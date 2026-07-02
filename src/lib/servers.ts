@@ -49,3 +49,27 @@ export async function listMembers(serverId: string) {
   for (const p of ((profs ?? []) as any[])) byId[p.id] = p.avatar_url ?? null
   return members.map(m => ({ ...m, avatar_url: byId[m.user_id] ?? null }))
 }
+
+export async function findServers(q: string): Promise<Server[]> {
+  const term = q.trim()
+  if (!term) return []
+  // match by name (ilike) or exact id
+  const byName = await supabase.from('servers').select('*').ilike('name', '%' + term + '%').limit(10)
+  const list = (byName.data ?? []) as Server[]
+  if (list.length === 0 && /^[0-9a-f-]{6,}$/i.test(term)) {
+    const byId = await supabase.from('servers').select('*').eq('id', term).maybeSingle()
+    if (byId.data) return [byId.data as Server]
+  }
+  return list
+}
+
+export async function renameServer(id: string, name: string) {
+  return supabase.from('servers').update({ name }).eq('id', id)
+}
+
+export async function deleteServer(id: string) {
+  await supabase.from('channels').delete().eq('server_id', id)
+  await supabase.from('server_members').delete().eq('server_id', id)
+  await supabase.from('server_invites').delete().eq('server_id', id)
+  return supabase.from('servers').delete().eq('id', id)
+}
