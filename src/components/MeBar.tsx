@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL, Status } from '../lib/presence'
+import { Settings } from './Settings'
 
 export function MeBar({ username, avatarUrl, onAvatar }: { username: string; avatarUrl?: string | null; onAvatar?: (url: string) => void }) {
   const { user } = useAuth()
@@ -24,6 +25,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
 
   const { myStatus, setMyStatus } = usePresence()
   const [menu, setMenu] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const STATUSES: Status[] = ['online', 'idle', 'dnd', 'offline']
   return (
     <div className="me">
@@ -44,7 +46,9 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
           ))}
         </div>
       )}
+      <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя">⚙</button>
       <button className="me-out" onClick={() => supabase.auth.signOut()} title="Выйти">⎋</button>
+      {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
