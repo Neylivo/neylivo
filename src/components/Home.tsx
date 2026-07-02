@@ -5,9 +5,8 @@ import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
-import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer } from '../lib/servers'
+import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer, updateServer } from '../lib/servers'
 import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal } from './ServerModals'
-import { getServerPrefs } from '../lib/serverPrefs'
 import { PresenceProvider } from '../lib/presence'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
@@ -40,15 +39,12 @@ export function Home() {
     }
   }
 
-  async function onCreate(name: string, avatar: string | null) {
+  async function onCreate(name: string, avatarUrl: string | null) {
     if (!name || !user) return
-    const res = await createSrv(name, user.id, username)
+    const res = await createSrv(name, user.id, username, avatarUrl)
     if (res.error) return alert(res.error.message)
     setShowCreate(false)
-    if (res.server) {
-      if (avatar) { const { setServerPrefs } = await import('../lib/serverPrefs'); setServerPrefs(res.server.id, { avatar }) }
-      refresh(res.server.id)
-    }
+    if (res.server) refresh(res.server.id)
   }
 
   async function onCtxAction(k: string, server: Server) {
@@ -83,33 +79,31 @@ export function Home() {
             title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
         </div>
         <div className="srv-sep" />
-        {servers.map(s => {
-          const prefs = getServerPrefs(s.id)
-          return (
+        {servers.map(s => (
           <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
             <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
-              style={prefs.avatar ? { backgroundImage: `url(${prefs.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
+              style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
               title={s.name}
               onClick={() => setView({ kind: 'server', server: s })}
               onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
               {s.name.slice(0, 2).toUpperCase()}</button>
           </div>
-          )
-        })}
+        ))}
         <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}>＋</button>
         <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}>🔍</button>
       </nav>
       {view.kind === 'music'
-        ? <MusicPlayer me={username} onClose={() => setView({ kind: 'dm' })} />
+        ? <MusicPlayer me={username} meId={user?.id ?? ''} onClose={() => setView({ kind: 'dm' })} />
         : view.kind === 'dm'
         ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
         : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
-    {showCreate && <CreateServerModal onClose={() => setShowCreate(false)} onCreate={onCreate} />}
+    {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
-    {settingsServer && <ServerSettingsModal server={settingsServer}
+    {settingsServer && <ServerSettingsModal server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
+      onChanged={() => refresh()}
       onRename={async name => { await renameServer(settingsServer.id, name); setSettingsServer(null); refresh() }}
       onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setView({ kind: 'dm' }); refresh() }} />}
     </PresenceProvider>
