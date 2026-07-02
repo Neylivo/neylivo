@@ -703,3 +703,22 @@ body { font-size: var(--font-px, 16px); }
 .ctxmenu-item.danger { color:var(--red); }
 .ctxmenu-item.danger:hover { background:var(--red); color:#fff; }
 .ctxmenu-ic { width:18px; text-align:center; opacity:.85; }
+
+
+/* ===== pass 16: profile theme + profile pet ===== */
+.pqs-acc-card2 { background:var(--bg3); border-radius:10px; padding:16px; margin-bottom:16px; }
+.pqs-ptheme-row { display:flex; gap:20px; margin:10px 0; }
+.pqs-ptheme { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
+.pqs-ptheme input[type=color] { width:44px; height:28px; border:none; border-radius:6px; background:none; cursor:pointer; padding:0; }
+.pqs-ptheme-preview { height:56px; border-radius:8px; margin:10px 0; }
+.pqs-pet-pick { display:flex; align-items:center; gap:12px; margin:10px 0; }
+.pqs-pet-thumb { width:56px; height:56px; border-radius:10px; background:var(--bg2); display:flex; align-items:center; justify-content:center; color:var(--mut); overflow:hidden; }
+.pqs-pet-thumb img, .pqs-pet-thumb video { width:100%; height:100%; object-fit:cover; }
+.pqs-pet-pos { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 16px; }
+.pqs-pet-posbtn { background:var(--bg2); border:1px solid transparent; color:var(--tx); padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
+.pqs-pet-posbtn.on { border-color:var(--brand); background:rgba(88,101,242,.15); }
+.pqs-pet-previews { display:flex; gap:20px; flex-wrap:wrap; }
+.pqs-pet-plabel { font-size:12px; color:var(--mut); margin-bottom:6px; }
+.pqs-pet-card { width:220px; height:150px; border-radius:12px; background:var(--bg2); overflow:hidden; }
+.pqs-pet-card.big { width:260px; }
+.pqs-pet-banner { position:absolute; inset:0 0 auto 0; height:56px; }
