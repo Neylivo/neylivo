@@ -416,3 +416,32 @@ input[type=range] { accent-color:var(--brand); }
 .pet-species { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:10px 0; }
 .pet-sp { background:var(--bg3); border:2px solid transparent; border-radius:8px; font-size:26px; padding:6px; cursor:pointer; }
 .pet-sp.on { border-color:var(--brand); }
+
+
+
+/* ===== pass 7: polish toward prototype (committed directly) ===== */
+/* server rail spacing + home/music pill parity */
+.servers { gap:8px; padding-top:12px; }
+.srv.home { font-size:22px; }
+
+/* channel sidebar: category caret + hover affordance like prototype */
+.srv-title { cursor:pointer; }
+.srv-title:hover { background:rgba(255,255,255,.03); }
+.ch-sec { display:flex; align-items:center; gap:4px; }
+.ch-sec::before { content:'⌄'; font-size:12px; opacity:.7; }
+.ch { display:flex; align-items:center; gap:6px; font-size:15px; }
+.ch::before { content:'#'; color:var(--mut); font-size:18px; font-weight:400; }
+.ch.add::before, .ch[style]::before { content:''; }
+
+/* chat header: give it real height + spacing like prototype */
+.chat-head { min-height:48px; padding:0 16px; gap:8px; font-size:16px; }
+
+/* member panel width to Discord/prototype standard (240) */
+.members { width:240px; padding:16px 8px; }
+.dm-sec-t { padding:16px 8px 4px; }
+
+/* composer breathing room */
+.composer { padding:0 16px 24px; }
+
+/* nicer message hover tools shadow */
+.msg-tools { box-shadow:0 2px 10px rgba(0,0,0,.35); }
