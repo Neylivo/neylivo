@@ -117,3 +117,16 @@ body { font-family: 'gg sans', 'Inter', system-ui, sans-serif; background: var(-
 .ms-dim { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .ms-clear { background: #ed4245; border: none; color: #fff; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
 .ms-msg { margin-top: 10px; color: #3ba55d; }
+
+/* stage 6: calls */
+.call-start { background: none; border: none; color: var(--mut); cursor: pointer; font-size: 16px; margin-left: 10px; }
+.call-start:hover { color: #3ba55d; }
+.call-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 80; display: flex; flex-direction: column; }
+.call-stage { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; padding: 16px; overflow: auto; align-content: center; }
+.call-tile { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; }
+.call-media { width: 100%; height: 100%; object-fit: cover; }
+.call-cap { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 13px; z-index: 2; }
+.call-bar { display: flex; gap: 14px; justify-content: center; padding: 16px; background: rgba(0,0,0,.4); }
+.call-bar button { width: 54px; height: 54px; border-radius: 50%; border: none; font-size: 20px; cursor: pointer; background: #4e5058; color: #fff; }
+.call-bar button.on { background: var(--brand); }
+.call-bar button.leave { background: #ed4245; }

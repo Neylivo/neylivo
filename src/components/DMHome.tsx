@@ -7,6 +7,8 @@ import { searchUsers, sendRequest, respondRequest, openThread } from '../lib/fri
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { Composer, Attachment } from './Composer'
+import { CallRoom } from './CallRoom'
+import { joinRoom, Room } from '../lib/livekit'
 
 interface Friend { id: string; name: string }
 
@@ -22,6 +24,12 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [threadId, setThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DMMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
+  const [call, setCall] = useState<Room | null>(null)
+
+  async function startCall() {
+    if (!threadId) return
+    try { setCall(await joinRoom('dm_' + threadId, meId, username)) } catch (e: any) { alert(e.message ?? String(e)) }
+  }
 
   useEffect(() => { loadRequests() /* eslint-disable-next-line */ }, [])
 
@@ -123,7 +131,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
       <main className="chat">
         {active ? <>
-          <header className="chat-head">@ {active.name}</header>
+          <header className="chat-head">@ {active.name}<button className="call-start" title="Позвонить" onClick={startCall}>📞</button></header>
+          {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
           <div className="msgs">
             {messages.map(m => (
               <div key={m.id} className="msg">

@@ -7,6 +7,8 @@ import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { Composer, Attachment } from './Composer'
 import { createInvite, listMembers } from '../lib/servers'
+import { CallRoom } from './CallRoom'
+import { joinRoom, Room } from '../lib/livekit'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -16,6 +18,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [messages, setMessages] = useState<Message[]>([])
   const [members, setMembers] = useState<any[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
+  const [call, setCall] = useState<Room | null>(null)
   const isOwner = server.owner === user?.id
 
   useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
@@ -71,6 +74,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     onLeft()
   }
 
+  async function startCall() {
+    if (!curChannel || !user) return
+    try { setCall(await joinRoom('ch_' + curChannel.id, user.id, username)) } catch (e: any) { alert(e.message ?? String(e)) }
+  }
+
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
     if (!curChannel || !user) return
     const { error } = await supabase.from('messages').insert({
@@ -106,7 +114,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
-        <header className="chat-head"># {curChannel?.name ?? '—'}</header>
+        <header className="chat-head"># {curChannel?.name ?? '—'}<button className="call-start" title="Голосовой звонок" onClick={startCall}>📞</button></header>
+        {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
         <div className="msgs">
           {messages.map(m => (
             <div key={m.id} className="msg">
