@@ -32,6 +32,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [tab, setTab] = useState<'online' | 'all' | 'pending' | 'add'>('online')
+  const [ffilter, setFfilter] = useState('')
   const { statusOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
 
@@ -197,9 +198,10 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               <button className={'pfr-tab' + (tab === 'online' ? ' on' : '')} onClick={() => setTab('online')}>В сети</button>
               <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
               <button className={'pfr-tab' + (tab === 'pending' ? ' on' : '')} onClick={() => setTab('pending')}>Ожидание{requests.length > 0 ? ' — ' + requests.length : ''}</button>
-              <button className={'pfr-tab pfr-add' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}>Добавить в друзья</button>
             </div>
+            <button className={'pfr-addfriend' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}>Добавить в друзья</button>
           </header>
+          <div className="pfr-main">
           <div className="pfr-body">
             {tab === 'add' ? <div className="pfr-addbox">
               <div className="pfr-addh">Добавить в друзья</div>
@@ -226,8 +228,10 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               ))}
             </>
             : (() => {
-                const list = tab === 'online' ? friends.filter(f => statusOf(f.id) !== 'offline') : friends
+                const base = tab === 'online' ? friends.filter(f => statusOf(f.id) !== 'offline') : friends
+                const list = ffilter ? base.filter(f => f.name.toLowerCase().includes(ffilter.toLowerCase())) : base
                 return <>
+                  <div className="pfr-search"><input placeholder="Поиск" value={ffilter} onChange={e => setFfilter(e.target.value)} /></div>
                   <div className="pfr-sec">{tab === 'online' ? 'В сети' : 'Все друзья'} — {list.length}</div>
                   {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
                   {list.map(f => (
@@ -240,6 +244,20 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                   ))}
                 </>
               })()}
+          </div>
+          <aside className="pfr-right">
+            <div className="pfr-right-h">Активные контакты</div>
+            {(() => {
+              const activeContacts = friends.filter(f => statusOf(f.id) !== 'offline')
+              if (activeContacts.length === 0) return <div className="pfr-actempty">Нет активных контактов</div>
+              return activeContacts.map(f => (
+                <div key={f.id} className="pfr-actcard" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
+                  <div className="pfr-actnm">{f.name}</div>
+                  <div className="pfr-actsub">{STATUS_LABEL[statusOf(f.id)]}</div>
+                </div>
+              ))
+            })()}
+          </aside>
           </div>
         </>}
       </main>
