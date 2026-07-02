@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
-import { getServerPrefs, setServerPrefs, fileToDataUrl } from '../lib/serverPrefs'
+import { uploadTo } from '../lib/storage'
+import { updateServer } from '../lib/servers'
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -15,14 +16,19 @@ function Overlay({ onClose, children }: { onClose: () => void; children: React.R
   )
 }
 
-export function CreateServerModal({ onClose, onCreate }:
-  { onClose: () => void; onCreate: (name: string, avatar: string | null) => void }) {
+export function CreateServerModal({ uid, onClose, onCreate }:
+  { uid: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void }) {
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const initials = (name.trim() || 'PG').slice(0, 2).toUpperCase()
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (f) setAvatar(await fileToDataUrl(f))
+    const f = e.target.files?.[0]; if (!f || !uid) return
+    setBusy(true)
+    try { setAvatar(await uploadTo('avatars', uid, f)) }
+    catch (err: any) { alert(err.message ?? String(err)) }
+    finally { setBusy(false) }
   }
   return (
     <Overlay onClose={onClose}>
@@ -33,7 +39,7 @@ export function CreateServerModal({ onClose, onCreate }:
         <div className="modal-av" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>
           {!avatar && initials}
         </div>
-        <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>📷 Аватарка</button>
+        <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : '📷 Аватарка'}</button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
       </div>
       <label className="modal-lbl">Название сервера</label>
@@ -41,7 +47,7 @@ export function CreateServerModal({ onClose, onCreate }:
         onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
       <div className="modal-foot">
         <button className="modal-ghost" onClick={onClose}>Отмена</button>
-        <button className="modal-primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), avatar)}>Создать</button>
+        <button className="modal-primary" disabled={!name.trim() || busy} onClick={() => onCreate(name.trim(), avatar)}>Создать</button>
       </div>
     </Overlay>
   )
@@ -106,18 +112,25 @@ export function ServerCtxMenu({ x, y, isOwner, onClose, onAction }:
   )
 }
 
-export function ServerSettingsModal({ server, onClose, onRename, onDelete }:
-  { server: Server; onClose: () => void; onRename: (name: string) => void; onDelete: () => void }) {
+export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, onChanged }:
+  { server: Server; uid: string; onClose: () => void; onRename: (name: string) => void; onDelete: () => void; onChanged?: () => void }) {
   const [tab, setTab] = useState<'main' | 'roles' | 'channels'>('main')
-  const prefs = getServerPrefs(server.id)
-  const [accent, setAccent] = useState(prefs.accent || '#5865f2')
-  const [avatar, setAvatar] = useState<string | null>(prefs.avatar ?? null)
+  const [accent, setAccent] = useState(server.accent || '#5865f2')
+  const [avatar, setAvatar] = useState<string | null>(server.avatar_url ?? null)
   const [name, setName] = useState(server.name)
+  const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const initials = (server.name || 'S').slice(0, 2).toUpperCase()
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (f) { const url = await fileToDataUrl(f); setAvatar(url); setServerPrefs(server.id, { avatar: url }) }
+    const f = e.target.files?.[0]; if (!f || !uid) return
+    setBusy(true)
+    try {
+      const url = await uploadTo('avatars', uid, f)
+      setAvatar(url)
+      await updateServer(server.id, { avatar_url: url })
+      onChanged?.()
+    } catch (err: any) { alert(err.message ?? String(err)) }
+    finally { setBusy(false) }
   }
   return (
     <Overlay onClose={onClose}>
@@ -133,7 +146,7 @@ export function ServerSettingsModal({ server, onClose, onRename, onDelete }:
         <div className="modal-sect">Аватарка сервера</div>
         <div className="modal-avwrap left">
           <div className="modal-av sq" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>{!avatar && initials}</div>
-          <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>🖼 Сменить</button>
+          <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : '🖼 Сменить'}</button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
         </div>
         <label className="modal-lbl">Название сервера</label>
@@ -144,8 +157,8 @@ export function ServerSettingsModal({ server, onClose, onRename, onDelete }:
         <div className="modal-sect">Тема сервера (акцент)</div>
         <div className="modal-inline">
           <input type="color" className="modal-color" value={accent} onChange={e => setAccent(e.target.value)} />
-          <button className="modal-primary" onClick={() => setServerPrefs(server.id, { accent })}>Применить</button>
-          <button className="modal-ghost" onClick={() => { setAccent('#5865f2'); setServerPrefs(server.id, { accent: null }) }}>Сбросить</button>
+          <button className="modal-primary" onClick={async () => { await updateServer(server.id, { accent }); onChanged?.() }}>Применить</button>
+          <button className="modal-ghost" onClick={async () => { setAccent('#5865f2'); await updateServer(server.id, { accent: null }); onChanged?.() }}>Сбросить</button>
           <span className="modal-hint">акцент применяется, когда открыт этот сервер</span>
         </div>
       </>}
