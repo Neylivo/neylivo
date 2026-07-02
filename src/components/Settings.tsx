@@ -1,12 +1,11 @@
-
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
 import { friendCode } from '../lib/friendCode'
-import { getProfile, setProfile, petKindOf, fileToDataUrl } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
+import { uploadTo } from '../lib/storage'
 import { ProfilePet } from './ProfilePet'
-import { useRef } from 'react'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -47,15 +46,31 @@ export function Settings({ username, avatarUrl, onClose }:
   const { settings, set, setCustom, accents, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
   const [name, setName] = useState(username)
-  const [prof, setProf] = useState(() => getProfile(user?.id ?? ''))
-  const [about, setAbout] = useState(() => getProfile(user?.id ?? '').about)
+  const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
+  const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
-  function patchProf(patch: any) { setProf(setProfile(user!.id, patch)) }
+
+  useEffect(() => {
+    if (!user) return
+    let ok = true
+    fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about) } })
+    return () => { ok = false }
+  }, [user])
+
+  async function patchProf(patch: Partial<ProfilePrefs>) {
+    setProf(p => ({ ...p, ...patch }))
+    if (user) await saveProfile(user.id, patch)
+  }
   async function pickPet(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
-    const url = await fileToDataUrl(f)
-    patchProf({ petUrl: url, petKind: petKindOf(f), petOn: true })
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setPetBusy(true)
+    try {
+      const url = await uploadTo('avatars', user.id, f)
+      await patchProf({ petUrl: url, petKind: petKindOf(f), petOn: true })
+    } catch (err: any) { alert(err.message ?? String(err)) }
+    finally { setPetBusy(false) }
   }
 
   useEffect(() => {
@@ -66,7 +81,7 @@ export function Settings({ username, avatarUrl, onClose }:
 
   async function saveAccount() {
     if (name.trim() && name !== username) await supabase.from('profiles').update({ username: name.trim() }).eq('id', user!.id)
-    patchProf({ about })
+    await patchProf({ about })
     setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
 
@@ -123,7 +138,7 @@ export function Settings({ username, avatarUrl, onClose }:
               </Row>
               <div className="pqs-pet-pick">
                 <div className="pqs-pet-thumb">{prof.petUrl ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted /> : <img src={prof.petUrl} alt="" />) : '—'}</div>
-                <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>Выбрать файл</button>
+                <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : 'Выбрать файл'}</button>
                 <button className="pqs-save" onClick={() => patchProf({ petUrl: null, petKind: 'none', petOn: false })}>Убрать</button>
                 <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
               </div>
