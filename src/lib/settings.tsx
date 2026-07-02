@@ -1,11 +1,17 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 
+export interface CustomTheme {
+  dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
+  dim: number       // texture dim 0..100 (reserved for texture backgrounds)
+  on: boolean       // whether custom theme overrides the preset
+}
+
 export interface Settings {
-  theme: 'dark' | 'light' | 'midnight'
+  theme: string       // preset key (see THEMES)
   accent: string
+  custom: CustomTheme
   compact: boolean
-  fontScale: number   // 0.85 .. 1.3
+  fontPx: number      // 12 .. 20 (px)
   zoom: number        // 70 .. 130 (%)
   animations: boolean
   notifSystem: boolean
@@ -23,11 +29,31 @@ export interface Settings {
   actText: string
 }
 
+// 10 named theme presets. Each overrides the core design tokens; the app aliases
+// (--bg/--bg2/--bg3/--brand) derive from these automatically.
+export interface ThemeDef { key: string; name: string; dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string; tx: string; mut: string }
+export const THEMES: ThemeDef[] = [
+  { key:'dark',     name:'Discord',  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', tx:'#dbdee1', mut:'#949ba4' },
+  { key:'midnight', name:'Полночь',  dark:'#000000', main:'#050506', panel:'#111318', content:'#0b0b0e', hover:'#1a1c22', active:'#16181d', accent:'#4752c4', tx:'#dbdee1', mut:'#8a8f98' },
+  { key:'forest',   name:'Лес',      dark:'#12211a', main:'#16281f', panel:'#1b3327', content:'#1f3b2d', hover:'#274b39', active:'#22422f', accent:'#3ba55d', tx:'#dbe5df', mut:'#8fa89a' },
+  { key:'rose',     name:'Роза',     dark:'#25131d', main:'#2c1723', panel:'#361c2b', content:'#3d2031', hover:'#4d2a3e', active:'#442436', accent:'#eb459e', tx:'#e8dae2', mut:'#b08fa1' },
+  { key:'sunset',   name:'Закат',    dark:'#241812', main:'#2b1d15', panel:'#35241a', content:'#3d291d', hover:'#4d3526', active:'#442f21', accent:'#faa61a', tx:'#e8ddd3', mut:'#b0a08f' },
+  { key:'amethyst', name:'Аметист',  dark:'#1d1329', main:'#231731', panel:'#2c1c3d', content:'#321f45', hover:'#3f2a55', active:'#38244c', accent:'#9b59b6', tx:'#e0dae8', mut:'#a08fb0' },
+  { key:'ocean',    name:'Океан',    dark:'#0f2027', main:'#12262f', panel:'#173039', content:'#1a3742', hover:'#234652', active:'#1f3e49', accent:'#1abc9c', tx:'#d3e5e8', mut:'#8fa5ab' },
+  { key:'crimson',  name:'Багровый', dark:'#261213', main:'#2d1617', panel:'#381b1c', content:'#401f20', hover:'#502829', active:'#472324', accent:'#ed4245', tx:'#e8d8d8', mut:'#b08f8f' },
+  { key:'graphite', name:'Графит',   dark:'#1a1a1c', main:'#202022', panel:'#2a2a2d', content:'#303033', hover:'#3a3a3e', active:'#333336', accent:'#80848e', tx:'#dbdee1', mut:'#949ba4' },
+  { key:'cosmos',   name:'Космос',   dark:'#0d0f1e', main:'#111427', panel:'#181c33', content:'#1c213d', hover:'#262c4d', active:'#212642', accent:'#5865f2', tx:'#dbdee8', mut:'#8f93b0' },
+]
+
+export const DEFAULT_CUSTOM: CustomTheme = {
+  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', dim:35, on:false,
+}
+
 export const DEFAULTS: Settings = {
-  theme: 'dark', accent: '#5865f2', compact: false, fontScale: 1, zoom: 100, animations: true,
+  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
-  micVol: 100, spkVol: 100, lang: 'ru', dmAll: true, dmMembers: true, dataCollect: false,
-  devmode: false, actOn: false, actText: '',
+  micVol: 100, spkVol: 100, lang: 'ru', dmAll: false, dmMembers: true, dataCollect: false,
+  devmode: false, actOn: true, actText: '',
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
@@ -35,16 +61,20 @@ const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6
 interface SettingsCtx {
   settings: Settings
   set: <K extends keyof Settings>(k: K, v: Settings[K]) => void
+  setCustom: (patch: Partial<CustomTheme>) => void
   accents: string[]
+  themes: ThemeDef[]
 }
-const Ctx = createContext<SettingsCtx>({ settings: DEFAULTS, set: () => {}, accents: ACCENTS })
+const Ctx = createContext<SettingsCtx>({ settings: DEFAULTS, set: () => {}, setCustom: () => {}, accents: ACCENTS, themes: THEMES })
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem('ponoi_settings')
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) }
+    if (raw) {
+      const p = JSON.parse(raw)
+      return { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
+    }
   } catch {}
-  // migrate older single keys
   const s = { ...DEFAULTS }
   const lang = localStorage.getItem('ponoi_lang'); if (lang) s.lang = lang
   const zoom = localStorage.getItem('ponoi_zoom'); if (zoom) s.zoom = Number(zoom)
@@ -53,9 +83,23 @@ function load(): Settings {
 
 function apply(s: Settings) {
   const root = document.documentElement
-  root.style.setProperty('--c-accent', s.accent)
+  const def = THEMES.find(t => t.key === s.theme) ?? THEMES[0]
+  const c = s.custom
+  const use = c.on
+    ? { dark:c.dark, main:c.main, panel:c.panel, content:c.content, hover:c.hover, active:c.active, accent:c.accent, tx:def.tx, mut:def.mut }
+    : def
+  root.style.setProperty('--c-dark', use.dark)
+  root.style.setProperty('--c-main', use.main)
+  root.style.setProperty('--c-panel', use.panel)
+  root.style.setProperty('--c-content', use.content)
+  root.style.setProperty('--c-hover', use.hover)
+  root.style.setProperty('--c-active', use.active)
+  root.style.setProperty('--c-accent', c.on ? c.accent : (s.accent || use.accent))
+  root.style.setProperty('--tx', use.tx)
+  root.style.setProperty('--mut', use.mut)
   root.setAttribute('data-theme', s.theme)
-  root.style.setProperty('--font-scale', String(s.fontScale))
+  root.style.setProperty('--font-scale', String(s.fontPx / 16))
+  root.style.setProperty('--font-px', s.fontPx + 'px')
   document.body.classList.toggle('compact', s.compact)
   document.body.classList.toggle('no-anim', !s.animations)
   ;(document.body.style as any).zoom = String(s.zoom / 100)
@@ -64,14 +108,14 @@ function apply(s: Settings) {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(load)
   useEffect(() => { apply(settings) }, [settings])
+  function persist(next: Settings) { localStorage.setItem('ponoi_settings', JSON.stringify(next)); return next }
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
-    setSettings(prev => {
-      const next = { ...prev, [k]: v }
-      localStorage.setItem('ponoi_settings', JSON.stringify(next))
-      return next
-    })
+    setSettings(prev => persist({ ...prev, [k]: v }))
   }
-  return <Ctx.Provider value={{ settings, set, accents: ACCENTS }}>{children}</Ctx.Provider>
+  function setCustom(patch: Partial<CustomTheme>) {
+    setSettings(prev => persist({ ...prev, custom: { ...prev.custom, ...patch } }))
+  }
+  return <Ctx.Provider value={{ settings, set, setCustom, accents: ACCENTS, themes: THEMES }}>{children}</Ctx.Provider>
 }
 
 export const useSettings = () => useContext(Ctx)
