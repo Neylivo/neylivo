@@ -5,6 +5,8 @@ import type { FriendRequest, DMMessage, Profile } from '../types'
 import { searchUsers, sendRequest, respondRequest, openThread } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
+import { AvatarWithStatus } from './AvatarWithStatus'
+import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
@@ -29,6 +31,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [call, setCall] = useState<Room | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
+  const [tab, setTab] = useState<'online' | 'all' | 'pending' | 'add'>('online')
+  const { statusOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
 
   async function startCall() {
@@ -127,6 +131,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   return (
     <>
       <aside className="dm-side">
+        <div className="dm-friends-nav" onClick={() => setActive(null)}>👥 Друзья</div>
         <div className="dm-side-top">
           <div className="addfriend">
             <input placeholder="Найти по имени…" value={q} onChange={e => doSearch(e.target.value)} />
@@ -185,7 +190,58 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             <div ref={bottomRef} />
           </div>
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
-        </> : <div className="dm-empty">Выбери друга слева, чтобы начать переписку 💬</div>}
+        </> : <>
+          <header className="chat-head pfr-head">
+            <span className="pfr-title">👥 Друзья</span>
+            <div className="pfr-tabs">
+              <button className={'pfr-tab' + (tab === 'online' ? ' on' : '')} onClick={() => setTab('online')}>В сети</button>
+              <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
+              <button className={'pfr-tab' + (tab === 'pending' ? ' on' : '')} onClick={() => setTab('pending')}>Ожидание{requests.length > 0 ? ' — ' + requests.length : ''}</button>
+              <button className={'pfr-tab pfr-add' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}>Добавить в друзья</button>
+            </div>
+          </header>
+          <div className="pfr-body">
+            {tab === 'add' ? <div className="pfr-addbox">
+              <div className="pfr-addh">Добавить в друзья</div>
+              <div className="pfr-addsub">Найди друзей по имени пользователя.</div>
+              <input className="pfr-addin" placeholder="Введи имя пользователя…" value={q} onChange={e => doSearch(e.target.value)} />
+              {results.map(p => (
+                <div key={p.id} className="pfr-row" onClick={() => add(p)}>
+                  <Avatar name={p.username} url={p.avatar_url} size={32} />
+                  <span className="pfr-name">{p.username}</span>
+                  <span className="pfr-add-btn">＋ Добавить</span>
+                </div>
+              ))}
+            </div>
+            : tab === 'pending' ? <>
+              <div className="pfr-sec">Ожидание — {requests.length}</div>
+              {requests.length === 0 && <div className="pfr-empty">Нет входящих заявок</div>}
+              {requests.map(r => (
+                <div key={r.id} className="pfr-row">
+                  <Avatar name={r.from_name} size={32} />
+                  <span className="pfr-name">{r.from_name}</span>
+                  <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}>✓</button>
+                  <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}>✕</button>
+                </div>
+              ))}
+            </>
+            : (() => {
+                const list = tab === 'online' ? friends.filter(f => statusOf(f.id) !== 'offline') : friends
+                return <>
+                  <div className="pfr-sec">{tab === 'online' ? 'В сети' : 'Все друзья'} — {list.length}</div>
+                  {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
+                  {list.map(f => (
+                    <div key={f.id} className="pfr-row" onClick={() => openChat(f)}>
+                      <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
+                      <span className="pfr-name">{f.name}</span>
+                      <span className="pfr-status">{STATUS_LABEL[statusOf(f.id)]}</span>
+                      <span className="pfr-msg" title="Написать">💬</span>
+                    </div>
+                  ))}
+                </>
+              })()}
+          </div>
+        </>}
       </main>
     </>
   )
