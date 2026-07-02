@@ -9,3 +9,22 @@ export interface Message {
   content: string
   created_at: string
 }
+
+export interface FriendRequest {
+  id: string
+  from_user: string
+  to_user: string
+  from_name: string
+  to_name: string
+  status: string
+  created_at: string
+}
+export interface DMThread { id: string; user_a: string; user_b: string; created_at: string }
+export interface DMMessage {
+  id: string
+  thread_id: string
+  author: string
+  author_name: string
+  content: string
+  created_at: string
+}
