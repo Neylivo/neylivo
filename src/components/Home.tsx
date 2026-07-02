@@ -7,6 +7,7 @@ import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode } from '../lib/servers'
 import { PresenceProvider } from '../lib/presence'
+import { Pet } from './Pet'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -77,6 +78,7 @@ export function Home() {
         : view.kind === 'dm'
         ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
         : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+      <Pet />
     </div>
     </PresenceProvider>
   )
