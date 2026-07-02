@@ -11,6 +11,8 @@ import { MessageList } from './MessageList'
 import { createInvite, listMembers } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
+import type { RxSummary } from '../lib/reactions'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -24,6 +26,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const isOwner = server.owner === user?.id
   const { statusOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
+  const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
+  const [showPins, setShowPins] = useState(false)
+  const msgsRef = useRef<Message[]>([])
 
   useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
 
@@ -41,6 +46,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const { data } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).order('created_at').limit(100)
     setMessages(data ?? [])
+    loadRx((data ?? []).map(m => m.id))
   }
 
   useEffect(() => {
@@ -54,6 +60,17 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }, [curChannel])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  useEffect(() => { msgsRef.current = messages }, [messages])
+
+  useEffect(() => {
+    if (!curChannel) return
+    const ch = supabase.channel('rx:' + curChannel.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' },
+        () => loadRx(msgsRef.current.map(m => m.id)))
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [curChannel])
 
   async function createChannel() {
     const name = prompt('Название канала')?.trim()
@@ -92,6 +109,25 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (error) alert(error.message)
   }
 
+  async function loadRx(ids: string[]) {
+    const rows = await loadReactions('reactions', ids)
+    setReactions(groupReactions(rows))
+  }
+  async function react(id: string, emoji: string) {
+    if (!user) return
+    await toggleReaction('reactions', id, user.id, emoji)
+    loadRx(msgsRef.current.map(m => m.id))
+  }
+  async function pin(id: string, pinned: boolean) {
+    await setPin('messages', id, pinned)
+    setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
+  }
+  async function removeMsg(id: string) {
+    if (!confirm('Удалить сообщение?')) return
+    await deleteMessage('messages', id)
+    setMessages(ms => ms.filter(m => m.id !== id))
+  }
+
   return (
     <>
       <aside className="channels">
@@ -111,10 +147,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
-        <header className="chat-head"># {curChannel?.name ?? '—'}<button className="call-start" title="Голосовой звонок" onClick={startCall}>📞</button></header>
+        <header className="chat-head"># {curChannel?.name ?? '—'}
+          <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}>📌</button>
+          <button className="call-start" title="Голосовой звонок" onClick={startCall}>📞</button>
+        </header>
+        {showPins && <div className="pins-panel">
+          <div className="pins-h">📌 Закреплённые сообщения</div>
+          {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
+          {messages.filter(m => (m as any).pinned).map(m => (
+            <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
+              <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}>✕</button></div>
+          ))}
+        </div>}
         {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
         <div className="msgs">
-          <MessageList messages={messages as any} />
+          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id}
+            canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg} />
           <div ref={bottomRef} />
         </div>
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} />}

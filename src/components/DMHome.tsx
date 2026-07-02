@@ -9,6 +9,8 @@ import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
+import type { RxSummary } from '../lib/reactions'
 
 interface Friend { id: string; name: string }
 
@@ -25,6 +27,9 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [messages, setMessages] = useState<DMMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const [call, setCall] = useState<Room | null>(null)
+  const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
+  const [showPins, setShowPins] = useState(false)
+  const msgsRef = useRef<DMMessage[]>([])
 
   async function startCall() {
     if (!threadId) return
@@ -66,6 +71,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     const { data } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at').limit(100)
     setMessages((data ?? []) as DMMessage[])
+    loadRx(((data ?? []) as DMMessage[]).map(m => m.id))
   }
 
   useEffect(() => {
@@ -80,6 +86,17 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  useEffect(() => { msgsRef.current = messages }, [messages])
+
+  useEffect(() => {
+    if (!threadId) return
+    const ch = supabase.channel('drx:' + threadId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_reactions' },
+        () => loadRx(msgsRef.current.map(m => m.id)))
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [threadId])
+
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
     if (!threadId) return
     const { error } = await supabase.from('dm_messages').insert({
@@ -87,6 +104,24 @@ export function DMHome({ username, avatarUrl, onAvatar }:
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
     })
     if (error) alert(error.message)
+  }
+
+  async function loadRx(ids: string[]) {
+    const rows = await loadReactions('dm_reactions', ids)
+    setReactions(groupReactions(rows))
+  }
+  async function react(id: string, emoji: string) {
+    await toggleReaction('dm_reactions', id, meId, emoji)
+    loadRx(msgsRef.current.map(m => m.id))
+  }
+  async function pin(id: string, pinned: boolean) {
+    await setPin('dm_messages', id, pinned)
+    setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
+  }
+  async function removeMsg(id: string) {
+    if (!confirm('Удалить сообщение?')) return
+    await deleteMessage('dm_messages', id)
+    setMessages(ms => ms.filter(m => m.id !== id))
   }
 
   return (
@@ -131,10 +166,22 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
       <main className="chat">
         {active ? <>
-          <header className="chat-head">@ {active.name}<button className="call-start" title="Позвонить" onClick={startCall}>📞</button></header>
+          <header className="chat-head">@ {active.name}
+            <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}>📌</button>
+            <button className="call-start" title="Позвонить" onClick={startCall}>📞</button>
+          </header>
+          {showPins && <div className="pins-panel">
+            <div className="pins-h">📌 Закреплённые сообщения</div>
+            {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
+            {messages.filter(m => (m as any).pinned).map(m => (
+              <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
+                <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}>✕</button></div>
+            ))}
+          </div>}
           {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
           <div className="msgs">
-            <MessageList messages={messages as any} />
+            <MessageList messages={messages as any} reactions={reactions} currentUser={meId}
+              canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} />
             <div ref={bottomRef} />
           </div>
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
