@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Profile, DMThread } from '../types'
+import { tagFor, parseFriendCode } from './friendCode'
 
 export async function searchUsers(q: string, exceptId: string): Promise<Profile[]> {
   const term = q.trim()
@@ -7,6 +8,17 @@ export async function searchUsers(q: string, exceptId: string): Promise<Profile[
   const { data } = await supabase.from('profiles').select('*')
     .ilike('username', '%' + term + '%').limit(10)
   return (data ?? []).filter(p => p.id !== exceptId)
+}
+
+// Find a profile by its friend code "Имя#7401". The tag is a pure function of
+// the user id (see friendCode.ts), so we fetch same-named profiles and match.
+export async function findByCode(code: string): Promise<Profile | null> {
+  const parsed = parseFriendCode(code)
+  if (!parsed) return null
+  const { data } = await supabase.from('profiles').select('*')
+    .eq('username', parsed.name).limit(50)
+  const candidates = (data ?? []) as Profile[]
+  return candidates.find(p => tagFor(p.id) === parsed.tag) ?? null
 }
 
 export async function sendRequest(fromId: string, fromName: string, to: Profile) {
