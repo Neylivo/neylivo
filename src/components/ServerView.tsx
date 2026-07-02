@@ -5,7 +5,8 @@ import type { Server, Channel, Message } from '../types'
 import { timeShort } from '../lib/ui'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
-import { Composer, Attachment } from './Composer'
+import { Composer } from './Composer'
+import { MessageList } from './MessageList'
 import { createInvite, listMembers } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
@@ -96,6 +97,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <button className="srv-invite" title="Пригласить" onClick={invite}>🔗</button>
         </div>
         <div className="ch-list">
+          <div className="ch-sec">Текстовые каналы</div>
           {channels.map(c => (
             <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '')}
               onClick={() => selectChannel(c)}># {c.name}</div>
@@ -117,16 +119,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <header className="chat-head"># {curChannel?.name ?? '—'}<button className="call-start" title="Голосовой звонок" onClick={startCall}>📞</button></header>
         {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
         <div className="msgs">
-          {messages.map(m => (
-            <div key={m.id} className="msg">
-              <Avatar name={m.author_name} url={(m as any).author_avatar} size={40} />
-              <div className="msg-body">
-                <div className="msg-hdr"><b>{m.author_name}</b><span className="msg-time">{timeShort(m.created_at)}</span></div>
-                {m.content && <div className="msg-txt">{m.content}</div>}
-                <Attachment url={(m as any).attach_url} type={(m as any).attach_type} />
-              </div>
-            </div>
-          ))}
+          <MessageList messages={messages as any} />
           <div ref={bottomRef} />
         </div>
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} />}

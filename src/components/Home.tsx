@@ -52,14 +52,20 @@ export function Home() {
   return (
     <div className="app">
       <nav className="servers">
-        <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
-          title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}>🏠</button>
-        <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-          title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
+        <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
+          <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
+            title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}>🏠</button>
+        </div>
+        <div className={'srv-wrap' + (view.kind === 'music' ? ' on' : '')}>
+          <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
+            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
+        </div>
         <div className="srv-sep" />
         {servers.map(s => (
-          <button key={s.id} className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
-            title={s.name} onClick={() => setView({ kind: 'server', server: s })}>{s.name.slice(0, 2).toUpperCase()}</button>
+          <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
+            <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
+              title={s.name} onClick={() => setView({ kind: 'server', server: s })}>{s.name.slice(0, 2).toUpperCase()}</button>
+          </div>
         ))}
         <button className="srv add" title="Создать сервер" onClick={onCreate}>＋</button>
         <button className="srv join" title="Присоединиться по коду" onClick={onJoin}>🔗</button>

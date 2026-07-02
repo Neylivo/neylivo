@@ -174,3 +174,33 @@ body {
 .call-bar button:hover { transform:scale(1.06); }
 .call-bar button.on { background:var(--brand); }
 .call-bar button.leave { background:var(--red); }
+
+
+/* ===== pass 1: chat scaffold like Discord ===== */
+.servers { gap:6px; }
+.srv-wrap { position:relative; display:flex; align-items:center; justify-content:center; width:100%; }
+.srv-wrap::before { content:''; position:absolute; left:0; width:4px; height:0; background:#fff; border-radius:0 4px 4px 0;
+  transition:height .15s ease; }
+.srv-wrap:hover::before { height:20px; }
+.srv-wrap.on::before { height:40px; }
+
+.ch-sec { padding:16px 8px 4px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
+
+/* message grouping */
+.msgs { gap:0; padding:12px 0 12px; }
+.msg { padding:2px 48px 2px 16px; position:relative; }
+.msg:hover { background:rgba(0,0,0,.06); }
+.msg-gutter { width:40px; flex-shrink:0; display:flex; justify-content:center; }
+.msg.grouped { margin-top:0; }
+.msg.grouped .msg-txt { margin-top:0; }
+.msg-ts-hover { font-size:10px; color:var(--mut); opacity:0; align-self:center; line-height:1; }
+.msg.grouped:hover .msg-ts-hover { opacity:1; }
+.msg-tools { position:absolute; top:-12px; right:12px; display:none; background:var(--bg2); border:1px solid rgba(0,0,0,.2);
+  border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+.msg:hover .msg-tools { display:flex; }
+.msg-tools button { background:none; border:none; color:var(--mut); width:32px; height:32px; cursor:pointer; font-size:15px; border-radius:6px; }
+.msg-tools button:hover { color:var(--tx); background:rgba(255,255,255,.06); }
+
+.day-sep { display:flex; align-items:center; text-align:center; margin:12px 16px; color:var(--mut); font-size:12px; font-weight:600; }
+.day-sep::before, .day-sep::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.08); }
+.day-sep span { padding:0 8px; }

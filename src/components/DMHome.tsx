@@ -6,7 +6,8 @@ import { timeShort } from '../lib/ui'
 import { searchUsers, sendRequest, respondRequest, openThread } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
-import { Composer, Attachment } from './Composer'
+import { Composer } from './Composer'
+import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
 
@@ -134,16 +135,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           <header className="chat-head">@ {active.name}<button className="call-start" title="Позвонить" onClick={startCall}>📞</button></header>
           {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
           <div className="msgs">
-            {messages.map(m => (
-              <div key={m.id} className="msg">
-                <Avatar name={m.author_name} size={40} />
-                <div className="msg-body">
-                  <div className="msg-hdr"><b>{m.author_name}</b><span className="msg-time">{timeShort(m.created_at)}</span></div>
-                  {m.content && <div className="msg-txt">{m.content}</div>}
-                  <Attachment url={(m as any).attach_url} type={(m as any).attach_type} />
-                </div>
-              </div>
-            ))}
+            <MessageList messages={messages as any} />
             <div ref={bottomRef} />
           </div>
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
