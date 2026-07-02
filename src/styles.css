@@ -320,3 +320,16 @@ input[type=range] { accent-color:var(--brand); }
 .mus-li-del { opacity:0; color:#fff; padding:0 4px; }
 .mus-li:hover .mus-li-del { opacity:.7; }
 .mus-li-del:hover { opacity:1 !important; color:var(--red); }
+
+
+/* ===== pass 5: call screen ===== */
+.call-top { display:flex; align-items:center; justify-content:center; gap:16px; padding:14px; color:#fff; }
+.call-live { font-weight:700; }
+.call-live.call-connected { color:var(--green); }
+.call-live.call-connecting { color:#faa61a; animation:pulse 1s ease-in-out infinite; }
+.call-live.call-reconnecting { color:var(--red); animation:pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity:.4; } }
+.call-cnt { color:#dbdee1; background:rgba(255,255,255,.08); padding:4px 10px; border-radius:999px; font-size:13px; }
+.call-tile { display:flex; align-items:center; justify-content:center; }
+.call-tile::before { content:'📷'; position:absolute; font-size:40px; opacity:.25; }
+.call-media { position:relative; z-index:1; }

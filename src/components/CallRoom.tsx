@@ -1,6 +1,6 @@
+
 import { useEffect, useRef, useState } from 'react'
-import { Room, RoomEvent, Track } from '../lib/livekit'
-import { useAuth } from '../auth/AuthProvider'
+import { Room, RoomEvent } from '../lib/livekit'
 
 // Renders every participant's video/audio by attaching LiveKit tracks to DOM elements.
 function Stage({ room }: { room: Room }) {
@@ -26,7 +26,7 @@ function Stage({ room }: { room: Room }) {
       else host.appendChild(el) // audio
     }
 
-    function sub(track: any, pub: any, participant: any) {
+    function sub(track: any, _pub: any, participant: any) {
       attach(track, participant.sid + track.sid, participant.identity)
     }
     function unsub(track: any) { track.detach().forEach((e: HTMLElement) => e.remove()) }
@@ -34,7 +34,6 @@ function Stage({ room }: { room: Room }) {
     room.on(RoomEvent.TrackSubscribed, sub)
     room.on(RoomEvent.TrackUnsubscribed, unsub)
 
-    // local tracks
     room.localParticipant.trackPublications.forEach(pub => {
       if (pub.track) attach(pub.track, room.localParticipant.sid + pub.trackSid, 'Вы')
     })
@@ -56,8 +55,30 @@ export function CallRoom({ room, onLeave }: { room: Room; onLeave: () => void })
   const [mic, setMic] = useState(true)
   const [cam, setCam] = useState(false)
   const [screen, setScreen] = useState(false)
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
+  const [count, setCount] = useState(1)
 
-  useEffect(() => { room.localParticipant.setMicrophoneEnabled(true).then(() => setMic(true)) }, [room])
+  useEffect(() => {
+    room.localParticipant.setMicrophoneEnabled(true).then(() => setMic(true))
+    const upd = () => setCount(room.numParticipants + 1)
+    setStatus(room.state === 'connected' ? 'connected' : 'connecting')
+    upd()
+    const onConn = () => setStatus('connected')
+    const onRec = () => setStatus('reconnecting')
+    const onRecd = () => setStatus('connected')
+    room.on(RoomEvent.Connected, onConn)
+    room.on(RoomEvent.Reconnecting, onRec)
+    room.on(RoomEvent.Reconnected, onRecd)
+    room.on(RoomEvent.ParticipantConnected, upd)
+    room.on(RoomEvent.ParticipantDisconnected, upd)
+    return () => {
+      room.off(RoomEvent.Connected, onConn)
+      room.off(RoomEvent.Reconnecting, onRec)
+      room.off(RoomEvent.Reconnected, onRecd)
+      room.off(RoomEvent.ParticipantConnected, upd)
+      room.off(RoomEvent.ParticipantDisconnected, upd)
+    }
+  }, [room])
 
   async function toggleMic() { const v = !mic; await room.localParticipant.setMicrophoneEnabled(v); setMic(v) }
   async function toggleCam() { const v = !cam; await room.localParticipant.setCameraEnabled(v); setCam(v) }
@@ -68,14 +89,20 @@ export function CallRoom({ room, onLeave }: { room: Room; onLeave: () => void })
   }
   function leave() { room.disconnect(); onLeave() }
 
+  const statusLabel = status === 'connected' ? 'В звонке' : status === 'reconnecting' ? 'Переподключение…' : 'Соединение…'
+
   return (
     <div className="call-wrap">
+      <div className="call-top">
+        <span className={'call-live call-' + status}>● {statusLabel}</span>
+        <span className="call-cnt">👥 {count}</span>
+      </div>
       <Stage room={room} />
       <div className="call-bar">
         <button className={mic ? 'on' : ''} onClick={toggleMic} title="Микрофон">{mic ? '🎤' : '🔇'}</button>
         <button className={cam ? 'on' : ''} onClick={toggleCam} title="Камера">{cam ? '📹' : '📷'}</button>
         <button className={screen ? 'on' : ''} onClick={toggleScreen} title="Демонстрация экрана">🖥️</button>
-        <button className="leave" onClick={leave} title="Выйти">📴</button>
+        <button className="leave" onClick={leave} title="Отключиться">📴</button>
       </div>
     </div>
   )
