@@ -633,3 +633,28 @@ input[type=range] { accent-color:var(--brand); }
 .pqs-code-copy { background:var(--brand); border:none; color:#fff; padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer; }
 .pqs-email { margin-top:20px; border-top:1px solid rgba(255,255,255,.08); padding-top:16px; }
 .pqs-email-val { font-family:monospace; color:var(--tx); letter-spacing:1px; }
+
+
+/* ===== pass 14: appearance — custom theme + 10 theme presets + font px ===== */
+body { font-size: var(--font-px, 16px); }
+.pqs-sec-t { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin:20px 0 10px; }
+.pqs-custom { background:var(--bg3); border-radius:10px; padding:16px; margin-bottom:8px; }
+.pqs-custom-h { font-size:14px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+.pqs-custom-sub { color:var(--mut); font-size:13px; margin:4px 0 12px; }
+.pqs-custom-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-top:1px solid rgba(255,255,255,.05); }
+.pqs-custom-row > span:first-child { flex:1; font-weight:500; }
+.pqs-custom-row input[type=color] { width:44px; height:28px; border:none; border-radius:6px; background:none; cursor:pointer; padding:0; }
+.pqs-custom-row input[type=range] { flex:1; max-width:340px; }
+.pqs-custom-x { background:none; border:none; color:var(--mut); cursor:pointer; font-size:14px; }
+.pqs-custom-x:hover { color:var(--red); }
+.pqs-custom-pct { min-width:44px; text-align:right; color:var(--mut); }
+.pqs-custom-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; }
+.pqs-custom-toggle { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
+.pqs-preset-grid { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; }
+.pqs-preset { background:var(--bg3); border:2px solid transparent; border-radius:10px; padding:12px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px; color:var(--tx); transition:transform .12s ease, border-color .12s ease; }
+.pqs-preset:hover { transform:translateY(-2px); }
+.pqs-preset.on { border-color:var(--brand); }
+.pqs-preset-sw { width:48px; height:34px; border-radius:6px; border-left:6px solid; display:flex; align-items:flex-end; padding:4px; }
+.pqs-preset-sw > span { width:12px; height:12px; border-radius:3px; display:block; }
+.pqs-preset-nm { font-size:13px; font-weight:600; }
+@media (max-width: 900px) { .pqs-preset-grid { grid-template-columns:repeat(3, 1fr); } }
