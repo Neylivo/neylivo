@@ -3,6 +3,8 @@ import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, STATUS_LABEL } from '../lib/presence'
 import { tagFor } from '../lib/friendCode'
+import { getProfile } from '../lib/profilePrefs'
+import { ProfilePet } from './ProfilePet'
 
 export interface MiniProfileData {
   userId: string
@@ -20,7 +22,9 @@ export function MiniProfile({ data, onClose, onMessage }:
     <>
       <div className="mini-overlay" onClick={onClose} />
       <div className="mini" style={{ left: data.x, top: data.y }} onClick={e => e.stopPropagation()}>
-        <div className="mini-banner" />
+        {(() => { const pp = getProfile(data.userId); return <>
+        <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
+        <ProfilePet p={pp} scale={0.3} /></> })()}
         <div className="mini-av">
           <Avatar name={data.name} url={data.avatarUrl} size={72} />
           <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
