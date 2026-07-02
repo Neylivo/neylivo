@@ -6,6 +6,7 @@ import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode } from '../lib/servers'
+import { PresenceProvider } from '../lib/presence'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -50,6 +51,7 @@ export function Home() {
   }
 
   return (
+    <PresenceProvider username={username} avatarUrl={avatarUrl}>
     <div className="app">
       <nav className="servers">
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
@@ -76,5 +78,6 @@ export function Home() {
         ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
         : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
+    </PresenceProvider>
   )
 }

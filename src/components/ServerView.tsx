@@ -4,6 +4,9 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
+import { AvatarWithStatus } from './AvatarWithStatus'
+import { usePresence } from '../lib/presence'
+import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { createInvite, listMembers } from '../lib/servers'
@@ -20,6 +23,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const bottomRef = useRef<HTMLDivElement>(null)
   const [call, setCall] = useState<Room | null>(null)
   const isOwner = server.owner === user?.id
+  const { statusOf } = usePresence()
+  const [mini, setMini] = useState<MiniProfileData | null>(null)
 
   useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
 
@@ -102,14 +107,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               onClick={() => selectChannel(c)}># {c.name}</div>
           ))}
           <div className="ch add" onClick={createChannel}>＋ канал</div>
-          <div className="dm-sec-t">Участники — {members.length}</div>
-          {members.map(m => (
-            <div key={m.user_id} className="dm-item">
-              <Avatar name={m.member_name} url={m.avatar_url} size={32} />
-              <span className="me-nm">{m.member_name}</span>
-              {m.role === 'owner' && <span className="mut" title="Владелец">👑</span>}
-            </div>
-          ))}
           {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}>⎋ покинуть сервер</div>}
         </div>
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
@@ -123,6 +120,28 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} />}
       </main>
+      <aside className="members">
+        {(() => {
+          const on = members.filter(m => statusOf(m.user_id) !== 'offline')
+          const off = members.filter(m => statusOf(m.user_id) === 'offline')
+          const row = (m: any) => (
+            <div key={m.user_id} className="member" onClick={e => setMini({
+              userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
+              role: m.role, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 220) })}>
+              <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
+              <span className="me-nm" style={{ color: m.role === 'owner' ? '#faa61a' : undefined }}>{m.member_name}</span>
+              {m.role === 'owner' && <span className="mut" title="Владелец">👑</span>}
+            </div>
+          )
+          return <>
+            {on.length > 0 && <div className="dm-sec-t">В сети — {on.length}</div>}
+            {on.map(row)}
+            {off.length > 0 && <div className="dm-sec-t">Не в сети — {off.length}</div>}
+            {off.map(row)}
+          </>
+        })()}
+      </aside>
+      {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )
 }
