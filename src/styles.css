@@ -477,3 +477,18 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-addin { width:100%; background:var(--bg3); border:1px solid rgba(0,0,0,.4); border-radius:8px; padding:12px 14px; color:var(--tx); outline:none; font-size:15px; margin-bottom:8px; }
 .pfr-addin:focus { border-color:var(--brand); }
 .pfr-add-btn { margin-left:auto; color:var(--brand); font-weight:600; font-size:14px; }
+
+
+
+/* ===== pass 9: mini-profile polish toward prototype (pmini-*) ===== */
+.mini { width:260px; box-shadow:0 16px 48px rgba(0,0,0,.7); }
+.mini-banner { height:64px; background:linear-gradient(90deg,#5865f2,#eb459e); }
+.mini-av { margin:-40px 0 0 16px; }
+.mini-av .av-wrap, .mini-av > span { border:6px solid var(--bg3); border-radius:50%; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+.mini-body { padding:8px 16px 16px; }
+.mini-name { font-size:20px; font-weight:800; line-height:1.1; }
+.mini-status { margin-top:6px; }
+.mini-divider { height:1px; background:rgba(255,255,255,.08); margin:12px 0; }
+.mini-role { margin-top:0; font-size:13px; color:#faa61a; font-weight:600; }
+.mini-role-mut { color:var(--mut); font-weight:500; }
+.mini-msg { margin-top:14px; border-radius:8px; }
