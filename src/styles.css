@@ -445,3 +445,35 @@ input[type=range] { accent-color:var(--brand); }
 
 /* nicer message hover tools shadow */
 .msg-tools { box-shadow:0 2px 10px rgba(0,0,0,.35); }
+
+
+
+/* ===== pass 8: dedicated Друзья (Friends) page like prototype (pfr-*) ===== */
+.dm-friends-nav { margin:8px 8px 0; padding:8px 10px; border-radius:6px; color:var(--tx); font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; }
+.dm-friends-nav:hover { background:rgba(255,255,255,.06); }
+.pfr-head { display:flex; align-items:center; gap:16px; }
+.pfr-title { font-weight:700; display:flex; align-items:center; gap:8px; }
+.pfr-tabs { display:flex; align-items:center; gap:8px; }
+.pfr-tab { background:none; border:none; color:var(--mut); cursor:pointer; padding:4px 10px; border-radius:4px; font-size:15px; font-weight:500; }
+.pfr-tab:hover { background:rgba(255,255,255,.06); color:var(--tx); }
+.pfr-tab.on { background:rgba(255,255,255,.1); color:#fff; }
+.pfr-add { background:var(--green); color:#fff; }
+.pfr-add:hover, .pfr-add.on { background:var(--green); filter:brightness(1.08); color:#fff; }
+.pfr-body { flex:1; overflow-y:auto; padding:16px 24px; }
+.pfr-sec { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin:8px 0; }
+.pfr-row { display:flex; align-items:center; gap:12px; padding:10px 8px; border-top:1px solid rgba(255,255,255,.06); cursor:pointer; border-radius:8px; }
+.pfr-row:hover { background:rgba(255,255,255,.04); }
+.pfr-name { font-weight:600; color:var(--tx); }
+.pfr-status { color:var(--mut); font-size:13px; }
+.pfr-msg { margin-left:auto; font-size:16px; opacity:.7; }
+.pfr-row:hover .pfr-msg { opacity:1; }
+.pfr-ok, .pfr-no { border:none; border-radius:50%; width:32px; height:32px; cursor:pointer; color:#fff; font-size:14px; }
+.pfr-ok { margin-left:auto; background:var(--green); }
+.pfr-no { margin-left:8px; background:var(--red); }
+.pfr-empty { color:var(--mut); padding:16px 8px; font-size:14px; }
+.pfr-addbox { max-width:640px; }
+.pfr-addh { font-size:16px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+.pfr-addsub { color:var(--mut); font-size:14px; margin:4px 0 12px; }
+.pfr-addin { width:100%; background:var(--bg3); border:1px solid rgba(0,0,0,.4); border-radius:8px; padding:12px 14px; color:var(--tx); outline:none; font-size:15px; margin-bottom:8px; }
+.pfr-addin:focus { border-color:var(--brand); }
+.pfr-add-btn { margin-left:auto; color:var(--brand); font-weight:600; font-size:14px; }
