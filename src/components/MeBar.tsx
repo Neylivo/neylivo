@@ -10,6 +10,8 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const { user } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const [micOff, setMicOff] = useState(false)
+  const [deaf, setDeaf] = useState(false)
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -46,6 +48,8 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
           ))}
         </div>
       )}
+      <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? '🔇' : '🎙'}</button>
+      <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? '🔕' : '🎧'}</button>
       <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя">⚙</button>
       <button className="me-out" onClick={() => supabase.auth.signOut()} title="Выйти">⎋</button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
