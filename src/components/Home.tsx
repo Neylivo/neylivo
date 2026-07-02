@@ -4,9 +4,10 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
+import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode } from '../lib/servers'
 
-type View = { kind: 'dm' } | { kind: 'server'; server: Server }
+type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
 export function Home() {
   const { user } = useAuth()
@@ -53,6 +54,8 @@ export function Home() {
       <nav className="servers">
         <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
           title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}>🏠</button>
+        <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
+          title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
         <div className="srv-sep" />
         {servers.map(s => (
           <button key={s.id} className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
@@ -61,7 +64,9 @@ export function Home() {
         <button className="srv add" title="Создать сервер" onClick={onCreate}>＋</button>
         <button className="srv join" title="Присоединиться по коду" onClick={onJoin}>🔗</button>
       </nav>
-      {view.kind === 'dm'
+      {view.kind === 'music'
+        ? <MusicPlayer me={username} onClose={() => setView({ kind: 'dm' })} />
+        : view.kind === 'dm'
         ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
         : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
