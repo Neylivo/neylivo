@@ -5,7 +5,9 @@ import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
-import { myServers, createServer as createSrv, joinByCode } from '../lib/servers'
+import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer } from '../lib/servers'
+import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal } from './ServerModals'
+import { getServerPrefs } from '../lib/serverPrefs'
 import { PresenceProvider } from '../lib/presence'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
@@ -16,6 +18,10 @@ export function Home() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [servers, setServers] = useState<Server[]>([])
   const [view, setView] = useState<View>({ kind: 'dm' })
+  const [showCreate, setShowCreate] = useState(false)
+  const [showFind, setShowFind] = useState(false)
+  const [ctx, setCtx] = useState<{ server: Server; x: number; y: number } | null>(null)
+  const [settingsServer, setSettingsServer] = useState<Server | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -34,20 +40,34 @@ export function Home() {
     }
   }
 
-  async function onCreate() {
-    const name = prompt('Название сервера')?.trim()
+  async function onCreate(name: string, avatar: string | null) {
     if (!name || !user) return
     const res = await createSrv(name, user.id, username)
     if (res.error) return alert(res.error.message)
-    if (res.server) refresh(res.server.id)
+    setShowCreate(false)
+    if (res.server) {
+      if (avatar) { const { setServerPrefs } = await import('../lib/serverPrefs'); setServerPrefs(res.server.id, { avatar }) }
+      refresh(res.server.id)
+    }
   }
 
-  async function onJoin() {
-    const code = prompt('Вставь код приглашения или ссылку')?.trim()
-    if (!code || !user) return
-    const res = await joinByCode(code, user.id, username)
-    if (res.error) return alert(res.error.message)
-    if (res.serverId) refresh(res.serverId)
+  async function onCtxAction(k: string, server: Server) {
+    if (!user) return
+    if (k === 'copyid') { navigator.clipboard?.writeText(server.id); return }
+    if (k === 'settings') { setSettingsServer(server); return }
+    if (k === 'invite') {
+      const { createInvite } = await import('../lib/servers')
+      const res = await createInvite(server.id, user.id)
+      if (res.code) { navigator.clipboard?.writeText(res.code); alert('Код приглашения скопирован: ' + res.code) }
+      return
+    }
+    if (k === 'delete') {
+      if (server.owner !== user.id) return alert('Только владелец может удалить сервер')
+      await deleteServer(server.id)
+      setView({ kind: 'dm' }); refresh()
+      return
+    }
+    // read / notif / mute / tag — client-side niceties, no-op persistence for now
   }
 
   return (
@@ -63,14 +83,21 @@ export function Home() {
             title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
         </div>
         <div className="srv-sep" />
-        {servers.map(s => (
+        {servers.map(s => {
+          const prefs = getServerPrefs(s.id)
+          return (
           <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
             <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
-              title={s.name} onClick={() => setView({ kind: 'server', server: s })}>{s.name.slice(0, 2).toUpperCase()}</button>
+              style={prefs.avatar ? { backgroundImage: `url(${prefs.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
+              title={s.name}
+              onClick={() => setView({ kind: 'server', server: s })}
+              onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
+              {s.name.slice(0, 2).toUpperCase()}</button>
           </div>
-        ))}
-        <button className="srv add" title="Создать сервер" onClick={onCreate}>＋</button>
-        <button className="srv join" title="Присоединиться по коду" onClick={onJoin}>🔗</button>
+          )
+        })}
+        <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}>＋</button>
+        <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}>🔍</button>
       </nav>
       {view.kind === 'music'
         ? <MusicPlayer me={username} onClose={() => setView({ kind: 'dm' })} />
@@ -78,6 +105,13 @@ export function Home() {
         ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
         : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
+    {showCreate && <CreateServerModal onClose={() => setShowCreate(false)} onCreate={onCreate} />}
+    {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
+    {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
+    {settingsServer && <ServerSettingsModal server={settingsServer}
+      onClose={() => setSettingsServer(null)}
+      onRename={async name => { await renameServer(settingsServer.id, name); setSettingsServer(null); refresh() }}
+      onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setView({ kind: 'dm' }); refresh() }} />}
     </PresenceProvider>
   )
 }
