@@ -1,9 +1,9 @@
-
+import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, STATUS_LABEL } from '../lib/presence'
 import { tagFor } from '../lib/friendCode'
-import { getProfile } from '../lib/profilePrefs'
+import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 
 export interface MiniProfileData {
@@ -18,13 +18,14 @@ export interface MiniProfileData {
 
 export function MiniProfile({ data, onClose, onMessage }:
   { data: MiniProfileData; onClose: () => void; onMessage?: () => void }) {
+  const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  useEffect(() => { let ok = true; fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
   return (
     <>
       <div className="mini-overlay" onClick={onClose} />
       <div className="mini" style={{ left: data.x, top: data.y }} onClick={e => e.stopPropagation()}>
-        {(() => { const pp = getProfile(data.userId); return <>
         <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
-        <ProfilePet p={pp} scale={0.3} /></> })()}
+        <ProfilePet p={pp} scale={0.3} />
         <div className="mini-av">
           <Avatar name={data.name} url={data.avatarUrl} size={72} />
           <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
@@ -33,6 +34,7 @@ export function MiniProfile({ data, onClose, onMessage }:
           <div className="mini-name">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()}{tagFor(data.userId)} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}</div>
+          {pp.about && <div className="mini-about">{pp.about}</div>}
           <div className="mini-divider" />
           <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}>🔗 Копировать код друга</button>
           {data.role === 'owner'
