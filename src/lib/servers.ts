@@ -13,12 +13,18 @@ export async function myServers(): Promise<Server[]> {
   return (data ?? []) as Server[]
 }
 
-export async function createServer(name: string, meId: string, meName: string) {
-  const { data, error } = await supabase.from('servers').insert({ name, owner: meId }).select().single()
+export async function createServer(name: string, meId: string, meName: string, avatarUrl?: string | null) {
+  const { data, error } = await supabase.from('servers').insert({ name, owner: meId, avatar_url: avatarUrl ?? null }).select().single()
   if (error || !data) return { error }
   await supabase.from('server_members').insert({ server_id: data.id, user_id: meId, member_name: meName, role: 'owner' })
   await supabase.from('channels').insert({ server_id: data.id, name: 'общий' })
   return { server: data as Server }
+}
+
+// Update shared server fields (name / avatar / accent). Stored on the servers row
+// so every member sees the same avatar & accent on any device.
+export async function updateServer(id: string, patch: { name?: string; avatar_url?: string | null; accent?: string | null }) {
+  return supabase.from('servers').update(patch).eq('id', id)
 }
 
 export async function createInvite(serverId: string, meId: string) {
@@ -53,7 +59,6 @@ export async function listMembers(serverId: string) {
 export async function findServers(q: string): Promise<Server[]> {
   const term = q.trim()
   if (!term) return []
-  // match by name (ilike) or exact id
   const byName = await supabase.from('servers').select('*').ilike('name', '%' + term + '%').limit(10)
   const list = (byName.data ?? []) as Server[]
   if (list.length === 0 && /^[0-9a-f-]{6,}$/i.test(term)) {
@@ -64,7 +69,7 @@ export async function findServers(q: string): Promise<Server[]> {
 }
 
 export async function renameServer(id: string, name: string) {
-  return supabase.from('servers').update({ name }).eq('id', id)
+  return updateServer(id, { name })
 }
 
 export async function deleteServer(id: string) {
