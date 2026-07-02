@@ -11,13 +11,14 @@ type View = { kind: 'dm' } | { kind: 'server'; server: Server }
 export function Home() {
   const { user } = useAuth()
   const [username, setUsername] = useState('Вы')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [servers, setServers] = useState<Server[]>([])
   const [view, setView] = useState<View>({ kind: 'dm' })
 
   useEffect(() => {
     if (!user) return
-    supabase.from('profiles').select('username').eq('id', user.id).single()
-      .then(({ data }) => { if (data?.username) setUsername(data.username) })
+    supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
+      .then(({ data }) => { if (data?.username) setUsername(data.username); if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
     refresh()
     // eslint-disable-next-line
   }, [user])
@@ -61,8 +62,8 @@ export function Home() {
         <button className="srv join" title="Присоединиться по коду" onClick={onJoin}>🔗</button>
       </nav>
       {view.kind === 'dm'
-        ? <DMHome username={username} />
-        : <ServerView server={view.server} username={username} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+        ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
+        : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
   )
 }

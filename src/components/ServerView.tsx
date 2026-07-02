@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel, Message } from '../types'
-import { colorFor, initial, timeShort } from '../lib/ui'
+import { timeShort } from '../lib/ui'
 import { MeBar } from './MeBar'
+import { Avatar } from './Avatar'
+import { Composer, Attachment } from './Composer'
 import { createInvite, listMembers } from '../lib/servers'
 
-export function ServerView({ server, username, onLeft }: { server: Server; username: string; onLeft: () => void }) {
+export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
+  { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
   const { user } = useAuth()
   const [channels, setChannels] = useState<Channel[]>([])
   const [curChannel, setCurChannel] = useState<Channel | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
-  const [text, setText] = useState('')
   const [members, setMembers] = useState<any[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const isOwner = server.owner === user?.id
@@ -58,7 +60,6 @@ export function ServerView({ server, username, onLeft }: { server: Server; usern
     if (!user) return
     const res = await createInvite(server.id, user.id)
     if (res.error) return alert(res.error.message)
-    const link = location.origin + '/#join-' + res.code
     try { await navigator.clipboard.writeText(res.code!) } catch {}
     prompt('Код приглашения скопирован. Отправь его другу:', res.code!)
   }
@@ -70,13 +71,11 @@ export function ServerView({ server, username, onLeft }: { server: Server; usern
     onLeft()
   }
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault()
-    const t = text.trim()
-    if (!t || !curChannel || !user) return
-    setText('')
+  async function sendMsg(t: string, attach?: { url: string; type: string }) {
+    if (!curChannel || !user) return
     const { error } = await supabase.from('messages').insert({
       channel_id: curChannel.id, author: user.id, author_name: username, content: t,
+      attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
     })
     if (error) alert(error.message)
   }
@@ -97,35 +96,31 @@ export function ServerView({ server, username, onLeft }: { server: Server; usern
           <div className="dm-sec-t">Участники — {members.length}</div>
           {members.map(m => (
             <div key={m.user_id} className="dm-item">
-              <span className="dm-av" style={{ background: colorFor(m.member_name) }}>{initial(m.member_name)}</span>
+              <Avatar name={m.member_name} url={m.avatar_url} size={32} />
               <span className="me-nm">{m.member_name}</span>
               {m.role === 'owner' && <span className="mut" title="Владелец">👑</span>}
             </div>
           ))}
           {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}>⎋ покинуть сервер</div>}
         </div>
-        <MeBar username={username} />
+        <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
         <header className="chat-head"># {curChannel?.name ?? '—'}</header>
         <div className="msgs">
           {messages.map(m => (
             <div key={m.id} className="msg">
-              <div className="msg-av" style={{ background: colorFor(m.author_name) }}>{initial(m.author_name)}</div>
+              <Avatar name={m.author_name} url={(m as any).author_avatar} size={40} />
               <div className="msg-body">
                 <div className="msg-hdr"><b>{m.author_name}</b><span className="msg-time">{timeShort(m.created_at)}</span></div>
-                <div className="msg-txt">{m.content}</div>
+                {m.content && <div className="msg-txt">{m.content}</div>}
+                <Attachment url={(m as any).attach_url} type={(m as any).attach_type} />
               </div>
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
-        {curChannel && (
-          <form className="composer" onSubmit={send}>
-            <input placeholder={'Написать в #' + curChannel.name} value={text} onChange={e => setText(e.target.value)} />
-            <button type="submit">➤</button>
-          </form>
-        )}
+        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} />}
       </main>
     </>
   )

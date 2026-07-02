@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile } from '../types'
-import { colorFor, initial, timeShort } from '../lib/ui'
+import { timeShort } from '../lib/ui'
 import { searchUsers, sendRequest, respondRequest, openThread } from '../lib/friends'
 import { MeBar } from './MeBar'
+import { Avatar } from './Avatar'
+import { Composer, Attachment } from './Composer'
 
 interface Friend { id: string; name: string }
 
-export function DMHome({ username }: { username: string }) {
+export function DMHome({ username, avatarUrl, onAvatar }:
+  { username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void }) {
   const { user } = useAuth()
   const meId = user!.id
   const [requests, setRequests] = useState<FriendRequest[]>([])
@@ -18,7 +21,6 @@ export function DMHome({ username }: { username: string }) {
   const [active, setActive] = useState<Friend | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DMMessage[]>([])
-  const [text, setText] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { loadRequests() /* eslint-disable-next-line */ }, [])
@@ -41,10 +43,7 @@ export function DMHome({ username }: { username: string }) {
     setFriends(fr)
   }
 
-  async function doSearch(v: string) {
-    setQ(v)
-    setResults(await searchUsers(v, meId))
-  }
+  async function doSearch(v: string) { setQ(v); setResults(await searchUsers(v, meId)) }
 
   async function add(p: Profile) {
     const { error } = await sendRequest(meId, username, p)
@@ -73,13 +72,11 @@ export function DMHome({ username }: { username: string }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault()
-    const t = text.trim()
-    if (!t || !threadId) return
-    setText('')
+  async function sendMsg(t: string, attach?: { url: string; type: string }) {
+    if (!threadId) return
     const { error } = await supabase.from('dm_messages').insert({
       thread_id: threadId, author: meId, author_name: username, content: t,
+      attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
     })
     if (error) alert(error.message)
   }
@@ -93,7 +90,7 @@ export function DMHome({ username }: { username: string }) {
           </div>
           {results.map(p => (
             <div key={p.id} className="dm-item" onClick={() => add(p)}>
-              <span className="dm-av" style={{ background: colorFor(p.username) }}>{initial(p.username)}</span>
+              <Avatar name={p.username} url={p.avatar_url} size={32} />
               <span className="me-nm">{p.username}</span><span className="mut">＋</span>
             </div>
           ))}
@@ -103,7 +100,7 @@ export function DMHome({ username }: { username: string }) {
           <div className="dm-sec-t">Заявки в друзья — {requests.length}</div>
           {requests.map(r => (
             <div key={r.id} className="req">
-              <span className="dm-av" style={{ background: colorFor(r.from_name) }}>{initial(r.from_name)}</span>
+              <Avatar name={r.from_name} size={32} />
               <span className="nm">{r.from_name}</span>
               <button className="ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}>✓</button>
               <button className="no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}>✕</button>
@@ -115,13 +112,13 @@ export function DMHome({ username }: { username: string }) {
         <div className="ch-list">
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
-              <span className="dm-av" style={{ background: colorFor(f.name) }}>{initial(f.name)}</span>
+              <Avatar name={f.name} size={32} />
               <span className="me-nm">{f.name}</span>
             </div>
           ))}
           {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Найди кого-нибудь выше.</div>}
         </div>
-        <MeBar username={username} />
+        <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
 
       <main className="chat">
@@ -130,19 +127,17 @@ export function DMHome({ username }: { username: string }) {
           <div className="msgs">
             {messages.map(m => (
               <div key={m.id} className="msg">
-                <div className="msg-av" style={{ background: colorFor(m.author_name) }}>{initial(m.author_name)}</div>
+                <Avatar name={m.author_name} size={40} />
                 <div className="msg-body">
                   <div className="msg-hdr"><b>{m.author_name}</b><span className="msg-time">{timeShort(m.created_at)}</span></div>
-                  <div className="msg-txt">{m.content}</div>
+                  {m.content && <div className="msg-txt">{m.content}</div>}
+                  <Attachment url={(m as any).attach_url} type={(m as any).attach_type} />
                 </div>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
-          <form className="composer" onSubmit={send}>
-            <input placeholder={'Написать @' + active.name} value={text} onChange={e => setText(e.target.value)} />
-            <button type="submit">➤</button>
-          </form>
+          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
         </> : <div className="dm-empty">Выбери друга слева, чтобы начать переписку 💬</div>}
       </main>
     </>

@@ -74,3 +74,8 @@ body { font-family: 'gg sans', 'Inter', system-ui, sans-serif; background: var(-
 .srv-title { display: flex; align-items: center; justify-content: space-between; }
 .srv-invite { background: none; border: none; color: var(--mut); cursor: pointer; font-size: 15px; }
 .srv-invite:hover { color: #fff; }
+
+/* stage 4: attachments */
+.attach-btn { background: #383a40; border: none; color: var(--tx); border-radius: 8px; width: 44px; font-size: 20px; cursor: pointer; }
+.msg-att { max-width: 360px; max-height: 300px; border-radius: 8px; margin-top: 6px; display: block; }
+.msg-file { display: inline-block; margin-top: 6px; color: #00a8fc; text-decoration: none; }
