@@ -34,11 +34,18 @@ export async function joinByCode(code: string, meId: string, meName: string) {
   if (!inv.data) return { error: { message: 'Приглашение не найдено' } }
   const { error } = await supabase.from('server_members')
     .insert({ server_id: inv.data.server_id, user_id: meId, member_name: meName, role: 'member' })
-  if (error && !String(error.message).includes('duplicate')) return { error }
+  if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }
   return { serverId: inv.data.server_id as string }
 }
 
+// Members with their profile avatar_url merged in (server_members has no avatar column).
 export async function listMembers(serverId: string) {
   const { data } = await supabase.from('server_members').select('*').eq('server_id', serverId).order('joined_at')
-  return data ?? []
+  const members = (data ?? []) as any[]
+  if (members.length === 0) return members
+  const ids = members.map(m => m.user_id)
+  const { data: profs } = await supabase.from('profiles').select('id, avatar_url').in('id', ids)
+  const byId: Record<string, string | null> = {}
+  for (const p of ((profs ?? []) as any[])) byId[p.id] = p.avatar_url ?? null
+  return members.map(m => ({ ...m, avatar_url: byId[m.user_id] ?? null }))
 }
