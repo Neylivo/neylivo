@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
-import { BG_IDB_KEY, TRACKS_KEY } from './types'
+import { BG_IDB_KEY } from './types'
 import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
+import { uploadTo } from '../lib/storage'
+import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 
 const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
 interface Playlist { id: string; name: string; trackIds: string[] }
 
-function loadUrlTracks(): Track[] {
-  try { return JSON.parse(localStorage.getItem(TRACKS_KEY) || '[]') } catch { return [] }
-}
-function saveUrlTracks(list: Track[]) {
-  localStorage.setItem(TRACKS_KEY, JSON.stringify(list.filter(t => t.kind === 'url')))
-}
 function loadPlaylists(): Playlist[] {
   try { return JSON.parse(localStorage.getItem(PLAYLISTS_KEY) || '[]') } catch { return [] }
 }
@@ -25,8 +21,10 @@ function fmt(s: number) {
 }
 function isSoundcloud(u: string) { return /soundcloud\.com/i.test(u) }
 
-export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }) {
-  const [tracks, setTracks] = useState<Track[]>(loadUrlTracks)
+export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; onClose: () => void }) {
+  // Shared library ("Трекотека"): tracks live in the music_tracks table, visible
+  // to everyone, and anyone can add. Realtime keeps every listener's list in sync.
+  const [tracks, setTracks] = useState<Track[]>([])
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [settings, setSettings] = useState(false)
@@ -41,6 +39,7 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
   const [qFilter, setQFilter] = useState('')
   const [showLib, setShowLib] = useState(false)
   const [libQ, setLibQ] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off')
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists)
@@ -53,6 +52,18 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
   const cur = tracks[idx]
 
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
+
+  // Initial load + realtime subscription so new tracks appear for everyone live.
+  useEffect(() => {
+    let ok = true
+    fetchTracks().then(t => { if (ok) setTracks(t) })
+    const ch = supabase.channel('music_tracks_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'music_tracks' }, () => {
+        fetchTracks().then(t => { if (ok) setTracks(t) })
+      })
+      .subscribe()
+    return () => { ok = false; supabase.removeChannel(ch) }
+  }, [])
 
   useEffect(() => {
     let revoked = ''
@@ -94,22 +105,31 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
     }
   }, [idx, playing, together])
 
-  function addFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function addFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const fs = Array.from(e.target.files ?? [])
-    const add: Track[] = fs.map((f, i) => ({ id: Date.now() + '_' + i, url: URL.createObjectURL(f), name: f.name.replace(/\.[^.]+$/, ''), owner: me, kind: 'file' }))
-    setTracks(t => [...t, ...add])
-    if (fileRef.current) fileRef.current.value = ''
+    if (fs.length === 0 || !meId) return
+    setUploading(true)
+    try {
+      for (const f of fs) {
+        const url = await uploadTo('attachments', meId, f)   // shared public URL
+        await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
+      }
+      setTracks(await fetchTracks())
+    } catch (err: any) { alert(err.message ?? String(err)) }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
-  function addSoundcloud() {
-    const url = scUrl.trim(); if (!url) return
+  async function addSoundcloud() {
+    const url = scUrl.trim(); if (!url || !meId) return
     const name = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
-    setTracks(t => { const n = [...t, { id: 'u_' + Date.now(), url, name, owner: me, kind: 'url' as const }]; saveUrlTracks(n); return n })
+    await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url' })
     setScUrl('')
+    setTracks(await fetchTracks())
   }
 
-  function removeTrack(id: string) {
-    setTracks(t => { const n = t.filter(x => x.id !== id); saveUrlTracks(n); return n })
+  async function removeTrack(id: string) {
+    await removeTrackDb(id)
+    setTracks(t => t.filter(x => x.id !== id))
     setIdx(i => Math.max(0, Math.min(i, tracks.length - 2)))
   }
 
@@ -186,7 +206,7 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
           </div>
 
           {tab === 'queue' ? <>
-            <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>＋</button></div>
+            <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : '＋'}</button></div>
             <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
             <div className="mus2-list">
               {filteredQueue.length === 0 && <div className="mus2-empty">Пусто. Вставь ссылку SoundCloud, чтобы добавить трек.</div>}
@@ -223,7 +243,7 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
           <div className="mus2-art">{cur ? '🎵' : <span className="mus2-note">♫</span>}</div>
           <div className="mus2-nowt">{cur ? cur.name : 'Ничего не играет'}</div>
-          <div className="mus2-nowsub">{cur ? (isSoundcloud(cur.url) ? 'SoundCloud' : cur.kind === 'url' ? 'по ссылке' : 'локальный файл') : 'Добавь трек, чтобы начать'}</div>
+          <div className="mus2-nowsub">{cur ? (isSoundcloud(cur.url) ? 'SoundCloud' : cur.kind === 'url' ? 'по ссылке' : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {together && <div className="mus2-together-badge">👥 Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
           {showRight && <img className="mus-gif r" src={gif.url} alt="" />}
         </section>
@@ -273,10 +293,10 @@ export function MusicPlayer({ me, onClose }: { me: string; onClose: () => void }
           </header>
           <div className="mus2-lib-body">
             {tracks.length === 0
-              ? <div className="mus2-empty center">Очередь пуста. Добавь треки или разверни плейлист SoundCloud.</div>
+              ? <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
               : tracks.filter(t => t.name.toLowerCase().includes(libQ.toLowerCase())).map(t => {
                   const i = tracks.indexOf(t)
-                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>{t.name}</div>
+                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>{t.name}<span className="mus2-lib-own">{t.owner}</span></div>
                 })}
           </div>
         </div>
