@@ -68,3 +68,9 @@ body { font-family: 'gg sans', 'Inter', system-ui, sans-serif; background: var(-
 .dm-item.on { background: rgba(255,255,255,.08); }
 .dm-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; }
 .dm-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--mut); font-size: 15px; }
+
+/* stage 3: invite/join buttons + server title layout */
+.srv.join { color: #00a8fc; font-size: 18px; }
+.srv-title { display: flex; align-items: center; justify-content: space-between; }
+.srv-invite { background: none; border: none; color: var(--mut); cursor: pointer; font-size: 15px; }
+.srv-invite:hover { color: #fff; }
