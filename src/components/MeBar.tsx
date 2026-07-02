@@ -4,7 +4,6 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL, Status } from '../lib/presence'
-import { useState } from 'react'
 
 export function MeBar({ username, avatarUrl, onAvatar }: { username: string; avatarUrl?: string | null; onAvatar?: (url: string) => void }) {
   const { user } = useAuth()
