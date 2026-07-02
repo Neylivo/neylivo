@@ -27,8 +27,11 @@ export function MiniProfile({ data, onClose, onMessage }:
         <div className="mini-body">
           <div className="mini-name">{data.name}</div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}</div>
-          {data.role === 'owner' && <div className="mini-role">👑 Владелец</div>}
-          {onMessage && <button className="mini-msg" onClick={onMessage}>Написать</button>}
+          <div className="mini-divider" />
+          {data.role === 'owner'
+            ? <div className="mini-role">👑 Владелец сервера</div>
+            : data.role && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
+          {onMessage && <button className="mini-msg" onClick={onMessage}>Написать сообщение</button>}
         </div>
       </div>
     </>
