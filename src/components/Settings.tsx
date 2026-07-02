@@ -21,9 +21,9 @@ const CATS = [
 const LANGS = [
   { id: 'ru', flag: '🇷🇺', name: 'Русский', sub: 'Russian' },
   { id: 'en', flag: '🇬🇧', name: 'English', sub: 'English' },
-  { id: 'dolb', flag: '🤪', name: 'Долбёжка', sub: 'Meme' },
-  { id: 'staro', flag: '📜', name: 'Старославянский', sub: 'Old Slavic' },
-  { id: 'burm', flag: '🇲🇲', name: 'Бирманский', sub: 'Burmese' },
+  { id: 'dolb', flag: '🤪', name: 'Долбоёбский', sub: 'на свой страх и риск' },
+  { id: 'staro', flag: '📜', name: 'Старорусскій', sub: 'дореформенный' },
+  { id: 'burm', flag: '🐱', name: 'Бурмалды', sub: 'кошачий диалект' },
 ]
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -41,7 +41,7 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
 export function Settings({ username, avatarUrl, onClose }:
   { username: string; avatarUrl?: string | null; onClose: () => void }) {
   const { user } = useAuth()
-  const { settings, set, accents } = useSettings()
+  const { settings, set, setCustom, accents, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
   const [name, setName] = useState(username)
   const [about, setAbout] = useState(() => localStorage.getItem('ponoi_about_' + (user?.id ?? '')) || '')
@@ -106,27 +106,49 @@ export function Settings({ username, avatarUrl, onClose }:
 
           {cat === 'appearance' && <>
             <h2>Внешний вид</h2>
-            <Row title="Тема">
-              <div className="pqs-themes">
-                {(['dark', 'midnight', 'light'] as const).map(t => (
-                  <button key={t} className={'pqs-theme ' + t + (settings.theme === t ? ' on' : '')} onClick={() => set('theme', t)}>
-                    {t === 'dark' ? 'Тёмная' : t === 'midnight' ? 'Тёмная-тёмная' : 'Светлая'}
-                  </button>
-                ))}
+
+            <div className="pqs-custom">
+              <div className="pqs-custom-h">Своя тема</div>
+              <div className="pqs-custom-sub">Задай цвет на каждую поверхность — можно собрать Discord целиком. Всё применяется сразу.</div>
+              {([
+                ['dark', 'Тёмный фон'], ['content', 'Основной фон'], ['panel', 'Панель'],
+                ['hover', 'Наведение'], ['active', 'Активный'], ['accent', 'Акцент'],
+              ] as const).map(([k, label]) => (
+                <div key={k} className="pqs-custom-row">
+                  <span>{label}</span>
+                  <input type="color" value={(settings.custom as any)[k]} onChange={e => setCustom({ [k]: e.target.value, on: true } as any)} />
+                  <button className="pqs-custom-x" title="Сбросить поверхность" onClick={() => { const d = (settings.theme && themes.find(t => t.key === settings.theme)) || themes[0]; setCustom({ [k]: (d as any)[k] } as any) }}>✕</button>
+                </div>
+              ))}
+              <div className="pqs-custom-row">
+                <span>Затемнение текстур (читаемость)</span>
+                <input type="range" min={0} max={100} value={settings.custom.dim} onChange={e => setCustom({ dim: Number(e.target.value) })} />
+                <span className="pqs-custom-pct">{settings.custom.dim}%</span>
               </div>
-            </Row>
-            <Row title="Акцентный цвет">
-              <div className="pqs-accents">
-                {accents.map(a => (
-                  <button key={a} className={'pqs-acc-dot' + (settings.accent === a ? ' on' : '')} style={{ background: a }} onClick={() => set('accent', a)} />
-                ))}
+              <div className="pqs-custom-foot">
+                <label className="pqs-custom-toggle"><input type="checkbox" checked={settings.custom.on} onChange={e => setCustom({ on: e.target.checked })} /> Использовать свою тему</label>
+                <button className="pqs-save" onClick={() => setCustom({ on: false })}>Сбросить</button>
               </div>
+            </div>
+
+            <div className="pqs-sec-t">Тема</div>
+            <div className="pqs-preset-grid">
+              {themes.map(t => (
+                <button key={t.key} className={'pqs-preset' + (settings.theme === t.key && !settings.custom.on ? ' on' : '')}
+                  onClick={() => { set('theme', t.key); set('accent', t.accent); setCustom({ on: false }) }}>
+                  <span className="pqs-preset-sw" style={{ background: t.content, borderColor: t.accent }}>
+                    <span style={{ background: t.accent }} />
+                  </span>
+                  <span className="pqs-preset-nm">{t.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <Row title="Размер шрифта" desc={settings.fontPx + 'px'}>
+              <input type="range" min={12} max={20} step={1} value={settings.fontPx} onChange={e => set('fontPx', Number(e.target.value))} />
             </Row>
             <Row title="Компактный режим" desc="Уменьшает отступы между сообщениями">
               <Toggle on={settings.compact} onChange={v => set('compact', v)} />
-            </Row>
-            <Row title="Размер шрифта" desc={Math.round(settings.fontScale * 100) + '%'}>
-              <input type="range" min={85} max={130} value={settings.fontScale * 100} onChange={e => set('fontScale', Number(e.target.value) / 100)} />
             </Row>
             <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
               <Toggle on={settings.animations} onChange={v => set('animations', v)} />
