@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
 import { friendCode } from '../lib/friendCode'
+import { getProfile, setProfile, petKindOf, fileToDataUrl } from '../lib/profilePrefs'
+import { ProfilePet } from './ProfilePet'
+import { useRef } from 'react'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -44,8 +47,16 @@ export function Settings({ username, avatarUrl, onClose }:
   const { settings, set, setCustom, accents, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
   const [name, setName] = useState(username)
-  const [about, setAbout] = useState(() => localStorage.getItem('ponoi_about_' + (user?.id ?? '')) || '')
+  const [prof, setProf] = useState(() => getProfile(user?.id ?? ''))
+  const [about, setAbout] = useState(() => getProfile(user?.id ?? '').about)
   const [saved, setSaved] = useState(false)
+  const petRef = useRef<HTMLInputElement>(null)
+  function patchProf(patch: any) { setProf(setProfile(user!.id, patch)) }
+  async function pickPet(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return
+    const url = await fileToDataUrl(f)
+    patchProf({ petUrl: url, petKind: petKindOf(f), petOn: true })
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -55,7 +66,7 @@ export function Settings({ username, avatarUrl, onClose }:
 
   async function saveAccount() {
     if (name.trim() && name !== username) await supabase.from('profiles').update({ username: name.trim() }).eq('id', user!.id)
-    localStorage.setItem('ponoi_about_' + user!.id, about)
+    patchProf({ about })
     setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
 
@@ -85,7 +96,7 @@ export function Settings({ username, avatarUrl, onClose }:
               </div>
             </div>
             <div className="pqs-acc-card">
-              <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${settings.accent}, #eb459e)` }} />
+              <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
               <div className="pqs-acc-row">
                 <div className="pqs-acc-av" style={{ background: settings.accent }}>
                   {avatarUrl ? <img src={avatarUrl} alt={username} /> : username.slice(0, 1).toUpperCase()}
@@ -93,6 +104,57 @@ export function Settings({ username, avatarUrl, onClose }:
                 <div className="pqs-acc-name">{username}</div>
               </div>
             </div>
+            <div className="pqs-acc-card2">
+              <div className="pqs-sec-t">Тема профиля</div>
+              <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю.</div>
+              <div className="pqs-ptheme-row">
+                <label className="pqs-ptheme"><input type="color" value={prof.primary} onChange={e => patchProf({ primary: e.target.value })} /> Основной цвет</label>
+                <label className="pqs-ptheme"><input type="color" value={prof.accent} onChange={e => patchProf({ accent: e.target.value })} /> Акцент</label>
+              </div>
+              <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+              <button className="pqs-save" onClick={() => patchProf({ primary: '#5865f2', accent: '#5865f2' })}>Сбросить</button>
+            </div>
+
+            <div className="pqs-acc-card2">
+              <div className="pqs-sec-t">Питомец профиля</div>
+              <div className="pqs-code-sub">Маленький питомец в правом нижнем углу твоего профиля (мини и большого). Можно фото, GIF, видео или 3D-модель (.glb/.gltf). Ставить не обязательно.</div>
+              <Row title="Показывать питомца" desc="Включи, чтобы поставить питомца на профиль">
+                <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
+              </Row>
+              <div className="pqs-pet-pick">
+                <div className="pqs-pet-thumb">{prof.petUrl ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted /> : <img src={prof.petUrl} alt="" />) : '—'}</div>
+                <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>Выбрать файл</button>
+                <button className="pqs-save" onClick={() => patchProf({ petUrl: null, petKind: 'none', petOn: false })}>Убрать</button>
+                <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
+              </div>
+              <div className="pqs-code-sub">Поддерживается: фото (PNG/JPG/WebP), GIF, видео (MP4/WebM — лучше короткое и зациклённое) и 3D-модель (.glb/.gltf — её можно вращать мышью).</div>
+              <Row title="Размер" desc={prof.petSize + ' px'}>
+                <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
+              </Row>
+              <div className="pqs-lbl">Позиция</div>
+              <div className="pqs-pet-pos">
+                {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
+                  <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
+                ))}
+              </div>
+              <div className="pqs-pet-previews">
+                <div>
+                  <div className="pqs-pet-plabel">Мини-профиль (1:1)</div>
+                  <div className="pqs-pet-card mini" style={{ position: 'relative' }}>
+                    <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                    <ProfilePet p={prof} scale={0.35} />
+                  </div>
+                </div>
+                <div>
+                  <div className="pqs-pet-plabel">Большой профиль (1:1)</div>
+                  <div className="pqs-pet-card big" style={{ position: 'relative' }}>
+                    <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                    <ProfilePet p={prof} scale={0.5} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <label className="pqs-lbl">Имя пользователя</label>
             <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} />
             <label className="pqs-lbl">О себе</label>
