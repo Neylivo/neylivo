@@ -606,3 +606,30 @@ input[type=range] { accent-color:var(--brand); }
 .me-ic:hover{background:rgba(255,255,255,.06);color:#fff;}
 .me-ic.off{color:#f23f43;}
 @media (max-width:1100px){.pfr-right{display:none;}}
+
+
+/* ===== pass 13: friend codes (add-by-code panel, mini-profile code, settings) ===== */
+.pfr-codebox { background:var(--bg3); border:1px solid rgba(0,0,0,.3); border-radius:10px; padding:16px; margin-bottom:16px; }
+.pfr-codeh, .pfr-codeh2 { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin-bottom:8px; }
+.pfr-codeh2 { margin-top:16px; }
+.pfr-coderow { display:flex; align-items:center; gap:12px; background:rgba(0,0,0,.25); border-radius:8px; padding:10px 14px; }
+.pfr-code { font-weight:800; color:#fff; }
+.pfr-codehint { color:var(--mut); font-size:13px; margin-left:auto; }
+.pfr-copy, .pfr-addbtn2 { background:var(--brand); border:none; color:#fff; padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.pfr-copy:hover, .pfr-addbtn2:hover { filter:brightness(1.1); }
+.pfr-addcoderow { display:flex; gap:10px; align-items:center; }
+.pfr-addcoderow .pfr-addin { margin-bottom:0; flex:1; }
+.pfr-codemsg { margin-top:10px; color:var(--mut); font-size:13px; }
+.mini-code { color:var(--mut); font-size:13px; margin-top:2px; display:flex; align-items:center; gap:6px; }
+.mini-hash { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--brand); color:#fff; font-size:11px; font-weight:700; }
+.mini-copycode { margin-top:10px; width:100%; background:rgba(0,0,0,.25); border:none; color:var(--tx); padding:9px; border-radius:8px; font-weight:600; cursor:pointer; }
+.mini-copycode:hover { background:rgba(255,255,255,.08); }
+.pqs-code-card { background:var(--bg3); border-radius:10px; padding:16px; margin-bottom:16px; }
+.pqs-code-h { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
+.pqs-code-sub { color:var(--mut); font-size:13px; margin:4px 0 12px; }
+.pqs-code-row { display:flex; align-items:center; gap:12px; background:rgba(0,0,0,.25); border-radius:8px; padding:10px 14px; }
+.pqs-code-val { font-weight:800; color:#fff; }
+.pqs-code-hint { color:var(--mut); font-size:13px; margin-left:auto; }
+.pqs-code-copy { background:var(--brand); border:none; color:#fff; padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer; }
+.pqs-email { margin-top:20px; border-top:1px solid rgba(255,255,255,.08); padding-top:16px; }
+.pqs-email-val { font-family:monospace; color:var(--tx); letter-spacing:1px; }
