@@ -2,6 +2,7 @@
 import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, STATUS_LABEL } from '../lib/presence'
+import { tagFor } from '../lib/friendCode'
 
 export interface MiniProfileData {
   userId: string
@@ -26,8 +27,10 @@ export function MiniProfile({ data, onClose, onMessage }:
         </div>
         <div className="mini-body">
           <div className="mini-name">{data.name}</div>
+          <div className="mini-code">{data.name.toLowerCase()}{tagFor(data.userId)} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}</div>
           <div className="mini-divider" />
+          <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}>🔗 Копировать код друга</button>
           {data.role === 'owner'
             ? <div className="mini-role">👑 Владелец сервера</div>
             : data.role && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
