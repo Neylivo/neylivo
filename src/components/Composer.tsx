@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { uploadTo, isImage } from '../lib/storage'
+import { EmojiPicker } from './EmojiPicker'
+import { GifPicker } from './GifPicker'
 
 export function Composer({ placeholder, onSend }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void> }) {
@@ -8,7 +10,18 @@ export function Composer({ placeholder, onSend }:
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const [emoji, setEmoji] = useState(false)
+  const [gif, setGif] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  function insertEmoji(t: string) { setText(x => x + t); setEmoji(false) }
+  async function sendGif(url: string) {
+    setGif(false)
+    if (!user) return
+    setBusy(true)
+    try { await onSend('', { url, type: 'image' }) } catch (err: any) { alert(err.message ?? String(err)) }
+    finally { setBusy(false) }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -31,7 +44,14 @@ export function Composer({ placeholder, onSend }:
     <form className="composer" onSubmit={submit}>
       <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}>＋</button>
       <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
-      <input placeholder={file ? ('📎 ' + file.name) : placeholder} value={text} onChange={e => setText(e.target.value)} />
+      <input placeholder={file ? ('📎 ' + file.name) : placeholder} value={text} onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') { setEmoji(false); setGif(false) } }} />
+      <div className="composer-tools">
+        <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
+        <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}>😊</button>
+        {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
+        {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} /></div>}
+      </div>
       <button type="submit" disabled={busy}>{busy ? '…' : '➤'}</button>
     </form>
   )
