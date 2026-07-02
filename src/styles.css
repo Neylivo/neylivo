@@ -305,3 +305,18 @@ input[type=range] { accent-color:var(--brand); }
 .pqs-lang-name { font-weight:700; }
 .pqs-lang-sub { color:var(--mut); font-size:12px; }
 .pqs-lang-badge { position:absolute; top:8px; right:10px; color:var(--brand); font-weight:800; }
+
+
+/* ===== pass 4: music player full ===== */
+.mus-artist { color:var(--mut); font-size:13px; margin-top:-6px; }
+.mus-disc { font-size:110px; filter:drop-shadow(0 8px 24px rgba(0,0,0,.5)); }
+.mus-seek { display:flex; align-items:center; gap:10px; width:340px; max-width:70vw; font-size:12px; color:var(--mut); }
+.mus-seek input { flex:1; accent-color:var(--brand); }
+.mus-vol { display:flex; align-items:center; gap:8px; width:220px; }
+.mus-vol input { flex:1; accent-color:var(--brand); }
+.mus-addrow { display:flex; gap:8px; }
+.mus-li { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.mus-li-n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mus-li-del { opacity:0; color:#fff; padding:0 4px; }
+.mus-li:hover .mus-li-del { opacity:.7; }
+.mus-li-del:hover { opacity:1 !important; color:var(--red); }

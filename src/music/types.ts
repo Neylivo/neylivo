@@ -1,4 +1,5 @@
-export interface Track { id: string; url: string; name: string; owner: string }
+
+export interface Track { id: string; url: string; name: string; owner: string; kind?: 'url' | 'file' }
 export type GifPos = 'left' | 'right' | 'both'
 export interface GifCfg { url: string; pos: GifPos }
 export interface BgCfg {
@@ -11,3 +12,4 @@ export interface BgCfg {
 export const GIF_KEY = 'ponoi_mus_gif_v1'
 export const BG_KEY = 'ponoi_mus_bg_v1'
 export const BG_IDB_KEY = 'musbg'
+export const TRACKS_KEY = 'ponoi_mus_tracks_v1'  // persisted URL-tracks only (file tracks are object-URL, not persisted)
