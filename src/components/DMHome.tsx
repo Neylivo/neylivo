@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByCode } from '../lib/friends'
+import { friendCode, tagFor } from '../lib/friendCode'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -33,6 +34,9 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [showPins, setShowPins] = useState(false)
   const [tab, setTab] = useState<'online' | 'all' | 'pending' | 'add'>('online')
   const [ffilter, setFfilter] = useState('')
+  const [code, setCode] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [codeMsg, setCodeMsg] = useState('')
   const { statusOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
 
@@ -66,6 +70,15 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   async function add(p: Profile) {
     const { error } = await sendRequest(meId, username, p)
     if (error) alert(error.message); else { setQ(''); setResults([]); alert('Заявка отправлена ' + p.username) }
+  }
+
+  async function addByCode() {
+    const p = await findByCode(code)
+    if (!p) { setCodeMsg('Пользователь с таким кодом не найден'); return }
+    if (p.id === meId) { setCodeMsg('Это твой собственный код :)'); return }
+    const { error } = await sendRequest(meId, username, p)
+    if (error) setCodeMsg(error.message)
+    else { setCode(''); setCodeMsg('Заявка отправлена ' + friendCode(p.username, p.id)) }
   }
 
   async function openChat(f: Friend) {
@@ -205,6 +218,20 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           <div className="pfr-body">
             {tab === 'add' ? <div className="pfr-addbox">
               <div className="pfr-addh">Добавить в друзья</div>
+              <div className="pfr-codebox">
+                <div className="pfr-codeh">Мой код друга</div>
+                <div className="pfr-coderow">
+                  <span className="pfr-code">{friendCode(username, meId)}</span>
+                  <span className="pfr-codehint">поделись им</span>
+                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(friendCode(username, meId)); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
+                </div>
+                <div className="pfr-codeh2">Добавить в друзья по коду</div>
+                <div className="pfr-addcoderow">
+                  <input className="pfr-addin" placeholder="Введи код друга (например, Сергей#4242)" value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addByCode() }} />
+                  <button className="pfr-addbtn2" onClick={addByCode}>Добавить</button>
+                </div>
+                {codeMsg && <div className="pfr-codemsg">{codeMsg}</div>}
+              </div>
               <div className="pfr-addsub">Найди друзей по имени пользователя.</div>
               <input className="pfr-addin" placeholder="Введи имя пользователя…" value={q} onChange={e => doSearch(e.target.value)} />
               {results.map(p => (
