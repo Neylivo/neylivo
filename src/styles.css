@@ -511,3 +511,53 @@ input[type=range] { accent-color:var(--brand); }
 .pqs-theme:hover { transform:translateY(-1px); }
 .pqs-toggle { box-shadow:inset 0 1px 2px rgba(0,0,0,.3); }
 .pqs-kbd { min-width:90px; text-align:center; }
+
+
+
+/* ===== pass 11: Ponoi Music + call screen polish (mus-* / call-*) ===== */
+.mus-full { display:flex; flex-direction:column; }
+.mus-head { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; backdrop-filter:blur(6px); }
+.mus-head b { font-size:16px; }
+.mus-head-r { display:flex; gap:8px; }
+.mus-stage { flex:1; display:flex; align-items:center; justify-content:center; gap:32px; position:relative; }
+.mus-center { display:flex; flex-direction:column; align-items:center; gap:12px; width:min(440px,90%); z-index:2; }
+.mus-disc { font-size:88px; filter:drop-shadow(0 8px 24px rgba(0,0,0,.5)); }
+.mus-disc[data-spin="true"] { animation:musspin 4s linear infinite; }
+@keyframes musspin { to { transform:rotate(360deg); } }
+.mus-now { font-size:22px; font-weight:800; text-align:center; }
+.mus-artist { color:var(--mut); font-size:13px; margin-top:-6px; }
+.mus-seek { display:flex; align-items:center; gap:10px; width:100%; font-variant-numeric:tabular-nums; font-size:12px; color:var(--mut); }
+.mus-seek input { flex:1; }
+.mus-ctl { display:flex; align-items:center; gap:18px; margin:4px 0; }
+.mus-ctl button { background:none; border:none; color:var(--tx); font-size:22px; cursor:pointer; opacity:.85; }
+.mus-ctl button:hover:not(:disabled) { opacity:1; transform:scale(1.1); }
+.mus-ctl .big { width:56px; height:56px; border-radius:50%; background:var(--brand); font-size:24px; display:flex; align-items:center; justify-content:center; }
+.mus-vol { display:flex; align-items:center; gap:8px; width:100%; }
+.mus-vol input { flex:1; }
+.mus-addrow { display:flex; gap:10px; }
+.mus-add { background:var(--bg3); border:none; color:var(--tx); padding:8px 14px; border-radius:8px; cursor:pointer; }
+.mus-add:hover { background:rgba(255,255,255,.1); }
+.mus-list { width:100%; max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+.mus-li { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:6px; cursor:pointer; }
+.mus-li:hover { background:rgba(255,255,255,.06); }
+.mus-li.on { background:rgba(88,101,242,.25); }
+.mus-li-del { opacity:0; color:var(--mut); }
+.mus-li:hover .mus-li-del { opacity:1; }
+.mus-gif { max-width:180px; max-height:60vh; border-radius:12px; z-index:2; }
+
+.call-wrap { display:flex; flex-direction:column; background:#000; }
+.call-top { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; color:#fff; }
+.call-live { font-size:13px; font-weight:600; }
+.call-connected { color:#3ba55d; }
+.call-connecting, .call-reconnecting { color:#faa61a; }
+.call-cnt { font-size:13px; color:#ccc; }
+.call-stage { flex:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; padding:8px; align-content:center; }
+.call-tile { position:relative; background:#1e1f22; border-radius:12px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; }
+.call-media { width:100%; height:100%; object-fit:cover; }
+.call-cap { position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:#fff; font-size:12px; padding:2px 8px; border-radius:6px; z-index:2; }
+.call-bar { display:flex; align-items:center; justify-content:center; gap:14px; padding:16px; }
+.call-bar button { width:52px; height:52px; border-radius:50%; border:none; background:#2b2d31; color:#fff; font-size:20px; cursor:pointer; }
+.call-bar button:hover { background:#41434a; }
+.call-bar button.on { background:#4e5058; }
+.call-bar .leave { background:var(--red); }
+.call-bar .leave:hover { background:#c93b3e; }
