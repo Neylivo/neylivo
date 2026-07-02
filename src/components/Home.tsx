@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
+import { myServers, createServer as createSrv, joinByCode } from '../lib/servers'
 
 type View = { kind: 'dm' } | { kind: 'server'; server: Server }
 
@@ -17,26 +18,33 @@ export function Home() {
     if (!user) return
     supabase.from('profiles').select('username').eq('id', user.id).single()
       .then(({ data }) => { if (data?.username) setUsername(data.username) })
-    loadServers()
+    refresh()
     // eslint-disable-next-line
   }, [user])
 
-  async function loadServers(select?: Server) {
-    const { data } = await supabase.from('servers').select('*').order('created_at')
-    const list = data ?? []
+  async function refresh(selectId?: string) {
+    const list = await myServers()
     setServers(list)
-    if (select) setView({ kind: 'server', server: select })
+    if (selectId) {
+      const s = list.find(x => x.id === selectId)
+      if (s) setView({ kind: 'server', server: s })
+    }
   }
 
-  async function createServer() {
+  async function onCreate() {
     const name = prompt('Название сервера')?.trim()
     if (!name || !user) return
-    const { data, error } = await supabase.from('servers').insert({ name, owner: user.id }).select().single()
-    if (error) return alert(error.message)
-    if (data) {
-      await supabase.from('channels').insert({ server_id: data.id, name: 'общий' })
-      loadServers(data as Server)
-    }
+    const res = await createSrv(name, user.id, username)
+    if (res.error) return alert(res.error.message)
+    if (res.server) refresh(res.server.id)
+  }
+
+  async function onJoin() {
+    const code = prompt('Вставь код приглашения или ссылку')?.trim()
+    if (!code || !user) return
+    const res = await joinByCode(code, user.id, username)
+    if (res.error) return alert(res.error.message)
+    if (res.serverId) refresh(res.serverId)
   }
 
   return (
@@ -49,11 +57,12 @@ export function Home() {
           <button key={s.id} className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
             title={s.name} onClick={() => setView({ kind: 'server', server: s })}>{s.name.slice(0, 2).toUpperCase()}</button>
         ))}
-        <button className="srv add" title="Создать сервер" onClick={createServer}>＋</button>
+        <button className="srv add" title="Создать сервер" onClick={onCreate}>＋</button>
+        <button className="srv join" title="Присоединиться по коду" onClick={onJoin}>🔗</button>
       </nav>
       {view.kind === 'dm'
         ? <DMHome username={username} />
-        : <ServerView server={view.server} username={username} />}
+        : <ServerView server={view.server} username={username} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
     </div>
   )
 }

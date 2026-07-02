@@ -4,16 +4,21 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel, Message } from '../types'
 import { colorFor, initial, timeShort } from '../lib/ui'
 import { MeBar } from './MeBar'
+import { createInvite, listMembers } from '../lib/servers'
 
-export function ServerView({ server, username }: { server: Server; username: string }) {
+export function ServerView({ server, username, onLeft }: { server: Server; username: string; onLeft: () => void }) {
   const { user } = useAuth()
   const [channels, setChannels] = useState<Channel[]>([])
   const [curChannel, setCurChannel] = useState<Channel | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
+  const [members, setMembers] = useState<any[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
+  const isOwner = server.owner === user?.id
 
-  useEffect(() => { loadChannels() /* eslint-disable-next-line */ }, [server.id])
+  useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
+
+  async function loadMembers() { setMembers(await listMembers(server.id)) }
 
   async function loadChannels() {
     const { data } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
@@ -49,6 +54,22 @@ export function ServerView({ server, username }: { server: Server; username: str
     loadChannels()
   }
 
+  async function invite() {
+    if (!user) return
+    const res = await createInvite(server.id, user.id)
+    if (res.error) return alert(res.error.message)
+    const link = location.origin + '/#join-' + res.code
+    try { await navigator.clipboard.writeText(res.code!) } catch {}
+    prompt('Код приглашения скопирован. Отправь его другу:', res.code!)
+  }
+
+  async function leave() {
+    if (!user || isOwner) return
+    if (!confirm('Покинуть сервер?')) return
+    await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', user.id)
+    onLeft()
+  }
+
   async function send(e: React.FormEvent) {
     e.preventDefault()
     const t = text.trim()
@@ -63,13 +84,25 @@ export function ServerView({ server, username }: { server: Server; username: str
   return (
     <>
       <aside className="channels">
-        <div className="srv-title">{server.name}</div>
+        <div className="srv-title">
+          {server.name}
+          <button className="srv-invite" title="Пригласить" onClick={invite}>🔗</button>
+        </div>
         <div className="ch-list">
           {channels.map(c => (
             <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '')}
               onClick={() => selectChannel(c)}># {c.name}</div>
           ))}
           <div className="ch add" onClick={createChannel}>＋ канал</div>
+          <div className="dm-sec-t">Участники — {members.length}</div>
+          {members.map(m => (
+            <div key={m.user_id} className="dm-item">
+              <span className="dm-av" style={{ background: colorFor(m.member_name) }}>{initial(m.member_name)}</span>
+              <span className="me-nm">{m.member_name}</span>
+              {m.role === 'owner' && <span className="mut" title="Владелец">👑</span>}
+            </div>
+          ))}
+          {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}>⎋ покинуть сервер</div>}
         </div>
         <MeBar username={username} />
       </aside>
