@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
+import { friendCode } from '../lib/friendCode'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -74,6 +75,15 @@ export function Settings({ username, avatarUrl, onClose }:
         <div className="pqs-inner">
           {cat === 'account' && <>
             <h2>Мой аккаунт</h2>
+            <div className="pqs-code-card">
+              <div className="pqs-code-h">Код друга</div>
+              <div className="pqs-code-sub">Поделись своим кодом, чтобы тебя добавили в друзья.</div>
+              <div className="pqs-code-row">
+                <span className="pqs-code-val">{friendCode(username, user!.id)}</span>
+                <span className="pqs-code-hint">твой код</span>
+                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(friendCode(username, user!.id))}>Копировать</button>
+              </div>
+            </div>
             <div className="pqs-acc-card">
               <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${settings.accent}, #eb459e)` }} />
               <div className="pqs-acc-row">
@@ -88,6 +98,10 @@ export function Settings({ username, avatarUrl, onClose }:
             <label className="pqs-lbl">О себе</label>
             <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
             <button className="pqs-save" onClick={saveAccount}>{saved ? 'Сохранено ✓' : 'Сохранить'}</button>
+            <div className="pqs-email">
+              <div className="pqs-lbl">Email</div>
+              <div className="pqs-email-val">{(user?.email ?? '').replace(/^(.).*(@.*)$/, (_m, a, b) => a + '••••••' + b) || '••••••@••••.•••'}</div>
+            </div>
           </>}
 
           {cat === 'appearance' && <>
