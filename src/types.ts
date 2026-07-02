@@ -1,4 +1,4 @@
-export interface Profile { id: string; username: string; avatar_color: string | null }
+export interface Profile { id: string; username: string; avatar_color: string | null; avatar_url?: string | null }
 export interface Server { id: string; name: string; owner: string; created_at: string }
 export interface Channel { id: string; server_id: string; name: string }
 export interface Message {
@@ -8,6 +8,9 @@ export interface Message {
   author_name: string
   content: string
   created_at: string
+  attach_url?: string | null
+  attach_type?: string | null
+  pinned?: boolean
 }
 
 export interface FriendRequest {
@@ -27,4 +30,7 @@ export interface DMMessage {
   author_name: string
   content: string
   created_at: string
+  attach_url?: string | null
+  attach_type?: string | null
+  pinned?: boolean
 }
