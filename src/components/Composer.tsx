@@ -6,8 +6,9 @@ import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 
-export function Composer({ placeholder, onSend }:
-  { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void> }) {
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType }:
+  { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
+    replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const [text, setText] = useState('')
@@ -44,28 +45,36 @@ export function Composer({ placeholder, onSend }:
   }
 
   return (
-    <form className="composer" onSubmit={submit}>
-      <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
-      <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
-      <input placeholder={file ? file.name : placeholder} value={text} onChange={e => setText(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Escape') { setEmoji(false); setGif(false); return }
-          if (e.key === 'Enter') {
-            const hasCtrl = e.ctrlKey || e.metaKey
-            if (settings.sendKey === 'ctrl') {
-              if (hasCtrl) { e.preventDefault(); submit(e as any) } else { e.preventDefault() }
+    <>
+      {replyingTo && <div className="reply-banner">
+        <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
+        <span>{replyingTo.preview}</span>
+        <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
+      </div>}
+      <form className="composer" onSubmit={submit}>
+        <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
+        <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        <input placeholder={file ? file.name : placeholder} value={text}
+          onChange={e => { setText(e.target.value); onType?.() }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setEmoji(false); setGif(false); onCancelReply?.(); return }
+            if (e.key === 'Enter') {
+              const hasCtrl = e.ctrlKey || e.metaKey
+              if (settings.sendKey === 'ctrl') {
+                if (hasCtrl) { e.preventDefault(); submit(e as any) } else { e.preventDefault() }
+              }
+              // 'enter' mode: let the form submit naturally
             }
-            // 'enter' mode: let the form submit naturally
-          }
-        }} />
-      <div className="composer-tools">
-        <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
-        <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
-        {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
-        {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} /></div>}
-      </div>
-      <button type="submit" disabled={busy}>{busy ? '…' : <Icon name="send" size={18} />}</button>
-    </form>
+          }} />
+        <div className="composer-tools">
+          <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
+          <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
+          {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
+          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} /></div>}
+        </div>
+        <button type="submit" disabled={busy}>{busy ? '…' : <Icon name="send" size={18} />}</button>
+      </form>
+    </>
   )
 }
 
