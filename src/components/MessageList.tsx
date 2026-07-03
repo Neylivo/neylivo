@@ -24,6 +24,8 @@ export interface UiMessage {
   edited?: boolean
 }
 
+import { Em } from '../lib/twemoji'
+
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
 
 // Прыжок к сообщению: плавный скролл + подсветка-вспышка (как в Discord).
@@ -174,13 +176,13 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false
                     return <button key={r.emoji} className={'rx' + (mine ? ' mine' : '')} onClick={() => onReact?.(m.id, r.emoji)}>
-                      <span>{r.emoji}</span><span className="rx-n">{r.count}</span>
-                      <span className="rx-tip"><span className="rx-tip-e">{r.emoji}</span>{rxWho(r.users, currentUser, nameOf)}</span>
+                      <span><Em>{r.emoji}</Em></span><span className="rx-n">{r.count}</span>
+                      <span className="rx-tip"><span className="rx-tip-e"><Em>{r.emoji}</Em></span>{rxWho(r.users, currentUser, nameOf)}</span>
                     </button>
                   })}
                   <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>
                   {pickFor === m.id && <div className="rx-quick">
-                    {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}>{e}</button>)}
+                    {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                   </div>}
                 </div>}
               </div>
@@ -188,7 +190,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
                 <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>
                 {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
-                  {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}>{e}</button>)}
+                  {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
                 {m.author === currentUser && onEdit && m.content && <button title="Изменить" onClick={() => { setEditing(m.id); setEditText(m.content ?? '') }}><Icon name="edit" size={18} /></button>}
                 <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}><Icon name="more" size={18} /></button>
@@ -202,7 +204,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
         <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
           <div className="ctx-quick">
-            {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}>{e}</button>)}
+            {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
           </div>
           {onReply && <div className="ctx-item" onClick={() => { onReply(menuMsg); setMenu(null) }}><Icon name="reply" size={15} /> Ответить</div>}
           {menuMsg.author === currentUser && onEdit && menuMsg.content && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}

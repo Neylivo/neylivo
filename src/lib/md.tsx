@@ -5,6 +5,7 @@ import { guardLink } from './linkguard'
 import { highlight, normLang } from './hl'
 import { toastOk } from './toast'
 import { Icon } from '../components/icons'
+import { emojify } from './twemoji'
 
 // Мини-маркдаун как в Discord: **жирный**, *курсив*, __подчёркнутый__, ~~зачёркнутый~~,
 // `код`, ```блок кода```, > цитата, ||спойлер|| (клик — раскрыть), кликабельные ссылки
@@ -67,8 +68,8 @@ function inline(text: string, depth = 0): ReactNode[] {
   let rest = text
   while (rest) {
     const f = firstMatch(rest, pats)
-    if (!f) { out.push(rest); break }
-    if (f.idx > 0) out.push(rest.slice(0, f.idx))
+    if (!f) { out.push(...emojify(rest)); break }
+    if (f.idx > 0) out.push(...emojify(rest.slice(0, f.idx)))
     out.push(f.p.render(f.m, depth))
     rest = rest.slice(f.idx + f.m[0].length)
   }

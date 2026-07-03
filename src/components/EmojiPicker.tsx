@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { EMOJI_GROUPS, loadCustom, addCustom, removeCustom } from '../lib/emoji'
 import { Icon } from './icons'
+import { Em } from '../lib/twemoji'
 
 export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => void; onClose: () => void }) {
   const { user } = useAuth()
@@ -48,7 +49,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
           {!q && top.length > 0 && <div>
             <div className="emoji-grp">Часто используемые</div>
             <div className="emoji-grid">
-              {top.map((e, i) => <button key={'f' + i} className="emoji-btn" onClick={() => pick(e)}>{e}</button>)}
+              {top.map((e, i) => <button key={'f' + i} className="emoji-btn" onClick={() => pick(e)}><Em>{e}</Em></button>)}
             </div>
           </div>}
           {EMOJI_GROUPS.map(g => {
@@ -58,7 +59,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
               <div key={g.title}>
                 <div className="emoji-grp">{g.title}</div>
                 <div className="emoji-grid">
-                  {items.map((e, i) => <button key={g.title + i} className="emoji-btn" onClick={() => pick(e)}>{e}</button>)}
+                  {items.map((e, i) => <button key={g.title + i} className="emoji-btn" onClick={() => pick(e)}><Em>{e}</Em></button>)}
                 </div>
               </div>
             )

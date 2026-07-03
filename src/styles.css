@@ -1391,3 +1391,16 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .mus2-in:focus, .modal-in:focus, .pqs-in:focus, .auth-card input:focus, .pfr-addin:focus { border-color:var(--brand); box-shadow:0 0 0 1px rgba(88,101,242,.35); }
 /* Разделители дней: компактнее */
 .day-sep { margin:10px 12px; }
+
+
+/* ===== pass 19: Twemoji — красивые эмодзи как в Discord ===== */
+img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03em; object-fit:contain; }
+.rx img.twemoji { width:16px; height:16px; vertical-align:-3px; }
+.rx-tip-e img.twemoji { width:20px; height:20px; }
+.rx-quick img.twemoji, .ctx-quick img.twemoji { width:22px; height:22px; }
+.emoji-btn img.twemoji { width:26px; height:26px; }
+/* Пикер: ровная сетка, ховер с лёгким увеличением — как в Discord */
+.emoji-btn { display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:6px; transition:background .1s ease, transform .08s ease; }
+.emoji-btn:hover { background:rgba(255,255,255,.08); transform:scale(1.12); }
+.rx-quick button, .ctx-quick button { transition:background .1s ease, transform .08s ease; }
+.rx-quick button:hover, .ctx-quick button:hover { background:rgba(255,255,255,.08); transform:scale(1.15); }
