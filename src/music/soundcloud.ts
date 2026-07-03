@@ -77,5 +77,5 @@ export function loadWidgetApi(): Promise<any> {
 
 export function widgetSrc(url: string) {
   return 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(url) +
-    '&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false'
+    '&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false'
 }

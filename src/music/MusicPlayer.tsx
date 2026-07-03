@@ -185,8 +185,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           w.getDuration((ms: number) => { if (!disposed && ms > 0) { gotDur = true; setDur(ms / 1000) } })
           w.getCurrentSound((s: any) => {   // запасной источник метаданных, если oEmbed не сработал
             if (disposed || !s) return
+            if (!gotDur && s.duration > 0) { gotDur = true; setDur(s.duration / 1000) }
             const art = s.artwork_url ? String(s.artwork_url).replace('-large', '-t500x500') : null
-            setMeta(prev => prev[curUrl] ? prev : ({ ...prev, [curUrl]: { title: s.title || '', author: s.user?.username || '', art } }))
+            setMeta(prev => {
+              const old = prev[curUrl]
+              return { ...prev, [curUrl]: {
+                title: old?.title || s.title || '',
+                author: old?.author || s.user?.username || '',
+                art: old?.art || art,
+                play: old?.play,
+              } }
+            })
           })
           if (playingRef.current) w.play()
         })
@@ -196,6 +205,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           if (!gotDur) w.getDuration((ms: number) => { if (!disposed && ms > 0) { gotDur = true; setDur(ms / 1000) } })
         })
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
+        // Виджет теперь видимый и кликабельный — синхронизируем его кнопки с нашими.
+        w.bind(SC.Widget.Events.PLAY, () => { if (!disposed) setPlaying(true) })
+        w.bind(SC.Widget.Events.PAUSE, () => { if (!disposed) setPlaying(false) })
         w.bind(SC.Widget.Events.ERROR, () => { if (!disposed) toastErr('SoundCloud: трек не воспроизводится (закрытый или недоступен для встраивания)') })
       } catch { toastErr('Не удалось загрузить плеер SoundCloud — проверь блокировщик рекламы') }
     })()
@@ -425,6 +437,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author ? curMeta.author + ' · SoundCloud' : 'SoundCloud') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author ? curMeta.author + ' · по ссылке' : 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
+            src={widgetSrc(scPlayUrl)} />}
           {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
           {showRight && <img className="mus-gif r" src={gif.url} alt="" />}
         </section>
@@ -483,8 +497,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
       </div>}
 
-      {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
-        src={widgetSrc(scPlayUrl)} />}
       {curYt && ytId && <iframe key={ytId} ref={ytFrameRef} className="mus2-ytframe" title="YouTube" allow="autoplay; encrypted-media"
         src={'https://www.youtube.com/embed/' + ytId + '?enablejsapi=1&playsinline=1&controls=0&rel=0'} />}
       <audio ref={audioRef} src={audioSrc}
