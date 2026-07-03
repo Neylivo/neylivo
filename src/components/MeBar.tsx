@@ -5,6 +5,7 @@ import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL, Status } from '../lib/presence'
 import { Settings } from './Settings'
+import { Icon } from './icons'
 
 export function MeBar({ username, avatarUrl, onAvatar }: { username: string; avatarUrl?: string | null; onAvatar?: (url: string) => void }) {
   const { user } = useAuth()
@@ -48,10 +49,10 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
           ))}
         </div>
       )}
-      <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? '🔇' : '🎙'}</button>
-      <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? '🔕' : '🎧'}</button>
-      <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя">⚙</button>
-      <button className="me-out" onClick={() => supabase.auth.signOut()} title="Выйти">⎋</button>
+      <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
+      <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
+      <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
+      <button className="me-out" onClick={() => supabase.auth.signOut()} title="Выйти"><Icon name="signout" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
