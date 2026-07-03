@@ -5,6 +5,7 @@ import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence } from '../lib/presence'
+import { notifyMessage } from '../lib/notify'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -54,7 +55,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const ch = supabase.channel('messages:' + curChannel.id)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },
-        p => setMessages(m => [...m, p.new as Message]))
+        p => {
+          const msg = p.new as Message
+          setMessages(m => [...m, msg])
+          if (msg.author !== user?.id) notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
+        })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
