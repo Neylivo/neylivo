@@ -347,6 +347,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
+            nameOf={id => members.find(z => z.user_id === id)?.member_name}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)

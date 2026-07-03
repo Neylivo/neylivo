@@ -60,6 +60,13 @@ function renderContent(text: string) {
   return renderMd(text)
 }
 
+// «Вы, Вася и ещё 2» — подпись для тултипа реакции.
+function rxWho(users: string[], me?: string, resolve?: (id: string) => string | undefined): string {
+  const names = users.map(u => (me && u === me) ? 'Вы' : (resolve?.(u) ?? 'Кто-то'))
+  if (names.length <= 3) return names.join(', ')
+  return names.slice(0, 3).join(', ') + ' и ещё ' + (names.length - 3)
+}
+
 interface Props {
   messages: UiMessage[]
   reactions?: Record<string, RxSummary[]>
@@ -74,9 +81,11 @@ interface Props {
   onProfile?: (m: UiMessage, x: number, y: number) => void
   newDividerId?: string | null
   ownerId?: string | null
+  // Имя пользователя по id — для тултипа «кто поставил реакцию».
+  nameOf?: (userId: string) => string | undefined
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf }: Props) {
   const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
@@ -166,6 +175,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     const mine = currentUser ? r.users.includes(currentUser) : false
                     return <button key={r.emoji} className={'rx' + (mine ? ' mine' : '')} onClick={() => onReact?.(m.id, r.emoji)}>
                       <span>{r.emoji}</span><span className="rx-n">{r.count}</span>
+                      <span className="rx-tip"><span className="rx-tip-e">{r.emoji}</span>{rxWho(r.users, currentUser, nameOf)}</span>
                     </button>
                   })}
                   <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>

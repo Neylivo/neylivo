@@ -1331,3 +1331,16 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .lightbox-zoom { position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
   background: rgba(20, 20, 24, .85); border-radius: 8px; padding: 4px 10px; font-size: 12.5px;
   color: #dbdee1; cursor: pointer; }
+
+
+/* --- Тултип реакции: кто поставил --- */
+.rx { position: relative; }
+.rx-tip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); align-items: center; gap: 7px; white-space: nowrap;
+  background: rgba(17, 18, 20, .96); border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: #dbdee1;
+  pointer-events: none; z-index: 40; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+  animation: rx-tip-in .12s ease; }
+.rx-tip-e { font-size: 17px; }
+.rx:hover .rx-tip { display: flex; }
+@keyframes rx-tip-in { from { opacity: 0; transform: translate(-50%, 3px); } to { opacity: 1; transform: translate(-50%, 0); } }

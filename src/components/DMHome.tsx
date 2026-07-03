@@ -307,6 +307,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
+              nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
