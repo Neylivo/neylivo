@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
+import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, STATUS_LABEL } from '../lib/presence'
 import { tagFor } from '../lib/friendCode'
@@ -20,7 +21,16 @@ export interface MiniProfileData {
 export function MiniProfile({ data, onClose, onMessage }:
   { data: MiniProfileData; onClose: () => void; onMessage?: () => void }) {
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   useEffect(() => { let ok = true; fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
+  // Аватар: если не передали (например, клик по сообщению в ЛС) — берём из profiles.
+  useEffect(() => {
+    let ok = true
+    setAv(data.avatarUrl)
+    if (!data.avatarUrl) supabase.from('profiles').select('avatar_url').eq('id', data.userId).maybeSingle()
+      .then(({ data: d }) => { if (ok && d?.avatar_url) setAv(d.avatar_url) })
+    return () => { ok = false }
+  }, [data.userId, data.avatarUrl])
   return (
     <>
       <div className="mini-overlay" onClick={onClose} />
@@ -28,7 +38,7 @@ export function MiniProfile({ data, onClose, onMessage }:
         <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
         <ProfilePet p={pp} scale={0.3} />
         <div className="mini-av">
-          <Avatar name={data.name} url={data.avatarUrl} size={72} />
+          <Avatar name={data.name} url={av} size={72} />
           <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
         </div>
         <div className="mini-body">

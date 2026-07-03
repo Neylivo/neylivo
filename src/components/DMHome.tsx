@@ -259,7 +259,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
-              onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author_avatar, status: statusOf(m.author), x, y })} />
+              onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
             {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}

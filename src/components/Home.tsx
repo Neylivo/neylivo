@@ -239,7 +239,7 @@ export function Home() {
       setQs(false)
       if (t.kind === 'home') setView({ kind: 'dm' })
       else if (t.kind === 'music') setView({ kind: 'music' })
-      else if (t.kind === 'server') setView({ kind: 'server', server: t.server })
+      else if (t.kind === 'server') { setView({ kind: 'server', server: t.server }); clearUnread(t.server.id) }
       else { setView({ kind: 'dm' }); setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: t.friend })), 60) }
     }} />}
     {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
