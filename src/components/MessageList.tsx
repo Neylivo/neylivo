@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, dayLabel } from '../lib/ui'
-import { loadCustom } from '../lib/emoji'
+import { renderMd } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
@@ -38,15 +38,9 @@ function isEmojiOnly(text: string): boolean {
   } catch { return false }
 }
 
-// Render message text, replacing :name: tokens with custom-emoji images.
+// Рендер текста: мини-маркдаун Discord (жирный/курсив/код/цитаты/спойлеры/ссылки) + кастом-эмодзи.
 function renderContent(text: string) {
-  const custom = loadCustom()
-  const parts = text.split(/(:[a-zA-Z0-9_]+:)/g)
-  return parts.map((p, i) => {
-    const m = p.match(/^:([a-zA-Z0-9_]+):$/)
-    if (m && custom[m[1]]) return <img key={i} className="inline-emoji" src={custom[m[1]]} alt={p} />
-    return <Fragment key={i}>{p}</Fragment>
-  })
+  return renderMd(text)
 }
 
 interface Props {

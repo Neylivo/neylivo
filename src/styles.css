@@ -982,3 +982,18 @@ body.no-anim .toast { animation:none; }
 .cfm-ok:hover { filter:brightness(1.1); }
 .cfm-ok.danger { background:var(--red,#ed4245); }
 body.no-anim .cfm-overlay { animation:none; }
+
+/* ===== Маркдаун в сообщениях ===== */
+.msg-txt { white-space:pre-wrap; }
+.md-code { background:var(--bg1,#1e1f22); border:1px solid rgba(0,0,0,.3); padding:1px 5px; border-radius:4px;
+  font-family:Consolas,'JetBrains Mono','Fira Code',monospace; font-size:.88em; }
+.md-codeblock { background:var(--bg1,#1e1f22); border:1px solid rgba(0,0,0,.35); border-radius:8px;
+  padding:9px 12px; margin:4px 0; font-family:Consolas,'JetBrains Mono','Fira Code',monospace; font-size:13px;
+  line-height:1.45; white-space:pre-wrap; overflow-x:auto; max-width:680px; }
+.md-quote { border-left:4px solid var(--mut,#4e5058); padding:1px 10px; margin:3px 0; color:var(--mut,#949ba4); }
+.md-link { color:var(--brand,#5865f2); text-decoration:none; overflow-wrap:anywhere; }
+.md-link:hover { text-decoration:underline; }
+.md-spoiler { background:#101114; border-radius:4px; padding:0 3px; cursor:pointer; color:transparent; user-select:none; }
+.md-spoiler:not(.open) .inline-emoji, .md-spoiler:not(.open) .md-code { opacity:0; }
+.md-spoiler:not(.open) .md-link { color:transparent; }
+.md-spoiler.open { background:rgba(255,255,255,.08); color:inherit; cursor:auto; user-select:auto; }
