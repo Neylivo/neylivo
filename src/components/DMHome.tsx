@@ -16,6 +16,7 @@ import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
+import { Icon } from './icons'
 
 interface Friend { id: string; name: string }
 
@@ -152,7 +153,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   return (
     <>
       <aside className="dm-side">
-        <div className="dm-friends-nav" onClick={() => setActive(null)}>👥 Друзья</div>
+        <div className="dm-friends-nav" onClick={() => setActive(null)}><Icon name="users" size={18} /> Друзья</div>
         <div className="dm-side-top">
           <div className="addfriend">
             <input placeholder="Найти по имени…" value={q} onChange={e => doSearch(e.target.value)} />
@@ -160,7 +161,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           {results.map(p => (
             <div key={p.id} className="dm-item" onClick={() => add(p)}>
               <Avatar name={p.username} url={p.avatar_url} size={32} />
-              <span className="me-nm">{p.username}</span><span className="mut">＋</span>
+              <span className="me-nm">{p.username}</span><span className="mut"><Icon name="plus" size={16} /></span>
             </div>
           ))}
         </div>
@@ -171,8 +172,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             <div key={r.id} className="req">
               <Avatar name={r.from_name} size={32} />
               <span className="nm">{r.from_name}</span>
-              <button className="ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}>✓</button>
-              <button className="no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}>✕</button>
+              <button className="ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
+              <button className="no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
             </div>
           ))}
         </>}
@@ -193,15 +194,15 @@ export function DMHome({ username, avatarUrl, onAvatar }:
       <main className="chat">
         {active ? <>
           <header className="chat-head">@ {active.name}
-            <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}>📌</button>
-            <button className="call-start" title="Позвонить" onClick={startCall}>📞</button>
+            <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
+            <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
           </header>
           {showPins && <div className="pins-panel">
-            <div className="pins-h">📌 Закреплённые сообщения</div>
+            <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
             {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
             {messages.filter(m => (m as any).pinned).map(m => (
               <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
-                <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}>✕</button></div>
+                <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
           {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
@@ -213,7 +214,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
         </> : <>
           <header className="chat-head pfr-head">
-            <span className="pfr-title">👥 Друзья</span>
+            <span className="pfr-title"><Icon name="users" size={20} /> Друзья</span>
             <div className="pfr-tabs">
               <button className={'pfr-tab' + (tab === 'online' ? ' on' : '')} onClick={() => setTab('online')}>В сети</button>
               <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
@@ -245,7 +246,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                 <div key={p.id} className="pfr-row" onClick={() => add(p)}>
                   <Avatar name={p.username} url={p.avatar_url} size={32} />
                   <span className="pfr-name">{p.username}</span>
-                  <span className="pfr-add-btn">＋ Добавить</span>
+                  <span className="pfr-add-btn"><Icon name="plus" size={14} /> Добавить</span>
                 </div>
               ))}
             </div>
@@ -256,8 +257,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                 <div key={r.id} className="pfr-row">
                   <Avatar name={r.from_name} size={32} />
                   <span className="pfr-name">{r.from_name}</span>
-                  <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}>✓</button>
-                  <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}>✕</button>
+                  <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
+                  <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
                 </div>
               ))}
             </>
@@ -273,7 +274,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                       <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
                       <span className="pfr-name">{f.name}</span>
                       <span className="pfr-status">{STATUS_LABEL[statusOf(f.id)]}</span>
-                      <span className="pfr-msg" title="Написать">💬</span>
+                      <span className="pfr-msg" title="Написать"><Icon name="message" size={16} /></span>
                     </div>
                   ))}
                 </>
