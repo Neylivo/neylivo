@@ -102,6 +102,9 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, currentUser, onEdit])
 
+  // Начало редактирования сообщения закрывает панели эмодзи/GIF в композере.
+  useEffect(() => { if (editing) window.dispatchEvent(new Event('ponoi-close-pickers')) }, [editing])
+
   async function saveEdit(id: string) {
     const t = editText.trim()
     if (t) await onEdit?.(id, t)

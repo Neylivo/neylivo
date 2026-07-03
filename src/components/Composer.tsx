@@ -90,6 +90,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     return () => window.removeEventListener('keydown', h)
   }, [])
 
+  // Внешние события (например, начало редактирования сообщения) закрывают панели эмодзи/GIF.
+  useEffect(() => {
+    const h = () => { setEmoji(false); setGif(false) }
+    window.addEventListener('ponoi-close-pickers', h)
+    return () => window.removeEventListener('ponoi-close-pickers', h)
+  }, [])
+
   // Drag-and-drop файла в чат + вставка картинки из буфера (Ctrl+V).
   const [drag, setDrag] = useState(false)
   const dragDepth = useRef(0)

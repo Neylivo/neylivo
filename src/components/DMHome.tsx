@@ -10,7 +10,7 @@ import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
-import { notifyMessage } from '../lib/notify'
+import { notifyMessage, msgSound } from '../lib/notify'
 import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -143,7 +143,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           const msg = p.new as DMMessage
           setMessages(m => [...m, msg])
           localStorage.setItem('ponoi_lastread_dm_' + threadId, String(Date.now()))
-          if (msg.author !== meId) notifyMessage(msg.author_name, msg.content ?? '')
+          if (msg.author !== meId) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },

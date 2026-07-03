@@ -7,7 +7,7 @@ import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence } from '../lib/presence'
-import { notifyMessage } from '../lib/notify'
+import { notifyMessage, msgSound, uiChime } from '../lib/notify'
 import { notifModeOf } from '../lib/srvNotify'
 import { mentionsUser } from '../lib/md'
 import { sendPush } from '../lib/push'
@@ -120,8 +120,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           if (msg.author !== user?.id) {
             const mode = notifModeOf(server.id)
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
-            if (mode === 'all' || (mode === 'mentions' && mentioned))
+            if (mode === 'all' || (mode === 'mentions' && mentioned)) {
+              msgSound()
               notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
+            }
           }
         })
       .on('postgres_changes',
@@ -230,6 +232,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (!name) return
     const { error } = await supabase.from('channels').insert({ server_id: server.id, name })
     if (error) return toastErr(error.message)
+    uiChime() // мягкое звуковое подтверждение создания канала
     loadChannels()
   }
 
