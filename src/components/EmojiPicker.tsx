@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { EMOJI_GROUPS, loadCustom, addCustom, removeCustom } from '../lib/emoji'
+import { Icon } from './icons'
 
 export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => void; onClose: () => void }) {
   const { user } = useAuth()
@@ -25,9 +26,9 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   return (
     <div className="emoji-pop" onClick={e => e.stopPropagation()}>
       <div className="emoji-tabs">
-        <button className={tab === 'emoji' ? 'on' : ''} onClick={() => setTab('emoji')}>😊 Эмодзи</button>
-        <button className={tab === 'custom' ? 'on' : ''} onClick={() => setTab('custom')}>⭐ Свои</button>
-        <button className="emoji-x" onClick={onClose}>✕</button>
+        <button className={tab === 'emoji' ? 'on' : ''} onClick={() => setTab('emoji')}><Icon name="smile" size={16} /> Эмодзи</button>
+        <button className={tab === 'custom' ? 'on' : ''} onClick={() => setTab('custom')}><Icon name="star" size={16} /> Свои</button>
+        <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       {tab === 'emoji' && <>
         <input className="emoji-search" placeholder="Поиск…" value={q} onChange={e => setQ(e.target.value)} />
@@ -47,12 +48,12 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
         </div>
       </>}
       {tab === 'custom' && <div className="emoji-scroll">
-        <button className="emoji-add" onClick={addNew}>＋ Добавить свой эмодзи</button>
+        <button className="emoji-add" onClick={addNew}><Icon name="plus" size={15} /> Добавить свой эмодзи</button>
         <div className="emoji-grid">
           {Object.entries(custom).map(([name, url]) => (
             <button key={name} className="emoji-btn cust" title={':' + name + ':'} onClick={() => onPick(':' + name + ':')}>
               <img src={url} alt={name} />
-              <span className="emoji-del" onClick={async ev => { ev.stopPropagation(); setCustom({ ...(await removeCustom(name)) }) }}>✕</span>
+              <span className="emoji-del" onClick={async ev => { ev.stopPropagation(); setCustom({ ...(await removeCustom(name)) }) }}><Icon name="close" size={12} /></span>
             </button>
           ))}
         </div>
