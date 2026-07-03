@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL, Status } from '../lib/presence'
+import { ActivityLabel } from './ActivityLabel'
 import { Settings } from './Settings'
 import { Icon } from './icons'
 
@@ -27,7 +28,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
     finally { setBusy(false) }
   }
 
-  const { myStatus, setMyStatus } = usePresence()
+  const { myStatus, setMyStatus, myActivity, setMyActivity } = usePresence()
   const [menu, setMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const STATUSES: Status[] = ['online', 'idle', 'dnd', 'offline']
@@ -38,7 +39,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       </span>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
       <span className="me-nm" onClick={() => setMenu(m => !m)} style={{ cursor: 'pointer' }} title="Статус">
-        {busy ? 'Загрузка…' : username}<br /><small className="mut">{STATUS_LABEL[myStatus]}</small>
+        {busy ? 'Загрузка…' : username}<br /><small className="mut">{myActivity ? <ActivityLabel activity={myActivity} /> : STATUS_LABEL[myStatus]}</small>
       </span>
       {menu && (
         <div className="status-menu" onMouseLeave={() => setMenu(false)}>
@@ -48,6 +49,18 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
               {STATUS_LABEL[s]}
             </div>
           ))}
+          <div className="status-sep" />
+          {myActivity
+            ? <div className="status-opt" onClick={() => { setMyActivity(null); setMenu(false) }}>
+                <Icon name="close" size={14} /> Убрать активность
+              </div>
+            : <div className="status-opt" onClick={() => {
+                setMenu(false)
+                const t = prompt('Чем занимаешься? (например: Играю в Doom)')?.trim()
+                if (t) setMyActivity({ text: t, since: Date.now() })
+              }}>
+                <Icon name="gamepad" size={14} /> Установить активность…
+              </div>}
         </div>
       )}
       <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>

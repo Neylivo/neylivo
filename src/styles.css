@@ -1404,3 +1404,24 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .emoji-btn:hover { background:rgba(255,255,255,.08); transform:scale(1.12); }
 .rx-quick button, .ctx-quick button { transition:background .1s ease, transform .08s ease; }
 .rx-quick button:hover, .ctx-quick button:hover { background:rgba(255,255,255,.08); transform:scale(1.15); }
+
+/* ==== Системные сообщения, цветные роли, активность ==== */
+.sys-msg { display:flex; align-items:center; gap:8px; padding:4px 16px 4px 20px; margin:2px 0; color:var(--mut); font-size:14px; cursor:pointer; border-radius:4px; }
+.sys-msg:hover { background:rgba(255,255,255,.03); }
+.sys-msg .sys-ic { display:inline-flex; color:var(--mut); flex:none; }
+.sys-msg b { color:#dbdee1; font-weight:600; }
+.sys-msg .sys-prev { font-style:italic; }
+.sys-msg .msg-time { margin-left:auto; font-size:11px; flex:none; }
+.role-pop { min-width:214px; }
+.role-pop-h { padding:8px 10px 4px; font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--mut); }
+.role-dot { width:12px; height:12px; border-radius:50%; display:inline-block; flex:none; }
+.role-item { display:flex; align-items:center; gap:8px; }
+.role-item.on { color:#fff; }
+.role-item .role-del { margin-left:auto; opacity:0; color:var(--mut); display:inline-flex; cursor:pointer; }
+.role-item:hover .role-del { opacity:1; }
+.role-item .role-del:hover { color:#ed4245; }
+.role-empty { padding:6px 10px; color:var(--mut); font-size:13px; }
+.mini-rolechip { margin-top:8px; display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:12px; background:rgba(255,255,255,.06); font-size:12px; font-weight:600; }
+.mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:13px; color:#dbdee1; }
+.member-act { display:block; font-weight:400; font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.status-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }

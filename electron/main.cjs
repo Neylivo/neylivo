@@ -48,6 +48,19 @@ app.whenReady().then(() => {
     }).catch(() => cb({}))
   }, { useSystemPicker: true })
 
+  // Автообновления (как в Discord): проверяем GitHub Releases при запуске и
+  // каждые 4 часа; обновление качается в фоне и ставится при закрытии приложения.
+  if (!isDev) {
+    try {
+      const { autoUpdater } = require('electron-updater')
+      autoUpdater.autoDownload = true
+      autoUpdater.autoInstallOnAppQuit = true
+      const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
+      check()
+      setInterval(check, 4 * 60 * 60 * 1000)
+    } catch {}
+  }
+
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

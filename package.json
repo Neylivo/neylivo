@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -15,7 +15,8 @@
     "@supabase/supabase-js": "^2.45.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "livekit-client": "^2.5.7"
+    "livekit-client": "^2.5.7",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

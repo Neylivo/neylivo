@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
-import { Status, STATUS_LABEL } from '../lib/presence'
+import { Status, STATUS_LABEL, type Activity } from '../lib/presence'
+import { ActivityLabel } from './ActivityLabel'
 import { tagFor } from '../lib/friendCode'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
@@ -29,6 +30,9 @@ export interface MiniProfileData {
   avatarUrl?: string | null
   status: Status
   role?: string
+  roleName?: string
+  roleColor?: string
+  activity?: Activity | null
   x: number
   y: number
 }
@@ -69,12 +73,14 @@ export function MiniProfile({ data, onClose, onMessage }:
           <div className="mini-name">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()}{tagFor(data.userId)} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
+          {data.activity && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           <div className="mini-divider" />
           <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}><Icon name="link" size={15} /> Копировать код друга</button>
+          {data.roleName && <div className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor }} />{data.roleName}</div>}
           {data.role === 'owner'
             ? <div className="mini-role"><Icon name="crown" size={14} /> Владелец сервера</div>
-            : data.role && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
+            : data.role && !data.roleName && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
           {onMessage && <button className="mini-msg" onClick={onMessage}>Написать сообщение</button>}
         </div>
       </div>

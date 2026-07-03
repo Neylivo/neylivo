@@ -23,6 +23,9 @@ import { Icon } from './icons'
 import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
+import { fetchRoles, createRole, deleteRole, assignRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { sysPin, parseSys } from '../lib/sysmsg'
+import { ActivityLabel } from './ActivityLabel'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -38,8 +41,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [unseen, setUnseen] = useState(0)
   const [call, setCall] = useState<Room | null>(null)
   const isOwner = server.owner === user?.id
-  const { statusOf } = usePresence()
+  const { statusOf, activityOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
+  const [roles, setRoles] = useState<ServerRole[]>([])
+  const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -60,9 +65,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
 
-  useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
+  // Цветные роли: id -> роль и цвет имени участника.
+  const roleById: Record<string, ServerRole> = {}
+  for (const r of roles) roleById[r.id] = r
+  function roleColorOf(userId: string): string | undefined {
+    const mm = members.find(z => z.user_id === userId)
+    return mm?.role_id ? roleById[mm.role_id]?.color : undefined
+  }
+
+  useEffect(() => { loadChannels(); loadMembers(); loadRoles() /* eslint-disable-next-line */ }, [server.id])
 
   async function loadMembers() { setMembers(await listMembers(server.id)) }
+  async function loadRoles() { setRoles(await fetchRoles(server.id)) }
 
   async function loadChannels() {
     const { data } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
@@ -117,7 +131,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           const msg = p.new as Message
           setMessages(m => [...m, msg])
           localStorage.setItem('ponoi_lastread_' + curChannel.id, String(Date.now()))
-          if (msg.author !== user?.id) {
+          if (msg.author !== user?.id && !parseSys(msg.content)) {
             const mode = notifModeOf(server.id)
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
             if (mode === 'all' || (mode === 'mentions' && mentioned)) {
@@ -289,6 +303,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function pin(id: string, pinned: boolean) {
     await setPin('messages', id, pinned)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
+    // Системное сообщение в ленте «X закрепил(а) сообщение» (как в Discord).
+    if (pinned && user && curChannelRef.current) {
+      const target = msgsRef.current.find(m => m.id === id)
+      await supabase.from('messages').insert({
+        channel_id: curChannelRef.current.id, author: user.id, author_name: username,
+        content: sysPin(id, (target?.content || 'вложение').slice(0, 60)),
+      })
+    }
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
@@ -348,11 +370,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
-            nameOf={id => members.find(z => z.user_id === id)?.member_name}
+            nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
-            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
-              setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, x, y }) }} />
+            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm?.role_id ? roleById[mm.role_id] : undefined
+              setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, roleName: rr?.name, roleColor: rr?.color, activity: activityOf(m.author), x, y }) }} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}
@@ -368,15 +390,23 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {(() => {
           const on = members.filter(m => statusOf(m.user_id) !== 'offline')
           const off = members.filter(m => statusOf(m.user_id) === 'offline')
-          const row = (m: any) => (
-            <div key={m.user_id} className="member" onClick={e => setMini({
+          const row = (m: any) => {
+            const act = activityOf(m.user_id)
+            const rr = m.role_id ? roleById[m.role_id] : undefined
+            return (
+            <div key={m.user_id} className="member"
+              onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
+              onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
-              role: m.role, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 220) })}>
+              role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
+              x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 220) })}>
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
-              <span className="me-nm" style={{ color: m.role === 'owner' ? '#faa61a' : undefined }}>{m.member_name}</span>
+              <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
+                {act && <small className="member-act"><ActivityLabel activity={act} /></small>}
+              </span>
               {m.role === 'owner' && <span className="mut" title="Владелец"><Icon name="crown" size={14} /></span>}
             </div>
-          )
+          )}
           return <>
             {on.length > 0 && <div className="dm-sec-t">В сети — {on.length}</div>}
             {on.map(row)}
@@ -385,6 +415,30 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           </>
         })()}
       </aside>}
+      {rolePop && <>
+        <div className="ctx-overlay" onClick={() => setRolePop(null)} onContextMenu={e => { e.preventDefault(); setRolePop(null) }} />
+        <div className="ctx-menu role-pop" style={{ left: rolePop.x, top: rolePop.y }}>
+          <div className="role-pop-h">Роль участника</div>
+          {roles.map(r => {
+            const mm = members.find(z => z.user_id === rolePop.userId)
+            const on = mm?.role_id === r.id
+            return <div key={r.id} className={'ctx-item role-item' + (on ? ' on' : '')}
+              onClick={async () => { await assignRole(server.id, rolePop.userId, on ? null : r.id); await loadMembers(); setRolePop(null) }}>
+              <span className="role-dot" style={{ background: r.color }} />{r.name}
+              {on && <Icon name="check" size={14} />}
+              <span className="role-del" title="Удалить роль" onClick={async e => { e.stopPropagation(); if (!await confirmUi('Удалить роль «' + r.name + '»?', { okText: 'Удалить' })) return; await deleteRole(r.id); await Promise.all([loadRoles(), loadMembers()]) }}><Icon name="trash" size={13} /></span>
+            </div>
+          })}
+          {roles.length === 0 && <div className="role-empty">Ролей пока нет</div>}
+          <div className="ctx-item" onClick={async () => {
+            const name = prompt('Название роли (например: Модератор)')?.trim(); if (!name) return
+            const color = ROLE_COLORS[roles.length % ROLE_COLORS.length]
+            const { error } = await createRole(server.id, name, color)
+            if (error) { toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql в Supabase SQL Editor' : String(error.message ?? error)); return }
+            await loadRoles(); toastOk('Роль «' + name + '» создана')
+          }}><Icon name="plus" size={14} /> Создать роль</div>
+        </div>
+      </>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )
