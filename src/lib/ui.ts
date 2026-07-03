@@ -6,8 +6,10 @@ export function colorFor(name: string) {
   return PALETTE[h % PALETTE.length]
 }
 export const initial = (s: string) => (s || '?').slice(0, 1).toUpperCase()
+let _time24 = true
+export function setTime24(v: boolean) { _time24 = v }
 export const timeShort = (iso: string) =>
-  new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: !_time24 })
 
 export function dayLabel(iso: string) {
   const d = new Date(iso)
