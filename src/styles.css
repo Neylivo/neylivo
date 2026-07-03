@@ -856,3 +856,10 @@ body { font-size: var(--font-px, 16px); }
 .pqs-keycap:hover { background: var(--c-hover); }
 .pqs-keycap.rec { border-color: var(--c-accent); color: var(--c-accent); animation: sbrec 1s ease-in-out infinite; }
 @keyframes sbrec { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+/* ===== Гибкие настройки (flexible settings) ===== */
+:root { --radius: 8px; --msg-gap: 0px; }
+.msg:not(.grouped) { margin-top: calc(8px + var(--msg-gap)); }
+.msg-txt.big-emoji { font-size: 2.6em; line-height: 1.25; }
+.msg-txt.big-emoji .inline-emoji { width: 2.6em; height: 2.6em; vertical-align: middle; }
+.composer, .pqs-in, select.pqs-in, .sb, .msg-att { border-radius: var(--radius); }
+select.pqs-in { cursor: pointer; }
