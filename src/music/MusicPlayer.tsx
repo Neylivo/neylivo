@@ -8,7 +8,7 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
-import { isSoundcloudUrl, scMeta, loadWidgetApi, widgetSrc, type ScMeta } from './soundcloud'
+import { isSoundcloudUrl, scMeta, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 
 const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
@@ -167,7 +167,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         })
         w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => { if (!disposed) setCurT((e?.currentPosition || 0) / 1000) })
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
-      } catch {}
+        w.bind(SC.Widget.Events.ERROR, () => { if (!disposed) toastErr('SoundCloud: трек не воспроизводится (закрытый или недоступен для встраивания)') })
+      } catch { toastErr('Не удалось загрузить плеер SoundCloud — проверь блокировщик рекламы') }
     })()
     return () => { disposed = true; widgetRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +211,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
 
   async function addSoundcloud() {
-    const url = scUrl.trim(); if (!url || !meId) return
+    const url = cleanScUrl(scUrl); if (!url || !meId) return
+    if (!/^https?:\/\//i.test(url)) { toastErr('Вставь полную ссылку (https://…)'); return }
     const m = await scMeta(url)   // настоящее название/автор/обложка через oEmbed
     const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
     if (m) setMeta(prev => ({ ...prev, [url]: m }))
@@ -226,7 +228,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
 
   const next = () => {
-    if (repeat === 'one') { const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) } return }
+    if (repeat === 'one') {
+      const w = widgetRef.current
+      if (w) { w.seekTo(0); w.play(); return }
+      const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) }
+      return
+    }
     setIdx(i => {
       if (shuffle && tracks.length > 1) { let n = i; while (n === i) n = Math.floor(Math.random() * tracks.length); return n }
       const n = i + 1
@@ -273,7 +280,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-brand"><span className="mus2-logo"><Icon name="music" size={20} /></span> <b>Музыка</b></div>
         <div className="mus2-topr">
           <button title="Настройки" onClick={() => setSettings(true)}><Icon name="gear" size={18} /></button>
-          <button title="Тема" onClick={() => document.documentElement.classList.toggle('mus-light')}><Icon name="moon" size={18} /></button>
           <button title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
       </header>

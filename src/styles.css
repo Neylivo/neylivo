@@ -1367,3 +1367,27 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 
 /* --- «Был в сети» в мини-профиле --- */
 .mini-lastseen { color: var(--mut); font-size: 12px; }
+
+
+/* ===== pass 18: дизайн-пасс «как в Discord» ===== */
+/* Единая геометрия шапок — ровно 48px, как в Discord */
+.chat-head, .srv-title { height:48px; min-height:48px; padding:0 16px; }
+.chat-head { font-size:16px; }
+/* Каналы: плотнее и увереннее */
+.ch { padding:6px 8px; margin:1px 0; font-weight:500; }
+.ch.on { font-weight:600; }
+/* Список участников: ширина и ритм Discord */
+.members { width:236px; padding:12px 8px; }
+.member { padding:5px 8px; cursor:pointer; }
+/* Сообщения: мягче ховер, ровнее вертикальный ритм */
+.msg { padding:4px 12px; }
+.msg:hover { background:rgba(0,0,0,.08); }
+/* Кнопки в шапке: одинаковые квадратные хит-зоны с ховером */
+.pin-btn, .call-start, .srv-invite { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; transition:background .12s ease, color .12s ease; }
+.pin-btn:hover, .call-start:hover, .srv-invite:hover { background:rgba(255,255,255,.06); }
+/* Меню и модалки: радиус 8px, как в Discord */
+.ctx-menu, .ctxmenu, .status-menu, .modal, .ms-modal { border-radius:8px; }
+/* Инпуты: мягкое свечение фокуса вместо голого бордера */
+.mus2-in:focus, .modal-in:focus, .pqs-in:focus, .auth-card input:focus, .pfr-addin:focus { border-color:var(--brand); box-shadow:0 0 0 1px rgba(88,101,242,.35); }
+/* Разделители дней: компактнее */
+.day-sep { margin:10px 12px; }

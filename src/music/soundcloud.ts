@@ -15,6 +15,20 @@ export function isSoundcloudUrl(u: string) {
   return /(^|\.)soundcloud\.com\//i.test(u) || /^https?:\/\/on\.soundcloud\.com\//i.test(u)
 }
 
+/** Чистим SC-ссылку: убираем query/hash (utm, si и прочий трекинг ломают виджет). */
+export function cleanScUrl(u: string): string {
+  let s = u.trim()
+  try {
+    const url = new URL(s)
+    if (/(^|\.)soundcloud\.com$/i.test(url.hostname)) {
+      url.search = ''
+      url.hash = ''
+      s = url.toString().replace(/\/$/, '')
+    }
+  } catch {}
+  return s
+}
+
 /** Track metadata via SoundCloud oEmbed (no API key needed). Cached in localStorage. */
 export async function scMeta(url: string): Promise<ScMeta | null> {
   if (cache[url]) return cache[url]
