@@ -18,6 +18,7 @@ import { joinRoom, Room } from '../lib/livekit'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
+import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
@@ -34,6 +35,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
   const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
@@ -175,6 +177,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </aside>
       <main className="chat">
         <header className="chat-head"># {curChannel?.name ?? '—'}
+          <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => setShowSearch(s => !s)}><Icon name="search" size={18} /></button>
           <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
           <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
           <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
@@ -188,6 +191,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
           ))}
         </div>}
+        {showSearch && <SearchPanel onClose={() => setShowSearch(false)} scope={{
+          table: 'messages', channelIds: channels.map(c => c.id),
+          channelName: id => channels.find(c => c.id === id)?.name ?? '?',
+        }} />}
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs">
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username}
