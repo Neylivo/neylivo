@@ -1,4 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
+import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -154,7 +155,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
   }
   async function removeMsg(id: string) {
-    if (!confirm('Удалить сообщение?')) return
+    if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     await deleteMessage('dm_messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
   }

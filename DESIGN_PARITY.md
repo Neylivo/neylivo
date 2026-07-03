@@ -34,6 +34,9 @@
 - [x] Проход 6 (часть 1): тосты вместо системных alert() во всём приложении
       (src/lib/toast.tsx: toast/toastOk/toastErr + <Toasts/> в App, клик — закрыть),
       «Текст скопирован» при копировании из контекст-меню сообщения.
+- [x] Проход 6 (часть 2): модалки подтверждения вместо confirm()/prompt()
+      (src/lib/confirm.tsx: confirmUi() -> Promise<boolean>, ConfirmHost в App;
+      Enter/Esc, красная кнопка для опасных действий; prompt() кода приглашения -> тост).
 
 ## Проходы (по порядку)
 

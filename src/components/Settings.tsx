@@ -1,4 +1,5 @@
 import { toastErr } from '../lib/toast'
+import { confirmUi } from '../lib/confirm'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -417,7 +418,7 @@ export function Settings({ username, avatarUrl, onClose }:
           {cat === 'advanced' && <>
             <h2>Дополнительно</h2>
             <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={settings.devmode} onChange={v => set('devmode', v)} /></Row>
-            <button className="pqs-danger" onClick={() => { if (confirm('Очистить все локальные данные?')) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
+            <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
           </>}
         </div>
       </div>

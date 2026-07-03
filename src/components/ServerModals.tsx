@@ -1,4 +1,5 @@
 import { toastErr } from '../lib/toast'
+import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
@@ -169,7 +170,7 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
       {tab === 'channels' && <div className="modal-note">Каналы создаются и удаляются на боковой панели сервера (＋ канал).</div>}
 
       <div className="modal-foot">
-        <button className="modal-danger" onClick={() => { if (confirm('Удалить сервер? Это необратимо.')) onDelete() }}>Удалить сервер</button>
+        <button className="modal-danger" onClick={async () => { if (await confirmUi('Удалить сервер «' + server.name + '»? Это необратимо.', { okText: 'Удалить сервер' })) onDelete() }}>Удалить сервер</button>
         <button className="modal-ghost" onClick={onClose}>Закрыть</button>
       </div>
     </Overlay>

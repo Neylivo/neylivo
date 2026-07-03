@@ -967,3 +967,18 @@ body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none;
 .toast-tx { overflow-wrap:anywhere; }
 @keyframes toastIn { from { transform:translateY(12px); opacity:0; } to { transform:none; opacity:1; } }
 body.no-anim .toast { animation:none; }
+
+/* ===== Проход 6: модалки подтверждения ===== */
+.cfm-overlay { position:fixed; inset:0; z-index:390; background:rgba(0,0,0,.6); display:flex; align-items:center;
+  justify-content:center; animation:toastIn .15s ease; }
+.cfm-box { background:var(--bg2,#2b2d31); border:1px solid rgba(0,0,0,.4); border-radius:12px; padding:22px;
+  width:min(400px, calc(100vw - 40px)); box-shadow:0 16px 48px rgba(0,0,0,.55); }
+.cfm-msg { font-size:15px; font-weight:600; line-height:1.45; margin-bottom:18px; }
+.cfm-btns { display:flex; gap:10px; justify-content:flex-end; }
+.cfm-btns button { border:none; border-radius:8px; padding:9px 18px; font-size:14px; font-weight:600; cursor:pointer; }
+.cfm-cancel { background:none; color:var(--tx,#dbdee1); }
+.cfm-cancel:hover { text-decoration:underline; }
+.cfm-ok { background:var(--brand,#5865f2); color:#fff; }
+.cfm-ok:hover { filter:brightness(1.1); }
+.cfm-ok.danger { background:var(--red,#ed4245); }
+body.no-anim .cfm-overlay { animation:none; }

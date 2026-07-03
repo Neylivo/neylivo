@@ -1,4 +1,5 @@
-import { toastErr } from '../lib/toast'
+import { toastErr, toastOk } from '../lib/toast'
+import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -99,12 +100,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const res = await createInvite(server.id, user.id)
     if (res.error) return toastErr(res.error.message)
     try { await navigator.clipboard.writeText(res.code!) } catch {}
-    prompt('Код приглашения скопирован. Отправь его другу:', res.code!)
+    toastOk('Код приглашения скопирован: ' + res.code)
   }
 
   async function leave() {
     if (!user || isOwner) return
-    if (!confirm('Покинуть сервер?')) return
+    if (!await confirmUi('Покинуть сервер «' + server.name + '»?', { okText: 'Покинуть' })) return
     await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', user.id)
     onLeft()
   }
@@ -141,7 +142,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
   }
   async function removeMsg(id: string) {
-    if (!confirm('Удалить сообщение?')) return
+    if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     await deleteMessage('messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
   }
