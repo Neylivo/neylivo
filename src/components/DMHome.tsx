@@ -106,6 +106,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   async function openChat(f: Friend) {
     setActive(f)
+    // Сброс случайного выделения текста при переключении диалога.
+    window.getSelection()?.removeAllRanges()
     const t = await openThread(meId, f.id)
     if (!t) return
     setThreadId(t.id)

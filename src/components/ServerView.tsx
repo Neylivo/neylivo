@@ -90,6 +90,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   async function selectChannel(c: Channel) {
     setCurChannel(c)
+    // Сброс случайного выделения текста при переключении канала.
+    window.getSelection()?.removeAllRanges()
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
     const { data } = await supabase.from('messages').select('*')

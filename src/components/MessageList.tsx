@@ -143,7 +143,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><Icon name="reply" size={13} /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span><span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span></div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span><span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 {editing === m.id
                   ? <div className="msg-edit">
                       <textarea className="msg-edit-in" value={editText} autoFocus
@@ -154,7 +154,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         }} />
                       <div className="msg-edit-hint">Esc — <button type="button" onClick={() => setEditing(null)}>отмена</button> • Enter — <button type="button" onClick={() => saveEdit(m.id)}>сохранить</button></div>
                     </div>
-                  : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && <span className="msg-edited">(изменено)</span>}</div>}
+                  : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} />
                 {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" />}
                 {rx.length > 0 && <div className="rx-bar">

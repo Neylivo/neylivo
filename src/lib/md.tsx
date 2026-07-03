@@ -24,6 +24,15 @@ const k = () => 'md' + (seq = (seq + 1) % 1e9)
 
 const URL_RE = /https?:\/\/[^\s<>]+[^\s<>.,)!?;:'"]/
 
+// Длинные ссылки показываем компактно: домен + начало пути (сама ссылка при этом полная).
+function shortUrl(u: string): string {
+  if (u.length <= 64) return u
+  try { const p = new URL(u); return p.host + (p.pathname + p.search).slice(0, 28) + '\u2026' } catch { return u.slice(0, 61) + '\u2026' }
+}
+
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]*\w/
+const PHONE_RE = /\+\d[\d ()-]{8,16}\d/
+
 interface Pat { re: RegExp; render: (m: RegExpMatchArray, depth: number) => ReactNode }
 
 function firstMatch(text: string, pats: Pat[]) {
@@ -47,7 +56,9 @@ function inline(text: string, depth = 0): ReactNode[] {
     { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1)}</s> },
     { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
     { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
-    { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])}>{m[0]}</a> },
+    { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])} title={m[0]}>{shortUrl(m[0])}</a> },
+    { re: EMAIL_RE, render: m => <a key={k()} className="md-link" href={'mailto:' + m[0]}>{m[0]}</a> },
+    { re: PHONE_RE, render: m => <a key={k()} className="md-link" href={'tel:' + m[0].replace(/[^+\d]/g, '')}>{m[0]}</a> },
     { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} /> : m[0] },
     { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => <span key={k()} className="md-mention">@{m[1]}</span> },
   ]

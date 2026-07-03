@@ -1238,3 +1238,13 @@ body.no-anim .lightbox { animation: none; }
 
 /* --- Автоскрытие панели участников на узком окне --- */
 @media (max-width: 940px) { .members { display: none; } }
+
+
+/* --- «(изменено)» рядом со временем в шапке сообщения --- */
+.msg-hdr .msg-edited { margin-left: 2px; }
+
+/* --- Скорость точек «печатает…» зависит от числа набирающих --- */
+.typing-dots i { animation-duration: var(--td, 1.2s); }
+
+/* --- Мягкое раскрытие спойлера без резкого скачка текста --- */
+.md-spoiler { transition: background .25s ease, color .25s ease, filter .25s ease; }

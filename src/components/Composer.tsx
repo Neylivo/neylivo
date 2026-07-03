@@ -149,6 +149,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     e.preventDefault()
     const t = polish(applySlash(text.trim()))
     if ((!t && !file) || !user) return
+    // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
+    if (t && !file && !t.replace(/[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g, '').trim()) return
     // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
     if (t && !file && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
