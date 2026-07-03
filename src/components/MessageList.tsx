@@ -5,6 +5,7 @@ import { timeShort, dayLabel } from '../lib/ui'
 import { loadCustom } from '../lib/emoji'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
+import { useSettings } from '../lib/settings'
 
 export interface UiMessage {
   id: string
@@ -19,6 +20,18 @@ export interface UiMessage {
 }
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
+
+// Detect a message consisting solely of emoji (1..8) so it can render large.
+function isEmojiOnly(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  try {
+    const stripped = t.replace(/\s+/g, '')
+    const re = /^(\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D)+$/u
+    const count = [...stripped.matchAll(/\p{Extended_Pictographic}/gu)].length
+    return re.test(stripped) && count >= 1 && count <= 8
+  } catch { return false }
+}
 
 // Render message text, replacing :name: tokens with custom-emoji images.
 // Uses the synchronous shared-emoji cache (loadCustom); the component re-renders
@@ -44,6 +57,7 @@ interface Props {
 }
 
 export function MessageList({ messages, reactions = {}, currentUser, canPin, onReact, onPin, onDelete }: Props) {
+  const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [, setEmojiVer] = useState(0)
@@ -67,7 +81,7 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
         const ts = new Date(m.created_at).getTime()
         const day = new Date(m.created_at).toDateString()
         const showDay = day !== lastDay
-        const grouped = !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
+        const grouped = settings.groupMessages && !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
         return (
@@ -77,13 +91,15 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 260) }) }}>
               <div className="msg-gutter">
                 {grouped
-                  ? <span className="msg-ts-hover">{new Date(m.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
-                  : <Avatar name={m.author_name} url={m.author_avatar} size={40} />}
+                  ? <span className="msg-ts-hover">{timeShort(m.created_at)}</span>
+                  : settings.showAvatars
+                  ? <Avatar name={m.author_name} url={m.author_avatar} size={40} />
+                  : null}
               </div>
               <div className="msg-body">
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
                 {!grouped && <div className="msg-hdr"><span className="nm">{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
-                {m.content && <div className="msg-txt">{renderContent(m.content)}</div>}
+                {m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} />
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
