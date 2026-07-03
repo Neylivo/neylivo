@@ -43,3 +43,7 @@ export async function setPin(table: PinTable, id: string, pinned: boolean) {
 export async function deleteMessage(table: PinTable, id: string) {
   await supabase.from(table).delete().eq('id', id)
 }
+
+export async function editMessage(table: PinTable, id: string, content: string) {
+  await supabase.from(table).update({ content, edited: true }).eq('id', id)
+}
