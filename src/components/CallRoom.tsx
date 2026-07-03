@@ -7,6 +7,7 @@ import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
 import { matchCombo } from '../lib/keybind'
 import { Soundboard } from './Soundboard'
+import { audioCtx, master, fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
 
 // ---- Проход 5: экран звонка как в прототипе ----
 // У каждого участника — своя плитка (аватар-инициалы, если камера выключена),
@@ -19,13 +20,7 @@ function hue(s: string) {
   return h
 }
 
-// Общий AudioContext для регулировки громкости участников (0–200% через GainNode).
-let _actx: AudioContext | null = null
-function audioCtx(): AudioContext {
-  if (!_actx) _actx = new (window.AudioContext || (window as any).webkitAudioContext)()
-  if (_actx.state === 'suspended') _actx.resume()
-  return _actx
-}
+// AudioContext и master-гейн — общие, из callSounds (там же fade-in и сигналы).
 
 /** Плитка одного участника: камера (если есть) или аватар-инициалы. */
 function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
@@ -70,7 +65,7 @@ function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
             const src = ctx.createMediaStreamSource(new MediaStream([t.mediaStreamTrack]))
             const g = ctx.createGain()
             g.gain.value = volRef.current / 100
-            src.connect(g); g.connect(ctx.destination)
+            src.connect(g); g.connect(master())
             ;(el as HTMLMediaElement).muted = true
             nodes.push(src, g); gainsRef.current.push(g)
           } catch { /* нет WebAudio — играет сам элемент на 100% */ }
@@ -184,21 +179,24 @@ export function CallRoom({ room, meId, meName, onLeave }:
       setCount(n + 1)
     }
     setStatus(room.state === 'connected' ? 'connected' : 'connecting')
+    if (room.state === 'connected') fadeInCall()
     upd()
-    const onConn = () => { setStatus('connected'); upd() }
+    const onConn = () => { setStatus('connected'); upd(); fadeInCall() }
     const onRec = () => setStatus('reconnecting')
     const onRecd = () => setStatus('connected')
     room.on(RoomEvent.Connected, onConn)
     room.on(RoomEvent.Reconnecting, onRec)
     room.on(RoomEvent.Reconnected, onRecd)
-    room.on(RoomEvent.ParticipantConnected, upd)
-    room.on(RoomEvent.ParticipantDisconnected, upd)
+    const onPJoin = () => { upd(); sndJoin() }
+    const onPLeave = () => { upd(); sndLeave() }
+    room.on(RoomEvent.ParticipantConnected, onPJoin)
+    room.on(RoomEvent.ParticipantDisconnected, onPLeave)
     return () => {
       room.off(RoomEvent.Connected, onConn)
       room.off(RoomEvent.Reconnecting, onRec)
       room.off(RoomEvent.Reconnected, onRecd)
-      room.off(RoomEvent.ParticipantConnected, upd)
-      room.off(RoomEvent.ParticipantDisconnected, upd)
+      room.off(RoomEvent.ParticipantConnected, onPJoin)
+      room.off(RoomEvent.ParticipantDisconnected, onPLeave)
     }
   }, [room])
 
@@ -255,7 +253,7 @@ export function CallRoom({ room, meId, meName, onLeave }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.sbKey])
 
-  async function toggleMic() { const v = !mic; await room.localParticipant.setMicrophoneEnabled(v); setMic(v) }
+  async function toggleMic() { const v = !mic; await room.localParticipant.setMicrophoneEnabled(v); setMic(v); v ? sndUnmute() : sndMute() }
   async function toggleCam() { const v = !cam; await room.localParticipant.setCameraEnabled(v); setCam(v) }
   async function toggleScreen() {
     const v = !screen

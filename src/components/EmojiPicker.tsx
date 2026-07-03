@@ -8,6 +8,10 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   const [tab, setTab] = useState<'emoji' | 'custom'>('emoji')
   const [custom, setCustom] = useState(loadCustom())
   const [q, setQ] = useState('')
+  // Счётчик использования эмодзи — самые частые показываются отдельной группой сверху.
+  const [freq, setFreq] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('ponoi_emoji_freq') || '{}') } catch { return {} }
+  })
 
   // Refresh the grid whenever the shared emoji cache changes (realtime sync).
   useEffect(() => {
@@ -15,6 +19,14 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
     window.addEventListener('ponoi-custom-emoji', h)
     return () => window.removeEventListener('ponoi-custom-emoji', h)
   }, [])
+
+  function pick(e: string) {
+    const f = { ...freq, [e]: (freq[e] ?? 0) + 1 }
+    setFreq(f)
+    try { localStorage.setItem('ponoi_emoji_freq', JSON.stringify(f)) } catch {}
+    onPick(e)
+  }
+  const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 16).map(([e]) => e)
 
   async function addNew() {
     if (!user) return
@@ -33,6 +45,12 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
       {tab === 'emoji' && <>
         <input className="emoji-search" placeholder="Поиск…" value={q} onChange={e => setQ(e.target.value)} />
         <div className="emoji-scroll">
+          {!q && top.length > 0 && <div>
+            <div className="emoji-grp">Часто используемые</div>
+            <div className="emoji-grid">
+              {top.map((e, i) => <button key={'f' + i} className="emoji-btn" onClick={() => pick(e)}>{e}</button>)}
+            </div>
+          </div>}
           {EMOJI_GROUPS.map(g => {
             const items = g.emojis
             if (!items.length) return null
@@ -40,7 +58,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
               <div key={g.title}>
                 <div className="emoji-grp">{g.title}</div>
                 <div className="emoji-grid">
-                  {items.map((e, i) => <button key={g.title + i} className="emoji-btn" onClick={() => onPick(e)}>{e}</button>)}
+                  {items.map((e, i) => <button key={g.title + i} className="emoji-btn" onClick={() => pick(e)}>{e}</button>)}
                 </div>
               </div>
             )
