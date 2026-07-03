@@ -168,7 +168,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
           ))}
         </div>}
-        {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
+        {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs">
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg} />
