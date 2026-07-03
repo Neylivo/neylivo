@@ -8,6 +8,7 @@ import { uploadTo } from '../lib/storage'
 import { ProfilePet } from './ProfilePet'
 import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
+import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -69,6 +70,41 @@ function KeyCapture({ value, onChange }: { value: string; onChange: (v: string) 
     <button className={'pqs-keycap' + (cap ? ' rec' : '')} onClick={() => setCap(c => !c)}>
       {cap ? 'Нажми клавиши…' : <span className="pqs-kbd">{value || '—'}</span>}
     </button>
+  )
+}
+
+
+function ChatBgCard() {
+  const [bg, setBg] = useState(loadChatBgPrefs())
+  const [thumb, setThumb] = useState<string | null>(getChatBgUrl())
+  const [busy, setBusy] = useState(false)
+  const fRef = useRef<HTMLInputElement>(null)
+  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return
+    setBusy(true)
+    try { setBg(await setChatBgPhoto(f)); setThumb(getChatBgUrl()) }
+    catch (err: any) { alert(err?.message ?? String(err)) }
+    finally { setBusy(false); if (fRef.current) fRef.current.value = '' }
+  }
+  return (
+    <div className="pqs-acc-card2">
+      <div className="pqs-sec-t">Фон чата</div>
+      <Row title="Фоновое фото" desc="Поставить своё фото фоном чата (размытое, чтобы текст читался)">
+        <Toggle on={bg.on} onChange={v => setBg(setChatBgPrefs({ on: v }))} />
+      </Row>
+      <div className="pqs-pet-pick">
+        <div className="pqs-pet-thumb">{thumb ? <img src={thumb} alt="" /> : 'нет фото'}</div>
+        <button className="pqs-code-copy" onClick={() => fRef.current?.click()}>{busy ? 'Загрузка…' : 'Выбрать фото'}</button>
+        <button className="pqs-save" onClick={async () => { setBg(await clearChatBgPhoto()); setThumb(null) }}>Сбросить фон</button>
+        <input ref={fRef} type="file" accept="image/*" hidden onChange={pick} />
+      </div>
+      <Row title="Размытие" desc={bg.blur + ' px'}>
+        <input type="range" min={0} max={30} value={bg.blur} onChange={e => setBg(setChatBgPrefs({ blur: Number(e.target.value) }))} />
+      </Row>
+      <Row title="Затемнение" desc={bg.tint + '%'}>
+        <input type="range" min={0} max={80} value={bg.tint} onChange={e => setBg(setChatBgPrefs({ tint: Number(e.target.value) }))} />
+      </Row>
+    </div>
   )
 }
 
@@ -215,6 +251,7 @@ export function Settings({ username, avatarUrl, onClose }:
 
           {cat === 'appearance' && <>
             <h2>Внешний вид</h2>
+            <ChatBgCard />
 
             <div className="pqs-custom">
               <div className="pqs-custom-h">Своя тема</div>

@@ -885,3 +885,15 @@ select.pqs-in { cursor: pointer; }
 .typing-dots i:nth-child(2) { animation-delay: .2s; }
 .typing-dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes typingdot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+/* ===== Фон чата (Настройки → Внешний вид → «Фон чата») ===== */
+body.chatbg-on .chat { position:relative; isolation:isolate; overflow:hidden; }
+body.chatbg-on .chat::before {
+  content:''; position:absolute; inset:-32px; z-index:-1; pointer-events:none;
+  background-image:var(--chatbg-url,none); background-size:cover; background-position:center;
+  filter:blur(var(--chatbg-blur,6px));
+}
+body.chatbg-on .chat::after {
+  content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:rgba(0,0,0,var(--chatbg-tint,.45));
+}
