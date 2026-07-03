@@ -6,6 +6,7 @@ import { friendCode } from '../lib/friendCode'
 import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { uploadTo } from '../lib/storage'
 import { ProfilePet } from './ProfilePet'
+import { Icon } from './icons'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -97,7 +98,7 @@ export function Settings({ username, avatarUrl, onClose }:
         </div>
       </div>
       <div className="pqs-content">
-        <button className="pqs-close" onClick={onClose} title="Закрыть (Esc)">✕<span>ESC</span></button>
+        <button className="pqs-close" onClick={onClose} title="Закрыть (Esc)"><Icon name="close" size={18} /><span>ESC</span></button>
         <div className="pqs-inner">
           {cat === 'account' && <>
             <h2>Мой аккаунт</h2>
@@ -174,7 +175,7 @@ export function Settings({ username, avatarUrl, onClose }:
             <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} />
             <label className="pqs-lbl">О себе</label>
             <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
-            <button className="pqs-save" onClick={saveAccount}>{saved ? 'Сохранено ✓' : 'Сохранить'}</button>
+            <button className="pqs-save" onClick={saveAccount}>{saved ? <>Сохранено <Icon name="check" size={14} /></> : 'Сохранить'}</button>
             <div className="pqs-email">
               <div className="pqs-lbl">Email</div>
               <div className="pqs-email-val">{(user?.email ?? '').replace(/^(.).*(@.*)$/, (_m, a, b) => a + '••••••' + b) || '••••••@••••.•••'}</div>
@@ -268,7 +269,7 @@ export function Settings({ username, avatarUrl, onClose }:
                   <span className="pqs-lang-flag">{l.flag}</span>
                   <span className="pqs-lang-name">{l.name}</span>
                   <span className="pqs-lang-sub">{l.sub}</span>
-                  {settings.lang === l.id && <span className="pqs-lang-badge">✓</span>}
+                  {settings.lang === l.id && <span className="pqs-lang-badge"><Icon name="check" size={14} /></span>}
                 </button>
               ))}
             </div>
