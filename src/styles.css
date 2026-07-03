@@ -1277,3 +1277,13 @@ body.no-anim .lightbox { animation: none; }
 body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
   animation-play-state: paused !important;
 }
+
+
+/* --- Корона владельца сервера рядом с ником в чате --- */
+.msg-crown { color: #faa61a; display: inline-flex; align-items: center; margin: 0 2px; vertical-align: middle; }
+
+/* --- Кнопка «@» в шапке: прыжок к первому упоминанию тебя --- */
+.pin-btn.at-btn { font-weight: 700; font-size: 15px; line-height: 1; }
+
+/* --- Тонкая рамка вокруг сообщения при наведении: точные границы --- */
+.msg:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); border-radius: 4px; }

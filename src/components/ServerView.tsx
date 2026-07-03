@@ -13,7 +13,7 @@ import { mentionsUser } from '../lib/md'
 import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
-import { MessageList } from './MessageList'
+import { MessageList, jumpToMessage } from './MessageList'
 import { createInvite, listMembers } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
@@ -314,6 +314,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </aside>
       <main className="chat">
         <header className="chat-head"># {curChannel?.name ?? '—'}
+          {(() => {
+            const fm = messages.find(m => m.content && m.author !== user?.id && mentionsUser(m.content, username))
+            return fm ? <button className="pin-btn at-btn" title="К первому упоминанию тебя" onClick={() => jumpToMessage(fm.id)}>@</button> : null
+          })()}
           <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => setShowSearch(s => !s)}><Icon name="search" size={18} /></button>
           <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
           <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
@@ -334,7 +338,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         }} />}
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
-          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId}
+          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
