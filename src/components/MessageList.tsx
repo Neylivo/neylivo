@@ -1,5 +1,4 @@
-
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, dayLabel } from '../lib/ui'
@@ -21,6 +20,8 @@ export interface UiMessage {
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
 
 // Render message text, replacing :name: tokens with custom-emoji images.
+// Uses the synchronous shared-emoji cache (loadCustom); the component re-renders
+// on 'ponoi-custom-emoji' so newly-synced emoji resolve for everyone.
 function renderContent(text: string) {
   const custom = loadCustom()
   const parts = text.split(/(:[a-zA-Z0-9_]+:)/g)
@@ -44,6 +45,15 @@ interface Props {
 export function MessageList({ messages, reactions = {}, currentUser, canPin, onReact, onPin, onDelete }: Props) {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
+  const [, setEmojiVer] = useState(0)
+
+  // Re-render message bodies when the shared custom-emoji cache updates.
+  useEffect(() => {
+    const h = () => setEmojiVer(v => v + 1)
+    window.addEventListener('ponoi-custom-emoji', h)
+    return () => window.removeEventListener('ponoi-custom-emoji', h)
+  }, [])
+
   let lastAuthor = ''
   let lastTs = 0
   let lastDay = ''
