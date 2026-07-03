@@ -1148,3 +1148,18 @@ body.no-anim .search-busy { animation:none; }
 .fold-colors { display:flex; gap:8px; margin-top:10px; }
 .fold-color { width:22px; height:22px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; }
 .fold-color.on { border-color:#fff; }
+
+/* ===== Прыжок к сообщению + «К последним ↓» ===== */
+.msg-reply.clickable { cursor:pointer; }
+.msg-reply.clickable:hover .msg-reply-tx { color:var(--tx, #dbdee1); text-decoration:underline; }
+.msg-flash { animation:msg-flash 1.6s ease both; border-radius:6px; }
+@keyframes msg-flash { 0%, 35% { background:color-mix(in srgb, var(--brand, #5865f2) 26%, transparent); } 100% { background:transparent; } }
+body.no-anim .msg-flash { animation:none; }
+.jump-down { position:sticky; bottom:8px; z-index:5; margin-left:auto; margin-right:14px;
+  display:flex; align-items:center; gap:6px; width:max-content;
+  background:var(--brand, #5865f2); color:#fff; border:none; border-radius:999px;
+  padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.4); }
+.jump-down:hover { filter:brightness(1.08); }
+.search-hit { cursor:pointer; }
+.search-hit:hover { background:var(--c-hover, #383a40); }

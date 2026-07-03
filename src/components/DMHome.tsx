@@ -35,6 +35,10 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [threadId, setThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DMMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
+  const msgsBoxRef = useRef<HTMLDivElement>(null)
+  const prevLen = useRef(0)
+  const [atBottom, setAtBottom] = useState(true)
+  const [unseen, setUnseen] = useState(0)
   const [call, setCall] = useState<Room | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
@@ -125,7 +129,28 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
+    else setUnseen(u => u + Math.max(0, messages.length - prevLen.current))
+    prevLen.current = messages.length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages])
+
+  // «К последним ↓»: автоскролл только если пользователь у низа; иначе копим счётчик.
+  function nearBottom(): boolean {
+    const el = msgsBoxRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }
+  function onMsgsScroll() {
+    const nb = nearBottom()
+    setAtBottom(nb)
+    if (nb) setUnseen(0)
+  }
+  function jumpDown() {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setUnseen(0); setAtBottom(true)
+  }
 
   useEffect(() => { msgsRef.current = messages }, [messages])
 
@@ -228,11 +253,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             ))}
           </div>}
           {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
-          <div className="msgs">
+          <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
-            <div ref={bottomRef} />
+            {!atBottom && <button className="jump-down" onClick={jumpDown}>
+            {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
+          </button>}
+          <div ref={bottomRef} />
           </div>
           {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
 import { timeShort } from '../lib/ui'
+import { jumpToMessage } from './MessageList'
 
 // Поиск сообщений как в Discord. Понимает фильтры прямо в строке:
 //   from:имя        — только от этого автора
@@ -87,7 +88,7 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
       {hits !== null && <div className="search-res">
         <div className="search-cnt">{hits.length === 0 ? 'Ничего не найдено' : 'Результатов: ' + hits.length + (hits.length === 50 ? '+' : '')}</div>
         {hits.map(h => (
-          <div key={h.id} className="search-hit">
+          <div key={h.id} className="search-hit" title="Перейти к сообщению" onClick={() => jumpToMessage(h.id)}>
             <div className="search-hit-top">
               <b>{h.author_name}</b>
               {scope.channelName && h.channel_id && <span className="search-hit-ch">#{scope.channelName(h.channel_id)}</span>}

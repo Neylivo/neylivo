@@ -6,7 +6,7 @@ import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
-import { toastOk } from '../lib/toast'
+import { toastOk, toastErr } from '../lib/toast'
 
 export interface UiMessage {
   id: string
@@ -25,6 +25,15 @@ export interface UiMessage {
 }
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
+
+// Прыжок к сообщению: плавный скролл + подсветка-вспышка (как в Discord).
+export function jumpToMessage(id: string) {
+  const el = document.getElementById('msg-' + id)
+  if (!el) { toastErr('Сообщение вне загруженной истории'); return }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('msg-flash')
+  window.setTimeout(() => el.classList.remove('msg-flash'), 1600)
+}
 
 // Ссылка на картинку в тексте — показываем превью самой картинки под сообщением.
 const IMG_URL = /https?:\/\/[^\s<>]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s<>]*)?/i
@@ -119,7 +128,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         return (
           <Fragment key={m.id}>
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-            <div className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '')}
+            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '')}
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
               <div className="msg-gutter">
                 {grouped
@@ -129,7 +138,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   : null}
               </div>
               <div className="msg-body">
-                {isReply && <div className="msg-reply"><Icon name="reply" size={13} /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
+                {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><Icon name="reply" size={13} /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
                 {!grouped && <div className="msg-hdr"><span className="nm">{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
                 {editing === m.id
