@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo, isImage } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
+import { Icon } from './icons'
 
 export function Composer({ placeholder, onSend }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void> }) {
@@ -42,17 +43,17 @@ export function Composer({ placeholder, onSend }:
 
   return (
     <form className="composer" onSubmit={submit}>
-      <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}>＋</button>
+      <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
       <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
-      <input placeholder={file ? ('📎 ' + file.name) : placeholder} value={text} onChange={e => setText(e.target.value)}
+      <input placeholder={file ? file.name : placeholder} value={text} onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Escape') { setEmoji(false); setGif(false) } }} />
       <div className="composer-tools">
         <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
-        <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}>😊</button>
+        <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
         {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
         {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} /></div>}
       </div>
-      <button type="submit" disabled={busy}>{busy ? '…' : '➤'}</button>
+      <button type="submit" disabled={busy}>{busy ? '…' : <Icon name="send" size={18} />}</button>
     </form>
   )
 }
@@ -60,5 +61,5 @@ export function Composer({ placeholder, onSend }:
 export function Attachment({ url, type }: { url?: string | null; type?: string | null }) {
   if (!url) return null
   if (type === 'image') return <a href={url} target="_blank" rel="noreferrer"><img className="msg-att" src={url} alt="вложение" /></a>
-  return <a className="msg-file" href={url} target="_blank" rel="noreferrer">📎 Скачать файл</a>
+  return <a className="msg-file" href={url} target="_blank" rel="noreferrer"><Icon name="paperclip" size={16} /> Скачать файл</a>
 }
