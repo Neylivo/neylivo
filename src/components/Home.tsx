@@ -11,6 +11,7 @@ import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
 import { registerPush } from '../lib/push'
+import { Icon } from './icons'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -78,11 +79,11 @@ export function Home() {
       <nav className="servers">
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
           <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
-            title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}>🏠</button>
+            title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>
         </div>
         <div className={'srv-wrap' + (view.kind === 'music' ? ' on' : '')}>
           <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}>🎵</button>
+            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
         </div>
         <div className="srv-sep" />
         {servers.map(s => (
@@ -95,8 +96,8 @@ export function Home() {
               {s.name.slice(0, 2).toUpperCase()}</button>
           </div>
         ))}
-        <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}>＋</button>
-        <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}>🔍</button>
+        <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
+        <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
       </nav>
       {view.kind === 'music'
         ? <MusicPlayer me={username} meId={user?.id ?? ''} onClose={() => setView({ kind: 'dm' })} />
