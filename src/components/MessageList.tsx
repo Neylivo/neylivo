@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, dayLabel } from '../lib/ui'
-import { renderMd } from '../lib/md'
+import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
@@ -47,6 +47,7 @@ interface Props {
   messages: UiMessage[]
   reactions?: Record<string, RxSummary[]>
   currentUser?: string
+  currentUserName?: string
   canPin?: (m: UiMessage) => boolean
   onReact?: (id: string, emoji: string) => void
   onPin?: (id: string, pinned: boolean) => void
@@ -55,7 +56,7 @@ interface Props {
   onEdit?: (id: string, content: string) => void | Promise<void>
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, canPin, onReact, onPin, onDelete, onReply, onEdit }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit }: Props) {
   const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
@@ -93,10 +94,11 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
         const grouped = settings.groupMessages && !isReply && !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
+        const meMentioned = !!(currentUserName && m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName))
         return (
           <Fragment key={m.id}>
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-            <div className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '')}
+            <div className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '')}
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
               <div className="msg-gutter">
                 {grouped

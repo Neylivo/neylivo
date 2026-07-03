@@ -7,9 +7,12 @@ import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType }:
+const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
+
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
-    replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void }) {
+    replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void;
+    mentionables?: string[] }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const [text, setText] = useState('')
@@ -17,7 +20,39 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [busy, setBusy] = useState(false)
   const [emoji, setEmoji] = useState(false)
   const [gif, setGif] = useState(false)
+  const [mQ, setMQ] = useState<string | null>(null)
+  const [mIdx, setMIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Автодополнение @упоминаний: имена участников + @everyone.
+  const names = Array.from(new Set(['everyone', ...(mentionables ?? [])])).filter(Boolean)
+  const sugg = mQ !== null
+    ? names.filter(n => n.toLowerCase().startsWith(mQ.toLowerCase())).slice(0, 8)
+    : []
+
+  function updateMention(v: string, caret: number | null) {
+    const upto = v.slice(0, caret ?? v.length)
+    const m = upto.match(MENTION_TAIL)
+    setMQ(m ? m[1] : null)
+    setMIdx(0)
+  }
+
+  function pickMention(name: string) {
+    const el = inputRef.current
+    const caret = el?.selectionStart ?? text.length
+    const upto = text.slice(0, caret)
+    const m = upto.match(MENTION_TAIL)
+    if (!m) { setMQ(null); return }
+    const start = caret - m[0].length
+    const next = text.slice(0, start) + '@' + name + ' ' + text.slice(caret)
+    setText(next)
+    setMQ(null)
+    requestAnimationFrame(() => {
+      const p = start + name.length + 2
+      el?.focus(); el?.setSelectionRange(p, p)
+    })
+  }
 
   function insertEmoji(t: string) { setText(x => x + t); setEmoji(false) }
   async function sendGif(url: string) {
@@ -40,7 +75,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         attach = { url, type: isImage(file) ? 'image' : 'file' }
       }
       await onSend(t, attach)
-      setText(''); setFile(null); if (fileRef.current) fileRef.current.value = ''
+      setText(''); setFile(null); setMQ(null); if (fileRef.current) fileRef.current.value = ''
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
@@ -53,11 +88,29 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
       </div>}
       <form className="composer" onSubmit={submit}>
+        {sugg.length > 0 && <div className="mention-pop">
+          <div className="mention-h">Упомянуть</div>
+          {sugg.map((n, i) => (
+            <div key={n} className={'mention-it' + (i === mIdx ? ' on' : '')}
+              onMouseEnter={() => setMIdx(i)}
+              onMouseDown={e => { e.preventDefault(); pickMention(n) }}>
+              <span className="mention-at">@</span>{n}
+              {n === 'everyone' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>все участники</span>}
+            </div>
+          ))}
+        </div>}
         <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
         <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
-        <input placeholder={file ? file.name : placeholder} value={text}
-          onChange={e => { setText(e.target.value); onType?.() }}
+        <input ref={inputRef} placeholder={file ? file.name : placeholder} value={text}
+          onChange={e => { setText(e.target.value); onType?.(); updateMention(e.target.value, e.target.selectionStart) }}
+          onClick={e => updateMention(text, (e.target as HTMLInputElement).selectionStart)}
           onKeyDown={e => {
+            if (sugg.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx(i => (i + 1) % sugg.length); return }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setMIdx(i => (i - 1 + sugg.length) % sugg.length); return }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx]); return }
+              if (e.key === 'Escape') { e.preventDefault(); setMQ(null); return }
+            }
             if (e.key === 'Escape') { setEmoji(false); setGif(false); onCancelReply?.(); return }
             if (e.key === 'Enter') {
               const hasCtrl = e.ctrlKey || e.metaKey

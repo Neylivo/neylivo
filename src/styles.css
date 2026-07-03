@@ -997,3 +997,18 @@ body.no-anim .cfm-overlay { animation:none; }
 .md-spoiler:not(.open) .inline-emoji, .md-spoiler:not(.open) .md-code { opacity:0; }
 .md-spoiler:not(.open) .md-link { color:transparent; }
 .md-spoiler.open { background:rgba(255,255,255,.08); color:inherit; cursor:auto; user-select:auto; }
+
+/* ===== Упоминания @ник ===== */
+.md-mention { background:rgba(88,101,242,.28); color:#c9cdfb; border-radius:4px; padding:0 3px; font-weight:600; }
+.msg.mention-hl { background:rgba(250,166,26,.08); box-shadow:inset 3px 0 0 var(--yellow,#faa61a); }
+.msg.mention-hl:hover { background:rgba(250,166,26,.12); }
+.composer { position:relative; }
+.mention-pop { position:absolute; left:12px; right:12px; bottom:calc(100% + 8px); z-index:60;
+  background:var(--bg2,#2b2d31); border:1px solid rgba(0,0,0,.4); border-radius:10px; padding:6px;
+  box-shadow:0 -8px 28px rgba(0,0,0,.45); max-height:280px; overflow-y:auto; }
+.mention-h { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+  color:var(--mut,#949ba4); padding:5px 9px 4px; }
+.mention-it { display:flex; align-items:center; gap:6px; padding:7px 9px; border-radius:6px;
+  font-size:14px; cursor:pointer; }
+.mention-it.on { background:var(--bg4,#404249); }
+.mention-at { color:var(--mut,#949ba4); font-weight:700; }

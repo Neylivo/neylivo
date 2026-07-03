@@ -45,6 +45,7 @@ function inline(text: string, depth = 0): ReactNode[] {
     { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
     { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer">{m[0]}</a> },
     { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} /> : m[0] },
+    { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => <span key={k()} className="md-mention">@{m[1]}</span> },
   ]
   const out: ReactNode[] = []
   let rest = text
@@ -100,4 +101,12 @@ export function renderMd(text: string): ReactNode[] {
     }
   }
   return out
+}
+
+/** Есть ли в тексте упоминание конкретного пользователя (или @everyone). */
+export function mentionsUser(text: string, name: string): boolean {
+  if (!text || !name) return false
+  if (/@everyone(?![\p{L}\p{N}_])/u.test(text)) return true
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  try { return new RegExp('@' + esc + '(?![\\p{L}\\p{N}_])', 'iu').test(text) } catch { return false }
 }

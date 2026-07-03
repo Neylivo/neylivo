@@ -184,13 +184,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>}
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs">
-          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id}
+          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
           <div ref={bottomRef} />
         </div>
         {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg}
+          mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />}
       </main>

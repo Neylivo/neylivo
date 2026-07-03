@@ -221,13 +221,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           </div>}
           {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
           <div className="msgs">
-            <MessageList messages={messages as any} reactions={reactions} currentUser={meId}
+            <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
             <div ref={bottomRef} />
           </div>
           {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg}
+            mentionables={[active.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
             onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />
         </> : <>
