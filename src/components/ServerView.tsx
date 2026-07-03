@@ -201,6 +201,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => window.removeEventListener('beforeunload', h)
   }, [call])
 
+  // Escape закрывает панель закреплённых.
+  useEffect(() => {
+    if (!showPins) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowPins(false) }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [showPins])
+
   // Реалтайм: новое сообщение в другом канале этого сервера зажигает подсветку.
   useEffect(() => {
     if (!channels.length) return
@@ -318,8 +326,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const fm = messages.find(m => m.content && m.author !== user?.id && mentionsUser(m.content, username))
             return fm ? <button className="pin-btn at-btn" title="К первому упоминанию тебя" onClick={() => jumpToMessage(fm.id)}>@</button> : null
           })()}
-          <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => setShowSearch(s => !s)}><Icon name="search" size={18} /></button>
-          <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
+          <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => { setShowPins(false); setShowSearch(s => !s) }}><Icon name="search" size={18} /></button>
+          <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
           <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
           <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
             onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
@@ -328,8 +336,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
           {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
           {messages.filter(m => (m as any).pinned).map(m => (
-            <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
-              <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
+            <div key={m.id} className="pin-row clickable" title="Перейти к сообщению" onClick={() => { setShowPins(false); jumpToMessage(m.id) }}><b>{m.author_name}:</b> <span>{m.content}</span>
+              <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
           ))}
         </div>}
         {showSearch && <SearchPanel onClose={() => setShowSearch(false)} scope={{

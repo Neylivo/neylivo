@@ -1287,3 +1287,10 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 
 /* --- Тонкая рамка вокруг сообщения при наведении: точные границы --- */
 .msg:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); border-radius: 4px; }
+
+
+/* --- Панель закреплённых: кликабельные записи и счётчик на кнопке --- */
+.pin-row.clickable { cursor: pointer; }
+.pin-row.clickable:hover { background: rgba(255, 255, 255, .04); }
+.pin-count { font-size: 10.5px; font-weight: 700; background: var(--blue, #5865f2); color: #fff;
+  border-radius: 8px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }

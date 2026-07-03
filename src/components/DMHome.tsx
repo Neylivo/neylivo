@@ -13,7 +13,7 @@ import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { notifyMessage, msgSound } from '../lib/notify'
 import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
-import { MessageList } from './MessageList'
+import { MessageList, jumpToMessage } from './MessageList'
 import { CallRoom } from './CallRoom'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { joinRoom, Room } from '../lib/livekit'
@@ -219,6 +219,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     return () => window.removeEventListener('beforeunload', h)
   }, [call])
 
+  // Escape закрывает панель закреплённых.
+  useEffect(() => {
+    if (!showPins) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowPins(false) }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [showPins])
+
   useEffect(() => {
     if (!threadId) return
     const ch = supabase.channel('drx:' + threadId)
@@ -285,15 +293,15 @@ export function DMHome({ username, avatarUrl, onAvatar }:
       <main className="chat">
         {active ? <>
           <header className="chat-head">@ {active.name}
-            <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
+            <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
             <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
           </header>
           {showPins && <div className="pins-panel">
             <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
             {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
             {messages.filter(m => (m as any).pinned).map(m => (
-              <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
-                <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
+              <div key={m.id} className="pin-row clickable" title="Перейти к сообщению" onClick={() => { setShowPins(false); jumpToMessage(m.id) }}><b>{m.author_name}:</b> <span>{m.content}</span>
+                <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
           {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
