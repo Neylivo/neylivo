@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
 import { updateServer } from '../lib/servers'
+import { Icon } from './icons'
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -32,14 +33,14 @@ export function CreateServerModal({ uid, onClose, onCreate }:
   }
   return (
     <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}>✕</button>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
       <div className="modal-title">Создать сервер</div>
       <div className="modal-sub">Дай ему имя и аватарку — потом всё можно поменять.</div>
       <div className="modal-avwrap">
         <div className="modal-av" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>
           {!avatar && initials}
         </div>
-        <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : '📷 Аватарка'}</button>
+        <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="camera" size={16} /> Аватарка</>}</button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
       </div>
       <label className="modal-lbl">Название сервера</label>
@@ -65,7 +66,7 @@ export function FindServerModal({ onClose, onFind }:
   }
   return (
     <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}>✕</button>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
       <div className="modal-title">Найти сервер</div>
       <div className="modal-sub">По ID или названию</div>
       <input className="modal-in" autoFocus placeholder="ID или название сервера" value={q} onChange={e => run(e.target.value)} />
@@ -83,14 +84,14 @@ export function FindServerModal({ onClose, onFind }:
 }
 
 const CTX_ITEMS = [
-  { k: 'read', label: 'Прочитать всё', icon: '✔' },
-  { k: 'invite', label: 'Пригласить друга', icon: '＋' },
-  { k: 'notif', label: 'Настройки уведомлений', icon: '🔔' },
-  { k: 'mute', label: 'Заглушить сервер', icon: '🔕' },
-  { k: 'tag', label: 'Взять тег сервера', icon: '🏷' },
-  { k: 'copyid', label: 'Копировать ID сервера', icon: '🆔' },
-  { k: 'settings', label: 'Настройки сервера', icon: '⚙' },
-  { k: 'delete', label: 'Удалить сервер', icon: '🗑', danger: true },
+  { k: 'read', label: 'Прочитать всё', icon: 'check' },
+  { k: 'invite', label: 'Пригласить друга', icon: 'plus' },
+  { k: 'notif', label: 'Настройки уведомлений', icon: 'bell' },
+  { k: 'mute', label: 'Заглушить сервер', icon: 'bell-off' },
+  { k: 'tag', label: 'Взять тег сервера', icon: 'tag' },
+  { k: 'copyid', label: 'Копировать ID сервера', icon: 'id-card' },
+  { k: 'settings', label: 'Настройки сервера', icon: 'gear' },
+  { k: 'delete', label: 'Удалить сервер', icon: 'trash', danger: true },
 ] as const
 
 export function ServerCtxMenu({ x, y, isOwner, onClose, onAction }:
@@ -105,7 +106,7 @@ export function ServerCtxMenu({ x, y, isOwner, onClose, onAction }:
       {CTX_ITEMS.filter(i => isOwner || (i.k !== 'delete' && i.k !== 'settings')).map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>
-          <span className="ctxmenu-ic">{i.icon}</span>{i.label}
+          <span className="ctxmenu-ic"><Icon name={i.icon} size={16} /></span>{i.label}
         </div>
       ))}
     </div>
@@ -134,7 +135,7 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
   }
   return (
     <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}>✕</button>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
       <div className="modal-title">Настройки сервера — {server.name}</div>
       <div className="modal-tabs">
         <button className={'modal-tab' + (tab === 'main' ? ' on' : '')} onClick={() => setTab('main')}>Основное</button>
@@ -146,7 +147,7 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
         <div className="modal-sect">Аватарка сервера</div>
         <div className="modal-avwrap left">
           <div className="modal-av sq" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>{!avatar && initials}</div>
-          <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : '🖼 Сменить'}</button>
+          <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="image" size={16} /> Сменить</>}</button>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
         </div>
         <label className="modal-lbl">Название сервера</label>
