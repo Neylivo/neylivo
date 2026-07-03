@@ -13,9 +13,10 @@ import { MessageList } from './MessageList'
 import { createInvite, listMembers } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
-import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
+import { useTyping } from '../lib/typing'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -31,7 +32,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
+  const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const msgsRef = useRef<Message[]>([])
+  const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
 
   useEffect(() => { loadChannels(); loadMembers() /* eslint-disable-next-line */ }, [server.id])
 
@@ -62,6 +65,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           setMessages(m => [...m, msg])
           if (msg.author !== user?.id) notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
         })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },
+        p => { const msg = p.new as Message; setMessages(m => m.map(x => x.id === msg.id ? msg : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
@@ -112,8 +118,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const { error } = await supabase.from('messages').insert({
       channel_id: curChannel.id, author: user.id, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
+      reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     })
     if (error) { alert(error.message); return }
+    setReplyTarget(null)
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
     sendPush(targets, username + ' \u2014 #' + curChannel.name, t || 'Вложение', '/')
   }
@@ -135,6 +143,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (!confirm('Удалить сообщение?')) return
     await deleteMessage('messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
+  }
+  async function editMsg(id: string, content: string) {
+    await editMessage('messages', id, content)
+    setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
   }
 
   return (
@@ -171,10 +183,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs">
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id}
-            canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg} />
+            canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
+            onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
           <div ref={bottomRef} />
         </div>
-        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} />}
+        {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
+        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg}
+          replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
+          onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />}
       </main>
       <aside className="members">
         {(() => {
