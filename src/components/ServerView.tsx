@@ -15,6 +15,7 @@ import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
+import { Icon } from './icons'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -141,7 +142,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       <aside className="channels">
         <div className="srv-title">
           {server.name}
-          <button className="srv-invite" title="Пригласить" onClick={invite}>🔗</button>
+          <button className="srv-invite" title="Пригласить" onClick={invite}><Icon name="link" size={16} /></button>
         </div>
         <div className="ch-list">
           <div className="ch-sec">Текстовые каналы</div>
@@ -149,22 +150,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '')}
               onClick={() => selectChannel(c)}># {c.name}</div>
           ))}
-          <div className="ch add" onClick={createChannel}>＋ канал</div>
-          {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}>⎋ покинуть сервер</div>}
+          <div className="ch add" onClick={createChannel}><Icon name="plus" size={14} /> канал</div>
+          {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}><Icon name="signout" size={14} /> покинуть сервер</div>}
         </div>
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
         <header className="chat-head"># {curChannel?.name ?? '—'}
-          <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}>📌</button>
-          <button className="call-start" title="Голосовой звонок" onClick={startCall}>📞</button>
+          <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
+          <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
         </header>
         {showPins && <div className="pins-panel">
-          <div className="pins-h">📌 Закреплённые сообщения</div>
+          <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
           {messages.filter(m => (m as any).pinned).length === 0 && <div className="mut" style={{ padding: 10, fontSize: 13 }}>Нет закреплённых сообщений</div>}
           {messages.filter(m => (m as any).pinned).map(m => (
             <div key={m.id} className="pin-row"><b>{m.author_name}:</b> <span>{m.content}</span>
-              <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}>✕</button></div>
+              <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
           ))}
         </div>}
         {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
@@ -185,7 +186,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               role: m.role, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 220) })}>
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
               <span className="me-nm" style={{ color: m.role === 'owner' ? '#faa61a' : undefined }}>{m.member_name}</span>
-              {m.role === 'owner' && <span className="mut" title="Владелец">👑</span>}
+              {m.role === 'owner' && <span className="mut" title="Владелец"><Icon name="crown" size={14} /></span>}
             </div>
           )
           return <>
