@@ -13,7 +13,10 @@ export const STATUS_COLOR: Record<Status, string> = {
 
 // Кастомная активность («Играю в Doom»): текст + момент начала, тикает у всех в реальном времени.
 export interface Activity { text: string; since: number }
-interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null }
+// Авто-активность «Слушает…»: публикуется плеером Ponoi Music сама, как Spotify-статус в Discord.
+// pos — позиция трека (сек) на момент at; зрители досчитывают тайминг локально.
+export interface Listening { title: string; author?: string; source?: string; pos: number; dur?: number; at: number }
+interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
   myStatus: Status
@@ -22,8 +25,9 @@ interface PresenceCtx {
   myActivity: Activity | null
   setMyActivity: (a: Activity | null) => void
   activityOf: (userId: string) => Activity | null
+  setMyListening: (l: Listening | null) => void
 }
-const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', setMyStatus: () => {}, statusOf: () => 'offline', myActivity: null, setMyActivity: () => {}, activityOf: () => null })
+const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', setMyStatus: () => {}, statusOf: () => 'offline', myActivity: null, setMyActivity: () => {}, activityOf: () => null, setMyListening: () => {} })
 
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
@@ -35,6 +39,8 @@ export function PresenceProvider({ username, avatarUrl, children }:
   })
   const chanRef = useRef<any>(null)
   const actRef = useRef<Activity | null>(myActivity)
+  const [myListening, setMyListeningState] = useState<Listening | null>(null)
+  const lisRef = useRef<Listening | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -44,12 +50,12 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const map: Record<string, PresenceState> = {}
       for (const key of Object.keys(state)) {
         const meta = state[key][0]
-        map[key] = { username: meta.username, status: meta.status, avatar_url: meta.avatar_url, activity: meta.activity ?? null }
+        map[key] = { username: meta.username, status: meta.status, avatar_url: meta.avatar_url, activity: meta.activity ?? null, listening: meta.listening ?? null }
       }
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: actRef.current })
+      if (st === 'SUBSCRIBED') await ch.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: lisRef.current })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -70,17 +76,31 @@ export function PresenceProvider({ username, avatarUrl, children }:
   function setMyStatus(s: Status) {
     setMyStatusState(s)
     localStorage.setItem('ponoi_status', s)
-    chanRef.current?.track({ username, status: s, avatar_url: avatarUrl ?? null, activity: actRef.current })
+    chanRef.current?.track({ username, status: s, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: lisRef.current })
   }
 
   function setMyActivity(a: Activity | null) {
     actRef.current = a
     setMyActivityState(a)
     try { a ? localStorage.setItem('ponoi_activity', JSON.stringify(a)) : localStorage.removeItem('ponoi_activity') } catch {}
-    chanRef.current?.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: a })
+    chanRef.current?.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: a, listening: lisRef.current })
   }
 
+  function setMyListening(l: Listening | null) {
+    if (!l && !lisRef.current) return   // нечего сбрасывать — не дёргаем канал
+    lisRef.current = l
+    setMyListeningState(l)
+    chanRef.current?.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: l })
+  }
+
+  // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
+  // since подобран так, что бегущее время = позиция трека.
   function activityOf(userId: string): Activity | null {
+    const l = userId === user?.id ? myListening : online[userId]?.listening
+    if (l) {
+      const text = '🎵 Слушает: ' + l.title + (l.author ? ' — ' + l.author : '') + (l.source ? ' · ' + l.source : '')
+      return { text, since: l.at - Math.floor(l.pos * 1000) }
+    }
     if (userId === user?.id) return myActivity
     return online[userId]?.activity ?? null
   }
@@ -90,7 +110,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.status ?? 'offline'
   }
 
-  return <Ctx.Provider value={{ online, myStatus, setMyStatus, statusOf, myActivity, setMyActivity, activityOf }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ online, myStatus, setMyStatus, statusOf, myActivity, setMyActivity, activityOf, setMyListening }}>{children}</Ctx.Provider>
 }
 
 export const usePresence = () => useContext(Ctx)

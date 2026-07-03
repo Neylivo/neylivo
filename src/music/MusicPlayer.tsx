@@ -4,6 +4,7 @@ import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
 import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
+import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
@@ -85,6 +86,25 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   } as React.CSSProperties) : undefined
 
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
+
+  // ---- Авто-активность «Слушает…» (как Spotify-статус в Discord) ----
+  // Пока трек играет — публикуем название/автора/источник и позицию; на паузе сбрасываем.
+  const { setMyListening } = usePresence()
+  const curTRef = useRef(0)
+  useEffect(() => { curTRef.current = curT }, [curT])
+  useEffect(() => {
+    if (!playing || !cur) { setMyListening(null); return }
+    const source = curSc ? 'SoundCloud' : curYt ? 'YouTube' : isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
+    const pub = () => setMyListening({
+      title: curMeta?.title || cur.name, author: curMeta?.author || '',
+      source, pos: curTRef.current, dur: dur || undefined, at: Date.now(),
+    })
+    pub()
+    const t = window.setInterval(pub, 15000)   // периодически освежаем позицию (перемотки и т.п.)
+    return () => window.clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, cur?.url, curMeta?.title, curMeta?.author, dur])
+  useEffect(() => () => { setMyListening(null) }, [])   // размонтирование плеера = слушание кончилось
 
   // Initial load + realtime subscription so new tracks appear for everyone live.
   useEffect(() => {

@@ -28,7 +28,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
     finally { setBusy(false) }
   }
 
-  const { myStatus, setMyStatus, myActivity, setMyActivity } = usePresence()
+  const { myStatus, setMyStatus, myActivity, setMyActivity, activityOf } = usePresence()
   const [menu, setMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const STATUSES: Status[] = ['online', 'idle', 'dnd', 'offline']
@@ -39,7 +39,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       </span>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
       <span className="me-nm" onClick={() => setMenu(m => !m)} style={{ cursor: 'pointer' }} title="Статус">
-        {busy ? 'Загрузка…' : username}<br /><small className="mut">{myActivity ? <ActivityLabel activity={myActivity} /> : STATUS_LABEL[myStatus]}</small>
+        {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : myActivity; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
       </span>
       {menu && (
         <div className="status-menu" onMouseLeave={() => setMenu(false)}>
