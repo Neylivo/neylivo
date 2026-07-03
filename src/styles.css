@@ -727,7 +727,20 @@ body { font-size: var(--font-px, 16px); }
 
 
 /* ===== pass 17: Ponoi Music redesign (mus2-*) ===== */
-.mus2 { flex:1; position:relative; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
+/* Музыка: по умолчанию панель у правого края (как в макете), .full — на весь экран */
+.mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:120; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
+.mus2.full { left:0; width:auto; border-left:none; box-shadow:none; }
+/* Узкая панель: очередь сверху, обложка ниже, всё компактнее */
+.mus2:not(.full) .mus2-body { flex-direction:column; }
+.mus2:not(.full) .mus2-side { width:100%; max-width:100%; border-right:none; border-bottom:1px solid rgba(0,0,0,.2); flex:0 1 auto; max-height:46%; }
+.mus2:not(.full) .mus2-now { padding:16px; gap:10px; }
+.mus2:not(.full) .mus2-art { width:150px; height:150px; border-radius:14px; }
+.mus2:not(.full) .mus2-art svg { width:56px; height:56px; }
+.mus2:not(.full) .mus2-vinyl { display:none; }
+.mus2:not(.full) .mus2-artglow { inset:-30px; }
+.mus2:not(.full) .mus2-nowt { font-size:17px; }
+.mus2:not(.full) .mus-gif { display:none; }
+.mus2:not(.full) .mus2-bar { padding:10px 16px 14px; }
 .mus2.hasbg > .mus2-top, .mus2.hasbg > .mus2-body, .mus2.hasbg > .mus2-bar { position:relative; z-index:2; }
 .mus2-top { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid rgba(0,0,0,.2); }
 .mus2-brand { display:flex; align-items:center; gap:8px; font-size:15px; }

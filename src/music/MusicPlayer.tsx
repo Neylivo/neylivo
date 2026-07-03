@@ -33,6 +33,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [full, setFull] = useState(false)  // панель справа <-> на весь экран
   const [gif, setGif] = useState(loadGif())
   const [bg, setBg] = useState<BgCfg>(loadBg())
   const [bgUrl, setBgUrl] = useState<string>('')
@@ -344,7 +345,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const filteredQueue = qFilter ? tracks.filter(t => t.name.toLowerCase().includes(qFilter.toLowerCase())) : tracks
 
   return (<>
-    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '') + (visible ? '' : ' mus2-hidden')} style={musStyle}>
+    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '') + (full ? ' full' : '') + (visible ? '' : ' mus2-hidden')} style={musStyle}>
       {bg.type !== 'none' && bgUrl && <>
         {bg.type === 'video'
           ? <video className="musbg" src={bgUrl} autoPlay loop muted playsInline />
@@ -355,6 +356,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       <header className="mus2-top">
         <div className="mus2-brand"><span className="mus2-logo"><Icon name="music" size={20} /></span> <b>Музыка</b></div>
         <div className="mus2-topr">
+          <button title={full ? 'Свернуть в панель' : 'На весь экран'} onClick={() => setFull(f => !f)}><Icon name={full ? 'shrink' : 'expand'} size={18} /></button>
           <button title="Настройки" onClick={() => setSettings(true)}><Icon name="gear" size={18} /></button>
           <button title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>

@@ -48,6 +48,9 @@ export function Home() {
   const chMap = useRef<Record<string, string>>({})
   const viewRef = useRef<View>(view)
   useEffect(() => { viewRef.current = view }, [view])
+  // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
+  const lastView = useRef<View>({ kind: 'dm' })
+  useEffect(() => { if (view.kind !== 'music') lastView.current = view }, [view])
   useEffect(() => {
     if (servers.length === 0) return
     supabase.from('channels').select('id, server_id').in('server_id', servers.map(s => s.id))
@@ -226,12 +229,15 @@ export function Home() {
             title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
         </div>
       </nav>
-      {view.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
-      {view.kind === 'server' && <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+      {(() => { const bv = view.kind === 'music' ? lastView.current : view
+        return <>
+          {bv.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
+          {bv.kind === 'server' && <ServerView server={bv.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+        </> })()}
       {(musicOn || view.kind === 'music') && <MusicPlayer me={username} meId={user?.id ?? ''}
         visible={view.kind === 'music'}
-        onClose={() => setView(v => v.kind === 'music' ? { kind: 'dm' } : { kind: 'music' })}
-        onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? { kind: 'dm' } : v) }} />}
+        onClose={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}
+        onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? lastView.current : v) }} />}
     </div>
     {hk && <HotkeysModal onClose={() => setHk(false)} />}
     {folderFor && <FolderModal server={folderFor} onClose={() => setFolderFor(null)} />}
