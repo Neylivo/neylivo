@@ -12,6 +12,7 @@ import { comboFromEvent, isComboComplete } from '../lib/keybind'
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
   { k: 'appearance', label: 'Внешний вид' },
+  { k: 'chat', label: 'Чат' },
   { k: 'notifications', label: 'Уведомления' },
   { k: 'voice', label: 'Голос и видео' },
   { k: 'keybinds', label: 'Горячие клавиши' },
@@ -28,6 +29,16 @@ const LANGS = [
   { id: 'dolb', flag: '🤪', name: 'Долбоёбский', sub: 'на свой страх и риск' },
   { id: 'staro', flag: '📜', name: 'Старорусскій', sub: 'дореформенный' },
   { id: 'burm', flag: '🐱', name: 'Бурмалды', sub: 'кошачий диалект' },
+]
+
+const FONTS = [
+  { id: '', name: 'Системный' },
+  { id: "'Inter', sans-serif", name: 'Inter' },
+  { id: "'Roboto', sans-serif", name: 'Roboto' },
+  { id: "'Open Sans', sans-serif", name: 'Open Sans' },
+  { id: "'Georgia', serif", name: 'Georgia' },
+  { id: "'JetBrains Mono', monospace", name: 'Моноширинный' },
+  { id: "'Comic Sans MS', cursive", name: 'Comic Sans' },
 ]
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -251,6 +262,43 @@ export function Settings({ username, avatarUrl, onClose }:
             <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
               <Toggle on={settings.animations} onChange={v => set('animations', v)} />
             </Row>
+
+            <div className="pqs-sec-t">Шрифт и форма</div>
+            <label className="pqs-lbl">Шрифт интерфейса</label>
+            <select className="pqs-in" value={settings.fontFamily} onChange={e => set('fontFamily', e.target.value)}>
+              {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <Row title="Скругление углов" desc={settings.radius + 'px'}>
+              <input type="range" min={0} max={20} value={settings.radius} onChange={e => set('radius', Number(e.target.value))} />
+            </Row>
+            <Row title="Отступ между сообщениями" desc={settings.msgGap + 'px'}>
+              <input type="range" min={0} max={24} value={settings.msgGap} onChange={e => set('msgGap', Number(e.target.value))} />
+            </Row>
+          </>}
+
+          {cat === 'chat' && <>
+            <h2>Чат</h2>
+            <Row title="24-часовой формат времени" desc="Например, 14:30 вместо 2:30 PM">
+              <Toggle on={settings.time24} onChange={v => set('time24', v)} />
+            </Row>
+            <Row title="Показывать аватары" desc="Аватар автора рядом с сообщением">
+              <Toggle on={settings.showAvatars} onChange={v => set('showAvatars', v)} />
+            </Row>
+            <Row title="Группировать сообщения" desc="Объединять подряд идущие сообщения одного автора">
+              <Toggle on={settings.groupMessages} onChange={v => set('groupMessages', v)} />
+            </Row>
+            <Row title="Крупные эмодзи" desc="Сообщения только из эмодзи показывать крупно">
+              <Toggle on={settings.bigEmoji} onChange={v => set('bigEmoji', v)} />
+            </Row>
+            <div className="pqs-sec-t">Отправка сообщений</div>
+            <div className="pqs-preset-grid">
+              <button className={'pqs-preset' + (settings.sendKey === 'enter' ? ' on' : '')} onClick={() => set('sendKey', 'enter')}>
+                <span className="pqs-preset-nm">Enter — отправить</span>
+              </button>
+              <button className={'pqs-preset' + (settings.sendKey === 'ctrl' ? ' on' : '')} onClick={() => set('sendKey', 'ctrl')}>
+                <span className="pqs-preset-nm">Ctrl/⌘ + Enter — отправить</span>
+              </button>
+            </div>
           </>}
 
           {cat === 'notifications' && <>
@@ -274,15 +322,23 @@ export function Settings({ username, avatarUrl, onClose }:
 
           {cat === 'keybinds' && <>
             <h2>Горячие клавиши</h2>
-            <div className="pqs-keys">
-              {[['Alt + J', 'Открыть ponAI'], ['Alt + M', 'Открыть Музыку'], ['Ctrl / ⌘ + K', 'Быстрый переход'], ['Enter', 'Отправить'], ['Shift + Enter', 'Новая строка'], ['Esc', 'Закрыть']].map(([k, d]) => (
-                <div key={k} className="pqs-key"><span className="pqs-kbd">{k}</span><span>{d}</span></div>
-              ))}
-            </div>
+            <div className="pqs-sec-t">Настраиваемые</div>
+            <Row title="Открыть Музыку" desc="Быстрый переход в Ponoi Music">
+              <KeyCapture value={settings.keyMusic} onChange={v => set('keyMusic', v)} />
+            </Row>
+            <Row title="Открыть личные сообщения" desc="Быстрый переход на главный экран (ЛС)">
+              <KeyCapture value={settings.keyHome} onChange={v => set('keyHome', v)} />
+            </Row>
             <div className="pqs-sec-t">Саундпад</div>
             <Row title="Сохранить момент (15 сек)" desc="В звонке: сохранить последние 15 секунд разговора в саундпад">
               <KeyCapture value={settings.sbKey} onChange={v => set('sbKey', v)} />
             </Row>
+            <div className="pqs-sec-t">Стандартные</div>
+            <div className="pqs-keys">
+              {[['Ctrl / ⌘ + K', 'Быстрый переход'], ['Enter', 'Отправить'], ['Shift + Enter', 'Новая строка'], ['Esc', 'Закрыть']].map(([k, d]) => (
+                <div key={k} className="pqs-key"><span className="pqs-kbd">{k}</span><span>{d}</span></div>
+              ))}
+            </div>
           </>}
 
           {cat === 'language' && <>
