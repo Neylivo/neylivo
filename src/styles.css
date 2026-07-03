@@ -1425,3 +1425,6 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:13px; color:#dbdee1; }
 .member-act { display:block; font-weight:400; font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .status-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }
+
+/* Скрытый YouTube-плеер (музыка по ссылке YouTube) */
+.mus2-ytframe { position:fixed; left:-9999px; bottom:0; width:2px; height:2px; opacity:0; pointer-events:none; border:0; }

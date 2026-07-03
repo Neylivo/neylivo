@@ -9,6 +9,7 @@ import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { isSoundcloudUrl, scMeta, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
+import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 
 const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
@@ -53,6 +54,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const fileRef = useRef<HTMLInputElement>(null)
   const togChan = useRef<any>(null)
   const scRef = useRef<HTMLIFrameElement>(null)
+  const ytFrameRef = useRef<HTMLIFrameElement>(null)
+  const ytRef = useRef<any>(null)          // YT.Player поверх скрытого iframe
+  const ytTimer = useRef<number | null>(null)
   const widgetRef = useRef<any>(null)
   const playingRef = useRef(false)
   const volRef = useRef(100)
@@ -62,10 +66,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   const cur = tracks[idx]
   const curSc = !!cur && isSoundcloudUrl(cur.url)
+  const curYt = !!cur && !curSc && isYouTubeUrl(cur.url)
   const curMeta = cur ? meta[cur.url] : undefined
   const curArt = curMeta?.art ?? null
   // URL, который реально отдаём виджету: каноничный из oEmbed, если он уже известен.
   const scPlayUrl = curSc && cur ? (curMeta?.play || cur.url) : ''
+  // YouTube: id видео прямо из ссылки.
+  const ytId = curYt && cur ? (parseYouTubeId(cur.url) || '') : ''
+  // Обычный <audio>: для Audius-ссылок подставляем прямой stream-URL из resolve.
+  const audioSrc = cur && !curSc && !curYt ? (curMeta?.play || cur.url) : undefined
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
     '--mus-a': rgb(acc),
@@ -107,25 +116,32 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       if (w) { if (playing) w.play(); else w.pause() }
       return
     }
+    if (curYt) {
+      audioRef.current?.pause()
+      const y = ytRef.current
+      if (y) { try { if (playing) y.playVideo(); else y.pauseVideo() } catch {} }
+      return
+    }
     const a = audioRef.current; if (!a) return
     if (playing) a.play().catch(() => {}); else a.pause()
-  }, [playing, idx, curSc])
+  }, [playing, idx, curSc, curYt])
 
   useEffect(() => {
     volRef.current = vol
     const a = audioRef.current; if (a) a.volume = vol / 100
     widgetRef.current?.setVolume(vol)
+    try { ytRef.current?.setVolume?.(vol) } catch {}
     localStorage.setItem('ponoi_mus_vol', String(vol))
   }, [vol])
 
-  // ---- SoundCloud: oEmbed metadata for every SC track in the list ----
+  // ---- Метаданные для всех ссылок в списке: SoundCloud / YouTube / Audius ----
   useEffect(() => {
     let ok = true
-    const missing = tracks.filter(t => isSoundcloudUrl(t.url) && !meta[t.url])
+    const missing = tracks.filter(t => !meta[t.url] && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
     ;(async () => {
       for (const t of missing) {
-        const m = await scMeta(t.url)
+        const m = isSoundcloudUrl(t.url) ? await scMeta(t.url) : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
         if (!ok) return
         if (m) setMeta(prev => ({ ...prev, [t.url]: m }))
       }
@@ -186,6 +202,47 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curSc, scPlayUrl])
 
+  // ---- YouTube (скрытый iframe + IFrame API) — музыка по ссылке YouTube ----
+  useEffect(() => {
+    if (!curYt || !ytId) { ytRef.current = null; return }
+    setCurT(0); setDur(0)
+    let disposed = false
+    ;(async () => {
+      try {
+        const YT = await loadYtApi()
+        if (disposed || !ytFrameRef.current) return
+        new YT.Player(ytFrameRef.current, {
+          events: {
+            onReady: (e: any) => {
+              if (disposed) return
+              ytRef.current = e.target
+              try { e.target.setVolume(volRef.current) } catch {}
+              try { const d = e.target.getDuration(); if (d > 0) setDur(d) } catch {}
+              if (playingRef.current) { try { e.target.playVideo() } catch {} }
+            },
+            onStateChange: (e: any) => {
+              if (disposed) return
+              try { const d = e.target.getDuration(); if (d > 0) setDur(d) } catch {}
+              if (e.data === 0) nextRef.current()
+            },
+            onError: () => { if (!disposed) toastErr('YouTube: видео закрыто для встраивания — попробуй другую ссылку') },
+          },
+        })
+        ytTimer.current = window.setInterval(() => {
+          const y = ytRef.current
+          if (!y) return
+          try { const t = y.getCurrentTime(); if (typeof t === 'number') setCurT(t) } catch {}
+        }, 500)
+      } catch { toastErr('Не удалось загрузить плеер YouTube') }
+    })()
+    return () => {
+      disposed = true
+      if (ytTimer.current) { window.clearInterval(ytTimer.current); ytTimer.current = null }
+      ytRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curYt, ytId])
+
   // ---- listen together (broadcast sync via supabase realtime) ----
   useEffect(() => {
     if (!together) { if (togChan.current) { supabase.removeChannel(togChan.current); togChan.current = null } return }
@@ -225,7 +282,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   async function addSoundcloud() {
     const url = cleanScUrl(scUrl); if (!url || !meId) return
     if (!/^https?:\/\//i.test(url)) { toastErr('Вставь полную ссылку (https://…)'); return }
-    const m = await scMeta(url)   // настоящее название/автор/обложка через oEmbed
+    // Метаданные по типу ссылки: SoundCloud / YouTube / Audius (прямые файлы играют как есть).
+    const m = isSoundcloudUrl(url) ? await scMeta(url)
+      : isYouTubeUrl(url) ? await ytMeta(url)
+      : isAudiusUrl(url) ? await audiusMeta(url)
+      : null
+    if (!m && isAudiusUrl(url)) { toastErr('Не удалось прочитать ссылку Audius — проверь её'); return }
     const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
     if (m) setMeta(prev => ({ ...prev, [url]: m }))
     await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url' })
@@ -243,6 +305,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (repeat === 'one') {
       const w = widgetRef.current
       if (w) { w.seekTo(0); w.play(); return }
+      const y = ytRef.current
+      if (y) { try { y.seekTo(0, true); y.playVideo() } catch {}; return }
       const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) }
       return
     }
@@ -307,7 +371,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
 
           <div className="mus2-addrow">
-            <input className="mus2-in" placeholder="Ссылка SoundCloud (трек или плейлист)…" value={scUrl}
+            <input className="mus2-in" placeholder="Ссылка: SoundCloud, YouTube, Audius или .mp3…" value={scUrl}
               onChange={e => setScUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addSoundcloud() }} />
             <button className="mus2-addbtn" onClick={addSoundcloud}>Добавить</button>
           </div>
@@ -320,7 +384,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button></div>
             <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
             <div className="mus2-list">
-              {filteredQueue.length === 0 && <div className="mus2-empty">Пусто. Вставь ссылку SoundCloud, чтобы добавить трек.</div>}
+              {filteredQueue.length === 0 && <div className="mus2-empty">Пусто. Вставь ссылку — SoundCloud, YouTube, Audius или прямой .mp3.</div>}
               {filteredQueue.map((t) => {
                 const i = tracks.indexOf(t)
                 return (
@@ -358,7 +422,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
           </div>
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
-          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author ? curMeta.author + ' · SoundCloud' : 'SoundCloud') : cur.kind === 'url' ? 'по ссылке' : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author ? curMeta.author + ' · SoundCloud' : 'SoundCloud') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author ? curMeta.author + ' · по ссылке' : 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
           {showRight && <img className="mus-gif r" src={gif.url} alt="" />}
         </section>
@@ -368,7 +432,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-seek">
           <span>{fmt(curT)}</span>
           <input type="range" min={0} max={dur || 0} step={0.1} value={curT}
-            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur} />
+            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else if (curYt) { try { ytRef.current?.seekTo(v, true) } catch {}; setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur} />
           <span>{fmt(dur)}</span>
         </div>
         <div className="mus2-ctlrow">
@@ -419,7 +483,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
       {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
         src={widgetSrc(scPlayUrl)} />}
-      <audio ref={audioRef} src={cur && !curSc ? cur.url : undefined}
+      {curYt && ytId && <iframe key={ytId} ref={ytFrameRef} className="mus2-ytframe" title="YouTube" allow="autoplay; encrypted-media"
+        src={'https://www.youtube.com/embed/' + ytId + '?enablejsapi=1&playsinline=1&controls=0&rel=0'} />}
+      <audio ref={audioRef} src={audioSrc}
         onEnded={next}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
