@@ -53,6 +53,8 @@ body {
 .srv.home.on, .srv.home:hover { border-radius:16px; }
 .srv.music { color:#eb459e; font-size:20px; }
 .srv.music:hover, .srv.music.on { background:#eb459e; color:#fff; }
+/* Нота (музыка) прижата к самому низу левой панели — как в макете */
+.srv-wrap.music-bottom { margin-top:auto; }
 .srv.join { color:var(--blue); font-size:18px; }
 .srv.join:hover { background:var(--blue); color:#fff; }
 .srv-sep { width:32px; height:2px; background:var(--bg2); border-radius:1px; margin:2px auto; }

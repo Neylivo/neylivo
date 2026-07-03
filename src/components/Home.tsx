@@ -180,10 +180,6 @@ export function Home() {
           <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
             title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>
         </div>
-        <div className={'srv-wrap' + (view.kind === 'music' ? ' on' : '')}>
-          <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
-        </div>
         <div className="srv-sep" />
         {(() => {
           const inFolder = new Set(folders.flatMap(f => f.servers))
@@ -225,6 +221,10 @@ export function Home() {
         })()}
         <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
         <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
+        <div className={'srv-wrap music-bottom' + (view.kind === 'music' ? ' on' : '')}>
+          <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
+            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
+        </div>
       </nav>
       {view.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
       {view.kind === 'server' && <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
