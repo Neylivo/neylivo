@@ -301,6 +301,9 @@ export function Settings({ username, avatarUrl, onClose }:
             <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
               <Toggle on={settings.animations} onChange={v => set('animations', v)} />
             </Row>
+            <Row title="Автосмена темы" desc="Днём (8:00–20:00) — светлая тема, ночью — выбранная. По умолчанию выключено">
+              <Toggle on={settings.autoTheme} onChange={v => set('autoTheme', v)} />
+            </Row>
 
             <div className="pqs-sec-t">Шрифт и форма</div>
             <label className="pqs-lbl">Шрифт интерфейса</label>
@@ -382,6 +385,7 @@ export function Settings({ username, avatarUrl, onClose }:
 
           {cat === 'language' && <>
             <h2>Язык</h2>
+            <div className="pqs-code-sub">Перевод применяется сразу ко всему интерфейсу. English покрывает основные надписи, шуточные языки переводятся «на лету». Сообщения пользователей не переводятся.</div>
             <div className="pqs-langs">
               {LANGS.map(l => (
                 <button key={l.id} className={'pqs-lang' + (settings.lang === l.id ? ' on' : '')} onClick={() => set('lang', l.id)}>

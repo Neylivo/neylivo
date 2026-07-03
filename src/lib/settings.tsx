@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { setTime24 } from './ui'
+import { applyLang } from './i18n'
 
 export interface CustomTheme {
   dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
@@ -15,6 +16,7 @@ export interface Settings {
   fontPx: number      // 12 .. 20 (px)
   zoom: number        // 70 .. 130 (%)
   animations: boolean
+  autoTheme: boolean   // автосмена темы по времени суток (по умолчанию выключена)
   notifSystem: boolean
   notifSounds: boolean
   mentionsOnly: boolean
@@ -46,6 +48,7 @@ export interface Settings {
 export interface ThemeDef { key: string; name: string; dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string; tx: string; mut: string }
 export const THEMES: ThemeDef[] = [
   { key:'dark',     name:'Discord',  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', tx:'#dbdee1', mut:'#949ba4' },
+  { key:'light',    name:'Светлая',  dark:'#e3e5e8', main:'#ebedef', panel:'#f2f3f5', content:'#ffffff', hover:'#e8eaed', active:'#e0e2e6', accent:'#5865f2', tx:'#313338', mut:'#5c5e66' },
   { key:'midnight', name:'Полночь',  dark:'#000000', main:'#050506', panel:'#111318', content:'#0b0b0e', hover:'#1a1c22', active:'#16181d', accent:'#4752c4', tx:'#dbdee1', mut:'#8a8f98' },
   { key:'forest',   name:'Лес',      dark:'#12211a', main:'#16281f', panel:'#1b3327', content:'#1f3b2d', hover:'#274b39', active:'#22422f', accent:'#3ba55d', tx:'#dbe5df', mut:'#8fa89a' },
   { key:'rose',     name:'Роза',     dark:'#25131d', main:'#2c1723', panel:'#361c2b', content:'#3d2031', hover:'#4d2a3e', active:'#442436', accent:'#eb459e', tx:'#e8dae2', mut:'#b08fa1' },
@@ -62,7 +65,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 }
 
 export const DEFAULTS: Settings = {
-  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true,
+  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
   micVol: 100, spkVol: 100, lang: 'ru', dmAll: false, dmMembers: true, dataCollect: false,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
@@ -97,9 +100,11 @@ function load(): Settings {
 
 function apply(s: Settings) {
   const root = document.documentElement
-  const def = THEMES.find(t => t.key === s.theme) ?? THEMES[0]
+  // Автосмена темы: днём (8:00–20:00) — светлая, ночью — выбранная. По умолчанию выключена.
+  const day = s.autoTheme && (() => { const h = new Date().getHours(); return h >= 8 && h < 20 })()
+  const def = THEMES.find(t => t.key === (day ? 'light' : s.theme)) ?? THEMES[0]
   const c = s.custom
-  const use = c.on
+  const use = (c.on && !day)
     ? { dark:c.dark, main:c.main, panel:c.panel, content:c.content, hover:c.hover, active:c.active, accent:c.accent, tx:def.tx, mut:def.mut }
     : def
   root.style.setProperty('--c-dark', use.dark)
@@ -108,10 +113,10 @@ function apply(s: Settings) {
   root.style.setProperty('--c-content', use.content)
   root.style.setProperty('--c-hover', use.hover)
   root.style.setProperty('--c-active', use.active)
-  root.style.setProperty('--c-accent', c.on ? c.accent : (s.accent || use.accent))
+  root.style.setProperty('--c-accent', (c.on && !day) ? c.accent : (day ? def.accent : (s.accent || use.accent)))
   root.style.setProperty('--tx', use.tx)
   root.style.setProperty('--mut', use.mut)
-  root.setAttribute('data-theme', s.theme)
+  root.setAttribute('data-theme', day ? 'light' : s.theme)
   root.style.setProperty('--font-scale', String(s.fontPx / 16))
   root.style.setProperty('--font-px', s.fontPx + 'px')
   document.body.classList.toggle('compact', s.compact)
@@ -126,6 +131,14 @@ function apply(s: Settings) {
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(load)
   useEffect(() => { apply(settings) }, [settings])
+  // Язык интерфейса: применяем перевод при старте и при смене.
+  useEffect(() => { applyLang(settings.lang) }, [settings.lang])
+  // Автосмена темы: перепроверяем время раз в минуту.
+  useEffect(() => {
+    if (!settings.autoTheme) return
+    const id = setInterval(() => setSettings(prev => ({ ...prev })), 60000)
+    return () => clearInterval(id)
+  }, [settings.autoTheme])
   function persist(next: Settings) { localStorage.setItem('ponoi_settings', JSON.stringify(next)); return next }
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
     setSettings(prev => persist({ ...prev, [k]: v }))
