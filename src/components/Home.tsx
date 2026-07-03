@@ -12,11 +12,14 @@ import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
 import { registerPush } from '../lib/push'
 import { Icon } from './icons'
+import { useSettings } from '../lib/settings'
+import { matchCombo } from '../lib/keybind'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
 export function Home() {
   const { user } = useAuth()
+  const { settings } = useSettings()
   const [username, setUsername] = useState('Вы')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [servers, setServers] = useState<Server[]>([])
@@ -36,6 +39,18 @@ export function Home() {
     refresh()
     // eslint-disable-next-line
   }, [user])
+
+  // Global quick-navigation keybinds (configurable in Settings).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (settings.keyMusic && matchCombo(e, settings.keyMusic)) { e.preventDefault(); setView({ kind: 'music' }) }
+      else if (settings.keyHome && matchCombo(e, settings.keyHome)) { e.preventDefault(); setView({ kind: 'dm' }) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settings.keyMusic, settings.keyHome])
 
   async function refresh(selectId?: string) {
     const list = await myServers()
