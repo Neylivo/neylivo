@@ -31,7 +31,6 @@ const LANGS = [
   { id: 'en', flag: '🇬🇧', name: 'English', sub: 'English' },
   { id: 'dolb', flag: '🤪', name: 'Долбоёбский', sub: 'на свой страх и риск' },
   { id: 'staro', flag: '📜', name: 'Старорусскій', sub: 'дореформенный' },
-  { id: 'burm', flag: '🗿', name: 'Бурмалды', sub: 'мем-язык Меллстроя' },
 ]
 
 const FONTS = [

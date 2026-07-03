@@ -118,31 +118,6 @@ function toDolb(t: string): string {
     .replace(/чн/g, 'шн')
 }
 
-// Бурмалды: мем-язык Меллстроя. Слова мутируют в бурмалда-стайл —
-// часть заменяется каноничными мем-словами, остальные получают
-// бурмалда-окончания. Детерминированно (по хэшу слова), чтобы одна и та же
-// надпись всегда выглядела одинаково.
-const BURM_WORDS = ['бурмалда', 'гуливан', 'опахало', 'жумба', 'калдырь', 'чикибамбони']
-function burmHash(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-  return h
-}
-function toBurm(t: string): string {
-  if (!CYR.test(t)) return t
-  return t.replace(/[А-Яа-яЁё]{5,}/g, w => {
-    const h = burmHash(w.toLowerCase())
-    const cap = w[0] === w[0].toUpperCase()
-    if (h % 4 === 0) {
-      const m = BURM_WORDS[h % BURM_WORDS.length]
-      return cap ? m[0].toUpperCase() + m.slice(1) : m
-    }
-    const stem = w.slice(0, Math.max(3, w.length - 3))
-    const end = ['алда', 'умба', 'ондо', 'ырга'][h % 4]
-    return stem + end
-  })
-}
-
 let cur = 'ru'
 let mo: MutationObserver | null = null
 let mute = false
@@ -163,7 +138,6 @@ function tx(raw: string): string {
   if (cur === 'en') out = toEn(out)
   else if (cur === 'staro') out = toStaro(out)
   else if (cur === 'dolb') out = toDolb(out)
-  else if (cur === 'burm') out = toBurm(out)
   return m[1] + out + m[3]
 }
 
