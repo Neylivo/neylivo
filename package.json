@@ -30,11 +30,28 @@
   "build": {
     "appId": "com.ponoi.app",
     "productName": "Ponoi",
-    "files": ["dist/**/*", "electron/**/*"],
-    "directories": { "output": "release" },
-    "win": { "target": "nsis", "icon": "build/icon.ico" },
-    "publish": { "provider": "github", "owner": "ponoiai", "repo": "ponoi" },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "ponoiai",
+      "repo": "ponoi",
+      "releaseType": "release"
+    },
     "artifactName": "Ponoi-Setup-${version}.${ext}",
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   }
 }
