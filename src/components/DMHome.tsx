@@ -202,40 +202,19 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   return (
     <>
       <aside className="dm-side">
-        <div className="dm-friends-nav" onClick={() => setActive(null)}><Icon name="users" size={18} /> Друзья</div>
-        <div className="dm-side-top">
-          <div className="addfriend">
-            <input placeholder="Найти по имени…" value={q} onChange={e => doSearch(e.target.value)} />
-          </div>
-          {results.map(p => (
-            <div key={p.id} className="dm-item" onClick={() => add(p)}>
-              <Avatar name={p.username} url={p.avatar_url} size={32} />
-              <span className="me-nm">{p.username}</span><span className="mut"><Icon name="plus" size={16} /></span>
-            </div>
-          ))}
+        <div className="dm-friends-nav" onClick={() => setActive(null)}><Icon name="users" size={18} /> Друзья
+          {requests.length > 0 && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
         </div>
-
-        {requests.length > 0 && <>
-          <div className="dm-sec-t">Заявки в друзья — {requests.length}</div>
-          {requests.map(r => (
-            <div key={r.id} className="req">
-              <Avatar name={r.from_name} size={32} />
-              <span className="nm">{r.from_name}</span>
-              <button className="ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
-              <button className="no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
-            </div>
-          ))}
-        </>}
 
         <div className="dm-sec-t">Личные сообщения</div>
         <div className="ch-list">
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
-              <Avatar name={f.name} size={32} />
+              <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
               <span className="me-nm">{f.name}</span>
             </div>
           ))}
-          {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Найди кого-нибудь выше.</div>}
+          {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Открой «Друзья» и добавь кого-нибудь.</div>}
         </div>
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>

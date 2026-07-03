@@ -53,7 +53,6 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
       <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
       <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
-      <button className="me-out" onClick={() => supabase.auth.signOut()} title="Выйти"><Icon name="signout" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
     </div>
   )
