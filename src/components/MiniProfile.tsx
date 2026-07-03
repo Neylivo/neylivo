@@ -5,6 +5,7 @@ import { Status, STATUS_LABEL } from '../lib/presence'
 import { tagFor } from '../lib/friendCode'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
+import { Icon } from './icons'
 
 export interface MiniProfileData {
   userId: string
@@ -36,9 +37,9 @@ export function MiniProfile({ data, onClose, onMessage }:
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}</div>
           {pp.about && <div className="mini-about">{pp.about}</div>}
           <div className="mini-divider" />
-          <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}>🔗 Копировать код друга</button>
+          <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}><Icon name="link" size={15} /> Копировать код друга</button>
           {data.role === 'owner'
-            ? <div className="mini-role">👑 Владелец сервера</div>
+            ? <div className="mini-role"><Icon name="crown" size={14} /> Владелец сервера</div>
             : data.role && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
           {onMessage && <button className="mini-msg" onClick={onMessage}>Написать сообщение</button>}
         </div>
