@@ -6,6 +6,7 @@ import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence } from '../lib/presence'
 import { notifyMessage } from '../lib/notify'
+import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -111,7 +112,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       channel_id: curChannel.id, author: user.id, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
     })
-    if (error) alert(error.message)
+    if (error) { alert(error.message); return }
+    const targets = members.map(m => m.user_id).filter(id => id !== user.id)
+    sendPush(targets, username + ' \u2014 #' + curChannel.name, t || 'Вложение', '/')
   }
 
   async function loadRx(ids: string[]) {
