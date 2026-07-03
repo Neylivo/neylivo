@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Room, RoomEvent } from '../lib/livekit'
+import { Icon } from './icons'
 
 // Renders every participant's video/audio by attaching LiveKit tracks to DOM elements.
 function Stage({ room }: { room: Room }) {
@@ -95,14 +96,14 @@ export function CallRoom({ room, onLeave }: { room: Room; onLeave: () => void })
     <div className="call-wrap">
       <div className="call-top">
         <span className={'call-live call-' + status}>● {statusLabel}</span>
-        <span className="call-cnt">👥 {count}</span>
+        <span className="call-cnt"><Icon name="users" size={15} /> {count}</span>
       </div>
       <Stage room={room} />
       <div className="call-bar">
-        <button className={mic ? 'on' : ''} onClick={toggleMic} title="Микрофон">{mic ? '🎤' : '🔇'}</button>
-        <button className={cam ? 'on' : ''} onClick={toggleCam} title="Камера">{cam ? '📹' : '📷'}</button>
-        <button className={screen ? 'on' : ''} onClick={toggleScreen} title="Демонстрация экрана">🖥️</button>
-        <button className="leave" onClick={leave} title="Отключиться">📴</button>
+        <button className={mic ? 'on' : ''} onClick={toggleMic} title="Микрофон">{mic ? <Icon name="mic" size={20} /> : <Icon name="mic-off" size={20} />}</button>
+        <button className={cam ? 'on' : ''} onClick={toggleCam} title="Камера">{cam ? <Icon name="video" size={20} /> : <Icon name="video-off" size={20} />}</button>
+        <button className={screen ? 'on' : ''} onClick={toggleScreen} title="Демонстрация экрана"><Icon name="screen-share" size={20} /></button>
+        <button className="leave" onClick={leave} title="Отключиться"><Icon name="phone-off" size={20} /></button>
       </div>
     </div>
   )
