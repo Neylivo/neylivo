@@ -3,6 +3,7 @@ import type { GifCfg, BgCfg, GifPos } from './types'
 import { GIF_KEY, BG_KEY, BG_IDB_KEY } from './types'
 import { idbSet, idbDel } from '../lib/idb'
 import { videoDuration } from './videoDuration'
+import { Icon } from '../components/icons'
 
 export function loadGif(): GifCfg { try { return JSON.parse(localStorage.getItem(GIF_KEY) || '') } catch { return { url: '', pos: 'both' } } }
 export function loadBg(): BgCfg { try { return JSON.parse(localStorage.getItem(BG_KEY) || '') } catch { return { type: 'none', mode: 'url', url: '', dim: 40, ver: 0 } } }
@@ -30,9 +31,9 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
   return (
     <div className="ms-overlay" onClick={onClose}>
       <div className="ms-modal" onClick={e => e.stopPropagation()}>
-        <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}>✕</button></div>
+        <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
 
-        <div className="ms-sec">💃 Гифки по бокам</div>
+        <div className="ms-sec"><Icon name="film" size={15} /> Гифки по бокам</div>
         <input className="ms-in" placeholder="URL гифки" value={gif.url} onChange={e => setGif({ ...gif, url: e.target.value })} />
         <div className="ms-row">
           {(['left', 'right', 'both'] as GifPos[]).map(p => (
@@ -42,7 +43,7 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
         </div>
         {gif.url && <img className="ms-prev" src={gif.url} alt="gif" />}
 
-        <div className="ms-sec">🖼️ Фон плеера</div>
+        <div className="ms-sec"><Icon name="image" size={15} /> Фон плеера</div>
         <div className="ms-row">
           <button className={'ms-chip' + (bg.type === 'none' ? ' on' : '')} onClick={() => setBg({ ...bg, type: 'none' })}>Нет</button>
           <button className={'ms-chip' + (bg.type === 'photo' ? ' on' : '')} onClick={() => setBg({ ...bg, type: 'photo' })}>Фото</button>
