@@ -28,6 +28,7 @@ export function Home() {
   const [showFind, setShowFind] = useState(false)
   const [ctx, setCtx] = useState<{ server: Server; x: number; y: number } | null>(null)
   const [settingsServer, setSettingsServer] = useState<Server | null>(null)
+  const [musicOn, setMusicOn] = useState(false)   // плеер остаётся смонтирован — музыка играет в фоне
 
   useEffect(() => {
     if (!user) return
@@ -51,6 +52,8 @@ export function Home() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [settings.keyMusic, settings.keyHome])
+
+  useEffect(() => { if (view.kind === 'music') setMusicOn(true) }, [view])
 
   async function refresh(selectId?: string) {
     const list = await myServers()
@@ -114,11 +117,12 @@ export function Home() {
         <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
         <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
       </nav>
-      {view.kind === 'music'
-        ? <MusicPlayer me={username} meId={user?.id ?? ''} onClose={() => setView({ kind: 'dm' })} />
-        : view.kind === 'dm'
-        ? <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
-        : <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+      {view.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
+      {view.kind === 'server' && <ServerView server={view.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+      {(musicOn || view.kind === 'music') && <MusicPlayer me={username} meId={user?.id ?? ''}
+        visible={view.kind === 'music'}
+        onClose={() => setView(v => v.kind === 'music' ? { kind: 'dm' } : { kind: 'music' })}
+        onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? { kind: 'dm' } : v) }} />}
     </div>
     {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}

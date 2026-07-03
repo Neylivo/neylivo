@@ -905,3 +905,34 @@ body.chatbg-on .chat::after {
 .mus2-artglow { position:absolute; inset:-46px; border-radius:40px; background-size:cover; background-position:center; filter:blur(52px) saturate(1.5); opacity:.55; pointer-events:none; }
 .mus2-art img { width:100%; height:100%; object-fit:cover; display:block; }
 .mus2-scframe { position:absolute; bottom:0; left:0; width:2px; height:2px; opacity:.01; border:0; pointer-events:none; }
+
+/* ===== Ponoi Music: мини-плеер в углу + виниловая пластинка ===== */
+.mus2-hidden { display:none !important; }
+.mus-mini { position:fixed; left:84px; bottom:14px; z-index:130; display:flex; align-items:center; gap:10px;
+  background:var(--bg2); border:1px solid rgba(0,0,0,.35); border-radius:14px; padding:8px 10px;
+  box-shadow:0 12px 32px rgba(0,0,0,.5); width:320px; }
+.mus-mini-art { width:40px; height:40px; border-radius:50%; overflow:hidden; flex:none; cursor:pointer;
+  background:linear-gradient(150deg,var(--mus-a,#8b5cf6),var(--mus-a2,#5865f2));
+  display:flex; align-items:center; justify-content:center; color:#fff; }
+.mus-mini-art img { width:100%; height:100%; object-fit:cover; }
+.mus-mini-art.spin { animation:musSpin 8s linear infinite; }
+.mus-mini-meta { flex:1; min-width:0; cursor:pointer; }
+.mus-mini-t { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mus-mini-s { color:var(--mut); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mus-mini button { background:none; border:none; color:var(--tx); cursor:pointer; width:28px; height:28px;
+  border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none; }
+.mus-mini button:hover:not(:disabled) { background:var(--c-hover); }
+.mus-mini button:disabled { opacity:.4; cursor:default; }
+.mus-mini .mm-play { background:var(--mus-a,var(--brand)); color:#fff; border-radius:50%; }
+.mus2-vinyl { position:absolute; top:50%; right:-92px; width:232px; height:232px; margin-top:-116px; border-radius:50%;
+  background:radial-gradient(circle at center,#0b0b0b 0 30%,#111 30% 32%,#0d0d0d 32% 100%);
+  box-shadow:0 10px 30px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.05);
+  display:flex; align-items:center; justify-content:center; z-index:0; }
+.mus2-vinyl::before { content:''; position:absolute; inset:12px; border-radius:50%;
+  background:repeating-radial-gradient(circle at center, rgba(255,255,255,.04) 0 2px, transparent 2px 5px); }
+.mus2-vinyl::after { content:''; position:absolute; width:11px; height:11px; border-radius:50%;
+  background:#000; box-shadow:inset 0 0 0 2px rgba(255,255,255,.18); }
+.mus2-vinyl img { width:86px; height:86px; border-radius:50%; object-fit:cover; }
+.mus2-vinyl.spin { animation:musSpin 7s linear infinite; }
+@keyframes musSpin { to { transform:rotate(360deg); } }
+body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none; }

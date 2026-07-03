@@ -23,7 +23,8 @@ function fmt(s: number) {
   return m + ':' + String(ss).padStart(2, '0')
 }
 
-export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; onClose: () => void }) {
+export function MusicPlayer({ me, meId, visible, onClose, onStop }:
+  { me: string; meId: string; visible: boolean; onClose: () => void; onStop: () => void }) {
   // Shared library ("Трекотека"): tracks live in the music_tracks table, visible
   // to everyone, and anyone can add. Realtime keeps every listener's list in sync.
   const [tracks, setTracks] = useState<Track[]>([])
@@ -258,8 +259,8 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
   const showRight = gif.url && (gif.pos === 'right' || gif.pos === 'both')
   const filteredQueue = qFilter ? tracks.filter(t => t.name.toLowerCase().includes(qFilter.toLowerCase())) : tracks
 
-  return (
-    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '')} style={musStyle}>
+  return (<>
+    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '') + (visible ? '' : ' mus2-hidden')} style={musStyle}>
       {bg.type !== 'none' && bgUrl && <>
         {bg.type === 'video'
           ? <video className="musbg" src={bgUrl} autoPlay loop muted playsInline />
@@ -334,6 +335,7 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
           <div className="mus2-artwrap">
             {curArt && <div className="mus2-artglow" style={{ backgroundImage: `url(${curArt})` }} />}
+            <div className={'mus2-vinyl' + (playing ? ' spin' : '')}>{curArt && <img src={curArt} alt="" />}</div>
             <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
           </div>
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
@@ -404,5 +406,21 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}
     </main>
-  )
+    {!visible && (
+      <div className="mus-mini" style={musStyle}>
+        <div className={'mus-mini-art' + (playing ? ' spin' : '')} onClick={onClose} title="Открыть плеер">
+          {curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={18} />}
+        </div>
+        <div className="mus-mini-meta" onClick={onClose} title="Открыть плеер">
+          <div className="mus-mini-t">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
+          <div className="mus-mini-s">{cur ? (curMeta?.author || (curSc ? 'SoundCloud' : cur.kind === 'file' ? 'файл' : 'по ссылке')) : 'открой плеер и добавь трек'}</div>
+        </div>
+        <button className="mm-play" title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
+          {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}
+        </button>
+        <button title="Следующий" onClick={next} disabled={tracks.length < 2}><Icon name="skip-forward" size={15} /></button>
+        <button title="Выключить музыку" onClick={() => { setPlaying(false); onStop() }}><Icon name="close" size={15} /></button>
+      </div>
+    )}
+  </>)
 }
