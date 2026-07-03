@@ -47,6 +47,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
+  // Подсветка каналов с непрочитанными сообщениями (как в Discord).
+  const [unreadCh, setUnreadCh] = useState<Record<string, boolean>>({})
+  const curChannelRef = useRef<Channel | null>(null)
   // Память прокрутки по каналам + подгрузка старых сообщений при скролле вверх.
   const scrollMem = useRef<Record<string, number>>({})
   const pendingScroll = useRef<number | 'bottom' | null>(null)
@@ -66,10 +69,28 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const list = data ?? []
     setChannels(list)
     if (list.length) selectChannel(list[0]); else { setCurChannel(null); setMessages([]) }
+    refreshUnread(list)
+  }
+
+  // Начальное вычисление непрочитанных: берём последнее сообщение каждого канала.
+  async function refreshUnread(list: Channel[]) {
+    if (!list.length) return
+    const { data } = await supabase.from('messages').select('channel_id, author, created_at')
+      .in('channel_id', list.map(c => c.id)).order('created_at', { ascending: false }).limit(200)
+    const seen = new Set<string>()
+    const un: Record<string, boolean> = {}
+    for (const m of (data ?? []) as any[]) {
+      if (seen.has(m.channel_id)) continue
+      seen.add(m.channel_id)
+      const lastRead = Number(localStorage.getItem('ponoi_lastread_' + m.channel_id) ?? 0)
+      if (m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) un[m.channel_id] = true
+    }
+    setUnreadCh(un)
   }
 
   async function selectChannel(c: Channel) {
     setCurChannel(c)
+    setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
     const { data } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
@@ -166,6 +187,24 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
 
   useEffect(() => { msgsRef.current = messages }, [messages])
+  useEffect(() => { curChannelRef.current = curChannel }, [curChannel])
+
+  // Реалтайм: новое сообщение в другом канале этого сервера зажигает подсветку.
+  useEffect(() => {
+    if (!channels.length) return
+    const ids = new Set(channels.map(c => c.id))
+    const ch = supabase.channel('srv-unread:' + server.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
+        p => {
+          const msg = p.new as Message
+          if (!ids.has(msg.channel_id) || msg.author === user?.id) return
+          if (curChannelRef.current?.id === msg.channel_id) return
+          setUnreadCh(u => u[msg.channel_id] ? u : { ...u, [msg.channel_id]: true })
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels])
 
   useEffect(() => {
     if (!curChannel) return
@@ -252,7 +291,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
             <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы</div>
           {channels.filter(c => catOpen || curChannel?.id === c.id).map(c => (
-            <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '')}
+            <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '')}
               onClick={() => selectChannel(c)}># {c.name}</div>
           ))}
           <div className="ch add" onClick={createChannel}><Icon name="plus" size={14} /> канал</div>

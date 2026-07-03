@@ -5,6 +5,7 @@ import { uploadTo, isImage } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
+import { Lightbox } from './Lightbox'
 import { useSettings } from '../lib/settings'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -241,6 +242,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
 export function Attachment({ url, type }: { url?: string | null; type?: string | null }) {
   const [revealed, setRevealed] = useState(false)
+  const [viewer, setViewer] = useState(false)
   if (!url) return null
   const clean = url.replace('#spoiler', '')
   if (type === 'image') {
@@ -250,7 +252,10 @@ export function Attachment({ url, type }: { url?: string | null; type?: string |
         <span className="att-spoiler-tag">СПОЙЛЕР</span>
       </div>
     )
-    return <a href={clean} target="_blank" rel="noreferrer"><img className="msg-att" src={clean} alt="вложение" /></a>
+    return <>
+      <img className="msg-att zoomable" src={clean} alt="вложение" onClick={() => setViewer(true)} />
+      {viewer && <Lightbox url={clean} onClose={() => setViewer(false)} />}
+    </>
   }
   return <a className="msg-file" href={clean} target="_blank" rel="noreferrer"><Icon name="paperclip" size={16} /> Скачать файл</a>
 }

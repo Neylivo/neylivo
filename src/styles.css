@@ -1218,3 +1218,23 @@ body.no-anim .msg-flash { animation:none; }
 /* --- Плавное затухание индикатора «печатает…» вместо резкого исчезновения --- */
 .typing-ind { transition: opacity .35s ease; }
 .typing-ind.fade { opacity: 0; }
+
+
+/* --- Полноэкранный просмотр изображения: затемнение, закрытие кликом мимо/Escape --- */
+.lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.85);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  animation: lbfade .15s ease; cursor: zoom-out; }
+.lightbox img { max-width: 90vw; max-height: 84vh; border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.6); cursor: default; }
+.lightbox-orig { color: #fff; opacity: .7; font-size: 13px; }
+.lightbox-orig:hover { opacity: 1; text-decoration: underline; }
+@keyframes lbfade { from { opacity: 0 } to { opacity: 1 } }
+body.no-anim .lightbox { animation: none; }
+.msg-att.zoomable { cursor: zoom-in; }
+
+/* --- Канал с непрочитанными: белое имя + маленькая точка (как в Discord) --- */
+.ch.unread { color: #fff; font-weight: 600; }
+.ch.unread::after { content: '●'; font-size: 7px; vertical-align: middle; margin-left: 6px; color: #fff; }
+
+/* --- Автоскрытие панели участников на узком окне --- */
+@media (max-width: 940px) { .members { display: none; } }

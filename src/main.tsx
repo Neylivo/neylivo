@@ -17,3 +17,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </SettingsProvider>
   </React.StrictMode>,
 )
+
+
+// Скрытый лог в консоли — приветствие для любопытных 🐾
+try {
+  console.log('%cPonoi', 'color:#5865f2;font-size:28px;font-weight:800;')
+  console.log('%cПривет, любопытный! Раз ты открыл консоль — держи секретное рукопожатие: 🐾', 'color:#949ba4;font-size:13px;')
+} catch {}
