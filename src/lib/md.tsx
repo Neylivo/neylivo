@@ -2,6 +2,9 @@ import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import { loadCustom } from './emoji'
 import { guardLink } from './linkguard'
+import { highlight, normLang } from './hl'
+import { toastOk } from './toast'
+import { Icon } from '../components/icons'
 
 // Мини-маркдаун как в Discord: **жирный**, *курсив*, __подчёркнутый__, ~~зачёркнутый~~,
 // `код`, ```блок кода```, > цитата, ||спойлер|| (клик — раскрыть), кликабельные ссылки
@@ -106,7 +109,18 @@ export function renderMd(text: string): ReactNode[] {
       const lang = code.match(/^([a-zA-Z0-9+#-]{1,12})\n/)
       if (lang) code = code.slice(lang[0].length)
       code = code.replace(/^\n+|\n+$/g, '')
-      if (code) out.push(<pre key={k()} className="md-codeblock">{code}</pre>)
+      if (code) {
+        const langName = lang ? normLang(lang[1]) && lang[1].toLowerCase() : null
+        const codeText = code
+        out.push(
+          <div key={k()} className="md-codewrap">
+            {langName && <span className="md-lang">{langName}</span>}
+            <button type="button" className="md-copy" title="Копировать код"
+              onClick={() => { navigator.clipboard?.writeText(codeText); toastOk('Код скопирован') }}><Icon name="copy" size={14} /></button>
+            <pre className="md-codeblock">{highlight(code, lang ? lang[1] : null)}</pre>
+          </div>
+        )
+      }
     } else if (chunks[i]) {
       out.push(...blockText(chunks[i]))
     }
