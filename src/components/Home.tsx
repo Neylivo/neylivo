@@ -10,6 +10,7 @@ import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal 
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
+import { registerPush } from '../lib/push'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -28,6 +29,7 @@ export function Home() {
     if (!user) return
     initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
     initNotifications() // ask once for desktop-notification permission
+    registerPush(user.id) // subscribe to real web-push (works even when app closed)
     supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
       .then(({ data }) => { if (data?.username) setUsername(data.username); if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
     refresh()
