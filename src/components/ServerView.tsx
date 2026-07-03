@@ -34,6 +34,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
+  const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
@@ -173,6 +174,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <header className="chat-head"># {curChannel?.name ?? '—'}
           <button className="pin-btn" title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} /></button>
           <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
+          <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
+            onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
         </header>
         {showPins && <div className="pins-panel">
           <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
@@ -195,7 +198,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />}
       </main>
-      <aside className="members">
+      {showMembers && <aside className="members">
         {(() => {
           const on = members.filter(m => statusOf(m.user_id) !== 'offline')
           const off = members.filter(m => statusOf(m.user_id) === 'offline')
@@ -215,7 +218,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {off.map(row)}
           </>
         })()}
-      </aside>
+      </aside>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )

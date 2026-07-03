@@ -38,6 +38,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const { settings } = useSettings()
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [spoiler, setSpoiler] = useState(false)
   const [busy, setBusy] = useState(false)
   const [emoji, setEmoji] = useState(false)
   const [gif, setGif] = useState(false)
@@ -93,11 +94,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     try {
       let attach: { url: string; type: string } | undefined
       if (file) {
-        const url = await uploadTo('attachments', user.id, file)
+        let url = await uploadTo('attachments', user.id, file)
+        if (spoiler && isImage(file)) url += '#spoiler'
         attach = { url, type: isImage(file) ? 'image' : 'file' }
       }
       await onSend(t, attach)
-      setText(''); setFile(null); setMQ(null); if (fileRef.current) fileRef.current.value = ''
+      setText(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
@@ -145,6 +147,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
+          {file && isImage(file) && <button type="button" className={'ctool spoiler-t' + (spoiler ? ' on' : '')}
+            title={spoiler ? 'Картинка будет спойлером' : 'Отправить как спойлер'}
+            onClick={() => setSpoiler(s => !s)}>| |</button>}
           <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
@@ -157,7 +162,17 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 }
 
 export function Attachment({ url, type }: { url?: string | null; type?: string | null }) {
+  const [revealed, setRevealed] = useState(false)
   if (!url) return null
-  if (type === 'image') return <a href={url} target="_blank" rel="noreferrer"><img className="msg-att" src={url} alt="вложение" /></a>
-  return <a className="msg-file" href={url} target="_blank" rel="noreferrer"><Icon name="paperclip" size={16} /> Скачать файл</a>
+  const clean = url.replace('#spoiler', '')
+  if (type === 'image') {
+    if (url.includes('#spoiler') && !revealed) return (
+      <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
+        <img className="msg-att blurred" src={clean} alt="спойлер" />
+        <span className="att-spoiler-tag">СПОЙЛЕР</span>
+      </div>
+    )
+    return <a href={clean} target="_blank" rel="noreferrer"><img className="msg-att" src={clean} alt="вложение" /></a>
+  }
+  return <a className="msg-file" href={clean} target="_blank" rel="noreferrer"><Icon name="paperclip" size={16} /> Скачать файл</a>
 }

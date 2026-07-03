@@ -26,6 +26,14 @@ export interface UiMessage {
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
 
+// Ссылка на картинку в тексте — показываем превью самой картинки под сообщением.
+const IMG_URL = /https?:\/\/[^\s<>]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s<>]*)?/i
+function firstImageUrl(text?: string | null): string | null {
+  if (!text) return null
+  const m = text.match(IMG_URL)
+  return m ? m[0] : null
+}
+
 // Detect a message consisting solely of emoji (1..8) so it can render large.
 function isEmojiOnly(text: string): boolean {
   const t = text.trim()
@@ -136,6 +144,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     </div>
                   : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && <span className="msg-edited">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} />
+                {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" />}
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false

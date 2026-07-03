@@ -1021,3 +1021,14 @@ body.no-anim .cfm-overlay { animation:none; }
 .md-list li { margin:1px 0; }
 .char-count { align-self:center; font-size:12px; font-variant-numeric:tabular-nums; color:var(--mut,#949ba4); padding:0 4px; }
 .char-count.over { color:var(--red,#ed4245); font-weight:700; }
+
+/* ===== Спойлер-картинки, превью ссылок, панель участников ===== */
+.att-spoiler { position:relative; display:inline-block; overflow:hidden; border-radius:8px; cursor:pointer; max-width:420px; }
+.att-spoiler .msg-att.blurred { filter:blur(32px) brightness(.75); transform:scale(1.08); display:block; }
+.att-spoiler-tag { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(0,0,0,.75); color:#fff; padding:7px 16px; border-radius:18px;
+  font-size:12px; font-weight:800; letter-spacing:.8px; pointer-events:none; }
+.att-spoiler:hover .att-spoiler-tag { background:rgba(0,0,0,.88); }
+.ctool.spoiler-t { font-weight:800; letter-spacing:1px; }
+.ctool.spoiler-t.on { color:var(--brand,#5865f2); }
+.pin-btn.on { color:var(--brand,#5865f2); }

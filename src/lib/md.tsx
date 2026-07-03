@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import { loadCustom } from './emoji'
+import { guardLink } from './linkguard'
 
 // Мини-маркдаун как в Discord: **жирный**, *курсив*, __подчёркнутый__, ~~зачёркнутый~~,
 // `код`, ```блок кода```, > цитата, ||спойлер|| (клик — раскрыть), кликабельные ссылки
@@ -43,7 +44,7 @@ function inline(text: string, depth = 0): ReactNode[] {
     { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1)}</s> },
     { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
     { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
-    { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer">{m[0]}</a> },
+    { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])}>{m[0]}</a> },
     { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} /> : m[0] },
     { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => <span key={k()} className="md-mention">@{m[1]}</span> },
   ]
