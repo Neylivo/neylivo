@@ -1,7 +1,7 @@
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { uploadTo, isImage } from '../lib/storage'
+import { uploadWithProgress, isImage } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
@@ -64,6 +64,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
   // Сообщение, которое не ушло из-за сбоя сети: текст остаётся в поле, баннер даёт повторить одной кнопкой.
   const [failed, setFailed] = useState(false)
+  // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
+  const [upProg, setUpProg] = useState<number | null>(null)
 
   // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
   useEffect(() => {
@@ -174,7 +176,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     try {
       let attach: { url: string; type: string } | undefined
       if (file) {
-        let url = await uploadTo('attachments', user.id, file)
+        setUpProg(0)
+        let url = await uploadWithProgress('attachments', user.id, file, p => setUpProg(p))
         if (spoiler && isImage(file)) url += '#spoiler'
         attach = { url, type: isImage(file) ? 'image' : 'file' }
       }
@@ -183,7 +186,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       setFailed(false)
       setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setUpProg(null) }
   }
 
   return (
@@ -193,6 +196,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         Сообщение не отправлено — проверь соединение
         <button type="button" onClick={e => { setFailed(false); submit(e as any) }}>Повторить</button>
         <button type="button" className="send-fail-x" title="Скрыть" onClick={() => setFailed(false)}>×</button>
+      </div>}
+      {upProg !== null && <div className="up-progress">
+        <div className="up-progress-fill" style={{ width: Math.round(upProg * 100) + '%' }} />
+        <span className="up-progress-tx">Загрузка{file ? ' «' + file.name + '»' : ''}… {Math.round(upProg * 100)}%</span>
+      </div>}
+      {file && upProg === null && <div className="file-chip">
+        <Icon name="paperclip" size={14} /> <b className="file-chip-nm">{file.name}</b> <span className="file-chip-sz">{fmtSize(file.size)}</span>
+        <button type="button" className="file-chip-x" title="Убрать файл" onClick={() => { setFile(null); setSpoiler(false); if (fileRef.current) fileRef.current.value = '' }}><Icon name="close" size={14} /></button>
       </div>}
       {replyingTo && <div className="reply-banner">
         <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
