@@ -1317,3 +1317,17 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 /* --- Плавное появление картинок в чате --- */
 .msg-att { animation: img-in .25s ease; }
 @keyframes img-in { from { opacity: 0; } to { opacity: 1; } }
+
+
+/* --- Лайтбокс: панель действий и индикатор зума --- */
+.lightbox img { transition: transform .12s ease; }
+.lightbox-bar { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center; background: rgba(20, 20, 24, .85);
+  border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; padding: 7px 10px; }
+.lightbox-bar button, .lightbox-bar a { display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; color: #dbdee1; font-size: 13.5px; cursor: pointer;
+  padding: 4px 8px; border-radius: 6px; text-decoration: none; }
+.lightbox-bar button:hover, .lightbox-bar a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.lightbox-zoom { position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+  background: rgba(20, 20, 24, .85); border-radius: 8px; padding: 4px 10px; font-size: 12.5px;
+  color: #dbdee1; cursor: pointer; }
