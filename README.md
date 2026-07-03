@@ -59,3 +59,27 @@
 ## Деплой
 - `npm run build` → статика в `dist/` (Vercel/Netlify/Cloudflare Pages).
 - Supabase и LiveKit — облачные бэкенды, отдельный сервер не нужен.
+
+## Установщик для друзей (Windows) 📦
+
+Сборка настоящего установщика `Ponoi-Setup-<версия>.exe` полностью автоматизирована через GitHub Actions.
+
+**Один раз настроить:**
+1. В репозитории: Settings → Secrets and variables → Actions → New repository secret.
+   Добавь два секрета (значения — из твоего локального `.env`):
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+**Выпустить версию:**
+```bash
+git tag v1.0.0
+git push --tags
+```
+Через ~5 минут на странице **Releases** появится готовый `Ponoi-Setup-1.0.0.exe`.
+
+**Отдать другу:** просто скинь ссылку на .exe со страницы Releases. Друг устанавливает,
+регистрируется по email — и вы общаетесь: все данные живут в общем облаке (Supabase),
+звонки — через LiveKit. Никаких серверов поднимать не нужно.
+
+Проверить сборку без релиза: вкладка Actions → workflow «release» → Run workflow —
+готовый .exe будет в артефактах сборки.
