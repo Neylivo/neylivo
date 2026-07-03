@@ -14,9 +14,10 @@ import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
-import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage } from '../lib/reactions'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
+import { useTyping } from '../lib/typing'
 
 interface Friend { id: string; name: string }
 
@@ -42,6 +43,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [codeMsg, setCodeMsg] = useState('')
   const { statusOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
+  const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
+  const { typers, notifyTyping } = useTyping(threadId, username)
 
   async function startCall() {
     if (!threadId) return
@@ -105,6 +108,9 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           setMessages(m => [...m, msg])
           if (msg.author !== meId) notifyMessage(msg.author_name, msg.content ?? '')
         })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
+        p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? msg : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
@@ -127,8 +133,10 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     const { error } = await supabase.from('dm_messages').insert({
       thread_id: threadId, author: meId, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
+      reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     })
     if (error) { alert(error.message); return }
+    setReplyTarget(null)
     if (active) sendPush([active.id], username, t || 'Вложение', '/')
   }
 
@@ -148,6 +156,10 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     if (!confirm('Удалить сообщение?')) return
     await deleteMessage('dm_messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
+  }
+  async function editMsg(id: string, content: string) {
+    await editMessage('dm_messages', id, content)
+    setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
   }
 
   return (
@@ -205,13 +217,17 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                 <button className="pin-un" title="Открепить" onClick={() => pin(m.id, false)}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
-          {call && <CallRoom room={call} onLeave={() => setCall(null)} />}
+          {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
           <div className="msgs">
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId}
-              canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} />
+              canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
+              onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
             <div ref={bottomRef} />
           </div>
-          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} />
+          {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
+          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg}
+            replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
+            onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />
         </> : <>
           <header className="chat-head pfr-head">
             <span className="pfr-title"><Icon name="users" size={20} /> Друзья</span>
