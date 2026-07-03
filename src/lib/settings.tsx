@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { setTime24 } from './ui'
 
 export interface CustomTheme {
   dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
@@ -28,6 +29,16 @@ export interface Settings {
   actOn: boolean
   actText: string
   sbKey: string   // in-call: save last 15s of the conversation
+  fontFamily: string   // '' = system
+  radius: number       // UI corner radius px
+  msgGap: number       // extra gap between messages px
+  time24: boolean      // 24h vs 12h clock
+  showAvatars: boolean
+  groupMessages: boolean
+  bigEmoji: boolean    // render emoji-only messages large
+  sendKey: 'enter' | 'ctrl'
+  keyMusic: string
+  keyHome: string
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
@@ -55,6 +66,8 @@ export const DEFAULTS: Settings = {
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
   micVol: 100, spkVol: 100, lang: 'ru', dmAll: false, dmMembers: true, dataCollect: false,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true,
+  sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
@@ -104,6 +117,10 @@ function apply(s: Settings) {
   document.body.classList.toggle('compact', s.compact)
   document.body.classList.toggle('no-anim', !s.animations)
   ;(document.body.style as any).zoom = String(s.zoom / 100)
+  root.style.setProperty('--radius', s.radius + 'px')
+  root.style.setProperty('--msg-gap', s.msgGap + 'px')
+  document.body.style.fontFamily = s.fontFamily || ''
+  setTime24(s.time24)
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
