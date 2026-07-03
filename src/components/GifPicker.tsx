@@ -17,9 +17,25 @@ const BUILTIN = [
 
 interface Gif { id: string; url: string }
 
+// Избранные GIF: личный список, хранится локально и переживает перезагрузку.
+const FAV_KEY = 'ponoi_fav_gifs'
+function loadFavs(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]'); return Array.isArray(v) ? v : [] }
+  catch { return [] }
+}
+
 export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; onClose: () => void }) {
   const { user } = useAuth()
   const [mine, setMine] = useState<Gif[]>([])
+  const [favs, setFavs] = useState<string[]>(loadFavs)
+
+  function toggleFav(url: string) {
+    setFavs(f => {
+      const next = f.includes(url) ? f.filter(u => u !== url) : [url, ...f].slice(0, 24)
+      localStorage.setItem(FAV_KEY, JSON.stringify(next))
+      return next
+    })
+  }
 
   async function refresh() {
     const { data } = await supabase.from('gifs').select('id, url').order('created_at', { ascending: false })
@@ -52,12 +68,24 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
         <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       <div className="emoji-scroll">
+        {favs.length > 0 && <>
+          <div className="emoji-grp">Избранное</div>
+          <div className="gif-grid">
+            {favs.map(u => (
+              <div key={'f' + u} className="gif-cell" onClick={() => onPick(u)}>
+                <img src={u} alt="gif" loading="lazy" />
+                <span className="gif-fav on" title="Убрать из избранного" onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
+              </div>
+            ))}
+          </div>
+        </>}
         {mine.length > 0 && <>
           <div className="emoji-grp">Общие GIF</div>
           <div className="gif-grid">
             {mine.map(g => (
               <div key={g.id} className="gif-cell" onClick={() => onPick(g.url)}>
-                <img src={g.url} alt="gif" />
+                <img src={g.url} alt="gif" loading="lazy" />
+                <span className={'gif-fav' + (favs.includes(g.url) ? ' on' : '')} title={favs.includes(g.url) ? 'Убрать из избранного' : 'В избранное'} onClick={ev => { ev.stopPropagation(); toggleFav(g.url) }}>★</span>
                 <span className="emoji-del" onClick={ev => { ev.stopPropagation(); removeMine(g.id) }}><Icon name="close" size={12} /></span>
               </div>
             ))}
@@ -65,7 +93,12 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
         </>}
         <div className="emoji-grp">Популярные</div>
         <div className="gif-grid">
-          {BUILTIN.map(u => <div key={u} className="gif-cell" onClick={() => onPick(u)}><img src={u} alt="gif" /></div>)}
+          {BUILTIN.map(u => (
+            <div key={u} className="gif-cell" onClick={() => onPick(u)}>
+              <img src={u} alt="gif" loading="lazy" />
+              <span className={'gif-fav' + (favs.includes(u) ? ' on' : '')} title={favs.includes(u) ? 'Убрать из избранного' : 'В избранное'} onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

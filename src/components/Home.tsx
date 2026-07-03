@@ -196,6 +196,7 @@ export function Home() {
                 onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
                 {s.name.slice(0, 2).toUpperCase()}</button>
               {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}
+              {notifModeOf(s.id) === 'mute' && <span className="srv-mute-badge" title="Уведомления выключены">🔕</span>}
             </div>
           )
           return <>
