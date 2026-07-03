@@ -4,6 +4,7 @@ import { Attachment } from './Composer'
 import { timeShort, dayLabel } from '../lib/ui'
 import { loadCustom } from '../lib/emoji'
 import type { RxSummary } from '../lib/reactions'
+import { Icon } from './icons'
 
 export interface UiMessage {
   id: string
@@ -80,7 +81,7 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
                   : <Avatar name={m.author_name} url={m.author_avatar} size={40} />}
               </div>
               <div className="msg-body">
-                {m.pinned && <div className="msg-pinned-tag">📌 Закреплено</div>}
+                {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
                 {!grouped && <div className="msg-hdr"><span className="nm">{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
                 {m.content && <div className="msg-txt">{renderContent(m.content)}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} />
@@ -91,18 +92,18 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
                       <span>{r.emoji}</span><span className="rx-n">{r.count}</span>
                     </button>
                   })}
-                  <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}>＋</button>
+                  <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>
                   {pickFor === m.id && <div className="rx-quick">
                     {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}>{e}</button>)}
                   </div>}
                 </div>}
               </div>
               <div className="msg-tools">
-                <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}>😊</button>
+                <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>
                 {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}>{e}</button>)}
                 </div>}
-                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 260) }) }}>⋯</button>
+                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 260) }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
           </Fragment>
@@ -116,9 +117,9 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
             {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}>{e}</button>)}
           </div>
           {(canPin ? canPin(menuMsg) : true) &&
-            <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}>{menuMsg.pinned ? '📌 Открепить' : '📌 Закрепить'}</div>}
-          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); setMenu(null) }}>📋 Копировать текст</div>}
-          {menuMsg.author === currentUser && <div className="ctx-item danger" onClick={() => { onDelete?.(menu.id); setMenu(null) }}>🗑 Удалить</div>}
+            <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}><Icon name="pin" size={15} /> {menuMsg.pinned ? 'Открепить' : 'Закрепить'}</div>}
+          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
+          {menuMsg.author === currentUser && <div className="ctx-item danger" onClick={() => { onDelete?.(menu.id); setMenu(null) }}><Icon name="trash" size={15} /> Удалить</div>}
         </div>
       </>}
     </>
