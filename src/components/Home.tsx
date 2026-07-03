@@ -16,6 +16,7 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { matchCombo } from '../lib/keybind'
 import { QuickSwitcher } from './QuickSwitcher'
+import { HotkeysModal } from './HotkeysModal'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -32,6 +33,7 @@ export function Home() {
   const [settingsServer, setSettingsServer] = useState<Server | null>(null)
   const [musicOn, setMusicOn] = useState(false)   // плеер остаётся смонтирован — музыка играет в фоне
   const [qs, setQs] = useState(false)             // Ctrl+K панель быстрого перехода
+  const [hk, setHk] = useState(false)             // Ctrl+/ шпаргалка горячих клавиш
 
   useEffect(() => {
     if (!user) return
@@ -60,6 +62,7 @@ export function Home() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setQs(v => !v) }
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); setHk(v => !v) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -136,6 +139,7 @@ export function Home() {
         onClose={() => setView(v => v.kind === 'music' ? { kind: 'dm' } : { kind: 'music' })}
         onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? { kind: 'dm' } : v) }} />}
     </div>
+    {hk && <HotkeysModal onClose={() => setHk(false)} />}
     {qs && <QuickSwitcher servers={servers} onClose={() => setQs(false)} onGo={t => {
       setQs(false)
       if (t.kind === 'home') setView({ kind: 'dm' })
