@@ -7,6 +7,8 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
+import { isSoundcloudUrl, scMeta, loadWidgetApi, widgetSrc, type ScMeta } from './soundcloud'
+import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 
 const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
 interface Playlist { id: string; name: string; trackIds: string[] }
@@ -20,7 +22,6 @@ function fmt(s: number) {
   const m = Math.floor(s / 60), ss = Math.floor(s % 60)
   return m + ':' + String(ss).padStart(2, '0')
 }
-function isSoundcloud(u: string) { return /soundcloud\.com/i.test(u) }
 
 export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; onClose: () => void }) {
   // Shared library ("Трекотека"): tracks live in the music_tracks table, visible
@@ -49,8 +50,25 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
   const audioRef = useRef<HTMLAudioElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const togChan = useRef<any>(null)
+  const scRef = useRef<HTMLIFrameElement>(null)
+  const widgetRef = useRef<any>(null)
+  const playingRef = useRef(false)
+  const volRef = useRef(100)
+  const nextRef = useRef<() => void>(() => {})
+  const [meta, setMeta] = useState<Record<string, ScMeta>>({})
+  const [color, setColor] = useState<Rgb | null>(null)
 
   const cur = tracks[idx]
+  const curSc = !!cur && isSoundcloudUrl(cur.url)
+  const curMeta = cur ? meta[cur.url] : undefined
+  const curArt = curMeta?.art ?? null
+  const acc = color ? boost(color) : null
+  const musStyle = acc ? ({
+    '--mus-a': rgb(acc),
+    '--mus-a2': rgb(lighten(acc)),
+    '--mus-a-soft': rgb(acc, .22),
+    '--mus-bg1': rgb(scale(acc, .16)),
+  } as React.CSSProperties) : undefined
 
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
 
@@ -78,11 +96,80 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
   }, [bg.type, bg.mode, bg.url, bg.ver])
 
   useEffect(() => {
+    playingRef.current = playing
+    if (curSc) {
+      audioRef.current?.pause()
+      const w = widgetRef.current
+      if (w) { if (playing) w.play(); else w.pause() }
+      return
+    }
     const a = audioRef.current; if (!a) return
     if (playing) a.play().catch(() => {}); else a.pause()
-  }, [playing, idx])
+  }, [playing, idx, curSc])
 
-  useEffect(() => { const a = audioRef.current; if (a) a.volume = vol / 100; localStorage.setItem('ponoi_mus_vol', String(vol)) }, [vol])
+  useEffect(() => {
+    volRef.current = vol
+    const a = audioRef.current; if (a) a.volume = vol / 100
+    widgetRef.current?.setVolume(vol)
+    localStorage.setItem('ponoi_mus_vol', String(vol))
+  }, [vol])
+
+  // ---- SoundCloud: oEmbed metadata for every SC track in the list ----
+  useEffect(() => {
+    let ok = true
+    const missing = tracks.filter(t => isSoundcloudUrl(t.url) && !meta[t.url])
+    if (missing.length === 0) return
+    ;(async () => {
+      for (const t of missing) {
+        const m = await scMeta(t.url)
+        if (!ok) return
+        if (m) setMeta(prev => ({ ...prev, [t.url]: m }))
+      }
+    })()
+    return () => { ok = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks])
+
+  // ---- Тема под цвет трека: выжимаем доминирующий цвет из обложки ----
+  useEffect(() => {
+    let ok = true
+    const art = cur ? meta[cur.url]?.art : null
+    if (!art) { setColor(null); return }
+    artColor(art).then(c => { if (ok) setColor(c) })
+    return () => { ok = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur?.url, meta])
+
+  // ---- SoundCloud widget (скрытый iframe) — реальное воспроизведение SC-ссылок ----
+  useEffect(() => {
+    setCurT(0); setDur(0)
+    if (!curSc || !cur) { widgetRef.current = null; return }
+    const curUrl = cur.url
+    let disposed = false
+    ;(async () => {
+      try {
+        const SC = await loadWidgetApi()
+        if (disposed || !scRef.current) return
+        const w = SC.Widget(scRef.current)
+        w.bind(SC.Widget.Events.READY, () => {
+          if (disposed) return
+          widgetRef.current = w
+          w.setVolume(volRef.current)
+          w.getDuration((ms: number) => { if (!disposed) setDur((ms || 0) / 1000) })
+          w.getCurrentSound((s: any) => {   // запасной источник метаданных, если oEmbed не сработал
+            if (disposed || !s) return
+            const art = s.artwork_url ? String(s.artwork_url).replace('-large', '-t500x500') : null
+            setMeta(prev => prev[curUrl] ? prev : ({ ...prev, [curUrl]: { title: s.title || '', author: s.user?.username || '', art } }))
+          })
+          if (playingRef.current) w.play()
+        })
+        w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => { if (!disposed) setCurT((e?.currentPosition || 0) / 1000) })
+        w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
+      } catch {}
+    })()
+    return () => { disposed = true; widgetRef.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curSc, cur?.url])
 
   // ---- listen together (broadcast sync via supabase realtime) ----
   useEffect(() => {
@@ -122,7 +209,9 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
 
   async function addSoundcloud() {
     const url = scUrl.trim(); if (!url || !meId) return
-    const name = decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
+    const m = await scMeta(url)   // настоящее название/автор/обложка через oEmbed
+    const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
+    if (m) setMeta(prev => ({ ...prev, [url]: m }))
     await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url' })
     setScUrl('')
     setTracks(await fetchTracks())
@@ -144,6 +233,7 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
     })
   }
   const prev = () => setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
+  nextRef.current = next
 
   function addToPlaylist(trackId: string) {
     const name = prompt('Название плейлиста (существующее или новое)')?.trim(); if (!name) return
@@ -169,7 +259,7 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
   const filteredQueue = qFilter ? tracks.filter(t => t.name.toLowerCase().includes(qFilter.toLowerCase())) : tracks
 
   return (
-    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '')}>
+    <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '')} style={musStyle}>
       {bg.type !== 'none' && bgUrl && <>
         {bg.type === 'video'
           ? <video className="musbg" src={bgUrl} autoPlay loop muted playsInline />
@@ -215,7 +305,7 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
                 const i = tracks.indexOf(t)
                 return (
                   <div key={t.id} className={'mus2-li' + (i === idx ? ' on' : '')} onClick={() => { setIdx(i); setPlaying(true) }}>
-                    <span className="mus2-li-n">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{t.name}</span>
+                    <span className="mus2-li-n">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{meta[t.url]?.title || t.name}</span>
                     <span className="mus2-li-add" title="В плейлист" onClick={e => { e.stopPropagation(); addToPlaylist(t.id) }}><Icon name="plus" size={14} /></span>
                     <span className="mus2-li-del" title="Убрать" onClick={e => { e.stopPropagation(); removeTrack(t.id) }}><Icon name="close" size={13} /></span>
                   </div>
@@ -242,9 +332,12 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
 
         <section className="mus2-now">
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
-          <div className="mus2-art">{cur ? <Icon name="music" size={72} /> : <span className="mus2-note"><Icon name="music" size={72} /></span>}</div>
-          <div className="mus2-nowt">{cur ? cur.name : 'Ничего не играет'}</div>
-          <div className="mus2-nowsub">{cur ? (isSoundcloud(cur.url) ? 'SoundCloud' : cur.kind === 'url' ? 'по ссылке' : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          <div className="mus2-artwrap">
+            {curArt && <div className="mus2-artglow" style={{ backgroundImage: `url(${curArt})` }} />}
+            <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
+          </div>
+          <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
+          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author ? curMeta.author + ' · SoundCloud' : 'SoundCloud') : cur.kind === 'url' ? 'по ссылке' : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
           {showRight && <img className="mus-gif r" src={gif.url} alt="" />}
         </section>
@@ -254,7 +347,7 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
         <div className="mus2-seek">
           <span>{fmt(curT)}</span>
           <input type="range" min={0} max={dur || 0} step={0.1} value={curT}
-            onChange={e => { const a = audioRef.current; if (a) { a.currentTime = +e.target.value; setCurT(+e.target.value) } }} disabled={!cur} />
+            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur} />
           <span>{fmt(dur)}</span>
         </div>
         <div className="mus2-ctlrow">
@@ -297,13 +390,15 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
               ? <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
               : tracks.filter(t => t.name.toLowerCase().includes(libQ.toLowerCase())).map(t => {
                   const i = tracks.indexOf(t)
-                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>{t.name}<span className="mus2-lib-own">{t.owner}</span></div>
+                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>{meta[t.url]?.title || t.name}<span className="mus2-lib-own">{t.owner}</span></div>
                 })}
           </div>
         </div>
       </div>}
 
-      <audio ref={audioRef} src={cur?.url}
+      {curSc && cur && <iframe key={cur.url} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
+        src={widgetSrc(cur.url)} />}
+      <audio ref={audioRef} src={cur && !curSc ? cur.url : undefined}
         onEnded={next}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />

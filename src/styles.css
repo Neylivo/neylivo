@@ -736,14 +736,14 @@ body { font-size: var(--font-px, 16px); }
 .mus2-body { flex:1; display:flex; min-height:0; }
 .mus2-side { width:460px; max-width:46%; display:flex; flex-direction:column; padding:16px; gap:10px; border-right:1px solid rgba(0,0,0,.2); overflow-y:auto; }
 .mus2-sidehead { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.mus2-title { font-weight:800; font-size:18px; background:linear-gradient(90deg,#8b5cf6,#5865f2); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.mus2-title { font-weight:800; font-size:18px; background:linear-gradient(90deg,var(--mus-a,#8b5cf6),var(--mus-a2,#5865f2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .mus2-tabs { display:flex; gap:6px; }
 .mus2-tab { background:var(--bg3); border:none; color:var(--tx); padding:6px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
-.mus2-tab.on { background:var(--brand); color:#fff; }
+.mus2-tab.on { background:var(--mus-a,var(--brand)); color:#fff; }
 .mus2-addrow { display:flex; gap:8px; }
 .mus2-in { flex:1; background:var(--bg3); border:1px solid rgba(0,0,0,.3); border-radius:8px; padding:10px 12px; color:var(--tx); outline:none; font-size:14px; }
-.mus2-in:focus { border-color:var(--brand); }
-.mus2-addbtn { background:var(--brand); border:none; color:#fff; padding:0 16px; border-radius:8px; font-weight:600; cursor:pointer; }
+.mus2-in:focus { border-color:var(--mus-a,var(--brand)); }
+.mus2-addbtn { background:var(--mus-a,var(--brand)); border:none; color:#fff; padding:0 16px; border-radius:8px; font-weight:600; cursor:pointer; }
 .mus2-libbtn, .mus2-filebtn { background:var(--bg3); border:none; color:var(--tx); padding:0 14px; border-radius:8px; cursor:pointer; font-weight:600; }
 .mus2-sec { display:flex; align-items:center; justify-content:space-between; font-size:12px; letter-spacing:.4px; color:var(--mut); font-weight:700; margin-top:6px; }
 .mus2-filebtn { width:26px; height:26px; padding:0; }
@@ -752,7 +752,7 @@ body { font-size: var(--font-px, 16px); }
 .mus2-empty.center { text-align:center; padding:40px; }
 .mus2-li { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:8px; cursor:pointer; }
 .mus2-li:hover { background:rgba(255,255,255,.05); }
-.mus2-li.on { background:rgba(88,101,242,.22); }
+.mus2-li.on { background:var(--mus-a-soft,rgba(88,101,242,.22)); }
 .mus2-li-n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mus2-li-add, .mus2-li-del { opacity:0; color:var(--mut); padding:0 2px; }
 .mus2-li:hover .mus2-li-add, .mus2-li:hover .mus2-li-del { opacity:.7; }
@@ -764,29 +764,29 @@ body { font-size: var(--font-px, 16px); }
 .mus2-pl-t { padding:6px 8px; color:var(--mut); border-radius:6px; cursor:pointer; font-size:14px; }
 .mus2-pl-t:hover { background:rgba(255,255,255,.05); color:var(--tx); }
 .mus2-now { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; position:relative; padding:24px; }
-.mus2-art { width:280px; height:280px; border-radius:18px; background:linear-gradient(150deg,#8b5cf6,#5865f2); display:flex; align-items:center; justify-content:center; font-size:96px; box-shadow:0 18px 48px rgba(0,0,0,.4); }
+.mus2-art { position:relative; z-index:1; overflow:hidden; width:280px; height:280px; border-radius:18px; background:linear-gradient(150deg,var(--mus-a,#8b5cf6),var(--mus-a2,#5865f2)); display:flex; align-items:center; justify-content:center; font-size:96px; box-shadow:0 18px 48px rgba(0,0,0,.4); }
 .mus2-note { color:rgba(255,255,255,.9); font-size:120px; }
 .mus2-nowt { font-size:24px; font-weight:800; text-align:center; }
 .mus2-nowsub { color:var(--mut); font-size:14px; margin-top:-8px; }
-.mus2-together-badge { margin-top:8px; background:rgba(88,101,242,.2); color:var(--tx); padding:6px 12px; border-radius:20px; font-size:13px; }
+.mus2-together-badge { margin-top:8px; background:var(--mus-a-soft,rgba(88,101,242,.2)); color:var(--tx); padding:6px 12px; border-radius:20px; font-size:13px; }
 .mus2-bar { border-top:1px solid rgba(0,0,0,.2); padding:12px 24px 16px; display:flex; flex-direction:column; gap:10px; }
 .mus2-seek { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--mut); font-variant-numeric:tabular-nums; }
-.mus2-seek input { flex:1; accent-color:var(--brand); }
+.mus2-seek input { flex:1; accent-color:var(--mus-a,var(--brand)); }
 .mus2-ctlrow { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .mus2-vol { display:flex; align-items:center; gap:8px; width:180px; }
-.mus2-vol input { flex:1; accent-color:var(--brand); }
+.mus2-vol input { flex:1; accent-color:var(--mus-a,var(--brand)); }
 .mus2-ctl { display:flex; align-items:center; gap:16px; }
 .mus2-ctl button { background:none; border:none; color:var(--tx); font-size:18px; cursor:pointer; opacity:.8; }
-.mus2-ctl button.on { opacity:1; color:var(--brand); }
+.mus2-ctl button.on { opacity:1; color:var(--mus-a,var(--brand)); }
 .mus2-ctl button:hover:not(:disabled) { opacity:1; transform:scale(1.1); }
-.mus2-ctl .big { width:48px; height:48px; border-radius:50%; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; }
+.mus2-ctl .big { width:48px; height:48px; border-radius:50%; background:var(--mus-a,var(--brand)); color:#fff; display:flex; align-items:center; justify-content:center; }
 .mus2-extra { display:flex; align-items:center; gap:12px; }
 .mus2-inpl, .mus2-tog { background:none; border:none; color:var(--mut); cursor:pointer; font-weight:600; font-size:13px; }
 .mus2-inpl:hover, .mus2-tog:hover { color:var(--tx); }
 .mus2-together-wrap { position:relative; }
 .mus2-tog-pop { position:absolute; bottom:120%; right:0; background:var(--bg2); border:1px solid rgba(0,0,0,.4); border-radius:10px; padding:8px; display:flex; flex-direction:column; gap:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); min-width:180px; z-index:20; }
 .mus2-tog-pop button { background:var(--bg3); border:none; color:var(--tx); padding:9px; border-radius:6px; cursor:pointer; font-weight:600; }
-.mus2-tog-pop button:hover { background:var(--brand); color:#fff; }
+.mus2-tog-pop button:hover { background:var(--mus-a,var(--brand)); color:#fff; }
 .mus2-tog-code { color:var(--mut); font-size:13px; padding:4px 2px; }
 .mus2-lib { position:fixed; inset:0; background:var(--bg); z-index:140; display:flex; }
 .mus2-lib-inner { flex:1; display:flex; flex-direction:column; }
@@ -897,3 +897,11 @@ body.chatbg-on .chat::after {
   content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
   background:rgba(0,0,0,var(--chatbg-tint,.45));
 }
+
+/* ===== Ponoi Music: обложка трека + перекраска темы под цвет обложки ===== */
+.mus2.tinted { background:linear-gradient(180deg,var(--mus-bg1,var(--bg)) 0%,var(--bg) 72%); }
+.mus2, .mus2-tab.on, .mus2-addbtn, .mus2-ctl .big { transition:background .5s ease; }
+.mus2-artwrap { position:relative; }
+.mus2-artglow { position:absolute; inset:-46px; border-radius:40px; background-size:cover; background-position:center; filter:blur(52px) saturate(1.5); opacity:.55; pointer-events:none; }
+.mus2-art img { width:100%; height:100%; object-fit:cover; display:block; }
+.mus2-scframe { position:absolute; bottom:0; left:0; width:2px; height:2px; opacity:.01; border:0; pointer-events:none; }
