@@ -27,6 +27,7 @@ export interface Settings {
   devmode: boolean
   actOn: boolean
   actText: string
+  sbKey: string   // in-call: save last 15s of the conversation
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
@@ -53,7 +54,7 @@ export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
   micVol: 100, spkVol: 100, lang: 'ru', dmAll: false, dmMembers: true, dataCollect: false,
-  devmode: false, actOn: true, actText: '',
+  devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
