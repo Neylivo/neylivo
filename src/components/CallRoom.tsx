@@ -19,19 +19,43 @@ function hue(s: string) {
   return h
 }
 
+// Общий AudioContext для регулировки громкости участников (0–200% через GainNode).
+let _actx: AudioContext | null = null
+function audioCtx(): AudioContext {
+  if (!_actx) _actx = new (window.AudioContext || (window as any).webkitAudioContext)()
+  if (_actx.state === 'suspended') _actx.resume()
+  return _actx
+}
+
 /** Плитка одного участника: камера (если есть) или аватар-инициалы. */
 function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
   const vidRef = useRef<HTMLDivElement>(null)
   const [hasCam, setHasCam] = useState(false)
   const [micOn, setMicOn] = useState(true)
   const [speaking, setSpeaking] = useState(!!p.isSpeaking)
+  // Индивидуальная громкость участника 0–200%, запоминается по имени.
+  const [vol, setVol] = useState(() => {
+    const v = parseInt(localStorage.getItem('ponoi_vol_' + (p.identity || '')) || '100', 10)
+    return isNaN(v) ? 100 : Math.max(0, Math.min(200, v))
+  })
+  const volRef = useRef(vol)
+  const gainsRef = useRef<GainNode[]>([])
+
+  useEffect(() => {
+    volRef.current = vol
+    gainsRef.current.forEach(g => { g.gain.value = vol / 100 })
+    if (!isLocal) try { localStorage.setItem('ponoi_vol_' + (p.identity || ''), String(vol)) } catch {}
+  }, [vol, isLocal, p.identity])
 
   useEffect(() => {
     const host = vidRef.current!
     let attached: HTMLElement[] = []
+    let nodes: AudioNode[] = []
 
     function refresh() {
       attached.forEach(e => e.remove()); attached = []
+      nodes.forEach(n => { try { n.disconnect() } catch {} }); nodes = []
+      gainsRef.current = []
       let cam = false
       p.trackPublications.forEach((pub: any) => {
         const t = pub.track
@@ -40,6 +64,16 @@ function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
           const el = t.attach(); el.classList.add('call-media'); host.appendChild(el); attached.push(el); cam = true
         } else if (t.kind === 'audio' && !isLocal) {
           const el = t.attach(); el.style.display = 'none'; host.appendChild(el); attached.push(el)
+          // Громкость через WebAudio: элемент глушим, звук идёт через GainNode (0–200%).
+          try {
+            const ctx = audioCtx()
+            const src = ctx.createMediaStreamSource(new MediaStream([t.mediaStreamTrack]))
+            const g = ctx.createGain()
+            g.gain.value = volRef.current / 100
+            src.connect(g); g.connect(ctx.destination)
+            ;(el as HTMLMediaElement).muted = true
+            nodes.push(src, g); gainsRef.current.push(g)
+          } catch { /* нет WebAudio — играет сам элемент на 100% */ }
         }
       })
       setHasCam(cam)
@@ -55,6 +89,8 @@ function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
       evs.forEach(e => p.off(e, refresh))
       p.off('isSpeakingChanged', onSpeak)
       attached.forEach(e => e.remove())
+      nodes.forEach(n => { try { n.disconnect() } catch {} })
+      gainsRef.current = []
     }
   }, [p, isLocal])
 
@@ -64,6 +100,13 @@ function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
       <div className="call-vid" ref={vidRef} />
       {!hasCam && <div className="call-ava" style={{ background: `hsl(${hue(p.identity || 'x')} 55% 42%)` }}>
         {String(name).slice(0, 2).toUpperCase()}
+      </div>}
+      {!isLocal && <div className="tile-vol" onClick={e => e.stopPropagation()}>
+        <Icon name="headphones" size={12} />
+        <input type="range" min={0} max={200} step={5} value={vol}
+          onChange={e => setVol(parseInt(e.target.value, 10))}
+          title={'Громкость: ' + vol + '%'} />
+        <span className="tile-vol-pct">{vol}%</span>
       </div>}
       <div className="call-cap">
         {!micOn && <Icon name="mic-off" size={12} />}

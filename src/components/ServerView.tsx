@@ -35,6 +35,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
+  const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
@@ -160,8 +161,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <button className="srv-invite" title="Пригласить" onClick={invite}><Icon name="link" size={16} /></button>
         </div>
         <div className="ch-list">
-          <div className="ch-sec">Текстовые каналы</div>
-          {channels.map(c => (
+          <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
+            onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
+            <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы</div>
+          {channels.filter(c => catOpen || curChannel?.id === c.id).map(c => (
             <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '')}
               onClick={() => selectChannel(c)}># {c.name}</div>
           ))}

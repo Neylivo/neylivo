@@ -1068,3 +1068,27 @@ body.no-anim .qs-box { animation:none; }
 .hl-num { color:#b5cea8; }
 .hl-com { color:#6a9955; font-style:italic; }
 .hl-fn { color:#dcdcaa; }
+
+/* ===== Сворачивание категории каналов ===== */
+.ch-sec.clickable { cursor:pointer; user-select:none; display:flex; align-items:center; gap:4px; }
+.ch-sec.clickable:hover { color:var(--tx,#dbdee1); }
+.ch-caret { display:inline-block; font-size:9px; transition:transform .12s ease; }
+.ch-caret.open { transform:rotate(90deg); }
+body.no-anim .ch-caret { transition:none; }
+
+/* ===== Пульсирующий зелёный ободок говорящего ===== */
+.call-tile.speaking .call-ava { animation:spk-pulse 1.15s ease-in-out infinite; }
+@keyframes spk-pulse {
+  0%, 100% { box-shadow:0 0 0 3px #23a55a, 0 0 10px 1px rgba(35,165,90,.45); }
+  50% { box-shadow:0 0 0 6px rgba(35,165,90,.45), 0 0 16px 4px rgba(35,165,90,.3); }
+}
+body.no-anim .call-tile.speaking .call-ava { animation:none; box-shadow:0 0 0 3px #23a55a; }
+
+/* ===== Индивидуальная громкость участника ===== */
+.tile-vol { position:absolute; left:8px; right:8px; bottom:34px; display:flex; align-items:center; gap:7px;
+  background:rgba(0,0,0,.72); border-radius:8px; padding:6px 10px; opacity:0;
+  transition:opacity .12s; pointer-events:none; }
+.call-tile:hover .tile-vol { opacity:1; pointer-events:auto; }
+.tile-vol input[type=range] { flex:1; accent-color:#23a55a; height:4px; cursor:pointer; }
+.tile-vol .tile-vol-pct { font-size:11px; font-weight:700; color:#fff; min-width:38px; text-align:right; }
+.tile-vol svg { color:#dbdee1; flex-shrink:0; }
