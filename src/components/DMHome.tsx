@@ -53,6 +53,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const { typers, notifyTyping } = useTyping(threadId, username)
   const [mini, setMini] = useState<MiniProfileData | null>(null)
+  const [newDividerId, setNewDividerId] = useState<string | null>(null)
 
   async function startCall() {
     if (!threadId) return
@@ -102,8 +103,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     setThreadId(t.id)
     const { data } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at').limit(100)
-    setMessages((data ?? []) as DMMessage[])
-    loadRx(((data ?? []) as DMMessage[]).map(m => m.id))
+    const list = (data ?? []) as DMMessage[]
+    setMessages(list)
+    // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в ЛС.
+    const lastRead = Number(localStorage.getItem('ponoi_lastread_dm_' + t.id) ?? 0)
+    const firstNew = lastRead ? list.find(m => m.author !== meId && new Date(m.created_at).getTime() > lastRead) : undefined
+    setNewDividerId(firstNew?.id ?? null)
+    localStorage.setItem('ponoi_lastread_dm_' + t.id, String(Date.now()))
+    loadRx(list.map(m => m.id))
   }
 
   // Ctrl+K: открыть личку с другом по событию из QuickSwitcher.
@@ -122,6 +129,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
         p => {
           const msg = p.new as DMMessage
           setMessages(m => [...m, msg])
+          localStorage.setItem('ponoi_lastread_dm_' + threadId, String(Date.now()))
           if (msg.author !== meId) notifyMessage(msg.author_name, msg.content ?? '')
         })
       .on('postgres_changes',
@@ -235,7 +243,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           </div>}
           {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
-            <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username}
+            <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
@@ -245,7 +253,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           <div ref={bottomRef} />
           </div>
           {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
-          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg}
+          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
             mentionables={[active.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
             onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />

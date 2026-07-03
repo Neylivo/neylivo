@@ -45,6 +45,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
+  const [newDividerId, setNewDividerId] = useState<string | null>(null)
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
 
@@ -63,8 +64,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setCurChannel(c)
     const { data } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).order('created_at').limit(100)
-    setMessages(data ?? [])
-    loadRx((data ?? []).map(m => m.id))
+    const list = data ?? []
+    setMessages(list)
+    // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в канал.
+    const lastRead = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
+    const firstNew = lastRead ? list.find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) : undefined
+    setNewDividerId(firstNew?.id ?? null)
+    localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
+    loadRx(list.map(m => m.id))
   }
 
   useEffect(() => {
@@ -75,6 +82,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => {
           const msg = p.new as Message
           setMessages(m => [...m, msg])
+          localStorage.setItem('ponoi_lastread_' + curChannel.id, String(Date.now()))
           if (msg.author !== user?.id) {
             const mode = notifModeOf(server.id)
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
@@ -229,7 +237,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         }} />}
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
-          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username}
+          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
@@ -240,7 +248,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div ref={bottomRef} />
         </div>
         {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
-        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg}
+        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />}

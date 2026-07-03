@@ -21,6 +21,13 @@ const SLASH: Record<string, string> = {
   '/bear': '\u0295\u2022\u1d25\u2022\u0294',
 }
 
+// Типографика при отправке: -- становится тире, ... становится многоточием,
+// случайные двойные пробелы схлопываются. Сообщения с кодом (`) не трогаем.
+function polish(t: string): string {
+  if (t.includes('\u0060')) return t
+  return t.replace(/--/g, '\u2014').replace(/\.\.\./g, '\u2026').replace(/ {2,}/g, ' ')
+}
+
 function applySlash(t: string): string {
   const sp = t.indexOf(' ')
   const cmd = (sp === -1 ? t : t.slice(0, sp)).toLowerCase()
@@ -30,10 +37,10 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
     replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void;
-    mentionables?: string[] }) {
+    mentionables?: string[]; draftKey?: string }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const [text, setText] = useState('')
@@ -46,6 +53,32 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [mIdx, setMIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
+
+  // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
+  useEffect(() => {
+    if (draftKey === undefined) return
+    setText(localStorage.getItem('ponoi_draft_' + draftKey) ?? '')
+    setMQ(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey])
+  function keepDraft(v: string) {
+    if (draftKey === undefined) return
+    if (v) localStorage.setItem('ponoi_draft_' + draftKey, v)
+    else localStorage.removeItem('ponoi_draft_' + draftKey)
+  }
+
+  // Любая буква/цифра возвращает фокус в строку ввода, где бы ни был курсор (как в Discord).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
 
   // Drag-and-drop файла в чат + вставка картинки из буфера (Ctrl+V).
   const [drag, setDrag] = useState(false)
@@ -102,7 +135,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     })
   }
 
-  function insertEmoji(t: string) { setText(x => x + t); setEmoji(false) }
+  function insertEmoji(t: string) { setText(x => { const nv = x + t; keepDraft(nv); return nv }); setEmoji(false) }
   async function sendGif(url: string) {
     setGif(false)
     if (!user) return
@@ -113,8 +146,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const t = applySlash(text.trim())
+    const t = polish(applySlash(text.trim()))
     if ((!t && !file) || !user) return
+    // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
+    if (t && !file && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
     setBusy(true)
     try {
@@ -125,7 +160,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         attach = { url, type: isImage(file) ? 'image' : 'file' }
       }
       await onSend(t, attach)
-      setText(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
+      lastSent.current = { t, at: Date.now() }
+      setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
@@ -153,8 +189,22 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
         <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
         <input ref={inputRef} placeholder={file ? file.name : placeholder} value={text}
-          onChange={e => { setText(e.target.value); onType?.(); updateMention(e.target.value, e.target.selectionStart) }}
-          onPaste={e => { const f = e.clipboardData?.files?.[0]; if (f) { e.preventDefault(); setFile(f) } }}
+          onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
+          onPaste={e => {
+            const f = e.clipboardData?.files?.[0]
+            if (f) { e.preventDefault(); setFile(f); return }
+            // Вставленный текст очищаем от пробелов по краям.
+            const p = e.clipboardData?.getData('text')
+            if (p && p !== p.trim()) {
+              e.preventDefault()
+              const el = e.target as HTMLInputElement
+              const s = el.selectionStart ?? text.length, en = el.selectionEnd ?? s
+              const ins = p.trim()
+              const nv = text.slice(0, s) + ins + text.slice(en)
+              setText(nv); keepDraft(nv); updateMention(nv, s + ins.length)
+              requestAnimationFrame(() => { const c = s + ins.length; el.setSelectionRange(c, c) })
+            }
+          }}
           onClick={e => updateMention(text, (e.target as HTMLInputElement).selectionStart)}
           onKeyDown={e => {
             if (sugg.length > 0) {
