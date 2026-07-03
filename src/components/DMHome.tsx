@@ -226,7 +226,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
             <div ref={bottomRef} />
           </div>
-          {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
+          {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg}
             mentionables={[active.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}

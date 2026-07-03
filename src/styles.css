@@ -1012,3 +1012,12 @@ body.no-anim .cfm-overlay { animation:none; }
   font-size:14px; cursor:pointer; }
 .mention-it.on { background:var(--bg4,#404249); }
 .mention-at { color:var(--mut,#949ba4); font-weight:700; }
+
+/* ===== Заголовки, списки, счётчик символов ===== */
+.md-h1 { font-size:1.5em; font-weight:800; line-height:1.25; margin:4px 0 2px; }
+.md-h2 { font-size:1.25em; font-weight:700; line-height:1.25; margin:3px 0 2px; }
+.md-h3 { font-size:1.08em; font-weight:700; line-height:1.25; margin:2px 0 1px; }
+.md-list { margin:2px 0; padding-left:22px; }
+.md-list li { margin:1px 0; }
+.char-count { align-self:center; font-size:12px; font-variant-numeric:tabular-nums; color:var(--mut,#949ba4); padding:0 4px; }
+.char-count.over { color:var(--red,#ed4245); font-weight:700; }

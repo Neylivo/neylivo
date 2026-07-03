@@ -189,7 +189,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
           <div ref={bottomRef} />
         </div>
-        {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.join(', ')} печатает…</div>}
+        {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}

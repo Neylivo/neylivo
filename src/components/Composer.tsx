@@ -8,6 +8,27 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
+const MAXLEN = 2000
+
+// Команды-камодзи как в Discord: /shrug и компания.
+const SLASH: Record<string, string> = {
+  '/shrug': '\u00af\\_(\u30c4)_/\u00af',
+  '/tableflip': '(\u256f\u00b0\u25a1\u00b0)\u256f\ufe35 \u253b\u2501\u253b',
+  '/unflip': '\u252c\u2500\u252c \u30ce( \u309c-\u309c\u30ce)',
+  '/lenny': '( \u0361\u00b0 \u035c\u0296 \u0361\u00b0)',
+  '/happy': '(\u1d54\u25e1\u1d54)',
+  '/cry': '(\u2565\ufe4f\u2565)',
+  '/bear': '\u0295\u2022\u1d25\u2022\u0294',
+}
+
+function applySlash(t: string): string {
+  const sp = t.indexOf(' ')
+  const cmd = (sp === -1 ? t : t.slice(0, sp)).toLowerCase()
+  const rep = SLASH[cmd]
+  if (!rep) return t
+  const rest = sp === -1 ? '' : t.slice(sp + 1).trim()
+  return rest ? rest + ' ' + rep : rep
+}
 
 export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
@@ -65,8 +86,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const t = text.trim()
+    const t = applySlash(text.trim())
     if ((!t && !file) || !user) return
+    if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
     setBusy(true)
     try {
       let attach: { url: string; type: string } | undefined
@@ -111,6 +133,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx]); return }
               if (e.key === 'Escape') { e.preventDefault(); setMQ(null); return }
             }
+            if (e.key === 'ArrowUp' && !text) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
             if (e.key === 'Escape') { setEmoji(false); setGif(false); onCancelReply?.(); return }
             if (e.key === 'Enter') {
               const hasCtrl = e.ctrlKey || e.metaKey
@@ -120,6 +143,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               // 'enter' mode: let the form submit naturally
             }
           }} />
+        {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
           <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>

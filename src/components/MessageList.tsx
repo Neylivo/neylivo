@@ -71,9 +71,22 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     return () => window.removeEventListener('ponoi-custom-emoji', h)
   }, [])
 
+  // ↑ в пустом композере — редактировать своё последнее сообщение (событие из Composer).
+  useEffect(() => {
+    const h = () => {
+      if (!onEdit) return
+      const mine = [...messages].reverse().find(m => m.author === currentUser && m.content)
+      if (mine) { setEditing(mine.id); setEditText(mine.content ?? '') }
+    }
+    window.addEventListener('ponoi-edit-last', h)
+    return () => window.removeEventListener('ponoi-edit-last', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, currentUser, onEdit])
+
   async function saveEdit(id: string) {
     const t = editText.trim()
     if (t) await onEdit?.(id, t)
+    else onDelete?.(id) // стёр весь текст — предложить удалить сообщение (с подтверждением)
     setEditing(null)
   }
 

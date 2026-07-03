@@ -59,10 +59,11 @@ function inline(text: string, depth = 0): ReactNode[] {
   return out
 }
 
-// Текст без код-блоков: строки, начинающиеся с "> ", группируются в цитату.
+// Текст без код-блоков: > цитаты, #/##/### заголовки, "* "/"- " маркированные списки.
 function blockText(text: string): ReactNode[] {
   const out: ReactNode[] = []
   let quote: string[] = []
+  let list: string[] = []
   let plain: string[] = []
   const flushPlain = () => {
     if (plain.length) {
@@ -77,11 +78,20 @@ function blockText(text: string): ReactNode[] {
       quote = []
     }
   }
-  for (const ln of text.split('\n')) {
-    if (/^>\s?/.test(ln)) { flushPlain(); quote.push(ln.replace(/^>\s?/, '')) }
-    else { flushQuote(); plain.push(ln) }
+  const flushList = () => {
+    if (list.length) {
+      out.push(<ul key={k()} className="md-list">{list.map(it => <li key={k()}>{inline(it)}</li>)}</ul>)
+      list = []
+    }
   }
-  flushPlain(); flushQuote()
+  for (const ln of text.split('\n')) {
+    const h = ln.match(/^(#{1,3})\s+(\S.*)$/)
+    if (h) { flushPlain(); flushQuote(); flushList(); out.push(<div key={k()} className={'md-h' + h[1].length}>{inline(h[2])}</div>); continue }
+    if (/^>\s?/.test(ln)) { flushPlain(); flushList(); quote.push(ln.replace(/^>\s?/, '')); continue }
+    if (/^[*-]\s+\S/.test(ln)) { flushPlain(); flushQuote(); list.push(ln.replace(/^[*-]\s+/, '')); continue }
+    flushQuote(); flushList(); plain.push(ln)
+  }
+  flushPlain(); flushQuote(); flushList()
   return out
 }
 
