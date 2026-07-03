@@ -17,6 +17,10 @@ export interface UiMessage {
   attach_type?: string | null
   author_avatar?: string | null
   pinned?: boolean
+  reply_to?: string | null
+  reply_author?: string | null
+  reply_preview?: string | null
+  edited?: boolean
 }
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
@@ -34,8 +38,6 @@ function isEmojiOnly(text: string): boolean {
 }
 
 // Render message text, replacing :name: tokens with custom-emoji images.
-// Uses the synchronous shared-emoji cache (loadCustom); the component re-renders
-// on 'ponoi-custom-emoji' so newly-synced emoji resolve for everyone.
 function renderContent(text: string) {
   const custom = loadCustom()
   const parts = text.split(/(:[a-zA-Z0-9_]+:)/g)
@@ -54,12 +56,16 @@ interface Props {
   onReact?: (id: string, emoji: string) => void
   onPin?: (id: string, pinned: boolean) => void
   onDelete?: (id: string) => void
+  onReply?: (m: UiMessage) => void
+  onEdit?: (id: string, content: string) => void | Promise<void>
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, canPin, onReact, onPin, onDelete }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, canPin, onReact, onPin, onDelete, onReply, onEdit }: Props) {
   const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   const [, setEmojiVer] = useState(0)
 
   // Re-render message bodies when the shared custom-emoji cache updates.
@@ -68,6 +74,12 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
     window.addEventListener('ponoi-custom-emoji', h)
     return () => window.removeEventListener('ponoi-custom-emoji', h)
   }, [])
+
+  async function saveEdit(id: string) {
+    const t = editText.trim()
+    if (t) await onEdit?.(id, t)
+    setEditing(null)
+  }
 
   let lastAuthor = ''
   let lastTs = 0
@@ -81,14 +93,16 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
         const ts = new Date(m.created_at).getTime()
         const day = new Date(m.created_at).toDateString()
         const showDay = day !== lastDay
-        const grouped = settings.groupMessages && !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
+        const isReply = !!m.reply_to
+        // Replies always show their own header (so the quote reads clearly).
+        const grouped = settings.groupMessages && !isReply && !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
         return (
           <Fragment key={m.id}>
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
             <div className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '')}
-              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 260) }) }}>
+              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
               <div className="msg-gutter">
                 {grouped
                   ? <span className="msg-ts-hover">{timeShort(m.created_at)}</span>
@@ -97,9 +111,20 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
                   : null}
               </div>
               <div className="msg-body">
+                {isReply && <div className="msg-reply"><Icon name="reply" size={13} /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
                 {!grouped && <div className="msg-hdr"><span className="nm">{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
-                {m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}</div>}
+                {editing === m.id
+                  ? <div className="msg-edit">
+                      <textarea className="msg-edit-in" value={editText} autoFocus
+                        onChange={e => setEditText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Escape') { e.preventDefault(); setEditing(null) }
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m.id) }
+                        }} />
+                      <div className="msg-edit-hint">Esc — <button type="button" onClick={() => setEditing(null)}>отмена</button> • Enter — <button type="button" onClick={() => saveEdit(m.id)}>сохранить</button></div>
+                    </div>
+                  : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && <span className="msg-edited">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} />
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
@@ -115,11 +140,13 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
                 </div>}
               </div>
               <div className="msg-tools">
+                {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
                 <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>
                 {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}>{e}</button>)}
                 </div>}
-                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 260) }) }}><Icon name="more" size={18} /></button>
+                {m.author === currentUser && onEdit && m.content && <button title="Изменить" onClick={() => { setEditing(m.id); setEditText(m.content ?? '') }}><Icon name="edit" size={18} /></button>}
+                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
           </Fragment>
@@ -132,6 +159,8 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
           <div className="ctx-quick">
             {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}>{e}</button>)}
           </div>
+          {onReply && <div className="ctx-item" onClick={() => { onReply(menuMsg); setMenu(null) }}><Icon name="reply" size={15} /> Ответить</div>}
+          {menuMsg.author === currentUser && onEdit && menuMsg.content && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}
           {(canPin ? canPin(menuMsg) : true) &&
             <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}><Icon name="pin" size={15} /> {menuMsg.pinned ? 'Открепить' : 'Закрепить'}</div>}
           {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
