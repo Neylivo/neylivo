@@ -4,10 +4,12 @@ import { uploadTo, isImage } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
+import { useSettings } from '../lib/settings'
 
 export function Composer({ placeholder, onSend }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void> }) {
   const { user } = useAuth()
+  const { settings } = useSettings()
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -46,7 +48,16 @@ export function Composer({ placeholder, onSend }:
       <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
       <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
       <input placeholder={file ? file.name : placeholder} value={text} onChange={e => setText(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Escape') { setEmoji(false); setGif(false) } }} />
+        onKeyDown={e => {
+          if (e.key === 'Escape') { setEmoji(false); setGif(false); return }
+          if (e.key === 'Enter') {
+            const hasCtrl = e.ctrlKey || e.metaKey
+            if (settings.sendKey === 'ctrl') {
+              if (hasCtrl) { e.preventDefault(); submit(e as any) } else { e.preventDefault() }
+            }
+            // 'enter' mode: let the form submit naturally
+          }
+        }} />
       <div className="composer-tools">
         <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
         <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
