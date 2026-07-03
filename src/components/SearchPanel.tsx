@@ -42,9 +42,21 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const inRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
 
   useEffect(() => { inRef.current?.focus() }, [])
+
+  // Клик в пустую область чата закрывает панель поиска (клики по шапке не считаются).
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (panelRef.current && !panelRef.current.contains(t) && t.closest('.msgs')) onClose()
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (timer.current) window.clearTimeout(timer.current)
@@ -76,12 +88,12 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
   }
 
   return (
-    <div className="search-panel">
+    <div className="search-panel" ref={panelRef}>
       <div className="search-head">
         <Icon name="search" size={15} />
         <input ref={inRef} value={q} onChange={e => setQ(e.target.value)}
           placeholder="Поиск…  (from:имя  before:2026-01-01  after:…  has:link/file/image)"
-          onKeyDown={e => { if (e.key === 'Escape') onClose() }} />
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); if (q) setQ(''); else onClose() } }} />
         {busy && <span className="search-busy" />}
         <button className="search-x" onClick={onClose} title="Закрыть"><Icon name="close" size={14} /></button>
       </div>

@@ -1213,3 +1213,8 @@ body.no-anim .msg-flash { animation:none; }
   font-size: 10px; font-weight: 700; letter-spacing: .5px;
   padding: 2px 7px; border-radius: 4px;
 }
+
+
+/* --- Плавное затухание индикатора «печатает…» вместо резкого исчезновения --- */
+.typing-ind { transition: opacity .35s ease; }
+.typing-ind.fade { opacity: 0; }

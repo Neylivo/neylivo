@@ -21,6 +21,7 @@ import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, e
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useTyping } from '../lib/typing'
+import { TypingIndicator } from './TypingIndicator'
 
 interface Friend { id: string; name: string }
 
@@ -54,6 +55,13 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const { typers, notifyTyping } = useTyping(threadId, username)
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
+  // Память прокрутки по каналам + подгрузка старых сообщений при скролле вверх.
+  const scrollMem = useRef<Record<string, number>>({})
+  const pendingScroll = useRef<number | 'bottom' | null>(null)
+  const loadingOlder = useRef(false)
+  const hasMore = useRef(true)
+  const prevHeight = useRef<number | null>(null)
+  const prevTop = useRef(0)
 
   async function startCall() {
     if (!threadId) return
@@ -101,9 +109,12 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     const t = await openThread(meId, f.id)
     if (!t) return
     setThreadId(t.id)
+    // Загружаем последние 100 сообщений (раньше в длинных диалогах грузились самые старые 100).
     const { data } = await supabase.from('dm_messages').select('*')
-      .eq('thread_id', t.id).order('created_at').limit(100)
-    const list = (data ?? []) as DMMessage[]
+      .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
+    const list = ((data ?? []) as DMMessage[]).reverse()
+    hasMore.current = (data ?? []).length === 100
+    pendingScroll.current = scrollMem.current['dm_' + t.id] ?? 'bottom'
     setMessages(list)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в ЛС.
     const lastRead = Number(localStorage.getItem('ponoi_lastread_dm_' + t.id) ?? 0)
@@ -140,7 +151,17 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   }, [threadId])
 
   useEffect(() => {
-    if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
+    const el = msgsBoxRef.current
+    if (el && prevHeight.current !== null) {
+      // Подгрузили старые сообщения — сохраняем видимую позицию без прыжка.
+      el.scrollTop = prevTop.current + (el.scrollHeight - prevHeight.current)
+      prevHeight.current = null
+    } else if (el && pendingScroll.current !== null) {
+      // Восстановление сохранённой позиции прокрутки при входе в канал.
+      el.scrollTop = pendingScroll.current === 'bottom' ? el.scrollHeight : pendingScroll.current
+      pendingScroll.current = null
+      setUnseen(0); setAtBottom(nearBottom())
+    } else if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
     else setUnseen(u => u + Math.max(0, messages.length - prevLen.current))
     prevLen.current = messages.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,9 +174,33 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     return el.scrollHeight - el.scrollTop - el.clientHeight < 120
   }
   function onMsgsScroll() {
+    const el = msgsBoxRef.current
+    if (el && threadId) scrollMem.current['dm_' + threadId] = el.scrollTop
+    if (el && el.scrollTop < 60) loadOlder()
     const nb = nearBottom()
     setAtBottom(nb)
     if (nb) setUnseen(0)
+  }
+
+  // Динамическая подгрузка старых сообщений небольшими порциями при прокрутке вверх.
+  async function loadOlder() {
+    const el = msgsBoxRef.current
+    if (!threadId || !el || loadingOlder.current || !hasMore.current || msgsRef.current.length === 0) return
+    loadingOlder.current = true
+    try {
+      const oldest = msgsRef.current[0].created_at
+      const { data } = await supabase.from('dm_messages').select('*')
+        .eq('thread_id', threadId).lt('created_at', oldest)
+        .order('created_at', { ascending: false }).limit(50)
+      const older = ((data ?? []) as DMMessage[]).reverse()
+      hasMore.current = older.length === 50
+      if (older.length) {
+        prevHeight.current = el.scrollHeight
+        prevTop.current = el.scrollTop
+        setMessages(m => [...older, ...m])
+        loadRx([...older.map(o => o.id), ...msgsRef.current.map(m => m.id)])
+      }
+    } finally { loadingOlder.current = false }
   }
   function jumpDown() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -252,7 +297,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           </button>}
           <div ref={bottomRef} />
           </div>
-          {typers.length > 0 && <div className="typing-ind"><span className="typing-dots"><i/><i/><i/></span>{typers.length >= 3 ? 'Несколько человек печатают…' : typers.join(', ') + (typers.length === 2 ? ' печатают…' : ' печатает…')}</div>}
+          <TypingIndicator typers={typers} />
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
             mentionables={[active.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
