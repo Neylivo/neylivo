@@ -1358,3 +1358,12 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .srv-mute-badge { position: absolute; right: 2px; bottom: -2px; font-size: 11px; line-height: 1;
   filter: grayscale(.2); background: var(--bg1, #1e1f22); border-radius: 50%; padding: 2px;
   pointer-events: none; z-index: 2; }
+
+
+/* --- Счётчик онлайна в шапке канала --- */
+.head-online { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px;
+  font-size: 12.5px; font-weight: 600; color: var(--mut); }
+.head-online-dot { width: 8px; height: 8px; border-radius: 50%; background: #3ba55d; }
+
+/* --- «Был в сети» в мини-профиле --- */
+.mini-lastseen { color: var(--mut); font-size: 12px; }

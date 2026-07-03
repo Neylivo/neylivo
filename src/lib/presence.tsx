@@ -47,6 +47,17 @@ export function PresenceProvider({ username, avatarUrl, children }:
     // eslint-disable-next-line
   }, [user, username, avatarUrl])
 
+  // «Был в сети»: раз в минуту отмечаемся в profiles.last_seen.
+  // Если миграция 11 ещё не применена (колонки нет) — запрос тихо вернёт ошибку, ничего не ломается.
+  useEffect(() => {
+    if (!user) return
+    const beat = () => { supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {}) }
+    beat()
+    const t = window.setInterval(beat, 60_000)
+    window.addEventListener('beforeunload', beat)
+    return () => { window.clearInterval(t); window.removeEventListener('beforeunload', beat) }
+  }, [user])
+
   function setMyStatus(s: Status) {
     setMyStatusState(s)
     localStorage.setItem('ponoi_status', s)

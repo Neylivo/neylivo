@@ -8,6 +8,21 @@ import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profile
 import { ProfilePet } from './ProfilePet'
 import { Icon } from './icons'
 
+// «Был(а) в сети 5 мин назад» — относительное время последнего визита.
+function lastSeenLabel(iso: string): string | null {
+  const diff = Date.now() - new Date(iso).getTime()
+  if (isNaN(diff) || diff < 0) return null
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'только что'
+  if (m < 60) return m + ' мин назад'
+  const h = Math.floor(m / 60)
+  if (h < 24) return h + ' ч назад'
+  const d = Math.floor(h / 24)
+  if (d === 1) return 'вчера'
+  if (d < 30) return d + ' дн назад'
+  return 'давно'
+}
+
 export interface MiniProfileData {
   userId: string
   name: string
@@ -22,6 +37,15 @@ export function MiniProfile({ data, onClose, onMessage }:
   { data: MiniProfileData; onClose: () => void; onMessage?: () => void }) {
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
+  const [lastSeen, setLastSeen] = useState<string | null>(null)
+  // Для офлайн-пользователя подтягиваем время последнего визита (если миграция 11 применена).
+  useEffect(() => {
+    let ok = true
+    setLastSeen(null)
+    if (data.status === 'offline') supabase.from('profiles').select('last_seen').eq('id', data.userId).maybeSingle()
+      .then(({ data: d }: any) => { if (ok && d?.last_seen) setLastSeen(d.last_seen) })
+    return () => { ok = false }
+  }, [data.userId, data.status])
   useEffect(() => { let ok = true; fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
   // Аватар: если не передали (например, клик по сообщению в ЛС) — берём из profiles.
   useEffect(() => {
@@ -44,7 +68,7 @@ export function MiniProfile({ data, onClose, onMessage }:
         <div className="mini-body">
           <div className="mini-name">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()}{tagFor(data.userId)} <span className="mini-hash">#</span></div>
-          <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}</div>
+          <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
           {pp.about && <div className="mini-about">{pp.about}</div>}
           <div className="mini-divider" />
           <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}><Icon name="link" size={15} /> Копировать код друга</button>

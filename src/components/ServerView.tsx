@@ -322,6 +322,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </aside>
       <main className="chat">
         <header className="chat-head"># {curChannel?.name ?? '—'}
+          <span className="head-online" title="Участников в сети"><span className="head-online-dot" />{members.filter(mm => statusOf(mm.user_id) !== 'offline').length}</span>
           {(() => {
             const fm = messages.find(m => m.content && m.author !== user?.id && mentionsUser(m.content, username))
             return fm ? <button className="pin-btn at-btn" title="К первому упоминанию тебя" onClick={() => jumpToMessage(fm.id)}>@</button> : null
