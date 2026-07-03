@@ -8,6 +8,7 @@ import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer, updateServer } from '../lib/servers'
 import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal } from './ServerModals'
 import { PresenceProvider } from '../lib/presence'
+import { initCustomEmoji } from '../lib/emoji'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -24,6 +25,7 @@ export function Home() {
 
   useEffect(() => {
     if (!user) return
+    initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
     supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
       .then(({ data }) => { if (data?.username) setUsername(data.username); if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
     refresh()
