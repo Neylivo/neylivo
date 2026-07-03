@@ -7,6 +7,7 @@ import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePref
 import { uploadTo } from '../lib/storage'
 import { ProfilePet } from './ProfilePet'
 import { Icon } from './icons'
+import { comboFromEvent, isComboComplete } from '../lib/keybind'
 
 const CATS = [
   { k: 'account', label: 'Мой аккаунт' },
@@ -38,6 +39,25 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
       <div><div className="pqs-optt">{title}</div>{desc && <div className="pqs-optd">{desc}</div>}</div>
       <div>{children}</div>
     </div>
+  )
+}
+
+function KeyCapture({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [cap, setCap] = useState(false)
+  useEffect(() => {
+    if (!cap) return
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      const combo = comboFromEvent(e)
+      if (isComboComplete(combo)) { onChange(combo); setCap(false) }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [cap, onChange])
+  return (
+    <button className={'pqs-keycap' + (cap ? ' rec' : '')} onClick={() => setCap(c => !c)}>
+      {cap ? 'Нажми клавиши…' : <span className="pqs-kbd">{value || '—'}</span>}
+    </button>
   )
 }
 
@@ -259,6 +279,10 @@ export function Settings({ username, avatarUrl, onClose }:
                 <div key={k} className="pqs-key"><span className="pqs-kbd">{k}</span><span>{d}</span></div>
               ))}
             </div>
+            <div className="pqs-sec-t">Саундпад</div>
+            <Row title="Сохранить момент (15 сек)" desc="В звонке: сохранить последние 15 секунд разговора в саундпад">
+              <KeyCapture value={settings.sbKey} onChange={v => set('sbKey', v)} />
+            </Row>
           </>}
 
           {cat === 'language' && <>
