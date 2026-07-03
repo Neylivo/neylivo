@@ -9,6 +9,7 @@ import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { notifyMessage } from '../lib/notify'
+import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
@@ -126,7 +127,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
       thread_id: threadId, author: meId, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
     })
-    if (error) alert(error.message)
+    if (error) { alert(error.message); return }
+    if (active) sendPush([active.id], username, t || 'Вложение', '/')
   }
 
   async function loadRx(ids: string[]) {
