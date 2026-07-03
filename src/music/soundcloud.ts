@@ -1,9 +1,9 @@
 // SoundCloud support: oEmbed metadata (title / author / artwork) and the
 // Widget API (hidden iframe) for actual playback of soundcloud.com links —
 // a plain <audio> element cannot play a soundcloud.com page URL.
-export interface ScMeta { title: string; author: string; art: string | null }
+export interface ScMeta { title: string; author: string; art: string | null; play?: string | null }
 
-const META_KEY = 'ponoi_mus_scmeta_v1'
+const META_KEY = 'ponoi_mus_scmeta_v2'
 
 function loadCache(): Record<string, ScMeta> {
   try { return JSON.parse(localStorage.getItem(META_KEY) || '{}') } catch { return {} }
@@ -39,10 +39,18 @@ export async function scMeta(url: string): Promise<ScMeta | null> {
     let title = String(j.title || '')
     const author = String(j.author_name || '')
     if (author && title.endsWith(' by ' + author)) title = title.slice(0, title.length - (' by ' + author).length)
+    // Каноничный URL трека для виджета — достаём из oEmbed html (api.soundcloud.com/tracks/…).
+    // Критично для коротких ссылок on.soundcloud.com: oEmbed их резолвит, а сам виджет — нет.
+    let play: string | null = null
+    try {
+      const m = String(j.html || '').match(/src="([^"]+)"/)
+      if (m) play = new URL(m[1].replace(/&amp;/g, '&')).searchParams.get('url')
+    } catch {}
     const meta: ScMeta = {
       title: title || 'Трек',
       author,
       art: j.thumbnail_url ? String(j.thumbnail_url) : null,
+      play,
     }
     cache[url] = meta; saveCache()
     return meta

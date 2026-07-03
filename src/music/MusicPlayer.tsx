@@ -64,6 +64,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const curSc = !!cur && isSoundcloudUrl(cur.url)
   const curMeta = cur ? meta[cur.url] : undefined
   const curArt = curMeta?.art ?? null
+  // URL, который реально отдаём виджету: каноничный из oEmbed, если он уже известен.
+  const scPlayUrl = curSc && cur ? (curMeta?.play || cur.url) : ''
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
     '--mus-a': rgb(acc),
@@ -148,6 +150,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (!curSc || !cur) { widgetRef.current = null; return }
     const curUrl = cur.url
     let disposed = false
+    let gotDur = false
+    // Если виджет молчит 10 секунд — почти всегда его режет блокировщик рекламы.
+    const readyTimer = setTimeout(() => {
+      if (!disposed && !widgetRef.current) toastErr('SoundCloud не отвечает — отключи блокировщик рекламы (w.soundcloud.com) или попробуй другую ссылку')
+    }, 10000)
     ;(async () => {
       try {
         const SC = await loadWidgetApi()
@@ -155,9 +162,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         const w = SC.Widget(scRef.current)
         w.bind(SC.Widget.Events.READY, () => {
           if (disposed) return
+          clearTimeout(readyTimer)
           widgetRef.current = w
           w.setVolume(volRef.current)
-          w.getDuration((ms: number) => { if (!disposed) setDur((ms || 0) / 1000) })
+          w.getDuration((ms: number) => { if (!disposed && ms > 0) { gotDur = true; setDur(ms / 1000) } })
           w.getCurrentSound((s: any) => {   // запасной источник метаданных, если oEmbed не сработал
             if (disposed || !s) return
             const art = s.artwork_url ? String(s.artwork_url).replace('-large', '-t500x500') : null
@@ -165,14 +173,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           })
           if (playingRef.current) w.play()
         })
-        w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => { if (!disposed) setCurT((e?.currentPosition || 0) / 1000) })
+        w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => {
+          if (disposed) return
+          setCurT((e?.currentPosition || 0) / 1000)
+          if (!gotDur) w.getDuration((ms: number) => { if (!disposed && ms > 0) { gotDur = true; setDur(ms / 1000) } })
+        })
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
         w.bind(SC.Widget.Events.ERROR, () => { if (!disposed) toastErr('SoundCloud: трек не воспроизводится (закрытый или недоступен для встраивания)') })
       } catch { toastErr('Не удалось загрузить плеер SoundCloud — проверь блокировщик рекламы') }
     })()
-    return () => { disposed = true; widgetRef.current = null }
+    return () => { disposed = true; clearTimeout(readyTimer); widgetRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curSc, cur?.url])
+  }, [curSc, scPlayUrl])
 
   // ---- listen together (broadcast sync via supabase realtime) ----
   useEffect(() => {
@@ -405,8 +417,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
       </div>}
 
-      {curSc && cur && <iframe key={cur.url} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
-        src={widgetSrc(cur.url)} />}
+      {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
+        src={widgetSrc(scPlayUrl)} />}
       <audio ref={audioRef} src={cur && !curSc ? cur.url : undefined}
         onEnded={next}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
