@@ -15,6 +15,7 @@ import { registerPush } from '../lib/push'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { matchCombo } from '../lib/keybind'
+import { QuickSwitcher } from './QuickSwitcher'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -30,6 +31,7 @@ export function Home() {
   const [ctx, setCtx] = useState<{ server: Server; x: number; y: number } | null>(null)
   const [settingsServer, setSettingsServer] = useState<Server | null>(null)
   const [musicOn, setMusicOn] = useState(false)   // плеер остаётся смонтирован — музыка играет в фоне
+  const [qs, setQs] = useState(false)             // Ctrl+K панель быстрого перехода
 
   useEffect(() => {
     if (!user) return
@@ -53,6 +55,15 @@ export function Home() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [settings.keyMusic, settings.keyHome])
+
+  // Ctrl+K / Cmd+K — быстрый переход, работает даже когда фокус в поле ввода.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setQs(v => !v) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => { if (view.kind === 'music') setMusicOn(true) }, [view])
 
@@ -125,6 +136,13 @@ export function Home() {
         onClose={() => setView(v => v.kind === 'music' ? { kind: 'dm' } : { kind: 'music' })}
         onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? { kind: 'dm' } : v) }} />}
     </div>
+    {qs && <QuickSwitcher servers={servers} onClose={() => setQs(false)} onGo={t => {
+      setQs(false)
+      if (t.kind === 'home') setView({ kind: 'dm' })
+      else if (t.kind === 'music') setView({ kind: 'music' })
+      else if (t.kind === 'server') setView({ kind: 'server', server: t.server })
+      else { setView({ kind: 'dm' }); setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: t.friend })), 60) }
+    }} />}
     {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}

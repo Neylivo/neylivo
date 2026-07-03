@@ -100,6 +100,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     loadRx(((data ?? []) as DMMessage[]).map(m => m.id))
   }
 
+  // Ctrl+K: открыть личку с другом по событию из QuickSwitcher.
+  useEffect(() => {
+    const h = (e: Event) => { const f = (e as CustomEvent).detail; if (f?.id && f?.name) openChat(f) }
+    window.addEventListener('ponoi-open-dm', h)
+    return () => window.removeEventListener('ponoi-open-dm', h)
+    // eslint-disable-next-line
+  }, [])
+
   useEffect(() => {
     if (!threadId) return
     const ch = supabase.channel('dm:' + threadId)
