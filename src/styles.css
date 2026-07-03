@@ -1127,3 +1127,24 @@ body.no-anim .search-busy { animation:none; }
   background:var(--c-dark,#1e1f22); border:1px solid rgba(255,255,255,.12); border-bottom-width:2px;
   color:var(--tx,#dbdee1); }
 .hk-hint { margin-top:12px; font-size:11.5px; color:var(--mut,#949ba4); text-align:center; }
+
+/* ===== Папки серверов (левая колонка) ===== */
+.srv-folder { display:flex; flex-direction:column; align-items:center; gap:8px; border-radius:24px; }
+.srv-folder.open { background:color-mix(in srgb, var(--fold, #5865f2) 16%, transparent); padding-bottom:8px; }
+.srv-folder .fold-head { background:color-mix(in srgb, var(--fold, #5865f2) 26%, transparent);
+  color:var(--fold, #5865f2); display:flex; align-items:center; justify-content:center; }
+.srv-folder .fold-head:hover { background:color-mix(in srgb, var(--fold, #5865f2) 40%, transparent); border-radius:16px; }
+.srv-folder.active .fold-head { box-shadow:inset 0 0 0 2px var(--fold, #5865f2); }
+.fold-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+.fold-mini { width:14px; height:14px; border-radius:5px; background-color:rgba(0,0,0,.35);
+  background-size:cover; background-position:center; color:#fff; font:600 8.5px/14px sans-serif;
+  text-align:center; overflow:hidden; }
+.fold-list { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.fold-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:14px; }
+.fold-row:hover { background:rgba(255,255,255,.06); }
+.fold-row.on { background:color-mix(in srgb, #5865f2 22%, transparent); }
+.fold-dot { width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#fff; flex:none; }
+.fold-n { margin-left:auto; color:var(--mut, #949ba4); font-size:12px; }
+.fold-colors { display:flex; gap:8px; margin-top:10px; }
+.fold-color { width:22px; height:22px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; }
+.fold-color.on { border-color:#fff; }

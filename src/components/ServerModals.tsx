@@ -91,6 +91,7 @@ const CTX_ITEMS = [
   { k: 'notif', label: 'Настройки уведомлений', icon: 'bell' },
   { k: 'mute', label: 'Заглушить сервер', icon: 'bell-off' },
   { k: 'tag', label: 'Взять тег сервера', icon: 'tag' },
+  { k: 'folder', label: 'Переместить в папку', icon: 'folder' },
   { k: 'copyid', label: 'Копировать ID сервера', icon: 'id-card' },
   { k: 'settings', label: 'Настройки сервера', icon: 'gear' },
   { k: 'delete', label: 'Удалить сервер', icon: 'trash', danger: true },

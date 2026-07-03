@@ -17,6 +17,8 @@ import { useSettings } from '../lib/settings'
 import { matchCombo } from '../lib/keybind'
 import { QuickSwitcher } from './QuickSwitcher'
 import { HotkeysModal } from './HotkeysModal'
+import { FolderModal } from './FolderModal'
+import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -34,6 +36,8 @@ export function Home() {
   const [musicOn, setMusicOn] = useState(false)   // плеер остаётся смонтирован — музыка играет в фоне
   const [qs, setQs] = useState(false)             // Ctrl+K панель быстрого перехода
   const [hk, setHk] = useState(false)             // Ctrl+/ шпаргалка горячих клавиш
+  const [folders, setFolders] = useState<SrvFolder[]>(loadFolders())
+  const [folderFor, setFolderFor] = useState<Server | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -70,6 +74,13 @@ export function Home() {
 
   useEffect(() => { if (view.kind === 'music') setMusicOn(true) }, [view])
 
+  // Папки серверов: перечитываем при любом изменении (создание/перенос/сворачивание).
+  useEffect(() => {
+    const h = () => setFolders(loadFolders())
+    window.addEventListener('ponoi-folders', h)
+    return () => window.removeEventListener('ponoi-folders', h)
+  }, [])
+
   async function refresh(selectId?: string) {
     const list = await myServers()
     setServers(list)
@@ -90,6 +101,7 @@ export function Home() {
   async function onCtxAction(k: string, server: Server) {
     if (!user) return
     if (k === 'copyid') { navigator.clipboard?.writeText(server.id); return }
+    if (k === 'folder') { setFolderFor(server); return }
     if (k === 'settings') { setSettingsServer(server); return }
     if (k === 'invite') {
       const { createInvite } = await import('../lib/servers')
@@ -119,16 +131,42 @@ export function Home() {
             title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
         </div>
         <div className="srv-sep" />
-        {servers.map(s => (
-          <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
-            <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
-              style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
-              title={s.name}
-              onClick={() => setView({ kind: 'server', server: s })}
-              onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
-              {s.name.slice(0, 2).toUpperCase()}</button>
-          </div>
-        ))}
+        {(() => {
+          const inFolder = new Set(folders.flatMap(f => f.servers))
+          const srvBtn = (s: Server) => (
+            <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
+              <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
+                style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
+                title={s.name}
+                onClick={() => setView({ kind: 'server', server: s })}
+                onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
+                {s.name.slice(0, 2).toUpperCase()}</button>
+            </div>
+          )
+          return <>
+            {folders.map(f => {
+              const list = f.servers.map(id => servers.find(s => s.id === id)).filter(Boolean) as Server[]
+              if (list.length === 0) return null
+              const activeIn = view.kind === 'server' && f.servers.includes(view.server.id)
+              return (
+                <div key={f.id} className={'srv-folder' + (f.open ? ' open' : '') + (activeIn ? ' active' : '')}
+                  style={{ ['--fold' as any]: f.color }}>
+                  <button className="srv fold-head" title={f.name} onClick={() => toggleFolder(f.id)}>
+                    {f.open ? <Icon name="folder" size={20} /> : (
+                      <span className="fold-grid">
+                        {list.slice(0, 4).map(s => <span key={s.id} className="fold-mini"
+                          style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})` } : undefined}>
+                          {!s.avatar_url && s.name.slice(0, 1).toUpperCase()}</span>)}
+                      </span>
+                    )}
+                  </button>
+                  {f.open && list.map(srvBtn)}
+                </div>
+              )
+            })}
+            {servers.filter(s => !inFolder.has(s.id)).map(srvBtn)}
+          </>
+        })()}
         <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
         <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
       </nav>
@@ -140,6 +178,7 @@ export function Home() {
         onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? { kind: 'dm' } : v) }} />}
     </div>
     {hk && <HotkeysModal onClose={() => setHk(false)} />}
+    {folderFor && <FolderModal server={folderFor} onClose={() => setFolderFor(null)} />}
     {qs && <QuickSwitcher servers={servers} onClose={() => setQs(false)} onGo={t => {
       setQs(false)
       if (t.kind === 'home') setView({ kind: 'dm' })
