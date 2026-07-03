@@ -154,6 +154,21 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     })
   }
 
+  // Горячие клавиши форматирования: оборачивают выделенный текст маркдауном (как в Discord).
+  function wrapFormat(marker: string) {
+    const el = inputRef.current
+    if (!el) return
+    const s = el.selectionStart ?? text.length, en = el.selectionEnd ?? s
+    const sel = text.slice(s, en)
+    const nv = text.slice(0, s) + marker + sel + marker + text.slice(en)
+    setText(nv); keepDraft(nv)
+    requestAnimationFrame(() => {
+      el.focus()
+      if (sel) el.setSelectionRange(s + marker.length, en + marker.length)
+      else { const p = s + marker.length; el.setSelectionRange(p, p) }
+    })
+  }
+
   function insertEmoji(t: string) { setText(x => { const nv = x + t; keepDraft(nv); return nv }); setEmoji(false) }
   async function sendGif(url: string) {
     setGif(false)
@@ -243,6 +258,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           }}
           onClick={e => updateMention(text, (e.target as HTMLInputElement).selectionStart)}
           onKeyDown={e => {
+            // Ctrl+B — жирный, Ctrl+I — курсив, Ctrl+E — код, Ctrl+Shift+S — спойлер.
+            if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+              const k = e.key.toLowerCase()
+              if (k === 'b') { e.preventDefault(); wrapFormat('**'); return }
+              if (k === 'i') { e.preventDefault(); wrapFormat('*'); return }
+              if (k === 'e') { e.preventDefault(); wrapFormat('`'); return }
+              if (e.shiftKey && k === 's') { e.preventDefault(); wrapFormat('||'); return }
+            }
             if (sugg.length > 0) {
               if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx(i => (i + 1) % sugg.length); return }
               if (e.key === 'ArrowUp') { e.preventDefault(); setMIdx(i => (i - 1 + sugg.length) % sugg.length); return }
@@ -293,12 +316,12 @@ export function Attachment({ url, type }: { url?: string | null; type?: string |
   if (type === 'image') {
     if (url.includes('#spoiler') && !revealed) return (
       <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
-        <img className="msg-att blurred" src={clean} alt="спойлер" />
+        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" />
         <span className="att-spoiler-tag">СПОЙЛЕР</span>
       </div>
     )
     return <>
-      <img className="msg-att zoomable" src={clean} alt="вложение" onClick={() => setViewer(true)} />
+      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" onClick={() => setViewer(true)} />
       {viewer && <Lightbox url={clean} onClose={() => setViewer(false)} />}
     </>
   }

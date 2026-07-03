@@ -1312,3 +1312,8 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .file-chip-x { margin-left: auto; background: none; border: 0; color: #949ba4; cursor: pointer;
   display: inline-flex; padding: 2px; }
 .file-chip-x:hover { color: #ed4245; }
+
+
+/* --- Плавное появление картинок в чате --- */
+.msg-att { animation: img-in .25s ease; }
+@keyframes img-in { from { opacity: 0; } to { opacity: 1; } }
