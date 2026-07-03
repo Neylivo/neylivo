@@ -8,6 +8,7 @@ import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
+import { notifyMessage } from '../lib/notify'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
@@ -97,7 +98,11 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     const ch = supabase.channel('dm:' + threadId)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
-        p => setMessages(m => [...m, p.new as DMMessage]))
+        p => {
+          const msg = p.new as DMMessage
+          setMessages(m => [...m, msg])
+          if (msg.author !== meId) notifyMessage(msg.author_name, msg.content ?? '')
+        })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
