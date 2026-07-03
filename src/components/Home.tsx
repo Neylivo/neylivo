@@ -1,5 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { Server } from '../types'
@@ -7,7 +7,7 @@ import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer, updateServer } from '../lib/servers'
-import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal } from './ServerModals'
+import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal, ServerNotifModal } from './ServerModals'
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
@@ -19,6 +19,7 @@ import { QuickSwitcher } from './QuickSwitcher'
 import { HotkeysModal } from './HotkeysModal'
 import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
+import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -38,6 +39,8 @@ export function Home() {
   const [hk, setHk] = useState(false)             // Ctrl+/ шпаргалка горячих клавиш
   const [folders, setFolders] = useState<SrvFolder[]>(loadFolders())
   const [folderFor, setFolderFor] = useState<Server | null>(null)
+  const [notifFor, setNotifFor] = useState<Server | null>(null)
+  const [, setNotifVer] = useState(0) // ре-рендер при смене режима уведомлений
 
   // Непрочитанное на серверах: глобальная подписка на INSERT в messages.
   // Канал → сервер резолвим по заранее загруженной карте каналов.
@@ -62,6 +65,7 @@ export function Home() {
         if (!msg.channel_id || msg.author === user.id) return
         const sid = chMap.current[msg.channel_id]
         if (!sid) return
+        if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
         const v = viewRef.current
         if (v.kind === 'server' && v.server.id === sid) return
         setUnread(prev => { const n = new Set(prev); n.add(sid); return n })
@@ -109,6 +113,13 @@ export function Home() {
 
   useEffect(() => { if (view.kind === 'music') setMusicOn(true) }, [view])
 
+  // Смена режима уведомлений: перерисовать левую колонку (иконки/точки).
+  useEffect(() => {
+    const h = () => setNotifVer(v => v + 1)
+    window.addEventListener('ponoi-notif', h)
+    return () => window.removeEventListener('ponoi-notif', h)
+  }, [])
+
   // Папки серверов: перечитываем при любом изменении (создание/перенос/сворачивание).
   useEffect(() => {
     const h = () => setFolders(loadFolders())
@@ -150,7 +161,15 @@ export function Home() {
       setView({ kind: 'dm' }); refresh()
       return
     }
-    // read / notif / mute / tag — client-side niceties, no-op persistence for now
+    if (k === 'read') { clearUnread(server.id); toastOk('Отмечено прочитанным'); return }
+    if (k === 'notif') { setNotifFor(server); return }
+    if (k === 'mute') {
+      const muted = notifModeOf(server.id) === 'mute'
+      setNotifMode(server.id, muted ? 'all' : 'mute')
+      toastOk(muted ? 'Уведомления включены: ' + server.name : 'Сервер заглушен: ' + server.name)
+      return
+    }
+    // tag — client-side nicety, no-op for now
   }
 
   return (
@@ -169,14 +188,14 @@ export function Home() {
         {(() => {
           const inFolder = new Set(folders.flatMap(f => f.servers))
           const srvBtn = (s: Server) => (
-            <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}>
+            <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '') + (notifModeOf(s.id) === 'mute' ? ' srv-muted' : '')}>
               <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
                 style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
                 title={s.name}
                 onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
                 onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
                 {s.name.slice(0, 2).toUpperCase()}</button>
-              {unread.has(s.id) && <span className="unread-dot" title="Есть новые сообщения" />}
+              {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}
             </div>
           )
           return <>
@@ -215,6 +234,7 @@ export function Home() {
     </div>
     {hk && <HotkeysModal onClose={() => setHk(false)} />}
     {folderFor && <FolderModal server={folderFor} onClose={() => setFolderFor(null)} />}
+    {notifFor && <ServerNotifModal server={notifFor} onClose={() => setNotifFor(null)} />}
     {qs && <QuickSwitcher servers={servers} onClose={() => setQs(false)} onGo={t => {
       setQs(false)
       if (t.kind === 'home') setView({ kind: 'dm' })
@@ -224,7 +244,7 @@ export function Home() {
     }} />}
     {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
-    {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
+    {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettingsModal server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
       onChanged={() => refresh()}

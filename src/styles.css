@@ -1182,3 +1182,18 @@ body.no-anim .msg-flash { animation:none; }
   padding:38px 56px; text-align:center; color:var(--tx, #dbdee1);
   font-size:17px; font-weight:600; animation:pop .15s ease both; }
 .drop-box small { display:block; margin-top:6px; font-size:13px; font-weight:400; color:var(--mut, #949ba4); }
+
+/* ===== Уведомления на сервер ===== */
+.srv-muted .srv { opacity:.45; filter:saturate(.5); }
+.srv-muted .srv:hover { opacity:.8; }
+.notif-opts { display:flex; flex-direction:column; gap:8px; margin:14px 0 4px; }
+.notif-opt { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:10px;
+  background:var(--bg2, #2b2d31); cursor:pointer; border:1px solid transparent; transition:background .12s, border-color .12s; }
+.notif-opt:hover { background:var(--c-hover, #383a40); }
+.notif-opt.on { border-color:var(--brand, #5865f2); background:color-mix(in srgb, var(--brand, #5865f2) 10%, var(--bg2, #2b2d31)); }
+.notif-radio { width:18px; height:18px; border-radius:50%; border:2px solid var(--mut, #949ba4); flex:0 0 auto; position:relative; }
+.notif-radio.on { border-color:var(--brand, #5865f2); }
+.notif-radio.on::after { content:''; position:absolute; inset:3px; border-radius:50%; background:var(--brand, #5865f2); }
+.notif-body { display:flex; flex-direction:column; gap:2px; flex:1; }
+.notif-nm { font-size:14px; font-weight:600; }
+.notif-hint { font-size:12px; color:var(--mut, #949ba4); }

@@ -8,6 +8,8 @@ import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence } from '../lib/presence'
 import { notifyMessage } from '../lib/notify'
+import { notifModeOf } from '../lib/srvNotify'
+import { mentionsUser } from '../lib/md'
 import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
@@ -73,7 +75,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => {
           const msg = p.new as Message
           setMessages(m => [...m, msg])
-          if (msg.author !== user?.id) notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
+          if (msg.author !== user?.id) {
+            const mode = notifModeOf(server.id)
+            const mentioned = !!msg.content && mentionsUser(msg.content, username)
+            if (mode === 'all' || (mode === 'mentions' && mentioned))
+              notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
+          }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },

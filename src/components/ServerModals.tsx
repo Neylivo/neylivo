@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
 import { updateServer } from '../lib/servers'
+import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
 import { Icon } from './icons'
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
@@ -97,8 +98,8 @@ const CTX_ITEMS = [
   { k: 'delete', label: 'Удалить сервер', icon: 'trash', danger: true },
 ] as const
 
-export function ServerCtxMenu({ x, y, isOwner, onClose, onAction }:
-  { x: number; y: number; isOwner: boolean; onClose: () => void; onAction: (k: string) => void }) {
+export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
+  { x: number; y: number; isOwner: boolean; muted?: boolean; onClose: () => void; onAction: (k: string) => void }) {
   useEffect(() => {
     const h = () => onClose()
     window.addEventListener('click', h)
@@ -109,7 +110,7 @@ export function ServerCtxMenu({ x, y, isOwner, onClose, onAction }:
       {CTX_ITEMS.filter(i => isOwner || (i.k !== 'delete' && i.k !== 'settings')).map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>
-          <span className="ctxmenu-ic"><Icon name={i.icon} size={16} /></span>{i.label}
+          <span className="ctxmenu-ic"><Icon name={i.k === 'mute' && muted ? 'bell' : i.icon} size={16} /></span>{i.k === 'mute' ? (muted ? 'Включить уведомления' : 'Заглушить сервер') : i.label}
         </div>
       ))}
     </div>
@@ -173,6 +174,38 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
       <div className="modal-foot">
         <button className="modal-danger" onClick={async () => { if (await confirmUi('Удалить сервер «' + server.name + '»? Это необратимо.', { okText: 'Удалить сервер' })) onDelete() }}>Удалить сервер</button>
         <button className="modal-ghost" onClick={onClose}>Закрыть</button>
+      </div>
+    </Overlay>
+  )
+}
+
+export function ServerNotifModal({ server, onClose }: { server: Server; onClose: () => void }) {
+  const [mode, setMode] = useState<NotifMode>(notifModeOf(server.id))
+  function pick(m: NotifMode) { setMode(m); setNotifMode(server.id, m) }
+  const opts: { m: NotifMode; hint: string }[] = [
+    { m: 'all', hint: 'уведомлять о каждом сообщении' },
+    { m: 'mentions', hint: 'только когда тебя упомянули (@имя или @everyone)' },
+    { m: 'mute', hint: 'сервер полностью заглушен — ни уведомлений, ни точки' },
+  ]
+  return (
+    <Overlay onClose={onClose}>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+      <div className="modal-title">Уведомления — {server.name}</div>
+      <div className="modal-sub">Настройка действует только для тебя, на этом устройстве.</div>
+      <div className="notif-opts">
+        {opts.map(o => (
+          <label key={o.m} className={'notif-opt' + (mode === o.m ? ' on' : '')} onClick={() => pick(o.m)}>
+            <span className={'notif-radio' + (mode === o.m ? ' on' : '')} />
+            <span className="notif-body">
+              <span className="notif-nm">{NOTIF_LABEL[o.m]}</span>
+              <span className="notif-hint">{o.hint}</span>
+            </span>
+            {o.m === 'mute' && <Icon name="bell-off" size={16} />}
+          </label>
+        ))}
+      </div>
+      <div className="modal-foot">
+        <button className="modal-ghost" onClick={onClose}>Готово</button>
       </div>
     </Overlay>
   )
