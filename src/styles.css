@@ -936,3 +936,21 @@ body.chatbg-on .chat::after {
 .mus2-vinyl.spin { animation:musSpin 7s linear infinite; }
 @keyframes musSpin { to { transform:rotate(360deg); } }
 body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none; }
+
+/* ===== Проход 5: экран звонка ===== */
+.call-tile::before { content:none; }
+.call-vid { position:absolute; inset:0; }
+.call-tile { min-height:170px; }
+.call-tile.speaking { box-shadow:0 0 0 3px var(--green,#3ba55d); }
+.call-ava { position:relative; z-index:1; width:84px; height:84px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; color:#fff; font-weight:800; font-size:28px; letter-spacing:.5px;
+  box-shadow:0 6px 18px rgba(0,0,0,.4); }
+.call-cap { display:flex; align-items:center; gap:5px; }
+.call-stage.has-share { grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+.call-stage.has-share .call-tile.share { grid-column:1 / -1; aspect-ratio:auto; min-height:46vh; background:#000; }
+.call-tile.share .call-media { object-fit:contain; }
+.call-waiting { position:absolute; left:0; right:0; top:46%; text-align:center; color:#fff; font-size:20px; font-weight:800;
+  pointer-events:none; animation:pulse 1.6s ease-in-out infinite; }
+.call-waiting span { display:block; font-size:13px; font-weight:500; color:#bbb; margin-top:6px; }
+.call-bar button.off { background:#fff; color:#1e1f22; }
+.call-bar button.off:hover { background:#e3e3e3; }

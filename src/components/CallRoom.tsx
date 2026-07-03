@@ -7,53 +7,118 @@ import { saveMoment } from '../lib/soundboard'
 import { matchCombo } from '../lib/keybind'
 import { Soundboard } from './Soundboard'
 
-// Renders every participant's video/audio by attaching LiveKit tracks to DOM elements.
-function Stage({ room }: { room: Room }) {
-  const ref = useRef<HTMLDivElement>(null)
+// ---- Проход 5: экран звонка как в прототипе ----
+// У каждого участника — своя плитка (аватар-инициалы, если камера выключена),
+// подсветка говорящего, значок выключенного микрофона, отдельные большие плитки
+// для демонстрации экрана и оверлей «Звоним…», пока никто не присоединился.
+
+function hue(s: string) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
+  return h
+}
+
+/** Плитка одного участника: камера (если есть) или аватар-инициалы. */
+function Tile({ p, isLocal }: { p: any; isLocal: boolean }) {
+  const vidRef = useRef<HTMLDivElement>(null)
+  const [hasCam, setHasCam] = useState(false)
+  const [micOn, setMicOn] = useState(true)
+  const [speaking, setSpeaking] = useState(!!p.isSpeaking)
 
   useEffect(() => {
-    const host = ref.current!
-    const tiles = new Map<string, HTMLDivElement>()
+    const host = vidRef.current!
+    let attached: HTMLElement[] = []
 
-    function tileFor(id: string, label: string) {
-      let t = tiles.get(id)
-      if (!t) {
-        t = document.createElement('div'); t.className = 'call-tile'
-        const cap = document.createElement('div'); cap.className = 'call-cap'; cap.textContent = label
-        t.appendChild(cap); host.appendChild(t); tiles.set(id, t)
-      }
-      return t
+    function refresh() {
+      attached.forEach(e => e.remove()); attached = []
+      let cam = false
+      p.trackPublications.forEach((pub: any) => {
+        const t = pub.track
+        if (!t || pub.source === 'screen_share' || pub.source === 'screen_share_audio') return
+        if (t.kind === 'video') {
+          const el = t.attach(); el.classList.add('call-media'); host.appendChild(el); attached.push(el); cam = true
+        } else if (t.kind === 'audio' && !isLocal) {
+          const el = t.attach(); el.style.display = 'none'; host.appendChild(el); attached.push(el)
+        }
+      })
+      setHasCam(cam)
+      setMicOn(p.isMicrophoneEnabled !== false)
     }
-
-    function attach(track: any, id: string, label: string) {
-      const el = track.attach(); el.classList.add('call-media')
-      if (track.kind === 'video') tileFor(id, label).appendChild(el)
-      else host.appendChild(el) // audio
-    }
-
-    function sub(track: any, _pub: any, participant: any) {
-      attach(track, participant.sid + track.sid, participant.identity)
-    }
-    function unsub(track: any) { track.detach().forEach((e: HTMLElement) => e.remove()) }
-
-    room.on(RoomEvent.TrackSubscribed, sub)
-    room.on(RoomEvent.TrackUnsubscribed, unsub)
-
-    room.localParticipant.trackPublications.forEach(pub => {
-      if (pub.track) attach(pub.track, room.localParticipant.sid + pub.trackSid, 'Вы')
-    })
-    room.localParticipant.on('localTrackPublished', (pub: any) => {
-      if (pub.track) attach(pub.track, room.localParticipant.sid + pub.trackSid, 'Вы')
-    })
-
+    refresh()
+    const evs = ['trackSubscribed', 'trackUnsubscribed', 'trackMuted', 'trackUnmuted',
+      'trackPublished', 'trackUnpublished', 'localTrackPublished', 'localTrackUnpublished']
+    evs.forEach(e => p.on(e, refresh))
+    const onSpeak = (s: boolean) => setSpeaking(s)
+    p.on('isSpeakingChanged', onSpeak)
     return () => {
-      room.off(RoomEvent.TrackSubscribed, sub)
-      room.off(RoomEvent.TrackUnsubscribed, unsub)
-      host.innerHTML = ''
+      evs.forEach(e => p.off(e, refresh))
+      p.off('isSpeakingChanged', onSpeak)
+      attached.forEach(e => e.remove())
     }
+  }, [p, isLocal])
+
+  const name = isLocal ? 'Вы' : (p.identity || '?')
+  return (
+    <div className={'call-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' hascam' : '')}>
+      <div className="call-vid" ref={vidRef} />
+      {!hasCam && <div className="call-ava" style={{ background: `hsl(${hue(p.identity || 'x')} 55% 42%)` }}>
+        {String(name).slice(0, 2).toUpperCase()}
+      </div>}
+      <div className="call-cap">
+        {!micOn && <Icon name="mic-off" size={12} />}
+        {name}
+      </div>
+    </div>
+  )
+}
+
+/** Большая плитка демонстрации экрана. */
+function ShareTile({ pub, who }: { pub: any; who: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const host = ref.current!
+    const t = pub.track
+    if (!t) return
+    const el = t.attach(); el.classList.add('call-media'); host.appendChild(el)
+    return () => { t.detach().forEach((e: HTMLElement) => e.remove()) }
+  }, [pub])
+  return (
+    <div className="call-tile share">
+      <div className="call-vid" ref={ref} />
+      <div className="call-cap"><Icon name="screen-share" size={12} /> {who} — экран</div>
+    </div>
+  )
+}
+
+/** Сетка: локальный + удалённые участники + плитки демонстраций экрана. */
+function Stage({ room }: { room: Room }) {
+  const [, bump] = useState(0)
+
+  useEffect(() => {
+    const re = () => bump(v => v + 1)
+    const evs = [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected,
+      RoomEvent.TrackSubscribed, RoomEvent.TrackUnsubscribed,
+      RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished] as any[]
+    evs.forEach(e => room.on(e, re))
+    return () => { evs.forEach(e => room.off(e, re)) }
   }, [room])
 
-  return <div className="call-stage" ref={ref} />
+  const remotes: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
+  const all: { p: any; local: boolean }[] = [{ p: room.localParticipant, local: true }, ...remotes.map(p => ({ p, local: false }))]
+
+  const shares: { pub: any; who: string }[] = []
+  all.forEach(({ p, local }) => {
+    p.trackPublications.forEach((pub: any) => {
+      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? 'Вы' : (p.identity || '?') })
+    })
+  })
+
+  return (
+    <div className={'call-stage' + (shares.length ? ' has-share' : '')}>
+      {shares.map((s, i) => <ShareTile key={'sh' + i} pub={s.pub} who={s.who} />)}
+      {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} />)}
+    </div>
+  )
 }
 
 export function CallRoom({ room, meId, meName, onLeave }:
@@ -70,10 +135,13 @@ export function CallRoom({ room, meId, meName, onLeave }:
 
   useEffect(() => {
     room.localParticipant.setMicrophoneEnabled(true).then(() => setMic(true))
-    const upd = () => setCount(room.numParticipants + 1)
+    const upd = () => {
+      const n = (room as any).remoteParticipants?.size ?? (room as any).participants?.size ?? 0
+      setCount(n + 1)
+    }
     setStatus(room.state === 'connected' ? 'connected' : 'connecting')
     upd()
-    const onConn = () => setStatus('connected')
+    const onConn = () => { setStatus('connected'); upd() }
     const onRec = () => setStatus('reconnecting')
     const onRecd = () => setStatus('connected')
     room.on(RoomEvent.Connected, onConn)
@@ -152,21 +220,25 @@ export function CallRoom({ room, meId, meName, onLeave }:
   }
   function leave() { room.disconnect(); onLeave() }
 
-  const statusLabel = status === 'connected' ? 'В звонке' : status === 'reconnecting' ? 'Переподключение…' : 'Соединение…'
+  const alone = status === 'connected' && count <= 1
+  const statusLabel = status === 'reconnecting' ? 'Переподключение…'
+    : status === 'connecting' ? 'Соединение…'
+    : alone ? 'Звоним…' : 'В звонке'
 
   return (
     <div className={'call-wrap' + (flash ? ' sb-flash' : '')}>
       <div className="call-top">
-        <span className={'call-live call-' + status}>● {statusLabel}</span>
+        <span className={'call-live call-' + (alone ? 'connecting' : status)}>● {statusLabel}</span>
         <span className="call-cnt"><Icon name="users" size={15} /> {count}</span>
         {flash && <span className="sb-flash-tag"><Icon name="soundboard" size={14} /> Момент сохранён</span>}
       </div>
       <Stage room={room} />
+      {alone && <div className="call-waiting">Звоним… <span>ждём, пока кто-нибудь присоединится</span></div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="call-bar">
-        <button className={mic ? 'on' : ''} onClick={toggleMic} title="Микрофон">{mic ? <Icon name="mic" size={20} /> : <Icon name="mic-off" size={20} />}</button>
-        <button className={cam ? 'on' : ''} onClick={toggleCam} title="Камера">{cam ? <Icon name="video" size={20} /> : <Icon name="video-off" size={20} />}</button>
-        <button className={screen ? 'on' : ''} onClick={toggleScreen} title="Демонстрация экрана"><Icon name="screen-share" size={20} /></button>
+        <button className={mic ? 'on' : 'off'} onClick={toggleMic} title="Микрофон">{mic ? <Icon name="mic" size={20} /> : <Icon name="mic-off" size={20} />}</button>
+        <button className={cam ? 'on' : 'off'} onClick={toggleCam} title="Камера">{cam ? <Icon name="video" size={20} /> : <Icon name="video-off" size={20} />}</button>
+        <button className={screen ? 'on' : 'off'} onClick={toggleScreen} title="Демонстрация экрана"><Icon name="screen-share" size={20} /></button>
         <button className={showSb ? 'on' : ''} onClick={() => setShowSb(s => !s)} title={'Саундпад / Моменты' + (settings.sbKey ? ' (' + settings.sbKey + ')' : '')}><Icon name="soundboard" size={20} /></button>
         <button className="leave" onClick={leave} title="Отключиться"><Icon name="phone-off" size={20} /></button>
       </div>
