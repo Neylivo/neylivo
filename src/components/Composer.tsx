@@ -11,6 +11,13 @@ import { useSettings } from '../lib/settings'
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 2000
 
+// Человекочитаемый размер файла для подсказки на ссылке скачивания.
+function fmtSize(n: number): string {
+  if (n < 1024) return n + ' Б'
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' КБ'
+  return (n / 1048576).toFixed(1) + ' МБ'
+}
+
 // Команды-камодзи как в Discord: /shrug и компания.
 const SLASH: Record<string, string> = {
   '/shrug': '\u00af\\_(\u30c4)_/\u00af',
@@ -55,6 +62,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
+  // Сообщение, которое не ушло из-за сбоя сети: текст остаётся в поле, баннер даёт повторить одной кнопкой.
+  const [failed, setFailed] = useState(false)
 
   // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
   useEffect(() => {
@@ -164,14 +173,20 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       }
       await onSend(t, attach)
       lastSent.current = { t, at: Date.now() }
+      setFailed(false)
       setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
-    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
 
   return (
     <>
       {drag && <div className="drop-overlay"><div className="drop-box">Отпусти, чтобы прикрепить файл<small>картинки, документы — что угодно</small></div></div>}
+      {failed && !busy && <div className="send-fail">
+        Сообщение не отправлено — проверь соединение
+        <button type="button" onClick={e => { setFailed(false); submit(e as any) }}>Повторить</button>
+        <button type="button" className="send-fail-x" title="Скрыть" onClick={() => setFailed(false)}>×</button>
+      </div>}
       {replyingTo && <div className="reply-banner">
         <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
         <span>{replyingTo.preview}</span>
@@ -245,6 +260,16 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 export function Attachment({ url, type }: { url?: string | null; type?: string | null }) {
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
+  const [size, setSize] = useState<string | null>(null)
+  // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
+  useEffect(() => {
+    if (!url || type === 'image') { setSize(null); return }
+    let on = true
+    fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
+      .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) setSize(fmtSize(n)) })
+      .catch(() => {})
+    return () => { on = false }
+  }, [url, type])
   if (!url) return null
   const clean = url.replace('#spoiler', '')
   if (type === 'image') {
@@ -259,5 +284,5 @@ export function Attachment({ url, type }: { url?: string | null; type?: string |
       {viewer && <Lightbox url={clean} onClose={() => setViewer(false)} />}
     </>
   }
-  return <a className="msg-file" href={clean} target="_blank" rel="noreferrer"><Icon name="paperclip" size={16} /> Скачать файл</a>
+  return <a className="msg-file" href={clean} target="_blank" rel="noreferrer" title={size ? 'Размер файла: ' + size : undefined}><Icon name="paperclip" size={16} /> Скачать файл{size && <span className="msg-file-size">{size}</span>}</a>
 }

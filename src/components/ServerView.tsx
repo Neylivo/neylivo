@@ -191,6 +191,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   useEffect(() => { msgsRef.current = messages }, [messages])
   useEffect(() => { curChannelRef.current = curChannel }, [curChannel])
 
+  // Предупреждение браузера при попытке закрыть вкладку с активным звонком.
+  useEffect(() => {
+    if (!call) return
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [call])
+
   // Реалтайм: новое сообщение в другом канале этого сервера зажигает подсветку.
   useEffect(() => {
     if (!channels.length) return

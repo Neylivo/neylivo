@@ -211,6 +211,14 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   useEffect(() => { msgsRef.current = messages }, [messages])
 
+  // Предупреждение браузера при попытке закрыть вкладку с активным звонком.
+  useEffect(() => {
+    if (!call) return
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [call])
+
   useEffect(() => {
     if (!threadId) return
     const ch = supabase.channel('drx:' + threadId)

@@ -1248,3 +1248,26 @@ body.no-anim .lightbox { animation: none; }
 
 /* --- Мягкое раскрытие спойлера без резкого скачка текста --- */
 .md-spoiler { transition: background .25s ease, color .25s ease, filter .25s ease; }
+
+
+/* --- Баннер «не отправлено» с повтором одной кнопкой --- */
+.send-fail { display: flex; align-items: center; gap: 8px; margin: 0 16px; padding: 6px 14px;
+  font-size: 13px; color: #fa777c; background: var(--c-panel);
+  border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); }
+.send-fail button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 13px; padding: 0; }
+.send-fail button:hover { text-decoration: underline; }
+.send-fail .send-fail-x { margin-left: auto; color: var(--mut); font-size: 15px; }
+.send-fail .send-fail-x:hover { color: var(--tx); text-decoration: none; }
+
+/* --- HEX-код цвета в тексте показывает квадратик этого цвета --- */
+.md-hex { display: inline-flex; align-items: center; gap: 4px; }
+.md-hex i { width: 11px; height: 11px; border-radius: 3px; display: inline-block;
+  border: 1px solid rgba(255,255,255,.25); }
+
+/* --- Изогнутая линия у ответа, соединяющая его с оригиналом (как в Discord) --- */
+.msg-reply-curve { flex: 0 0 16px; width: 16px; height: 8px;
+  border-left: 2px solid #4e5058; border-top: 2px solid #4e5058;
+  border-top-left-radius: 6px; align-self: flex-end; margin-bottom: 3px; }
+
+/* --- Размер файла у ссылки скачивания --- */
+.msg-file-size { margin-left: 6px; font-size: 11.5px; color: var(--mut); }
