@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react'
+import { Icon } from './icons'
 
 // A floating desktop-style pet that wanders along the bottom of the screen,
 // reacts to clicks, and can be customized (species emoji + name). Config in localStorage.
@@ -38,7 +39,7 @@ export function Pet() {
   function poke() { setSay(PHRASES[Math.floor(Math.random() * PHRASES.length)]); setTimeout(() => setSay(null), 2500) }
 
   if (!cfg.on) return (
-    <button className="pet-off" title="Показать питомца" onClick={() => setCfg({ ...cfg, on: true })}>🐾</button>
+    <button className="pet-off" title="Показать питомца" onClick={() => setCfg({ ...cfg, on: true })}><Icon name="paw" size={22} /></button>
   )
 
   return (
