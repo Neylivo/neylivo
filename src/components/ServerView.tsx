@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -89,14 +90,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const name = prompt('Название канала')?.trim()
     if (!name) return
     const { error } = await supabase.from('channels').insert({ server_id: server.id, name })
-    if (error) return alert(error.message)
+    if (error) return toastErr(error.message)
     loadChannels()
   }
 
   async function invite() {
     if (!user) return
     const res = await createInvite(server.id, user.id)
-    if (res.error) return alert(res.error.message)
+    if (res.error) return toastErr(res.error.message)
     try { await navigator.clipboard.writeText(res.code!) } catch {}
     prompt('Код приглашения скопирован. Отправь его другу:', res.code!)
   }
@@ -110,7 +111,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   async function startCall() {
     if (!curChannel || !user) return
-    try { setCall(await joinRoom('ch_' + curChannel.id, user.id, username)) } catch (e: any) { alert(e.message ?? String(e)) }
+    try { setCall(await joinRoom('ch_' + curChannel.id, user.id, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
@@ -120,7 +121,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     })
-    if (error) { alert(error.message); return }
+    if (error) { toastErr(error.message); return }
     setReplyTarget(null)
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
     sendPush(targets, username + ' \u2014 #' + curChannel.name, t || 'Вложение', '/')

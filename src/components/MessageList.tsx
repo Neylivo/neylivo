@@ -6,6 +6,7 @@ import { loadCustom } from '../lib/emoji'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
+import { toastOk } from '../lib/toast'
 
 export interface UiMessage {
   id: string
@@ -163,7 +164,7 @@ export function MessageList({ messages, reactions = {}, currentUser, canPin, onR
           {menuMsg.author === currentUser && onEdit && menuMsg.content && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}
           {(canPin ? canPin(menuMsg) : true) &&
             <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}><Icon name="pin" size={15} /> {menuMsg.pinned ? 'Открепить' : 'Закрепить'}</div>}
-          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
+          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); toastOk('Текст скопирован'); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
           {menuMsg.author === currentUser && <div className="ctx-item danger" onClick={() => { onDelete?.(menu.id); setMenu(null) }}><Icon name="trash" size={15} /> Удалить</div>}
         </div>
       </>}

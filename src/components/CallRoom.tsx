@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { Room, RoomEvent } from '../lib/livekit'
 import { Icon } from './icons'
@@ -196,7 +197,7 @@ export function CallRoom({ room, meId, meName, onLeave }:
       setFlash(true); setTimeout(() => setFlash(false), 1200)
       await saveMoment(recRef.current, meId, meName, 15)
       setShowSb(true)
-    } catch (e: any) { alert(e.message ?? String(e)) }
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
   // In-call hotkey: save the last 15s when the configured combo is pressed.
@@ -216,7 +217,7 @@ export function CallRoom({ room, meId, meName, onLeave }:
   async function toggleScreen() {
     const v = !screen
     try { await room.localParticipant.setScreenShareEnabled(v); setScreen(v) }
-    catch (e: any) { alert(e.message ?? String(e)) }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
   }
   function leave() { room.disconnect(); onLeave() }
 

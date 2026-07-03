@@ -954,3 +954,16 @@ body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none;
 .call-waiting span { display:block; font-size:13px; font-weight:500; color:#bbb; margin-top:6px; }
 .call-bar button.off { background:#fff; color:#1e1f22; }
 .call-bar button.off:hover { background:#e3e3e3; }
+
+/* ===== Проход 6: тосты ===== */
+.toasts { position:fixed; right:16px; bottom:16px; z-index:400; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+.toast { pointer-events:auto; display:flex; align-items:center; gap:9px; max-width:360px; background:var(--bg2,#2b2d31);
+  color:var(--tx,#dbdee1); border:1px solid rgba(0,0,0,.4); border-left:4px solid var(--brand,#5865f2);
+  border-radius:10px; padding:10px 14px; font-size:14px; box-shadow:0 12px 32px rgba(0,0,0,.5); cursor:pointer;
+  animation:toastIn .22s ease; }
+.toast-ok { border-left-color:var(--green,#3ba55d); }
+.toast-error { border-left-color:var(--red,#ed4245); }
+.toast-ic { flex:none; }
+.toast-tx { overflow-wrap:anywhere; }
+@keyframes toastIn { from { transform:translateY(12px); opacity:0; } to { transform:none; opacity:1; } }
+body.no-anim .toast { animation:none; }

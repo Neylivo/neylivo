@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
@@ -28,7 +29,7 @@ export function CreateServerModal({ uid, onClose, onCreate }:
     const f = e.target.files?.[0]; if (!f || !uid) return
     setBusy(true)
     try { setAvatar(await uploadTo('avatars', uid, f)) }
-    catch (err: any) { alert(err.message ?? String(err)) }
+    catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
   return (
@@ -130,7 +131,7 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
       setAvatar(url)
       await updateServer(server.id, { avatar_url: url })
       onChanged?.()
-    } catch (err: any) { alert(err.message ?? String(err)) }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
   return (

@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
@@ -204,7 +205,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
       }
       setTracks(await fetchTracks())
-    } catch (err: any) { alert(err.message ?? String(err)) }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 

@@ -1,3 +1,4 @@
+import { toastErr, toastOk } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -48,7 +49,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   async function startCall() {
     if (!threadId) return
-    try { setCall(await joinRoom('dm_' + threadId, meId, username)) } catch (e: any) { alert(e.message ?? String(e)) }
+    try { setCall(await joinRoom('dm_' + threadId, meId, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
   useEffect(() => { loadRequests() /* eslint-disable-next-line */ }, [])
@@ -75,7 +76,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   async function add(p: Profile) {
     const { error } = await sendRequest(meId, username, p)
-    if (error) alert(error.message); else { setQ(''); setResults([]); alert('Заявка отправлена ' + p.username) }
+    if (error) toastErr(error.message); else { setQ(''); setResults([]); toastOk('Заявка отправлена ' + p.username) }
   }
 
   async function addByCode() {
@@ -135,7 +136,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     })
-    if (error) { alert(error.message); return }
+    if (error) { toastErr(error.message); return }
     setReplyTarget(null)
     if (active) sendPush([active.id], username, t || 'Вложение', '/')
   }

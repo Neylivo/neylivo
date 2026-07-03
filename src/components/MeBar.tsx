@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -22,7 +23,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       const url = await uploadTo('avatars', user.id, f)
       await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id)
       onAvatar?.(url)
-    } catch (err: any) { alert(err.message ?? String(err)) }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
 

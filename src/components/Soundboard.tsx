@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { Room } from '../lib/livekit'
 import { CallRecorder, playToAll } from '../lib/callAudio'
@@ -33,7 +34,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
     try {
       await saveMomentClip(recorder, meId, meName, 15)
       refresh()
-    } catch (e: any) { alert(e.message ?? String(e)) }
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setBusy('') }
   }
 
@@ -50,7 +51,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
         await addClip({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: meName, duration: dur })
       }
       refresh()
-    } catch (e: any) { alert(e.message ?? String(e)) }
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setBusy(''); if (fileRef.current) fileRef.current.value = '' }
   }
 
@@ -66,7 +67,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
     try {
       const { stop } = await playToAll(room, c.url, { onEnded: () => { setPlayingId(null); stopRef.current = null } })
       stopRef.current = stop
-    } catch (e: any) { alert(e.message ?? String(e)); setPlayingId(null) }
+    } catch (e: any) { toastErr(e.message ?? String(e)); setPlayingId(null) }
   }
 
   async function openTrim(c: Clip) {
@@ -75,7 +76,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
       const resp = await fetch(c.url)
       const buf = await decodeAudio(await resp.arrayBuffer())
       setTrim({ clip: c, buf, start: 0, end: buf.duration })
-    } catch (e: any) { alert(e.message ?? String(e)) }
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setBusy('') }
   }
 
@@ -90,7 +91,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
       await addClip({ url, name, ownerId: meId, ownerName: meName, duration: Math.max(0, trim.end - trim.start) })
       setTrim(null)
       refresh()
-    } catch (e: any) { alert(e.message ?? String(e)) }
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setBusy('') }
   }
 

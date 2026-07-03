@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { uploadTo, isImage } from '../lib/storage'
@@ -23,7 +24,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     setGif(false)
     if (!user) return
     setBusy(true)
-    try { await onSend('', { url, type: 'image' }) } catch (err: any) { alert(err.message ?? String(err)) }
+    try { await onSend('', { url, type: 'image' }) } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
 
@@ -40,7 +41,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       }
       await onSend(t, attach)
       setText(''); setFile(null); if (fileRef.current) fileRef.current.value = ''
-    } catch (err: any) { alert(err.message ?? String(err)) }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
 

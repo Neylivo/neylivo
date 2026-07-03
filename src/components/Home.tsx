@@ -1,3 +1,4 @@
+import { toastErr, toastOk } from '../lib/toast'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -67,7 +68,7 @@ export function Home() {
   async function onCreate(name: string, avatarUrl: string | null) {
     if (!name || !user) return
     const res = await createSrv(name, user.id, username, avatarUrl)
-    if (res.error) return alert(res.error.message)
+    if (res.error) return toastErr(res.error.message)
     setShowCreate(false)
     if (res.server) refresh(res.server.id)
   }
@@ -79,11 +80,11 @@ export function Home() {
     if (k === 'invite') {
       const { createInvite } = await import('../lib/servers')
       const res = await createInvite(server.id, user.id)
-      if (res.code) { navigator.clipboard?.writeText(res.code); alert('Код приглашения скопирован: ' + res.code) }
+      if (res.code) { navigator.clipboard?.writeText(res.code); toastOk('Код приглашения скопирован: ' + res.code) }
       return
     }
     if (k === 'delete') {
-      if (server.owner !== user.id) return alert('Только владелец может удалить сервер')
+      if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
       await deleteServer(server.id)
       setView({ kind: 'dm' }); refresh()
       return

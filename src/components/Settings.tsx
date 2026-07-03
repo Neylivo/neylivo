@@ -1,3 +1,4 @@
+import { toastErr } from '../lib/toast'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -83,7 +84,7 @@ function ChatBgCard() {
     const f = e.target.files?.[0]; if (!f) return
     setBusy(true)
     try { setBg(await setChatBgPhoto(f)); setThumb(getChatBgUrl()) }
-    catch (err: any) { alert(err?.message ?? String(err)) }
+    catch (err: any) { toastErr(err?.message ?? String(err)) }
     finally { setBusy(false); if (fRef.current) fRef.current.value = '' }
   }
   return (
@@ -137,7 +138,7 @@ export function Settings({ username, avatarUrl, onClose }:
     try {
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ petUrl: url, petKind: petKindOf(f), petOn: true })
-    } catch (err: any) { alert(err.message ?? String(err)) }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setPetBusy(false) }
   }
 
