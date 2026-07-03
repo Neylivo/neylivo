@@ -393,6 +393,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           const row = (m: any) => {
             const act = activityOf(m.user_id)
             const rr = m.role_id ? roleById[m.role_id] : undefined
+            const isTyping = typers.includes(m.member_name)
             return (
             <div key={m.user_id} className="member"
               onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
@@ -404,6 +405,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
                 {act && <small className="member-act"><ActivityLabel activity={act} /></small>}
               </span>
+              {isTyping && <span className="member-typing" title="печатает…"><i/><i/><i/></span>}
               {m.role === 'owner' && <span className="mut" title="Владелец"><Icon name="crown" size={14} /></span>}
             </div>
           )}
