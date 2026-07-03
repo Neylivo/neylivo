@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
+import { Icon } from './icons'
 
 // Keyless GIF picker — like the prototype: a built-in list of public GIF URLs,
 // add-by-URL, and a SHARED "Мои GIF" collection stored in the Supabase `gifs`
@@ -47,8 +48,8 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
     <div className="emoji-pop gif-pop" onClick={e => e.stopPropagation()}>
       <div className="emoji-tabs">
         <b style={{ flex: 1, padding: '4px 6px' }}>GIF</b>
-        <button className="emoji-add" style={{ margin: 0 }} onClick={addUrl}>＋ URL</button>
-        <button className="emoji-x" onClick={onClose}>✕</button>
+        <button className="emoji-add" style={{ margin: 0 }} onClick={addUrl}><Icon name="plus" size={15} /> URL</button>
+        <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       <div className="emoji-scroll">
         {mine.length > 0 && <>
@@ -57,7 +58,7 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
             {mine.map(g => (
               <div key={g.id} className="gif-cell" onClick={() => onPick(g.url)}>
                 <img src={g.url} alt="gif" />
-                <span className="emoji-del" onClick={ev => { ev.stopPropagation(); removeMine(g.id) }}>✕</span>
+                <span className="emoji-del" onClick={ev => { ev.stopPropagation(); removeMine(g.id) }}><Icon name="close" size={12} /></span>
               </div>
             ))}
           </div>
