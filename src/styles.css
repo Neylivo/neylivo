@@ -1163,3 +1163,22 @@ body.no-anim .msg-flash { animation:none; }
 .jump-down:hover { filter:brightness(1.08); }
 .search-hit { cursor:pointer; }
 .search-hit:hover { background:var(--c-hover, #383a40); }
+
+/* ===== Профиль-карточка из чата ===== */
+.av-click { cursor:pointer; }
+.msg-hdr .nm.clickable { cursor:pointer; }
+.msg-hdr .nm.clickable:hover { text-decoration:underline; }
+
+/* ===== Индикатор непрочитанного на серверах ===== */
+.srv-wrap { position:relative; }
+.unread-dot { position:absolute; left:-4px; top:50%; transform:translateY(-50%);
+  width:8px; height:8px; border-radius:0 4px 4px 0; background:#fff; z-index:2; }
+
+/* ===== Drag-and-drop файлов в чат ===== */
+.drop-overlay { position:fixed; inset:0; z-index:140; background:rgba(0,0,0,.6);
+  display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.drop-box { border:3px dashed var(--brand, #5865f2); border-radius:16px;
+  background:color-mix(in srgb, var(--brand, #5865f2) 14%, var(--bg2, #2b2d31));
+  padding:38px 56px; text-align:center; color:var(--tx, #dbdee1);
+  font-size:17px; font-weight:600; animation:pop .15s ease both; }
+.drop-box small { display:block; margin-top:6px; font-size:13px; font-weight:400; color:var(--mut, #949ba4); }

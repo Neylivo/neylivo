@@ -1,5 +1,5 @@
 import { toastErr } from '../lib/toast'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { uploadTo, isImage } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
@@ -46,6 +46,32 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [mIdx, setMIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Drag-and-drop файла в чат + вставка картинки из буфера (Ctrl+V).
+  const [drag, setDrag] = useState(false)
+  const dragDepth = useRef(0)
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
+    const enter = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDrag(true) }
+    const over = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault() }
+    const leave = (e: DragEvent) => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDrag(false) }
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault(); dragDepth.current = 0; setDrag(false)
+      const f = e.dataTransfer?.files?.[0]
+      if (f) { setFile(f); inputRef.current?.focus() }
+    }
+    window.addEventListener('dragenter', enter)
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter)
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+    }
+  }, [])
 
   // Автодополнение @упоминаний: имена участников + @everyone.
   const names = Array.from(new Set(['everyone', ...(mentionables ?? [])])).filter(Boolean)
@@ -106,6 +132,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   return (
     <>
+      {drag && <div className="drop-overlay"><div className="drop-box">Отпусти, чтобы прикрепить файл<small>картинки, документы — что угодно</small></div></div>}
       {replyingTo && <div className="reply-banner">
         <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
         <span>{replyingTo.preview}</span>
@@ -127,6 +154,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
         <input ref={inputRef} placeholder={file ? file.name : placeholder} value={text}
           onChange={e => { setText(e.target.value); onType?.(); updateMention(e.target.value, e.target.selectionStart) }}
+          onPaste={e => { const f = e.clipboardData?.files?.[0]; if (f) { e.preventDefault(); setFile(f) } }}
           onClick={e => updateMention(text, (e.target as HTMLInputElement).selectionStart)}
           onKeyDown={e => {
             if (sugg.length > 0) {

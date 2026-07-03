@@ -71,9 +71,10 @@ interface Props {
   onDelete?: (id: string) => void
   onReply?: (m: UiMessage) => void
   onEdit?: (id: string, content: string) => void | Promise<void>
+  onProfile?: (m: UiMessage, x: number, y: number) => void
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile }: Props) {
   const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
@@ -134,13 +135,13 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {grouped
                   ? <span className="msg-ts-hover">{timeShort(m.created_at)}</span>
                   : settings.showAvatars
-                  ? <Avatar name={m.author_name} url={m.author_avatar} size={40} />
+                  ? <span className="av-click" title="Профиль" onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}><Avatar name={m.author_name} url={m.author_avatar} size={40} /></span>
                   : null}
               </div>
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><Icon name="reply" size={13} /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className="nm">{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span><span className="msg-time">{timeShort(m.created_at)}</span></div>}
                 {editing === m.id
                   ? <div className="msg-edit">
                       <textarea className="msg-edit-in" value={editText} autoFocus

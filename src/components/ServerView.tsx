@@ -224,7 +224,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
-            onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
+            onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
+            onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author_avatar, status: statusOf(m.author),
+              role: members.find(mm => mm.user_id === m.author)?.role, x, y })} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}

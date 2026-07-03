@@ -15,6 +15,7 @@ import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { CallRoom } from './CallRoom'
+import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { joinRoom, Room } from '../lib/livekit'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
@@ -51,6 +52,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const msgsRef = useRef<DMMessage[]>([])
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const { typers, notifyTyping } = useTyping(threadId, username)
+  const [mini, setMini] = useState<MiniProfileData | null>(null)
 
   async function startCall() {
     if (!threadId) return
@@ -256,7 +258,8 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
-              onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg} />
+              onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
+              onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author_avatar, status: statusOf(m.author), x, y })} />
             {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}
@@ -351,6 +354,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           </div>
         </>}
       </main>
+      {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )
 }

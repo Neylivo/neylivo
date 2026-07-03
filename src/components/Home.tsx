@@ -39,6 +39,41 @@ export function Home() {
   const [folders, setFolders] = useState<SrvFolder[]>(loadFolders())
   const [folderFor, setFolderFor] = useState<Server | null>(null)
 
+  // Непрочитанное на серверах: глобальная подписка на INSERT в messages.
+  // Канал → сервер резолвим по заранее загруженной карте каналов.
+  const [unread, setUnread] = useState<Set<string>>(new Set())
+  const chMap = useRef<Record<string, string>>({})
+  const viewRef = useRef<View>(view)
+  useEffect(() => { viewRef.current = view }, [view])
+  useEffect(() => {
+    if (servers.length === 0) return
+    supabase.from('channels').select('id, server_id').in('server_id', servers.map(s => s.id))
+      .then(({ data }) => {
+        const map: Record<string, string> = {}
+        for (const c of data ?? []) map[c.id] = c.server_id
+        chMap.current = map
+      })
+  }, [servers])
+  useEffect(() => {
+    if (!user) return
+    const ch = supabase.channel('unread:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => {
+        const msg = p.new as { channel_id?: string; author?: string }
+        if (!msg.channel_id || msg.author === user.id) return
+        const sid = chMap.current[msg.channel_id]
+        if (!sid) return
+        const v = viewRef.current
+        if (v.kind === 'server' && v.server.id === sid) return
+        setUnread(prev => { const n = new Set(prev); n.add(sid); return n })
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line
+  }, [user])
+  function clearUnread(id: string) {
+    setUnread(prev => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n })
+  }
+
   useEffect(() => {
     if (!user) return
     initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
@@ -138,9 +173,10 @@ export function Home() {
               <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
                 style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
                 title={s.name}
-                onClick={() => setView({ kind: 'server', server: s })}
+                onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
                 onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
                 {s.name.slice(0, 2).toUpperCase()}</button>
+              {unread.has(s.id) && <span className="unread-dot" title="Есть новые сообщения" />}
             </div>
           )
           return <>
