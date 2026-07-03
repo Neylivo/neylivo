@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
+import { Icon } from '../components/icons'
 
 const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
 interface Playlist { id: string; name: string; trackIds: string[] }
@@ -177,11 +178,11 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
       </>}
 
       <header className="mus2-top">
-        <div className="mus2-brand"><span className="mus2-logo">🎵</span> <b>Музыка</b></div>
+        <div className="mus2-brand"><span className="mus2-logo"><Icon name="music" size={20} /></span> <b>Музыка</b></div>
         <div className="mus2-topr">
-          <button title="Настройки" onClick={() => setSettings(true)}>⚙</button>
-          <button title="Тема" onClick={() => document.documentElement.classList.toggle('mus-light')}>🌙</button>
-          <button title="Закрыть" onClick={onClose}>✕</button>
+          <button title="Настройки" onClick={() => setSettings(true)}><Icon name="gear" size={18} /></button>
+          <button title="Тема" onClick={() => document.documentElement.classList.toggle('mus-light')}><Icon name="moon" size={18} /></button>
+          <button title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
       </header>
 
@@ -201,12 +202,12 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
             <button className="mus2-addbtn" onClick={addSoundcloud}>Добавить</button>
           </div>
           <div className="mus2-addrow">
-            <input className="mus2-in" placeholder="🔎 Найти трек в очереди…" value={qFilter} onChange={e => setQFilter(e.target.value)} />
+            <input className="mus2-in" placeholder="Найти трек в очереди…" value={qFilter} onChange={e => setQFilter(e.target.value)} />
             <button className="mus2-libbtn" onClick={() => setShowLib(true)}>Трекотека</button>
           </div>
 
           {tab === 'queue' ? <>
-            <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : '＋'}</button></div>
+            <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button></div>
             <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
             <div className="mus2-list">
               {filteredQueue.length === 0 && <div className="mus2-empty">Пусто. Вставь ссылку SoundCloud, чтобы добавить трек.</div>}
@@ -214,9 +215,9 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
                 const i = tracks.indexOf(t)
                 return (
                   <div key={t.id} className={'mus2-li' + (i === idx ? ' on' : '')} onClick={() => { setIdx(i); setPlaying(true) }}>
-                    <span className="mus2-li-n">{i === idx && playing ? '🎶 ' : ''}{t.name}</span>
-                    <span className="mus2-li-add" title="В плейлист" onClick={e => { e.stopPropagation(); addToPlaylist(t.id) }}>＋</span>
-                    <span className="mus2-li-del" title="Убрать" onClick={e => { e.stopPropagation(); removeTrack(t.id) }}>✕</span>
+                    <span className="mus2-li-n">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{t.name}</span>
+                    <span className="mus2-li-add" title="В плейлист" onClick={e => { e.stopPropagation(); addToPlaylist(t.id) }}><Icon name="plus" size={14} /></span>
+                    <span className="mus2-li-del" title="Убрать" onClick={e => { e.stopPropagation(); removeTrack(t.id) }}><Icon name="close" size={13} /></span>
                   </div>
                 )
               })}
@@ -224,12 +225,12 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
           </> : <>
             <div className="mus2-sec">ПЛЕЙЛИСТЫ</div>
             <div className="mus2-list">
-              {playlists.length === 0 && <div className="mus2-empty">Нет плейлистов. Добавляй треки из очереди кнопкой ＋.</div>}
+              {playlists.length === 0 && <div className="mus2-empty">Нет плейлистов. Добавляй треки из очереди кнопкой «плюс».</div>}
               {playlists.map(p => (
                 <div key={p.id} className="mus2-pl">
                   <div className="mus2-pl-h">
                     <b>{p.name}</b> <span className="mut">{p.trackIds.length} трек.</span>
-                    <span className="mus2-li-del" title="Удалить" onClick={() => { const n = playlists.filter(x => x.id !== p.id); setPlaylists(n); savePlaylists(n) }}>✕</span>
+                    <span className="mus2-li-del" title="Удалить" onClick={() => { const n = playlists.filter(x => x.id !== p.id); setPlaylists(n); savePlaylists(n) }}><Icon name="close" size={13} /></span>
                   </div>
                   {p.trackIds.map(tid => { const t = tracks.find(x => x.id === tid); if (!t) return null
                     return <div key={tid} className="mus2-pl-t" onClick={() => { const i = tracks.indexOf(t); setIdx(i); setPlaying(true) }}>{t.name}</div> })}
@@ -241,10 +242,10 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
 
         <section className="mus2-now">
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
-          <div className="mus2-art">{cur ? '🎵' : <span className="mus2-note">♫</span>}</div>
+          <div className="mus2-art">{cur ? <Icon name="music" size={72} /> : <span className="mus2-note"><Icon name="music" size={72} /></span>}</div>
           <div className="mus2-nowt">{cur ? cur.name : 'Ничего не играет'}</div>
           <div className="mus2-nowsub">{cur ? (isSoundcloud(cur.url) ? 'SoundCloud' : cur.kind === 'url' ? 'по ссылке' : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
-          {together && <div className="mus2-together-badge">👥 Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
+          {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
           {showRight && <img className="mus-gif r" src={gif.url} alt="" />}
         </section>
       </div>
@@ -257,18 +258,18 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
           <span>{fmt(dur)}</span>
         </div>
         <div className="mus2-ctlrow">
-          <div className="mus2-vol">🔊 <input type="range" min={0} max={100} value={vol} onChange={e => setVol(+e.target.value)} /></div>
+          <div className="mus2-vol"><Icon name="volume" size={16} /> <input type="range" min={0} max={100} value={vol} onChange={e => setVol(+e.target.value)} /></div>
           <div className="mus2-ctl">
-            <button className={shuffle ? 'on' : ''} title="Перемешать" onClick={() => setShuffle(s => !s)}>🔀</button>
-            <button title="Предыдущий" onClick={prev} disabled={!tracks.length}>⏮</button>
-            <button className="big" onClick={() => setPlaying(p => !p)} disabled={!tracks.length}>{playing ? '⏸' : '▶'}</button>
-            <button title="Следующий" onClick={next} disabled={!tracks.length}>⏭</button>
-            <button className={repeat !== 'off' ? 'on' : ''} title={'Повтор: ' + repeat} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}>{repeat === 'one' ? '🔂' : '🔁'}</button>
+            <button className={shuffle ? 'on' : ''} title="Перемешать" onClick={() => setShuffle(s => !s)}><Icon name="shuffle" size={18} /></button>
+            <button title="Предыдущий" onClick={prev} disabled={!tracks.length}><Icon name="skip-back" size={18} /></button>
+            <button className="big" onClick={() => setPlaying(p => !p)} disabled={!tracks.length}>{playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}</button>
+            <button title="Следующий" onClick={next} disabled={!tracks.length}><Icon name="skip-forward" size={18} /></button>
+            <button className={repeat !== 'off' ? 'on' : ''} title={'Повтор: ' + repeat} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
           </div>
           <div className="mus2-extra">
-            <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}>＋ В плейлист</button>
+            <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
             <div className="mus2-together-wrap">
-              <button className="mus2-tog" onClick={() => setTogetherUi(u => !u)}>👥 Вместе {together ? '•' : '＋'}</button>
+              <button className="mus2-tog" onClick={() => setTogetherUi(u => !u)}><Icon name="users" size={15} /> Вместе {together ? '•' : <Icon name="plus" size={13} />}</button>
               {togetherUi && <div className="mus2-tog-pop" onMouseLeave={() => setTogetherUi(false)}>
                 {together ? <>
                   <div className="mus2-tog-code">Код: <b>{together.code}</b></div>
@@ -288,8 +289,8 @@ export function MusicPlayer({ me, meId, onClose }: { me: string; meId: string; o
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
             <b>Ponoi Music · Трекотека</b>
-            <input className="mus2-in" placeholder="🔎 Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
-            <button className="mus2-lib-x" onClick={() => setShowLib(false)}>✕</button>
+            <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
+            <button className="mus2-lib-x" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
           </header>
           <div className="mus2-lib-body">
             {tracks.length === 0
