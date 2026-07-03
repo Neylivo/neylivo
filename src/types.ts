@@ -11,6 +11,10 @@ export interface Message {
   attach_url?: string | null
   attach_type?: string | null
   pinned?: boolean
+  reply_to?: string | null
+  reply_author?: string | null
+  reply_preview?: string | null
+  edited?: boolean
 }
 
 export interface FriendRequest {
@@ -33,4 +37,8 @@ export interface DMMessage {
   attach_url?: string | null
   attach_type?: string | null
   pinned?: boolean
+  reply_to?: string | null
+  reply_author?: string | null
+  reply_preview?: string | null
+  edited?: boolean
 }
