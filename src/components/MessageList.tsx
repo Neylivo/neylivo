@@ -222,7 +222,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           <Fragment key={m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '')}
+            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '')}
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
               <div className="msg-gutter">
                 {grouped
@@ -254,6 +254,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
                 {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
+                <span className="tg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false

@@ -2481,3 +2481,63 @@ body.no-anim .member-typing i { animation:none; }
   .chat-head { padding-top:calc(8px + env(safe-area-inset-top)); }
   .me { padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
 }
+
+
+/* ==== v1.36.0: мобильный интерфейс в стиле Telegram ==== */
+/* На телефоне чат выглядит как Telegram (привычно для не-геймеров), десктоп остаётся Discord 1-в-1. */
+.tg-time { display:none; }
+.send-tg { display:none; }
+@media (max-width:768px) {
+  /* Фон и шапка как в тёмном Telegram */
+  .chat { background:#0e1621; }
+  .chat-head { background:#17212b; border-bottom:1px solid rgba(0,0,0,.35); box-shadow:none; background-image:none; }
+  .mob-burger { color:#8b9ba8; }
+  .msgs { padding:10px 8px 6px; gap:3px; background:#0e1621; }
+
+  /* Пузыри: чужие слева (тёмные), свои справа (синие), время внутри пузыря */
+  .msg { padding:1px 6px; gap:8px; align-items:flex-end; animation:none; }
+  .msg:hover { background:none; }
+  .msg.pinned { background:none; box-shadow:none; }
+  .msg.mention-hl { background:none; }
+  .msg-gutter { width:34px; }
+  .msg-gutter .av-click { display:inline-flex; transform:scale(.8); transform-origin:bottom left; }
+  .msg-body { position:relative; max-width:82%; background:#182533; border-radius:15px 15px 15px 5px; padding:6px 46px 7px 11px; }
+  .msg.grouped .msg-body { border-radius:15px; }
+  .msg.mine { flex-direction:row-reverse; }
+  .msg.mine .msg-gutter { display:none; }
+  .msg.mine .msg-body { background:#2b5278; border-radius:15px 15px 5px 15px; }
+  .msg.mine.grouped .msg-body { border-radius:15px; }
+  .msg.mine .msg-hdr { display:none; }
+  .msg-hdr .nm { font-size:13.5px; color:#64b5ef; }
+  .msg-hdr .msg-time, .msg-ts-hover, .msg-edited { display:none; }
+  .msg .tg-time { display:block; position:absolute; right:10px; bottom:5px; font-size:11px; color:#6d7f8f; }
+  .msg.mine .tg-time { color:rgba(255,255,255,.55); }
+  .msg-txt { line-height:1.35; font-size:15px; }
+  .msg-att { max-width:100%; border-radius:10px; }
+  .msg-tools { display:none !important; }
+  /* В личке (1-на-1) — без аватарок и имён, как в Telegram */
+  .dm-side ~ .chat .msg-gutter { display:none; }
+  .dm-side ~ .chat .msg-hdr { display:none; }
+
+  /* Разделители дней — пилюли по центру */
+  .day-sep { justify-content:center; margin:10px 0; }
+  .day-sep::before, .day-sep::after { display:none; }
+  .day-sep span { background:rgba(0,0,0,.35); border-radius:999px; padding:4px 12px; color:#dfe7ee; font-size:12.5px; }
+
+  /* Композер: тёмная панель, меньше кнопок, круглая синяя «Отправить» */
+  .composer { padding:6px 8px calc(8px + env(safe-area-inset-bottom)); background:#17212b; gap:4px; }
+  .composer input { background:transparent; padding:12px 6px; font-size:16px; }
+  .attach-btn { background:transparent; color:#8b9ba8; width:40px; }
+  .ctool { background:transparent; color:#8b9ba8; min-width:38px; height:40px; padding:0 6px; }
+  .ctool-clip, .gif-badge { display:none; }
+  .send-tg { display:flex; align-items:center; justify-content:center; flex:none; width:44px; height:44px;
+    border:none; border-radius:50%; background:#5288c1; color:#fff; cursor:pointer; }
+  .send-busy { width:44px; height:44px; border-radius:50%; }
+
+  /* Список чатов — как главный экран Telegram: крупные аватарки и имена */
+  .dm-side { width:calc(100vw - 72px); max-width:none; background:#17212b; }
+  .channels { background:#17212b; }
+  .dm-sec-t { color:#6d7f8f; }
+  .dm-item { padding:8px 12px; margin:0 4px; gap:12px; border-radius:10px; }
+  .dm-item .me-nm { font-size:16px; font-weight:600; }
+}

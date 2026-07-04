@@ -20,7 +20,7 @@ import { startRingback, stopRingback } from '../lib/callSounds'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
-import { openMobNav, closeMobNav } from '../lib/mobile'
+import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
@@ -372,7 +372,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
         <div className="ch-list">
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
-              <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+              <AvatarWithStatus name={f.name} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
               <span className="me-nm">{f.name}
                 {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
               </span>
@@ -385,7 +385,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
       <main className="chat">
         {active ? <>
-          <header className="chat-head"><button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>@ {active.name}
+          <header className="chat-head"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>{!IS_MOBILE && '@ '}{active.name}
             <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
             <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
           </header>
@@ -474,7 +474,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                   {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
                   {list.map(f => (
                     <div key={f.id} className="pfr-row" onClick={() => openChat(f)}>
-                      <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                      <AvatarWithStatus name={f.name} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
                       <span className="pfr-name">{f.name}</span>
                       <span className="pfr-status">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
                       <span className="pfr-msg" title="Написать"><Icon name="message" size={16} /></span>
