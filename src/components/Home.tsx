@@ -36,6 +36,12 @@ export function Home() {
   const [view, setView] = useState<View>({ kind: 'dm' })
   const [showCreate, setShowCreate] = useState(false)
   const [showFind, setShowFind] = useState(false)
+  // v1.53.0: карточка «Исследуйте доступные серверы» во вкладке «Добавить в друзья»
+  useEffect(() => {
+    const h = () => setShowFind(true)
+    window.addEventListener('ponoi-open-discover', h)
+    return () => window.removeEventListener('ponoi-open-discover', h)
+  }, [])
   const [showJoin, setShowJoin] = useState(false)   // v1.46.0: модалка «Присоединиться к серверу»
   const [ctx, setCtx] = useState<{ server: Server; x: number; y: number } | null>(null)
   const [settingsServer, setSettingsServer] = useState<Server | null>(null)

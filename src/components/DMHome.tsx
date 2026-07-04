@@ -59,6 +59,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [code, setCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [codeMsg, setCodeMsg] = useState('')
+  const [codeOk, setCodeOk] = useState(false) // v1.53.0: зелёное/красное сообщение под полем, как в Discord
   const { statusOf, gameOf, deviceOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
@@ -268,11 +269,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     const name = code.trim().replace(/^@/, '').replace(/#\d+$/, '').trim()
     if (!name) return
     const p = await findByUsername(name)
-    if (!p) { setCodeMsg('Пользователь «' + name + '» не найден — проверь написание'); return }
-    if (p.id === meId) { setCodeMsg('Это твой собственный юзернейм :)'); return }
+    if (!p) { setCodeOk(false); setCodeMsg('Хм, не получилось. Проверь, что имя пользователя введено правильно.'); return }
+    if (p.id === meId) { setCodeOk(false); setCodeMsg('Это твой собственный юзернейм :)'); return }
     const { error } = await sendRequest(meId, username, p)
-    if (error) setCodeMsg(error.message)
-    else { setCode(''); setCodeMsg('Заявка отправлена — ' + p.username) }
+    if (error) { setCodeOk(false); setCodeMsg(error.message) }
+    else { setCode(''); setResults([]); setCodeOk(true); setCodeMsg('Успешно! Запрос дружбы отправлен пользователю ' + (p.display_name || p.username) + '.') }
   }
 
   // v1.51.0: удаление из друзей из меню «⋯» (сносим заявку в обе стороны)
@@ -545,31 +546,52 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           </header>
           <div className="pfr-main">
           <div className="pfr-body">
-            {tab === 'add' ? <div className="pfr-addbox">
-              <div className="pfr-addh">Добавить в друзья</div>
-              <div className="pfr-codebox">
-                <div className="pfr-codeh">Мой юзернейм</div>
-                <div className="pfr-coderow">
-                  <span className="pfr-code">{handle || username}</span>
-                  <span className="pfr-codehint">поделись им</span>
-                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(handle || username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
+            {tab === 'add' ? <div className="pfr-add2">
+              <div className="pfr-add2-head">
+                <div className="pfr-add2-tx">
+                  <div className="pfr-add2-h">Добавить в друзья</div>
+                  <div className="pfr-add2-sub">Вы можете добавить друзей по имени пользователя в Ponoi.</div>
                 </div>
-                <div className="pfr-codeh2">Добавить в друзья по юзернейму</div>
-                <div className="pfr-addcoderow">
-                  <input className="pfr-addin" placeholder="Введи юзернейм (например, guchipon)" value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addByName() }} />
-                  <button className="pfr-addbtn2" onClick={addByName}>Отправить заявку</button>
-                </div>
-                {codeMsg && <div className="pfr-codemsg">{codeMsg}</div>}
+                <svg className="pfr-add2-mascot" viewBox="0 0 120 100" fill="none" aria-hidden="true">
+                  <ellipse cx="62" cy="93" rx="34" ry="5" fill="rgba(0,0,0,.35)"/>
+                  <path d="M36 42 q-16 -2 -18 -16" stroke="#5865f2" strokeWidth="9" strokeLinecap="round"/>
+                  <circle cx="16" cy="24" r="8" fill="#eef0ff"/>
+                  <rect x="34" y="26" width="56" height="50" rx="17" fill="#5865f2"/>
+                  <rect x="42" y="70" width="40" height="21" rx="8" fill="#eef0ff"/>
+                  <rect x="56" y="74" width="12" height="6" rx="3" fill="#5865f2"/>
+                  <circle cx="53" cy="48" r="5" fill="#fff"/>
+                  <circle cx="72" cy="48" r="5" fill="#fff"/>
+                  <path d="M55 61 q8 7 16 0" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+                  <path d="M64 26 q1 -9 9 -12" stroke="#23a55a" strokeWidth="5" strokeLinecap="round"/>
+                  <ellipse cx="78" cy="12" rx="9" ry="5" fill="#23a55a" transform="rotate(-15 78 12)"/>
+                </svg>
               </div>
-              <div className="pfr-addsub">Или найди по нику или части юзернейма.</div>
-              <input className="pfr-addin" placeholder="Введи имя пользователя…" value={q} onChange={e => doSearch(e.target.value)} />
-              {results.map(p => (
-                <div key={p.id} className="pfr-row" onClick={() => add(p)}>
-                  <Avatar name={p.display_name || p.username} url={p.avatar_url} size={32} />
-                  <span className="pfr-name">{p.display_name || p.username}<span className="pfr-uname">{p.username}</span></span>
-                  <span className="pfr-add-btn"><Icon name="plus" size={14} /> Добавить</span>
-                </div>
-              ))}
+              <div className={'pfr-add2-inwrap' + (codeMsg ? (codeOk ? ' ok' : ' err') : '')}>
+                <input placeholder="Введите имя пользователя" value={code}
+                  onChange={e => { setCode(e.target.value); setCodeMsg(''); doSearch(e.target.value) }}
+                  onKeyDown={e => { if (e.key === 'Enter') addByName() }} />
+                <button className="pfr-add2-send" disabled={!code.trim()} onClick={addByName}>Отправить запрос дружбы</button>
+              </div>
+              {codeMsg && <div className={'pfr-add2-msg' + (codeOk ? ' ok' : ' err')}>{codeMsg}</div>}
+              {!codeMsg && <div className="pfr-add2-hint">Твой юзернейм — <b title="Скопировать" onClick={() => { navigator.clipboard?.writeText(handle || username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{handle || username}</b>{copied ? ' — скопировано \u2713' : '. Нажми на него, чтобы скопировать и поделиться.'}</div>}
+              {q.trim().length > 1 && results.filter(p => p.id !== meId).length > 0 && <div className="pfr-add2-results">
+                <div className="pfr-sec">Похожие пользователи</div>
+                {results.filter(p => p.id !== meId).map(p => (
+                  <div key={p.id} className="pfr-row" onClick={() => add(p)}>
+                    <Avatar name={p.display_name || p.username} url={p.avatar_url} size={32} />
+                    <span className="pfr-name">{p.display_name || p.username}<span className="pfr-uname">{p.username}</span></span>
+                    <span className="pfr-add-btn"><Icon name="plus" size={14} /> Добавить</span>
+                  </div>
+                ))}
+              </div>}
+              <div className="pfr-add2-div" />
+              <div className="pfr-add2-h2">Где ещё можно завести друзей</div>
+              <div className="pfr-add2-sub">Нет знакомых пользователей? Тогда просмотри наш список открытых серверов — там найдётся всё, от игр до музыки и многого другого.</div>
+              <button className="pfr-add2-explore" onClick={() => window.dispatchEvent(new Event('ponoi-open-discover'))}>
+                <span className="pfr-add2-exic"><Icon name="compass" size={20} /></span>
+                <span className="pfr-add2-extx">Исследуйте доступные серверы</span>
+                <Icon name="chevron-right" size={18} />
+              </button>
             </div>
             : tab === 'pending' ? <>
               <div className="pfr-sec">Ожидание — {requests.length}</div>
