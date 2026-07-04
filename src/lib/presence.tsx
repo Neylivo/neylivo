@@ -25,32 +25,26 @@ interface PresenceState { username: string; status: Status; avatar_url?: string 
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
   myStatus: Status
-  setMyStatus: (s: Status) => void
   statusOf: (userId: string) => Status
-  myActivity: Activity | null
-  setMyActivity: (a: Activity | null) => void
   activityOf: (userId: string) => Activity | null
   setMyListening: (l: Listening | null) => void
   gameOf: (userId: string) => Game | null
 }
-const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', setMyStatus: () => {}, statusOf: () => 'offline', myActivity: null, setMyActivity: () => {}, activityOf: () => null, setMyListening: () => {}, gameOf: () => null })
+const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null })
 
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
   const { user } = useAuth()
   const [online, setOnline] = useState<Record<string, PresenceState>>({})
-  const [myStatus, setMyStatusState] = useState<Status>(() => (localStorage.getItem('ponoi_status') as Status) || 'online')
-  const [myActivity, setMyActivityState] = useState<Activity | null>(() => {
-    try { return JSON.parse(localStorage.getItem('ponoi_activity') || 'null') } catch { return null }
-  })
+  // Статус вручную не выбирается: в приложении — «В сети», вышел из приложения — «Не в сети».
+  // Ручная активность тоже удалена: активность только автоматическая (игра/музыка).
+  const myStatus: Status = 'online'
   const chanRef = useRef<any>(null)
-  const actRef = useRef<Activity | null>(myActivity)
   const [myListening, setMyListeningState] = useState<Listening | null>(null)
   const lisRef = useRef<Listening | null>(null)
   const [myGame, setMyGame] = useState<Game | null>(null)
   const gameRef = useRef<Game | null>(null)
   const sessRef = useRef<string | null>(null)   // id открытой игровой сессии в activity_sessions
-  const statRef = useRef<Status>(myStatus)
   const propRef = useRef({ username, avatarUrl })
 
   useEffect(() => {
@@ -66,7 +60,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: lisRef.current, game: gameRef.current })
+      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -100,7 +94,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({ username: propRef.current.username, status: statRef.current, avatar_url: propRef.current.avatarUrl ?? null, activity: actRef.current, listening: lisRef.current, game: val })
+        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val })
       }
       if (!g) { pub(null); return }
       pub({ ...g, cover: null })                 // мгновенно: у друзей серый геймпад-заглушка
@@ -112,25 +106,11 @@ export function PresenceProvider({ username, avatarUrl, children }:
     // eslint-disable-next-line
   }, [])
 
-  function setMyStatus(s: Status) {
-    setMyStatusState(s)
-    statRef.current = s
-    localStorage.setItem('ponoi_status', s)
-    chanRef.current?.track({ username, status: s, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: lisRef.current, game: gameRef.current })
-  }
-
-  function setMyActivity(a: Activity | null) {
-    actRef.current = a
-    setMyActivityState(a)
-    try { a ? localStorage.setItem('ponoi_activity', JSON.stringify(a)) : localStorage.removeItem('ponoi_activity') } catch {}
-    chanRef.current?.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: a, listening: lisRef.current, game: gameRef.current })
-  }
-
   function setMyListening(l: Listening | null) {
     if (!l && !lisRef.current) return   // нечего сбрасывать — не дёргаем канал
     lisRef.current = l
     setMyListeningState(l)
-    chanRef.current?.track({ username, status: myStatus, avatar_url: avatarUrl ?? null, activity: actRef.current, listening: l, game: gameRef.current })
+    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current })
   }
 
   // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
@@ -144,8 +124,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const text = '🎵 Слушает: ' + l.title + (l.author ? ' — ' + l.author : '') + (l.source ? ' · ' + l.source : '')
       return { text, since: l.at - Math.floor(l.pos * 1000) }
     }
-    if (userId === user?.id) return myActivity
-    return online[userId]?.activity ?? null
+    return null   // ручная активность удалена — только авто (игра/музыка)
   }
 
   function gameOf(userId: string): Game | null {
@@ -158,7 +137,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.status ?? 'offline'
   }
 
-  return <Ctx.Provider value={{ online, myStatus, setMyStatus, statusOf, myActivity, setMyActivity, activityOf, setMyListening, gameOf }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf }}>{children}</Ctx.Provider>
 }
 
 export const usePresence = () => useContext(Ctx)

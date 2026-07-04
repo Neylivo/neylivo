@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
-import { Status, STATUS_LABEL, STATUS_COLOR, usePresence, type Activity } from '../lib/presence'
+import { Status, STATUS_LABEL, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, Elapsed } from './ActivityLabel'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
@@ -59,12 +59,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const { user } = useAuth()
   const isMe = user?.id === data.userId
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
-  const { gameOf, myActivity, setMyActivity, myStatus, setMyStatus } = usePresence()
+  const { gameOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
-  const [sub, setSub] = useState<'status' | 'acc' | null>(null)   // подменю своего попапа (статус / учётные записи)
+  const [sub, setSub] = useState<'acc' | null>(null)   // подменю своего попапа (учётные записи)
   const [edit, setEdit] = useState(false)
   const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
@@ -122,14 +122,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     else { setMsg(''); toastOk('Отправлено — ' + data.name); onMessage?.(); onClose() }
   }
 
-  // Пузырёк статуса у своей аватарки: клик — задать/убрать свой статус.
-  function editStatus() {
-    const t = prompt('Свой статус (пусто — убрать)', myActivity?.text ?? '')
-    if (t === null) return
-    const v = t.trim()
-    setMyActivity(v ? { text: v, since: Date.now() } : null)
-  }
-
   // Шаг 2 цепочки: клик по аватарке/нику в мини-профиле открывает фулл-профиль по центру.
   if (full) return <FullProfile userId={data.userId} name={data.name} avatarUrl={av} status={data.status} onClose={onClose} />
 
@@ -158,9 +150,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             <Avatar name={data.name} url={av} size={80} />
             <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
           </div>
-          {isMe && <button className="mini-addstatus" title="Установить свой статус" onClick={editStatus}>
-            {myActivity?.text ? <span className="mini-addstatus-tx">{myActivity.text}</span> : <><Icon name="plus" size={15} /><span className="mini-addstatus-ph">Какой ваш самый бесполезный талант?</span></>}
-          </button>}
         </div>
         <div className="mini-body">
           <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
@@ -188,12 +177,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {isMe && meControls && <>
             <div className="mini-grp">
               <button className="mini-row" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>
-              <div className="mini-rowsep" />
-              <button className="mini-row" onClick={() => setSub(s => s === 'status' ? null : 'status')}>
-                <span className="status-dot" style={{ background: STATUS_COLOR[myStatus] }} />
-                {myStatus === 'offline' ? 'Невидимый' : myStatus === 'idle' ? 'Неактивен' : STATUS_LABEL[myStatus]}
-                <span className="mini-row-chev"><Icon name="chevron-down" size={14} /></span>
-              </button>
             </div>
             <div className="mini-grp">
               <button className="mini-row" onClick={() => setSub(s => s === 'acc' ? null : 'acc')}>
@@ -205,14 +188,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 <Icon name="id-card" size={15} /> Копировать ID пользователя
               </button>
             </div>
-            {sub === 'status' && <div className="mini-sub">
-              {([['online', 'В сети', ''], ['idle', 'Неактивен', ''], ['dnd', 'Не беспокоить', 'Вы не будете получать уведомления на рабочем столе'], ['offline', 'Невидимый', 'У вас будет статус «Не в сети»']] as [Status, string, string][]).map(([s, lbl, desc]) => (
-                <button key={s} className={'mini-subrow' + (myStatus === s ? ' on' : '')} onClick={() => { setMyStatus(s); setSub(null) }}>
-                  <span className="dotwrap"><StatusDot status={s} size={12} /></span>
-                  <span className="mini-subrow-t">{lbl}{desc && <small>{desc}</small>}</span>
-                </button>
-              ))}
-            </div>}
             {sub === 'acc' && <div className="mini-sub">
               <div className="mini-acc">
                 <Avatar name={data.name} url={av} size={28} />
