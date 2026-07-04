@@ -4,7 +4,7 @@ const path = require('path')
 const isDev = !app.isPackaged
 
 // ---- Авто-детект игр (как в Discord) ----
-// Раз в 4 секунды (как в Discord) смотрим процессы Windows (tasklist). Рендереру шлём событие ТОЛЬКО
+// Раз в 4 секунды (как в Discord) смотрим ОКНА Windows (PowerShell Get-Process). Рендереру шлём событие ТОЛЬКО
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
@@ -79,31 +79,35 @@ async function findCover(name) {
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
-// Строгий детект (v1.27.0): никакой «фейковой» активности.
-// (1) javaw.exe — это любое Java-приложение: Minecraft'ом считаем только если
-//    заголовок окна содержит «minecraft» (tasklist /v отдаёт заголовки окон).
-// (2) Старт игры публикуем только после двух сканов подряд (~8 сек), чтобы не
-//    ловить мгновенные/служебные процессы; закрытие игры гасим сразу.
+// Строгий детект (v1.49.1): спрашиваем у Windows ТОЛЬКО процессы с настоящим
+// главным окном (MainWindowHandle ≠ 0 и непустой заголовок) через PowerShell —
+// ровно так запущенную игру отличает от фоновой службы и Discord.
+// tasklist для этого не годился: он пишет заголовок и у фоновых процессов
+// (RobloxPlayerBeta, висящий в диспетчере после закрытия игры, детектился зря).
+// javaw.exe — это любое Java-приложение: Minecraft'ом считаем только если
+// заголовок окна содержит «minecraft». Старт игры публикуем после двух сканов
+// подряд (~8 сек), чтобы не ловить мигающие процессы; закрытие гасим сразу.
+const GAME_BY_PROC = {}
+for (const [exe, nm] of Object.entries(GAMES)) GAME_BY_PROC[exe.replace(/\.exe$/, '')] = nm
+const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.MainWindowTitle }"
 let pendingGame = null   // кандидат на старт: { name, at }
+let scanBusy = false     // не пускаем сканы внахлёст
 function scanGames() {
-  if (process.platform !== 'win32') return
+  if (process.platform !== 'win32' || scanBusy) return
+  scanBusy = true
   const { execFile } = require('child_process')
-  execFile('tasklist.exe', ['/fo', 'csv', '/nh', '/v'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', PS_SCAN], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, out) => {
+    scanBusy = false
     if (err || !out) return
     let found = null
     for (const line of String(out).split('\n')) {
-      const cols = line.match(/"[^"]*"/g)
-      if (!cols || cols.length < 2) continue
-      const exe = cols[0].slice(1, -1).toLowerCase()
-      const nm = GAMES[exe]
-      if (!nm) continue
-      // v1.49.0: игрой считаем только процесс с настоящим открытым окном.
-      // Фоновые службы (например, Roblox, висящий в диспетчере после закрытия игры)
-      // окна не имеют — tasklist в колонке заголовка пишет «N/A» (в русской Windows «Н/Д»).
-      const title = cols[cols.length - 1].slice(1, -1)
-      const tl = title.toLowerCase()
-      if (!title || tl === 'n/a' || tl === 'н/д' || tl === 'нет данных') continue
-      if (exe === 'javaw.exe' && !tl.includes('minecraft')) continue
+      const i = line.indexOf('|')
+      if (i <= 0) continue
+      const proc = line.slice(0, i).trim().toLowerCase()
+      const title = line.slice(i + 1).trim()
+      const nm = GAME_BY_PROC[proc]
+      if (!nm || !title) continue
+      if (proc === 'javaw' && !title.toLowerCase().includes('minecraft')) continue
       found = nm
       break
     }
