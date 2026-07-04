@@ -297,3 +297,54 @@ export function ServerNotifModal({ server, onClose }: { server: Server; onClose:
     </Overlay>
   )
 }
+
+
+// Настройки конфиденциальности сервера — персональные, хранятся в localStorage (как в Discord).
+export function ServerPrivacyModal({ server, onClose }: { server: Server; onClose: () => void }) {
+  const KEY = 'ponoi_privacy_' + server.id
+  const [prefs, setPrefs] = useState<{ dm: boolean; activity: boolean }>(() => {
+    try { return { dm: true, activity: true, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') } } catch { return { dm: true, activity: true } }
+  })
+  function save(p: { dm: boolean; activity: boolean }) { setPrefs(p); localStorage.setItem(KEY, JSON.stringify(p)) }
+  return (
+    <Overlay onClose={onClose}>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+      <div className="modal-title" style={{ textAlign: 'left' }}>Настройки конфиденциальности</div>
+      <div className="modal-sub" style={{ textAlign: 'left' }}>{server.name}</div>
+      <div className="priv-row">
+        <div className="priv-t"><b>Личные сообщения</b><span>Разрешить личные сообщения от других участников этого сервера.</span></div>
+        <button className={'tgl' + (prefs.dm ? ' on' : '')} onClick={() => save({ ...prefs, dm: !prefs.dm })} />
+      </div>
+      <div className="priv-row">
+        <div className="priv-t"><b>Статус активности</b><span>Делиться статусом вашей игровой активности с участниками этого сервера.</span></div>
+        <button className={'tgl' + (prefs.activity ? ' on' : '')} onClick={() => save({ ...prefs, activity: !prefs.activity })} />
+      </div>
+      <div className="cset-hint">Эти настройки применяются только к серверу «{server.name}» и хранятся на этом устройстве.</div>
+      <div className="modal-foot"><button className="modal-ghost" onClick={onClose}>Готово</button></div>
+    </Overlay>
+  )
+}
+
+// Модалка «Создать категорию» — 1-в-1 как в Discord.
+export function CreateCategoryModal({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, priv: boolean) => void }) {
+  const [name, setName] = useState('')
+  const [priv, setPriv] = useState(false)
+  return (
+    <Overlay onClose={onClose}>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+      <div className="modal-title" style={{ textAlign: 'left' }}>Создать категорию</div>
+      <label className="modal-lbl">Название категории</label>
+      <div className="cch-name">
+        <Icon name="folder" size={16} />
+        <input autoFocus placeholder="Новая категория" value={name} onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), priv) }} />
+      </div>
+      <div className="cch-priv"><span>🔒</span> Приватная категория<button className={'tgl' + (priv ? ' on' : '')} onClick={() => setPriv(!priv)} /></div>
+      <div className="cset-hint">Только выбранные участники и участники с выбранными ролями смогут просматривать эту категорию.</div>
+      <div className="modal-foot">
+        <button className="modal-ghost" onClick={onClose}>Отмена</button>
+        <button className="modal-primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), priv)}>Создать категорию</button>
+      </div>
+    </Overlay>
+  )
+}

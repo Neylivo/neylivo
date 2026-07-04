@@ -14,7 +14,7 @@ import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
-import { createInvite, listMembers } from '../lib/servers'
+import { createInvite, listMembers, updateServer } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
@@ -28,6 +28,8 @@ import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
 import { CreateChannelModal } from './CreateChannelModal'
+import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
+import { loadChMuted, setChMuted } from '../lib/chMute'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 
@@ -60,7 +62,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showThreads, setShowThreads] = useState(false)
   const [thrQ, setThrQ] = useState('')
   const [showAllCh, setShowAllCh] = useState(() => localStorage.getItem('ponoi_show_all_channels') === '1')
-  const [showCreateCh, setShowCreateCh] = useState<null | 'text' | 'voice'>(null)
+  const [showCreateCh, setShowCreateCh] = useState<null | { kind: 'text' | 'voice'; cat?: string }>(null)
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [showCreateCat, setShowCreateCat] = useState(false)
+  const [srvSettings, setSrvSettings] = useState<any>((server as any).settings ?? {})
+  const [mutedCh, setMutedCh] = useState<Record<string, boolean>>(loadChMuted())
+  const [chCtx, setChCtx] = useState<{ ch: Channel; x: number; y: number } | null>(null)
+  const [catCtx, setCatCtx] = useState<{ cat: any; x: number; y: number } | null>(null)
+  const [catOpenMap, setCatOpenMap] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('ponoi_cat_open') ?? '{}') } catch { return {} } })
   const [chSettings, setChSettings] = useState<Channel | null>(null)
   const [editProfile, setEditProfile] = useState(false)
   const [hideMuted, setHideMuted] = useState(() => localStorage.getItem('ponoi_hide_muted') === '1')
@@ -87,7 +96,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return mm?.role_id ? roleById[mm.role_id]?.color : undefined
   }
 
-  useEffect(() => { loadChannels(); loadMembers(); loadRoles() /* eslint-disable-next-line */ }, [server.id])
+  useEffect(() => { loadChannels(); loadMembers(); loadRoles(); setSrvSettings((server as any).settings ?? {}) /* eslint-disable-next-line */ }, [server.id])
 
   async function loadMembers() { setMembers(await listMembers(server.id)) }
   async function loadRoles() { setRoles(await fetchRoles(server.id)) }
@@ -114,6 +123,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     for (const m of (data ?? []) as any[]) {
       if (seen.has(m.channel_id)) continue
       seen.add(m.channel_id)
+      if (loadChMuted()[m.channel_id]) continue
       const lastRead = Number(localStorage.getItem('ponoi_lastread_' + m.channel_id) ?? 0)
       if (m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) un[m.channel_id] = true
     }
@@ -152,7 +162,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           if (msg.author !== user?.id && !parseSys(msg.content)) {
             const mode = notifModeOf(server.id)
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
-            if (mode === 'all' || (mode === 'mentions' && mentioned)) {
+            if (!loadChMuted()[curChannel.id] && (mode === 'all' || (mode === 'mentions' && mentioned))) {
               msgSound()
               notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
             }
@@ -250,6 +260,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => {
           const msg = p.new as Message
           if (!ids.has(msg.channel_id) || msg.author === user?.id) return
+          if (loadChMuted()[msg.channel_id]) return
           if (curChannelRef.current?.id === msg.channel_id) return
           setUnreadCh(u => u[msg.channel_id] ? u : { ...u, [msg.channel_id]: true })
         })
@@ -267,9 +278,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
 
-  async function createChannel(name: string, kind: 'text' | 'voice', priv: boolean) {
+  async function createChannel(name: string, kind: 'text' | 'voice', priv: boolean, cat?: string) {
     // Сначала пробуем с новыми колонками (kind/settings из миграции 16), при ошибке — без них.
-    let { error } = await supabase.from('channels').insert({ server_id: server.id, name, kind, settings: priv ? { private: true } : {} } as any)
+    const settings: any = {}
+    if (priv) settings.private = true
+    if (cat) settings.category = cat
+    let { error } = await supabase.from('channels').insert({ server_id: server.id, name, kind, settings } as any)
     if (error) {
       const r2 = await supabase.from('channels').insert({ server_id: server.id, name })
       if (!r2.error && kind === 'voice') toastErr('Для голосовых каналов примени миграцию supabase/16_channel_settings.sql')
@@ -311,6 +325,46 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const m = notifModeOf(server.id) === 'mute' ? 'all' : 'mute'
     setNotifMode(server.id, m as any)
     toastOk(m === 'mute' ? 'Сервер заглушен' : 'Уведомления включены')
+  }
+  // Персональное заглушение канала (localStorage) — гасит звук/подсветку,
+  // а «Скрыть заглушённые каналы» убирает такие каналы из списка.
+  function toggleMuteCh(id: string) {
+    const next = !mutedCh[id]
+    setChMuted(id, next)
+    setMutedCh(loadChMuted())
+    toastOk(next ? 'Канал заглушен' : 'Уведомления канала включены')
+  }
+  function markChRead(c: Channel) {
+    localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
+    setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
+    toastOk('Отмечено прочитанным')
+  }
+  // Категории каналов: живут в servers.settings.categories (миграция 17),
+  // каналы привязываются через channels.settings.category (миграция 16).
+  async function createCategory(name: string, priv: boolean) {
+    const id = (crypto as any).randomUUID ? crypto.randomUUID() : String(Date.now())
+    const next = { ...srvSettings, categories: [...(srvSettings.categories ?? []), { id, name, private: priv }] }
+    const { error } = await updateServer(server.id, { settings: next } as any)
+    if (error) return toastErr(String(error.message ?? error).includes('settings') ? 'Сначала примени миграцию supabase/17_server_settings.sql в Supabase SQL Editor' : String(error.message ?? error))
+    setSrvSettings(next); uiChime(); toastOk('Категория «' + name + '» создана')
+  }
+  async function deleteCategory(cat: any) {
+    if (!await confirmUi('Удалить категорию «' + cat.name + '»? Каналы вернутся в общий список.', { okText: 'Удалить' })) return
+    const next = { ...srvSettings, categories: (srvSettings.categories ?? []).filter((c: any) => c.id !== cat.id) }
+    const { error } = await updateServer(server.id, { settings: next } as any)
+    if (error) return toastErr(String(error.message ?? error))
+    setSrvSettings(next)
+  }
+  async function renameCategory(cat: any) {
+    const name = prompt('Название категории:', cat.name)?.trim()
+    if (!name || name === cat.name) return
+    const next = { ...srvSettings, categories: (srvSettings.categories ?? []).map((c: any) => c.id === cat.id ? { ...c, name } : c) }
+    const { error } = await updateServer(server.id, { settings: next } as any)
+    if (error) return toastErr(String(error.message ?? error))
+    setSrvSettings(next)
+  }
+  function toggleCat(id: string) {
+    setCatOpenMap(m => { const n = { ...m, [id]: !(m[id] ?? true) }; localStorage.setItem('ponoi_cat_open', JSON.stringify(n)); return n })
   }
 
   async function startCall() {
@@ -383,11 +437,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {!isOwner && <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}>Показать все каналы <span className={'srv-mchk' + (showAllCh ? ' on' : '')}>{showAllCh && <Icon name="check" size={12} />}</span></div>}
             <div className="srv-msep" />
             {isOwner && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}>Настройки сервера <Icon name="gear" size={16} /></div>}
-            <div className="srv-mi" onClick={() => toastOk('Настройки конфиденциальности скоро появятся')}>Настройки конфиденциальности <Icon name="shield" size={16} /></div>
+            <div className="srv-mi" onClick={() => setShowPrivacy(true)}>Настройки конфиденциальности <Icon name="shield" size={16} /></div>
             <div className="srv-mi" onClick={() => setEditProfile(true)}>Редактировать личный профиль сервера <Icon name="edit" size={16} /></div>
             <div className="srv-msep" />
-            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCh('text')}>Создать канал <Icon name="plus-circle" size={16} /></div>}
-            {isOwner && <div className="srv-mi" onClick={() => toastOk('Категории скоро появятся')}>Создать категорию <Icon name="folder" size={16} /></div>}
+            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCh({ kind: 'text' })}>Создать канал <Icon name="plus-circle" size={16} /></div>}
+            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCat(true)}>Создать категорию <Icon name="folder" size={16} /></div>}
             <div className="srv-mi" onClick={() => setShowEvents(true)}>Создать событие <Icon name="calendar" size={16} /></div>
             {!isOwner && <><div className="srv-msep" /><div className="srv-mi danger" onClick={leave}>Покинуть сервер <Icon name="signout" size={16} /></div></>}
             <div className="srv-msep" />
@@ -396,35 +450,57 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </>}
         <div className="ch-list">
           <div className="ch evt clickable" onClick={() => setShowEvents(true)}><Icon name="calendar" size={16} /> Мероприятия</div>
-          <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
-            onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
-            <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы
-            {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh('text') }}><Icon name="plus" size={14} /></button>}
-          </div>
-          {channels.filter(c => (c as any).kind !== 'voice').filter(c => catOpen || curChannel?.id === c.id).map(c => (
-            <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '')}
-              onClick={() => selectChannel(c)}>
-              <span className="ch-nm"># {c.name}</span>
-              <span className="ch-acts">
-                <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
-                {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
-              </span>
-            </div>
-          ))}
-          <div className="ch-sec clickable" title={voiceCatOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
-            onClick={() => setVoiceCatOpen(v => { localStorage.setItem('ponoi_cat_voice_open', v ? '0' : '1'); return !v })}>
-            <span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}>▶</span>Голосовые каналы
-            {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh('voice') }}><Icon name="plus" size={14} /></button>}
-          </div>
-          {channels.filter(c => (c as any).kind === 'voice').filter(() => voiceCatOpen).map(c => (
-            <div key={c.id} className="ch" onClick={() => joinVoice(c)}>
-              <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
-              <span className="ch-acts">
-                <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
-                {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
-              </span>
-            </div>
-          ))}
+          {(() => {
+            const cats: any[] = srvSettings.categories ?? []
+            const catIds = new Set(cats.map((c: any) => c.id))
+            const catOf = (c: Channel) => { const id = (c as any).settings?.category; return id && catIds.has(id) ? id : null }
+            const visible = (c: Channel) => !hideMuted || !mutedCh[c.id] || curChannel?.id === c.id
+            const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 260) }) }
+            const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
+              <div key={c.id} className={'ch' + (mutedCh[c.id] ? ' muted' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)}>
+                <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
+                <span className="ch-acts">
+                  <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
+                  {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+                </span>
+              </div>
+            ) : (
+              <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '') + (mutedCh[c.id] ? ' muted' : '')}
+                onClick={() => selectChannel(c)} onContextMenu={onChCtx(c)}>
+                <span className="ch-nm"># {c.name}</span>
+                <span className="ch-acts">
+                  <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
+                  {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+                </span>
+              </div>
+            )
+            return <>
+              <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
+                onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
+                <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы
+                {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text' }) }}><Icon name="plus" size={14} /></button>}
+              </div>
+              {channels.filter(c => (c as any).kind !== 'voice' && !catOf(c)).filter(c => (catOpen && visible(c)) || curChannel?.id === c.id).map(chRow)}
+              <div className="ch-sec clickable" title={voiceCatOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
+                onClick={() => setVoiceCatOpen(v => { localStorage.setItem('ponoi_cat_voice_open', v ? '0' : '1'); return !v })}>
+                <span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}>▶</span>Голосовые каналы
+                {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'voice' }) }}><Icon name="plus" size={14} /></button>}
+              </div>
+              {channels.filter(c => (c as any).kind === 'voice' && !catOf(c)).filter(c => voiceCatOpen && visible(c)).map(chRow)}
+              {cats.map((cat: any) => {
+                const open = catOpenMap[cat.id] ?? true
+                return <div key={cat.id}>
+                  <div className="ch-sec clickable" title={open ? 'Свернуть категорию' : 'Развернуть категорию'}
+                    onClick={() => toggleCat(cat.id)}
+                    onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setCatCtx({ cat, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 200) }) }}>
+                    <span className={'ch-caret' + (open ? ' open' : '')}>▶</span>{cat.private ? '🔒 ' : ''}{cat.name}
+                    {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text', cat: cat.id }) }}><Icon name="plus" size={14} /></button>}
+                  </div>
+                  {channels.filter(c => catOf(c) === cat.id).filter(c => (open && visible(c)) || curChannel?.id === c.id).map(chRow)}
+                </div>
+              })}
+            </>
+          })()}
           {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}><Icon name="signout" size={14} /> покинуть сервер</div>}
         </div>
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
@@ -553,11 +629,31 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)}
         onAddRole={isOwner ? () => { const m = mini; setMini(null); setRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
-      {showCreateCh && <CreateChannelModal initialKind={showCreateCh} onClose={() => setShowCreateCh(null)}
-        onCreate={(nm, kd, pv) => { setShowCreateCh(null); createChannel(nm, kd, pv) }} />}
+      {showCreateCh && <CreateChannelModal initialKind={showCreateCh.kind} onClose={() => setShowCreateCh(null)}
+        onCreate={(nm, kd, pv) => { const cat = showCreateCh.cat; setShowCreateCh(null); createChannel(nm, kd, pv, cat) }} />}
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
       {showEvents && <ServerEvents server={server} channels={channels} onClose={() => setShowEvents(false)} />}
+      {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
+      {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}
+      {chCtx && <>
+        <div className="ctx-overlay" onClick={() => setChCtx(null)} onContextMenu={e => { e.preventDefault(); setChCtx(null) }} />
+        <div className="ctx-menu" style={{ left: chCtx.x, top: chCtx.y }} onClick={() => setChCtx(null)}>
+          <div className="ctx-item" onClick={() => markChRead(chCtx.ch)}><Icon name="check" size={14} /> Пометить как прочитанное</div>
+          <div className="ctx-item" onClick={invite}><Icon name="user-plus" size={14} /> Пригласить на сервер</div>
+          <div className="ctx-item" onClick={() => toggleMuteCh(chCtx.ch.id)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell' : 'bell-off'} size={14} /> {mutedCh[chCtx.ch.id] ? 'Включить уведомления' : 'Заглушить канал'}</div>
+          {isOwner && <div className="ctx-item" onClick={() => setChSettings(chCtx.ch)}><Icon name="gear" size={14} /> Настройки канала</div>}
+          <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(chCtx.ch.id); toastOk('ID канала скопирован') }}><Icon name="id-card" size={14} /> Копировать ID канала</div>
+        </div>
+      </>}
+      {catCtx && <>
+        <div className="ctx-overlay" onClick={() => setCatCtx(null)} onContextMenu={e => { e.preventDefault(); setCatCtx(null) }} />
+        <div className="ctx-menu" style={{ left: catCtx.x, top: catCtx.y }} onClick={() => setCatCtx(null)}>
+          <div className="ctx-item" onClick={() => setShowCreateCh({ kind: 'text', cat: catCtx.cat.id })}><Icon name="plus-circle" size={14} /> Создать канал</div>
+          <div className="ctx-item" onClick={() => renameCategory(catCtx.cat)}><Icon name="edit" size={14} /> Переименовать</div>
+          <div className="ctx-item danger" onClick={() => deleteCategory(catCtx.cat)}><Icon name="trash" size={14} /> Удалить категорию</div>
+        </div>
+      </>}
       {editProfile && user && <ProfileCard userId={user.id} name={username} avatarUrl={avatarUrl} status={statusOf(user.id)} onClose={() => setEditProfile(false)} />}
     </>
   )
