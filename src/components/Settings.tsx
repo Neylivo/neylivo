@@ -414,44 +414,73 @@ export function Settings({ username, avatarUrl, onClose }:
                   <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
                 </div>
 
-                <div className="pqs-acc-card2">
-                  <div className="pqs-sec-t">Питомец профиля</div>
-                  <div className="pqs-code-sub">Маленький питомец в правом нижнем углу твоего профиля (мини и большого). Можно фото, GIF, видео или 3D-модель (.glb/.gltf). Ставить не обязательно.</div>
-                  <Row title="Показывать питомца" desc="Включи, чтобы поставить питомца на профиль">
-                    <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
-                  </Row>
-                  <div className="pqs-pet-pick">
-                    <div className="pqs-pet-thumb">{prof.petUrl ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted /> : <img src={prof.petUrl} alt="" />) : '—'}</div>
-                    <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : 'Выбрать файл'}</button>
-                    <button className="pqs-save" onClick={() => patchProf({ petUrl: null, petKind: 'none', petOn: false })}>Убрать</button>
-                    <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
-                  </div>
-                  <div className="pqs-code-sub">Поддерживается: фото (PNG/JPG/WebP), GIF, видео (MP4/WebM — лучше короткое и зациклённое) и 3D-модель (.glb/.gltf — её можно вращать мышью).</div>
-                  <Row title="Размер" desc={prof.petSize + ' px'}>
-                    <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
-                  </Row>
-                  <div className="pqs-lbl">Позиция</div>
-                  <div className="pqs-pet-pos">
-                    {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
-                      <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
-                    ))}
-                  </div>
-                  <div className="pqs-pet-previews">
+                <div className="pqs-acc-card2 pet2">
+                  <div className="pet2-head">
                     <div>
-                      <div className="pqs-pet-plabel">Мини-профиль (1:1)</div>
-                      <div className="pqs-pet-card mini" style={{ position: 'relative' }}>
-                        <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                      <div className="pqs-sec-t" style={{ margin: 0 }}>Питомец профиля</div>
+                      <div className="pet2-sub">Маленький питомец живёт в углу твоей карточки профиля. Фото, GIF, видео или 3D-модель — ставить не обязательно.</div>
+                    </div>
+                    <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
+                  </div>
+                  {prof.petOn && <div className="pet2-body">
+                    <div className="pet2-pickrow">
+                      <button className="pet2-thumb" title="Выбрать файл" onClick={() => petRef.current?.click()}>
+                        {prof.petUrl
+                          ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted autoPlay loop /> : <img src={prof.petUrl} alt="" />)
+                          : <span className="pet2-thumb-empty"><Icon name="paw" size={22} /><em>Выбрать</em></span>}
+                      </button>
+                      <div className="pet2-pickinfo">
+                        <div className="pet2-pickbtns">
+                          <button className="pqs2-btn primary" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : (prof.petUrl ? 'Заменить файл' : 'Выбрать файл')}</button>
+                          {prof.petUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ petUrl: null, petKind: 'none' })}>Убрать</button>}
+                        </div>
+                        <div className="pet2-formats">PNG · JPG · WebP · GIF · видео MP4/WebM (короткое и зациклённое) · 3D-модель .glb/.gltf (можно вращать мышью)</div>
+                      </div>
+                      <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
+                    </div>
+                    <Row title="Размер" desc={prof.petSize + ' px'}>
+                      <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
+                    </Row>
+                    <div className="pqs-lbl">Позиция</div>
+                    <div className="pqs-pet-pos">
+                      {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
+                        <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
+                      ))}
+                    </div>
+                    <div className="pqs-lbl">Предпросмотр</div>
+                    <div className="pet2-previews">
+                      <div className="pet2-pv mini">
+                        <span className="pet2-pv-tag">Мини-профиль</span>
+                        <div className="pet2-pv-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
+                        <div className="pet2-pv-av" style={{ background: settings.accent }}>
+                          {avatarUrl ? <img src={avatarUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
+                          <span className="pet2-pv-dot" />
+                        </div>
+                        <div className="pet2-pv-body">
+                          <b>{name || username}</b>
+                          <span className="pet2-pv-un">{uname || username}</span>
+                          {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 80)}</p>}
+                          <div className="pet2-pv-btn">Сообщение</div>
+                        </div>
                         <ProfilePet p={prof} scale={0.35} />
                       </div>
-                    </div>
-                    <div>
-                      <div className="pqs-pet-plabel">Большой профиль (1:1)</div>
-                      <div className="pqs-pet-card big" style={{ position: 'relative' }}>
-                        <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                      <div className="pet2-pv big">
+                        <span className="pet2-pv-tag">Большой профиль</span>
+                        <div className="pet2-pv-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
+                        <div className="pet2-pv-av" style={{ background: settings.accent }}>
+                          {avatarUrl ? <img src={avatarUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
+                          <span className="pet2-pv-dot" />
+                        </div>
+                        <div className="pet2-pv-body">
+                          <b>{name || username}</b>
+                          <span className="pet2-pv-un">{uname || username}</span>
+                          {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 140)}</p>}
+                          <div className="pet2-pv-btn">Сообщение</div>
+                        </div>
                         <ProfilePet p={prof} scale={0.5} />
                       </div>
                     </div>
-                  </div>
+                  </div>}
                 </div>
               </>}
 
