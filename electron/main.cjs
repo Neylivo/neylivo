@@ -120,17 +120,17 @@ function scanGames() {
   })
 }
 
-// ---- Неоновый splash при запуске (в стиле установщика Discord) ----
-// Frameless-окно 650x400 (#0B0E14): логотип слева, прогресс справа. Пока оно
-// крутится, приложение готовится и проверяет обновления; затем схлопывается.
+// ---- Неоновый splash при запуске (компактный, как у Discord) ----
+// Frameless-окно 340x320: логотип и статус запуска. Пока оно крутится,
+// приложение готовится и проверяет обновления; затем схлопывается.
 let splash = null
 const SPLASH_MIN_MS = 1100   // v1.31.0: короче — приложение стартует заметно быстрее
 let splashShownAt = 0
 
 function createSplash() {
   splash = new BrowserWindow({
-    width: 650,
-    height: 400,
+    width: 340,
+    height: 320,
     frame: false,
     resizable: false,
     maximizable: false,
@@ -151,7 +151,10 @@ function createSplash() {
   splash.on('closed', () => { splash = null })
 }
 
+let appShown = false   // v1.31.2: страховки могут дёрнуть повторно — показываем окно один раз
 function closeSplashAndShow(win) {
+  if (appShown) return
+  appShown = true
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt))
   setTimeout(() => {
     try { splash?.webContents.send('splash-done') } catch {}
@@ -183,6 +186,13 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => closeSplashAndShow(win))
+
+  // v1.31.2: страховка от «вечного» сплэша. Если ready-to-show по какой-то причине
+  // не пришёл (тяжёлый первый запуск после установки, сбой отрисовки) — всё равно
+  // показываем окно: после полной загрузки страницы или максимум через 10 секунд.
+  win.webContents.once('did-finish-load', () => setTimeout(() => closeSplashAndShow(win), 400))
+  win.webContents.once('did-fail-load', () => closeSplashAndShow(win))
+  setTimeout(() => closeSplashAndShow(win), 10_000)
 
   // Open external (http) links in the system browser, not inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {

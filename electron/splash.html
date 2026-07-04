@@ -9,101 +9,85 @@
   body {
     background:#0B0E14; color:#fff;
     font-family:'Segoe UI', system-ui, sans-serif;
-    display:flex; border-radius:12px;
-    animation: appear .4s ease both;
+    border-radius:12px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    -webkit-app-region: drag;
+    animation: appear .35s ease both;
+    position:relative;
   }
   @keyframes appear { from { opacity:0 } to { opacity:1 } }
-  body.bye { animation: bye .35s ease both; }
+  body.bye { animation: bye .3s ease both; }
   @keyframes bye { to { opacity:0; transform:scale(.96) } }
 
-  /* Левая панель (35%): неоновый логотип + футуристичная сетка */
-  .left {
-    width:35%; height:100%; position:relative; flex:none;
-    background:linear-gradient(160deg,#12162a 0%,#0B0E14 70%);
-    display:flex; align-items:center; justify-content:center;
-    -webkit-app-region: drag;
-  }
-  .left::before {
-    content:''; position:absolute; inset:0; opacity:.14;
+  /* Едва заметная неоновая сетка на фоне */
+  body::before {
+    content:''; position:absolute; inset:0; opacity:.10; border-radius:12px;
     background-image:linear-gradient(rgba(99,102,241,.5) 1px, transparent 1px),
                      linear-gradient(90deg, rgba(99,102,241,.5) 1px, transparent 1px);
     background-size:26px 26px;
-    mask-image:radial-gradient(ellipse at 50% 45%, #000 30%, transparent 75%);
-    -webkit-mask-image:radial-gradient(ellipse at 50% 45%, #000 30%, transparent 75%);
-  }
-  .logo {
-    font-size:38px; font-weight:800; letter-spacing:1px; color:#fff;
-    text-shadow:0 0 12px rgba(99,102,241,.9), 0 0 34px rgba(99,102,241,.6), 0 0 70px rgba(99,102,241,.4);
-    animation: fadein 1s ease both, pulse 2.6s ease-in-out 1s infinite;
-    position:relative; z-index:1;
-  }
-  @keyframes fadein { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
-  @keyframes pulse {
-    0%,100% { text-shadow:0 0 12px rgba(99,102,241,.9), 0 0 34px rgba(99,102,241,.6), 0 0 70px rgba(99,102,241,.4) }
-    50%     { text-shadow:0 0 18px rgba(99,102,241,1), 0 0 50px rgba(99,102,241,.8), 0 0 95px rgba(99,102,241,.55) }
+    mask-image:radial-gradient(ellipse at 50% 42%, #000 25%, transparent 72%);
+    -webkit-mask-image:radial-gradient(ellipse at 50% 42%, #000 25%, transparent 72%);
   }
 
-  /* Правая панель (65%): зона действия */
-  .right {
-    flex:1; height:100%; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:14px; padding:0 44px;
-    -webkit-app-region: drag;
+  .logo {
+    font-size:44px; font-weight:800; letter-spacing:1px; position:relative; z-index:1;
+    text-shadow:0 0 14px rgba(99,102,241,.9), 0 0 40px rgba(99,102,241,.55);
+    animation: pulse 2.4s ease-in-out infinite;
   }
-  h1 { font-size:21px; font-weight:700; color:#FFFFFF; }
-  .sub { font-size:13.5px; color:#94A3B8; min-height:18px; transition:opacity .3s; }
+  @keyframes pulse {
+    0%,100% { text-shadow:0 0 14px rgba(99,102,241,.9), 0 0 40px rgba(99,102,241,.55) }
+    50%     { text-shadow:0 0 20px rgba(99,102,241,1), 0 0 60px rgba(99,102,241,.8) }
+  }
+
+  .status {
+    margin-top:32px; font-size:11.5px; font-weight:600; letter-spacing:2px;
+    color:#94A3B8; text-transform:uppercase; position:relative; z-index:1;
+    min-height:16px; text-align:center;
+  }
+
   .bar {
-    width:100%; height:5px; border-radius:99px; background:rgba(148,163,184,.15);
-    overflow:hidden; margin-top:6px;
+    margin-top:14px; width:200px; height:4px; border-radius:99px;
+    background:rgba(148,163,184,.14); overflow:hidden; position:relative; z-index:1;
+    opacity:0; transition:opacity .3s;
   }
+  .bar.on { opacity:1 }
   .fill {
     height:100%; width:0%; border-radius:99px;
     background:linear-gradient(90deg,#6366F1,#8b5cf6);
-    box-shadow:0 0 10px rgba(99,102,241,.9), 0 0 22px rgba(99,102,241,.55);
-    transition:width .4s ease-out;
+    box-shadow:0 0 10px rgba(99,102,241,.8);
+    transition:width .35s ease-out;
   }
-  .foot {
-    position:absolute; bottom:18px; left:0; right:0;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-    font-size:11px; color:#94A3B8;
-  }
-  .spin {
-    width:12px; height:12px; border-radius:50%; flex:none;
-    border:2px solid rgba(148,163,184,.25); border-top-color:#6366F1;
-    animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform:rotate(360deg) } }
 </style>
 </head>
 <body>
-  <div class="left"><div class="logo">ponoi</div></div>
-  <div class="right">
-    <h1 id="title">Установка ponoi...</h1>
-    <div class="sub" id="sub">Подготовка файлов...</div>
-    <div class="bar"><div class="fill" id="fill"></div></div>
-  </div>
-  <div class="foot"><span class="spin"></span> Это займет всего несколько секунд</div>
+  <div class="logo">ponoi</div>
+  <div class="status" id="status">Запуск</div>
+  <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
 <script>
-  // Подзаголовки меняются по мере прогресса; полоса плавно ползёт сама,
-  // а main-процесс может прислать реальный прогресс (скачивание обновления).
+  // Честный сплэш: никакого выдуманного прогресса и слова «Установка».
+  // Полоса появляется только когда реально качается обновление.
+  const status = document.getElementById('status')
+  const bar = document.getElementById('bar')
   const fill = document.getElementById('fill')
-  const sub = document.getElementById('sub')
-  const title = document.getElementById('title')
-  const PHRASES = ['Подготовка файлов...', 'Создаем уютное пространство...', 'Почти готово...']
-  let p = 0, external = false
-  function setP(v) { p = Math.max(p, Math.min(100, v)); fill.style.width = p + '%'
-    sub.textContent = PHRASES[p < 45 ? 0 : p < 85 ? 1 : 2] }
-  const tick = setInterval(() => { if (!external && p < 92) setP(p + (p < 60 ? 4 : 1.5)) }, 180)
+  let updating = false, dots = 0, label = 'Запуск'
+  setTimeout(() => { if (!updating) label = 'Ещё секунду' }, 12000)
+  const dotTick = setInterval(() => {
+    if (updating) return
+    dots = (dots + 1) % 4
+    status.textContent = label + '.'.repeat(dots)
+  }, 450)
   window.ponoiSplash?.onProgress((data) => {
-    // Реальный прогресс: качается обновление — показываем проценты.
-    external = true
-    title.textContent = 'Обновление ponoi...'
-    setP(data.percent)
-    sub.textContent = 'Скачиваем обновление... ' + Math.round(data.percent) + '%'
+    updating = true
+    bar.classList.add('on')
+    const p = Math.round(data.percent || 0)
+    fill.style.width = p + '%'
+    status.textContent = 'Скачиваем обновление ' + p + '%'
   })
   window.ponoiSplash?.onDone(() => {
-    clearInterval(tick); external = false; setP(100)
-    sub.textContent = 'Почти готово...'
-    setTimeout(() => document.body.classList.add('bye'), 250)
+    clearInterval(dotTick); updating = true
+    bar.classList.remove('on')
+    status.textContent = 'Готово'
+    setTimeout(() => document.body.classList.add('bye'), 150)
   })
 </script>
 </body>
