@@ -2232,7 +2232,7 @@ body.no-anim .member-typing i { animation:none; }
 .mag-ico { display:inline-flex; color:var(--mut); flex:none; }
 .game-inline { display:inline-flex; align-items:center; gap:5px; vertical-align:middle; max-width:100%; }
 .game-inline .mag-cover { width:16px; height:16px; }
-\n
+
 /* ===== v1.29.0: экран звонка 1-в-1 как в Discord ===== */
 .c2-wrap { position:relative; flex:none; display:flex; flex-direction:column; background:#000; height:290px;
   border-bottom:1px solid rgba(255,255,255,.06); }
