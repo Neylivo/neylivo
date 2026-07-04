@@ -3,14 +3,15 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
-import { Status, STATUS_LABEL, usePresence, type Activity } from '../lib/presence'
+import { Status, STATUS_LABEL, STATUS_COLOR, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, Elapsed } from './ActivityLabel'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
-import { sendRequest, openThread } from '../lib/friends'
+import { sendRequest, openThread, mutualFriends } from '../lib/friends'
 import { toastOk, toastErr } from '../lib/toast'
 import { Settings } from './Settings'
+import { FullProfile } from './FullProfile'
 import { Icon } from './icons'
 import type { Profile } from '../types'
 
@@ -46,21 +47,25 @@ export interface MiniProfileData {
   roleName?: string
   roleColor?: string
   activity?: Activity | null
+  // Якорь позиционирования: 'member-list' — прилипает слева от списка участников,
+  // 'me' — вырастает снизу над панелью пользователя; иначе свободно по x/y.
+  anchor?: 'member-list' | 'me'
   x: number
   y: number
 }
 
-export function MiniProfile({ data, onClose, onMessage }:
-  { data: MiniProfileData; onClose: () => void; onMessage?: () => void }) {
+export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar }:
+  { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void }) {
   const { user } = useAuth()
   const isMe = user?.id === data.userId
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
-  const { gameOf, myActivity, setMyActivity } = usePresence()
+  const { gameOf, myActivity, setMyActivity, myStatus, setMyStatus } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
   const [edit, setEdit] = useState(false)
+  const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
   const [meName, setMeName] = useState('')
   const [mutuals, setMutuals] = useState<{ id: string; username: string; avatar_url: string | null }[]>([])
@@ -88,23 +93,11 @@ export function MiniProfile({ data, onClose, onMessage }:
     supabase.from('profiles').select('username').eq('id', user.id).maybeSingle()
       .then(({ data: d }) => setMeName(d?.username ?? ''))
   }, [user?.id])
-  // Общие друзья: пересечение принятых заявок у меня и у него.
+  // Общие друзья (см. lib/friends.mutualFriends).
   useEffect(() => {
     if (!user || isMe) { setMutuals([]); return }
     let ok = true
-    ;(async () => {
-      const q = (uid: string) => supabase.from('friend_requests').select('from_user, to_user')
-        .eq('status', 'accepted').or('from_user.eq.' + uid + ',to_user.eq.' + uid)
-      const [a, b] = await Promise.all([q(user.id), q(data.userId)])
-      const others = (rows: any[] | null, uid: string) =>
-        new Set((rows ?? []).map(r => r.from_user === uid ? r.to_user : r.from_user))
-      const mine = others(a.data, user.id)
-      const theirs = others(b.data, data.userId)
-      const common = [...mine].filter(x => theirs.has(x) && x !== user.id && x !== data.userId)
-      if (!common.length) { if (ok) setMutuals([]); return }
-      const { data: profs } = await supabase.from('profiles').select('id, username, avatar_url').in('id', common.slice(0, 12))
-      if (ok) setMutuals((profs ?? []) as any)
-    })()
+    mutualFriends(user.id, data.userId).then(list => { if (ok) setMutuals(list as any) })
     return () => { ok = false }
   }, [user?.id, data.userId, isMe])
 
@@ -136,10 +129,19 @@ export function MiniProfile({ data, onClose, onMessage }:
     setMyActivity(v ? { text: v, since: Date.now() } : null)
   }
 
+  // Шаг 2 цепочки: клик по аватарке/нику в мини-профиле открывает фулл-профиль по центру.
+  if (full) return <FullProfile userId={data.userId} name={data.name} avatarUrl={av} status={data.status} onClose={onClose} />
+
+  const posStyle: React.CSSProperties = data.anchor === 'me'
+    ? { left: 8, bottom: 68 }
+    : data.anchor === 'member-list'
+    ? { right: 252, top: Math.max(12, Math.min(data.y - 60, window.innerHeight - 540)) }
+    : { left: data.x, top: data.y }
+
   return (
     <>
       <div className="mini-overlay" onClick={onClose} />
-      <div className="mini mini2" style={{ left: data.x, top: data.y }} onClick={e => e.stopPropagation()}>
+      <div className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
         <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
         {!isMe && <div className="mini-topbtns">
           <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>
@@ -151,16 +153,16 @@ export function MiniProfile({ data, onClose, onMessage }:
         </div>}
         <ProfilePet p={pp} scale={0.3} />
         <div className="mini-avrow">
-          <div className="mini-av">
+          <div className="mini-av" onClick={() => setFull(true)} title="Открыть полный профиль">
             <Avatar name={data.name} url={av} size={80} />
             <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
           </div>
-          {isMe && <button className="mini-addstatus" title="Установить свой статус" onClick={editStatus}>
+          {isMe && !meControls && <button className="mini-addstatus" title="Установить свой статус" onClick={editStatus}>
             {myActivity?.text ? <span className="mini-addstatus-tx">{myActivity.text}</span> : <Icon name="plus" size={15} />}
           </button>}
         </div>
         <div className="mini-body">
-          <div className="mini-name">{data.name}</div>
+          <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
           {game && <div className="mini-game">
@@ -182,6 +184,22 @@ export function MiniProfile({ data, onClose, onMessage }:
             <span className="mini-mutual-avs">{mutuals.slice(0, 3).map(m => <span key={m.id} className="mini-mutual-av"><Avatar name={m.username} url={m.avatar_url} size={20} /></span>)}</span>
             {mutualLabel(mutuals.length)}
           </div>}
+          {isMe && meControls && <>
+            <div className="mini-divider" />
+            <div className="mini-statuses">
+              {(['online', 'idle', 'dnd', 'offline'] as Status[]).map(s => (
+                <div key={s} className={'status-opt' + (myStatus === s ? ' on' : '')} onClick={() => setMyStatus(s)}>
+                  <span className="status-dot" style={{ background: STATUS_COLOR[s] }} />
+                  {s === 'offline' ? 'Невидимка' : STATUS_LABEL[s]}
+                </div>
+              ))}
+            </div>
+            <button className="mini-ctl" onClick={editStatus}><Icon name="smile" size={15} /> {myActivity?.text ? 'Изменить пользовательский статус' : 'Установить пользовательский статус'}</button>
+            <div className="mini-divider" />
+            {onPickAvatar && <button className="mini-ctl" onClick={onPickAvatar}><Icon name="camera" size={15} /> Сменить аватар</button>}
+            <button className="mini-ctl" onClick={() => setEdit(true)}><Icon name="gear" size={15} /> Настройки пользователя</button>
+            <button className="mini-ctl danger" onClick={() => supabase.auth.signOut()}><Icon name="signout" size={15} /> Выйти из аккаунта</button>
+          </>}
           {isMe
             ? <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>
             : <div className="mini-msgbox">

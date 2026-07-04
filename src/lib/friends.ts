@@ -31,6 +31,21 @@ export async function findByUsername(name: string): Promise<Profile | null> {
   return list.find(p => p.username === term) ?? list[0] ?? null
 }
 
+// Общие друзья двух пользователей: пересечение принятых friend_requests.
+export async function mutualFriends(aId: string, bId: string): Promise<Profile[]> {
+  const q = (uid: string) => supabase.from('friend_requests').select('from_user, to_user')
+    .eq('status', 'accepted').or('from_user.eq.' + uid + ',to_user.eq.' + uid)
+  const [a, b] = await Promise.all([q(aId), q(bId)])
+  const others = (rows: any[] | null, uid: string) =>
+    new Set((rows ?? []).map(r => r.from_user === uid ? r.to_user : r.from_user))
+  const mine = others(a.data as any[], aId)
+  const theirs = others(b.data as any[], bId)
+  const common = [...mine].filter(x => theirs.has(x) && x !== aId && x !== bId)
+  if (common.length === 0) return []
+  const { data } = await supabase.from('profiles').select('*').in('id', common.slice(0, 30))
+  return (data ?? []) as Profile[]
+}
+
 export async function sendRequest(fromId: string, fromName: string, to: Profile) {
   return supabase.from('friend_requests').insert({
     from_user: fromId, to_user: to.id, from_name: fromName, to_name: to.username, status: 'pending',

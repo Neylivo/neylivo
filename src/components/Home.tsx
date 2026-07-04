@@ -130,6 +130,14 @@ export function Home() {
     return () => window.removeEventListener('ponoi-folders', h)
   }, [])
 
+  // Переход на сервер из фулл-профиля (вкладка «Общие сервера»).
+  useEffect(() => {
+    const h = (e: any) => { const s = servers.find(x => x.id === e.detail); if (s) { setView({ kind: 'server', server: s }); clearUnread(s.id) } }
+    window.addEventListener('ponoi-open-server', h)
+    return () => window.removeEventListener('ponoi-open-server', h)
+    // eslint-disable-next-line
+  }, [servers])
+
   async function refresh(selectId?: string) {
     const list = await myServers()
     setServers(list)

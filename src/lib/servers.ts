@@ -56,6 +56,19 @@ export async function listMembers(serverId: string) {
   return members.map(m => ({ ...m, avatar_url: byId[m.user_id] ?? null }))
 }
 
+// Общие сервера двух пользователей (вкладка «Общие сервера» в фулл-профиле).
+export async function mutualServers(aId: string, bId: string): Promise<Server[]> {
+  const [a, b] = await Promise.all([
+    supabase.from('server_members').select('server_id').eq('user_id', aId),
+    supabase.from('server_members').select('server_id').eq('user_id', bId),
+  ])
+  const setB = new Set(((b.data ?? []) as any[]).map(r => r.server_id))
+  const ids = [...new Set(((a.data ?? []) as any[]).map(r => r.server_id))].filter(id => setB.has(id))
+  if (ids.length === 0) return []
+  const { data } = await supabase.from('servers').select('*').in('id', ids)
+  return (data ?? []) as Server[]
+}
+
 export async function findServers(q: string): Promise<Server[]> {
   const term = q.trim()
   if (!term) return []

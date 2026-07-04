@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { resolveCover } from './gameCovers'
+import { startSession, endSession } from './activity'
 import { useAuth } from '../auth/AuthProvider'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
@@ -48,6 +49,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   const lisRef = useRef<Listening | null>(null)
   const [myGame, setMyGame] = useState<Game | null>(null)
   const gameRef = useRef<Game | null>(null)
+  const sessRef = useRef<string | null>(null)   // id открытой игровой сессии в activity_sessions
   const statRef = useRef<Status>(myStatus)
   const propRef = useRef({ username, avatarUrl })
 
@@ -92,6 +94,9 @@ export function PresenceProvider({ username, avatarUrl, children }:
     if (!d?.onGame) return
     d.onGame(async (g: Game | null) => {
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) return
+      // История активностей (миграция 14): закрываем прошлую сессию, начинаем новую.
+      if (sessRef.current) { endSession(sessRef.current); sessRef.current = null }
+      if (g && user) startSession(user.id, g.name, g.since).then(id => { sessRef.current = id })
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
@@ -102,6 +107,8 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const cover = await resolveCover(g.name)   // кэш в базе -> фоновый поиск Steam -> кэш
       if (cover && gameRef.current?.name === g.name) pub({ ...g, cover })   // hot swap на обложку
     })
+    // Приложение закрывают во время игры — честно фиксируем конец сессии.
+    window.addEventListener('beforeunload', () => { if (sessRef.current) endSession(sessRef.current) })
     // eslint-disable-next-line
   }, [])
 

@@ -1,3 +1,4 @@
+
 import { toastErr } from '../lib/toast'
 import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -7,6 +8,7 @@ import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL, Status } from '../lib/presence'
 import { ActivityLabel } from './ActivityLabel'
 import { Settings } from './Settings'
+import { MiniProfile } from './MiniProfile'
 import { Icon } from './icons'
 
 export function MeBar({ username, avatarUrl, onAvatar }: { username: string; avatarUrl?: string | null; onAvatar?: (url: string) => void }) {
@@ -31,10 +33,11 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const { myStatus, setMyStatus, myActivity, setMyActivity, activityOf } = usePresence()
   const [menu, setMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [miniOpen, setMiniOpen] = useState(false)   // свой мини-профиль над панелью (как в Discord)
   const STATUSES: Status[] = ['online', 'idle', 'dnd', 'offline']
   return (
     <div className="me">
-      <span onClick={() => fileRef.current?.click()} title="Сменить аватар" style={{ cursor: 'pointer' }}>
+      <span onClick={() => setMiniOpen(v => !v)} title="Мой профиль" style={{ cursor: 'pointer' }}>
         <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} />
       </span>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
@@ -67,6 +70,10 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
       <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
+      {miniOpen && user && <MiniProfile
+        data={{ userId: user.id, name: username, avatarUrl, status: myStatus, anchor: 'me', x: 8, y: 0 }}
+        meControls onPickAvatar={() => fileRef.current?.click()}
+        onClose={() => setMiniOpen(false)} />}
     </div>
   )
 }

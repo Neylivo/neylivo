@@ -400,7 +400,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
               role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
-              x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 220) })}>
+              anchor: 'member-list',
+              x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
               <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
                 {act && <small className="member-act"><ActivityLabel activity={act} /></small>}
