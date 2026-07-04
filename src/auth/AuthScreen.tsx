@@ -20,11 +20,25 @@ export function AuthScreen() {
     try {
       if (mode === 'register') {
         const email = login.trim()
+        const finalName = username.trim() || email.split('@')[0]
+        // v1.38.0: ник должен быть свободен — если занят, подсказываем вариант
+        const { data: taken } = await supabase.rpc('username_taken', { uname: finalName })
+        if (taken) {
+          let alt: string | null = null
+          for (let i = 0; i < 3 && !alt; i++) {
+            const cand = `${finalName}${Math.floor(Math.random() * 900) + 100}`
+            const { data: t2 } = await supabase.rpc('username_taken', { uname: cand })
+            if (!t2) alt = cand
+          }
+          throw new Error(`Юзернейм «${finalName}» уже занят${alt ? `. Свободен, например: «${alt}»` : ''}`)
+        }
+        // v1.38.0: 1 почта = 1 аккаунт
+        const { data: emTaken } = await supabase.rpc('email_taken', { em: email })
+        if (emTaken) throw new Error('На эту почту уже зарегистрирован аккаунт — войди в него')
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        // Юзернейм — обязателен и сразу запоминается локально: даже если запись
-        // профиля не успеет пройти (подтверждение почты), «Вы» нигде не появится.
-        const finalName = username.trim() || email.split('@')[0]
+        // Юзернейм сразу запоминается локально: даже если запись профиля не успеет
+        // пройти (подтверждение почты), «Вы» нигде не появится.
         localStorage.setItem('ponoi_username', finalName)
         if (data.user) {
           await supabase.from('profiles').upsert({ id: data.user.id, username: finalName })

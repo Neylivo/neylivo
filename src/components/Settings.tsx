@@ -114,6 +114,7 @@ export function Settings({ username, avatarUrl, onClose }:
   const { settings, set, setCustom, accents, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
   const [name, setName] = useState(username)
+  const [nameChangedAt, setNameChangedAt] = useState<string | null>(null) // v1.38.0: смена ника раз в 2 недели
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
@@ -124,6 +125,8 @@ export function Settings({ username, avatarUrl, onClose }:
     if (!user) return
     let ok = true
     fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about) } })
+    supabase.from('profiles').select('username_changed_at').eq('id', user.id).single()
+      .then(({ data }) => { if (ok && data) setNameChangedAt(data.username_changed_at) })
     return () => { ok = false }
   }, [user])
 
@@ -148,7 +151,27 @@ export function Settings({ username, avatarUrl, onClose }:
   }, [onClose])
 
   async function saveAccount() {
-    if (name.trim() && name !== username) await supabase.from('profiles').update({ username: name.trim() }).eq('id', user!.id)
+    const newName = name.trim()
+    if (newName && newName !== username) {
+      // v1.38.0: ник уникален и меняется не чаще раза в 2 недели (жёстко проверяется и в базе)
+      const lockUntil = nameChangedAt ? new Date(nameChangedAt).getTime() + 14 * 86400000 : 0
+      if (lockUntil > Date.now()) {
+        const days = Math.max(1, Math.ceil((lockUntil - Date.now()) / 86400000))
+        toastErr(`Юзернейм можно менять раз в 2 недели. Осталось дней: ${days}`)
+        return
+      }
+      const { data: taken } = await supabase.rpc('username_taken', { uname: newName })
+      if (taken) { toastErr('Этот юзернейм уже занят'); return }
+      const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', user!.id)
+      if (error) {
+        const m = String(error.message || '')
+        toastErr(m.includes('username_change_too_soon') ? 'Юзернейм можно менять раз в 2 недели'
+          : (m.includes('duplicate') || m.includes('unique')) ? 'Этот юзернейм уже занят' : m)
+        return
+      }
+      localStorage.setItem('ponoi_username', newName)
+      setNameChangedAt(new Date().toISOString())
+    }
     await patchProf({ about })
     setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
@@ -240,6 +263,7 @@ export function Settings({ username, avatarUrl, onClose }:
 
             <label className="pqs-lbl">Имя пользователя</label>
             <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} />
+            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Менять юзернейм можно раз в 2 недели. Ник должен быть свободен.</div>
             <label className="pqs-lbl">О себе</label>
             <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
             <button className="pqs-save" onClick={saveAccount}>{saved ? <>Сохранено <Icon name="check" size={14} /></> : 'Сохранить'}</button>
