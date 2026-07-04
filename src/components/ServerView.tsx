@@ -698,7 +698,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               anchor: 'member-list',
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
-              <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
+              <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
@@ -721,7 +721,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <div className="dm-sec-t">{r.name} — {list.length}</div>
               {list.map(row)}
             </div>)}
-            {rest.length > 0 && <div className="dm-sec-t">В сети — {rest.length}</div>}
+            {rest.length > 0 && <div className="dm-sec-t">Участник — {rest.length}</div>}
             {rest.map(row)}
             {off.length > 0 && <div className="dm-sec-t">Не в сети — {off.length}</div>}
             {off.map(row)}

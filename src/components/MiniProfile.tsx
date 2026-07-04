@@ -170,7 +170,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">
             <span className="mini-uname">{data.name.toLowerCase()}</span>
-            {data.roleName && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor }} />{data.roleName}</span>}
+            {(data.roleName || data.role) && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor ?? '#99aab5' }} />{data.roleName ?? 'Участник'}</span>}
           </div>
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}

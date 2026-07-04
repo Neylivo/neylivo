@@ -408,7 +408,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     <td>{m.joined_at ? fmtD(m.joined_at) : '—'}</td>
                     <td>—</td>
                     <td>{m.role === 'owner' ? 'Создатель сервера' : 'Приглашение'}</td>
-                    <td>{rr ? <span className="sset-rolechip"><span className="role-dot" style={{ background: rr.color }} />{rr.name}</span> : '—'}</td>
+                    <td><span className="sset-rolechip"><span className="role-dot" style={{ background: rr ? rr.color : '#99aab5' }} />{rr ? rr.name : 'Участник'}</span></td>
                     <td>—</td>
                   </tr>
                 )
