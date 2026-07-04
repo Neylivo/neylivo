@@ -25,3 +25,7 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
+/* Минимальный fetch-обработчик (v1.34.0) — нужен, чтобы браузер считал
+   приложение устанавливаемым (PWA). Запросы идут в сеть как обычно. */
+self.addEventListener('fetch', () => {})

@@ -10,6 +10,7 @@ import { ActivityLabel } from './ActivityLabel'
 import { Settings } from './Settings'
 import { MiniProfile } from './MiniProfile'
 import { Icon } from './icons'
+import { IS_MOBILE } from '../lib/mobile'
 
 // Нижняя панель пользователя. Статус и активность вручную больше не ставятся:
 // статус автоматический (в приложении — «В сети»), активность — только авто (игра/музыка).
@@ -41,7 +42,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   return (
     <div className="me">
       <span onClick={() => setMiniOpen(v => !v)} title="Мой профиль" style={{ cursor: 'pointer' }}>
-        <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} />
+        <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} mobile={IS_MOBILE} />
       </span>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
       <span className="me-nm" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer' }} title="Мой профиль">

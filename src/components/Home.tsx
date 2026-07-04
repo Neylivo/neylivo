@@ -22,6 +22,7 @@ import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { IncomingCall } from './IncomingCall'
+import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -53,6 +54,8 @@ export function Home() {
       window.removeEventListener('ponoi-open-server-notif', openNotif as any)
     }
   }, [])
+  // Мобильная версия (v1.34.0): при старте открываем шторку навигации, как в Discord.
+  useEffect(() => { if (IS_MOBILE) openMobNav() }, [])
   const [, setNotifVer] = useState(0) // ре-рендер при смене режима уведомлений
 
   // Непрочитанное на серверах: глобальная подписка на INSERT в messages.
@@ -250,6 +253,7 @@ export function Home() {
             title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
         </div>
       </nav>
+      <div className="mob-backdrop" onClick={closeMobNav} />
       {(() => { const bv = view.kind === 'music' ? lastView.current : view
         return <>
           {bv.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}

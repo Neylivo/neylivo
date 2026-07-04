@@ -27,6 +27,7 @@ import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, createRole, deleteRole, assignRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
@@ -79,14 +80,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [voiceUsers, setVoiceUsers] = useState<Record<string, { userId: string; username: string; avatar?: string | null }[]>>({})
   const voicePresRef = useRef<any>(null)
   const isOwner = server.owner === user?.id
-  const { statusOf, activityOf, gameOf } = usePresence()
+  const { statusOf, activityOf, gameOf, deviceOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
-  const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
+  const [showMembers, setShowMembers] = useState(() => IS_MOBILE ? false : localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [voiceCatOpen, setVoiceCatOpen] = useState(() => localStorage.getItem('ponoi_cat_voice_open') !== '0')
   const [srvMenu, setSrvMenu] = useState(false)
@@ -196,7 +197,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
 
   async function selectChannel(c: Channel) {
-    setCurChannel(c)
+    setCurChannel(c); closeMobNav()
     // Сброс случайного выделения текста при переключении канала.
     window.getSelection()?.removeAllRanges()
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
@@ -620,6 +621,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       <main className="chat">
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
+          <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
           <span className="ph2-hash">#</span>
           <span className="ph2-name">{curChannel?.name ?? '—'}</span>
           <div className="ph2-btns">
@@ -697,7 +699,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
               anchor: 'member-list',
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
-              <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
+              <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
               <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />

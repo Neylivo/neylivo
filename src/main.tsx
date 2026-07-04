@@ -8,6 +8,12 @@ import { initChatBg } from './lib/chatBg'
 
 initChatBg()
 
+// PWA (v1.34.0): регистрируем service worker сразу — нужен для установки на телефон.
+// Под Electron file:// сервис-воркеры недоступны, поэтому тихо пропускаем.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {})
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <SettingsProvider>

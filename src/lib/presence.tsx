@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { resolveCover } from './gameCovers'
 import { startSession, endSession } from './activity'
 import { useAuth } from '../auth/AuthProvider'
+import { DEVICE } from './mobile'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
 export const STATUS_LABEL: Record<Status, string> = {
@@ -21,7 +22,7 @@ export interface Listening { title: string; author?: string; source?: string; po
 // Авто-активность «Играет в …»: десктоп присылает только старт/стоп ({ name, since }),
 // тикающий таймер каждый клиент досчитывает сам из разницы часов.
 export interface Game { name: string; since: number; cover?: string | null }
-interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null }
+interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; device?: 'mobile' | 'desktop' }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
   myStatus: Status
@@ -29,8 +30,9 @@ interface PresenceCtx {
   activityOf: (userId: string) => Activity | null
   setMyListening: (l: Listening | null) => void
   gameOf: (userId: string) => Game | null
+  deviceOf: (userId: string) => 'mobile' | 'desktop'
 }
-const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null })
+const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, deviceOf: () => 'desktop' })
 
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
@@ -55,12 +57,12 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const map: Record<string, PresenceState> = {}
       for (const key of Object.keys(state)) {
         const meta = state[key][0]
-        map[key] = { username: meta.username, status: meta.status, avatar_url: meta.avatar_url, activity: meta.activity ?? null, listening: meta.listening ?? null, game: meta.game ?? null }
+        map[key] = { username: meta.username, status: meta.status, avatar_url: meta.avatar_url, activity: meta.activity ?? null, listening: meta.listening ?? null, game: meta.game ?? null, device: meta.device ?? 'desktop' }
       }
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current })
+      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, device: DEVICE })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -103,7 +105,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val })
+        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, device: DEVICE })
       }
       if (!g) { pub(null); return }
       pub({ ...g, cover: null })                 // мгновенно: у друзей серый геймпад-заглушка
@@ -119,7 +121,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     if (!l && !lisRef.current) return   // нечего сбрасывать — не дёргаем канал
     lisRef.current = l
     setMyListeningState(l)
-    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current })
+    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current, device: DEVICE })
   }
 
   // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
@@ -146,7 +148,13 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.status ?? 'offline'
   }
 
-  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf }}>{children}</Ctx.Provider>
+  // Тип устройства (v1.34.0): сидит с телефона — рядом с аватаркой значок телефона, как в Discord.
+  function deviceOf(userId: string): 'mobile' | 'desktop' {
+    if (userId === user?.id) return DEVICE
+    return online[userId]?.device ?? 'desktop'
+  }
+
+  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf, deviceOf }}>{children}</Ctx.Provider>
 }
 
 export const usePresence = () => useContext(Ctx)
