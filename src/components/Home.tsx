@@ -6,7 +6,7 @@ import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
-import { myServers, createServer as createSrv, joinByCode, findServers, deleteServer, updateServer } from '../lib/servers'
+import { myServers, createServer as createSrv, joinByCode, deleteServer, updateServer } from '../lib/servers'
 import { CreateServerModal, FindServerModal, JoinServerModal, ServerCtxMenu, ServerNotifModal } from './ServerModals'
 import { ServerSettings } from './ServerSettings'
 import { PresenceProvider } from '../lib/presence'
@@ -322,7 +322,7 @@ export function Home() {
         setShowJoin(false)
         if (res.serverId) refresh(res.serverId)
       }} />}
-    {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
+    {showFind && <FindServerModal uid={user?.id ?? ''} username={username} onClose={() => setShowFind(false)} onJoined={id => { setShowFind(false); refresh(id) }} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}

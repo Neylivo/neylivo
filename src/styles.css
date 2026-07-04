@@ -2698,3 +2698,52 @@ body.no-anim .member-typing i { animation:none; }
 .srv-mchk { width:20px; height:20px; border:1px solid #80848e; border-radius:6px; }
 .srv-mchk.on { background:var(--c-accent); border-color:var(--c-accent); color:#fff; }
 .srv-msep { margin:4px; background:rgba(255,255,255,.06); }
+/* ===== v1.48.0: «Путешествие по серверам» + чистый тайтлбар ===== */
+.modal.fsm { width:640px; max-width:calc(100vw - 32px); padding:0; overflow:hidden; }
+.fsm-hero { position:relative; padding:28px 24px 40px; text-align:center; color:#fff;
+  background:radial-gradient(120% 140% at 18% 0%, rgba(139,92,246,.55), transparent 55%),
+             radial-gradient(120% 140% at 85% 8%, rgba(35,165,90,.25), transparent 50%),
+             linear-gradient(160deg,#4348c9,#5865f2); }
+.fsm-hero .modal-x { color:#fff; opacity:.85; }
+.fsm-hero .modal-x:hover { opacity:1; }
+.fsm-hero-ic { width:48px; height:48px; margin:0 auto 10px; border-radius:14px; background:rgba(255,255,255,.16);
+  display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.25); }
+.fsm-hero-t { font-size:20px; font-weight:800; }
+.fsm-hero-sub { margin:6px auto 0; font-size:13px; color:rgba(255,255,255,.82); max-width:420px; line-height:1.45; }
+.fsm-search { position:relative; margin:-24px 24px 0; z-index:2; }
+.fsm-search input { width:100%; height:48px; padding:0 44px; border-radius:10px; background:#1e1f22;
+  border:1px solid rgba(255,255,255,.08); color:#dbdee1; font-size:15px; outline:none;
+  box-shadow:0 8px 24px rgba(0,0,0,.35); transition:border-color .15s, box-shadow .15s; }
+.fsm-search input:focus { border-color:#5865f2; box-shadow:0 8px 24px rgba(0,0,0,.35), 0 0 0 3px rgba(88,101,242,.25); }
+.fsm-search input::placeholder { color:#6d7178; }
+.fsm-si { position:absolute; left:14px; top:50%; translate:0 -50%; color:#80848e; display:flex; pointer-events:none; }
+.fsm-clear { position:absolute; right:10px; top:50%; translate:0 -50%; width:26px; height:26px; border:none; border-radius:50%;
+  background:rgba(255,255,255,.06); color:#b5bac1; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.fsm-clear:hover { background:rgba(255,255,255,.12); color:#fff; }
+.fsm-body { padding:18px 16px 16px; max-height:380px; overflow:auto; }
+.fsm-sec { font-size:11.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#80848e; padding:0 8px 8px; }
+.fsm-card { display:flex; align-items:center; gap:12px; padding:10px; border-radius:8px; cursor:pointer; transition:background .12s; }
+.fsm-card:hover { background:rgba(255,255,255,.04); }
+.fsm-av { width:44px; height:44px; border-radius:12px; flex:none; color:#fff; font-weight:800; font-size:15px;
+  background-color:#5865f2; background-image:linear-gradient(135deg,#5865f2,#7c3aed); background-size:cover; background-position:center;
+  display:flex; align-items:center; justify-content:center; }
+.fsm-tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.fsm-nm { font-weight:700; font-size:15px; color:#f2f3f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fsm-meta { font-size:12.5px; color:#949ba4; display:flex; align-items:center; gap:6px; }
+.fsm-dot { width:8px; height:8px; border-radius:50%; background:#23a55a; flex:none; }
+.fsm-mine { display:inline-flex; align-items:center; gap:4px; color:#23a55a; font-weight:600; }
+.fsm-join { flex:none; height:32px; padding:0 14px; border:none; border-radius:6px; background:#5865f2; color:#fff;
+  font-weight:600; font-size:13.5px; cursor:pointer; transition:background .15s; }
+.fsm-join:hover { background:#4752c4; }
+.fsm-join:active { scale:.96; }
+.fsm-join:disabled { opacity:.6; cursor:default; }
+.fsm-join.open { background:transparent; border:1px solid rgba(255,255,255,.18); color:#dbdee1; }
+.fsm-join.open:hover { background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.3); }
+.fsm-skel { display:flex; flex-direction:column; gap:8px; padding:4px 8px; }
+.fsm-skel i { height:56px; border-radius:8px; background:linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.08), rgba(255,255,255,.03));
+  background-size:200% 100%; animation:fsm-shimmer 1.2s linear infinite; }
+@keyframes fsm-shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
+.fsm-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:34px 20px; color:#949ba4; text-align:center; }
+.fsm-empty-ic { width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,.05); display:flex; align-items:center; justify-content:center; color:#80848e; margin-bottom:6px; }
+.fsm-empty b { color:#dbdee1; font-size:15px; }
+.fsm-empty span { font-size:13px; max-width:380px; line-height:1.45; }

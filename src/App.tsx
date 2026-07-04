@@ -50,10 +50,7 @@ export default function App() {
   return <>
     <Toasts />
     <ConfirmHost />
-    {isDesktop && <header className="titlebar">
-      <span className="tb-logo">P</span>
-      <span className="tb-name">Ponoi</span>
-    </header>}
+    {isDesktop && <header className="titlebar" />}{/* v1.48.0: тайтлбар без логотипа и надписи — чистая полоса для перетаскивания, как просил владелец */}
     {isDesktop && <UpdateBanner />}
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}

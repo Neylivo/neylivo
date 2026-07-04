@@ -96,3 +96,43 @@ export async function deleteServer(id: string) {
   await supabase.from('server_invites').delete().eq('server_id', id)
   return supabase.from('servers').delete().eq('id', id)
 }
+
+// «Путешествие по серверам» (v1.48.0): подборка/поиск сообществ с числом
+// участников и пометкой серверов, где ты уже состоишь.
+export type DiscoverServer = Server & { members: number; joined: boolean }
+
+export async function discoverServers(q: string, meId: string): Promise<DiscoverServer[]> {
+  const term = q.trim()
+  let list: Server[] = []
+  if (!term) {
+    const { data } = await supabase.from('servers').select('*').limit(30)
+    list = (data ?? []) as Server[]
+  } else {
+    const byName = await supabase.from('servers').select('*').ilike('name', '%' + term + '%').limit(20)
+    list = (byName.data ?? []) as Server[]
+    if (list.length === 0 && /^[0-9a-f-]{6,}$/i.test(term)) {
+      const byId = await supabase.from('servers').select('*').eq('id', term).maybeSingle()
+      if (byId.data) list = [byId.data as Server]
+    }
+  }
+  if (list.length === 0) return []
+  const ids = list.map(s => s.id)
+  const { data: mem } = await supabase.from('server_members').select('server_id, user_id').in('server_id', ids)
+  const counts: Record<string, number> = {}
+  const mine = new Set<string>()
+  for (const r of ((mem ?? []) as any[])) {
+    counts[r.server_id] = (counts[r.server_id] ?? 0) + 1
+    if (r.user_id === meId) mine.add(r.server_id)
+  }
+  return list
+    .map(s => ({ ...s, members: counts[s.id] ?? 0, joined: mine.has(s.id) }))
+    .sort((a, b) => b.members - a.members)
+}
+
+// Вступление без кода приглашения — из «Путешествия по серверам».
+export async function joinServerDirect(serverId: string, meId: string, meName: string) {
+  const { error } = await supabase.from('server_members')
+    .insert({ server_id: serverId, user_id: meId, member_name: meName, role: 'member' })
+  if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }
+  return { serverId }
+}

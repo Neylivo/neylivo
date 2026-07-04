@@ -3,7 +3,7 @@ import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
-import { updateServer } from '../lib/servers'
+import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } from '../lib/servers'
 import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
 import { Icon } from './icons'
 
@@ -144,32 +144,97 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
   )
 }
 
-export function FindServerModal({ onClose, onFind }:
-  { onClose: () => void; onFind: (q: string) => Promise<Server[]> }) {
+// «Найти сервер» (v1.48.0): «Путешествие по серверам» в стиле Discord —
+// живой поиск, подборка сообществ, карточки с иконкой и числом участников,
+// вступление в один клик, «Открыть» для серверов, где уже состоишь.
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10, m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return one
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
+  return many
+}
+
+export function FindServerModal({ uid, username, onClose, onJoined }:
+  { uid: string; username: string; onClose: () => void; onJoined: (serverId: string) => void }) {
   const [q, setQ] = useState('')
-  const [results, setResults] = useState<Server[]>([])
-  const [searched, setSearched] = useState(false)
-  async function run(v: string) {
-    setQ(v)
-    if (!v.trim()) { setResults([]); setSearched(false); return }
-    setResults(await onFind(v.trim())); setSearched(true)
+  const [items, setItems] = useState<DiscoverServer[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const timer = useRef<number | null>(null)
+  const seq = useRef(0)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  // eslint-disable-next-line
+  useEffect(() => { load('') }, [])
+  async function load(term: string) {
+    const my = ++seq.current
+    setItems(null)
+    const res = await discoverServers(term, uid)
+    if (my === seq.current) setItems(res)
   }
+  function onInput(v: string) {
+    setQ(v)
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => load(v), 300)
+  }
+  async function join(s: DiscoverServer) {
+    if (s.joined) { onJoined(s.id); return }
+    if (busyId) return
+    setBusyId(s.id)
+    const res = await joinServerDirect(s.id, uid, username)
+    setBusyId(null)
+    if ((res as any).error) { toastErr(String((res as any).error.message ?? (res as any).error)); return }
+    onJoined(s.id)
+  }
+  const list = items ?? []
   return (
-    <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-      <div className="modal-title">Найти сервер</div>
-      <div className="modal-sub">По ID или названию</div>
-      <input className="modal-in" autoFocus placeholder="ID или название сервера" value={q} onChange={e => run(e.target.value)} />
-      <div className="modal-results">
-        {searched && results.length === 0 && <div className="modal-empty">Ничего не найдено</div>}
-        {results.map(s => (
-          <div key={s.id} className="modal-result">{s.name}</div>
-        ))}
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal fsm" onClick={e => e.stopPropagation()}>
+        <div className="fsm-hero">
+          <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+          <div className="fsm-hero-ic"><Icon name="compass" size={26} /></div>
+          <div className="fsm-hero-t">Путешествие по серверам</div>
+          <div className="fsm-hero-sub">Найдите сообщество по названию или ID сервера — или загляните в подборку ниже.</div>
+        </div>
+        <div className="fsm-search">
+          <span className="fsm-si"><Icon name="search" size={18} /></span>
+          <input autoFocus placeholder="Название или ID сервера" value={q} onChange={e => onInput(e.target.value)} />
+          {q && <button className="fsm-clear" title="Очистить" onClick={() => { setQ(''); load('') }}><Icon name="close" size={14} /></button>}
+        </div>
+        <div className="fsm-body">
+          {items === null && <div className="fsm-skel"><i /><i /><i /></div>}
+          {items !== null && <>
+            <div className="fsm-sec">{q.trim() ? 'Результаты поиска' + (list.length ? ' — ' + list.length : '') : 'Сообщества Ponoi'}</div>
+            {list.length === 0 && <div className="fsm-empty">
+              <div className="fsm-empty-ic"><Icon name="compass" size={34} /></div>
+              <b>Ничего не найдено</b>
+              <span>Проверьте название — или попросите у друга код приглашения: вступить можно и по нему.</span>
+            </div>}
+            {list.map(s => {
+              const initials = (s.name || 'S').slice(0, 2).toUpperCase()
+              return (
+                <div key={s.id} className="fsm-card" onClick={() => join(s)}>
+                  <span className="fsm-av" style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})` } : undefined}>{!s.avatar_url && initials}</span>
+                  <span className="fsm-tx">
+                    <span className="fsm-nm">{s.name}</span>
+                    <span className="fsm-meta">
+                      {s.members > 0 && <><span className="fsm-dot" />{s.members} {plural(s.members, 'участник', 'участника', 'участников')}</>}
+                      {s.joined && <span className="fsm-mine"><Icon name="check" size={12} /> Вы участник</span>}
+                    </span>
+                  </span>
+                  <button className={'fsm-join' + (s.joined ? ' open' : '')} disabled={busyId === s.id}
+                    onClick={e => { e.stopPropagation(); join(s) }}>
+                    {busyId === s.id ? '…' : s.joined ? 'Открыть' : 'Присоединиться'}
+                  </button>
+                </div>
+              )
+            })}
+          </>}
+        </div>
       </div>
-      <div className="modal-foot">
-        <button className="modal-ghost" onClick={onClose}>Закрыть</button>
-      </div>
-    </Overlay>
+    </div>
   )
 }
 
