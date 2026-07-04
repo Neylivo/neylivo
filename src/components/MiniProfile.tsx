@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { sendRequest, openThread, mutualFriends } from '../lib/friends'
 import { toastOk, toastErr } from '../lib/toast'
 import { Settings } from './Settings'
+import { ProfileCard } from './ProfileCard'
 import { FullProfile } from './FullProfile'
 import { Icon } from './icons'
 import type { Profile } from '../types'
@@ -65,7 +66,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
   const [sub, setSub] = useState<'acc' | null>(null)   // подменю своего попапа (учётные записи)
-  const [edit, setEdit] = useState(false)
+  const [edit, setEdit] = useState(false)          // карточка профиля («Редактировать профиль»)
+  const [accSettings, setAccSettings] = useState(false)  // настройки («Управление учётными записями»)
   const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
   const [meName, setMeName] = useState('')
@@ -195,7 +197,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 <span className="mini-acc-check"><Icon name="check" size={13} /></span>
               </div>
               <div className="mini-subsep" />
-              <button className="mini-subrow" onClick={() => { setSub(null); setEdit(true) }}>Управление учётными записями</button>
+              <button className="mini-subrow" onClick={() => { setSub(null); setAccSettings(true) }}>Управление учётными записями</button>
               {onPickAvatar && <button className="mini-subrow" onClick={() => { setSub(null); onPickAvatar() }}>Сменить аватар</button>}
               <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => supabase.auth.signOut()}>Выйти из аккаунта</button>
             </div>}
@@ -209,7 +211,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               </div>}
         </div>
       </div>
-      {edit && <Settings username={data.name} avatarUrl={av} onClose={() => setEdit(false)} />}
+      {edit && <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} onClose={() => setEdit(false)} />}
+      {accSettings && <Settings username={data.name} avatarUrl={av} onClose={() => setAccSettings(false)} />}
     </>
   )
 }

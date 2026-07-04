@@ -9,6 +9,7 @@ import { mutualFriends } from '../lib/friends'
 import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
+import { ProfileCard } from './ProfileCard'
 import type { Profile, Server } from '../types'
 
 function fmtMs(ms: number): string {
@@ -31,6 +32,7 @@ export function FullProfile({ userId, name, avatarUrl, status, onClose }:
   const [stats, setStats] = useState<GameStat[] | null>(null)
   const [srvs, setSrvs] = useState<Server[] | null>(null)
   const [frs, setFrs] = useState<Profile[] | null>(null)
+  const [editCard, setEditCard] = useState(false)
 
   useEffect(() => { let ok = true; fetchProfile(userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [userId])
   useEffect(() => { let ok = true; weekStats(userId).then(s => { if (ok) setStats(s) }); return () => { ok = false } }, [userId])
@@ -61,6 +63,7 @@ export function FullProfile({ userId, name, avatarUrl, status, onClose }:
             <div className="fp-name">{name}</div>
             <div className="fp-user">{name.toLowerCase()} <span className="mini-hash">#</span></div>
             <div className="fp-status"><StatusDot status={status} size={10} /> {STATUS_LABEL[status]}</div>
+            {isMe && <button className="fp-editbtn" onClick={() => setEditCard(true)}><Icon name="edit" size={14} /> Редактировать профиль</button>}
           </div>
         </div>
         {pp.about && <div className="fp-about">{pp.about}</div>}
@@ -107,6 +110,7 @@ export function FullProfile({ userId, name, avatarUrl, status, onClose }:
           )}
         </div>
       </div>
+      {editCard && <ProfileCard userId={userId} name={name} avatarUrl={avatarUrl} status={status} onClose={() => setEditCard(false)} />}
     </div>
   )
 }

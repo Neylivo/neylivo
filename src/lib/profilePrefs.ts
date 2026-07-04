@@ -14,11 +14,17 @@ export interface ProfilePrefs {
   petOn: boolean
   petSize: number          // px
   petPos: PetPos
+  pronouns: string         // местоимения (карточка профиля)
+  integrations: Integration[]
+  createdAt: string | null // profiles.created_at («В числе участников с»)
 }
+
+export interface Integration { label: string; url: string }
 
 export const DEFAULT_PROFILE: ProfilePrefs = {
   primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
+  pronouns: '', integrations: [], createdAt: null,
 }
 
 function fromRow(r: any): ProfilePrefs {
@@ -32,6 +38,9 @@ function fromRow(r: any): ProfilePrefs {
     petOn: !!r.pet_on,
     petSize: r.pet_size ?? DEFAULT_PROFILE.petSize,
     petPos: (r.pet_pos as PetPos) ?? DEFAULT_PROFILE.petPos,
+    pronouns: r.pronouns ?? '',
+    integrations: Array.isArray(r.integrations) ? r.integrations : [],
+    createdAt: r.created_at ?? null,
   }
 }
 
@@ -45,17 +54,22 @@ function toRow(p: Partial<ProfilePrefs>): any {
   if (p.petOn !== undefined) r.pet_on = p.petOn
   if (p.petSize !== undefined) r.pet_size = p.petSize
   if (p.petPos !== undefined) r.pet_pos = p.petPos
+  if (p.pronouns !== undefined) r.pronouns = p.pronouns
+  if (p.integrations !== undefined) r.integrations = p.integrations
   return r
 }
 
 // last-known values per user, so partial saves can merge without a re-fetch
 const cache: Record<string, ProfilePrefs> = {}
 
+const COLS_BASE = 'primary_color, accent_color, about, pet_url, pet_kind, pet_on, pet_size, pet_pos'
+const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
+
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
-  const { data } = await supabase.from('profiles')
-    .select('primary_color, accent_color, about, pet_url, pet_kind, pet_on, pet_size, pet_pos')
-    .eq('id', id).maybeSingle()
+  // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
+  let { data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle()
+  if (error) ({ data } = await supabase.from('profiles').select(COLS_BASE).eq('id', id).maybeSingle())
   const p = fromRow(data)
   cache[id] = p
   return p
