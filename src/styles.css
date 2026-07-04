@@ -2227,11 +2227,26 @@ body.no-anim .member-typing i { animation:none; }
 /* --- Свой тайтлбар вместо системной рамки Windows (десктоп) --- */
 #root { display:flex; flex-direction:column; }
 .app-viewport { flex:1; min-height:0; position:relative; }
-.titlebar { flex:none; height:32px; background:var(--c-dark,#1e1f22); display:flex; align-items:center; gap:8px;
-  padding:0 12px; -webkit-app-region:drag; user-select:none; }
-.titlebar .tb-logo { width:18px; height:18px; border-radius:5px; background:linear-gradient(135deg,#6366f1,#8b5cf6);
-  color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
-.titlebar .tb-name { font-size:12.5px; font-weight:700; color:#b5bac1; letter-spacing:.3px; }
+.titlebar { flex:none; height:32px; background:var(--c-dark,#1e1f22); display:flex; align-items:center;
+  padding:0; -webkit-app-region:drag; user-select:none; position:relative; z-index:60; }
+.titlebar .tb-nav { display:flex; align-items:center; gap:2px; padding-left:8px; -webkit-app-region:no-drag; }
+.titlebar .tb-arrow { width:28px; height:24px; display:flex; align-items:center; justify-content:center;
+  border:none; background:transparent; color:#b5bac1; border-radius:4px; cursor:pointer; }
+.titlebar .tb-arrow:hover { background:rgba(255,255,255,.06); color:#f2f3f5; }
+.titlebar .tb-arrow:disabled { opacity:.35; cursor:default; }
+.titlebar .tb-arrow:disabled:hover { background:transparent; color:#b5bac1; }
+.titlebar .tb-title { position:absolute; left:50%; top:0; height:32px; transform:translateX(-50%);
+  display:flex; align-items:center; font-size:12.5px; font-weight:600; color:#b5bac1; letter-spacing:.2px;
+  max-width:46%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; pointer-events:none; }
+.titlebar .tb-right { margin-left:auto; display:flex; align-items:center; height:100%; -webkit-app-region:no-drag; }
+.titlebar .tb-ico { width:32px; height:24px; margin-right:4px; display:flex; align-items:center; justify-content:center;
+  border:none; background:transparent; color:#b5bac1; border-radius:4px; cursor:pointer; }
+.titlebar .tb-ico:hover { background:rgba(255,255,255,.06); color:#f2f3f5; }
+.titlebar .tb-winctrls { display:flex; align-items:stretch; height:32px; }
+.titlebar .tb-win { width:46px; height:32px; display:flex; align-items:center; justify-content:center;
+  border:none; background:transparent; color:#b5bac1; cursor:pointer; }
+.titlebar .tb-win:hover { background:rgba(255,255,255,.08); color:#fff; }
+.titlebar .tb-win.tb-close:hover { background:#e81123; color:#fff; }
 
 /* --- Карточка-предпросмотр картинки до отправки (как в Discord) --- */
 .att-card { position:relative; margin:8px 16px 6px; padding:10px 10px 8px; width:fit-content; max-width:260px;

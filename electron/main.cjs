@@ -103,6 +103,11 @@ async function findCover(name) {
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
+// v1.56.0: управление окном из нашего тайтлбара (нативные кнопки убраны).
+ipcMain.on('win-minimize', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.minimize() } catch {} })
+ipcMain.on('win-toggle-max', (e) => { try { const w = BrowserWindow.fromWebContents(e.sender); if (w) w.isMaximized() ? w.unmaximize() : w.maximize() } catch {} })
+ipcMain.on('win-close', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.close() } catch {} })
+
 // Строгий детект (v1.49.1): спрашиваем у Windows ТОЛЬКО процессы с настоящим
 // главным окном (MainWindowHandle ≠ 0 и непустой заголовок) через PowerShell —
 // ровно так запущенную игру отличает от фоновой службы и Discord.
@@ -248,10 +253,10 @@ function createWindow() {
     backgroundColor: '#313338',
     autoHideMenuBar: true,
     title: 'Ponoi',
-    // v1.28.0: без системной рамки — тонкий тайтлбар рисует рендерер, а нативные
-    // кнопки «свернуть/развернуть/закрыть» даёт Windows-overlay в цвет темы.
+    // v1.56.0: без системной рамки и БЕЗ нативного Windows-overlay — тайтлбар и
+    // кнопки окна рисует рендерер (как в Discord). Overlay убрали: он рисовался
+    // поверх приложения и ломался, когда его что-то перекрывало.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#1e1f22', symbolColor: '#b5bac1', height: 32 },
     show: false,   // показываем только после splash
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -267,6 +272,13 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => closeSplashAndShow(win))
+
+  // v1.56.0: транслируем рендереру состояние окна (развёрнуто/восстановлено),
+  // чтобы кнопка разворачивания в нашем тайтлбаре меняла иконку.
+  const sendMax = () => { try { win.webContents.send('win-maximized', win.isMaximized()) } catch {} }
+  win.on('maximize', sendMax)
+  win.on('unmaximize', sendMax)
+  win.webContents.on('did-finish-load', sendMax)
 
   // v1.31.2: страховка от «вечного» сплэша. Если ready-to-show по какой-то причине
   // не пришёл (тяжёлый первый запуск после установки, сбой отрисовки) — всё равно

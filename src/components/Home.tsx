@@ -85,6 +85,44 @@ export function Home() {
   // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
   const lastView = useRef<View>({ kind: 'dm' })
   useEffect(() => { if (view.kind !== 'music') lastView.current = view }, [view])
+
+  // v1.56.0: история переходов между разделами — стрелки назад/вперёд в тайтлбаре (как в Discord).
+  const sameView = (a: View, b: View) => a.kind === b.kind && (a.kind !== 'server' || (b as any).server?.id === a.server.id)
+  const viewTitle = (v: View) => v.kind === 'dm' ? 'Личные сообщения' : v.kind === 'music' ? 'Ponoi Music' : v.server.name
+  const navHist = useRef<{ stack: View[]; idx: number }>({ stack: [view], idx: 0 })
+  const navByArrow = useRef(false)
+  const broadcastNav = () => {
+    const h = navHist.current
+    window.dispatchEvent(new CustomEvent('ponoi-nav-state', { detail: {
+      title: viewTitle(view), canBack: h.idx > 0, canForward: h.idx < h.stack.length - 1,
+    } }))
+  }
+  useEffect(() => {
+    const h = navHist.current
+    if (navByArrow.current) { navByArrow.current = false }
+    else if (!sameView(h.stack[h.idx], view)) {
+      h.stack = h.stack.slice(0, h.idx + 1); h.stack.push(view); h.idx = h.stack.length - 1
+    }
+    broadcastNav()
+    // eslint-disable-next-line
+  }, [view])
+  useEffect(() => {
+    const back = () => { const h = navHist.current; if (h.idx > 0) { h.idx--; navByArrow.current = true; setView(h.stack[h.idx]) } }
+    const fwd = () => { const h = navHist.current; if (h.idx < h.stack.length - 1) { h.idx++; navByArrow.current = true; setView(h.stack[h.idx]) } }
+    const req = () => broadcastNav()
+    const openQs = () => setQs(true)
+    window.addEventListener('ponoi-nav-back', back)
+    window.addEventListener('ponoi-nav-forward', fwd)
+    window.addEventListener('ponoi-nav-request', req)
+    window.addEventListener('ponoi-open-qs', openQs)
+    return () => {
+      window.removeEventListener('ponoi-nav-back', back)
+      window.removeEventListener('ponoi-nav-forward', fwd)
+      window.removeEventListener('ponoi-nav-request', req)
+      window.removeEventListener('ponoi-open-qs', openQs)
+    }
+    // eslint-disable-next-line
+  }, [])
   useEffect(() => {
     if (servers.length === 0) return
     supabase.from('channels').select('id, server_id').in('server_id', servers.map(s => s.id))

@@ -13,4 +13,9 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // Авто-обновление (v1.29.0): статус скачивания и команда «Перезапустить и обновить».
   onUpdate: (cb) => { ipcRenderer.removeAllListeners('ponoi-update'); ipcRenderer.on('ponoi-update', (_e, d) => cb(d)) },
   applyUpdate: () => ipcRenderer.send('ponoi-apply-update'),
+  // v1.56.0: управление окном для своего тайтлбара (нативные кнопки убраны).
+  winMinimize: () => ipcRenderer.send('win-minimize'),
+  winToggleMax: () => ipcRenderer.send('win-toggle-max'),
+  winClose: () => ipcRenderer.send('win-close'),
+  onMaximize: (cb) => { ipcRenderer.removeAllListeners('win-maximized'); ipcRenderer.on('win-maximized', (_e, m) => cb(!!m)) },
 })

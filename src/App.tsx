@@ -45,12 +45,57 @@ function UpdateBanner() {
   )
 }
 
+// v1.56.0: своя шапка вместо нативной рамки Windows — стрелки назад/вперёд слева,
+// название раздела по центру, справа иконки и свои кнопки окна (как в Discord).
+// Нативный titleBarOverlay убран (рисовался поверх приложения и ломался).
+function Titlebar() {
+  const [nav, setNav] = useState<{ title: string; canBack: boolean; canForward: boolean }>({ title: '', canBack: false, canForward: false })
+  const [max, setMax] = useState(false)
+  useEffect(() => {
+    const h = (e: any) => setNav(e.detail)
+    window.addEventListener('ponoi-nav-state', h as any)
+    window.dispatchEvent(new Event('ponoi-nav-request'))
+    const d = (window as any).ponoiDesktop
+    d?.onMaximize?.((m: boolean) => setMax(m))
+    return () => window.removeEventListener('ponoi-nav-state', h as any)
+  }, [])
+  const wc = () => (window as any).ponoiDesktop
+  return (
+    <header className="titlebar">
+      <div className="tb-nav">
+        <button className="tb-arrow" disabled={!nav.canBack} title="Назад"
+          onClick={() => window.dispatchEvent(new Event('ponoi-nav-back'))}><Icon name="arrow-left" size={18} /></button>
+        <button className="tb-arrow" disabled={!nav.canForward} title="Вперёд"
+          onClick={() => window.dispatchEvent(new Event('ponoi-nav-forward'))}><Icon name="arrow-right" size={18} /></button>
+      </div>
+      <div className="tb-title">{nav.title}</div>
+      <div className="tb-right">
+        <button className="tb-ico" title="Быстрый переход (Ctrl+K)"
+          onClick={() => window.dispatchEvent(new Event('ponoi-open-qs'))}><Icon name="search" size={16} /></button>
+        <div className="tb-winctrls">
+          <button className="tb-win" title="Свернуть" onClick={() => wc()?.winMinimize?.()}>
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0" y="4.5" width="10" height="1" fill="currentColor" /></svg>
+          </button>
+          <button className="tb-win" title={max ? 'Восстановить' : 'Развернуть'} onClick={() => wc()?.winToggleMax?.()}>
+            {max
+              ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1"><rect x="0.5" y="2.5" width="6" height="6" /><path d="M2.5 2.5V0.5H9.5V7.5H7.5" /></svg>
+              : <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1"><rect x="0.5" y="0.5" width="9" height="9" /></svg>}
+          </button>
+          <button className="tb-win tb-close" title="Закрыть" onClick={() => wc()?.winClose?.()}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1"><path d="M1 1l8 8M9 1l-8 8" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
 export default function App() {
   const { session, loading } = useAuth()
   return <>
     <Toasts />
     <ConfirmHost />
-    {isDesktop && <header className="titlebar" />}{/* v1.48.0: тайтлбар без логотипа и надписи — чистая полоса для перетаскивания, как просил владелец */}
+    {isDesktop && <Titlebar />}
     {isDesktop && <UpdateBanner />}
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
