@@ -126,9 +126,9 @@ function useSpeakMic(p: any) {
 }
 
 /** Кружочек участника — голосовой режим, когда никто не показывает видео. */
-function Bubble({ p, isLocal, avatar }: { p: any; isLocal: boolean; avatar?: string | null }) {
+function Bubble({ p, isLocal, avatar, meName }: { p: any; isLocal: boolean; avatar?: string | null; meName?: string }) {
   const { speaking, micOn } = useSpeakMic(p)
-  const name = isLocal ? 'Вы' : (p.name || p.identity || '?')
+  const name = isLocal ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?')
   return (
     <div className="c2-bub">
       <div className={'c2-bub-av' + (speaking ? ' speaking' : '')}>
@@ -142,7 +142,7 @@ function Bubble({ p, isLocal, avatar }: { p: any; isLocal: boolean; avatar?: str
 }
 
 /** Плитка участника — видео-режим: камера или аватар на тёмном фоне. */
-function Tile({ p, isLocal, avatar, small }: { p: any; isLocal: boolean; avatar?: string | null; small?: boolean }) {
+function Tile({ p, isLocal, avatar, small, meName }: { p: any; isLocal: boolean; avatar?: string | null; small?: boolean; meName?: string }) {
   const vidRef = useRef<HTMLDivElement>(null)
   const [hasCam, setHasCam] = useState(false)
   const { speaking, micOn } = useSpeakMic(p)
@@ -165,7 +165,7 @@ function Tile({ p, isLocal, avatar, small }: { p: any; isLocal: boolean; avatar?
     evs.forEach(e => p.on(e, refresh))
     return () => { evs.forEach(e => p.off(e, refresh)); attached.forEach(e => e.remove()) }
   }, [p])
-  const name = isLocal ? 'Вы' : (p.name || p.identity || '?')
+  const name = isLocal ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?')
   return (
     <div className={'c2-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' cam' : '') + (isLocal ? ' local' : '')}>
       <div className="c2-vid" ref={vidRef} />
@@ -196,7 +196,7 @@ function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () 
 }
 
 /** Сцена: кружочки в голосовом режиме, плитки + лента при видео/демке. */
-function Stage({ room, avatars }: { room: Room; avatars: Record<string, string | null> }) {
+function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, string | null>; meName?: string }) {
   const [, bump] = useState(0)
   const [focus, setFocus] = useState<string | null>(null)
   useEffect(() => {
@@ -215,7 +215,7 @@ function Stage({ room, avatars }: { room: Room; avatars: Record<string, string |
   let anyCam = false
   all.forEach(({ p, local }) => {
     p.trackPublications.forEach((pub: any) => {
-      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? 'Вы' : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
+      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
       if (pub.source === 'camera' && pub.track) anyCam = true
     })
   })
@@ -225,7 +225,7 @@ function Stage({ room, avatars }: { room: Room; avatars: Record<string, string |
   // Голосовой режим: кружочки-аватарки по центру, как звонок в Discord.
   if (!shares.length && !anyCam) return (
     <div className="c2-bubbles">
-      {all.map(({ p, local }) => <Bubble key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} />)}
+      {all.map(({ p, local }) => <Bubble key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} meName={meName} />)}
     </div>
   )
 
@@ -234,7 +234,7 @@ function Stage({ room, avatars }: { room: Room; avatars: Record<string, string |
   if (!focused) return (
     <div className="c2-board">
       <div className="c2-grid">
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} />)}
+        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} meName={meName} />)}
       </div>
     </div>
   )
@@ -244,7 +244,7 @@ function Stage({ room, avatars }: { room: Room; avatars: Record<string, string |
       <div className="c2-main"><ShareTile key={focused.key} pub={focused.pub} who={focused.who} /></div>
       <div className="c2-strip">
         {shares.filter(s => s.key !== focused.key).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} small />)}
+        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} small meName={meName} />)}
       </div>
     </div>
   )
@@ -428,7 +428,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
           <button title={fs ? 'Свернуть' : 'На весь экран'} onClick={() => setFs(f => !f)}><Icon name={fs ? 'shrink' : 'expand'} size={16} /></button>
         </div>
       </div>
-      <Stage room={room} avatars={avatars} />
+      <Stage room={room} avatars={avatars} meName={meName} />
       {alone && <div className="c2-waiting">{peer ? 'Ждём ответа — ' + peer.name + '…' : 'Ждём, пока кто-нибудь присоединится…'}</div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">

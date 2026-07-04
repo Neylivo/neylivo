@@ -28,7 +28,7 @@ type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Serve
 export function Home() {
   const { user } = useAuth()
   const { settings } = useSettings()
-  const [username, setUsername] = useState('Вы')
+  const [username, setUsername] = useState(() => localStorage.getItem('ponoi_username') || 'Вы')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [servers, setServers] = useState<Server[]>([])
   const [view, setView] = useState<View>({ kind: 'dm' })
@@ -100,7 +100,7 @@ export function Home() {
     initNotifications() // ask once for desktop-notification permission
     registerPush(user.id) // subscribe to real web-push (works even when app closed)
     supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
-      .then(({ data }) => { if (data?.username) setUsername(data.username); if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
+      .then(({ data }) => { if (data?.username) { setUsername(data.username); localStorage.setItem('ponoi_username', data.username) } if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
     refresh()
     // eslint-disable-next-line
   }, [user])
