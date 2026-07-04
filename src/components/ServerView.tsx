@@ -47,7 +47,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [unseen, setUnseen] = useState(0)
   const [call, setCall] = useState<Room | null>(null)
   const isOwner = server.owner === user?.id
-  const { statusOf, activityOf } = usePresence()
+  const { statusOf, activityOf, gameOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
@@ -589,7 +589,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
               <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
-                {act && <small className="member-act"><ActivityLabel activity={act} /></small>}
+                {(() => { const g = gameOf(m.user_id)
+                  if (g) return <small className="member-act">Играет в <b>{g.name}</b></small>
+                  return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
               </span>
               {isTyping && <span className="member-typing" title="печатает…"><i/><i/><i/></span>}
               {m.role === 'owner' && <span className="mut" title="Владелец"><Icon name="crown" size={14} /></span>}

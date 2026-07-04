@@ -78,6 +78,15 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return () => { window.clearInterval(t); window.removeEventListener('beforeunload', beat) }
   }, [user])
 
+  // Гигиена истории (v1.27.0): при входе закрываем свои «зависшие» игровые сессии
+  // без ended_at (приложение убили во время игры) — иначе они бесконечно «тикают»
+  // в статистике и выглядят как фейковая активность.
+  useEffect(() => {
+    if (!user) return
+    supabase.from('activity_sessions').update({ ended_at: new Date().toISOString() })
+      .eq('user_id', user.id).is('ended_at', null).then(() => {})
+  }, [user?.id])
+
   useEffect(() => { propRef.current = { username, avatarUrl } }, [username, avatarUrl])
 
   // Авто-детект игры (только в десктоп-приложении): Electron раз в 20 сек смотрит

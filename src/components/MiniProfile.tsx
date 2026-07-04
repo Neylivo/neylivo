@@ -13,7 +13,6 @@ import { sendRequest, openThread, mutualFriends } from '../lib/friends'
 import { toastOk, toastErr } from '../lib/toast'
 import { Settings } from './Settings'
 import { ProfileCard } from './ProfileCard'
-import { FullProfile } from './FullProfile'
 import { Icon } from './icons'
 import type { Profile } from '../types'
 
@@ -139,7 +138,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   }
 
   // Шаг 2 цепочки: клик по аватарке/нику в мини-профиле открывает фулл-профиль по центру.
-  if (full) return <FullProfile userId={data.userId} name={data.name} avatarUrl={av} status={data.status} onClose={onClose} />
+  if (full) return <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="activity" onClose={onClose} />
 
   const posStyle: React.CSSProperties = data.anchor === 'me'
     ? { left: 8, bottom: 68 }
@@ -233,7 +232,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               </div>}
         </div>
       </div>
-      {edit && <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} onClose={() => setEdit(false)} />}
+      {edit && <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="board" onClose={() => setEdit(false)} />}
       {accSettings && <Settings username={data.name} avatarUrl={av} onClose={() => setAccSettings(false)} />}
     </>
   )

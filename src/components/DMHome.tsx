@@ -48,7 +48,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const [code, setCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [codeMsg, setCodeMsg] = useState('')
-  const { statusOf } = usePresence()
+  const { statusOf, gameOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const { typers, notifyTyping } = useTyping(threadId, username)
@@ -285,7 +285,9 @@ export function DMHome({ username, avatarUrl, onAvatar }:
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
               <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
-              <span className="me-nm">{f.name}</span>
+              <span className="me-nm">{f.name}
+                {(() => { const g = gameOf(f.id); return g ? <small className="member-act">Играет в <b>{g.name}</b></small> : null })()}
+              </span>
             </div>
           ))}
           {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Открой «Друзья» и добавь кого-нибудь.</div>}
@@ -386,7 +388,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                     <div key={f.id} className="pfr-row" onClick={() => openChat(f)}>
                       <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
                       <span className="pfr-name">{f.name}</span>
-                      <span className="pfr-status">{STATUS_LABEL[statusOf(f.id)]}</span>
+                      <span className="pfr-status">{(() => { const g = gameOf(f.id); return g ? <>Играет в <b>{g.name}</b></> : STATUS_LABEL[statusOf(f.id)] })()}</span>
                       <span className="pfr-msg" title="Написать"><Icon name="message" size={16} /></span>
                     </div>
                   ))}
@@ -401,7 +403,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               return activeContacts.map(f => (
                 <div key={f.id} className="pfr-actcard" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
                   <div className="pfr-actnm">{f.name}</div>
-                  <div className="pfr-actsub">{STATUS_LABEL[statusOf(f.id)]}</div>
+                  <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <>Играет в <b>{g.name}</b></> : STATUS_LABEL[statusOf(f.id)] })()}</div>
                 </div>
               ))
             })()}

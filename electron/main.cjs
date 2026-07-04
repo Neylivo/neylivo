@@ -71,22 +71,44 @@ function findCover(name) {
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
+// Строгий детект (v1.27.0): никакой «фейковой» активности.
+// (1) javaw.exe — это любое Java-приложение: Minecraft'ом считаем только если
+//    заголовок окна содержит «minecraft» (tasklist /v отдаёт заголовки окон).
+// (2) Старт игры публикуем только после двух сканов подряд (~20 сек), чтобы не
+//    ловить мгновенные/служебные процессы; закрытие игры гасим сразу.
+let pendingGame = null   // кандидат на старт: { name, at }
 function scanGames() {
   if (process.platform !== 'win32') return
   const { execFile } = require('child_process')
-  execFile('tasklist.exe', ['/fo', 'csv', '/nh'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+  execFile('tasklist.exe', ['/fo', 'csv', '/nh', '/v'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
     if (err || !out) return
-    const running = new Set()
-    for (const line of String(out).split('\n')) {
-      const m = line.match(/^"([^"]+)"/)
-      if (m) running.add(m[1].toLowerCase())
-    }
     let found = null
-    for (const exe of Object.keys(GAMES)) { if (running.has(exe)) { found = GAMES[exe]; break } }
-    if (found && curGame?.name !== found) curGame = { name: found, since: Date.now() }   // игра запустилась — фиксируем момент старта
-    else if (!found && curGame) curGame = null                                           // игра закрылась
-    else return                                                                          // ничего не изменилось — молчим
-    broadcastGame()
+    for (const line of String(out).split('\n')) {
+      const cols = line.match(/"[^"]*"/g)
+      if (!cols || cols.length < 2) continue
+      const exe = cols[0].slice(1, -1).toLowerCase()
+      const nm = GAMES[exe]
+      if (!nm) continue
+      if (exe === 'javaw.exe') {
+        const title = cols[cols.length - 1].slice(1, -1).toLowerCase()
+        if (!title.includes('minecraft')) continue
+      }
+      found = nm
+      break
+    }
+    if (found) {
+      if (curGame && curGame.name === found) { pendingGame = null; return }   // уже играет — молчим
+      if (pendingGame && pendingGame.name === found) {                        // подтверждено вторым сканом
+        curGame = { name: found, since: pendingGame.at }
+        pendingGame = null
+        broadcastGame()
+      } else {
+        pendingGame = { name: found, at: Date.now() }                         // ждём подтверждения вторым сканом
+      }
+      return
+    }
+    pendingGame = null
+    if (curGame) { curGame = null; broadcastGame() }   // игра закрылась — гасим сразу
   })
 }
 
