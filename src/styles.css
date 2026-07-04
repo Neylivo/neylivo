@@ -2986,3 +2986,23 @@ body.no-anim .member-typing i { animation:none; }
   user-select: none;
   z-index: 40;
 }
+
+/* ===== v1.61.0: список каналов в серверах 1-в-1 как в Discord (по скриншоту) ===== */
+/* Решётка и динамик — настоящие иконки в разметке; псевдо-# больше не рисуем */
+.ch::before { content:none !important; }
+/* Строка канала: скругление 8px, иконка слева приглушённая, имя не съезжает при ховере */
+.ch { padding:6px 8px; margin:1px 0; border-radius:8px; font-size:15px; }
+.ch:hover { padding-left:8px; }
+.ch .ch-nm { gap:8px; }
+.ch .ch-nm > svg { color:#80848e; flex:none; }
+.ch:hover .ch-nm > svg, .ch.on .ch-nm > svg { color:#dbdee1; }
+.ch.on { background:rgba(255,255,255,.09); }
+/* Иконки действий справа видны и у активного канала, не только при ховере */
+.ch.on .ch-acts { display:flex; }
+/* Заголовок категории: имя, затем маленькая стрелка; «+» прижат вправо */
+.ch-sec::before { content:none; }
+.ch-sec.clickable { gap:5px; }
+.ch-caret { display:flex; align-items:center; font-size:0; opacity:.8; transform:rotate(-90deg); transition:transform .12s ease; }
+.ch-caret.open { transform:none; }
+/* Участники голосового канала: отступ под увеличенную иконку */
+.vo { padding-left:34px; }

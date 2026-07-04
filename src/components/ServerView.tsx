@@ -540,8 +540,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
                 <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)}>
-                  <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
+                  <span className="ch-nm"><Icon name="volume" size={18} /> {c.name}</span>
                   <span className="ch-acts">
+                    <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
                     <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
                     {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
                   </span>
@@ -556,7 +557,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             ) : (
               <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '') + (mutedCh[c.id] ? ' muted' : '')}
                 onClick={() => selectChannel(c)} onContextMenu={onChCtx(c)}>
-                <span className="ch-nm"># {c.name}</span>
+                <span className="ch-nm"><Icon name="hash" size={18} /> {c.name}</span>
                 <span className="ch-acts">
                   <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
                   {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
@@ -566,13 +567,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             return <>
               <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
                 onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
-                <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы
+                <span className="ch-sec-nm">Текстовые каналы</span><span className={'ch-caret' + (catOpen ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
                 {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text' }) }}><Icon name="plus" size={14} /></button>}
               </div>
               {channels.filter(c => (c as any).kind !== 'voice' && !catOf(c)).filter(c => (catOpen && visible(c)) || curChannel?.id === c.id).map(chRow)}
               <div className="ch-sec clickable" title={voiceCatOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
                 onClick={() => setVoiceCatOpen(v => { localStorage.setItem('ponoi_cat_voice_open', v ? '0' : '1'); return !v })}>
-                <span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}>▶</span>Голосовые каналы
+                <span className="ch-sec-nm">Голосовые каналы</span><span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
                 {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'voice' }) }}><Icon name="plus" size={14} /></button>}
               </div>
               {channels.filter(c => (c as any).kind === 'voice' && !catOf(c)).filter(c => voiceCatOpen && visible(c)).map(chRow)}
@@ -582,7 +583,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                   <div className="ch-sec clickable" title={open ? 'Свернуть категорию' : 'Развернуть категорию'}
                     onClick={() => toggleCat(cat.id)}
                     onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setCatCtx({ cat, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 200) }) }}>
-                    <span className={'ch-caret' + (open ? ' open' : '')}>▶</span>{cat.private ? '🔒 ' : ''}{cat.name}
+                    <span className="ch-sec-nm">{cat.private ? '🔒 ' : ''}{cat.name}</span><span className={'ch-caret' + (open ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
                     {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text', cat: cat.id }) }}><Icon name="plus" size={14} /></button>}
                   </div>
                   {channels.filter(c => catOf(c) === cat.id).filter(c => (open && visible(c)) || curChannel?.id === c.id).map(chRow)}
