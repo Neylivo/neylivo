@@ -1878,3 +1878,8 @@ body.no-anim .member-typing i { animation:none; }
 .fp-note { font-size:12.5px; color:var(--mut); margin:-2px 0 10px; }
 .fp-link { color:#00a8fc; cursor:pointer; }
 .fp-recent { display:flex; align-items:flex-start; gap:12px; padding:10px; border-radius:8px; background:rgba(255,255,255,.04); margin-bottom:8px; }
+
+
+/* ===== v1.20.0: картинка в лайтбоксе всегда на весь экран (как в Discord) ===== */
+/* .lb-fit — размер посчитан из naturalWidth/Height: маленькие гифки растягиваются, max-ограничения снимаются */
+.lightbox img.lb-fit { max-width:none; max-height:none; }

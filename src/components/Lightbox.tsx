@@ -25,7 +25,25 @@ function whenLabel(iso?: string | null): string {
 export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxMeta; onClose: () => void }) {
   const [zoom, setZoom] = useState(1)
   const [more, setMore] = useState(false)
+  // Размер «на весь экран»: любая картинка (даже крошечная гифка) растягивается
+  // до ~92vw x 86vh с сохранением пропорций — 1-в-1 как просмотрщик Discord.
+  const [fit, setFit] = useState<{ w: number; h: number } | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+
+  function computeFit() {
+    const img = imgRef.current
+    if (!img || !img.naturalWidth || !img.naturalHeight) return
+    const vw = window.innerWidth * 0.92
+    const vh = window.innerHeight * 0.86
+    const s = Math.min(vw / img.naturalWidth, vh / img.naturalHeight)
+    setFit({ w: Math.round(img.naturalWidth * s), h: Math.round(img.naturalHeight * s) })
+  }
+
+  // Окно растянули/сжали — пересчитываем размер картинки.
+  useEffect(() => {
+    window.addEventListener('resize', computeFit)
+    return () => window.removeEventListener('resize', computeFit)
+  }, [])
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
@@ -33,8 +51,8 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
     return () => window.removeEventListener('keydown', h, true)
   }, [onClose])
 
-  // Новая картинка — зум сбрасывается.
-  useEffect(() => { setZoom(1); setMore(false) }, [url])
+  // Новая картинка — зум и размер сбрасываются.
+  useEffect(() => { setZoom(1); setMore(false); setFit(null) }, [url])
 
   function wheel(e: React.WheelEvent) {
     e.stopPropagation()
@@ -100,7 +118,9 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
         <button title="Закрыть (Esc)" onClick={onClose}><Icon name="close" size={18} /></button>
       </div>
       <img ref={imgRef} src={url} alt="" crossOrigin="anonymous"
-        style={{ transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
+        className={fit ? 'lb-fit' : undefined}
+        style={{ width: fit?.w, height: fit?.h, transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
+        onLoad={computeFit}
         onClick={e => e.stopPropagation()}
         onDoubleClick={e => { e.stopPropagation(); setZoom(z => z === 1 ? 2 : 1) }} />
       {zoom !== 1 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setZoom(1) }} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>}
