@@ -128,7 +128,7 @@ function useSpeakMic(p: any) {
 /** Кружочек участника — голосовой режим, когда никто не показывает видео. */
 function Bubble({ p, isLocal, avatar, meName }: { p: any; isLocal: boolean; avatar?: string | null; meName?: string }) {
   const { speaking, micOn } = useSpeakMic(p)
-  const name = isLocal ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?')
+  const name = isLocal ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?')
   return (
     <div className="c2-bub">
       <div className={'c2-bub-av' + (speaking ? ' speaking' : '')}>
@@ -165,7 +165,7 @@ function Tile({ p, isLocal, avatar, small, meName }: { p: any; isLocal: boolean;
     evs.forEach(e => p.on(e, refresh))
     return () => { evs.forEach(e => p.off(e, refresh)); attached.forEach(e => e.remove()) }
   }, [p])
-  const name = isLocal ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?')
+  const name = isLocal ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?')
   return (
     <div className={'c2-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' cam' : '') + (isLocal ? ' local' : '')}>
       <div className="c2-vid" ref={vidRef} />
@@ -215,7 +215,7 @@ function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, 
   let anyCam = false
   all.forEach(({ p, local }) => {
     p.trackPublications.forEach((pub: any) => {
-      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? (meName || p.name || p.identity || 'Вы') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
+      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
       if (pub.source === 'camera' && pub.track) anyCam = true
     })
   })

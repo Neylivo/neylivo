@@ -115,7 +115,7 @@ function renderContent(text: string) {
 
 // «Вы, Вася и ещё 2» — подпись для тултипа реакции.
 function rxWho(users: string[], me?: string, resolve?: (id: string) => string | undefined, meName?: string): string {
-  const names = users.map(u => (me && u === me) ? (meName || resolve?.(u) || 'Вы') : (resolve?.(u) ?? 'Кто-то'))
+  const names = users.map(u => (me && u === me) ? (meName || resolve?.(u) || localStorage.getItem('ponoi_username') || '?') : (resolve?.(u) ?? 'Кто-то'))
   if (names.length <= 3) return names.join(', ')
   return names.slice(0, 3).join(', ') + ' и ещё ' + (names.length - 3)
 }
@@ -333,7 +333,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         </div>
       </>}
 
-      {fwdFor && currentUser && <ForwardModal src={fwdFor} meId={currentUser} meName={currentUserName ?? 'Вы'} onClose={() => setFwdFor(null)} />}
+      {fwdFor && currentUser && <ForwardModal src={fwdFor} meId={currentUser} meName={currentUserName ?? (localStorage.getItem('ponoi_username') || '?')} onClose={() => setFwdFor(null)} />}
     </>
   )
 }

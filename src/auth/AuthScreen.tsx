@@ -4,9 +4,11 @@ import authBg from '../assets/auth-bg.png'
 
 // Экран входа/регистрации 1-в-1 как в Discord (v1.35.0):
 // тёмная карточка, КАПС-подписи полей, кнопка «Продолжить», фон — арт.
+// v1.37.0: вход по почте ИЛИ юзернейму — если в поле нет «@», ищем почту
+// по нику через RPC email_for_username (supabase/19_login_by_username.sql).
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')       // почта или юзернейм (вход); почта (регистрация)
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [err, setErr] = useState<string | null>(null)
@@ -17,12 +19,25 @@ export function AuthScreen() {
     setErr(null); setBusy(true)
     try {
       if (mode === 'register') {
+        const email = login.trim()
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
+        // Юзернейм — обязателен и сразу запоминается локально: даже если запись
+        // профиля не успеет пройти (подтверждение почты), «Вы» нигде не появится.
+        const finalName = username.trim() || email.split('@')[0]
+        localStorage.setItem('ponoi_username', finalName)
         if (data.user) {
-          await supabase.from('profiles').upsert({ id: data.user.id, username: username || email.split('@')[0] })
+          await supabase.from('profiles').upsert({ id: data.user.id, username: finalName })
         }
       } else {
+        let email = login.trim()
+        if (!email.includes('@')) {
+          // Вход по юзернейму: находим почту по нику
+          const { data, error } = await supabase.rpc('email_for_username', { uname: email })
+          if (error) throw error
+          if (!data) throw new Error('Пользователь с таким юзернеймом не найден')
+          email = data as string
+        }
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       }
@@ -40,8 +55,8 @@ export function AuthScreen() {
         <h1>{reg ? 'Создать учетную запись' : 'С возвращением!'}</h1>
         {!reg && <p className="auth-sub">Мы так рады видеть вас снова!</p>}
         <div className="auth-fields">
-          <label className="auth-lb"><span>Электронная почта <i>*</i></span>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label className="auth-lb"><span>{reg ? <>Электронная почта <i>*</i></> : <>Электронная почта или юзернейм <i>*</i></>}</span>
+            <input type={reg ? 'email' : 'text'} value={login} onChange={e => setLogin(e.target.value)} required />
           </label>
           {reg && (
             <label className="auth-lb"><span>Имя пользователя <i>*</i></span>
