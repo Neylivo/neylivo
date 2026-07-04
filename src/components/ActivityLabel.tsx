@@ -29,3 +29,15 @@ export function Elapsed({ since }: { since: number }) {
   }, [])
   return <>{fmtElapsed(since)}</>
 }
+
+
+// «7:40» — часы:минуты, как в карточке игры Discord (тикает раз в 30 сек).
+export function ClockElapsed({ since }: { since: number }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = window.setInterval(() => setTick(v => v + 1), 30_000)
+    return () => window.clearInterval(t)
+  }, [])
+  const m = Math.max(0, Math.floor((Date.now() - since) / 60000))
+  return <>{Math.floor(m / 60)}:{String(m % 60).padStart(2, '0')}</>
+}

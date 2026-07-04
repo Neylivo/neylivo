@@ -4,7 +4,8 @@ import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, STATUS_LABEL, usePresence, type Activity } from '../lib/presence'
-import { ActivityLabel, Elapsed } from './ActivityLabel'
+import { ActivityLabel, ClockElapsed } from './ActivityLabel'
+import { recentActivity, popularGames } from '../lib/activity'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
@@ -62,6 +63,19 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const { gameOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
+  // Стрик «xN д. подряд» и метка «Популярное» для карточки текущей игры (1-в-1 как в Discord).
+  const [gameMeta, setGameMeta] = useState<{ streak: number; popular: boolean } | null>(null)
+  useEffect(() => {
+    let ok = true
+    setGameMeta(null)
+    if (!game?.name) return
+    const nm = game.name
+    Promise.all([recentActivity(data.userId), popularGames([nm])]).then(([ra, pop]) => {
+      if (!ok) return
+      setGameMeta({ streak: ra.find(r => r.name === nm)?.streak ?? 1, popular: pop.has(nm) })
+    })
+    return () => { ok = false }
+  }, [data.userId, game?.name])
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
@@ -157,13 +171,20 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
-          {game && <div className="mini-game">
-            {game.cover
-              ? <img className="mini-game-cover" src={game.cover} alt="" />
-              : <span className="mini-game-ph" title="Обложка ищется…"><Icon name="gamepad" size={22} /></span>}
-            <div className="mini-game-info">
-              <div className="mini-game-t">Играет в {game.name}</div>
-              <small className="mut"><Elapsed since={game.since} /></small>
+          {game && <div className="act-card">
+            <div className="act-head">Играет в</div>
+            <div className="act-row">
+              {game.cover
+                ? <img className="act-cover" src={game.cover} alt="" />
+                : <span className="act-cover act-cover-ph" title="Обложка ищется…"><Icon name="gamepad" size={24} /></span>}
+              <div className="act-info">
+                <div className="act-name">{game.name}</div>
+                <div className="act-meta">
+                  <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={game.since} /></span>
+                  {gameMeta && gameMeta.streak > 1 && <span><Icon name="zap" size={13} /> x{gameMeta.streak} д. подряд</span>}
+                  {gameMeta?.popular && <span><Icon name="flame" size={13} /> Популярное</span>}
+                </div>
+              </div>
             </div>
           </div>}
           {data.activity && !game && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
