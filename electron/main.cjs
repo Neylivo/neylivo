@@ -1,7 +1,31 @@
-const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain } = require('electron')
+const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage } = require('electron')
 const path = require('path')
 
 const isDev = !app.isPackaged
+
+// ---- v1.55.0: приложение живёт в фоне (трей + автозапуск с Windows) ----
+// Закрытие окна сворачивает в трей: активность, звонки и уведомления работают,
+// даже когда окно «выключено». Полный выход — через меню трея.
+let tray = null
+let quitting = false
+const startHidden = process.argv.includes('--hidden')   // автозапуск стартует скрыто, сразу в трей
+const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json')
+function readPrefs() { try { return JSON.parse(require('fs').readFileSync(prefsFile(), 'utf8')) } catch { return {} } }
+function writePrefs(p) { try { require('fs').writeFileSync(prefsFile(), JSON.stringify(p)) } catch {} }
+
+// Вторая копия приложения не запускается — просто показывает уже работающую.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showMainWindow())
+}
+
+function showMainWindow() {
+  const w = BrowserWindow.getAllWindows().find(x => x !== splash)
+  if (w) { try { if (w.isMinimized()) w.restore(); w.show(); w.focus() } catch {}; return }
+  const nw = createWindow()
+  nw.once('ready-to-show', () => { try { nw.show(); nw.focus() } catch {} })
+}
 
 // ---- Авто-детект игр (как в Discord) ----
 // Раз в 4 секунды (как в Discord) смотрим ОКНА Windows (PowerShell Get-Process). Рендереру шлём событие ТОЛЬКО
@@ -89,7 +113,49 @@ ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 // подряд (~8 сек), чтобы не ловить мигающие процессы; закрытие гасим сразу.
 const GAME_BY_PROC = {}
 for (const [exe, nm] of Object.entries(GAMES)) GAME_BY_PROC[exe.replace(/\.exe$/, '')] = nm
-const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.MainWindowTitle }"
+// v1.55.0: универсальный детект ЛЮБЫХ игр (в т.ч. инди), как в Discord.
+// PowerShell отдаёт процесс + путь exe + заголовок окна. Игра распознаётся:
+// 1) по известному имени процесса (словарь GAMES выше), или
+// 2) по расположению exe в папках игровых магазинов (Steam steamapps\common,
+//    Epic Games, GOG, XboxGames, Riot Games, itch, Roblox) — имя игры берём
+//    из папки игры. Лаунчеры и служебные процессы отсекает чёрный список.
+const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.Path + '|' + $_.MainWindowTitle }"
+const NOT_GAMES = new Set([
+  'steam', 'steamwebhelper', 'epicgameslauncher', 'epicwebhelper', 'galaxyclient', 'gog galaxy',
+  'riot client', 'riotclientservices', 'riotclientux', 'leagueclientux', 'battle.net', 'agent',
+  'launcher', 'robloxstudiobeta', 'itch', 'ubisoftconnect', 'upc', 'origin', 'eadesktop',
+  'eabackgroundservice', 'crashhandler', 'unitycrashhandler32', 'unitycrashhandler64',
+  'crashreportclient', 'easyanticheat', 'setup', 'unins000',
+])
+const GAME_DIRS = [
+  [/steamapps[\\/]common[\\/]([^\\/]+)/i, 1],
+  [/epic games[\\/]([^\\/]+)/i, 1],
+  [/gog galaxy[\\/]games[\\/]([^\\/]+)/i, 1],
+  [/gog games[\\/]([^\\/]+)/i, 1],
+  [/xboxgames[\\/]([^\\/]+)/i, 1],
+  [/riot games[\\/]([^\\/]+)/i, 1],
+  [/itch[\\/]apps[\\/]([^\\/]+)/i, 1],
+  [/roblox[\\/]versions[\\/]/i, 0],
+]
+function detectGame(proc, exePath, title) {
+  const nm = GAME_BY_PROC[proc]
+  if (nm) {
+    if (proc === 'javaw' && !title.toLowerCase().includes('minecraft')) return null
+    return nm
+  }
+  if (!exePath || NOT_GAMES.has(proc)) return null
+  for (const [re, grp] of GAME_DIRS) {
+    const m = exePath.match(re)
+    if (!m) continue
+    if (grp === 0) return 'Roblox'
+    let name = m[grp]
+    if (!name || NOT_GAMES.has(name.toLowerCase())) return null
+    // exe бывает зарыт в служебную папку — тогда лучше заголовок окна
+    if (/^(binaries|bin|win64|win32|shipping|game|live|retail|content)$/i.test(name)) name = title || name
+    return name.replace(/[-_]+/g, ' ').trim()
+  }
+  return null
+}
 let pendingGame = null   // кандидат на старт: { name, at }
 let scanBusy = false     // не пускаем сканы внахлёст
 function scanGames() {
@@ -101,13 +167,14 @@ function scanGames() {
     if (err || !out) return
     let found = null
     for (const line of String(out).split('\n')) {
-      const i = line.indexOf('|')
-      if (i <= 0) continue
-      const proc = line.slice(0, i).trim().toLowerCase()
-      const title = line.slice(i + 1).trim()
-      const nm = GAME_BY_PROC[proc]
-      if (!nm || !title) continue
-      if (proc === 'javaw' && !title.toLowerCase().includes('minecraft')) continue
+      const parts = line.split('|')
+      if (parts.length < 3) continue
+      const proc = parts[0].trim().toLowerCase()
+      const exePath = parts[1].trim()
+      const title = parts.slice(2).join('|').trim()
+      if (!title) continue
+      const nm = detectGame(proc, exePath, title)
+      if (!nm) continue
       found = nm
       break
     }
@@ -162,6 +229,7 @@ let appShown = false   // v1.31.2: страховки могут дёрнуть 
 function closeSplashAndShow(win) {
   if (appShown) return
   appShown = true
+  if (startHidden) { try { splash?.close() } catch {}; return }   // v1.55.0: автозапуск — сидим в трее, окно не показываем
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt))
   setTimeout(() => {
     try { splash?.webContents.send('splash-done') } catch {}
@@ -189,7 +257,13 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,   // v1.55.0: в трее/фоне активность, звонки и уведомления работают без замедления
     },
+  })
+
+  // v1.55.0: закрытие окна = свернуть в трей (как в Discord). Полный выход — из меню трея.
+  win.on('close', (e) => {
+    if (!quitting) { e.preventDefault(); win.hide() }
   })
 
   win.once('ready-to-show', () => closeSplashAndShow(win))
@@ -218,6 +292,7 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
+  return win
 }
 
 app.whenReady().then(() => {
@@ -249,6 +324,8 @@ app.whenReady().then(() => {
       // destroy() обходит beforeunload, а снятие window-all-closed не даёт app.quit()
       // вклиниться раньше установки.
       const forceQuitAndInstall = () => {
+        quitting = true
+        try { tray?.destroy() } catch {}
         try { app.removeAllListeners('window-all-closed') } catch {}
         for (const w of BrowserWindow.getAllWindows()) { try { w.destroy() } catch {} }
         try { autoUpdater.quitAndInstall(true, true) } catch {}
@@ -305,13 +382,55 @@ app.whenReady().then(() => {
     }
   } catch {}
 
-  createSplash()
+  // v1.55.0: иконка в трее — приложение живёт в фоне даже с закрытым окном.
+  try {
+    let icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.ico'))
+    if (icon.isEmpty()) icon = nativeImage.createFromPath(path.join(__dirname, '..', 'dist', 'icon.png'))
+    tray = new Tray(icon)
+    tray.setToolTip('Ponoi')
+    const auto = readPrefs().autostart !== false
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Открыть Ponoi', click: () => showMainWindow() },
+      { type: 'separator' },
+      {
+        label: 'Автозапуск с Windows', type: 'checkbox', checked: auto,
+        click: (mi) => {
+          writePrefs({ ...readPrefs(), autostart: mi.checked })
+          try { app.setLoginItemSettings({ openAtLogin: mi.checked, args: ['--hidden'] }) } catch {}
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Выйти из Ponoi',
+        click: () => {
+          quitting = true
+          try { tray?.destroy() } catch {}
+          for (const w of BrowserWindow.getAllWindows()) { try { w.destroy() } catch {} }
+          app.quit()
+        },
+      },
+    ]))
+    tray.on('click', () => showMainWindow())
+    tray.on('double-click', () => showMainWindow())
+  } catch {}
+
+  // v1.55.0: автозапуск с Windows (скрыто, в трей). Включён по умолчанию,
+  // выключается галочкой в меню трея — выбор запоминается в prefs.json.
+  if (!isDev && process.platform === 'win32' && readPrefs().autostart !== false) {
+    try { app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] }) } catch {}
+  }
+
+  if (!startHidden) createSplash()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
+app.on('before-quit', () => { quitting = true })
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // v1.55.0: окна закрыты, но приложение живёт в трее (активность, звонки,
+  // уведомления). Полностью выходим только через «Выйти из Ponoi» в трее.
+  if (process.platform !== 'darwin' && quitting) app.quit()
 })
