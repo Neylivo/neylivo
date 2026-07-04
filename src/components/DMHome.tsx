@@ -13,10 +13,11 @@ import { notifyMessage, msgSound } from '../lib/notify'
 import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
-import { CallRoom } from './CallRoom'
+import { CallRoom, Sinks } from './CallRoom'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
-import { startRingback, stopRingback } from '../lib/callSounds'
+import { startRingback, stopRingback, master, sndMute, sndUnmute } from '../lib/callSounds'
+import { sysCallStart, sysCallEnded, sysCallMissed, parseSys } from '../lib/sysmsg'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -77,6 +78,36 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const callRef = useRef<Room | null>(null)
   useEffect(() => { callRef.current = call }, [call])
 
+  // ---- v1.43.0: системное сообщение о звонке в ленте + состояние для панели. ----
+  // Звонок живёт при навигации (как в Discord): CallRoom показан только в чате
+  // звонка, в остальных местах звук держит отдельный <Sinks>, а кнопки панели
+  // обрабатывает запасной слушатель ниже.
+  const [callThread, setCallThread] = useState<string | null>(null)
+  const [callPeer, setCallPeer] = useState<Friend | null>(null)
+  const activeRef = useRef<Friend | null>(null)
+  useEffect(() => { activeRef.current = active }, [active])
+  const callMsgRef = useRef<string | null>(null)
+  const callStartRef = useRef(0)
+  const answeredRef = useRef(false)
+  const [cstate, setCstate] = useState({ mic: true, deaf: false, cam: false, screen: false, connected: false })
+  useEffect(() => {
+    const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d) setCstate(d) }
+    window.addEventListener('ponoi-call-state', h)
+    return () => window.removeEventListener('ponoi-call-state', h)
+  }, [])
+  const tglCall = (what: string) => window.dispatchEvent(new CustomEvent('ponoi-call-toggle', { detail: { what } }))
+  const cstateRef = useRef(cstate)
+  useEffect(() => { cstateRef.current = cstate }, [cstate])
+  // Итог звонка: «начинает звонок» превращается в длительность или «пропущен».
+  function finishCallMsg() {
+    const id = callMsgRef.current
+    if (!id) return
+    callMsgRef.current = null
+    const sec = Math.max(1, Math.round((Date.now() - callStartRef.current) / 1000))
+    const content = answeredRef.current ? sysCallEnded(sec) : sysCallMissed(sec)
+    supabase.from('dm_messages').update({ content }).eq('id', id).then(() => {})
+  }
+
   function endRing(sendCancel: boolean) {
     stopRingback()
     if (ringTimerRef.current) { window.clearInterval(ringTimerRef.current); ringTimerRef.current = null }
@@ -93,7 +124,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   function hangUp(sendCancel: boolean) {
     endRing(sendCancel)
     try { callRef.current?.disconnect() } catch {}
+    finishCallMsg()
     setCall(null)
+    setCallThread(null)
+    setCallPeer(null)
+    window.dispatchEvent(new CustomEvent('ponoi-call-state', { detail: { mic: true, deaf: false, cam: false, screen: false, connected: false } }))
+    try { master().gain.value = 1 } catch {}
   }
 
   async function startCall() {
@@ -101,6 +137,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     try {
       const room = await joinRoom('dm_' + threadId, meId, username)
       setCall(room)
+      setCallThread(threadId)
+      setCallPeer(active)
+      // Системное сообщение «X начинает звонок.» — по завершении обновится на итог.
+      answeredRef.current = false
+      callStartRef.current = Date.now()
+      try {
+        const { data: sm } = await supabase.from('dm_messages')
+          .insert({ thread_id: threadId, author: meId, author_name: username, content: sysCallStart() })
+          .select().single()
+        callMsgRef.current = (sm as any)?.id ?? null
+      } catch {}
       // Гудки + повторяем ring, чтобы собеседник точно увидел модалку.
       setRingingTo(active)
       startRingback()
@@ -119,10 +166,32 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
+  // Кнопки панели/MeBar работают и когда CallRoom не на экране (другая вкладка/чат).
+  const crShownRef = useRef(false)
+  useEffect(() => {
+    const h = async (e: Event) => {
+      if (crShownRef.current) return // CallRoom смонтирован — обработает сам
+      const room = callRef.current
+      if (!room) return
+      const what = (e as CustomEvent).detail?.what
+      const st = { ...cstateRef.current }
+      try {
+        if (what === 'mic') { const v = !st.mic; await room.localParticipant.setMicrophoneEnabled(v); st.mic = v; v ? sndUnmute() : sndMute() }
+        else if (what === 'deaf') { st.deaf = !st.deaf; try { master().gain.value = st.deaf ? 0 : 1 } catch {}; st.deaf ? sndMute() : sndUnmute() }
+        else if (what === 'cam') { const v = !st.cam; await room.localParticipant.setCameraEnabled(v); st.cam = v }
+        else if (what === 'screen') { const v = !st.screen; await (room.localParticipant as any).setScreenShareEnabled(v); st.screen = v }
+      } catch (err: any) { toastErr(err.message ?? String(err)) }
+      window.dispatchEvent(new CustomEvent('ponoi-call-state', { detail: st }))
+    }
+    window.addEventListener('ponoi-call-toggle', h)
+    return () => window.removeEventListener('ponoi-call-toggle', h)
+    // eslint-disable-next-line
+  }, [])
+
   // Собеседник подключился к комнате — гудки больше не нужны.
   useEffect(() => {
     if (!call) return
-    const onJoin = () => endRing(false)
+    const onJoin = () => { answeredRef.current = true; endRing(false) }
     call.on(RoomEvent.ParticipantConnected, onJoin)
     return () => { call.off(RoomEvent.ParticipantConnected, onJoin) }
     // eslint-disable-next-line
@@ -143,7 +212,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     const h = async (e: Event) => {
       const tid = (e as CustomEvent).detail?.threadId
       if (!tid || callRef.current) return
-      try { setCall(await joinRoom('dm_' + tid, meId, username)) } catch (err: any) { toastErr(err.message ?? String(err)) }
+      try {
+        const room = await joinRoom('dm_' + tid, meId, username)
+        setCall(room)
+        setCallThread(tid)
+        setCallPeer(activeRef.current)
+      } catch (err: any) { toastErr(err.message ?? String(err)) }
     }
     window.addEventListener('ponoi-join-call', h)
     return () => window.removeEventListener('ponoi-join-call', h)
@@ -152,7 +226,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
 
   // При размонтировании не оставляем «висящий» звонок и гудки.
   // eslint-disable-next-line
-  useEffect(() => () => { endRing(false); try { callRef.current?.disconnect() } catch {} }, [])
+  useEffect(() => () => { endRing(false); try { callRef.current?.disconnect() } catch {}; finishCallMsg() }, [])
 
   useEffect(() => { loadRequests() /* eslint-disable-next-line */ }, [])
 
@@ -234,7 +308,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           const msg = p.new as DMMessage
           setMessages(m => [...m, msg])
           localStorage.setItem('ponoi_lastread_dm_' + threadId, String(Date.now()))
-          if (msg.author !== meId) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
+          if (msg.author !== meId && !parseSys(msg.content)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
@@ -361,8 +435,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
   }
 
+  const callRoomShown = !!call && !!active && callThread === threadId
+  useEffect(() => { crShownRef.current = callRoomShown }, [callRoomShown])
+
   return (
     <>
+      {call && !callRoomShown && <Sinks room={call} />}
       <aside className="dm-side">
         <div className="dm-friends-nav" onClick={() => { setActive(null); closeMobNav() }}><Icon name="users" size={18} /> Друзья
           {requests.length > 0 && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
@@ -380,6 +458,22 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           ))}
           {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Открой «Друзья» и добавь кого-нибудь.</div>}
         </div>
+        {call && <div className="vp vp-dm">
+          {cstate.screen && <div className="vp-screen"><span className="vp-screen-ic"><Icon name="screen-share" size={14} /></span><span className="vp-screen-t">Экран 1</span><button className="vp-btn danger" title="Остановить демонстрацию" onClick={() => tglCall('screen')}><Icon name="close" size={14} /></button></div>}
+          <div className="vp-row">
+            <div className="vp-info">
+              <div className="vp-status"><span className="vp-dot" />{cstate.connected ? 'Голосовая связь подключена' : 'Соединение…'}</div>
+              <div className="vp-ch">{(ringingTo?.name ?? callPeer?.name) || 'Личный звонок'}</div>
+            </div>
+            <button className="vp-btn danger" title="Отключиться" onClick={() => hangUp(true)}><Icon name="phone-off" size={17} /></button>
+          </div>
+          <div className="vp-acts">
+            <button className={'vp-act' + (cstate.cam ? ' on' : '')} title={cstate.cam ? 'Выключить камеру' : 'Включить камеру'} onClick={() => tglCall('cam')}><Icon name={cstate.cam ? 'video' : 'video-off'} size={17} /></button>
+            <button className={'vp-act' + (cstate.screen ? ' live' : '')} title={cstate.screen ? 'Остановить демонстрацию' : 'Демонстрация экрана'} onClick={() => tglCall('screen')}><Icon name="screen-share" size={17} /></button>
+            <button className={'vp-act' + (cstate.mic ? '' : ' off')} title={cstate.mic ? 'Выключить микрофон' : 'Включить микрофон'} onClick={() => tglCall('mic')}><Icon name={cstate.mic ? 'mic' : 'mic-off'} size={17} /></button>
+            <button className={'vp-act' + (cstate.deaf ? ' off' : '')} title={cstate.deaf ? 'Включить звук' : 'Заглушить всех'} onClick={() => tglCall('deaf')}><Icon name={cstate.deaf ? 'headphones-off' : 'headphones'} size={17} /></button>
+          </div>
+        </div>}
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
 
@@ -397,7 +491,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
-          {call && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
+          {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               nameOf={id => id === meId ? username : active.name}

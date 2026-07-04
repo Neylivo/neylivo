@@ -7,7 +7,7 @@ import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
-import { parseSys } from '../lib/sysmsg'
+import { parseSys, fmtCallDur } from '../lib/sysmsg'
 import { parseFwd } from '../lib/fwd'
 import { ForwardModal } from './ForwardModal'
 import { EmojiPicker } from './EmojiPicker'
@@ -200,11 +200,31 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           return (
             <Fragment key={m.id}>
               {showSysDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
+              {sys.type === 'call' ? (() => {
+                // Системное сообщение о звонке — текст зависит от того, кто смотрит.
+                const mineCall = !!currentUser && m.author === currentUser
+                const st = sys.targetId
+                const dur = parseInt(sys.preview || '0', 10) || 0
+                return (
+                  <div className={'sys-msg sys-call' + (st === 'missed' && !mineCall ? ' missed' : '')}>
+                    <span className="sys-ic"><Icon name={st === 'missed' ? 'phone-off' : 'phone'} size={14} /></span>
+                    <span>
+                      {st === 'start' && <><b>{m.author_name}</b> начинает звонок.</>}
+                      {st === 'ended' && <>Звонок длился {fmtCallDur(dur)}.</>}
+                      {st === 'missed' && (mineCall
+                        ? <>Никто не ответил на звонок.</>
+                        : <>Вы пропустили звонок от <b>{m.author_name}</b>, который длился {fmtCallDur(dur)}.</>)}
+                    </span>
+                    <span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
+                  </div>
+                )
+              })() : (
               <div className="sys-msg" title="Перейти к закреплённому сообщению" onClick={() => sys.targetId && jumpToMessage(sys.targetId)}>
                 <span className="sys-ic"><Icon name="pin" size={14} /></span>
                 <span><b>{m.author_name}</b> закрепил(а) сообщение{sys.preview ? <>: <span className="sys-prev">«{sys.preview}»</span></> : null}</span>
                 <span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
               </div>
+              )}
             </Fragment>
           )
         }

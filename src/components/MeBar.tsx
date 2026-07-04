@@ -1,6 +1,6 @@
 
 import { toastErr } from '../lib/toast'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
@@ -23,6 +23,16 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   // Микро-анимации (<=300мс): тряска микрофона при муте, «сжатие» наушников при дефе.
   const [micAnim, setMicAnim] = useState(false)
   const [deafAnim, setDeafAnim] = useState(false)
+
+  // v1.43.0: в активном звонке кнопки управляют настоящим микрофоном/звуком.
+  const [cst, setCst] = useState<{ mic: boolean; deaf: boolean; connected: boolean } | null>(null)
+  useEffect(() => {
+    const h = (e: Event) => { const d = (e as CustomEvent).detail; setCst(d?.connected ? d : null) }
+    window.addEventListener('ponoi-call-state', h)
+    return () => window.removeEventListener('ponoi-call-state', h)
+  }, [])
+  const micIsOff = cst ? !cst.mic : micOff
+  const deafIsOn = cst ? cst.deaf : deaf
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -48,14 +58,14 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <span className="me-nm" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer' }} title="Мой профиль">
         {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : null; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
       </span>
-      <button className={'me-ic me-mic' + (micOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
-        onClick={() => setMicOff(m => { if (!m) setMicAnim(true); return !m })}
+      <button className={'me-ic me-mic' + (micIsOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
+        onClick={() => { if (cst) { if (cst.mic) setMicAnim(true); window.dispatchEvent(new CustomEvent('ponoi-call-toggle', { detail: { what: 'mic' } })); return } setMicOff(m => { if (!m) setMicAnim(true); return !m }) }}
         onAnimationEnd={() => setMicAnim(false)}
-        title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
-      <button className={'me-ic me-deaf' + (deaf ? ' off' : '') + (deafAnim ? ' anim-squeeze' : '')}
-        onClick={() => setDeaf(d => { if (!d) setDeafAnim(true); return !d })}
+        title="Микрофон">{micIsOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
+      <button className={'me-ic me-deaf' + (deafIsOn ? ' off' : '') + (deafAnim ? ' anim-squeeze' : '')}
+        onClick={() => { if (cst) { if (!cst.deaf) setDeafAnim(true); window.dispatchEvent(new CustomEvent('ponoi-call-toggle', { detail: { what: 'deaf' } })); return } setDeaf(d => { if (!d) setDeafAnim(true); return !d }) }}
         onAnimationEnd={() => setDeafAnim(false)}
-        title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
+        title="Звук">{deafIsOn ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
       <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
       {miniOpen && user && <MiniProfile

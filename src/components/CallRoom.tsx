@@ -142,7 +142,7 @@ function Bubble({ p, isLocal, avatar, meName }: { p: any; isLocal: boolean; avat
 }
 
 /** Плитка участника — видео-режим: камера или аватар на тёмном фоне. */
-function Tile({ p, isLocal, avatar, small, meName }: { p: any; isLocal: boolean; avatar?: string | null; small?: boolean; meName?: string }) {
+function Tile({ p, isLocal, avatar, color, small, meName }: { p: any; isLocal: boolean; avatar?: string | null; color?: string | null; small?: boolean; meName?: string }) {
   const vidRef = useRef<HTMLDivElement>(null)
   const [hasCam, setHasCam] = useState(false)
   const { speaking, micOn } = useSpeakMic(p)
@@ -167,7 +167,7 @@ function Tile({ p, isLocal, avatar, small, meName }: { p: any; isLocal: boolean;
   }, [p])
   const name = isLocal ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?')
   return (
-    <div className={'c2-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' cam' : '') + (isLocal ? ' local' : '')}>
+    <div className={'c2-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' cam' : '') + (isLocal ? ' local' : '')} style={!hasCam && color ? { background: color } : undefined}>
       <div className="c2-vid" ref={vidRef} />
       {!hasCam && <div className="c2-tile-av"><Avatar name={String(name)} url={avatar} size={small ? 44 : 72} /></div>}
       {!isLocal && <VolCtl identity={p.identity} />}
@@ -196,7 +196,7 @@ function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () 
 }
 
 /** Сцена: кружочки в голосовом режиме, плитки + лента при видео/демке. */
-function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, string | null>; meName?: string }) {
+function Stage({ room, avatars, colors, meName }: { room: Room; avatars: Record<string, string | null>; colors: Record<string, string | null>; meName?: string }) {
   const [, bump] = useState(0)
   const [focus, setFocus] = useState<string | null>(null)
   useEffect(() => {
@@ -221,6 +221,7 @@ function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, 
   })
 
   const av = (p: any) => avatars[p.identity] ?? null
+  const col = (p: any) => colors[p.identity] ?? null
 
   // Голосовой режим: кружочки-аватарки по центру, как звонок в Discord.
   if (!shares.length && !anyCam) return (
@@ -234,7 +235,7 @@ function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, 
   if (!focused) return (
     <div className="c2-board">
       <div className="c2-grid">
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} meName={meName} />)}
+        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} />)}
       </div>
     </div>
   )
@@ -244,7 +245,7 @@ function Stage({ room, avatars, meName }: { room: Room; avatars: Record<string, 
       <div className="c2-main"><ShareTile key={focused.key} pub={focused.pub} who={focused.who} /></div>
       <div className="c2-strip">
         {shares.filter(s => s.key !== focused.key).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} small meName={meName} />)}
+        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} />)}
       </div>
     </div>
   )
@@ -259,6 +260,8 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [deaf, setDeaf] = useState(false)
   const [fs, setFs] = useState(false)
   const [qMenu, setQMenu] = useState(false)
+  const [devMenu, setDevMenu] = useState<null | 'mic' | 'cam'>(null)
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [sq, setSq] = useState<{ res: string; fps: number }>(() => {
     try { const s = JSON.parse(localStorage.getItem('ponoi_share_q') || '{}'); if (s.res && s.fps) return s } catch {}
     return { res: '1080p', fps: 30 }
@@ -269,6 +272,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [flash, setFlash] = useState(false)
   const recRef = useRef<CallRecorder | null>(null)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
+  const [colors, setColors] = useState<Record<string, string | null>>({})
 
   // Аватарки участников из profiles: identity — это id (или юзернейм) пользователя.
   useEffect(() => {
@@ -279,17 +283,18 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
       const uu = ids.filter(x => UUID_RE.test(x))
       const nn = ids.filter(x => !UUID_RE.test(x))
       const map: Record<string, string | null> = {}
+      const cmap: Record<string, string | null> = {}
       try {
         if (uu.length) {
-          const { data } = await supabase.from('profiles').select('id,avatar_url').in('id', uu)
-          for (const r of (data ?? []) as any[]) map[r.id] = r.avatar_url
+          const { data } = await supabase.from('profiles').select('id,avatar_url,avatar_color').in('id', uu)
+          for (const r of (data ?? []) as any[]) { map[r.id] = r.avatar_url; cmap[r.id] = r.avatar_color }
         }
         if (nn.length) {
-          const { data } = await supabase.from('profiles').select('username,avatar_url').in('username', nn)
-          for (const r of (data ?? []) as any[]) map[r.username] = r.avatar_url
+          const { data } = await supabase.from('profiles').select('username,avatar_url,avatar_color').in('username', nn)
+          for (const r of (data ?? []) as any[]) { map[r.username] = r.avatar_url; cmap[r.username] = r.avatar_color }
         }
       } catch {}
-      if (ok) setAvatars(m => ({ ...m, ...map }))
+      if (ok) { setAvatars(m => ({ ...m, ...map })); setColors(m => ({ ...m, ...cmap })) }
     }
     load()
     const re = () => load()
@@ -298,7 +303,17 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   }, [room])
 
   useEffect(() => {
-    room.localParticipant.setMicrophoneEnabled(true).then(() => setMic(true))
+    // Возврат в чат со звонком не должен сбрасывать микрофон/камеру — восстанавливаем.
+    const lp: any = room.localParticipant
+    if (!(room as any).__ponoiInit) {
+      ;(room as any).__ponoiInit = true
+      lp.setMicrophoneEnabled(true).then(() => setMic(true))
+    } else {
+      setMic(lp.isMicrophoneEnabled !== false)
+      setCam(!!lp.isCameraEnabled)
+      setScreen(!!lp.isScreenShareEnabled)
+      try { setDeaf(master().gain.value === 0) } catch {}
+    }
     const upd = () => {
       const n = (room as any).remoteParticipants?.size ?? (room as any).participants?.size ?? 0
       setCount(n + 1)
@@ -412,6 +427,40 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   }
   function leave() { room.disconnect(); onLeave() }
 
+  // ---- v1.43.0: состояние звонка наружу (панель в сайдбаре, MeBar) + команды оттуда. ----
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('ponoi-call-state', { detail: { mic, deaf, cam, screen, connected: status === 'connected' } }))
+  }, [mic, deaf, cam, screen, status])
+  useEffect(() => {
+    const h = (e: Event) => {
+      const what = (e as CustomEvent).detail?.what
+      if (what === 'mic') toggleMic()
+      else if (what === 'deaf') toggleDeaf()
+      else if (what === 'cam') toggleCam()
+      else if (what === 'screen') { screen ? stopShare() : startShare() }
+    }
+    window.addEventListener('ponoi-call-toggle', h)
+    return () => window.removeEventListener('ponoi-call-toggle', h)
+  })
+
+  // Выбор микрофона/камеры — как стрелочки у кнопок в Discord.
+  async function openDev(kind: 'mic' | 'cam') {
+    setQMenu(false)
+    try {
+      const list = await (Room as any).getLocalDevices(kind === 'mic' ? 'audioinput' : 'videoinput', true)
+      setDevices((list ?? []).filter((d: MediaDeviceInfo) => d.deviceId))
+    } catch { setDevices([]) }
+    setDevMenu(kind)
+  }
+  async function pickDev(id: string) {
+    const kind = devMenu === 'mic' ? 'audioinput' : 'videoinput'
+    try {
+      await (room as any).switchActiveDevice(kind, id)
+      try { localStorage.setItem('ponoi_dev_' + devMenu, id) } catch {}
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+    setDevMenu(null)
+  }
+
   const alone = status === 'connected' && count <= 1
   const statusLabel = status === 'reconnecting' ? 'Переподключение…'
     : status === 'connecting' ? 'Соединение…'
@@ -428,13 +477,17 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
           <button title={fs ? 'Свернуть' : 'На весь экран'} onClick={() => setFs(f => !f)}><Icon name={fs ? 'shrink' : 'expand'} size={16} /></button>
         </div>
       </div>
-      <Stage room={room} avatars={avatars} meName={meName} />
+      <Stage room={room} avatars={avatars} colors={colors} meName={meName} />
       {alone && <div className="c2-waiting">{peer ? 'Ждём ответа — ' + peer.name + '…' : 'Ждём, пока кто-нибудь присоединится…'}</div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">
-        <button className={'c2-btn' + (mic ? '' : ' lit')} onClick={toggleMic} title={mic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={mic ? 'mic' : 'mic-off'} size={20} /></button>
-        <button className={'c2-btn' + (deaf ? ' lit' : '')} onClick={toggleDeaf} title={deaf ? 'Включить звук' : 'Заглушить всех'}><Icon name={deaf ? 'headphones-off' : 'headphones'} size={20} /></button>
-        <button className={'c2-btn' + (cam ? ' lit' : '')} onClick={toggleCam} title={cam ? 'Выключить камеру' : 'Включить камеру'}><Icon name={cam ? 'video' : 'video-off'} size={20} /></button>
+        <div className="c2-grp">
+          <button className={'c2-btn' + (mic ? '' : ' lit')} onClick={toggleMic} title={mic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={mic ? 'mic' : 'mic-off'} size={20} /></button>
+          <button className={'c2-caret' + (devMenu === 'mic' ? ' on' : '')} title="Выбрать микрофон" onClick={() => devMenu === 'mic' ? setDevMenu(null) : openDev('mic')}><Icon name="chevron-down" size={14} /></button>
+          <span className="c2-grp-sep" />
+          <button className={'c2-btn' + (cam ? ' lit' : '')} onClick={toggleCam} title={cam ? 'Выключить камеру' : 'Включить камеру'}><Icon name={cam ? 'video' : 'video-off'} size={20} /></button>
+          <button className={'c2-caret' + (devMenu === 'cam' ? ' on' : '')} title="Выбрать камеру" onClick={() => devMenu === 'cam' ? setDevMenu(null) : openDev('cam')}><Icon name="chevron-down" size={14} /></button>
+        </div>
         <div className="c2-share-wrap">
           <button className={'c2-btn' + (screen ? ' live' : '')} onClick={() => screen ? stopShare() : setQMenu(m => !m)} title={screen ? 'Остановить демонстрацию' : 'Демонстрация экрана'}><Icon name="screen-share" size={20} /></button>
           {qMenu && !screen && <>
@@ -453,7 +506,16 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
           </>}
         </div>
         <button className={'c2-btn' + (showSb ? ' lit' : '')} onClick={() => setShowSb(s => !s)} title={'Саундпад / Моменты' + (settings.sbKey ? ' (' + settings.sbKey + ')' : '')}><Icon name="soundboard" size={20} /></button>
+        <button className={'c2-btn' + (deaf ? ' lit' : '')} onClick={toggleDeaf} title={deaf ? 'Включить звук' : 'Заглушить всех'}><Icon name={deaf ? 'headphones-off' : 'headphones'} size={20} /></button>
         <button className="c2-btn leave" onClick={leave} title="Завершить звонок"><Icon name="phone-off" size={20} /></button>
+        {devMenu && <>
+          <div className="c2-menu-ov" onClick={() => setDevMenu(null)} />
+          <div className="c2-menu c2-devmenu">
+            <div className="c2-menu-h">{devMenu === 'mic' ? 'Микрофон' : 'Камера'}</div>
+            {devices.length === 0 && <div className="c2-dev-empty">Устройства не найдены — разреши доступ в браузере</div>}
+            {devices.map(d => <button key={d.deviceId} className={'c2-dev' + (localStorage.getItem('ponoi_dev_' + devMenu) === d.deviceId ? ' on' : '')} onClick={() => pickDev(d.deviceId)}>{d.label || (devMenu === 'mic' ? 'Микрофон' : 'Камера')}</button>)}
+          </div>
+        </>}
       </div>
     </div>
   )

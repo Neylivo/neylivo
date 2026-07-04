@@ -2562,3 +2562,45 @@ body.no-anim .member-typing i { animation:none; }
   80% { transform:translateX(calc(-50% + 6px)); }
 }
 .cset-save:disabled, .cset-reset:disabled { opacity:.6; cursor:default; }
+
+/* ============ v1.43.0: звонки 1-в-1 как в Discord ============ */
+/* Системные сообщения о звонках в ленте. */
+.sys-call { cursor: default; }
+.sys-call:hover { background: transparent; }
+.sys-call .sys-ic { color:#3ba55d; }
+.sys-call.missed .sys-ic { color:#ed4245; }
+.sys-call.missed b { color:#fff; }
+
+/* Панель управления звонком — группа-пилюля, как в Discord. */
+.c2-bar { position:relative; gap:10px; }
+.c2-grp { display:flex; align-items:center; background:#1e1f22; border:1px solid rgba(255,255,255,.06); border-radius:28px; padding:4px; gap:1px; }
+.c2-grp .c2-btn { width:46px; height:46px; background:transparent; }
+.c2-grp .c2-btn:hover { background:#383a40; transform:none; }
+.c2-grp .c2-btn.lit { background:#fff; color:#111214; }
+.c2-caret { border:none; background:transparent; color:#b5bac1; width:22px; height:46px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:10px; transition:background .12s ease, color .12s ease; }
+.c2-caret:hover, .c2-caret.on { color:#fff; background:rgba(255,255,255,.08); }
+.c2-grp-sep { width:1px; height:24px; background:rgba(255,255,255,.08); margin:0 5px; }
+
+/* Меню выбора микрофона/камеры. */
+.c2-devmenu { width:300px; max-height:260px; overflow:auto; left:50%; }
+.c2-dev { display:block; width:100%; text-align:left; border:none; background:transparent; color:#dbdee1; font-size:13px; padding:9px 10px; border-radius:8px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c2-dev:hover { background:rgba(255,255,255,.06); }
+.c2-dev.on { color:#fff; background:#6366f1; }
+.c2-dev-empty { color:#80848e; font-size:13px; padding:8px 10px; }
+
+/* Плитка участника окрашивается в цвет его аватарки (как в Discord). */
+.c2-tile:not(.cam) .c2-tile-av { z-index:1; }
+
+/* Панель голосовой связи в ЛС над панелью пользователя — как в Discord. */
+.vp-dm { flex-direction:column; align-items:stretch; gap:7px; }
+.vp-row { display:flex; align-items:center; gap:8px; }
+.vp-acts { display:flex; gap:4px; }
+.vp-act { flex:1; height:32px; border:none; border-radius:6px; background:rgba(255,255,255,.05); color:#b5bac1; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s ease, color .15s ease, transform .12s ease; }
+.vp-act:hover { background:rgba(255,255,255,.11); color:#fff; }
+.vp-act:active { transform:scale(.93); }
+.vp-act.on { background:#fff; color:#111214; }
+.vp-act.off { color:#ed4245; }
+.vp-act.live { background:#ed4245; color:#fff; }
+.vp-screen { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px; background:rgba(255,255,255,.05); }
+.vp-screen-ic { color:#ed4245; display:inline-flex; }
+.vp-screen-t { flex:1; font-size:12.5px; font-weight:700; color:#dbdee1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
