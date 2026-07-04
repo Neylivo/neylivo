@@ -321,7 +321,8 @@ app.whenReady().then(() => {
   }, { useSystemPicker: true })
 
   // Автообновления (как в Discord): проверяем GitHub Releases при запуске и
-  // каждые 4 часа; обновление качается в фоне и ставится при закрытии приложения.
+  // каждые 10 минут; обновление качается в фоне само — перезапускать приложение
+  // для начала скачивания не нужно.
   if (!isDev) {
     try {
       const { autoUpdater } = require('electron-updater')
@@ -367,11 +368,12 @@ app.whenReady().then(() => {
         bcastUpd({ state: 'error' })
       })
       ipcMain.on('ponoi-apply-update', () => forceQuitAndInstall())
-      // v1.37.1: обновления прилетают быстро — проверяем GitHub при каждом
-      // запуске и дальше каждые 30 минут (было: пропуск на старте + раз в 4 часа).
+      // v1.58.0: обновления прилетают ещё быстрее — проверяем GitHub при каждом
+      // запуске и дальше каждые 10 минут (было 30), чтобы обнова начинала
+      // скачиваться сама, без перезапуска приложения.
       const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
       check()
-      setInterval(check, 30 * 60 * 1000)
+      setInterval(check, 10 * 60 * 1000)
     } catch {}
   }
 
