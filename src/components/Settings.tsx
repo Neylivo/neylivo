@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
-import { friendCode } from '../lib/friendCode'
 import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { uploadTo } from '../lib/storage'
 import { ProfilePet } from './ProfilePet'
@@ -171,12 +170,12 @@ export function Settings({ username, avatarUrl, onClose }:
           {cat === 'account' && <>
             <h2>Мой аккаунт</h2>
             <div className="pqs-code-card">
-              <div className="pqs-code-h">Код друга</div>
-              <div className="pqs-code-sub">Поделись своим кодом, чтобы тебя добавили в друзья.</div>
+              <div className="pqs-code-h">Юзернейм</div>
+              <div className="pqs-code-sub">Поделись своим юзернеймом, чтобы тебя добавили в друзья.</div>
               <div className="pqs-code-row">
-                <span className="pqs-code-val">{friendCode(username, user!.id)}</span>
-                <span className="pqs-code-hint">твой код</span>
-                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(friendCode(username, user!.id))}>Копировать</button>
+                <span className="pqs-code-val">{username}</span>
+                <span className="pqs-code-hint">твой юзернейм</span>
+                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(username)}>Копировать</button>
               </div>
             </div>
             <div className="pqs-acc-card">
