@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session, desktopCapturer } = require('electron')
+const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain } = require('electron')
 const path = require('path')
 
 const isDev = !app.isPackaged
@@ -42,6 +42,34 @@ function broadcastGame() {
     try { w.webContents.send('ponoi-game', curGame) } catch {}
   }
 }
+
+// ---- Поиск обложки игры (магазин Steam, без ключей) ----
+// Вызывается рендерером через IPC; ищем в main-процессе (Node, нет CORS).
+const coverCache = new Map()   // name -> url | null (кэш на время работы приложения)
+function findCover(name) {
+  if (!name) return Promise.resolve(null)
+  if (coverCache.has(name)) return Promise.resolve(coverCache.get(name))
+  return new Promise((resolve) => {
+    const https = require('https')
+    const u = 'https://store.steampowered.com/api/storesearch/?l=en&cc=US&term=' + encodeURIComponent(name)
+    const req = https.get(u, (res) => {
+      let data = ''
+      res.on('data', (d) => { data += d })
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(data)
+          const item = (j.items || [])[0]
+          const url = item ? 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + item.id + '/header.jpg' : null
+          coverCache.set(name, url)
+          resolve(url)
+        } catch { resolve(null) }
+      })
+    })
+    req.on('error', () => resolve(null))
+    req.setTimeout(8000, () => { try { req.destroy() } catch {} resolve(null) })
+  })
+}
+ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
 function scanGames() {
   if (process.platform !== 'win32') return

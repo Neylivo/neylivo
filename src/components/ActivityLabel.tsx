@@ -19,3 +19,13 @@ export function ActivityLabel({ activity }: { activity: Activity }) {
   }, [])
   return <>{activity.text} — {fmtElapsed(activity.since)}</>
 }
+
+// Просто тикающее время («5 мин 31 сек») без текста — для карточки игры в мини-профиле.
+export function Elapsed({ since }: { since: number }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = window.setInterval(() => setTick(v => v + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  return <>{fmtElapsed(since)}</>
+}

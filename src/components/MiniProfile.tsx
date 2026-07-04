@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
-import { Status, STATUS_LABEL, type Activity } from '../lib/presence'
-import { ActivityLabel } from './ActivityLabel'
+import { Status, STATUS_LABEL, usePresence, type Activity } from '../lib/presence'
+import { ActivityLabel, Elapsed } from './ActivityLabel'
 import { tagFor } from '../lib/friendCode'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
@@ -40,6 +40,8 @@ export interface MiniProfileData {
 export function MiniProfile({ data, onClose, onMessage }:
   { data: MiniProfileData; onClose: () => void; onMessage?: () => void }) {
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const { gameOf } = usePresence()
+  const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   // Для офлайн-пользователя подтягиваем время последнего визита (если миграция 11 применена).
@@ -73,7 +75,16 @@ export function MiniProfile({ data, onClose, onMessage }:
           <div className="mini-name">{data.name}</div>
           <div className="mini-code">{data.name.toLowerCase()}{tagFor(data.userId)} <span className="mini-hash">#</span></div>
           <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
-          {data.activity && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
+          {game && <div className="mini-game">
+            {game.cover
+              ? <img className="mini-game-cover" src={game.cover} alt="" />
+              : <span className="mini-game-ph" title="Обложка ищется…"><Icon name="gamepad" size={22} /></span>}
+            <div className="mini-game-info">
+              <div className="mini-game-t">Играет в {game.name}</div>
+              <small className="mut"><Elapsed since={game.since} /></small>
+            </div>
+          </div>}
+          {data.activity && !game && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           <div className="mini-divider" />
           <button className="mini-copycode" onClick={() => navigator.clipboard?.writeText(data.name + '#' + tagFor(data.userId))}><Icon name="link" size={15} /> Копировать код друга</button>
