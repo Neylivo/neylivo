@@ -2547,3 +2547,7 @@ body.no-anim .member-typing i { animation:none; }
 .pqs-acc-names .pqs-acc-name { padding-top:0; line-height:1.2; }
 .pqs-acc-uname { font-size:13px; color:var(--mut); font-weight:500; margin-top:2px; }
 .pfr-uname { display:block; font-size:12px; color:var(--mut); font-weight:500; line-height:1.2; }
+
+/* ===== v1.41.0: подтверждение почты 6-значным кодом ===== */
+.auth-code { text-align:center; font-size:24px; font-weight:800; letter-spacing:14px; font-family:'JetBrains Mono', 'Consolas', monospace; }
+.auth-code::placeholder { letter-spacing:14px; color:var(--mut); }

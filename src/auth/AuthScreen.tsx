@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import authBg from '../assets/auth-bg.png'
 
@@ -6,6 +6,8 @@ import authBg from '../assets/auth-bg.png'
 // тёмная карточка, КАПС-подписи полей, кнопка «Продолжить», фон — арт.
 // v1.37.0: вход по почте ИЛИ юзернейму — если в поле нет «@», ищем почту
 // по нику через RPC email_for_username (supabase/19_login_by_username.sql).
+// v1.41.0: подтверждение почты — 6-значным кодом из письма (verifyOtp), а не ссылкой.
+// В шаблоне письма Supabase («Confirm signup») должен стоять {{ .Token }}.
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [login, setLogin] = useState('')       // почта или юзернейм (вход); почта (регистрация)
@@ -13,6 +15,17 @@ export function AuthScreen() {
   const [username, setUsername] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Шаг «Введи код из письма»: на какую почту ушёл код + сам код
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
+  const [pendingName, setPendingName] = useState('')
+  const [code, setCode] = useState('')
+  const [resendIn, setResendIn] = useState(0)   // кулдаун повторной отправки, сек
+
+  useEffect(() => {
+    if (resendIn <= 0) return
+    const t = window.setTimeout(() => setResendIn(s => s - 1), 1000)
+    return () => window.clearTimeout(t)
+  }, [resendIn])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,6 +56,8 @@ export function AuthScreen() {
         if (data.user) {
           await supabase.from('profiles').upsert({ id: data.user.id, username: finalName })
         }
+        // v1.41.0: почта требует подтверждения (сессии ещё нет) — показываем экран ввода кода
+        if (!data.session) { setPendingName(finalName); setVerifyEmail(email); setCode(''); setResendIn(30) }
       } else {
         let email = login.trim()
         if (!email.includes('@')) {
@@ -53,7 +68,15 @@ export function AuthScreen() {
           email = data as string
         }
         const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        if (error) {
+          // Почта ещё не подтверждена — сразу открываем экран ввода кода
+          if (String(error.message || '').toLowerCase().includes('not confirmed')) {
+            await supabase.auth.resend({ type: 'signup', email }).catch(() => {})
+            setVerifyEmail(email); setCode(''); setResendIn(30)
+            throw new Error('Почта ещё не подтверждена — мы отправили новый код, введи его')
+          }
+          throw error
+        }
       }
     } catch (e: any) {
       setErr(e.message ?? String(e))
@@ -61,6 +84,63 @@ export function AuthScreen() {
       setBusy(false)
     }
   }
+
+  // v1.41.0: подтверждение 6-значным кодом из письма
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault()
+    if (!verifyEmail || busy) return
+    const token = code.trim()
+    if (!/^\d{6}$/.test(token)) { setErr('Код — это 6 цифр из письма'); return }
+    setErr(null); setBusy(true)
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({ email: verifyEmail, token, type: 'signup' })
+      if (error) {
+        const m = String(error.message || '').toLowerCase()
+        throw new Error(m.includes('expired') || m.includes('invalid')
+          ? 'Неверный или устаревший код. Проверь цифры или запроси новый.' : (error.message ?? String(error)))
+      }
+      // Сессия появилась — дозаписываем профиль (upsert при регистрации мог не пройти без сессии)
+      if (data.user && pendingName) {
+        await supabase.from('profiles').upsert({ id: data.user.id, username: pendingName })
+      }
+      // Дальше AuthProvider сам увидит сессию и откроет приложение
+    } catch (e2: any) {
+      setErr(e2.message ?? String(e2))
+    } finally { setBusy(false) }
+  }
+
+  async function resend() {
+    if (!verifyEmail || resendIn > 0) return
+    setErr(null)
+    const { error } = await supabase.auth.resend({ type: 'signup', email: verifyEmail })
+    if (error) setErr(error.message ?? String(error))
+    setResendIn(30)
+  }
+
+  // Экран «Проверь почту» — ввод 6-значного кода (как в Discord)
+  if (verifyEmail) return (
+    <div className="auth" style={{ backgroundImage: `url(${authBg})` }}>
+      <form className="auth-card" onSubmit={submitCode}>
+        <h1>Проверь почту</h1>
+        <p className="auth-sub">Мы отправили 6-значный код на <b>{verifyEmail}</b></p>
+        <div className="auth-fields">
+          <label className="auth-lb"><span>Код подтверждения <i>*</i></span>
+            <input className="auth-code" inputMode="numeric" autoComplete="one-time-code" autoFocus
+              placeholder="······" value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required />
+          </label>
+        </div>
+        {err && <div className="auth-err">{err}</div>}
+        <button className="auth-btn" disabled={busy || code.length !== 6} type="submit">{busy ? '…' : 'Подтвердить'}</button>
+        <div className="auth-toggle" onClick={resend} style={resendIn > 0 ? { opacity: .55, cursor: 'default' } : undefined}>
+          {resendIn > 0 ? `Отправить код ещё раз (через ${resendIn} с)` : 'Отправить код ещё раз'}
+        </div>
+        <div className="auth-toggle" onClick={() => { setVerifyEmail(null); setMode('login'); setErr(null) }}>
+          <span className="auth-mut">Ошибся почтой? </span>Назад
+        </div>
+      </form>
+    </div>
+  )
 
   const reg = mode === 'register'
   return (
