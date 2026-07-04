@@ -102,9 +102,14 @@ export function Home() {
     initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
     initNotifications() // ask once for desktop-notification permission
     registerPush(user.id) // subscribe to real web-push (works even when app closed)
-    supabase.from('profiles').select('username, avatar_url').eq('id', user.id).single()
-      .then(({ data }) => {
-        if (data?.username) { setUsername(data.username); localStorage.setItem('ponoi_username', data.username) }
+    // v1.39.0: ник (display_name) — отображаемое имя, показывается везде, если задан;
+    // юзернейм — уникальный идентификатор. До миграции 21 колонки display_name нет — откатываемся.
+    supabase.from('profiles').select('username, display_name, avatar_url').eq('id', user.id).maybeSingle()
+      .then(async ({ data, error }) => {
+        let d: any = data
+        if (error) { const r = await supabase.from('profiles').select('username, avatar_url').eq('id', user.id).maybeSingle(); d = r.data }
+        const disp = d?.display_name || d?.username
+        if (disp) { setUsername(disp); localStorage.setItem('ponoi_username', disp) }
         else if (user.email) {
           // Профиль без юзернейма (например, регистрация с подтверждением почты не успела его записать):
           // показываем часть почты до @ и сразу чиним профиль — «Вы» больше нигде не появляется (v1.37.0)
@@ -112,7 +117,7 @@ export function Home() {
           setUsername(fb); localStorage.setItem('ponoi_username', fb)
           supabase.from('profiles').upsert({ id: user.id, username: fb })
         }
-        if (data?.avatar_url) setAvatarUrl(data.avatar_url)
+        if (d?.avatar_url) setAvatarUrl(d.avatar_url)
       })
     refresh()
     // eslint-disable-next-line

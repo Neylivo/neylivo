@@ -113,8 +113,10 @@ export function Settings({ username, avatarUrl, onClose }:
   const { user } = useAuth()
   const { settings, set, setCustom, accents, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
-  const [name, setName] = useState(username)
-  const [nameChangedAt, setNameChangedAt] = useState<string | null>(null) // v1.38.0: смена ника раз в 2 недели
+  const [name, setName] = useState(username)                 // ник (отображаемое имя) — свободный, может повторяться
+  const [uname, setUname] = useState('')                      // юзернейм — уникальный, по нему добавляют в друзья
+  const [nameChangedAt, setNameChangedAt] = useState<string | null>(null) // юзернейм меняется раз в 2 недели
+  const [orig, setOrig] = useState({ name: username, uname: '', about: '' }) // исходные значения — для плашки «несохранённые изменения»
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
@@ -124,9 +126,18 @@ export function Settings({ username, avatarUrl, onClose }:
   useEffect(() => {
     if (!user) return
     let ok = true
-    fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about) } })
-    supabase.from('profiles').select('username_changed_at').eq('id', user.id).single()
-      .then(({ data }) => { if (ok && data) setNameChangedAt(data.username_changed_at) })
+    fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about); setOrig(o => ({ ...o, about: p.about })) } })
+    // v1.39.0: ник и юзернейм — разные поля; до миграций 20/21 части колонок может не быть — откатываемся.
+    supabase.from('profiles').select('username, display_name, username_changed_at').eq('id', user.id).maybeSingle()
+      .then(async ({ data, error }) => {
+        let d: any = data
+        if (error) { const r = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(); d = r.data }
+        if (!ok || !d) return
+        const nick = d.display_name || d.username || ''
+        setUname(d.username ?? ''); setName(nick)
+        setNameChangedAt(d.username_changed_at ?? null)
+        setOrig(o => ({ ...o, name: nick, uname: d.username ?? '' }))
+      })
     return () => { ok = false }
   }, [user])
 
@@ -150,29 +161,40 @@ export function Settings({ username, avatarUrl, onClose }:
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // v1.39.0: плашка «несохранённые изменения» — как в настройках сервера
+  const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about
+  function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about) }
+
   async function saveAccount() {
-    const newName = name.trim()
-    if (newName && newName !== username) {
-      // v1.38.0: ник уникален и меняется не чаще раза в 2 недели (жёстко проверяется и в базе)
+    const newNick = name.trim()
+    const newUname = uname.trim()
+    if (newUname && newUname !== orig.uname) {
+      // Юзернейм уникален и меняется не чаще раза в 2 недели (жёстко проверяется и в базе)
       const lockUntil = nameChangedAt ? new Date(nameChangedAt).getTime() + 14 * 86400000 : 0
       if (lockUntil > Date.now()) {
         const days = Math.max(1, Math.ceil((lockUntil - Date.now()) / 86400000))
         toastErr(`Юзернейм можно менять раз в 2 недели. Осталось дней: ${days}`)
         return
       }
-      const { data: taken } = await supabase.rpc('username_taken', { uname: newName })
+      const { data: taken } = await supabase.rpc('username_taken', { uname: newUname })
       if (taken) { toastErr('Этот юзернейм уже занят'); return }
-      const { error } = await supabase.from('profiles').update({ username: newName }).eq('id', user!.id)
+      const { error } = await supabase.from('profiles').update({ username: newUname }).eq('id', user!.id)
       if (error) {
         const m = String(error.message || '')
         toastErr(m.includes('username_change_too_soon') ? 'Юзернейм можно менять раз в 2 недели'
           : (m.includes('duplicate') || m.includes('unique')) ? 'Этот юзернейм уже занят' : m)
         return
       }
-      localStorage.setItem('ponoi_username', newName)
       setNameChangedAt(new Date().toISOString())
     }
+    if (newNick !== orig.name) {
+      // Ник (отображаемое имя) — свободный: меняется когда угодно, может совпадать у разных людей
+      const { error } = await supabase.from('profiles').update({ display_name: newNick || null }).eq('id', user!.id)
+      if (error) { toastErr(error.message ?? String(error)); return }
+      localStorage.setItem('ponoi_username', newNick || newUname || username)
+    }
     await patchProf({ about })
+    setOrig({ name: newNick, uname: newUname || orig.uname, about })
     setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
 
@@ -189,6 +211,11 @@ export function Settings({ username, avatarUrl, onClose }:
       </div>
       <div className="pqs-content">
         <button className="pqs-close" onClick={onClose} title="Закрыть (Esc)"><Icon name="close" size={18} /><span>ESC</span></button>
+        {dirty && <div className="cset-savebar" style={{ zIndex: 1000 }}>
+          <span>Есть несохранённые изменения!</span>
+          <button className="cset-reset" onClick={resetAll}>Сбросить</button>
+          <button className="cset-save" onClick={saveAccount}>{saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
+        </div>}
         <div className="pqs-inner">
           {cat === 'account' && <>
             <h2>Мой аккаунт</h2>
@@ -196,9 +223,9 @@ export function Settings({ username, avatarUrl, onClose }:
               <div className="pqs-code-h">Юзернейм</div>
               <div className="pqs-code-sub">Поделись своим юзернеймом, чтобы тебя добавили в друзья.</div>
               <div className="pqs-code-row">
-                <span className="pqs-code-val">{username}</span>
+                <span className="pqs-code-val">{uname || username}</span>
                 <span className="pqs-code-hint">твой юзернейм</span>
-                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(username)}>Копировать</button>
+                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(uname || username)}>Копировать</button>
               </div>
             </div>
             <div className="pqs-acc-card">
@@ -261,12 +288,14 @@ export function Settings({ username, avatarUrl, onClose }:
               </div>
             </div>
 
-            <label className="pqs-lbl">Имя пользователя</label>
-            <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} />
-            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Менять юзернейм можно раз в 2 недели. Ник должен быть свободен.</div>
+            <label className="pqs-lbl">Ник (отображаемое имя)</label>
+            <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} placeholder="Как тебя видят другие" />
+            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Ник видят все в чатах и профиле. Он может совпадать у разных людей, менять можно когда угодно.</div>
+            <label className="pqs-lbl">Юзернейм</label>
+            <input className="pqs-in" value={uname} onChange={e => setUname(e.target.value)} />
+            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Юзернейм уникален — по нему тебя добавляют в друзья. Менять можно раз в 2 недели.</div>
             <label className="pqs-lbl">О себе</label>
             <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
-            <button className="pqs-save" onClick={saveAccount}>{saved ? <>Сохранено <Icon name="check" size={14} /></> : 'Сохранить'}</button>
             <div className="pqs-email">
               <div className="pqs-lbl">Email</div>
               <div className="pqs-email-val">{(user?.email ?? '').replace(/^(.).*(@.*)$/, (_m, a, b) => a + '••••••' + b) || '••••••@••••.•••'}</div>
