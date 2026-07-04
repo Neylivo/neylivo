@@ -191,8 +191,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       <div className="msg-edit-hint">Esc — <button type="button" onClick={() => setEditing(null)}>отмена</button> • Enter — <button type="button" onClick={() => saveEdit(m.id)}>сохранить</button></div>
                     </div>
                   : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
-                <Attachment url={m.attach_url} type={m.attach_type} />
-                {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" />}
+                <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
+                {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false

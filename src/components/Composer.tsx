@@ -380,7 +380,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   )
 }
 
-export function Attachment({ url, type }: { url?: string | null; type?: string | null }) {
+export function Attachment({ url, type, meta }: { url?: string | null; type?: string | null; meta?: import('./Lightbox').LightboxMeta }) {
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
   const [size, setSize] = useState<string | null>(null)
@@ -406,7 +406,7 @@ export function Attachment({ url, type }: { url?: string | null; type?: string |
     )
     return <>
       <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" onClick={() => setViewer(true)} />
-      {viewer && <Lightbox url={clean} onClose={() => setViewer(false)} />}
+      {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
   }
   return <a className="msg-file" href={clean} target="_blank" rel="noreferrer" title={size ? 'Размер файла: ' + size : undefined}><Icon name="paperclip" size={16} /> Скачать файл{size && <span className="msg-file-size">{size}</span>}</a>

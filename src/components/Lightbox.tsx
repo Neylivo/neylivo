@@ -1,11 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { toastOk, toastErr } from '../lib/toast'
+import { Avatar } from './Avatar'
 import { Icon } from './icons'
 
-// Полноэкранный просмотр изображения: затемнение, Escape/клик мимо — закрыть,
-// колёсико и двойной клик — зум, кнопки «Скопировать» и «Скачать».
-export function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
+export interface LightboxMeta { name: string; avatar?: string | null; at?: string | null }
+
+// «Вчера, в 21:13» — как подписывает время Discord в просмотрщике.
+function whenLabel(iso?: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const now = new Date()
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const t = d.getTime()
+  const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  if (t >= midnight) return 'Сегодня, в ' + hm
+  if (t >= midnight - 86400000) return 'Вчера, в ' + hm
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', в ' + hm
+}
+
+// Полноэкранный просмотрщик изображений в стиле Discord (v1.16.0):
+// картинка крупно по центру поверх затемнённого приложения, слева сверху —
+// автор и время сообщения, справа сверху — панель инструментов
+// (зум, скачать, открыть в браузере, «…», закрыть). Esc/клик мимо — закрыть.
+export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxMeta; onClose: () => void }) {
   const [zoom, setZoom] = useState(1)
+  const [more, setMore] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
@@ -15,7 +34,7 @@ export function Lightbox({ url, onClose }: { url: string; onClose: () => void })
   }, [onClose])
 
   // Новая картинка — зум сбрасывается.
-  useEffect(() => { setZoom(1) }, [url])
+  useEffect(() => { setZoom(1); setMore(false) }, [url])
 
   function wheel(e: React.WheelEvent) {
     e.stopPropagation()
@@ -23,8 +42,7 @@ export function Lightbox({ url, onClose }: { url: string; onClose: () => void })
   }
 
   // Копирование картинки в буфер обмена: через canvas в PNG (clipboard принимает только PNG).
-  async function copyImage(e: React.MouseEvent) {
-    e.stopPropagation()
+  async function copyImage() {
     try {
       const img = imgRef.current
       if (!img || !('ClipboardItem' in window)) throw new Error('Буфер обмена недоступен')
@@ -39,9 +57,13 @@ export function Lightbox({ url, onClose }: { url: string; onClose: () => void })
     } catch (err: any) { toastErr(err?.message ?? 'Не удалось скопировать') }
   }
 
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(url); toastOk('Ссылка скопирована') }
+    catch { toastErr('Не удалось скопировать ссылку') }
+  }
+
   // Скачивание: тянем blob и отдаём как файл, чтобы браузер не открывал вкладку.
-  async function download(e: React.MouseEvent) {
-    e.stopPropagation()
+  async function download() {
     try {
       const r = await fetch(url)
       const blob = await r.blob()
@@ -55,16 +77,33 @@ export function Lightbox({ url, onClose }: { url: string; onClose: () => void })
 
   return (
     <div className="lightbox" onClick={onClose} onWheel={wheel}>
+      {meta && <div className="lb-author" onClick={e => e.stopPropagation()}>
+        <Avatar name={meta.name} url={meta.avatar} size={40} />
+        <div className="lb-author-t">
+          <div className="lb-author-nm">{meta.name}</div>
+          {meta.at && <div className="lb-author-at">{whenLabel(meta.at)}</div>}
+        </div>
+      </div>}
+      <div className="lb-tools" onClick={e => e.stopPropagation()}>
+        <button title="Приблизить" onClick={() => setZoom(z => Math.min(4, +(z * 1.5).toFixed(3)))}><Icon name="zoom-in" size={18} /></button>
+        <button title="Скачать" onClick={download}><Icon name="download" size={18} /></button>
+        <button title="Открыть в браузере" onClick={() => window.open(url, '_blank')}><Icon name="external" size={18} /></button>
+        <div className="lb-more-wrap">
+          <button title="Ещё" onClick={() => setMore(v => !v)}><Icon name="dots" size={18} /></button>
+          {more && <div className="lb-more">
+            <button onClick={() => { setMore(false); copyImage() }}>Скопировать картинку</button>
+            <button onClick={() => { setMore(false); copyLink() }}>Скопировать ссылку</button>
+            <button onClick={() => { setMore(false); setZoom(1) }}>Сбросить масштаб</button>
+          </div>}
+        </div>
+        <span className="lb-tools-sep" />
+        <button title="Закрыть (Esc)" onClick={onClose}><Icon name="close" size={18} /></button>
+      </div>
       <img ref={imgRef} src={url} alt="" crossOrigin="anonymous"
         style={{ transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
         onClick={e => e.stopPropagation()}
         onDoubleClick={e => { e.stopPropagation(); setZoom(z => z === 1 ? 2 : 1) }} />
       {zoom !== 1 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setZoom(1) }} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>}
-      <div className="lightbox-bar" onClick={e => e.stopPropagation()}>
-        <button type="button" title="Скопировать картинку" onClick={copyImage}><Icon name="copy" size={16} /> Скопировать</button>
-        <button type="button" title="Скачать файл" onClick={download}><Icon name="paperclip" size={16} /> Скачать</button>
-        <a href={url} target="_blank" rel="noreferrer">Открыть оригинал</a>
-      </div>
     </div>
   )
 }

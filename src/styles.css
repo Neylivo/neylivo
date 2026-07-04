@@ -1807,3 +1807,27 @@ body.no-anim .member-typing i { animation:none; }
 .pqs-save, .pqs-danger, .fp-editbtn, .pc-int-add, .srv-invite, .pin-btn, .mini-msgbox-smile { transition: transform .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease, filter .15s ease; }
 .pqs-save:hover, .pqs-danger:hover, .fp-editbtn:hover { transform: scale(1.05); box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 .pqs-save:active, .pqs-danger:active, .fp-editbtn:active, .pin-btn:active, .srv-invite:active { transform: scale(.95); }
+
+
+/* ===== v1.16.0: просмотрщик изображений в стиле Discord ===== */
+.lightbox { background: rgba(0, 0, 0, .9); }
+.lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 4px; }
+/* Автор и время сообщения — слева сверху */
+.lb-author { position: absolute; top: 16px; left: 18px; display: flex; align-items: center; gap: 10px; cursor: default; }
+.lb-author-nm { color: #fff; font-weight: 700; font-size: 15px; }
+.lb-author-at { color: rgba(255, 255, 255, .6); font-size: 12.5px; }
+/* Панель инструментов — справа сверху */
+.lb-tools { position: absolute; top: 16px; right: 18px; display: flex; align-items: center; gap: 4px; cursor: default; }
+.lb-tools > button, .lb-more-wrap > button { width: 36px; height: 36px; border: none; border-radius: 8px; background: none;
+  color: rgba(255, 255, 255, .75); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .15s ease, color .15s ease, transform .15s ease; }
+.lb-tools > button:hover, .lb-more-wrap > button:hover { background: rgba(255, 255, 255, .12); color: #fff; transform: scale(1.05); }
+.lb-tools > button:active, .lb-more-wrap > button:active { transform: scale(.95); }
+.lb-tools-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, .2); margin: 0 6px; }
+.lb-more-wrap { position: relative; }
+.lb-more { position: absolute; top: 42px; right: 0; background: #111214; border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 8px; padding: 6px; min-width: 200px; display: flex; flex-direction: column; z-index: 5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5); animation: pcFade .12s ease both; }
+.lb-more button { background: none; border: none; color: #dbdee1; text-align: left; padding: 8px 10px; border-radius: 6px;
+  cursor: pointer; font-size: 13.5px; }
+.lb-more button:hover { background: rgba(255, 255, 255, .08); color: #fff; }
