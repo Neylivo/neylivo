@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
-import { Status, STATUS_LABEL, usePresence, type Activity } from '../lib/presence'
+import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
 import { recentActivity, popularGames } from '../lib/activity'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
@@ -168,8 +168,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
         </div>
         <div className="mini-body">
           <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
-          <div className="mini-code">{data.name.toLowerCase()} <span className="mini-hash">#</span></div>
-          <div className="mini-status"><StatusDot status={data.status} size={10} /> {STATUS_LABEL[data.status]}{data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <span className="mini-lastseen"> · был(а) в сети {lastSeenLabel(lastSeen)}</span>}</div>
+          <div className="mini-code">
+            <span className="mini-uname">{data.name.toLowerCase()}</span>
+            {data.roleName && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor }} />{data.roleName}</span>}
+          </div>
+          {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
+          {pp.about && <div className="mini-about">{pp.about}</div>}
           {game && <div className="act-card">
             <div className="act-head">Играет в</div>
             <div className="act-row">
@@ -187,11 +191,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             </div>
           </div>}
           {data.activity && !game && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
-          {pp.about && <div className="mini-about">{pp.about}</div>}
-          {data.roleName && <div className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor }} />{data.roleName}</div>}
-          {data.role === 'owner'
-            ? <div className="mini-role"><Icon name="crown" size={14} /> Владелец сервера</div>
-            : data.role && !data.roleName && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
           {onAddRole && <button className="mini-addrole" onClick={onAddRole}><Icon name="plus" size={13} /> Добавить роль</button>}
           {!isMe && mutuals.length > 0 && <div className="mini-mutuals">
             <span className="mini-mutual-avs">{mutuals.slice(0, 3).map(m => <span key={m.id} className="mini-mutual-av"><Avatar name={m.username} url={m.avatar_url} size={20} /></span>)}</span>
