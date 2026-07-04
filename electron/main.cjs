@@ -3,6 +3,65 @@ const path = require('path')
 
 const isDev = !app.isPackaged
 
+// ---- Авто-детект игр (как в Discord) ----
+// Раз в 20 секунд смотрим процессы Windows (tasklist). Рендереру шлём событие ТОЛЬКО
+// при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
+const GAMES = {
+  'cs2.exe': 'Counter-Strike 2',
+  'csgo.exe': 'CS:GO',
+  'dota2.exe': 'Dota 2',
+  'valorant.exe': 'VALORANT',
+  'valorant-win64-shipping.exe': 'VALORANT',
+  'fortniteclient-win64-shipping.exe': 'Fortnite',
+  'r5apex.exe': 'Apex Legends',
+  'league of legends.exe': 'League of Legends',
+  'rocketleague.exe': 'Rocket League',
+  'gta5.exe': 'GTA V',
+  'rustclient.exe': 'Rust',
+  'tslgame.exe': 'PUBG',
+  'overwatch.exe': 'Overwatch 2',
+  'minecraft.windows.exe': 'Minecraft',
+  'javaw.exe': 'Minecraft (Java)',
+  'robloxplayerbeta.exe': 'Roblox',
+  'eldenring.exe': 'Elden Ring',
+  'cyberpunk2077.exe': 'Cyberpunk 2077',
+  'witcher3.exe': 'The Witcher 3',
+  'genshinimpact.exe': 'Genshin Impact',
+  'aces.exe': 'War Thunder',
+  'worldoftanks.exe': 'World of Tanks',
+  'osu!.exe': 'osu!',
+  'terraria.exe': 'Terraria',
+  'stardewvalley.exe': 'Stardew Valley',
+  'factorio.exe': 'Factorio',
+  'hollowknight.exe': 'Hollow Knight',
+}
+let curGame = null   // { name, since } | null
+
+function broadcastGame() {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.webContents.send('ponoi-game', curGame) } catch {}
+  }
+}
+
+function scanGames() {
+  if (process.platform !== 'win32') return
+  const { execFile } = require('child_process')
+  execFile('tasklist.exe', ['/fo', 'csv', '/nh'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+    if (err || !out) return
+    const running = new Set()
+    for (const line of String(out).split('\n')) {
+      const m = line.match(/^"([^"]+)"/)
+      if (m) running.add(m[1].toLowerCase())
+    }
+    let found = null
+    for (const exe of Object.keys(GAMES)) { if (running.has(exe)) { found = GAMES[exe]; break } }
+    if (found && curGame?.name !== found) curGame = { name: found, since: Date.now() }   // игра запустилась — фиксируем момент старта
+    else if (!found && curGame) curGame = null                                           // игра закрылась
+    else return                                                                          // ничего не изменилось — молчим
+    broadcastGame()
+  })
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -27,6 +86,9 @@ function createWindow() {
     }
     return { action: 'allow' }
   })
+
+  // Свежеоткрытому окну сразу сообщаем текущую игру (если она уже запущена).
+  win.webContents.on('did-finish-load', () => { if (curGame) { try { win.webContents.send('ponoi-game', curGame) } catch {} } })
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
@@ -60,6 +122,10 @@ app.whenReady().then(() => {
       setInterval(check, 4 * 60 * 60 * 1000)
     } catch {}
   }
+
+  // Игровая активность: первый скан сразу, дальше раз в 20 секунд.
+  scanGames()
+  setInterval(scanGames, 20_000)
 
   createWindow()
   app.on('activate', () => {
