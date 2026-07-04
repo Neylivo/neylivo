@@ -66,6 +66,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [failed, setFailed] = useState(false)
   // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
   const [upProg, setUpProg] = useState<number | null>(null)
+  // Меню «плюса» слева (Фото / Файл / Папка / Голосовое) — как в Discord.
+  const [plusMenu, setPlusMenu] = useState(false)
+  const photoRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
+  // Запись голосового: { t } — секунды записи; recRef держит MediaRecorder.
+  const [rec, setRec] = useState<{ t: number } | null>(null)
+  const recRef = useRef<{ mr: MediaRecorder; chunks: Blob[]; timer: number; cancel: boolean } | null>(null)
 
   // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
   useEffect(() => {
@@ -178,6 +185,60 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     finally { setBusy(false) }
   }
 
+  // Отправка нескольких файлов подряд (выбор папки): каждый файл — отдельным сообщением.
+  async function sendFiles(fs: File[]) {
+    if (!user || fs.length === 0) return
+    const batch = fs.slice(0, 10)
+    if (fs.length > 10) toastErr('Отправляю первые 10 файлов из ' + fs.length)
+    setBusy(true)
+    try {
+      for (const f of batch) {
+        setUpProg(0)
+        const url = await uploadWithProgress('attachments', user.id, f, p => setUpProg(p))
+        await onSend('', { url, type: isImage(f) ? 'image' : 'file' })
+      }
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setBusy(false); setUpProg(null) }
+  }
+
+  // Голосовое сообщение: запись с микрофона, капсула с таймером, отмена/отправка.
+  async function startRec() {
+    if (recRef.current || !user) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      const chunks: Blob[] = []
+      mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(tr => tr.stop())
+        const st = recRef.current
+        recRef.current = null
+        setRec(null)
+        if (!st || st.cancel || !user) return
+        const blob = new Blob(chunks, { type: 'audio/webm' })
+        if (blob.size < 500) return
+        const f = new File([blob], 'voice_' + Date.now() + '.webm', { type: 'audio/webm' })
+        setBusy(true); setUpProg(0)
+        try {
+          const url = await uploadWithProgress('attachments', user.id, f, p => setUpProg(p))
+          await onSend('', { url, type: 'audio' })
+        } catch (err: any) { toastErr(err.message ?? String(err)) }
+        finally { setBusy(false); setUpProg(null) }
+      }
+      mr.start()
+      const timer = window.setInterval(() => setRec(r => r ? { t: r.t + 1 } : r), 1000)
+      recRef.current = { mr, chunks, timer, cancel: false }
+      setRec({ t: 0 })
+    } catch { toastErr('Микрофон недоступен — проверь доступ в системе') }
+  }
+  function stopRec(send: boolean) {
+    const st = recRef.current
+    if (!st) return
+    st.cancel = !send
+    window.clearInterval(st.timer)
+    try { st.mr.stop() } catch {}
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     const t = polish(applySlash(text.trim()))
@@ -225,6 +286,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <span>{replyingTo.preview}</span>
         <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
       </div>}
+      {rec && <div className="voice-pill">
+        <span className="voice-dot" />
+        <b className="voice-time">{Math.floor(rec.t / 60)}:{String(rec.t % 60).padStart(2, '0')}</b>
+        <button type="button" className="voice-x" title="Отменить запись" onClick={() => stopRec(false)}><Icon name="close" size={16} /></button>
+        <button type="button" className="voice-send" title="Отправить голосовое" onClick={() => stopRec(true)}><Icon name="send" size={16} /></button>
+      </div>}
       <form className="composer" onSubmit={submit}>
         {sugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Упомянуть</div>
@@ -237,8 +304,21 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             </div>
           ))}
         </div>}
-        <button type="button" className="attach-btn" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="plus-circle" size={20} /></button>
+        <div className="plus-wrap">
+          <button type="button" className="attach-btn" title="Прикрепить" onClick={() => setPlusMenu(v => !v)}><Icon name="plus-circle" size={20} /></button>
+          {plusMenu && <>
+            <div className="plus-overlay" onClick={() => setPlusMenu(false)} />
+            <div className="plus-menu">
+              <button type="button" onClick={() => { setPlusMenu(false); photoRef.current?.click() }}><Icon name="image" size={17} /> Фото</button>
+              <button type="button" onClick={() => { setPlusMenu(false); fileRef.current?.click() }}><Icon name="paperclip" size={17} /> Файл</button>
+              <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button>
+              <button type="button" onClick={() => { setPlusMenu(false); startRec() }}><Icon name="mic" size={17} /> Голосовое</button>
+            </div>
+          </>}
+        </div>
         <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={photoRef} type="file" accept="image/*" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
         <input ref={inputRef} placeholder={file ? file.name : placeholder} value={text}
           onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
           onPaste={e => {
@@ -287,10 +367,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           {file && isImage(file) && <button type="button" className={'ctool spoiler-t' + (spoiler ? ' on' : '')}
             title={spoiler ? 'Картинка будет спойлером' : 'Отправить как спойлер'}
             onClick={() => setSpoiler(s => !s)}>| |</button>}
-          <button type="button" className="ctool" title="GIF" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
+          <button type="button" className="ctool" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
+          <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
+          <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
-          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} /></div>}
+          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
         </div>
         <button type="submit" disabled={busy}>{busy ? '…' : <Icon name="send" size={18} />}</button>
       </form>
@@ -313,6 +395,8 @@ export function Attachment({ url, type }: { url?: string | null; type?: string |
   }, [url, type])
   if (!url) return null
   const clean = url.replace('#spoiler', '')
+  // Голосовое сообщение / аудио — встроенный плеер.
+  if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
   if (type === 'image') {
     if (url.includes('#spoiler') && !revealed) return (
       <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>

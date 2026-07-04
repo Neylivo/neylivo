@@ -1461,3 +1461,56 @@ body.no-anim .member-typing i { animation:none; }
 .mini-game-info { min-width:0; }
 .mini-game-t { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 @keyframes cover-in { from { opacity:0 } to { opacity:1 } }
+
+/* ➕ меню композера: Фото / Файл / Папка / Голосовое */
+.plus-wrap { position:relative; display:flex; }
+.plus-overlay { position:fixed; inset:0; z-index:30; }
+.plus-menu { position:absolute; bottom:42px; left:0; z-index:31; background:#111214; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:6px; min-width:190px; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+.plus-menu button { display:flex; align-items:center; gap:12px; background:none; border:0; color:#dbdee1; padding:10px 12px; border-radius:6px; cursor:pointer; font-size:14.5px; text-align:left; }
+.plus-menu button:hover { background:rgba(255,255,255,.09); color:#fff; }
+
+/* Капсула записи голосового: красная точка, таймер, отмена, отправка */
+.voice-pill { display:inline-flex; align-items:center; gap:12px; background:#2b2d31; border-radius:26px; padding:8px 10px 8px 16px; margin:6px 14px 2px; width:max-content; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+.voice-dot { width:11px; height:11px; border-radius:50%; background:#da373c; animation: voice-blink 1.1s ease infinite; }
+.voice-time { font-variant-numeric: tabular-nums; font-size:15px; }
+.voice-x, .voice-send { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; border:0; cursor:pointer; }
+.voice-x { background:#3a3c42; color:#dbdee1; }
+.voice-x:hover { background:#4e5058; }
+.voice-send { background:#5865f2; color:#fff; }
+.voice-send:hover { filter:brightness(1.1); }
+.ctool.rec-on { color:#da373c; }
+@keyframes voice-blink { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+
+/* Голосовое сообщение в чате */
+.msg-audio { display:block; width:300px; max-width:100%; margin-top:4px; height:38px; }
+
+/* GIF-пикер: вкладки и поиск */
+.gp2-tabs { display:flex; align-items:center; gap:2px; padding:6px 6px 0; }
+.gp2-tabs button { background:none; border:0; color:#b5bac1; padding:7px 10px; border-radius:6px 6px 0 0; cursor:pointer; font-size:14px; font-weight:600; }
+.gp2-tabs button.on { color:#fff; background:rgba(255,255,255,.07); box-shadow: inset 0 -2px 0 var(--accent, #5865f2); }
+.gp2-tabs button:hover { color:#fff; }
+.gp2-tabs .emoji-x { margin-left:auto; }
+.gp2-search { padding:8px; }
+.gp2-search input, .ep2-search input { width:100%; background:#1e1f22; border:0; border-radius:8px; color:#dbdee1; padding:9px 12px; font-size:14px; outline:none; }
+.gp2-url { padding:12px; display:flex; flex-direction:column; gap:10px; }
+.gp2-url input { background:#1e1f22; border:0; border-radius:8px; color:#dbdee1; padding:9px 12px; font-size:14px; outline:none; }
+.gp2-preview { max-width:100%; max-height:180px; border-radius:8px; object-fit:contain; align-self:center; }
+.gp2-url-btns { display:flex; gap:8px; }
+.gp2-url-btns button { flex:1; background:#5865f2; color:#fff; border:0; border-radius:8px; padding:9px 0; cursor:pointer; font-weight:600; }
+.gp2-url-btns button:disabled { opacity:.4; cursor:default; }
+.gp2-url-btns button + button { background:#3a3c42; }
+
+/* Эмодзи-пикер: поиск, рейка категорий, свои эмодзи */
+.ep2-search { display:flex; align-items:center; gap:6px; padding:8px; }
+.ep2-body { display:flex; min-height:0; flex:1; }
+.ep2-rail { display:flex; flex-direction:column; gap:4px; padding:6px; border-right:1px solid rgba(255,255,255,.06); }
+.ep2-rail button { width:38px; height:38px; display:flex; align-items:center; justify-content:center; background:none; border:0; border-radius:8px; cursor:pointer; color:#b5bac1; font-size:19px; }
+.ep2-rail button.on, .ep2-rail button:hover { background:rgba(255,255,255,.09); color:#fff; }
+.ep2-scroll { flex:1; }
+.ep2-grid { display:flex; flex-wrap:wrap; gap:4px; padding:4px 8px 10px; }
+.ep2-cell { width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:none; border:0; border-radius:8px; cursor:pointer; font-size:24px; padding:0; }
+.ep2-cell:hover { background:rgba(255,255,255,.09); }
+.ep2-cell img { width:30px; height:30px; object-fit:contain; }
+.ep2-add { border:1.5px dashed #5c5e66; color:#b5bac1; }
+.ep2-add:hover { border-color:#fff; color:#fff; }
+.ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }

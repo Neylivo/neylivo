@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react'
+
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
 
-// Keyless GIF picker — like the prototype: a built-in list of public GIF URLs,
-// add-by-URL, and a SHARED "Мои GIF" collection stored in the Supabase `gifs`
-// table (visible to everyone, anyone can add). No Tenor/Giphy API key.
+// GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
+// (общая коллекция + избранное) и «Эмодзи» (переключает на пикер эмодзи).
+// Поиск и «популярные» работают через публичный демо-ключ Tenor v1; если сеть
+// или ключ недоступны — показывается встроенный список.
+const TENOR = 'https://g.tenor.com/v1'
+const TENOR_KEY = 'LIVDSRZULELA'
+
 const BUILTIN = [
   'https://media.tenor.com/BeAr7d5A1AsAAAAC/cat.gif',
   'https://media.tenor.com/8Nl6zY0Jd0kAAAAC/thumbs-up.gif',
@@ -14,6 +19,14 @@ const BUILTIN = [
   'https://media.tenor.com/wZmQ0hqk3zEAAAAC/cry.gif',
   'https://media.tenor.com/gUjT4H8mZk4AAAAC/heart.gif',
 ]
+
+async function tenorGifs(path: string): Promise<string[]> {
+  try {
+    const r = await fetch(TENOR + '/' + path + '&key=' + TENOR_KEY + '&limit=24&media_filter=minimal')
+    const j = await r.json()
+    return ((j.results ?? []) as any[]).map(it => it.media?.[0]?.tinygif?.url).filter(Boolean)
+  } catch { return [] }
+}
 
 interface Gif { id: string; url: string }
 
@@ -24,10 +37,17 @@ function loadFavs(): string[] {
   catch { return [] }
 }
 
-export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; onClose: () => void }) {
+export function GifPicker({ onPick, onClose, onEmojiTab }:
+  { onPick: (url: string) => void; onClose: () => void; onEmojiTab?: () => void }) {
   const { user } = useAuth()
+  const [tab, setTab] = useState<'gifs' | 'url' | 'mine'>('gifs')
+  const [q, setQ] = useState('')
+  const [list, setList] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
   const [mine, setMine] = useState<Gif[]>([])
   const [favs, setFavs] = useState<string[]>(loadFavs)
+  const [urlIn, setUrlIn] = useState('')
+  const debRef = useRef(0)
 
   function toggleFav(url: string) {
     setFavs(f => {
@@ -36,6 +56,19 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
       return next
     })
   }
+
+  // «Гифки»: без запроса — популярные, с запросом — поиск (с задержкой при вводе).
+  useEffect(() => {
+    if (tab !== 'gifs') return
+    setLoading(true)
+    window.clearTimeout(debRef.current)
+    debRef.current = window.setTimeout(async () => {
+      const res = await tenorGifs(q.trim() ? 'search?q=' + encodeURIComponent(q.trim()) : 'trending?')
+      setList(res.length ? res : BUILTIN)
+      setLoading(false)
+    }, q.trim() ? 350 : 0)
+    return () => window.clearTimeout(debRef.current)
+  }, [q, tab])
 
   async function refresh() {
     const { data } = await supabase.from('gifs').select('id, url').order('created_at', { ascending: false })
@@ -49,58 +82,54 @@ export function GifPicker({ onPick, onClose }: { onPick: (url: string) => void; 
     return () => { supabase.removeChannel(ch) }
   }, [])
 
-  async function addUrl() {
-    if (!user) return
-    const url = prompt('URL GIF-картинки')?.trim(); if (!url) return
-    await supabase.from('gifs').insert({ url, owner: user.id })
-    refresh()
-  }
   async function removeMine(id: string) {
     await supabase.from('gifs').delete().eq('id', id)
     refresh()
   }
 
+  const cell = (u: string, del?: string) => (
+    <div key={(del ?? '') + u} className="gif-cell" onClick={() => onPick(u)}>
+      <img src={u} alt="gif" loading="lazy" />
+      <span className={'gif-fav' + (favs.includes(u) ? ' on' : '')}
+        title={favs.includes(u) ? 'Убрать из избранного' : 'В избранное'}
+        onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
+      {del && <span className="emoji-del" onClick={ev => { ev.stopPropagation(); removeMine(del) }}><Icon name="close" size={12} /></span>}
+    </div>
+  )
+
   return (
     <div className="emoji-pop gif-pop" onClick={e => e.stopPropagation()}>
-      <div className="emoji-tabs">
-        <b style={{ flex: 1, padding: '4px 6px' }}>GIF</b>
-        <button className="emoji-add" style={{ margin: 0 }} onClick={addUrl}><Icon name="plus" size={15} /> URL</button>
+      <div className="gp2-tabs">
+        <button className={tab === 'gifs' ? 'on' : ''} onClick={() => setTab('gifs')}>Гифки</button>
+        <button className={tab === 'url' ? 'on' : ''} onClick={() => setTab('url')}>По ссылке</button>
+        <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Мои GIF</button>
+        <button onClick={() => onEmojiTab?.()}>Эмодзи</button>
         <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
-      <div className="emoji-scroll">
+      {tab === 'gifs' && <>
+        <div className="gp2-search"><input placeholder="Поиск гифок…" value={q} onChange={e => setQ(e.target.value)} autoFocus /></div>
+        <div className="emoji-scroll">
+          {loading && <div className="ep2-hint">Ищу гифки…</div>}
+          <div className="gif-grid">{list.map(u => cell(u))}</div>
+        </div>
+      </>}
+      {tab === 'url' && <div className="gp2-url">
+        <input placeholder="Вставь ссылку на .gif" value={urlIn} onChange={e => setUrlIn(e.target.value)} autoFocus />
+        {urlIn.trim() && <img className="gp2-preview" src={urlIn.trim()} alt="предпросмотр" />}
+        <div className="gp2-url-btns">
+          <button disabled={!urlIn.trim()} onClick={() => { const u = urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
+          <button disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
+        </div>
+      </div>}
+      {tab === 'mine' && <div className="emoji-scroll">
         {favs.length > 0 && <>
           <div className="emoji-grp">Избранное</div>
-          <div className="gif-grid">
-            {favs.map(u => (
-              <div key={'f' + u} className="gif-cell" onClick={() => onPick(u)}>
-                <img src={u} alt="gif" loading="lazy" />
-                <span className="gif-fav on" title="Убрать из избранного" onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
-              </div>
-            ))}
-          </div>
+          <div className="gif-grid">{favs.map(u => cell(u))}</div>
         </>}
-        {mine.length > 0 && <>
-          <div className="emoji-grp">Общие GIF</div>
-          <div className="gif-grid">
-            {mine.map(g => (
-              <div key={g.id} className="gif-cell" onClick={() => onPick(g.url)}>
-                <img src={g.url} alt="gif" loading="lazy" />
-                <span className={'gif-fav' + (favs.includes(g.url) ? ' on' : '')} title={favs.includes(g.url) ? 'Убрать из избранного' : 'В избранное'} onClick={ev => { ev.stopPropagation(); toggleFav(g.url) }}>★</span>
-                <span className="emoji-del" onClick={ev => { ev.stopPropagation(); removeMine(g.id) }}><Icon name="close" size={12} /></span>
-              </div>
-            ))}
-          </div>
-        </>}
-        <div className="emoji-grp">Популярные</div>
-        <div className="gif-grid">
-          {BUILTIN.map(u => (
-            <div key={u} className="gif-cell" onClick={() => onPick(u)}>
-              <img src={u} alt="gif" loading="lazy" />
-              <span className={'gif-fav' + (favs.includes(u) ? ' on' : '')} title={favs.includes(u) ? 'Убрать из избранного' : 'В избранное'} onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
-            </div>
-          ))}
-        </div>
-      </div>
+        <div className="emoji-grp">Общие GIF</div>
+        {mine.length === 0 && <div className="ep2-hint">Пока пусто — добавь GIF на вкладке «По ссылке».</div>}
+        <div className="gif-grid">{mine.map(g => cell(g.url, g.id))}</div>
+      </div>}
     </div>
   )
 }
