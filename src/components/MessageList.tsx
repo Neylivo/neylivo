@@ -8,6 +8,8 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys } from '../lib/sysmsg'
+import { parseFwd } from '../lib/fwd'
+import { ForwardModal } from './ForwardModal'
 
 export interface UiMessage {
   id: string
@@ -96,6 +98,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
+  const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
   const [, setEmojiVer] = useState(0)
 
   // Re-render message bodies when the shared custom-emoji cache updates.
@@ -163,6 +166,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
         const meMentioned = !!(currentUserName && m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName))
+        const fwd = parseFwd(m.content)
         return (
           <Fragment key={m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
@@ -190,6 +194,12 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         }} />
                       <div className="msg-edit-hint">Esc — <button type="button" onClick={() => setEditing(null)}>отмена</button> • Enter — <button type="button" onClick={() => saveEdit(m.id)}>сохранить</button></div>
                     </div>
+                  : fwd
+                  ? <div className="msg-fwd">
+                      <div className="msg-fwd-hdr"><Icon name="forward" size={13} /> Пересланное сообщение</div>
+                      {fwd.text && <div className="msg-txt">{renderContent(fwd.text)}</div>}
+                      <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
+                    </div>
                   : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
                 {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
@@ -209,11 +219,12 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               </div>
               <div className="msg-tools">
                 {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
+                {currentUser && <button title="Переслать" onClick={() => setFwdFor(m)}><Icon name="forward" size={18} /></button>}
                 <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>
                 {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
-                {m.author === currentUser && onEdit && m.content && <button title="Изменить" onClick={() => { setEditing(m.id); setEditText(m.content ?? '') }}><Icon name="edit" size={18} /></button>}
+                {m.author === currentUser && onEdit && m.content && !fwd && <button title="Изменить" onClick={() => { setEditing(m.id); setEditText(m.content ?? '') }}><Icon name="edit" size={18} /></button>}
                 <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
@@ -228,13 +239,16 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
           </div>
           {onReply && <div className="ctx-item" onClick={() => { onReply(menuMsg); setMenu(null) }}><Icon name="reply" size={15} /> Ответить</div>}
-          {menuMsg.author === currentUser && onEdit && menuMsg.content && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}
+          {currentUser && <div className="ctx-item" onClick={() => { setFwdFor(menuMsg); setMenu(null) }}><Icon name="forward" size={15} /> Переслать</div>}
+          {menuMsg.author === currentUser && onEdit && menuMsg.content && !parseFwd(menuMsg.content) && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}
           {(canPin ? canPin(menuMsg) : true) &&
             <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}><Icon name="pin" size={15} /> {menuMsg.pinned ? 'Открепить' : 'Закрепить'}</div>}
-          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(menuMsg.content ?? ''); toastOk('Текст скопирован'); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
+          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(parseFwd(menuMsg.content)?.text ?? menuMsg.content ?? ''); toastOk('Текст скопирован'); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
           {menuMsg.author === currentUser && <div className="ctx-item danger" onClick={() => { onDelete?.(menu.id); setMenu(null) }}><Icon name="trash" size={15} /> Удалить</div>}
         </div>
       </>}
+
+      {fwdFor && currentUser && <ForwardModal src={fwdFor} meId={currentUser} meName={currentUserName ?? 'Вы'} onClose={() => setFwdFor(null)} />}
     </>
   )
 }
