@@ -6,8 +6,9 @@ import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
-import { myServers, createServer as createSrv, joinByCode, findServers, renameServer, deleteServer, updateServer } from '../lib/servers'
-import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerSettingsModal, ServerNotifModal } from './ServerModals'
+import { myServers, createServer as createSrv, joinByCode, findServers, deleteServer, updateServer } from '../lib/servers'
+import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerNotifModal } from './ServerModals'
+import { ServerSettings } from './ServerSettings'
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
@@ -271,10 +272,9 @@ export function Home() {
     {showCreate && <CreateServerModal uid={user?.id ?? ''} username={username} onClose={() => setShowCreate(false)} onCreate={onCreate} onJoin={() => setShowFind(true)} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
-    {settingsServer && <ServerSettingsModal server={settingsServer} uid={user?.id ?? ''}
+    {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
       onChanged={() => refresh()}
-      onRename={async name => { await renameServer(settingsServer.id, name); setSettingsServer(null); refresh() }}
       onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setView({ kind: 'dm' }); refresh() }} />}
     </PresenceProvider>
   )

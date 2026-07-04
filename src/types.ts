@@ -1,5 +1,5 @@
 export interface Profile { id: string; username: string; avatar_color: string | null; avatar_url?: string | null }
-export interface Server { id: string; name: string; owner: string; created_at: string; avatar_url?: string | null; accent?: string | null }
+export interface Server { id: string; name: string; owner: string; created_at: string; avatar_url?: string | null; accent?: string | null; settings?: any }
 export interface Channel { id: string; server_id: string; name: string; kind?: string | null; topic?: string | null; settings?: any }
 export interface Message {
   id: string
