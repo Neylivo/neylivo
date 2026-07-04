@@ -6,8 +6,9 @@ export type PetCard = 'mini' | 'big'
 // Питомец профиля (фото/GIF/видео/3D). v1.54.0:
 // - при позициях «Сверху…» питомец стоит на нижней кромке баннера, как в Discord;
 // - 3D-модель (.glb/.gltf) можно вращать мышью в любом месте, где виден профиль;
-// - режим «Свободно» хранит независимые позиции для мини- и большого профиля,
-//   а в настройках питомца можно перетаскивать прямо на превью (onFreeMove).
+// - режим «Свободно» (v1.57.0) хранит ОДНУ позицию в % от карточки: куда поставил,
+//   там питомец и стоит ВО ВСЕХ местах показа профиля — независимо от размера и
+//   положения карточки. В настройках можно перетаскивать прямо на превью (onFreeMove).
 export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }: {
   p: ProfilePrefs; scale?: number; card?: PetCard; bannerH?: number
   onFreeMove?: (card: PetCard, pos: PetFree, done: boolean) => void
@@ -19,7 +20,7 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
 
   let pos: React.CSSProperties
   if (p.petPos === 'free') {
-    const f = card === 'big' ? p.petFree.big : p.petFree.mini
+    const f = p.petFree
     pos = { position: 'absolute', left: f.x + '%', top: f.y + '%', transform: 'translate(-50%, -50%)' }
   } else if (p.petPos === 'above') {
     pos = { position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%)' }

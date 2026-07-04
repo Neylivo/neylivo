@@ -16,7 +16,7 @@ export interface ProfilePrefs {
   petOn: boolean
   petSize: number          // px
   petPos: PetPos
-  petFree: { mini: PetFree; big: PetFree } // «Свободно»: раздельные позиции мини/большого профиля
+  petFree: PetFree // «Свободно»: одна позиция (в % карточки) — питомец в том же месте во всех местах показа профиля
   pronouns: string         // местоимения (карточка профиля)
   integrations: Integration[]
   createdAt: string | null // profiles.created_at («В числе участников с»)
@@ -27,24 +27,21 @@ export interface Integration { label: string; url: string }
 export const DEFAULT_PROFILE: ProfilePrefs = {
   primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
-  petFree: { mini: { x: 80, y: 22 }, big: { x: 85, y: 16 } },
+  petFree: { x: 80, y: 22 },
   pronouns: '', integrations: [], createdAt: null,
 }
 
 
-// pet_pos в БД — text: либо пресет ('tr', 'br', …), либо «free|mx,my|bx,by» —
-// проценты центра питомца для мини- и большого профиля. Миграция не нужна.
-function parsePetPos(v: any): { petPos: PetPos; petFree: { mini: PetFree; big: PetFree } } {
+// pet_pos в БД — text: либо пресет ('tr', 'br', …), либо «free|x,y» — проценты
+// центра питомца, единые для всех мест показа профиля (v1.57.0). Старый формат
+// «free|mx,my|bx,by» (раздельные позиции) читаем, беря позицию мини. Миграция не нужна.
+function parsePetPos(v: any): { petPos: PetPos; petFree: PetFree } {
   const def = DEFAULT_PROFILE.petFree
   if (typeof v !== 'string' || !v) return { petPos: DEFAULT_PROFILE.petPos, petFree: def }
   if (v.startsWith('free')) {
-    const seg = v.split('|')
-    const num = (s: string | undefined, d: PetFree): PetFree => {
-      const m = (s ?? '').split(',')
-      const x = parseFloat(m[0]), y = parseFloat(m[1])
-      return isFinite(x) && isFinite(y) ? { x, y } : d
-    }
-    return { petPos: 'free', petFree: { mini: num(seg[1], def.mini), big: num(seg[2], def.big) } }
+    const m = (v.split('|')[1] ?? '').split(',')
+    const x = parseFloat(m[0]), y = parseFloat(m[1])
+    return { petPos: 'free', petFree: isFinite(x) && isFinite(y) ? { x, y } : def }
   }
   return { petPos: v as PetPos, petFree: def }
 }
@@ -77,7 +74,7 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.petSize !== undefined) r.pet_size = p.petSize
   if (p.petPos !== undefined || p.petFree !== undefined)
     r.pet_pos = full.petPos === 'free'
-      ? `free|${full.petFree.mini.x.toFixed(1)},${full.petFree.mini.y.toFixed(1)}|${full.petFree.big.x.toFixed(1)},${full.petFree.big.y.toFixed(1)}`
+      ? `free|${full.petFree.x.toFixed(1)},${full.petFree.y.toFixed(1)}`
       : full.petPos
   if (p.pronouns !== undefined) r.pronouns = p.pronouns
   if (p.integrations !== undefined) r.integrations = p.integrations

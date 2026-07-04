@@ -173,11 +173,11 @@ export function Settings({ username, avatarUrl, onClose }:
     return () => { ok = false }
   }, [user])
 
-  // v1.54.0: перетаскивание питомца в режиме «Свободно» — раздельно для мини и большого профиля
-  function moveFreePet(card: 'mini' | 'big', pos: { x: number; y: number }, done: boolean) {
-    const petFree = { ...prof.petFree, [card]: pos }
-    if (done) patchProf({ petPos: 'free', petFree })
-    else setProf(p => ({ ...p, petFree }))
+  // v1.57.0: перетаскивание питомца в режиме «Свободно» — позиция ОДНА для всех
+  // мест показа профиля: тащишь на любом превью — меняется везде одинаково.
+  function moveFreePet(_card: 'mini' | 'big', pos: { x: number; y: number }, done: boolean) {
+    if (done) patchProf({ petPos: 'free', petFree: pos })
+    else setProf(p => ({ ...p, petFree: pos }))
   }
 
   async function patchProf(patch: Partial<ProfilePrefs>) {
@@ -454,7 +454,7 @@ export function Settings({ username, avatarUrl, onClose }:
                         <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
                       ))}
                     </div>
-                    {prof.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца прямо на превью ниже — позиции в мини- и большом профиле независимы.</div>}
+                    {prof.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца на любом превью — позиция одна для всех мест: и в мини-профиле, и в полном, при любом их размере и положении.</div>}
                     <div className="pqs-lbl">Предпросмотр</div>
                     <div className="pet2-previews">
                       <div className="pet2-pv mini">
