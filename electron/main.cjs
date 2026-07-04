@@ -236,6 +236,16 @@ app.whenReady().then(() => {
       // v1.29.0: статус обновления транслируем в окно приложения — рендерер
       // показывает красивую карточку с прогрессом и кнопкой «Перезапустить».
       const bcastUpd = (data) => { for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('ponoi-update', data) } catch {} } }
+      // v1.47.1: «жёсткая» установка обновления. Обычный quitAndInstall закрывает окна
+      // мягко, и beforeunload (например, предупреждение при активном голосе) не даёт
+      // приложению выйти — установщик писал «Не удалось закрыть Ponoi. Закройте вручную».
+      // destroy() обходит beforeunload, а снятие window-all-closed не даёт app.quit()
+      // вклиниться раньше установки.
+      const forceQuitAndInstall = () => {
+        try { app.removeAllListeners('window-all-closed') } catch {}
+        for (const w of BrowserWindow.getAllWindows()) { try { w.destroy() } catch {} }
+        try { autoUpdater.quitAndInstall(true, true) } catch {}
+      }
       autoUpdater.on('update-available', (info) => bcastUpd({ state: 'downloading', percent: 0, version: info && info.version }))
       autoUpdater.on('download-progress', (p) => {
         // Реальный прогресс скачивания обновления показываем в splash-окне и в карточке.
@@ -243,15 +253,24 @@ app.whenReady().then(() => {
         bcastUpd({ state: 'downloading', percent: (p && p.percent) || 0 })
       })
       autoUpdater.on('update-downloaded', (info) => {
-        // v1.31.3: если обновление скачалось, пока мы ещё на сплэше (окно не открыто) —
-        // не висим на «100%», а сразу тихо ставим его и перезапускаемся новой версией.
+        // Обновление скачалось, пока мы на сплэше — сразу ставим его «жёстко».
+        // v1.47.1: страховка от зависания на «100%»: если через 4 секунды мы почему-то
+        // всё ещё живы — показываем приложение, обновление доставится при выходе.
         if (!appShown) {
           try { splash?.webContents.send('splash-progress', { percent: 100 }) } catch {}
-          try { autoUpdater.quitAndInstall(true, true); return } catch {}
+          setTimeout(() => { try { const w = BrowserWindow.getAllWindows().find(x => x !== splash); if (w) closeSplashAndShow(w) } catch {} }, 4000)
+          forceQuitAndInstall()
+          return
         }
         bcastUpd({ state: 'ready', version: info && info.version })
       })
-      ipcMain.on('ponoi-apply-update', () => { try { autoUpdater.quitAndInstall() } catch {} })
+      // v1.47.1: ошибка обновления больше не подвешивает сплэш/карточку — прячем
+      // прогресс и запускаемся как обычно; попробуем снова через 30 минут.
+      autoUpdater.on('error', () => {
+        try { splash?.webContents.send('splash-done') } catch {}
+        bcastUpd({ state: 'error' })
+      })
+      ipcMain.on('ponoi-apply-update', () => forceQuitAndInstall())
       // v1.37.1: обновления прилетают быстро — проверяем GitHub при каждом
       // запуске и дальше каждые 30 минут (было: пропуск на старте + раз в 4 часа).
       const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }

@@ -22,6 +22,7 @@ function UpdateBanner() {
     const d = (window as any).ponoiDesktop
     if (!d?.onUpdate) return
     d.onUpdate((data: any) => {
+      if (data?.state === 'error') { setU(null); return }   // v1.47.1: ошибка — тихо убираем карточку
       setU(prev => ({ ...(prev ?? { state: 'downloading' }), ...data }))
       if (data?.state === 'ready') setHidden(false)
     })
