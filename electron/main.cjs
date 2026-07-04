@@ -90,6 +90,46 @@ function scanGames() {
   })
 }
 
+// ---- Неоновый splash при запуске (в стиле установщика Discord) ----
+// Frameless-окно 650x400 (#0B0E14): логотип слева, прогресс справа. Пока оно
+// крутится, приложение готовится и проверяет обновления; затем схлопывается.
+let splash = null
+const SPLASH_MIN_MS = 2600   // минимум времени на экране, чтобы не мигал
+let splashShownAt = 0
+
+function createSplash() {
+  splash = new BrowserWindow({
+    width: 650,
+    height: 400,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    roundedCorners: true,
+    title: 'ponoi',
+    show: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'splash-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  splash.loadFile(path.join(__dirname, 'splash.html'))
+  splashShownAt = Date.now()
+  splash.on('closed', () => { splash = null })
+}
+
+function closeSplashAndShow(win) {
+  const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt))
+  setTimeout(() => {
+    try { splash?.webContents.send('splash-done') } catch {}
+    // Даём splash-у доиграть «схлопывание» (fade из splash.html), затем показываем приложение.
+    setTimeout(() => { try { splash?.close() } catch {}; try { win.show(); win.focus() } catch {} }, 420)
+  }, wait)
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -99,12 +139,15 @@ function createWindow() {
     backgroundColor: '#313338',
     autoHideMenuBar: true,
     title: 'Ponoi',
+    show: false,   // показываем только после splash
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
+
+  win.once('ready-to-show', () => closeSplashAndShow(win))
 
   // Open external (http) links in the system browser, not inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -145,6 +188,10 @@ app.whenReady().then(() => {
       const { autoUpdater } = require('electron-updater')
       autoUpdater.autoDownload = true
       autoUpdater.autoInstallOnAppQuit = true
+      // Реальный прогресс скачивания обновления показываем в splash-окне.
+      autoUpdater.on('download-progress', (p) => {
+        try { splash?.webContents.send('splash-progress', { percent: p?.percent ?? 0 }) } catch {}
+      })
       const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
       check()
       setInterval(check, 4 * 60 * 60 * 1000)
@@ -155,6 +202,7 @@ app.whenReady().then(() => {
   scanGames()
   setInterval(scanGames, 20_000)
 
+  createSplash()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
