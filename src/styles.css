@@ -1883,3 +1883,9 @@ body.no-anim .member-typing i { animation:none; }
 /* ===== v1.20.0: картинка в лайтбоксе всегда на весь экран (как в Discord) ===== */
 /* .lb-fit — размер посчитан из naturalWidth/Height: маленькие гифки растягиваются, max-ограничения снимаются */
 .lightbox img.lb-fit { max-width:none; max-height:none; }
+
+
+/* ===== v1.21.0: лайтбокс через портал — поверх ВСЕГО приложения (как в Discord) ===== */
+/* Раньше просмотрщик рисовался внутри строки сообщения: transform/animation у предков
+   ломали position:fixed — подложка не накрывала приложение, инструменты уезжали. */
+.lightbox { z-index: 999; }

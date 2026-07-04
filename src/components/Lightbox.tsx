@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toastOk, toastErr } from '../lib/toast'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
@@ -93,7 +94,9 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
     } catch { toastErr('Не удалось скачать файл') }
   }
 
-  return (
+  // Портал в document.body: просмотрщик всегда поверх всего приложения,
+  // никакие transform/animation у родителей не ломают fixed-подложку.
+  return createPortal(
     <div className="lightbox" onClick={onClose} onWheel={wheel}>
       {meta && <div className="lb-author" onClick={e => e.stopPropagation()}>
         <Avatar name={meta.name} url={meta.avatar} size={40} />
@@ -124,6 +127,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
         onClick={e => e.stopPropagation()}
         onDoubleClick={e => { e.stopPropagation(); setZoom(z => z === 1 ? 2 : 1) }} />
       {zoom !== 1 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setZoom(1) }} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>}
-    </div>
+    </div>,
+    document.body,
   )
 }
