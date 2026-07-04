@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
-import { recentActivity, popularGames } from '../lib/activity'
 import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
@@ -62,19 +61,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const { gameOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
-  // Стрик «xN д. подряд» и метка «Популярное» для карточки текущей игры (1-в-1 как в Discord).
-  const [gameMeta, setGameMeta] = useState<{ streak: number; popular: boolean } | null>(null)
-  useEffect(() => {
-    let ok = true
-    setGameMeta(null)
-    if (!game?.name) return
-    const nm = game.name
-    Promise.all([recentActivity(data.userId), popularGames([nm])]).then(([ra, pop]) => {
-      if (!ok) return
-      setGameMeta({ streak: ra.find(r => r.name === nm)?.streak ?? 1, popular: pop.has(nm) })
-    })
-    return () => { ok = false }
-  }, [data.userId, game?.name])
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
@@ -188,21 +174,28 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
-          {game && <div className="act-card">
-            <div className="act-head">Играет в</div>
-            <div className="act-row">
+          {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
+            <div className="mpg-head">Играет в
+              <button className="mpg-dots" title="Скопировать название игры"
+                onClick={() => { navigator.clipboard?.writeText(game.name); toastOk('Название игры скопировано') }}><Icon name="more" size={16} /></button>
+            </div>
+            <div className="mpg-row">
               {game.cover
-                ? <img className="act-cover" src={game.cover} alt="" />
-                : <span className="act-cover act-cover-ph" title="Обложка ищется…"><Icon name="gamepad" size={24} /></span>}
-              <div className="act-info">
-                <div className="act-name">{game.name}</div>
-                <div className="act-meta">
-                  <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={game.since} /></span>
-                  {gameMeta && gameMeta.streak > 1 && <span><Icon name="zap" size={13} /> x{gameMeta.streak} д. подряд</span>}
-                  {gameMeta?.popular && <span><Icon name="flame" size={13} /> Популярное</span>}
-                </div>
+                ? <img className="mpg-cover" src={game.cover} alt="" />
+                : <span className="mpg-cover mpg-ph"><Icon name="gamepad" size={26} /></span>}
+              <div className="mpg-info">
+                <div className="mpg-nm">{game.name}</div>
+                <div className="mpg-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={game.since} /></div>
               </div>
             </div>
+            {isMe && <button className="mpg-add" onClick={() => {
+              try {
+                const k = 'ponoi_favs_' + data.userId
+                const cur: string[] = JSON.parse(localStorage.getItem(k) || '[]')
+                if (!cur.includes(game.name)) localStorage.setItem(k, JSON.stringify([...cur, game.name]))
+                toastOk('Добавлено к текущим играм')
+              } catch {}
+            }}>Добавить к текущим играм</button>}
           </div>}
           {data.activity && !game && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
           {onAddRole && <button className="mini-addrole" onClick={onAddRole}><Icon name="plus" size={13} /> Добавить роль</button>}

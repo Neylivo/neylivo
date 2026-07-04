@@ -4,7 +4,7 @@ const path = require('path')
 const isDev = !app.isPackaged
 
 // ---- Авто-детект игр (как в Discord) ----
-// Раз в 20 секунд смотрим процессы Windows (tasklist). Рендереру шлём событие ТОЛЬКО
+// Раз в 4 секунды (как в Discord) смотрим процессы Windows (tasklist). Рендереру шлём событие ТОЛЬКО
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
@@ -82,7 +82,7 @@ ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 // Строгий детект (v1.27.0): никакой «фейковой» активности.
 // (1) javaw.exe — это любое Java-приложение: Minecraft'ом считаем только если
 //    заголовок окна содержит «minecraft» (tasklist /v отдаёт заголовки окон).
-// (2) Старт игры публикуем только после двух сканов подряд (~20 сек), чтобы не
+// (2) Старт игры публикуем только после двух сканов подряд (~8 сек), чтобы не
 //    ловить мгновенные/служебные процессы; закрытие игры гасим сразу.
 let pendingGame = null   // кандидат на старт: { name, at }
 function scanGames() {
@@ -97,10 +97,13 @@ function scanGames() {
       const exe = cols[0].slice(1, -1).toLowerCase()
       const nm = GAMES[exe]
       if (!nm) continue
-      if (exe === 'javaw.exe') {
-        const title = cols[cols.length - 1].slice(1, -1).toLowerCase()
-        if (!title.includes('minecraft')) continue
-      }
+      // v1.49.0: игрой считаем только процесс с настоящим открытым окном.
+      // Фоновые службы (например, Roblox, висящий в диспетчере после закрытия игры)
+      // окна не имеют — tasklist в колонке заголовка пишет «N/A» (в русской Windows «Н/Д»).
+      const title = cols[cols.length - 1].slice(1, -1)
+      const tl = title.toLowerCase()
+      if (!title || tl === 'n/a' || tl === 'н/д' || tl === 'нет данных') continue
+      if (exe === 'javaw.exe' && !tl.includes('minecraft')) continue
       found = nm
       break
     }
@@ -279,9 +282,9 @@ app.whenReady().then(() => {
     } catch {}
   }
 
-  // Игровая активность: первый скан сразу, дальше раз в 20 секунд.
+  // Игровая активность: первый скан сразу, дальше раз в 4 секунды (как в Discord).
   scanGames()
-  setInterval(scanGames, 20_000)
+  setInterval(scanGames, 4_000)
 
   // v1.37.1: после обновления версии один раз чистим HTTP- и код-кэш старой
   // версии, чтобы ничего не лагало. Логин и настройки (localStorage) не трогаем.
