@@ -242,7 +242,15 @@ app.whenReady().then(() => {
         try { splash?.webContents.send('splash-progress', { percent: p?.percent ?? 0 }) } catch {}
         bcastUpd({ state: 'downloading', percent: (p && p.percent) || 0 })
       })
-      autoUpdater.on('update-downloaded', (info) => bcastUpd({ state: 'ready', version: info && info.version }))
+      autoUpdater.on('update-downloaded', (info) => {
+        // v1.31.3: если обновление скачалось, пока мы ещё на сплэше (окно не открыто) —
+        // не висим на «100%», а сразу тихо ставим его и перезапускаемся новой версией.
+        if (!appShown) {
+          try { splash?.webContents.send('splash-progress', { percent: 100 }) } catch {}
+          try { autoUpdater.quitAndInstall(true, true); return } catch {}
+        }
+        bcastUpd({ state: 'ready', version: info && info.version })
+      })
       ipcMain.on('ponoi-apply-update', () => { try { autoUpdater.quitAndInstall() } catch {} })
       // v1.31.0: не дёргаем GitHub на каждый запуск — если проверяли меньше
       // 30 минут назад, стартовую проверку пропускаем (фон раз в 4 часа остаётся).
