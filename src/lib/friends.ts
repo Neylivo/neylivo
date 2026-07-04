@@ -21,6 +21,16 @@ export async function findByCode(code: string): Promise<Profile | null> {
   return candidates.find(p => tagFor(p.id) === parsed.tag) ?? null
 }
 
+// Точный поиск по юзернейму (без учёта регистра) — добавление в друзья как в Discord.
+// Если вдруг несколько совпадений, предпочитаем точное по регистру, иначе первое.
+export async function findByUsername(name: string): Promise<Profile | null> {
+  const term = name.trim()
+  if (!term) return null
+  const { data } = await supabase.from('profiles').select('*').ilike('username', term).limit(5)
+  const list = (data ?? []) as Profile[]
+  return list.find(p => p.username === term) ?? list[0] ?? null
+}
+
 export async function sendRequest(fromId: string, fromName: string, to: Profile) {
   return supabase.from('friend_requests').insert({
     from_user: fromId, to_user: to.id, from_name: fromName, to_name: to.username, status: 'pending',

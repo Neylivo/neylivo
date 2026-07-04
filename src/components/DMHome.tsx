@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByCode } from '../lib/friends'
-import { friendCode, tagFor } from '../lib/friendCode'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -95,13 +94,17 @@ export function DMHome({ username, avatarUrl, onAvatar }:
     if (error) toastErr(error.message); else { setQ(''); setResults([]); toastOk('Заявка отправлена ' + p.username) }
   }
 
-  async function addByCode() {
-    const p = await findByCode(code)
-    if (!p) { setCodeMsg('Пользователь с таким кодом не найден'); return }
-    if (p.id === meId) { setCodeMsg('Это твой собственный код :)'); return }
+  // Добавление по юзернейму, как в новом Discord (без #цифр).
+  // Старый формат «Имя#1234» тоже принимаем — цифры просто отбрасываем.
+  async function addByName() {
+    const name = code.trim().replace(/^@/, '').replace(/#\d+$/, '').trim()
+    if (!name) return
+    const p = await findByUsername(name)
+    if (!p) { setCodeMsg('Пользователь «' + name + '» не найден — проверь написание'); return }
+    if (p.id === meId) { setCodeMsg('Это твой собственный юзернейм :)'); return }
     const { error } = await sendRequest(meId, username, p)
     if (error) setCodeMsg(error.message)
-    else { setCode(''); setCodeMsg('Заявка отправлена ' + friendCode(p.username, p.id)) }
+    else { setCode(''); setCodeMsg('Заявка отправлена — ' + p.username) }
   }
 
   async function openChat(f: Friend) {
@@ -336,20 +339,20 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             {tab === 'add' ? <div className="pfr-addbox">
               <div className="pfr-addh">Добавить в друзья</div>
               <div className="pfr-codebox">
-                <div className="pfr-codeh">Мой код друга</div>
+                <div className="pfr-codeh">Мой юзернейм</div>
                 <div className="pfr-coderow">
-                  <span className="pfr-code">{friendCode(username, meId)}</span>
+                  <span className="pfr-code">{username}</span>
                   <span className="pfr-codehint">поделись им</span>
-                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(friendCode(username, meId)); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
+                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
                 </div>
-                <div className="pfr-codeh2">Добавить в друзья по коду</div>
+                <div className="pfr-codeh2">Добавить в друзья по юзернейму</div>
                 <div className="pfr-addcoderow">
-                  <input className="pfr-addin" placeholder="Введи код друга (например, Сергей#4242)" value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addByCode() }} />
-                  <button className="pfr-addbtn2" onClick={addByCode}>Добавить</button>
+                  <input className="pfr-addin" placeholder="Введи юзернейм (например, guchipon)" value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addByName() }} />
+                  <button className="pfr-addbtn2" onClick={addByName}>Отправить заявку</button>
                 </div>
                 {codeMsg && <div className="pfr-codemsg">{codeMsg}</div>}
               </div>
-              <div className="pfr-addsub">Найди друзей по имени пользователя.</div>
+              <div className="pfr-addsub">Или найди по части имени.</div>
               <input className="pfr-addin" placeholder="Введи имя пользователя…" value={q} onChange={e => doSearch(e.target.value)} />
               {results.map(p => (
                 <div key={p.id} className="pfr-row" onClick={() => add(p)}>
