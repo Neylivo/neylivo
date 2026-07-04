@@ -8,6 +8,9 @@ import { Toasts } from './lib/toast'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
 
+// v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
+declare const __APP_VERSION__: string
+
 // Десктоп без системной рамки (v1.28.0): тонкий тёмный тайтлбар рисуем сами,
 // а нативные кнопки «свернуть/развернуть/закрыть» отдаёт Windows-overlay
 // (см. electron/main.cjs, titleBarOverlay). Вся полоска — drag-регион.
@@ -100,5 +103,7 @@ export default function App() {
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>
+    {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу */}
+    <div className="app-ver">v{__APP_VERSION__}</div>
   </>
 }

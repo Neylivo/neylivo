@@ -2972,3 +2972,17 @@ body.no-anim .member-typing i { animation:none; }
 /* ===== v1.54.0: питомец профиля — на баннере, 3D-вращение, свободные позиции ===== */
 .pc-left { position:relative; }
 .pet2-freehint { margin:10px 2px 0; font-size:13px; color:#949cf7; }
+
+/* v1.59.0: текущая версия в правом нижнем углу — мелко, полупрозрачно, не мешает кликам */
+.app-ver {
+  position: fixed;
+  right: 6px;
+  bottom: 4px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted, #949ba4);
+  opacity: .55;
+  pointer-events: none;
+  user-select: none;
+  z-index: 40;
+}
