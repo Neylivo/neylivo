@@ -30,15 +30,16 @@ const SRV_TEMPLATES = [
   { icon: '🌍', label: 'Локальное сообщество' },
 ]
 
-export function CreateServerModal({ uid, onClose, onCreate, onJoin }:
-  { uid: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void; onJoin?: () => void }) {
-  // Двухшаговая модалка как в Discord: выбор шаблона → персонализация (имя + значок).
-  const [step, setStep] = useState<'pick' | 'custom'>('pick')
+export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
+  { uid: string; username?: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void; onJoin?: () => void }) {
+  // Трёхшаговая модалка как в Discord:
+  // выбор шаблона → «Расскажите нам о вашем сервере» → персонализация (имя + значок).
+  const [step, setStep] = useState<'pick' | 'about' | 'custom'>('pick')
+  const [tplName, setTplName] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const initials = (name.trim() || 'PG').slice(0, 2).toUpperCase()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -52,30 +53,35 @@ export function CreateServerModal({ uid, onClose, onCreate, onJoin }:
     finally { setBusy(false) }
   }
   function chooseTpl(label: string | null) {
-    if (label) setName(label)
+    setTplName(label)
+    setStep('about')
+  }
+  function toCustom() {
+    // Имя по умолчанию: из шаблона, иначе «Сервер <ник>» — как в Discord.
+    setName(tplName ?? `Сервер ${username || 'guchip0n'}`)
     setStep('custom')
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal csrv" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        {step === 'pick' ? (<>
+        {step === 'pick' && (<>
           <div className="csrv-head">
             <div className="modal-title">Создайте свой сервер</div>
             <div className="modal-sub">Ваш сервер — это место, где вы можете тусоваться со своими друзьями. Создайте сервер и начните общаться.</div>
           </div>
           <div className="csrv-list">
             <button className="csrv-row" onClick={() => chooseTpl(null)}>
-              <span className="csrv-ico">{'🚀'}</span>
+              <span className="csrv-ico">🚀</span>
               <span className="csrv-lbl">Свой шаблон</span>
-              <span className="csrv-arr">{'›'}</span>
+              <span className="csrv-arr">›</span>
             </button>
             <div className="csrv-sect">Начните с шаблона</div>
             {SRV_TEMPLATES.map(t => (
               <button key={t.label} className="csrv-row" onClick={() => chooseTpl(t.label)}>
                 <span className="csrv-ico">{t.icon}</span>
                 <span className="csrv-lbl">{t.label}</span>
-                <span className="csrv-arr">{'›'}</span>
+                <span className="csrv-arr">›</span>
               </button>
             ))}
           </div>
@@ -83,25 +89,53 @@ export function CreateServerModal({ uid, onClose, onCreate, onJoin }:
             <div className="csrv-join-t">У вас уже есть приглашение?</div>
             <button className="csrv-joinbtn" onClick={() => { onClose(); onJoin?.() }}>Присоединиться к серверу</button>
           </div>
-        </>) : (<>
+        </>)}
+        {step === 'about' && (<>
+          <div className="csrv-head">
+            <div className="modal-title">Расскажите нам о вашем сервере</div>
+            <div className="modal-sub">Чтобы мы смогли помочь вам с настройкой, скажите, для кого предназначен ваш сервер: для друзей или большого сообщества?</div>
+          </div>
+          <div className="csrv-list">
+            <button className="csrv-row" onClick={toCustom}>
+              <span className="csrv-ico">🌐</span>
+              <span className="csrv-lbl">Для клуба или сообщества</span>
+              <span className="csrv-arr">›</span>
+            </button>
+            <button className="csrv-row" onClick={toCustom}>
+              <span className="csrv-ico">😺</span>
+              <span className="csrv-lbl">Для меня и друзей</span>
+              <span className="csrv-arr">›</span>
+            </button>
+            <div className="csrv-skip">Затрудняетесь ответить? Вы можете пока <a onClick={toCustom}>пропустить этот вопрос</a>.</div>
+          </div>
+          <div className="csrv-foot single">
+            <button className="modal-ghost" onClick={() => setStep('pick')}>Назад</button>
+          </div>
+        </>)}
+        {step === 'custom' && (<>
           <div className="csrv-head">
             <div className="modal-title">Персонализируйте свой сервер</div>
-            <div className="modal-sub">Персонализируйте свой новый сервер, выбрав ему название и значок. Их всегда можно изменить.</div>
+            <div className="modal-sub">Персонализируйте свой новый сервер, выбрав ему название и значок. Их можно будет изменить в любой момент.</div>
           </div>
           <div className="csrv-body">
-            <div className="modal-avwrap">
-              <div className="modal-av" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>
-                {!avatar && initials}
-              </div>
-              <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="camera" size={16} /> Аватарка</>}</button>
+            <div className="csrv-upwrap">
+              <button className="csrv-up" style={avatar ? { backgroundImage: `url(${avatar})`, borderStyle: 'solid' } : undefined}
+                onClick={() => fileRef.current?.click()} title="Загрузить значок">
+                {!avatar && (<>
+                  <Icon name="camera" size={22} />
+                  <span className="csrv-up-t">{busy ? '…' : 'UPLOAD'}</span>
+                </>)}
+                <span className="csrv-up-plus">+</span>
+              </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
             </div>
-            <label className="modal-lbl">Название сервера</label>
-            <input className="modal-in" autoFocus placeholder="Например, My Server" value={name}
+            <label className="modal-lbl">Название сервера <span className="csrv-req">*</span></label>
+            <input className="modal-in" autoFocus value={name}
               onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
+            <div className="csrv-terms">Создавая сервер, вы соглашаетесь с <a>Правилами Сообщества</a> Ponoi.</div>
           </div>
           <div className="csrv-foot">
-            <button className="modal-ghost" onClick={() => setStep('pick')}>Назад</button>
+            <button className="modal-ghost" onClick={() => setStep('about')}>Назад</button>
             <button className="modal-primary" disabled={!name.trim() || busy} onClick={() => onCreate(name.trim(), avatar)}>Создать</button>
           </div>
         </>)}
