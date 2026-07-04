@@ -19,6 +19,9 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const [busy, setBusy] = useState(false)
   const [micOff, setMicOff] = useState(false)
   const [deaf, setDeaf] = useState(false)
+  // Микро-анимации (<=300мс): тряска микрофона при муте, «сжатие» наушников при дефе.
+  const [micAnim, setMicAnim] = useState(false)
+  const [deafAnim, setDeafAnim] = useState(false)
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -44,8 +47,14 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <span className="me-nm" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer' }} title="Мой профиль">
         {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : null; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
       </span>
-      <button className={'me-ic' + (micOff ? ' off' : '')} onClick={() => setMicOff(m => !m)} title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
-      <button className={'me-ic' + (deaf ? ' off' : '')} onClick={() => setDeaf(d => !d)} title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
+      <button className={'me-ic' + (micOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
+        onClick={() => setMicOff(m => { if (!m) setMicAnim(true); return !m })}
+        onAnimationEnd={() => setMicAnim(false)}
+        title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
+      <button className={'me-ic' + (deaf ? ' off' : '') + (deafAnim ? ' anim-squeeze' : '')}
+        onClick={() => setDeaf(d => { if (!d) setDeafAnim(true); return !d })}
+        onAnimationEnd={() => setDeafAnim(false)}
+        title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
       <button className="me-out" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onClose={() => setSettingsOpen(false)} />}
       {miniOpen && user && <MiniProfile

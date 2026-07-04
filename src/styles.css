@@ -267,10 +267,10 @@ body.compact .msgs { gap:0; }
 .pqs-optrow { display:flex; justify-content:space-between; align-items:center; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.06); gap:16px; }
 .pqs-optt { font-weight:600; }
 .pqs-optd { color:var(--mut); font-size:13px; margin-top:2px; }
-.pqs-toggle { width:44px; height:24px; border-radius:12px; background:#72767d; border:none; cursor:pointer; position:relative; transition:background .15s ease; flex-shrink:0; }
-.pqs-toggle span { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s ease; }
-.pqs-toggle.on { background:var(--green); }
-.pqs-toggle.on span { left:23px; }
+.pqs-toggle { width:44px; height:24px; border-radius:12px; background:#4f545c; border:none; cursor:pointer; position:relative; transition:background-color .2s ease-in-out; flex-shrink:0; }
+.pqs-toggle span { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .2s cubic-bezier(.4, 0, .2, 1); }
+.pqs-toggle.on { background:#6366F1; }
+.pqs-toggle.on span { transform:translateX(20px); }
 .pqs-lbl { display:block; margin:16px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
 .pqs-in { width:100%; background:var(--bg3); border:1px solid rgba(0,0,0,.3); border-radius:6px; padding:10px 12px; color:var(--tx); outline:none; font-family:inherit; font-size:15px; resize:vertical; }
 .pqs-in:focus { border-color:var(--brand); }
@@ -1636,3 +1636,53 @@ body.no-anim .member-typing i { animation:none; }
 .mini-acc { display:flex; align-items:center; gap:10px; padding:9px 10px; font-size:13.5px; font-weight:600; color:#fff; }
 .mini-acc .av-wrap { flex:none; }
 .mini-acc-check { margin-left:auto; width:20px; height:20px; border-radius:50%; background:#5865f2; color:#fff; display:flex; align-items:center; justify-content:center; flex:none; }
+
+
+/* ===== v1.13.0: живые кнопки — два типа анимаций ===== */
+/* Тип 1. Переключатели: только плавное перетекание (без агрессии). */
+/* см. переопределение .pqs-toggle выше по файлу */
+
+/* Тип 2. Функциональные кнопки: эмоциональные микро-анимации <= 300мс. */
+@keyframes mic-shake {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-15deg); }
+  40% { transform: rotate(15deg); }
+  60% { transform: rotate(-10deg); }
+  80% { transform: rotate(10deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes phones-squeeze {
+  0% { transform: scale(1, 1); }
+  35% { transform: scale(0.75, 0.92); }
+  65% { transform: scale(1.1, 0.96); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes gif-jump {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes icon-wiggle {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-12deg); }
+  60% { transform: rotate(10deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Нижняя панель: микрофон «передёргивает» при муте, наушники «сжимаются» при дефе. */
+.me-ic { transition: background .15s ease, color .15s ease, transform .15s ease; }
+.me-ic:active { transform: scale(.88); }
+.me-ic svg { display: block; margin: 0 auto; }
+.me-ic.anim-shake svg { animation: mic-shake .3s ease-in-out; }
+.me-ic.anim-squeeze svg { animation: phones-squeeze .3s ease-in-out; }
+
+/* Композер: кнопки «оживают» при наведении (pop + прыжок букв GIF, подмигивание иконок). */
+.composer .ctool { transition: background .15s ease, transform .18s cubic-bezier(.34, 1.56, .64, 1); }
+.composer .ctool:hover { transform: translateY(-1px) scale(1.06); }
+.composer .ctool:active { transform: scale(.92); }
+.composer .ctool:hover > svg { animation: icon-wiggle .3s ease; }
+.gif-badge-oval { transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.ctool.gif-badge:hover .gif-badge-oval { transform: scale(1.12); }
+.gif-badge-oval i { display: inline-block; font-style: normal; }
+.ctool.gif-badge:hover .gif-badge-oval i { animation: gif-jump .3s ease; }
+.ctool.gif-badge:hover .gif-badge-oval i:nth-child(2) { animation-delay: .05s; }
+.ctool.gif-badge:hover .gif-badge-oval i:nth-child(3) { animation-delay: .1s; }
