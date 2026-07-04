@@ -1514,3 +1514,28 @@ body.no-anim .member-typing i { animation:none; }
 .ep2-add { border:1.5px dashed #5c5e66; color:#b5bac1; }
 .ep2-add:hover { border-color:#fff; color:#fff; }
 .ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }
+
+/* ===== Панель ввода 1-в-1 как в эталоне: единая тёмная капсула ===== */
+.composer { background:#383a40; border-radius:24px; margin:0 16px 20px; padding:0 8px 0 6px; gap:2px; min-height:46px; align-items:center; }
+.composer input { background:transparent; border-radius:0; padding:12px 8px; }
+.composer .attach-btn { background:transparent; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#b5bac1; border-radius:50%; padding:0; }
+.composer .attach-btn:hover { background:transparent; color:#fff; }
+.composer .ctool { background:transparent; height:38px; min-width:36px; padding:0 6px; color:#b5bac1; display:flex; align-items:center; justify-content:center; }
+.composer .ctool:hover { background:transparent; color:#fff; }
+.composer .ctool.rec-on { color:#da373c; }
+.composer .ctool.spoiler-t.on { color:var(--brand,#5865f2); }
+/* Бейдж GIF — овальная рамка с надписью, как в Discord */
+.composer .ctool.gif-badge { font-size:10.5px; font-weight:800; letter-spacing:.4px; }
+.composer .ctool.gif-badge::before { content:none; }
+.composer .ctool.gif-badge { border:0; }
+.composer .gif-badge { position:relative; }
+.composer .gif-badge span, .composer .gif-badge { line-height:1; }
+.composer .ctool.gif-badge { min-width:0; }
+.composer .ctool.gif-badge { padding:0 4px; }
+.composer .ctool.gif-badge::after { content:''; }
+.composer .ctool.gif-badge { width:auto; }
+.gif-badge-oval { border:1.7px solid currentColor; border-radius:9px; padding:2px 5px; display:inline-block; }
+.composer .send-busy { background:transparent; color:#b5bac1; padding:0 8px; }
+/* Меню плюса и капсула записи позиционируются от капсулы */
+.composer .plus-menu { bottom:46px; }
+.voice-pill { margin:6px 16px 4px; }

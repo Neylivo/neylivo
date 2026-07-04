@@ -369,12 +369,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             onClick={() => setSpoiler(s => !s)}>| |</button>}
           <button type="button" className="ctool" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
-          <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}>GIF</button>
+          <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval">GIF</span></button>
           <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
           {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
         </div>
-        <button type="submit" disabled={busy}>{busy ? '…' : <Icon name="send" size={18} />}</button>
+        {busy && <button type="submit" className="send-busy" disabled>…</button>}
       </form>
     </>
   )
