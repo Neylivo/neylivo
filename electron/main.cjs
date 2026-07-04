@@ -124,7 +124,7 @@ function scanGames() {
 // Frameless-окно 650x400 (#0B0E14): логотип слева, прогресс справа. Пока оно
 // крутится, приложение готовится и проверяет обновления; затем схлопывается.
 let splash = null
-const SPLASH_MIN_MS = 2600   // минимум времени на экране, чтобы не мигал
+const SPLASH_MIN_MS = 1100   // v1.31.0: короче — приложение стартует заметно быстрее
 let splashShownAt = 0
 
 function createSplash() {
@@ -156,7 +156,8 @@ function closeSplashAndShow(win) {
   setTimeout(() => {
     try { splash?.webContents.send('splash-done') } catch {}
     // Даём splash-у доиграть «схлопывание» (fade из splash.html), затем показываем приложение.
-    setTimeout(() => { try { splash?.close() } catch {}; try { win.show(); win.focus() } catch {} }, 420)
+    // v1.31.0: открываемся развёрнутыми на весь экран (как Discord), а не маленьким окном.
+    setTimeout(() => { try { splash?.close() } catch {}; try { win.maximize(); win.show(); win.focus() } catch {} }, 300)
   }, wait)
 }
 
@@ -233,8 +234,16 @@ app.whenReady().then(() => {
       })
       autoUpdater.on('update-downloaded', (info) => bcastUpd({ state: 'ready', version: info && info.version }))
       ipcMain.on('ponoi-apply-update', () => { try { autoUpdater.quitAndInstall() } catch {} })
-      const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
-      check()
+      // v1.31.0: не дёргаем GitHub на каждый запуск — если проверяли меньше
+      // 30 минут назад, стартовую проверку пропускаем (фон раз в 4 часа остаётся).
+      const fs = require('fs')
+      const stampFile = path.join(app.getPath('userData'), 'update-check.json')
+      const lastCheckAt = () => { try { return JSON.parse(fs.readFileSync(stampFile, 'utf8')).at || 0 } catch { return 0 } }
+      const check = () => {
+        try { fs.writeFileSync(stampFile, JSON.stringify({ at: Date.now() })) } catch {}
+        try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {}
+      }
+      if (Date.now() - lastCheckAt() > 30 * 60 * 1000) check()
       setInterval(check, 4 * 60 * 60 * 1000)
     } catch {}
   }

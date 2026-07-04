@@ -2414,3 +2414,10 @@ body.no-anim .member-typing i { animation:none; }
 .vo-av { flex:none; display:flex; border-radius:50%; transition:box-shadow .12s ease; }
 .vo.speaking .vo-av { box-shadow:0 0 0 2px #3ba55d; }
 .vo-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ==== v1.31.0: верхняя панель канала 1-в-1 как в Discord ==== */
+.chat-head.ph2 { gap:8px; }
+.ph2-hash { color:#80848e; font-size:22px; font-weight:400; line-height:1; flex:none; }
+.ph2-name { font-weight:700; color:#f2f3f5; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ph2-btns { margin-left:auto; display:flex; align-items:center; gap:4px; flex:none; }
+.ph2-btns .pin-btn { margin-left:0; }

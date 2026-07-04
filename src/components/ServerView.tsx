@@ -305,6 +305,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => window.removeEventListener('beforeunload', h)
   }, [voice])
 
+  // Ctrl+F — поиск по сообщениям (кнопки в панели больше нет, как в Discord-макете).
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); setShowThreads(false); setShowPins(false); setShowSearch(s => !s) }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+    // eslint-disable-next-line
+  }, [])
+
   // Escape закрывает панель закреплённых.
   useEffect(() => {
     if (!showPins) return
@@ -605,18 +615,17 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
-        <header className="chat-head"># {curChannel?.name ?? '—'}
-          <span className="head-online" title="Участников в сети"><span className="head-online-dot" />{members.filter(mm => statusOf(mm.user_id) !== 'offline').length}</span>
-          {(() => {
-            const fm = messages.find(m => m.content && m.author !== user?.id && mentionsUser(m.content, username))
-            return fm ? <button className="pin-btn at-btn" title="К первому упоминанию тебя" onClick={() => jumpToMessage(fm.id)}>@</button> : null
-          })()}
-          <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
-          <button className="pin-btn" title="Пригласить на сервер" onClick={invite}><Icon name="user-plus" size={18} /></button>
-          <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => { setShowPins(false); setShowSearch(s => !s) }}><Icon name="search" size={18} /></button>
-          <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
-          <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
-            onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
+        {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
+        <header className="chat-head ph2">
+          <span className="ph2-hash">#</span>
+          <span className="ph2-name">{curChannel?.name ?? '—'}</span>
+          <div className="ph2-btns">
+            <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
+            <button className={'pin-btn' + (curChannel && mutedCh[curChannel.id] ? ' on' : '')} title={curChannel && mutedCh[curChannel.id] ? 'Включить уведомления канала' : 'Заглушить канал'} onClick={() => curChannel && toggleMuteCh(curChannel.id)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
+            <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
+            <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
+              onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
+          </div>
         </header>
         {showThreads && <div className="thr-panel">
           <div className="thr-top">
