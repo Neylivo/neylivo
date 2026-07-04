@@ -348,3 +348,51 @@ export function CreateCategoryModal({ onClose, onCreate }: { onClose: () => void
     </Overlay>
   )
 }
+// Модалка «Присоединиться к серверу» — 1-в-1 как в Discord (v1.46.0).
+export function JoinServerModal({ onClose, onBack, onDiscover, onJoin }:
+  { onClose: () => void; onBack: () => void; onDiscover: () => void; onJoin: (code: string) => Promise<void> | void }) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  async function submit() {
+    if (!code.trim() || busy) return
+    setBusy(true)
+    try { await onJoin(code.trim()) } finally { setBusy(false) }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal jsm" onClick={e => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+        <div className="jsm-head">
+          <div className="modal-title">Присоединиться к серверу</div>
+          <div className="modal-sub">Введите приглашение, чтобы присоединиться к существующему серверу.</div>
+        </div>
+        <label className="modal-lbl">Ссылка-приглашение <span className="csrv-req">*</span></label>
+        <input className="modal-in" autoFocus placeholder="https://ponoiai.github.io/ponoi/hjk2m3np" value={code}
+          onChange={e => setCode(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') submit() }} />
+        <div className="jsm-ex-t">Приглашения должны выглядеть так:</div>
+        <div className="jsm-ex">
+          <span>hjk2m3np</span>
+          <span>https://ponoiai.github.io/ponoi/hjk2m3np</span>
+        </div>
+        <button className="jsm-disc" onClick={onDiscover}>
+          <span className="jsm-disc-ic"><Icon name="compass" size={22} /></span>
+          <span className="jsm-disc-tx">
+            <b>Нет приглашения?</b>
+            <span>Загляните в доступные для обнаружения сообщества в «Путешествии по серверам».</span>
+          </span>
+          <span className="jsm-disc-arr">›</span>
+        </button>
+        <div className="jsm-foot">
+          <button className="modal-ghost" onClick={onBack}>Назад</button>
+          <button className="modal-primary" disabled={!code.trim() || busy} onClick={submit}>Присоединиться к серверу</button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -2671,3 +2671,20 @@ body.no-anim .member-typing i { animation:none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
 }
+/* ===== v1.46.0: модалка «Присоединиться к серверу» 1-в-1 как в Discord ===== */
+.modal.jsm { width:440px; padding-bottom:0; overflow:hidden; }
+.jsm-head { margin-bottom:18px; }
+.jsm-head .modal-sub { padding:0 8px; }
+.jsm-ex-t { margin:14px 0 6px; font-size:13px; font-weight:600; color:var(--tx); }
+.jsm-ex { display:flex; flex-wrap:wrap; gap:6px; }
+.jsm-ex span { background:var(--bg3); border-radius:4px; padding:4px 8px; font-size:13px; color:var(--tx); }
+.jsm-disc { display:flex; align-items:center; gap:12px; width:100%; margin-top:16px; padding:12px; background:var(--bg3); border:none; border-radius:8px; cursor:pointer; text-align:left; color:var(--tx); font:inherit; transition:background .15s ease; }
+.jsm-disc:hover { background:var(--c-hover); }
+.jsm-disc-ic { width:40px; height:40px; border-radius:50%; background:#23a55a; color:#fff; display:flex; align-items:center; justify-content:center; flex:none; }
+.jsm-disc-tx { flex:1; display:flex; flex-direction:column; gap:2px; }
+.jsm-disc-tx b { font-size:15px; font-weight:700; }
+.jsm-disc-tx span { font-size:12.5px; color:var(--mut); line-height:1.35; }
+.jsm-disc-arr { color:var(--mut); font-size:24px; line-height:1; flex:none; transition:translate .15s var(--ease-out4), color .15s ease; }
+.jsm-disc:hover .jsm-disc-arr { translate:3px 0; color:var(--tx); }
+.jsm-foot { display:flex; align-items:center; justify-content:space-between; margin:20px -24px 0; padding:16px 24px; background:var(--c-main); }
+.jsm-foot .modal-ghost { padding-left:0; }

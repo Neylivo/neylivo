@@ -7,7 +7,7 @@ import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
 import { MusicPlayer } from '../music/MusicPlayer'
 import { myServers, createServer as createSrv, joinByCode, findServers, deleteServer, updateServer } from '../lib/servers'
-import { CreateServerModal, FindServerModal, ServerCtxMenu, ServerNotifModal } from './ServerModals'
+import { CreateServerModal, FindServerModal, JoinServerModal, ServerCtxMenu, ServerNotifModal } from './ServerModals'
 import { ServerSettings } from './ServerSettings'
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
@@ -36,6 +36,7 @@ export function Home() {
   const [view, setView] = useState<View>({ kind: 'dm' })
   const [showCreate, setShowCreate] = useState(false)
   const [showFind, setShowFind] = useState(false)
+  const [showJoin, setShowJoin] = useState(false)   // v1.46.0: модалка «Присоединиться к серверу»
   const [ctx, setCtx] = useState<{ server: Server; x: number; y: number } | null>(null)
   const [settingsServer, setSettingsServer] = useState<Server | null>(null)
   const [musicOn, setMusicOn] = useState(false)   // плеер остаётся смонтирован — музыка играет в фоне
@@ -308,7 +309,19 @@ export function Home() {
       else if (t.kind === 'server') { setView({ kind: 'server', server: t.server }); clearUnread(t.server.id) }
       else { setView({ kind: 'dm' }); setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: t.friend })), 60) }
     }} />}
-    {showCreate && <CreateServerModal uid={user?.id ?? ''} username={username} onClose={() => setShowCreate(false)} onCreate={onCreate} onJoin={() => setShowFind(true)} />}
+    {showCreate && <CreateServerModal uid={user?.id ?? ''} username={username} onClose={() => setShowCreate(false)} onCreate={onCreate} onJoin={() => setShowJoin(true)} />}
+    {showJoin && <JoinServerModal
+      onClose={() => setShowJoin(false)}
+      onBack={() => { setShowJoin(false); setShowCreate(true) }}
+      onDiscover={() => { setShowJoin(false); setShowFind(true) }}
+      onJoin={async code => {
+        if (!user) return
+        const res = await joinByCode(code, user.id, username)
+        if (res.error) { toastErr(res.error.message ?? 'Приглашение не найдено'); return }
+        toastOk('Добро пожаловать на сервер!')
+        setShowJoin(false)
+        if (res.serverId) refresh(res.serverId)
+      }} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
