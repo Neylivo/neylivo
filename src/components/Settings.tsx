@@ -11,19 +11,30 @@ import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 
-const CATS = [
-  { k: 'account', label: 'Мой аккаунт' },
-  { k: 'appearance', label: 'Внешний вид' },
-  { k: 'chat', label: 'Чат' },
-  { k: 'notifications', label: 'Уведомления' },
-  { k: 'voice', label: 'Голос и видео' },
-  { k: 'keybinds', label: 'Горячие клавиши' },
-  { k: 'language', label: 'Язык' },
-  { k: 'display', label: 'Дисплей' },
-  { k: 'privacy', label: 'Конфиденциальность' },
-  { k: 'activity', label: 'Активность' },
-  { k: 'advanced', label: 'Дополнительно' },
-] as const
+// v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
+// слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
+// справа прокручиваемое содержимое секциями со строками «Изменить».
+const NAV: { group: string | null; items: { k: string; label: string; icon: string; subs?: { k: string; label: string }[] }[] }[] = [
+  { group: null, items: [
+    { k: 'account', label: 'Учётная запись', icon: 'user', subs: [
+      { k: 'acc-info', label: 'Информация об учётной записи' },
+      { k: 'acc-security', label: 'Пароль и безопасность' },
+    ] },
+    { k: 'profile', label: 'Профиль', icon: 'edit' },
+    { k: 'privacy', label: 'Данные и конфиденциальность', icon: 'shield' },
+    { k: 'notifications', label: 'Уведомления', icon: 'bell' },
+  ] },
+  { group: 'Настройки приложения', items: [
+    { k: 'appearance', label: 'Внешний вид', icon: 'image' },
+    { k: 'chat', label: 'Чат', icon: 'message' },
+    { k: 'voice', label: 'Голос и видео', icon: 'mic' },
+    { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' },
+    { k: 'language', label: 'Язык', icon: 'compass' },
+    { k: 'display', label: 'Дисплей', icon: 'expand' },
+    { k: 'activity', label: 'Активность', icon: 'gamepad' },
+    { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
+  ] },
+]
 
 const LANGS = [
   { id: 'ru', flag: '🇷🇺', name: 'Русский', sub: 'Russian' },
@@ -111,31 +122,39 @@ function ChatBgCard() {
 export function Settings({ username, avatarUrl, onClose }:
   { username: string; avatarUrl?: string | null; onClose: () => void }) {
   const { user } = useAuth()
-  const { settings, set, setCustom, accents, themes } = useSettings()
+  const { settings, set, setCustom, themes } = useSettings()
   const [cat, setCat] = useState<string>('account')
+  const [navQ, setNavQ] = useState('')                        // поиск по разделам в сайдбаре
   const [name, setName] = useState(username)                 // ник (отображаемое имя) — свободный, может повторяться
   const [uname, setUname] = useState('')                      // юзернейм — уникальный, по нему добавляют в друзья
   const [nameChangedAt, setNameChangedAt] = useState<string | null>(null) // юзернейм меняется раз в 2 недели
   const [orig, setOrig] = useState({ name: username, uname: '', about: '', primary: DEFAULT_PROFILE.primary, accent: DEFAULT_PROFILE.accent }) // исходные значения — для плашки «несохранённые изменения»
-  // v1.40.0: цвета профиля — тоже черновик: применяются только по «Сохранить изменения», как в Discord
   const [primary, setPrimary] = useState(DEFAULT_PROFILE.primary)
   const [accent, setAccent] = useState(DEFAULT_PROFILE.accent)
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
-  const [busy, setBusy] = useState(false)      // v1.42.0: идёт сохранение — кнопки заблокированы
-  const [shake, setShake] = useState(false)    // v1.42.0: тряска плашки при попытке закрыть без сохранения
+  const [busy, setBusy] = useState(false)      // идёт сохранение — кнопки заблокированы
+  const [shake, setShake] = useState(false)    // тряска плашки при попытке закрыть без сохранения
   const dirtyRef = useRef(false)
   const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
+  // v1.50.0: строки «Изменить» и смена почты/пароля как в Discord
+  const [showEmail, setShowEmail] = useState(false)
+  const [editNick, setEditNick] = useState(false)
+  const [editUname, setEditUname] = useState(false)
+  const [editEmail, setEditEmail] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [editPw, setEditPw] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
 
   useEffect(() => {
     if (!user) return
     let ok = true
     fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about); setPrimary(p.primary); setAccent(p.accent); setOrig(o => ({ ...o, about: p.about, primary: p.primary, accent: p.accent })) } })
-    // v1.42.0: надёжная загрузка. Трёхступенчатый фолбэк по миграциям (сначала без
-    // username_changed_at, потом без display_name), а если строки профиля нет совсем
-    // или юзернейм пуст (сбой при регистрации) — чиним профиль сами. Поля не бывают пустыми.
+    // Надёжная загрузка: трёхступенчатый фолбэк по миграциям, починка пустого юзернейма.
     ;(async () => {
       let r: any = await supabase.from('profiles').select('username, display_name, username_changed_at').eq('id', user.id).maybeSingle()
       if (r.error) r = await supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle()
@@ -171,7 +190,6 @@ export function Settings({ username, avatarUrl, onClose }:
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      // v1.42.0: с несохранёнными изменениями настройки не закрываются — плашка трясётся (как в Discord)
       if (dirtyRef.current) { setShake(true); window.setTimeout(() => setShake(false), 600) }
       else onClose()
     }
@@ -180,11 +198,9 @@ export function Settings({ username, avatarUrl, onClose }:
     // eslint-disable-next-line
   }, [onClose])
 
-  // v1.39.0: плашка «несохранённые изменения» — как в настройках сервера
   const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about || primary !== orig.primary || accent !== orig.accent
   dirtyRef.current = dirty
   function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about); setPrimary(orig.primary); setAccent(orig.accent) }
-  // v1.42.0: закрытие с несохранёнными изменениями — только через «Сбросить» или «Сохранить»
   function tryClose() {
     if (dirty) { setShake(true); window.setTimeout(() => setShake(false), 600); return }
     onClose()
@@ -216,7 +232,6 @@ export function Settings({ username, avatarUrl, onClose }:
       setNameChangedAt(new Date().toISOString())
     }
     if (newNick !== orig.name) {
-      // Ник (отображаемое имя) — свободный: меняется когда угодно, может совпадать у разных людей
       const { error } = await supabase.from('profiles').update({ display_name: newNick || null }).eq('id', user!.id)
       if (error) { toastErr(error.message ?? String(error)); return }
       localStorage.setItem('ponoi_username', newNick || newUname || username)
@@ -226,293 +241,395 @@ export function Settings({ username, avatarUrl, onClose }:
     const finalNick = newNick || finalUname
     setName(finalNick); setUname(finalUname)
     setOrig({ name: finalNick, uname: finalUname, about, primary, accent })
-    // Мгновенно обновляем имя во всём приложении (Home слушает это событие) — без перезагрузки.
     window.dispatchEvent(new CustomEvent('ponoi-profile-updated', { detail: { nick: newNick || newUname || username, handle: newUname || orig.uname } }))
     toastOk('Изменения сохранены')
     setSaved(true); setTimeout(() => setSaved(false), 1500)
     } finally { setBusy(false) }
   }
 
+  async function changeEmail() {
+    const e = newEmail.trim()
+    if (!e || !user) return
+    const { error } = await supabase.auth.updateUser({ email: e })
+    if (error) toastErr(error.message)
+    else { toastOk('Письмо с подтверждением отправлено на ' + e); setEditEmail(false); setNewEmail('') }
+  }
+  async function changePw() {
+    if (pwBusy) return
+    if (pw1.length < 6) { toastErr('Пароль должен быть не короче 6 символов'); return }
+    if (pw1 !== pw2) { toastErr('Пароли не совпадают'); return }
+    setPwBusy(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw1 })
+      if (error) toastErr(error.message)
+      else { toastOk('Пароль изменён'); setEditPw(false); setPw1(''); setPw2('') }
+    } finally { setPwBusy(false) }
+  }
+
+  function jumpTo(k: string) {
+    setCat('account')
+    window.setTimeout(() => document.getElementById('pqs2-' + k)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
+
+  const emailMasked = (user?.email ?? '').replace(/^[^@]+/, '**********') || '—'
+  const curLabel = NAV.flatMap(g => g.items).find(i => i.k === cat)?.label ?? 'Настройки'
+
   return (
-    <div className="pqs">
-      <div className="pqs-sidebar">
-        <div className="pqs-side-inner">
-          <div className="pqs-side-h">Настройки пользователя</div>
-          {CATS.map(c => (
-            <div key={c.k} className={'pqs-cat' + (cat === c.k ? ' on' : '')} onClick={() => setCat(c.k)}>{c.label}</div>
-          ))}
-          <div className="pqs-cat danger" onClick={() => supabase.auth.signOut()}>Выйти</div>
+    <div className="pqs2-overlay" onClick={tryClose}>
+      <div className="pqs2" onClick={e => e.stopPropagation()}>
+        <div className="pqs2-head">
+          <div className="pqs2-head-t">{curLabel}</div>
+          <button className="pqs2-x" onClick={tryClose} title="Закрыть (Esc)"><Icon name="close" size={18} /></button>
         </div>
-      </div>
-      <div className="pqs-content">
-        <button className="pqs-close" onClick={tryClose} title="Закрыть (Esc)"><Icon name="close" size={18} /><span>ESC</span></button>
-        {dirty && <div className={'cset-savebar' + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
-          <span>Есть несохранённые изменения!</span>
-          <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
-          <button className="cset-save" onClick={saveAccount} disabled={busy}>{busy ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
-        </div>}
-        <div className="pqs-inner">
-          {cat === 'account' && <>
-            <h2>Мой аккаунт</h2>
-            <div className="pqs-code-card">
-              <div className="pqs-code-h">Юзернейм</div>
-              <div className="pqs-code-sub">Поделись своим юзернеймом, чтобы тебя добавили в друзья.</div>
-              <div className="pqs-code-row">
-                <span className="pqs-code-val">{uname || username}</span>
-                <span className="pqs-code-hint">твой юзернейм</span>
-                <button className="pqs-code-copy" onClick={() => navigator.clipboard?.writeText(uname || username)}>Копировать</button>
+        <div className="pqs2-body">
+          <div className="pqs2-side">
+            <div className="pqs2-me" onClick={() => setCat('profile')} title="Редактировать профиль">
+              <div className="pqs2-me-av" style={{ background: settings.accent }}>
+                {avatarUrl ? <img src={avatarUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
+              </div>
+              <div className="pqs2-me-tx">
+                <b>{name || username}</b>
+                <span>Редактировать профиль… <Icon name="edit" size={11} /></span>
               </div>
             </div>
-            <div className="pqs-acc-card">
-              <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
-              <div className="pqs-acc-row">
-                <div className="pqs-acc-av" style={{ background: settings.accent }}>
-                  {avatarUrl ? <img src={avatarUrl} alt={username} /> : username.slice(0, 1).toUpperCase()}
-                </div>
-                <div className="pqs-acc-names">
-                  <div className="pqs-acc-name">{name || username}</div>
-                  <div className="pqs-acc-uname">{uname}</div>
-                </div>
-              </div>
+            <div className="pqs2-search">
+              <Icon name="search" size={15} />
+              <input placeholder="Поиск" value={navQ} onChange={e => setNavQ(e.target.value)} />
             </div>
-            <div className="pqs-acc-card2">
-              <div className="pqs-sec-t">Тема профиля</div>
-              <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю после «Сохранить изменения».</div>
-              <div className="pqs-ptheme-row">
-                <label className="pqs-ptheme"><input type="color" value={primary} onChange={e => setPrimary(e.target.value)} /> Основной цвет</label>
-                <label className="pqs-ptheme"><input type="color" value={accent} onChange={e => setAccent(e.target.value)} /> Акцент</label>
-              </div>
-              <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
-              <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
-            </div>
-
-            <div className="pqs-acc-card2">
-              <div className="pqs-sec-t">Питомец профиля</div>
-              <div className="pqs-code-sub">Маленький питомец в правом нижнем углу твоего профиля (мини и большого). Можно фото, GIF, видео или 3D-модель (.glb/.gltf). Ставить не обязательно.</div>
-              <Row title="Показывать питомца" desc="Включи, чтобы поставить питомца на профиль">
-                <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
-              </Row>
-              <div className="pqs-pet-pick">
-                <div className="pqs-pet-thumb">{prof.petUrl ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted /> : <img src={prof.petUrl} alt="" />) : '—'}</div>
-                <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : 'Выбрать файл'}</button>
-                <button className="pqs-save" onClick={() => patchProf({ petUrl: null, petKind: 'none', petOn: false })}>Убрать</button>
-                <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
-              </div>
-              <div className="pqs-code-sub">Поддерживается: фото (PNG/JPG/WebP), GIF, видео (MP4/WebM — лучше короткое и зациклённое) и 3D-модель (.glb/.gltf — её можно вращать мышью).</div>
-              <Row title="Размер" desc={prof.petSize + ' px'}>
-                <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
-              </Row>
-              <div className="pqs-lbl">Позиция</div>
-              <div className="pqs-pet-pos">
-                {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
-                  <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
-                ))}
-              </div>
-              <div className="pqs-pet-previews">
-                <div>
-                  <div className="pqs-pet-plabel">Мини-профиль (1:1)</div>
-                  <div className="pqs-pet-card mini" style={{ position: 'relative' }}>
-                    <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
-                    <ProfilePet p={prof} scale={0.35} />
+            <div className="pqs2-nav">
+              {NAV.map((g, gi) => {
+                const items = g.items.filter(i => !navQ.trim() || i.label.toLowerCase().includes(navQ.trim().toLowerCase()))
+                if (items.length === 0) return null
+                return (
+                  <div key={gi}>
+                    {gi > 0 && <div className="pqs2-navsep" />}
+                    {g.group && <div className="pqs2-grp">{g.group}</div>}
+                    {items.map(i => (
+                      <div key={i.k}>
+                        <button className={'pqs2-item' + (cat === i.k ? ' on' : '')} onClick={() => setCat(i.k)}>
+                          <span className="pqs2-item-ic"><Icon name={i.icon} size={16} /></span>{i.label}
+                        </button>
+                        {i.subs && cat === i.k && <div className="pqs2-subs">
+                          {i.subs.map(s => (
+                            <button key={s.k} className="pqs2-sub" onClick={() => jumpTo(s.k)}>{s.label}</button>
+                          ))}
+                        </div>}
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div>
-                  <div className="pqs-pet-plabel">Большой профиль (1:1)</div>
-                  <div className="pqs-pet-card big" style={{ position: 'relative' }}>
-                    <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
-                    <ProfilePet p={prof} scale={0.5} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <label className="pqs-lbl">Ник (отображаемое имя)</label>
-            <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} placeholder="Как тебя видят другие" />
-            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Ник видят все в чатах и профиле. Он может совпадать у разных людей, менять можно когда угодно.</div>
-            <label className="pqs-lbl">Юзернейм</label>
-            <input className="pqs-in" value={uname} onChange={e => setUname(e.target.value)} />
-            <div className="pqs-code-sub" style={{ marginTop: 4 }}>Юзернейм уникален — по нему тебя добавляют в друзья. Менять можно раз в 2 недели.</div>
-            <label className="pqs-lbl">О себе</label>
-            <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
-            <div className="pqs-email">
-              <div className="pqs-lbl">Email</div>
-              <div className="pqs-email-val">{(user?.email ?? '').replace(/^(.).*(@.*)$/, (_m, a, b) => a + '••••••' + b) || '••••••@••••.•••'}</div>
-            </div>
-          </>}
-
-          {cat === 'appearance' && <>
-            <h2>Внешний вид</h2>
-            <ChatBgCard />
-
-            <div className="pqs-custom">
-              <div className="pqs-custom-h">Своя тема</div>
-              <div className="pqs-custom-sub">Задай цвет на каждую поверхность — можно собрать Discord целиком. Всё применяется сразу.</div>
-              {([
-                ['dark', 'Тёмный фон'], ['content', 'Основной фон'], ['panel', 'Панель'],
-                ['hover', 'Наведение'], ['active', 'Активный'], ['accent', 'Акцент'],
-              ] as const).map(([k, label]) => (
-                <div key={k} className="pqs-custom-row">
-                  <span>{label}</span>
-                  <input type="color" value={(settings.custom as any)[k]} onChange={e => setCustom({ [k]: e.target.value, on: true } as any)} />
-                  <button className="pqs-custom-x" title="Сбросить поверхность" onClick={() => { const d = (settings.theme && themes.find(t => t.key === settings.theme)) || themes[0]; setCustom({ [k]: (d as any)[k] } as any) }}>✕</button>
-                </div>
-              ))}
-              <div className="pqs-custom-row">
-                <span>Затемнение текстур (читаемость)</span>
-                <input type="range" min={0} max={100} value={settings.custom.dim} onChange={e => setCustom({ dim: Number(e.target.value) })} />
-                <span className="pqs-custom-pct">{settings.custom.dim}%</span>
-              </div>
-              <div className="pqs-custom-foot">
-                <label className="pqs-custom-toggle"><input type="checkbox" checked={settings.custom.on} onChange={e => setCustom({ on: e.target.checked })} /> Использовать свою тему</label>
-                <button className="pqs-save" onClick={() => setCustom({ on: false })}>Сбросить</button>
-              </div>
-            </div>
-
-            <div className="pqs-sec-t">Тема</div>
-            <div className="pqs-preset-grid">
-              {themes.map(t => (
-                <button key={t.key} className={'pqs-preset' + (settings.theme === t.key && !settings.custom.on ? ' on' : '')}
-                  onClick={() => { set('theme', t.key); set('accent', t.accent); setCustom({ on: false }) }}>
-                  <span className="pqs-preset-sw" style={{ background: t.content, borderColor: t.accent }}>
-                    <span style={{ background: t.accent }} />
-                  </span>
-                  <span className="pqs-preset-nm">{t.name}</span>
-                </button>
-              ))}
-            </div>
-
-            <Row title="Размер шрифта" desc={settings.fontPx + 'px'}>
-              <input type="range" min={12} max={20} step={1} value={settings.fontPx} onChange={e => set('fontPx', Number(e.target.value))} />
-            </Row>
-            <Row title="Компактный режим" desc="Уменьшает отступы между сообщениями">
-              <Toggle on={settings.compact} onChange={v => set('compact', v)} />
-            </Row>
-            <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
-              <Toggle on={settings.animations} onChange={v => set('animations', v)} />
-            </Row>
-            <Row title="Автосмена темы" desc="Днём (8:00–20:00) — светлая тема, ночью — выбранная. По умолчанию выключено">
-              <Toggle on={settings.autoTheme} onChange={v => set('autoTheme', v)} />
-            </Row>
-
-            <div className="pqs-sec-t">Шрифт и форма</div>
-            <label className="pqs-lbl">Шрифт интерфейса</label>
-            <select className="pqs-in" value={settings.fontFamily} onChange={e => set('fontFamily', e.target.value)}>
-              {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-            <Row title="Скругление углов" desc={settings.radius + 'px'}>
-              <input type="range" min={0} max={20} value={settings.radius} onChange={e => set('radius', Number(e.target.value))} />
-            </Row>
-            <Row title="Отступ между сообщениями" desc={settings.msgGap + 'px'}>
-              <input type="range" min={0} max={24} value={settings.msgGap} onChange={e => set('msgGap', Number(e.target.value))} />
-            </Row>
-          </>}
-
-          {cat === 'chat' && <>
-            <h2>Чат</h2>
-            <Row title="24-часовой формат времени" desc="Например, 14:30 вместо 2:30 PM">
-              <Toggle on={settings.time24} onChange={v => set('time24', v)} />
-            </Row>
-            <Row title="Показывать аватары" desc="Аватар автора рядом с сообщением">
-              <Toggle on={settings.showAvatars} onChange={v => set('showAvatars', v)} />
-            </Row>
-            <Row title="Группировать сообщения" desc="Объединять подряд идущие сообщения одного автора">
-              <Toggle on={settings.groupMessages} onChange={v => set('groupMessages', v)} />
-            </Row>
-            <Row title="Крупные эмодзи" desc="Сообщения только из эмодзи показывать крупно">
-              <Toggle on={settings.bigEmoji} onChange={v => set('bigEmoji', v)} />
-            </Row>
-            <div className="pqs-sec-t">Отправка сообщений</div>
-            <div className="pqs-preset-grid">
-              <button className={'pqs-preset' + (settings.sendKey === 'enter' ? ' on' : '')} onClick={() => set('sendKey', 'enter')}>
-                <span className="pqs-preset-nm">Enter — отправить</span>
-              </button>
-              <button className={'pqs-preset' + (settings.sendKey === 'ctrl' ? ' on' : '')} onClick={() => set('sendKey', 'ctrl')}>
-                <span className="pqs-preset-nm">Ctrl/⌘ + Enter — отправить</span>
+                )
+              })}
+              <div className="pqs2-navsep" />
+              <button className="pqs2-item danger" onClick={() => supabase.auth.signOut()}>
+                <span className="pqs2-item-ic"><Icon name="signout" size={16} /></span>Выйти
               </button>
             </div>
-          </>}
+          </div>
+          <div className="pqs2-main">
+            {dirty && <div className={'cset-savebar' + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
+              <span>Есть несохранённые изменения!</span>
+              <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
+              <button className="cset-save" onClick={saveAccount} disabled={busy}>{busy ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
+            </div>}
+            <div className="pqs2-inner">
+              {cat === 'account' && <>
+                <h2 id="pqs2-acc-info">Информация об учётной записи</h2>
+                <div className="pqs2-rows">
+                  <div className="pqs2-row">
+                    <div className="pqs2-row-k">Ник (отображаемое имя)</div>
+                    <div className="pqs2-row-v">{name || '—'}</div>
+                    <button className="pqs2-btn" onClick={() => setEditNick(v => !v)}>Изменить</button>
+                  </div>
+                  {editNick && <div className="pqs2-editbox">
+                    <input className="pqs-in" value={name} onChange={e => setName(e.target.value)} placeholder="Как тебя видят другие" />
+                    <div className="pqs2-hint">Ник видят все в чатах и профиле, он может совпадать у разных людей. Сохранение — плашкой внизу.</div>
+                  </div>}
+                  <div className="pqs2-row">
+                    <div className="pqs2-row-k">Имя пользователя</div>
+                    <div className="pqs2-row-v">{uname || username}</div>
+                    <button className="pqs2-btn" onClick={() => setEditUname(v => !v)}>Изменить</button>
+                  </div>
+                  {editUname && <div className="pqs2-editbox">
+                    <input className="pqs-in" value={uname} onChange={e => setUname(e.target.value)} />
+                    <div className="pqs2-hint">Юзернейм уникален — по нему тебя добавляют в друзья. Менять можно раз в 2 недели. Сохранение — плашкой внизу.</div>
+                  </div>}
+                  <div className="pqs2-row">
+                    <div className="pqs2-row-k">Электронная почта</div>
+                    <div className="pqs2-row-v">{showEmail ? (user?.email ?? '—') : emailMasked}
+                      <a className="pqs2-link" onClick={() => setShowEmail(s => !s)}>{showEmail ? 'Скрыть' : 'Показать'}</a>
+                    </div>
+                    <button className="pqs2-btn" onClick={() => setEditEmail(v => !v)}>Изменить</button>
+                  </div>
+                  {editEmail && <div className="pqs2-editbox">
+                    <input className="pqs-in" placeholder="Новая электронная почта" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+                    <div className="pqs2-editrow">
+                      <button className="pqs2-btn primary" disabled={!newEmail.trim()} onClick={changeEmail}>Отправить подтверждение</button>
+                      <button className="pqs2-btn ghost" onClick={() => setEditEmail(false)}>Отмена</button>
+                    </div>
+                    <div className="pqs2-hint">На новый адрес придёт письмо — почта сменится после подтверждения.</div>
+                  </div>}
+                </div>
+                <div className="pqs2-divider" />
+                <h2 id="pqs2-acc-security">Пароль и безопасность</h2>
+                <div className="pqs2-rows">
+                  <div className="pqs2-row">
+                    <div className="pqs2-row-k">Пароль</div>
+                    <button className="pqs2-btn" onClick={() => setEditPw(v => !v)}>Изменить</button>
+                  </div>
+                  {editPw && <div className="pqs2-editbox">
+                    <input className="pqs-in" type="password" placeholder="Новый пароль" value={pw1} onChange={e => setPw1(e.target.value)} />
+                    <input className="pqs-in" type="password" placeholder="Повторите новый пароль" value={pw2} onChange={e => setPw2(e.target.value)} style={{ marginTop: 8 }} />
+                    <div className="pqs2-editrow">
+                      <button className="pqs2-btn primary" disabled={pwBusy || !pw1 || !pw2} onClick={changePw}>{pwBusy ? 'Сохранение…' : 'Сменить пароль'}</button>
+                      <button className="pqs2-btn ghost" onClick={() => { setEditPw(false); setPw1(''); setPw2('') }}>Отмена</button>
+                    </div>
+                  </div>}
+                </div>
+              </>}
 
-          {cat === 'notifications' && <>
-            <h2>Уведомления</h2>
-            <Row title="Системные уведомления"><Toggle on={settings.notifSystem} onChange={v => set('notifSystem', v)} /></Row>
-            <Row title="Звуки уведомлений"><Toggle on={settings.notifSounds} onChange={v => set('notifSounds', v)} /></Row>
-            <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={settings.mentionsOnly} onChange={v => set('mentionsOnly', v)} /></Row>
-            <Row title="Счётчик на иконке" desc="Показывать количество непрочитанных"><Toggle on={settings.unreadBadge} onChange={v => set('unreadBadge', v)} /></Row>
-          </>}
+              {cat === 'profile' && <>
+                <h2>Профиль</h2>
+                <div className="pqs-acc-card">
+                  <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
+                  <div className="pqs-acc-row">
+                    <div className="pqs-acc-av" style={{ background: settings.accent }}>
+                      {avatarUrl ? <img src={avatarUrl} alt={username} /> : username.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="pqs-acc-names">
+                      <div className="pqs-acc-name">{name || username}</div>
+                      <div className="pqs-acc-uname">{uname}</div>
+                    </div>
+                  </div>
+                </div>
+                <label className="pqs-lbl">О себе</label>
+                <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t">Тема профиля</div>
+                  <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю после «Сохранить изменения».</div>
+                  <div className="pqs-ptheme-row">
+                    <label className="pqs-ptheme"><input type="color" value={primary} onChange={e => setPrimary(e.target.value)} /> Основной цвет</label>
+                    <label className="pqs-ptheme"><input type="color" value={accent} onChange={e => setAccent(e.target.value)} /> Акцент</label>
+                  </div>
+                  <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
+                  <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
+                </div>
 
-          {cat === 'voice' && <>
-            <h2>Голос и видео</h2>
-            <Row title="Громкость микрофона" desc={settings.micVol + '%'}>
-              <input type="range" min={0} max={100} value={settings.micVol} onChange={e => set('micVol', Number(e.target.value))} />
-            </Row>
-            <Row title="Громкость динамика" desc={settings.spkVol + '%'}>
-              <input type="range" min={0} max={100} value={settings.spkVol} onChange={e => set('spkVol', Number(e.target.value))} />
-            </Row>
-            <div className="pqs-note">Выбор устройств и обработка голоса применяются при звонке (LiveKit).</div>
-          </>}
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t">Питомец профиля</div>
+                  <div className="pqs-code-sub">Маленький питомец в правом нижнем углу твоего профиля (мини и большого). Можно фото, GIF, видео или 3D-модель (.glb/.gltf). Ставить не обязательно.</div>
+                  <Row title="Показывать питомца" desc="Включи, чтобы поставить питомца на профиль">
+                    <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
+                  </Row>
+                  <div className="pqs-pet-pick">
+                    <div className="pqs-pet-thumb">{prof.petUrl ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted /> : <img src={prof.petUrl} alt="" />) : '—'}</div>
+                    <button className="pqs-code-copy" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : 'Выбрать файл'}</button>
+                    <button className="pqs-save" onClick={() => patchProf({ petUrl: null, petKind: 'none', petOn: false })}>Убрать</button>
+                    <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
+                  </div>
+                  <div className="pqs-code-sub">Поддерживается: фото (PNG/JPG/WebP), GIF, видео (MP4/WebM — лучше короткое и зациклённое) и 3D-модель (.glb/.gltf — её можно вращать мышью).</div>
+                  <Row title="Размер" desc={prof.petSize + ' px'}>
+                    <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
+                  </Row>
+                  <div className="pqs-lbl">Позиция</div>
+                  <div className="pqs-pet-pos">
+                    {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
+                      <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
+                    ))}
+                  </div>
+                  <div className="pqs-pet-previews">
+                    <div>
+                      <div className="pqs-pet-plabel">Мини-профиль (1:1)</div>
+                      <div className="pqs-pet-card mini" style={{ position: 'relative' }}>
+                        <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                        <ProfilePet p={prof} scale={0.35} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="pqs-pet-plabel">Большой профиль (1:1)</div>
+                      <div className="pqs-pet-card big" style={{ position: 'relative' }}>
+                        <div className="pqs-pet-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+                        <ProfilePet p={prof} scale={0.5} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>}
 
-          {cat === 'keybinds' && <>
-            <h2>Горячие клавиши</h2>
-            <div className="pqs-sec-t">Настраиваемые</div>
-            <Row title="Открыть Музыку" desc="Быстрый переход в Ponoi Music">
-              <KeyCapture value={settings.keyMusic} onChange={v => set('keyMusic', v)} />
-            </Row>
-            <Row title="Открыть личные сообщения" desc="Быстрый переход на главный экран (ЛС)">
-              <KeyCapture value={settings.keyHome} onChange={v => set('keyHome', v)} />
-            </Row>
-            <div className="pqs-sec-t">Саундпад</div>
-            <Row title="Сохранить момент (15 сек)" desc="В звонке: сохранить последние 15 секунд разговора в саундпад">
-              <KeyCapture value={settings.sbKey} onChange={v => set('sbKey', v)} />
-            </Row>
-            <div className="pqs-sec-t">Стандартные</div>
-            <div className="pqs-keys">
-              {[['Ctrl / ⌘ + K', 'Быстрый переход'], ['Enter', 'Отправить'], ['Shift + Enter', 'Новая строка'], ['Esc', 'Закрыть']].map(([k, d]) => (
-                <div key={k} className="pqs-key"><span className="pqs-kbd">{k}</span><span>{d}</span></div>
-              ))}
+              {cat === 'appearance' && <>
+                <h2>Внешний вид</h2>
+                <ChatBgCard />
+
+                <div className="pqs-custom">
+                  <div className="pqs-custom-h">Своя тема</div>
+                  <div className="pqs-custom-sub">Задай цвет на каждую поверхность — можно собрать Discord целиком. Всё применяется сразу.</div>
+                  {([
+                    ['dark', 'Тёмный фон'], ['content', 'Основной фон'], ['panel', 'Панель'],
+                    ['hover', 'Наведение'], ['active', 'Активный'], ['accent', 'Акцент'],
+                  ] as const).map(([k, label]) => (
+                    <div key={k} className="pqs-custom-row">
+                      <span>{label}</span>
+                      <input type="color" value={(settings.custom as any)[k]} onChange={e => setCustom({ [k]: e.target.value, on: true } as any)} />
+                      <button className="pqs-custom-x" title="Сбросить поверхность" onClick={() => { const d = (settings.theme && themes.find(t => t.key === settings.theme)) || themes[0]; setCustom({ [k]: (d as any)[k] } as any) }}>✕</button>
+                    </div>
+                  ))}
+                  <div className="pqs-custom-row">
+                    <span>Затемнение текстур (читаемость)</span>
+                    <input type="range" min={0} max={100} value={settings.custom.dim} onChange={e => setCustom({ dim: Number(e.target.value) })} />
+                    <span className="pqs-custom-pct">{settings.custom.dim}%</span>
+                  </div>
+                  <div className="pqs-custom-foot">
+                    <label className="pqs-custom-toggle"><input type="checkbox" checked={settings.custom.on} onChange={e => setCustom({ on: e.target.checked })} /> Использовать свою тему</label>
+                    <button className="pqs-save" onClick={() => setCustom({ on: false })}>Сбросить</button>
+                  </div>
+                </div>
+
+                <div className="pqs-sec-t">Тема</div>
+                <div className="pqs-preset-grid">
+                  {themes.map(t => (
+                    <button key={t.key} className={'pqs-preset' + (settings.theme === t.key && !settings.custom.on ? ' on' : '')}
+                      onClick={() => { set('theme', t.key); set('accent', t.accent); setCustom({ on: false }) }}>
+                      <span className="pqs-preset-sw" style={{ background: t.content, borderColor: t.accent }}>
+                        <span style={{ background: t.accent }} />
+                      </span>
+                      <span className="pqs-preset-nm">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <Row title="Размер шрифта" desc={settings.fontPx + 'px'}>
+                  <input type="range" min={12} max={20} step={1} value={settings.fontPx} onChange={e => set('fontPx', Number(e.target.value))} />
+                </Row>
+                <Row title="Компактный режим" desc="Уменьшает отступы между сообщениями">
+                  <Toggle on={settings.compact} onChange={v => set('compact', v)} />
+                </Row>
+                <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
+                  <Toggle on={settings.animations} onChange={v => set('animations', v)} />
+                </Row>
+                <Row title="Автосмена темы" desc="Днём (8:00–20:00) — светлая тема, ночью — выбранная. По умолчанию выключено">
+                  <Toggle on={settings.autoTheme} onChange={v => set('autoTheme', v)} />
+                </Row>
+
+                <div className="pqs-sec-t">Шрифт и форма</div>
+                <label className="pqs-lbl">Шрифт интерфейса</label>
+                <select className="pqs-in" value={settings.fontFamily} onChange={e => set('fontFamily', e.target.value)}>
+                  {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <Row title="Скругление углов" desc={settings.radius + 'px'}>
+                  <input type="range" min={0} max={20} value={settings.radius} onChange={e => set('radius', Number(e.target.value))} />
+                </Row>
+                <Row title="Отступ между сообщениями" desc={settings.msgGap + 'px'}>
+                  <input type="range" min={0} max={24} value={settings.msgGap} onChange={e => set('msgGap', Number(e.target.value))} />
+                </Row>
+              </>}
+
+              {cat === 'chat' && <>
+                <h2>Чат</h2>
+                <Row title="24-часовой формат времени" desc="Например, 14:30 вместо 2:30 PM">
+                  <Toggle on={settings.time24} onChange={v => set('time24', v)} />
+                </Row>
+                <Row title="Показывать аватары" desc="Аватар автора рядом с сообщением">
+                  <Toggle on={settings.showAvatars} onChange={v => set('showAvatars', v)} />
+                </Row>
+                <Row title="Группировать сообщения" desc="Объединять подряд идущие сообщения одного автора">
+                  <Toggle on={settings.groupMessages} onChange={v => set('groupMessages', v)} />
+                </Row>
+                <Row title="Крупные эмодзи" desc="Сообщения только из эмодзи показывать крупно">
+                  <Toggle on={settings.bigEmoji} onChange={v => set('bigEmoji', v)} />
+                </Row>
+                <div className="pqs-sec-t">Отправка сообщений</div>
+                <div className="pqs-preset-grid">
+                  <button className={'pqs-preset' + (settings.sendKey === 'enter' ? ' on' : '')} onClick={() => set('sendKey', 'enter')}>
+                    <span className="pqs-preset-nm">Enter — отправить</span>
+                  </button>
+                  <button className={'pqs-preset' + (settings.sendKey === 'ctrl' ? ' on' : '')} onClick={() => set('sendKey', 'ctrl')}>
+                    <span className="pqs-preset-nm">Ctrl/⌘ + Enter — отправить</span>
+                  </button>
+                </div>
+              </>}
+
+              {cat === 'notifications' && <>
+                <h2>Уведомления</h2>
+                <Row title="Системные уведомления"><Toggle on={settings.notifSystem} onChange={v => set('notifSystem', v)} /></Row>
+                <Row title="Звуки уведомлений"><Toggle on={settings.notifSounds} onChange={v => set('notifSounds', v)} /></Row>
+                <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={settings.mentionsOnly} onChange={v => set('mentionsOnly', v)} /></Row>
+                <Row title="Счётчик на иконке" desc="Показывать количество непрочитанных"><Toggle on={settings.unreadBadge} onChange={v => set('unreadBadge', v)} /></Row>
+              </>}
+
+              {cat === 'voice' && <>
+                <h2>Голос и видео</h2>
+                <Row title="Громкость микрофона" desc={settings.micVol + '%'}>
+                  <input type="range" min={0} max={100} value={settings.micVol} onChange={e => set('micVol', Number(e.target.value))} />
+                </Row>
+                <Row title="Громкость динамика" desc={settings.spkVol + '%'}>
+                  <input type="range" min={0} max={100} value={settings.spkVol} onChange={e => set('spkVol', Number(e.target.value))} />
+                </Row>
+                <div className="pqs-note">Выбор устройств и обработка голоса применяются при звонке (LiveKit).</div>
+              </>}
+
+              {cat === 'keybinds' && <>
+                <h2>Горячие клавиши</h2>
+                <div className="pqs-sec-t">Настраиваемые</div>
+                <Row title="Открыть Музыку" desc="Быстрый переход в Ponoi Music">
+                  <KeyCapture value={settings.keyMusic} onChange={v => set('keyMusic', v)} />
+                </Row>
+                <Row title="Открыть личные сообщения" desc="Быстрый переход на главный экран (ЛС)">
+                  <KeyCapture value={settings.keyHome} onChange={v => set('keyHome', v)} />
+                </Row>
+                <div className="pqs-sec-t">Саундпад</div>
+                <Row title="Сохранить момент (15 сек)" desc="В звонке: сохранить последние 15 секунд разговора в саундпад">
+                  <KeyCapture value={settings.sbKey} onChange={v => set('sbKey', v)} />
+                </Row>
+                <div className="pqs-sec-t">Стандартные</div>
+                <div className="pqs-keys">
+                  {[['Ctrl / ⌘ + K', 'Быстрый переход'], ['Enter', 'Отправить'], ['Shift + Enter', 'Новая строка'], ['Esc', 'Закрыть']].map(([k, d]) => (
+                    <div key={k} className="pqs-key"><span className="pqs-kbd">{k}</span><span>{d}</span></div>
+                  ))}
+                </div>
+              </>}
+
+              {cat === 'language' && <>
+                <h2>Язык</h2>
+                <div className="pqs-code-sub">Перевод применяется сразу ко всему интерфейсу. English покрывает основные надписи, шуточные языки переводятся «на лету». Сообщения пользователей не переводятся.</div>
+                <div className="pqs-langs">
+                  {LANGS.map(l => (
+                    <button key={l.id} className={'pqs-lang' + (settings.lang === l.id ? ' on' : '')} onClick={() => set('lang', l.id)}>
+                      <span className="pqs-lang-flag">{l.flag}</span>
+                      <span className="pqs-lang-name">{l.name}</span>
+                      <span className="pqs-lang-sub">{l.sub}</span>
+                      {settings.lang === l.id && <span className="pqs-lang-badge"><Icon name="check" size={14} /></span>}
+                    </button>
+                  ))}
+                </div>
+              </>}
+
+              {cat === 'display' && <>
+                <h2>Дисплей</h2>
+                <Row title="Масштаб интерфейса" desc={settings.zoom + '%'}>
+                  <input type="range" min={70} max={130} step={5} value={settings.zoom} onChange={e => set('zoom', Number(e.target.value))} />
+                </Row>
+                <button className="pqs-save" onClick={() => set('zoom', 100)}>Сбросить масштаб</button>
+              </>}
+
+              {cat === 'privacy' && <>
+                <h2>Данные и конфиденциальность</h2>
+                <Row title="ЛС от всех пользователей"><Toggle on={settings.dmAll} onChange={v => set('dmAll', v)} /></Row>
+                <Row title="ЛС с участниками сервера"><Toggle on={settings.dmMembers} onChange={v => set('dmMembers', v)} /></Row>
+                <Row title="Сбор данных об использовании" desc="Помогает улучшить приложение"><Toggle on={settings.dataCollect} onChange={v => set('dataCollect', v)} /></Row>
+              </>}
+
+              {cat === 'activity' && <>
+                <h2>Активность</h2>
+                <Row title="Своя активность" desc="Показывать пользовательский статус"><Toggle on={settings.actOn} onChange={v => set('actOn', v)} /></Row>
+                {settings.actOn && <input className="pqs-in" value={settings.actText} onChange={e => set('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
+              </>}
+
+              {cat === 'advanced' && <>
+                <h2>Дополнительно</h2>
+                <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={settings.devmode} onChange={v => set('devmode', v)} /></Row>
+                <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
+              </>}
             </div>
-          </>}
-
-          {cat === 'language' && <>
-            <h2>Язык</h2>
-            <div className="pqs-code-sub">Перевод применяется сразу ко всему интерфейсу. English покрывает основные надписи, шуточные языки переводятся «на лету». Сообщения пользователей не переводятся.</div>
-            <div className="pqs-langs">
-              {LANGS.map(l => (
-                <button key={l.id} className={'pqs-lang' + (settings.lang === l.id ? ' on' : '')} onClick={() => set('lang', l.id)}>
-                  <span className="pqs-lang-flag">{l.flag}</span>
-                  <span className="pqs-lang-name">{l.name}</span>
-                  <span className="pqs-lang-sub">{l.sub}</span>
-                  {settings.lang === l.id && <span className="pqs-lang-badge"><Icon name="check" size={14} /></span>}
-                </button>
-              ))}
-            </div>
-          </>}
-
-          {cat === 'display' && <>
-            <h2>Дисплей</h2>
-            <Row title="Масштаб интерфейса" desc={settings.zoom + '%'}>
-              <input type="range" min={70} max={130} step={5} value={settings.zoom} onChange={e => set('zoom', Number(e.target.value))} />
-            </Row>
-            <button className="pqs-save" onClick={() => set('zoom', 100)}>Сбросить масштаб</button>
-          </>}
-
-          {cat === 'privacy' && <>
-            <h2>Конфиденциальность</h2>
-            <Row title="ЛС от всех пользователей"><Toggle on={settings.dmAll} onChange={v => set('dmAll', v)} /></Row>
-            <Row title="ЛС с участниками сервера"><Toggle on={settings.dmMembers} onChange={v => set('dmMembers', v)} /></Row>
-            <Row title="Сбор данных об использовании" desc="Помогает улучшить приложение"><Toggle on={settings.dataCollect} onChange={v => set('dataCollect', v)} /></Row>
-          </>}
-
-          {cat === 'activity' && <>
-            <h2>Активность</h2>
-            <Row title="Своя активность" desc="Показывать пользовательский статус"><Toggle on={settings.actOn} onChange={v => set('actOn', v)} /></Row>
-            {settings.actOn && <input className="pqs-in" value={settings.actText} onChange={e => set('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
-          </>}
-
-          {cat === 'advanced' && <>
-            <h2>Дополнительно</h2>
-            <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={settings.devmode} onChange={v => set('devmode', v)} /></Row>
-            <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
-          </>}
+          </div>
         </div>
       </div>
     </div>
