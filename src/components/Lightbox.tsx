@@ -97,7 +97,12 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   // Портал в document.body: просмотрщик всегда поверх всего приложения,
   // никакие transform/animation у родителей не ломают fixed-подложку.
   return createPortal(
-    <div className="lightbox" onClick={onClose} onWheel={wheel}>
+    // Перетаскивание из просмотрщика запрещено: случайный drag гифки раньше
+    // «ронял» её в чат как новое вложение через зону дропа файлов.
+    <div className="lightbox" onClick={onClose} onWheel={wheel}
+      onDragStart={e => e.preventDefault()}
+      onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+      onDrop={e => { e.preventDefault(); e.stopPropagation() }}>
       {meta && <div className="lb-author" onClick={e => e.stopPropagation()}>
         <Avatar name={meta.name} url={meta.avatar} size={40} />
         <div className="lb-author-t">
@@ -121,6 +126,8 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
         <button title="Закрыть (Esc)" onClick={onClose}><Icon name="close" size={18} /></button>
       </div>
       <img ref={imgRef} src={url} alt="" crossOrigin="anonymous"
+        draggable={false}
+        onDragStart={e => e.preventDefault()}
         className={fit ? 'lb-fit' : undefined}
         style={{ width: fit?.w, height: fit?.h, transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
         onLoad={computeFit}
