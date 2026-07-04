@@ -49,6 +49,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [showPins, setShowPins] = useState(false)
   const [tab, setTab] = useState<'online' | 'all' | 'pending' | 'add'>('online')
   const [ffilter, setFfilter] = useState('')
+  // v1.51.0: меню «⋯» на строке друга (как в Discord); закрывается кликом мимо
+  const [rowMenu, setRowMenu] = useState<string | null>(null)
+  useEffect(() => {
+    const h = () => setRowMenu(null)
+    window.addEventListener('click', h)
+    return () => window.removeEventListener('click', h)
+  }, [])
   const [code, setCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [codeMsg, setCodeMsg] = useState('')
@@ -268,6 +275,16 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     else { setCode(''); setCodeMsg('Заявка отправлена — ' + p.username) }
   }
 
+  // v1.51.0: удаление из друзей из меню «⋯» (сносим заявку в обе стороны)
+  async function removeFriend(f: Friend) {
+    if (!await confirmUi('Удалить ' + f.name + ' из друзей?', { okText: 'Удалить' })) return
+    await supabase.from('friend_requests').delete()
+      .or(`and(from_user.eq.${meId},to_user.eq.${f.id}),and(from_user.eq.${f.id},to_user.eq.${meId})`)
+    if (active?.id === f.id) { setActive(null); setThreadId(null) }
+    loadRequests()
+    toastOk(f.name + ' удалён(а) из друзей')
+  }
+
   async function openChat(f: Friend) {
     setActive(f)
     closeMobNav()
@@ -442,11 +459,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     <>
       {call && !callRoomShown && <Sinks room={call} />}
       <aside className="dm-side">
-        <div className="dm-friends-nav" onClick={() => { setActive(null); closeMobNav() }}><Icon name="users" size={18} /> Друзья
+        <div className="dm-top">
+          <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>Найти или начать беседу</button>
+        </div>
+        <div className={'dm-navitem' + (!active ? ' on' : '')} onClick={() => { setActive(null); closeMobNav() }}>
+          <span className="dm-nav-ic"><Icon name="users" size={20} /></span> Друзья
           {requests.length > 0 && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
         </div>
 
-        <div className="dm-sec-t">Личные сообщения</div>
+        <div className="dm-sec-t2"><span>Личные сообщения</span>
+          <button className="dm-sec-plus" title="Начать беседу" onClick={() => { setActive(null); setTab('all') }}><Icon name="plus" size={14} /></button>
+        </div>
         <div className="ch-list">
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
@@ -512,6 +535,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         </> : <>
           <header className="chat-head pfr-head">
             <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button><span className="pfr-title"><Icon name="users" size={20} /> Друзья</span>
+            <span className="pfr-vsep" />
             <div className="pfr-tabs">
               <button className={'pfr-tab' + (tab === 'online' ? ' on' : '')} onClick={() => setTab('online')}>В сети</button>
               <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
@@ -563,15 +587,24 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 const base = tab === 'online' ? friends.filter(f => statusOf(f.id) !== 'offline') : friends
                 const list = ffilter ? base.filter(f => f.name.toLowerCase().includes(ffilter.toLowerCase())) : base
                 return <>
-                  <div className="pfr-search"><input placeholder="Поиск" value={ffilter} onChange={e => setFfilter(e.target.value)} /></div>
+                  <div className="pfr-search pfr-search2"><Icon name="search" size={16} /><input placeholder="Поиск" value={ffilter} onChange={e => setFfilter(e.target.value)} /></div>
                   <div className="pfr-sec">{tab === 'online' ? 'В сети' : 'Все друзья'} — {list.length}</div>
                   {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
                   {list.map(f => (
-                    <div key={f.id} className="pfr-row" onClick={() => openChat(f)}>
+                    <div key={f.id} className="pfr-row pfr-row2" onClick={() => openChat(f)}>
                       <AvatarWithStatus name={f.name} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
-                      <span className="pfr-name">{f.name}</span>
-                      <span className="pfr-status">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
-                      <span className="pfr-msg" title="Написать"><Icon name="message" size={16} /></span>
+                      <span className="pfr-nm2">
+                        <span className="pfr-name">{f.name}</span>
+                        <span className="pfr-substatus">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
+                      </span>
+                      <span className="pfr-acts">
+                        <button className="pfr-cbtn" title="Написать" onClick={e => { e.stopPropagation(); openChat(f) }}><Icon name="message" size={18} /></button>
+                        <button className="pfr-cbtn" title="Ещё" onClick={e => { e.stopPropagation(); setRowMenu(m => m === f.id ? null : f.id) }}><Icon name="dots" size={18} /></button>
+                        {rowMenu === f.id && <div className="pfr-rowmenu" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => { setRowMenu(null); openChat(f) }}>Написать</button>
+                          <button className="danger" onClick={() => { setRowMenu(null); removeFriend(f) }}>Удалить из друзей</button>
+                        </div>}
+                      </span>
                     </div>
                   ))}
                 </>
@@ -583,9 +616,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
               const activeContacts = friends.filter(f => statusOf(f.id) !== 'offline')
               if (activeContacts.length === 0) return <div className="pfr-actempty">Нет активных контактов</div>
               return activeContacts.map(f => (
-                <div key={f.id} className="pfr-actcard" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
-                  <div className="pfr-actnm">{f.name}</div>
-                  <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</div>
+                <div key={f.id} className="pfr-actcard pfr-actcard2" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
+                  <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                  <div className="pfr-acttx">
+                    <div className="pfr-actnm">{f.name}</div>
+                    <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</div>
+                  </div>
                 </div>
               ))
             })()}
