@@ -21,6 +21,7 @@ import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
+import { GameLine, GameInline } from './ActivityLabel'
 
 interface Friend { id: string; name: string }
 
@@ -286,7 +287,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
               <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
               <span className="me-nm">{f.name}
-                {(() => { const g = gameOf(f.id); return g ? <small className="member-act">Играет в <b>{g.name}</b></small> : null })()}
+                {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
               </span>
             </div>
           ))}
@@ -388,7 +389,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                     <div key={f.id} className="pfr-row" onClick={() => openChat(f)}>
                       <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} />
                       <span className="pfr-name">{f.name}</span>
-                      <span className="pfr-status">{(() => { const g = gameOf(f.id); return g ? <>Играет в <b>{g.name}</b></> : STATUS_LABEL[statusOf(f.id)] })()}</span>
+                      <span className="pfr-status">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
                       <span className="pfr-msg" title="Написать"><Icon name="message" size={16} /></span>
                     </div>
                   ))}
@@ -403,7 +404,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               return activeContacts.map(f => (
                 <div key={f.id} className="pfr-actcard" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
                   <div className="pfr-actnm">{f.name}</div>
-                  <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <>Играет в <b>{g.name}</b></> : STATUS_LABEL[statusOf(f.id)] })()}</div>
+                  <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</div>
                 </div>
               ))
             })()}

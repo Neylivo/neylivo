@@ -6,7 +6,8 @@ import { supabase } from './supabase'
 // (у друзей серая заглушка-геймпад), параллельно ищем обложку и делаем hot swap.
 // Если игра не нашлась — ставим not_found на пару дней, чтобы не мучить API.
 
-const NOT_FOUND_TTL = 2 * 24 * 60 * 60 * 1000   // 2 дня
+const NOT_FOUND_TTL = 6 * 60 * 60 * 1000   // 6 часов: источники пополняются — пробуем снова
+const SOURCES_UPGRADED_AT = Date.parse('2026-07-04T00:00:00Z')   // v1.28.0: добавлен iTunes-фолбэк
 
 export async function resolveCover(name: string): Promise<string | null> {
   if (!name) return null
@@ -16,7 +17,11 @@ export async function resolveCover(name: string): Promise<string | null> {
       .select('cover_url,status,checked_at').eq('name', name).maybeSingle()
     if (data) {
       if (data.status === 'ok' && data.cover_url) return data.cover_url
-      if (data.status === 'not_found' && Date.now() - new Date(data.checked_at).getTime() < NOT_FOUND_TTL) return null
+      if (data.status === 'not_found') {
+        const checked = new Date(data.checked_at).getTime()
+        // Записи «не нашлось» до апгрейда источников не считаются — ищем заново.
+        if (checked > SOURCES_UPGRADED_AT && Date.now() - checked < NOT_FOUND_TTL) return null
+      }
     }
   } catch {}
   // 2) Фоновый поиск через магазин Steam — только в десктопе (main-процесс, без CORS).

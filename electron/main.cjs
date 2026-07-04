@@ -46,28 +46,36 @@ function broadcastGame() {
 // ---- Поиск обложки игры (магазин Steam, без ключей) ----
 // Вызывается рендерером через IPC; ищем в main-процессе (Node, нет CORS).
 const coverCache = new Map()   // name -> url | null (кэш на время работы приложения)
-function findCover(name) {
-  if (!name) return Promise.resolve(null)
-  if (coverCache.has(name)) return Promise.resolve(coverCache.get(name))
+function httpJson(u) {
   return new Promise((resolve) => {
     const https = require('https')
-    const u = 'https://store.steampowered.com/api/storesearch/?l=en&cc=US&term=' + encodeURIComponent(name)
     const req = https.get(u, (res) => {
       let data = ''
       res.on('data', (d) => { data += d })
-      res.on('end', () => {
-        try {
-          const j = JSON.parse(data)
-          const item = (j.items || [])[0]
-          const url = item ? 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + item.id + '/header.jpg' : null
-          coverCache.set(name, url)
-          resolve(url)
-        } catch { resolve(null) }
-      })
+      res.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve(null) } })
     })
     req.on('error', () => resolve(null))
     req.setTimeout(8000, () => { try { req.destroy() } catch {} resolve(null) })
   })
+}
+// v1.28.0: два источника обложек. Steam покрывает ПК-игры, iTunes Search — не-стимовские
+// (Roblox, Fortnite, VALORANT и т.п. — у них есть iOS-версии с квадратными иконками).
+async function findCover(name) {
+  if (!name) return null
+  if (coverCache.has(name)) return coverCache.get(name)
+  const term = name.replace(/\(.*?\)/g, '').trim()   // «Minecraft (Java)» -> «Minecraft»
+  let url = null
+  const st = await httpJson('https://store.steampowered.com/api/storesearch/?l=en&cc=US&term=' + encodeURIComponent(term))
+  const item = ((st && st.items) || [])[0]
+  if (item) url = 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + item.id + '/header.jpg'
+  if (!url) {
+    const it = await httpJson('https://itunes.apple.com/search?media=software&limit=3&term=' + encodeURIComponent(term))
+    const w = term.split(/\s+/)[0].toLowerCase()
+    const app = ((it && it.results) || []).find((a) => String(a.trackName || '').toLowerCase().includes(w))
+    if (app) url = app.artworkUrl512 || app.artworkUrl100 || null
+  }
+  coverCache.set(name, url)
+  return url
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
@@ -161,6 +169,10 @@ function createWindow() {
     backgroundColor: '#313338',
     autoHideMenuBar: true,
     title: 'Ponoi',
+    // v1.28.0: без системной рамки — тонкий тайтлбар рисует рендерер, а нативные
+    // кнопки «свернуть/развернуть/закрыть» даёт Windows-overlay в цвет темы.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#1e1f22', symbolColor: '#b5bac1', height: 32 },
     show: false,   // показываем только после splash
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

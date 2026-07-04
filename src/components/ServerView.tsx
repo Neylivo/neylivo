@@ -14,6 +14,7 @@ import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
+import { GameLine } from './ActivityLabel'
 import { createInvite, listMembers, updateServer } from '../lib/servers'
 import { CallRoom } from './CallRoom'
 import { joinRoom, Room } from '../lib/livekit'
@@ -590,7 +591,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} />
               <span className="me-nm" style={{ color: rr?.color ?? (m.role === 'owner' ? '#faa61a' : undefined) }}>{m.member_name}
                 {(() => { const g = gameOf(m.user_id)
-                  if (g) return <small className="member-act">Играет в <b>{g.name}</b></small>
+                  if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
               </span>
               {isTyping && <span className="member-typing" title="печатает…"><i/><i/><i/></span>}

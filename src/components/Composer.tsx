@@ -66,6 +66,15 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [failed, setFailed] = useState(false)
   // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
   const [upProg, setUpProg] = useState<number | null>(null)
+  // Предпросмотр картинки до отправки (v1.28.0): миниатюра + спойлер/просмотр/убрать.
+  const [preview, setPreview] = useState<string | null>(null)
+  const [pvOpen, setPvOpen] = useState(false)
+  useEffect(() => {
+    if (!file || !isImage(file)) { setPreview(null); setPvOpen(false); return }
+    const u = URL.createObjectURL(file)
+    setPreview(u)
+    return () => { URL.revokeObjectURL(u); setPvOpen(false) }
+  }, [file])
   // Меню «плюса» слева (Фото / Файл / Папка / Голосовое) — как в Discord.
   const [plusMenu, setPlusMenu] = useState(false)
   const photoRef = useRef<HTMLInputElement>(null)
@@ -260,7 +269,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       await onSend(t, attach)
       lastSent.current = { t, at: Date.now() }
       setFailed(false)
-      setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''
+      setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
     finally { setBusy(false); setUpProg(null) }
   }
@@ -277,7 +286,21 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <div className="up-progress-fill" style={{ width: Math.round(upProg * 100) + '%' }} />
         <span className="up-progress-tx">Загрузка{file ? ' «' + file.name + '»' : ''}… {Math.round(upProg * 100)}%</span>
       </div>}
-      {file && upProg === null && <div className="file-chip">
+      {file && isImage(file) && preview && upProg === null && <div className="att-card">
+        <div className="att-card-actions">
+          <button type="button" className={'att-act' + (spoiler ? ' on' : '')} title={spoiler ? 'Картинка будет спойлером' : 'Отправить как спойлер'} onClick={() => setSpoiler(s => !s)}><span className="att-sp">| |</span></button>
+          <button type="button" className="att-act" title="Посмотреть" onClick={() => setPvOpen(true)}><Icon name="zoom-in" size={16} /></button>
+          <button type="button" className="att-act danger" title="Убрать вложение" onClick={() => { setFile(null); setSpoiler(false); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = '' }}><Icon name="trash" size={16} /></button>
+        </div>
+        <div className="att-thumb">
+          <img src={preview} alt="" className={spoiler ? 'blurred' : ''} />
+          {spoiler && <span className="att-spoiler-tag">СПОЙЛЕР</span>}
+        </div>
+        <div className="att-card-nm" title={file.name}>{file.name}</div>
+        <div className="att-card-sz">{fmtSize(file.size)}</div>
+      </div>}
+      {pvOpen && preview && <Lightbox url={preview} onClose={() => setPvOpen(false)} />}
+      {file && !isImage(file) && upProg === null && <div className="file-chip">
         <Icon name="paperclip" size={14} /> <b className="file-chip-nm">{file.name}</b> <span className="file-chip-sz">{fmtSize(file.size)}</span>
         <button type="button" className="file-chip-x" title="Убрать файл" onClick={() => { setFile(null); setSpoiler(false); if (fileRef.current) fileRef.current.value = '' }}><Icon name="close" size={14} /></button>
       </div>}
@@ -364,9 +387,6 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
-          {file && isImage(file) && <button type="button" className={'ctool spoiler-t' + (spoiler ? ' on' : '')}
-            title={spoiler ? 'Картинка будет спойлером' : 'Отправить как спойлер'}
-            onClick={() => setSpoiler(s => !s)}>| |</button>}
           <button type="button" className="ctool" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
           <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>

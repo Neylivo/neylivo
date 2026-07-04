@@ -2194,3 +2194,41 @@ body.no-anim .member-typing i { animation:none; }
 .member-act b, .pfr-status b, .pfr-actsub b { font-weight:600; color:#dbdee1; }
 .dm-item .me-nm { line-height:1.25; }
 .dm-item .member-act { margin-top:1px; }
+
+/* ===== v1.28.0 ===== */
+
+/* --- Свой тайтлбар вместо системной рамки Windows (десктоп) --- */
+#root { display:flex; flex-direction:column; }
+.app-viewport { flex:1; min-height:0; position:relative; }
+.titlebar { flex:none; height:32px; background:var(--c-dark,#1e1f22); display:flex; align-items:center; gap:8px;
+  padding:0 12px; -webkit-app-region:drag; user-select:none; }
+.titlebar .tb-logo { width:18px; height:18px; border-radius:5px; background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.titlebar .tb-name { font-size:12.5px; font-weight:700; color:#b5bac1; letter-spacing:.3px; }
+
+/* --- Карточка-предпросмотр картинки до отправки (как в Discord) --- */
+.att-card { position:relative; margin:8px 16px 6px; padding:10px 10px 8px; width:fit-content; max-width:260px;
+  background:var(--c-panel,#2b2d31); border:1px solid rgba(255,255,255,.06); border-radius:10px; animation:pop .15s ease both; }
+.att-thumb { position:relative; width:216px; height:140px; border-radius:6px; overflow:hidden; background:#1e1f22;
+  display:flex; align-items:center; justify-content:center; }
+.att-thumb img { width:100%; height:100%; object-fit:cover; }
+.att-thumb img.blurred { filter:blur(28px); }
+.att-thumb .att-spoiler-tag { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); }
+.att-card-nm { margin-top:7px; max-width:216px; font-size:13px; color:#dbdee1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.att-card-sz { font-size:11.5px; color:#949ba4; margin-top:1px; }
+.att-card-actions { position:absolute; top:-12px; right:8px; z-index:2; display:flex; overflow:hidden;
+  background:#1e1f22; border:1px solid rgba(255,255,255,.08); border-radius:7px; box-shadow:0 4px 14px rgba(0,0,0,.45); }
+.att-card-actions .att-act { border:0; background:transparent; color:#b5bac1; width:32px; height:28px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .12s ease, color .12s ease; }
+.att-card-actions .att-act:hover { background:rgba(255,255,255,.07); color:#fff; }
+.att-card-actions .att-act.danger:hover { background:#ed4245; color:#fff; }
+.att-card-actions .att-act.on { color:#6366f1; }
+.att-card-actions .att-sp { font-size:11px; font-weight:800; letter-spacing:1px; }
+
+/* --- «Играет в …» с мини-обложкой игры (участники сервера, ЛС, друзья) --- */
+.member-act.game { display:flex; align-items:center; gap:5px; }
+.member-act.game .mag-tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mag-cover { width:15px; height:15px; border-radius:4px; object-fit:cover; flex:none; animation:cover-in .3s ease; }
+.mag-ico { display:inline-flex; color:var(--mut); flex:none; }
+.game-inline { display:inline-flex; align-items:center; gap:5px; vertical-align:middle; max-width:100%; }
+.game-inline .mag-cover { width:16px; height:16px; }
