@@ -3006,3 +3006,23 @@ body.no-anim .member-typing i { animation:none; }
 .ch-caret.open { transform:none; }
 /* Участники голосового канала: отступ под увеличенную иконку */
 .vo { padding-left:34px; }
+
+/* ===== v1.62.0: тумблеры включены по умолчанию + единый красивый стиль всех переключателей и кнопок ===== */
+/* Оба вида тумблеров (.pqs-toggle в настройках и .tgl в модалках/сервере) — одна фиолетовая пилюля, как на образце */
+.pqs-toggle, .tgl { width:44px; height:25px; border-radius:14px; background:#4e5058; box-shadow:inset 0 1px 3px rgba(0,0,0,.25); transition:background .18s ease, filter .18s ease; }
+.pqs-toggle:hover, .tgl:hover { background:#5c5f66; }
+.pqs-toggle.on, .tgl.on { background:var(--brand, #5865f2); }
+.pqs-toggle.on:hover, .tgl.on:hover { background:var(--brand, #5865f2); filter:brightness(1.1); }
+.pqs-toggle span { top:3px; left:3px; width:19px; height:19px; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:transform .18s cubic-bezier(.4,0,.2,1), width .12s ease; }
+.pqs-toggle.on span { transform:translateX(19px); }
+.tgl::after { top:3px; left:3px; width:19px; height:19px; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:left .18s cubic-bezier(.4,0,.2,1), width .12s ease; }
+.tgl.on::after { left:22px; }
+/* Нажатие: ручка слегка вытягивается, как в Discord */
+.pqs-toggle:active span { width:23px; }
+.pqs-toggle.on:active span { transform:translateX(15px); }
+.tgl:active::after { width:23px; }
+.tgl.on:active::after { left:18px; }
+/* Все кнопки приложения: курсор, аккуратный фокус с клавиатуры, без «жёлтой вспышки» на тапе */
+button { cursor:pointer; -webkit-tap-highlight-color:transparent; }
+button:disabled { cursor:not-allowed; }
+button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2px; }

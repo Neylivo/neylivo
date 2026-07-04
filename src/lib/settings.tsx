@@ -67,7 +67,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
-  micVol: 100, spkVol: 100, lang: 'ru', dmAll: false, dmMembers: true, dataCollect: false,
+  micVol: 100, spkVol: 100, lang: 'ru', dmAll: true, dmMembers: true, dataCollect: true,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
@@ -89,8 +89,16 @@ function load(): Settings {
     const raw = localStorage.getItem('ponoi_settings')
     if (raw) {
       const p = JSON.parse(raw)
-      return { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
+      const s = { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
+      // v1.62.0: одноразовая миграция — ЛС и сбор данных включены по умолчанию
+      if (!localStorage.getItem('ponoi_mig_162')) {
+        s.dmAll = true; s.dmMembers = true; s.dataCollect = true
+        localStorage.setItem('ponoi_mig_162', '1')
+        localStorage.setItem('ponoi_settings', JSON.stringify(s))
+      }
+      return s
     }
+    localStorage.setItem('ponoi_mig_162', '1')
   } catch {}
   const s = { ...DEFAULTS }
   const lang = localStorage.getItem('ponoi_lang'); if (lang) s.lang = lang
