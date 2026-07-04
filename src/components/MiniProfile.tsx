@@ -64,6 +64,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
+  const [sub, setSub] = useState<'status' | 'acc' | null>(null)   // подменю своего попапа (статус / учётные записи)
   const [edit, setEdit] = useState(false)
   const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
@@ -157,8 +158,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             <Avatar name={data.name} url={av} size={80} />
             <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
           </div>
-          {isMe && !meControls && <button className="mini-addstatus" title="Установить свой статус" onClick={editStatus}>
-            {myActivity?.text ? <span className="mini-addstatus-tx">{myActivity.text}</span> : <Icon name="plus" size={15} />}
+          {isMe && <button className="mini-addstatus" title="Установить свой статус" onClick={editStatus}>
+            {myActivity?.text ? <span className="mini-addstatus-tx">{myActivity.text}</span> : <><Icon name="plus" size={15} /><span className="mini-addstatus-ph">Какой ваш самый бесполезный талант?</span></>}
           </button>}
         </div>
         <div className="mini-body">
@@ -185,24 +186,47 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             {mutualLabel(mutuals.length)}
           </div>}
           {isMe && meControls && <>
-            <div className="mini-divider" />
-            <div className="mini-statuses">
-              {(['online', 'idle', 'dnd', 'offline'] as Status[]).map(s => (
-                <div key={s} className={'status-opt' + (myStatus === s ? ' on' : '')} onClick={() => setMyStatus(s)}>
-                  <span className="status-dot" style={{ background: STATUS_COLOR[s] }} />
-                  {s === 'offline' ? 'Невидимка' : STATUS_LABEL[s]}
-                </div>
-              ))}
+            <div className="mini-grp">
+              <button className="mini-row" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>
+              <div className="mini-rowsep" />
+              <button className="mini-row" onClick={() => setSub(s => s === 'status' ? null : 'status')}>
+                <span className="status-dot" style={{ background: STATUS_COLOR[myStatus] }} />
+                {myStatus === 'offline' ? 'Невидимый' : myStatus === 'idle' ? 'Неактивен' : STATUS_LABEL[myStatus]}
+                <span className="mini-row-chev"><Icon name="chevron-down" size={14} /></span>
+              </button>
             </div>
-            <button className="mini-ctl" onClick={editStatus}><Icon name="smile" size={15} /> {myActivity?.text ? 'Изменить пользовательский статус' : 'Установить пользовательский статус'}</button>
-            <div className="mini-divider" />
-            {onPickAvatar && <button className="mini-ctl" onClick={onPickAvatar}><Icon name="camera" size={15} /> Сменить аватар</button>}
-            <button className="mini-ctl" onClick={() => setEdit(true)}><Icon name="gear" size={15} /> Настройки пользователя</button>
-            <button className="mini-ctl danger" onClick={() => supabase.auth.signOut()}><Icon name="signout" size={15} /> Выйти из аккаунта</button>
+            <div className="mini-grp">
+              <button className="mini-row" onClick={() => setSub(s => s === 'acc' ? null : 'acc')}>
+                <Icon name="users" size={15} /> Переключение между учётными записями
+                <span className="mini-row-chev"><Icon name="chevron-down" size={14} /></span>
+              </button>
+              <div className="mini-rowsep" />
+              <button className="mini-row" onClick={() => { navigator.clipboard?.writeText(data.userId); onClose() }}>
+                <Icon name="id-card" size={15} /> Копировать ID пользователя
+              </button>
+            </div>
+            {sub === 'status' && <div className="mini-sub">
+              {([['online', 'В сети', ''], ['idle', 'Неактивен', ''], ['dnd', 'Не беспокоить', 'Вы не будете получать уведомления на рабочем столе'], ['offline', 'Невидимый', 'У вас будет статус «Не в сети»']] as [Status, string, string][]).map(([s, lbl, desc]) => (
+                <button key={s} className={'mini-subrow' + (myStatus === s ? ' on' : '')} onClick={() => { setMyStatus(s); setSub(null) }}>
+                  <span className="dotwrap"><StatusDot status={s} size={12} /></span>
+                  <span className="mini-subrow-t">{lbl}{desc && <small>{desc}</small>}</span>
+                </button>
+              ))}
+            </div>}
+            {sub === 'acc' && <div className="mini-sub">
+              <div className="mini-acc">
+                <Avatar name={data.name} url={av} size={28} />
+                <span>{data.name}</span>
+                <span className="mini-acc-check"><Icon name="check" size={13} /></span>
+              </div>
+              <div className="mini-subsep" />
+              <button className="mini-subrow" onClick={() => { setSub(null); setEdit(true) }}>Управление учётными записями</button>
+              {onPickAvatar && <button className="mini-subrow" onClick={() => { setSub(null); onPickAvatar() }}>Сменить аватар</button>}
+              <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => supabase.auth.signOut()}>Выйти из аккаунта</button>
+            </div>}
           </>}
-          {isMe
-            ? <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>
-            : <div className="mini-msgbox">
+          {isMe && !meControls && <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>}
+          {!isMe && <div className="mini-msgbox">
                 <input placeholder={'Сообщение для @' + data.name} value={msg}
                   onChange={e => setMsg(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') sendDm(); if (e.key === 'Escape') onClose() }} />

@@ -1617,3 +1617,22 @@ body.no-anim .member-typing i { animation:none; }
 .fp-srv-nm { font-size:12.5px; color:#dbdee1; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .fp-friend { display:flex; align-items:center; gap:10px; padding:8px 6px; border-radius:8px; }
 .fp-friend:hover { background:rgba(255,255,255,.05); }
+
+/* ===== Свой попап из нижней панели 1-в-1 как на фото (v1.11.0): группы строк + подменю ===== */
+.mini-addstatus-ph { color:var(--mut); font-size:13px; margin-left:6px; }
+.mini-grp { margin-top:12px; background:rgba(0,0,0,.28); border-radius:10px; overflow:hidden; }
+.mini-row { width:100%; display:flex; align-items:center; gap:10px; background:none; border:0; color:#dbdee1; padding:11px 12px; font-size:13.5px; font-weight:500; cursor:pointer; text-align:left; }
+.mini-row:hover { background:rgba(255,255,255,.06); color:#fff; }
+.mini-rowsep { height:1px; background:rgba(255,255,255,.06); margin:0 12px; }
+.mini-row-chev { margin-left:auto; display:flex; color:var(--mut); transform:rotate(-90deg); }
+/* Подменю (статусы / учётные записи) выезжает справа от попапа */
+.mini-sub { position:absolute; left:calc(100% + 8px); bottom:14px; width:270px; background:#111214; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:6px; box-shadow:0 12px 36px rgba(0,0,0,.6); animation:pop .12s ease both; }
+.mini-subrow { width:100%; display:flex; align-items:flex-start; gap:10px; background:none; border:0; color:#dbdee1; padding:10px; border-radius:7px; cursor:pointer; text-align:left; font-size:13.5px; font-weight:600; }
+.mini-subrow:hover, .mini-subrow.on { background:rgba(255,255,255,.08); color:#fff; }
+.mini-subrow .dotwrap { margin-top:2px; display:flex; flex:none; }
+.mini-subrow-t { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.mini-subrow-t small { color:var(--mut); font-weight:400; font-size:12px; line-height:1.35; }
+.mini-subsep { height:1px; background:rgba(255,255,255,.07); margin:5px 8px; }
+.mini-acc { display:flex; align-items:center; gap:10px; padding:9px 10px; font-size:13.5px; font-weight:600; color:#fff; }
+.mini-acc .av-wrap { flex:none; }
+.mini-acc-check { margin-left:auto; width:20px; height:20px; border-radius:50%; background:#5865f2; color:#fff; display:flex; align-items:center; justify-content:center; flex:none; }
