@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import authBg from '../assets/auth-bg.png'
 
+// Экран входа/регистрации 1-в-1 как в Discord (v1.35.0):
+// тёмная карточка, КАПС-подписи полей, кнопка «Продолжить», фон — арт.
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
@@ -30,21 +33,31 @@ export function AuthScreen() {
     }
   }
 
+  const reg = mode === 'register'
   return (
-    <div className="auth">
+    <div className="auth" style={{ backgroundImage: `url(${authBg})` }}>
       <form className="auth-card" onSubmit={submit}>
-        <h1>Ponoi</h1>
-        <p className="auth-sub">{mode === 'login' ? 'С возвращением!' : 'Создай аккаунт'}</p>
-        {mode === 'register' && (
-          <input placeholder="Имя пользователя" value={username} onChange={e => setUsername(e.target.value)} />
-        )}
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required />
-        {err && <div className="auth-err">{err}</div>}
-        <button disabled={busy} type="submit">{busy ? '…' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
-        <div className="auth-toggle" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-          {mode === 'login' ? 'Нужен аккаунт? Регистрация' : 'Уже есть аккаунт? Войти'}
+        <h1>{reg ? 'Создать учетную запись' : 'С возвращением!'}</h1>
+        {!reg && <p className="auth-sub">Мы так рады видеть вас снова!</p>}
+        <div className="auth-fields">
+          <label className="auth-lb">Электронная почта <i>*</i>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          </label>
+          {reg && (
+            <label className="auth-lb">Имя пользователя <i>*</i>
+              <input value={username} onChange={e => setUsername(e.target.value)} required />
+            </label>
+          )}
+          <label className="auth-lb">Пароль <i>*</i>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          </label>
         </div>
+        {err && <div className="auth-err">{err}</div>}
+        <button className="auth-btn" disabled={busy} type="submit">{busy ? '…' : reg ? 'Продолжить' : 'Вход'}</button>
+        <div className="auth-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
+          {reg ? 'Уже зарегистрированы?' : <><span className="auth-mut">Нужна учетная запись? </span>Зарегистрироваться</>}
+        </div>
+        {reg && <div className="auth-legal">Регистрируясь, вы соглашаетесь с Условиями использования и Политикой конфиденциальности Ponoi.</div>}
       </form>
     </div>
   )
