@@ -1539,3 +1539,35 @@ body.no-anim .member-typing i { animation:none; }
 /* Меню плюса и капсула записи позиционируются от капсулы */
 .composer .plus-menu { bottom:46px; }
 .voice-pill { margin:6px 16px 4px; }
+
+/* ===== Мини-профиль 1-в-1 как в эталоне (v1.8.0) ===== */
+.mini.mini2 { width:300px; border-radius:14px; }
+.mini2 .mini-banner { height:74px; }
+/* Кнопки сверху справа: добавить в друзья и «…» */
+.mini-topbtns { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:3; }
+.mini-topbtns > button { width:32px; height:32px; border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.mini-topbtns > button:hover { background:rgba(0,0,0,.75); }
+.mini-more { position:absolute; top:38px; right:0; background:#111214; border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:4px; min-width:190px; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+.mini-more button { background:none; border:0; color:#dbdee1; padding:9px 10px; border-radius:5px; cursor:pointer; text-align:left; font-size:13.5px; }
+.mini-more button:hover { background:rgba(255,255,255,.09); color:#fff; }
+/* Ряд: аватарка внахлёст + пузырёк «добавить статус» (у своего профиля) */
+.mini-avrow { display:flex; align-items:center; gap:10px; margin:-40px 12px 0 16px; position:relative; z-index:2; }
+.mini2 .mini-av { margin:0; width:92px; flex:none; }
+.mini-addstatus { background:#232428; color:#b5bac1; border:0; border-radius:16px; padding:11px 16px; cursor:pointer; margin-top:14px; min-width:0; flex:1; display:flex; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,.35); }
+.mini-addstatus:hover { color:#fff; background:#2b2d31; }
+.mini-addstatus-tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
+/* Юзернейм с зелёным значком, как на фото */
+.mini2 .mini-hash { background:#23a55a; }
+/* Общие друзья: стопка мини-аватарок + подпись */
+.mini-mutuals { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; color:#dbdee1; }
+.mini-mutual-avs { display:flex; }
+.mini-mutual-av { border:2px solid var(--bg3); border-radius:50%; display:flex; }
+.mini-mutual-av + .mini-mutual-av { margin-left:-7px; }
+/* Поле «Сообщение для @ник» внизу карточки */
+.mini-msgbox { margin-top:14px; display:flex; align-items:center; gap:6px; background:#1e1f22; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:0 10px; }
+.mini-msgbox input { flex:1; background:transparent; border:0; outline:none; color:var(--tx); font-size:14px; padding:11px 2px; min-width:0; }
+.mini-msgbox input::placeholder { color:var(--mut); }
+.mini-msgbox-smile { color:var(--mut); display:flex; }
+/* Синяя кнопка «Редактировать профиль» у своего мини-профиля */
+.mini-editbtn { margin-top:14px; width:100%; background:var(--brand,#5865f2); color:#fff; border:0; border-radius:8px; padding:10px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-size:14px; }
+.mini-editbtn:hover { filter:brightness(1.1); }
