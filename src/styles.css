@@ -1750,3 +1750,60 @@ body.no-anim .member-typing i { animation:none; }
 .fp-editbtn { margin-top:8px; background:var(--brand); border:none; color:#fff; padding:7px 12px; border-radius:6px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:13px; }
 .fp-editbtn:hover { filter:brightness(1.1); }
 @media (max-width:900px) { .pc-card { grid-template-columns:1fr; overflow-y:auto; } .pc-right { border-left:none; } }
+
+
+/* ===== v1.15.0: дизайн-концепт анимаций v2 ===== */
+/* --- 🎧 Нижняя панель --- */
+/* Наушники: при наведении «снимаются с головы» — ушки разводятся, дуга приподнимается */
+.me-deaf svg path { transition: transform .3s cubic-bezier(.34, 1.56, .64, 1); transform-box: fill-box; transform-origin: center; }
+.me-deaf:hover:not(.off) .hp-l { transform: translateX(-2.5px) rotate(-10deg); }
+.me-deaf:hover:not(.off) .hp-r { transform: translateX(2.5px) rotate(10deg); }
+.me-deaf:hover:not(.off) .hp-arc { transform: translateY(-1.5px); }
+/* Клик: резко схлопываются */
+@keyframes hp-collapse { 0% { transform: scale(1); } 45% { transform: scale(.68, .85); } 75% { transform: scale(1.06, .96); } 100% { transform: scale(1); } }
+.me-ic.anim-squeeze svg { animation: hp-collapse .3s ease-in-out; }
+/* Красная черта плавно прорисовывается поверх (mic-off / headphones-off) */
+.ic-strike { stroke-dasharray: 32; stroke-dashoffset: 32; animation: strike-draw .3s ease-out .05s forwards; }
+@keyframes strike-draw { to { stroke-dashoffset: 0; } }
+
+/* Микрофон: при наведении покачивается маятником */
+@keyframes mic-pendulum { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+.me-mic:hover:not(.off) svg { animation: mic-pendulum 1.1s ease-in-out infinite; }
+/* Клик (мут): падает на бок на 15°, трясётся от удара и остаётся лежать */
+@keyframes mic-fall { 0% { transform: rotate(0deg); } 40% { transform: rotate(-21deg); } 55% { transform: rotate(-11deg); } 72% { transform: rotate(-18deg); } 86% { transform: rotate(-13deg); } 100% { transform: rotate(-15deg); } }
+.me-mic.anim-shake svg { animation: mic-fall .3s ease-in forwards; }
+.me-mic.off svg { transform: rotate(-15deg); }
+.me-mic svg { transition: transform .2s ease; }
+
+/* Шестерёнка: бесконечное плавное вращение при наведении, замирает без рывка */
+@keyframes gear-spin { to { transform: rotate(360deg); } }
+.me-out svg { animation: gear-spin 2s linear infinite; animation-play-state: paused; }
+.me-out:hover svg { animation-play-state: running; }
+
+/* --- 🖼️ Кнопки чата и ввода --- */
+/* GIF: рамка превращается в круг (волна букв — с v1.13.0) */
+.gif-badge-oval { transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), border-radius .25s ease; }
+.ctool.gif-badge:hover .gif-badge-oval { border-radius: 999px; }
+/* Смайлик: улыбка шире, глаза задорно прищуриваются */
+.composer .ctool .sm-mouth, .composer .ctool .sm-eye { transition: transform .25s ease; transform-box: fill-box; transform-origin: center; }
+.composer .ctool:hover .sm-mouth { transform: scale(1.35); }
+.composer .ctool:hover .sm-eye { transform: translateY(.5px) scaleX(2.6); }
+/* Плюс: оборачивается в крестик и «дышит» */
+.attach-btn svg { transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.attach-btn:hover svg { transform: rotate(45deg) scale(1.12); }
+
+/* --- 🧭 Навигация --- */
+/* Иконки серверов: скругление + zoom-in картинки, «вдавливание» при клике */
+.srv { transition: border-radius .2s ease, transform .12s ease, background .15s ease; overflow: hidden; }
+.srv:hover { border-radius: 16px; }
+.srv img { transition: transform .25s ease; }
+.srv:hover img { transform: scale(1.1); }
+.srv:active { transform: scale(.92); }
+/* Каналы: строка уступает место мышке (сдвиг на 4px), текст ярче */
+.ch { transition: background .15s ease, color .15s ease, padding-left .2s ease; }
+.ch:hover { padding-left: 14px; color: #fff; }
+
+/* --- 💡 Scale & Lift для стандартных кнопок --- */
+.pqs-save, .pqs-danger, .fp-editbtn, .pc-int-add, .srv-invite, .pin-btn, .mini-msgbox-smile { transition: transform .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease, filter .15s ease; }
+.pqs-save:hover, .pqs-danger:hover, .fp-editbtn:hover { transform: scale(1.05); box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.pqs-save:active, .pqs-danger:active, .fp-editbtn:active, .pin-btn:active, .srv-invite:active { transform: scale(.95); }

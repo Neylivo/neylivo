@@ -47,11 +47,11 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <span className="me-nm" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer' }} title="Мой профиль">
         {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : null; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
       </span>
-      <button className={'me-ic' + (micOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
+      <button className={'me-ic me-mic' + (micOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
         onClick={() => setMicOff(m => { if (!m) setMicAnim(true); return !m })}
         onAnimationEnd={() => setMicAnim(false)}
         title="Микрофон">{micOff ? <Icon name="mic-off" size={18} /> : <Icon name="mic" size={18} />}</button>
-      <button className={'me-ic' + (deaf ? ' off' : '') + (deafAnim ? ' anim-squeeze' : '')}
+      <button className={'me-ic me-deaf' + (deaf ? ' off' : '') + (deafAnim ? ' anim-squeeze' : '')}
         onClick={() => setDeaf(d => { if (!d) setDeafAnim(true); return !d })}
         onAnimationEnd={() => setDeafAnim(false)}
         title="Звук">{deaf ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
