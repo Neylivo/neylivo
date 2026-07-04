@@ -2551,3 +2551,14 @@ body.no-anim .member-typing i { animation:none; }
 /* ===== v1.41.0: подтверждение почты 6-значным кодом ===== */
 .auth-code { text-align:center; font-size:24px; font-weight:800; letter-spacing:14px; font-family:'JetBrains Mono', 'Consolas', monospace; }
 .auth-code::placeholder { letter-spacing:14px; color:var(--mut); }
+
+/* ===== v1.42.0: защита несохранённых изменений в настройках ===== */
+.cset-savebar.shake { animation:cset-shake .5s ease; }
+@keyframes cset-shake {
+  0%,100% { transform:translateX(-50%); }
+  20% { transform:translateX(calc(-50% - 9px)); }
+  40% { transform:translateX(calc(-50% + 9px)); }
+  60% { transform:translateX(calc(-50% - 6px)); }
+  80% { transform:translateX(calc(-50% + 6px)); }
+}
+.cset-save:disabled, .cset-reset:disabled { opacity:.6; cursor:default; }

@@ -123,6 +123,9 @@ export function Settings({ username, avatarUrl, onClose }:
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)      // v1.42.0: идёт сохранение — кнопки заблокированы
+  const [shake, setShake] = useState(false)    // v1.42.0: тряска плашки при попытке закрыть без сохранения
+  const dirtyRef = useRef(false)
   const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
 
@@ -130,17 +133,24 @@ export function Settings({ username, avatarUrl, onClose }:
     if (!user) return
     let ok = true
     fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about); setPrimary(p.primary); setAccent(p.accent); setOrig(o => ({ ...o, about: p.about, primary: p.primary, accent: p.accent })) } })
-    // v1.39.0: ник и юзернейм — разные поля; до миграций 20/21 части колонок может не быть — откатываемся.
-    supabase.from('profiles').select('username, display_name, username_changed_at').eq('id', user.id).maybeSingle()
-      .then(async ({ data, error }) => {
-        let d: any = data
-        if (error) { const r = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(); d = r.data }
-        if (!ok || !d) return
-        const nick = d.display_name || d.username || ''
-        setUname(d.username ?? ''); setName(nick)
-        setNameChangedAt(d.username_changed_at ?? null)
-        setOrig(o => ({ ...o, name: nick, uname: d.username ?? '' }))
-      })
+    // v1.42.0: надёжная загрузка. Трёхступенчатый фолбэк по миграциям (сначала без
+    // username_changed_at, потом без display_name), а если строки профиля нет совсем
+    // или юзернейм пуст (сбой при регистрации) — чиним профиль сами. Поля не бывают пустыми.
+    ;(async () => {
+      let r: any = await supabase.from('profiles').select('username, display_name, username_changed_at').eq('id', user.id).maybeSingle()
+      if (r.error) r = await supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle()
+      if (r.error) r = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle()
+      let d: any = r.data
+      if (!d?.username) {
+        const fb = localStorage.getItem('ponoi_username') || (user.email ? user.email.split('@')[0] : '')
+        if (fb) { await supabase.from('profiles').upsert({ id: user.id, username: fb }); d = { ...(d ?? {}), username: fb } }
+      }
+      if (!ok || !d) return
+      const nick = d.display_name || d.username || ''
+      setUname(d.username ?? ''); setName(nick)
+      setNameChangedAt(d.username_changed_at ?? null)
+      setOrig(o => ({ ...o, name: nick, uname: d.username ?? '' }))
+    })()
     return () => { ok = false }
   }, [user])
 
@@ -159,16 +169,31 @@ export function Settings({ username, avatarUrl, onClose }:
   }
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // v1.42.0: с несохранёнными изменениями настройки не закрываются — плашка трясётся (как в Discord)
+      if (dirtyRef.current) { setShake(true); window.setTimeout(() => setShake(false), 600) }
+      else onClose()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line
   }, [onClose])
 
   // v1.39.0: плашка «несохранённые изменения» — как в настройках сервера
   const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about || primary !== orig.primary || accent !== orig.accent
+  dirtyRef.current = dirty
   function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about); setPrimary(orig.primary); setAccent(orig.accent) }
+  // v1.42.0: закрытие с несохранёнными изменениями — только через «Сбросить» или «Сохранить»
+  function tryClose() {
+    if (dirty) { setShake(true); window.setTimeout(() => setShake(false), 600); return }
+    onClose()
+  }
 
   async function saveAccount() {
+    if (busy) return
+    setBusy(true)
+    try {
     const newNick = name.trim()
     const newUname = uname.trim()
     if (newUname && newUname !== orig.uname) {
@@ -197,11 +222,15 @@ export function Settings({ username, avatarUrl, onClose }:
       localStorage.setItem('ponoi_username', newNick || newUname || username)
     }
     await patchProf({ about, primary, accent })
-    setOrig({ name: newNick, uname: newUname || orig.uname, about, primary, accent })
+    const finalUname = newUname || orig.uname
+    const finalNick = newNick || finalUname
+    setName(finalNick); setUname(finalUname)
+    setOrig({ name: finalNick, uname: finalUname, about, primary, accent })
     // Мгновенно обновляем имя во всём приложении (Home слушает это событие) — без перезагрузки.
     window.dispatchEvent(new CustomEvent('ponoi-profile-updated', { detail: { nick: newNick || newUname || username, handle: newUname || orig.uname } }))
     toastOk('Изменения сохранены')
     setSaved(true); setTimeout(() => setSaved(false), 1500)
+    } finally { setBusy(false) }
   }
 
   return (
@@ -216,11 +245,11 @@ export function Settings({ username, avatarUrl, onClose }:
         </div>
       </div>
       <div className="pqs-content">
-        <button className="pqs-close" onClick={onClose} title="Закрыть (Esc)"><Icon name="close" size={18} /><span>ESC</span></button>
-        {dirty && <div className="cset-savebar" style={{ zIndex: 1000 }}>
+        <button className="pqs-close" onClick={tryClose} title="Закрыть (Esc)"><Icon name="close" size={18} /><span>ESC</span></button>
+        {dirty && <div className={'cset-savebar' + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
           <span>Есть несохранённые изменения!</span>
-          <button className="cset-reset" onClick={resetAll}>Сбросить</button>
-          <button className="cset-save" onClick={saveAccount}>{saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
+          <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
+          <button className="cset-save" onClick={saveAccount} disabled={busy}>{busy ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
         </div>}
         <div className="pqs-inner">
           {cat === 'account' && <>

@@ -62,6 +62,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
+  // v1.42.0: синхронный замок от двойной отправки (второй Enter до того, как busy успеет выставиться)
+  const sendingRef = useRef(false)
   // Сообщение, которое не ушло из-за сбоя сети: текст остаётся в поле, баннер даёт повторить одной кнопкой.
   const [failed, setFailed] = useState(false)
   // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
@@ -196,7 +198,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   // Отправка нескольких файлов подряд (выбор папки): каждый файл — отдельным сообщением.
   async function sendFiles(fs: File[]) {
-    if (!user || fs.length === 0) return
+    if (!user || fs.length === 0 || busy) return
     const batch = fs.slice(0, 10)
     if (fs.length > 10) toastErr('Отправляю первые 10 файлов из ' + fs.length)
     setBusy(true)
@@ -250,6 +252,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (busy || sendingRef.current) return   // v1.42.0: защита от двойной отправки
     const t = polish(applySlash(text.trim()))
     if ((!t && !file) || !user) return
     // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
@@ -257,6 +260,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
     if (t && !file && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
+    sendingRef.current = true
     setBusy(true)
     try {
       let attach: { url: string; type: string } | undefined
@@ -271,7 +275,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       setFailed(false)
       setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
-    finally { setBusy(false); setUpProg(null) }
+    finally { setBusy(false); setUpProg(null); sendingRef.current = false }
   }
 
   return (
