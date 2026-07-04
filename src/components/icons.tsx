@@ -81,6 +81,7 @@ export function Icon({ name, size, className }: { name: string; size?: number; c
     case 'reply': return <svg {...p}><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
     case 'forward': return <svg {...p}><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
     case 'edit': return <svg {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    case 'chevron-right': return <svg {...p}><polyline points="9 18 15 12 9 6"/></svg>
     default: return null
   }
 }

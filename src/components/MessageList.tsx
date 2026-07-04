@@ -10,6 +10,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { parseSys } from '../lib/sysmsg'
 import { parseFwd } from '../lib/fwd'
 import { ForwardModal } from './ForwardModal'
+import { EmojiPicker } from './EmojiPicker'
 
 export interface UiMessage {
   id: string
@@ -46,6 +47,53 @@ function firstImageUrl(text?: string | null): string | null {
   if (!text) return null
   const m = text.match(IMG_URL)
   return m ? m[0] : null
+}
+
+// Картинка сообщения (вложение-image или ссылка на картинку в тексте) — для пунктов меню с изображениями.
+function msgImage(m: UiMessage): string | null {
+  if (m.attach_url && m.attach_type === 'image') return m.attach_url.replace('#spoiler', '')
+  return firstImageUrl(m.content)
+}
+
+// Копирование картинки в буфер: fetch -> bitmap -> canvas -> PNG (clipboard принимает только PNG).
+async function copyImageToClipboard(url: string) {
+  try {
+    if (!('ClipboardItem' in window)) throw new Error('nope')
+    const r = await fetch(url)
+    const blob = await r.blob()
+    const bmp = await createImageBitmap(blob)
+    const cv = document.createElement('canvas')
+    cv.width = bmp.width; cv.height = bmp.height
+    cv.getContext('2d')!.drawImage(bmp, 0, 0)
+    const png: Blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('fail')), 'image/png'))
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+    toastOk('Изображение скопировано')
+  } catch { toastErr('Не удалось скопировать изображение') }
+}
+
+// Сохранение картинки как файла (blob, чтобы браузер не открывал вкладку).
+async function saveImage(url: string) {
+  try {
+    const r = await fetch(url)
+    const blob = await r.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = decodeURIComponent(url.split('/').pop()?.split('?')[0] ?? 'image')
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+  } catch { toastErr('Не удалось сохранить изображение') }
+}
+
+// «Зачитать сообщение» — озвучка через Web Speech API (как в Discord).
+function speakMsg(m: UiMessage) {
+  const text = parseFwd(m.content)?.text ?? m.content ?? ''
+  if (!text) return
+  try {
+    const u = new SpeechSynthesisUtterance(m.author_name + ' говорит: ' + text)
+    u.lang = 'ru-RU'
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(u)
+  } catch { toastErr('Синтез речи недоступен') }
 }
 
 // Detect a message consisting solely of emoji (1..8) so it can render large.
@@ -90,15 +138,18 @@ interface Props {
   nameOf?: (userId: string) => string | undefined
   // Цвет имени автора (цветные роли).
   colorOf?: (userId: string) => string | undefined
+  // «Отметить как непрочитанное» — ставит разделитель НОВОЕ на это сообщение.
+  onMarkUnread?: (m: UiMessage) => void
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
   const { settings } = useSettings()
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
+  const [emojiAt, setEmojiAt] = useState<{ id: string; x: number; y: number } | null>(null)
   const [, setEmojiVer] = useState(0)
 
   // Re-render message bodies when the shared custom-emoji cache updates.
@@ -232,19 +283,52 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         )
       })}
 
-      {menu && menuMsg && <>
+      {menu && menuMsg && (() => {
+        const img = msgImage(menuMsg)
+        const fwdM = parseFwd(menuMsg.content)
+        const textOf = fwdM ? fwdM.text : (menuMsg.content ?? '')
+        const item = (label: string, icon: string, fn: () => void, cls = '') => (
+          <div className={'ctx-item' + cls} onClick={() => { fn(); setMenu(null) }}><span>{label}</span><Icon name={icon} size={16} /></div>
+        )
+        return <>
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
-        <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
+        <div className="ctx-menu" style={{ left: Math.min(menu.x, window.innerWidth - 250), top: Math.max(8, Math.min(menu.y, window.innerHeight - (img ? 560 : 440))) }}>
           <div className="ctx-quick">
-            {QUICK.map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
+            {QUICK.slice(0, 4).map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
           </div>
-          {onReply && <div className="ctx-item" onClick={() => { onReply(menuMsg); setMenu(null) }}><Icon name="reply" size={15} /> Ответить</div>}
-          {currentUser && <div className="ctx-item" onClick={() => { setFwdFor(menuMsg); setMenu(null) }}><Icon name="forward" size={15} /> Переслать</div>}
-          {menuMsg.author === currentUser && onEdit && menuMsg.content && !parseFwd(menuMsg.content) && <div className="ctx-item" onClick={() => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? ''); setMenu(null) }}><Icon name="edit" size={15} /> Изменить</div>}
-          {(canPin ? canPin(menuMsg) : true) &&
-            <div className="ctx-item" onClick={() => { onPin?.(menu.id, !menuMsg.pinned); setMenu(null) }}><Icon name="pin" size={15} /> {menuMsg.pinned ? 'Открепить' : 'Закрепить'}</div>}
-          {menuMsg.content && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(parseFwd(menuMsg.content)?.text ?? menuMsg.content ?? ''); toastOk('Текст скопирован'); setMenu(null) }}><Icon name="copy" size={15} /> Копировать текст</div>}
-          {menuMsg.author === currentUser && <div className="ctx-item danger" onClick={() => { onDelete?.(menu.id); setMenu(null) }}><Icon name="trash" size={15} /> Удалить</div>}
+          <div className="ctx-item" onClick={() => { setEmojiAt({ id: menu.id, x: menu.x, y: menu.y }); setMenu(null) }}><span>Добавить реакцию</span><Icon name="chevron-right" size={16} /></div>
+          <div className="ctx-sep" />
+          {menuMsg.author === currentUser && onEdit && menuMsg.content && !fwdM ? item('Редактировать', 'edit', () => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? '') }) : null}
+          {onReply ? item('Ответить', 'reply', () => onReply(menuMsg)) : null}
+          {currentUser ? item('Переслать', 'forward', () => setFwdFor(menuMsg)) : null}
+          <div className="ctx-sep" />
+          {textOf ? item('Скопировать текст', 'copy', () => { navigator.clipboard?.writeText(textOf); toastOk('Текст скопирован') }) : null}
+          {(canPin ? canPin(menuMsg) : true) ? item(menuMsg.pinned ? 'Открепить сообщение' : 'Закрепить сообщение', 'pin', () => onPin?.(menu.id, !menuMsg.pinned)) : null}
+          {onMarkUnread ? item('Отметить как непрочитанное', 'message', () => { onMarkUnread(menuMsg); toastOk('Отмечено как непрочитанное') }) : null}
+          {item('Скопировать ссылку на сообщение', 'link', () => { navigator.clipboard?.writeText('ponoi://msg/' + menuMsg.id); toastOk('Ссылка скопирована') })}
+          {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
+          {img ? <>
+            <div className="ctx-sep" />
+            {item('Копировать изображение', 'image', () => { copyImageToClipboard(img) })}
+            {item('Сохранить изображение', 'download', () => { saveImage(img) })}
+            <div className="ctx-sep" />
+            {item('Копировать ссылку на изображение', 'link', () => { navigator.clipboard?.writeText(img); toastOk('Ссылка скопирована') })}
+            {item('Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
+          </> : null}
+          {menuMsg.author === currentUser ? <>
+            <div className="ctx-sep" />
+            {item('Удалить сообщение', 'trash', () => onDelete?.(menu.id), ' danger')}
+          </> : null}
+          <div className="ctx-sep" />
+          {item('Копировать ID сообщения', 'id-card', () => { navigator.clipboard?.writeText(menuMsg.id); toastOk('ID скопирован') })}
+        </div>
+        </>
+      })()}
+
+      {emojiAt && <>
+        <div className="ctx-overlay" onClick={() => setEmojiAt(null)} />
+        <div className="ctx-emoji-pop" style={{ left: Math.min(emojiAt.x, window.innerWidth - 380), top: Math.max(8, Math.min(emojiAt.y, window.innerHeight - 470)) }} onClick={e => e.stopPropagation()}>
+          <EmojiPicker onPick={e => { onReact?.(emojiAt.id, e); setEmojiAt(null) }} onClose={() => setEmojiAt(null)} />
         </div>
       </>}
 

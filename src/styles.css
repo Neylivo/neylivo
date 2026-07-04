@@ -1848,3 +1848,12 @@ body.no-anim .member-typing i { animation:none; }
 .fwd-check { width:20px; height:20px; border-radius:50%; border:2px solid var(--mut); display:flex; align-items:center; justify-content:center; color:#fff; flex:none; }
 .fwd-row.on .fwd-check { background:var(--brand); border-color:var(--brand); }
 .fwd-comment { margin-top:10px; }
+/* ===== v1.18.0: контекстное меню сообщений 1-в-1 как в Discord ===== */
+.ctx-menu { min-width:230px; padding:6px 8px; }
+.ctx-item { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:7px 8px; font-size:13.5px; font-weight:500; white-space:nowrap; }
+.ctx-item svg { flex:none; opacity:.9; }
+.ctx-sep { height:1px; background:rgba(255,255,255,.07); margin:4px 2px; }
+.ctx-quick { justify-content:space-between; border-bottom:none; margin-bottom:2px; padding:4px 2px; }
+.ctx-quick button { flex:0 0 auto; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; background:var(--bg2); border-radius:10px; transition:transform .12s ease, background .12s ease; }
+.ctx-quick button:hover { background:var(--brand); transform:scale(1.08); }
+.ctx-emoji-pop { position:fixed; z-index:95; animation:pop .12s ease both; }

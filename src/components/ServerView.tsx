@@ -373,6 +373,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
+            onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) localStorage.setItem('ponoi_lastread_' + curChannelRef.current.id, String(new Date(m.created_at).getTime() - 1)) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm?.role_id ? roleById[mm.role_id] : undefined
               setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, roleName: rr?.name, roleColor: rr?.color, activity: activityOf(m.author), x, y }) }} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>
