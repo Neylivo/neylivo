@@ -9,7 +9,7 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
-import { isSoundcloudUrl, scMeta, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
+import { isSoundcloudUrl, scMeta, scResolveTracks, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 
@@ -47,6 +47,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [showLib, setShowLib] = useState(false)
   const [libQ, setLibQ] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [importing, setImporting] = useState('')
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off')
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists)
@@ -94,9 +95,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   useEffect(() => { curTRef.current = curT }, [curT])
   useEffect(() => {
     if (!playing || !cur) { setMyListening(null); return }
-    const source = curSc ? 'SoundCloud' : curYt ? 'YouTube' : isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
+    const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
     const pub = () => setMyListening({
-      title: curMeta?.title || cur.name, author: curMeta?.author || '',
+      title: curMeta?.title || cur.name, author: curMeta?.author || cur.author || '',
       source, pos: curTRef.current, dur: dur || undefined, at: Date.now(),
     })
     pub()
@@ -117,6 +118,23 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       .subscribe()
     return () => { ok = false; supabase.removeChannel(ch) }
   }, [])
+
+  // Метаданные из базы (автор/обложка/play-URL) — видны всем сразу, без oEmbed.
+  useEffect(() => {
+    setMeta(prev => {
+      let ch = false
+      const n = { ...prev }
+      for (const t of tracks) {
+        if (!(t.author || t.art || t.play)) continue
+        const old = n[t.url]
+        if (old && (old.art || !t.art)) continue
+        n[t.url] = { title: old?.title || t.name, author: old?.author || t.author || '', art: old?.art || t.art || null, play: old?.play || t.play || null }
+        ch = true
+      }
+      return ch ? n : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks])
 
   useEffect(() => {
     let revoked = ''
@@ -158,7 +176,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // ---- Метаданные для всех ссылок в списке: SoundCloud / YouTube / Audius ----
   useEffect(() => {
     let ok = true
-    const missing = tracks.filter(t => !meta[t.url] && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
+    const missing = tracks.filter(t => !meta[t.url] && !(t.author || t.art || t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
     ;(async () => {
       for (const t of missing) {
@@ -225,7 +243,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           if (!gotDur) w.getDuration((ms: number) => { if (!disposed && ms > 0) { gotDur = true; setDur(ms / 1000) } })
         })
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
-        // Виджет теперь видимый и кликабельный — синхронизируем его кнопки с нашими.
+        // Виджет скрыт, но его события всё равно синхронизируем с нашими кнопками.
         w.bind(SC.Widget.Events.PLAY, () => { if (!disposed) setPlaying(true) })
         w.bind(SC.Widget.Events.PAUSE, () => { if (!disposed) setPlaying(false) })
         w.bind(SC.Widget.Events.ERROR, () => { if (!disposed) toastErr('SoundCloud: трек не воспроизводится (закрытый или недоступен для встраивания)') })
@@ -276,6 +294,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curYt, ytId])
 
+  // При смене трека сразу показываем длительность из базы (точную даст плеер позже).
+  useEffect(() => {
+    setCurT(0); setDur(tracks[idx]?.dur || 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx])
+
   // ---- listen together (broadcast sync via supabase realtime) ----
   useEffect(() => {
     if (!together) { if (togChan.current) { supabase.removeChannel(togChan.current); togChan.current = null } return }
@@ -315,15 +339,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   async function addSoundcloud() {
     const url = cleanScUrl(scUrl); if (!url || !meId) return
     if (!/^https?:\/\//i.test(url)) { toastErr('Вставь полную ссылку (https://…)'); return }
-    // Метаданные по типу ссылки: SoundCloud / YouTube / Audius (прямые файлы играют как есть).
-    const m = isSoundcloudUrl(url) ? await scMeta(url)
-      : isYouTubeUrl(url) ? await ytMeta(url)
-      : isAudiusUrl(url) ? await audiusMeta(url)
-      : null
+    if (isSoundcloudUrl(url)) {
+      // SoundCloud (трек ИЛИ плейлист/сет): разворачиваем ссылку в полный список
+      // треков и сохраняем каждый в общую трекотеку — с названием, автором,
+      // обложкой и длительностью прямо в базе: видно всем и навсегда.
+      setImporting('Читаю SoundCloud…')
+      try {
+        const list = await scResolveTracks(url, (d, t) => setImporting(t > 1 ? `Добавляю: ${d}/${t}…` : 'Добавляю трек…'))
+        if (list.length === 0) { toastErr('Не удалось прочитать треки по ссылке'); return }
+        const have = new Set(tracks.map(x => x.url))
+        let added = 0
+        for (const s of list) {
+          if (have.has(s.url)) continue
+          have.add(s.url)
+          setMeta(prev => ({ ...prev, [s.url]: { title: s.title, author: s.author, art: s.art, play: s.play } }))
+          await addTrack({ url: s.url, name: s.title, ownerId: meId, ownerName: me, kind: 'url', author: s.author, art: s.art, dur: s.dur, play: s.play })
+          added++
+        }
+        setScUrl('')
+        setTracks(await fetchTracks())
+        if (added === 0) toastErr('Эти треки уже есть в трекотеке')
+      } catch (err: any) { toastErr(err?.message ?? String(err)) }
+      finally { setImporting('') }
+      return
+    }
+    // Остальные источники: YouTube / Audius / прямой аудио-файл по ссылке.
+    const m = isYouTubeUrl(url) ? await ytMeta(url) : isAudiusUrl(url) ? await audiusMeta(url) : null
     if (!m && isAudiusUrl(url)) { toastErr('Не удалось прочитать ссылку Audius — проверь её'); return }
     const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
     if (m) setMeta(prev => ({ ...prev, [url]: m }))
-    await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url' })
+    await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
     setScUrl('')
     setTracks(await fetchTracks())
   }
@@ -407,8 +452,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-addrow">
             <input className="mus2-in" placeholder="Ссылка: SoundCloud, YouTube, Audius или .mp3…" value={scUrl}
               onChange={e => setScUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addSoundcloud() }} />
-            <button className="mus2-addbtn" onClick={addSoundcloud}>Добавить</button>
+            <button className="mus2-addbtn" onClick={addSoundcloud} disabled={!!importing}>{importing ? '…' : 'Добавить'}</button>
           </div>
+          {importing && <div className="mus2-importing">{importing}</div>}
           <div className="mus2-addrow">
             <input className="mus2-in" placeholder="Найти трек в очереди…" value={qFilter} onChange={e => setQFilter(e.target.value)} />
             <button className="mus2-libbtn" onClick={() => setShowLib(true)}>Трекотека</button>
@@ -423,7 +469,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 const i = tracks.indexOf(t)
                 return (
                   <div key={t.id} className={'mus2-li' + (i === idx ? ' on' : '')} onClick={() => { setIdx(i); setPlaying(true) }}>
-                    <span className="mus2-li-n">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{meta[t.url]?.title || t.name}</span>
+                    <span className="mus2-li-art">{(meta[t.url]?.art || t.art) ? <img src={(meta[t.url]?.art || t.art) as string} alt="" /> : <Icon name="music" size={13} />}</span>
+                    <span className="mus2-li-n">
+                      <span className="mus2-li-t">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{meta[t.url]?.title || t.name}</span>
+                      {(meta[t.url]?.author || t.author) ? <span className="mus2-li-a">{meta[t.url]?.author || t.author}</span> : null}
+                    </span>
+                    {t.dur ? <span className="mus2-li-d">{fmt(t.dur)}</span> : null}
                     <span className="mus2-li-add" title="В плейлист" onClick={e => { e.stopPropagation(); addToPlaylist(t.id) }}><Icon name="plus" size={14} /></span>
                     <span className="mus2-li-del" title="Убрать" onClick={e => { e.stopPropagation(); removeTrack(t.id) }}><Icon name="close" size={13} /></span>
                   </div>
@@ -456,7 +507,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
           </div>
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
-          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author ? curMeta.author + ' · SoundCloud' : 'SoundCloud') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author ? curMeta.author + ' · по ссылке' : 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
             src={widgetSrc(scPlayUrl)} />}
           {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}
@@ -509,9 +560,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-lib-body">
             {tracks.length === 0
               ? <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
-              : tracks.filter(t => t.name.toLowerCase().includes(libQ.toLowerCase())).map(t => {
+              : tracks.filter(t => (t.name + ' ' + (t.author || '')).toLowerCase().includes(libQ.toLowerCase())).map(t => {
                   const i = tracks.indexOf(t)
-                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>{meta[t.url]?.title || t.name}<span className="mus2-lib-own">{t.owner}</span></div>
+                  const art = meta[t.url]?.art || t.art
+                  const author = meta[t.url]?.author || t.author
+                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>
+                    <span className="mus2-lib-art">{art ? <img src={art} alt="" /> : <Icon name="music" size={15} />}</span>
+                    <span className="mus2-lib-meta"><span className="mus2-lib-t">{meta[t.url]?.title || t.name}</span>{author ? <span className="mus2-lib-a">{author}</span> : null}</span>
+                    {t.dur ? <span className="mus2-lib-d">{fmt(t.dur)}</span> : null}
+                    <span className="mus2-lib-own">{t.owner}</span>
+                  </div>
                 })}
           </div>
         </div>
@@ -532,7 +590,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
         <div className="mus-mini-meta" onClick={onClose} title="Открыть плеер">
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
-          <div className="mus-mini-s">{curMeta?.author || (curSc ? 'SoundCloud' : cur.kind === 'file' ? 'файл' : 'по ссылке')}</div>
+          <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'Ponoi Music')}</div>
         </div>
         <button className="mm-play" title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
           {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}

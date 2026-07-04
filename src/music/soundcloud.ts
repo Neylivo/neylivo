@@ -79,3 +79,76 @@ export function widgetSrc(url: string) {
   return 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(url) +
     '&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false'
 }
+
+// ---- Импорт трека/плейлиста: скрытый одноразовый виджет -> полный список треков ----
+export interface ScTrack { url: string; title: string; author: string; art: string | null; dur: number; play: string | null }
+
+function scArt(u: any): string | null {
+  const s = u ? String(u) : ''
+  return s ? s.replace('-large', '-t500x500') : null
+}
+
+/**
+ * Разворачивает SC-ссылку (одиночный трек ИЛИ плейлист/сет) в список треков с
+ * метаданными: название, автор, обложка, длительность, прямой play-URL
+ * (api.soundcloud.com/tracks/…). Работает через невидимый одноразовый виджет:
+ * READY -> getSounds(); ленивые элементы плейлиста добираем skip(i) + getCurrentSound.
+ */
+export async function scResolveTracks(url: string, onProgress?: (done: number, total: number) => void): Promise<ScTrack[]> {
+  let target = url
+  if (/^https?:\/\/on\.soundcloud\.com\//i.test(url)) {
+    // Короткие ссылки виджет сам не резолвит — берём каноничный URL из oEmbed.
+    const m = await scMeta(url)
+    if (m?.play) target = m.play
+  }
+  const SC = await loadWidgetApi()
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:fixed;left:-9999px;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none;border:0'
+  frame.allow = 'autoplay'
+  frame.src = widgetSrc(target)
+  document.body.appendChild(frame)
+  const w = SC.Widget(frame)
+  try {
+    await new Promise<void>((res, rej) => {
+      const t = setTimeout(() => rej(new Error('SoundCloud не отвечает — проверь ссылку или блокировщик рекламы')), 12000)
+      w.bind(SC.Widget.Events.READY, () => { clearTimeout(t); res() })
+      w.bind(SC.Widget.Events.ERROR, () => { clearTimeout(t); rej(new Error('SoundCloud: ссылка не читается')) })
+    })
+    try { w.setVolume(0) } catch {}
+    const sounds: any[] = await new Promise(res => w.getSounds((s: any[]) => res(Array.isArray(s) ? s : [])))
+    const total = Math.max(sounds.length, 1)
+    const out: ScTrack[] = []
+    const toTrack = (s: any): ScTrack => ({
+      url: String(s.permalink_url || url),
+      title: String(s.title || 'Трек'),
+      author: String(s.user?.username || ''),
+      art: scArt(s.artwork_url || s.user?.avatar_url),
+      dur: s.duration > 0 ? Math.round(s.duration / 1000) : 0,
+      play: s.id ? 'https://api.soundcloud.com/tracks/' + s.id : null,
+    })
+    for (let i = 0; i < total; i++) {
+      let s: any = sounds[i]
+      if (!s || !s.title) {
+        // Ленивый элемент плейлиста: перескакиваем на него и ждём загрузки данных.
+        try { w.skip(i) } catch {}
+        try { w.pause() } catch {}
+        s = await new Promise<any>(res => {
+          let tries = 0
+          const iv = setInterval(() => {
+            w.getCurrentSoundIndex((ci: number) => {
+              if (ci !== i) { if (++tries > 40) { clearInterval(iv); res(null) }; return }
+              w.getCurrentSound((cs: any) => {
+                if (cs && cs.title) { clearInterval(iv); try { w.pause() } catch {}; res(cs) }
+                else if (++tries > 40) { clearInterval(iv); res(null) }
+              })
+            })
+          }, 200)
+        })
+      }
+      if (s && s.title) out.push(toTrack(s))
+      onProgress?.(i + 1, total)
+    }
+    try { w.pause() } catch {}
+    return out
+  } finally { try { frame.remove() } catch {} }
+}

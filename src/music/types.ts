@@ -1,5 +1,5 @@
 
-export interface Track { id: string; url: string; name: string; owner: string; kind?: 'url' | 'file' }
+export interface Track { id: string; url: string; name: string; owner: string; kind?: 'url' | 'file'; author?: string; art?: string | null; dur?: number; play?: string | null }
 export type GifPos = 'left' | 'right' | 'both'
 export interface GifCfg { url: string; pos: GifPos }
 export interface BgCfg {
