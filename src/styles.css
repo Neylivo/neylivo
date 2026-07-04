@@ -925,7 +925,7 @@ body.chatbg-on .chat::after {
 
 /* ===== Ponoi Music: мини-плеер в углу + виниловая пластинка ===== */
 .mus2-hidden { display:none !important; }
-.mus-mini { position:fixed; left:84px; bottom:14px; z-index:130; display:flex; align-items:center; gap:10px;
+.mus-mini { position:fixed; right:14px; bottom:14px; z-index:130; display:flex; align-items:center; gap:10px;
   background:var(--bg2); border:1px solid rgba(0,0,0,.35); border-radius:14px; padding:8px 10px;
   box-shadow:0 12px 32px rgba(0,0,0,.5); width:320px; }
 .mus-mini-art { width:40px; height:40px; border-radius:50%; overflow:hidden; flex:none; cursor:pointer;

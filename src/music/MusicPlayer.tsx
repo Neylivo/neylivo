@@ -525,14 +525,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}
     </main>
-    {!visible && (
+    {!visible && cur && (
       <div className="mus-mini" style={musStyle}>
         <div className={'mus-mini-art' + (playing ? ' spin' : '')} onClick={onClose} title="Открыть плеер">
           {curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={18} />}
         </div>
         <div className="mus-mini-meta" onClick={onClose} title="Открыть плеер">
-          <div className="mus-mini-t">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
-          <div className="mus-mini-s">{cur ? (curMeta?.author || (curSc ? 'SoundCloud' : cur.kind === 'file' ? 'файл' : 'по ссылке')) : 'открой плеер и добавь трек'}</div>
+          <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
+          <div className="mus-mini-s">{curMeta?.author || (curSc ? 'SoundCloud' : cur.kind === 'file' ? 'файл' : 'по ссылке')}</div>
         </div>
         <button className="mm-play" title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
           {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}
