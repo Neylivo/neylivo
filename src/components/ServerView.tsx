@@ -26,6 +26,9 @@ import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, createRole, deleteRole, assignRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
+import { ChannelSettings } from './ChannelSettings'
+import { CreateChannelModal } from './CreateChannelModal'
+import { ProfileCard } from './ProfileCard'
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
@@ -50,6 +53,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showSearch, setShowSearch] = useState(false)
   const [showMembers, setShowMembers] = useState(() => localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
+  const [voiceCatOpen, setVoiceCatOpen] = useState(() => localStorage.getItem('ponoi_cat_voice_open') !== '0')
+  const [srvMenu, setSrvMenu] = useState(false)
+  const [showCreateCh, setShowCreateCh] = useState<null | 'text' | 'voice'>(null)
+  const [chSettings, setChSettings] = useState<Channel | null>(null)
+  const [editProfile, setEditProfile] = useState(false)
+  const [hideMuted, setHideMuted] = useState(() => localStorage.getItem('ponoi_hide_muted') === '1')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
   // Подсветка каналов с непрочитанными сообщениями (как в Discord).
@@ -82,7 +91,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const { data } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
     const list = data ?? []
     setChannels(list)
-    if (list.length) selectChannel(list[0]); else { setCurChannel(null); setMessages([]) }
+    // Первым выбираем текстовый канал (голосовые не открываются как чат).
+    const texts = list.filter(c => (c as any).kind !== 'voice')
+    if (texts.length) selectChannel(texts[0])
+    else if (list.length) selectChannel(list[0])
+    else { setCurChannel(null); setMessages([]) }
     refreshUnread(list)
   }
 
@@ -249,13 +262,23 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
 
-  async function createChannel() {
-    const name = prompt('Название канала')?.trim()
-    if (!name) return
-    const { error } = await supabase.from('channels').insert({ server_id: server.id, name })
+  async function createChannel(name: string, kind: 'text' | 'voice', priv: boolean) {
+    // Сначала пробуем с новыми колонками (kind/settings из миграции 16), при ошибке — без них.
+    let { error } = await supabase.from('channels').insert({ server_id: server.id, name, kind, settings: priv ? { private: true } : {} } as any)
+    if (error) {
+      const r2 = await supabase.from('channels').insert({ server_id: server.id, name })
+      if (!r2.error && kind === 'voice') toastErr('Для голосовых каналов примени миграцию supabase/16_channel_settings.sql')
+      error = r2.error
+    }
     if (error) return toastErr(error.message)
     uiChime() // мягкое звуковое подтверждение создания канала
     loadChannels()
+  }
+
+  // Вход в голосовой канал по клику (комнаты те же, что и у звонков в текстовых каналах).
+  async function joinVoice(c: Channel) {
+    if (!user) return
+    try { setCall(await joinRoom('ch_' + c.id, user.id, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
   async function invite() {
@@ -325,19 +348,59 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   return (
     <>
       <aside className="channels">
-        <div className="srv-title">
-          {server.name}
-          <button className="srv-invite" title="Пригласить" onClick={invite}><Icon name="link" size={16} /></button>
+        <div className="srv-title clickable" onClick={() => setSrvMenu(v => !v)}>
+          <span className="srv-title-nm">{server.name}</span>
+          <Icon name={srvMenu ? 'close' : 'chevron-down'} size={16} />
         </div>
+        {srvMenu && <>
+          <div className="ctx-overlay" onClick={() => setSrvMenu(false)} />
+          <div className="srv-menu" onClick={() => setSrvMenu(false)}>
+            <div className="srv-mi" onClick={invite}>Пригласить на сервер <Icon name="user-plus" size={16} /></div>
+            {isOwner && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}>Настройки сервера <Icon name="gear" size={16} /></div>}
+            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCh('text')}>Создать канал <Icon name="plus-circle" size={16} /></div>}
+            {isOwner && <div className="srv-mi" onClick={() => toastOk('Категории скоро появятся')}>Создать категорию <Icon name="folder" size={16} /></div>}
+            <div className="srv-mi" onClick={() => toastOk('События скоро появятся')}>Создать событие <Icon name="calendar" size={16} /></div>
+            <div className="srv-msep" />
+            <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-notif', { detail: server }))}>Параметры уведомлений <Icon name="bell" size={16} /></div>
+            <div className="srv-mi" onClick={() => toastOk('Настройки конфиденциальности скоро появятся')}>Настройки конфиденциальности <Icon name="shield" size={16} /></div>
+            <div className="srv-msep" />
+            <div className="srv-mi" onClick={() => setEditProfile(true)}>Редактировать личный профиль <Icon name="edit" size={16} /></div>
+            <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !hideMuted; setHideMuted(nv); localStorage.setItem('ponoi_hide_muted', nv ? '1' : '0') }}>Скрыть заглушённые каналы <span className={'srv-mchk' + (hideMuted ? ' on' : '')}>{hideMuted && <Icon name="check" size={12} />}</span></div>
+            <div className="srv-msep" />
+            <div className="srv-mi" onClick={() => { navigator.clipboard?.writeText(server.id); toastOk('ID сервера скопирован') }}>Копировать ID сервера <Icon name="id-card" size={16} /></div>
+          </div>
+        </>}
         <div className="ch-list">
+          <div className="ch evt"><Icon name="calendar" size={16} /> Мероприятия</div>
           <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
             onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
-            <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы</div>
-          {channels.filter(c => catOpen || curChannel?.id === c.id).map(c => (
+            <span className={'ch-caret' + (catOpen ? ' open' : '')}>▶</span>Текстовые каналы
+            {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh('text') }}><Icon name="plus" size={14} /></button>}
+          </div>
+          {channels.filter(c => (c as any).kind !== 'voice').filter(c => catOpen || curChannel?.id === c.id).map(c => (
             <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '')}
-              onClick={() => selectChannel(c)}># {c.name}</div>
+              onClick={() => selectChannel(c)}>
+              <span className="ch-nm"># {c.name}</span>
+              <span className="ch-acts">
+                <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
+                {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+              </span>
+            </div>
           ))}
-          <div className="ch add" onClick={createChannel}><Icon name="plus" size={14} /> канал</div>
+          <div className="ch-sec clickable" title={voiceCatOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
+            onClick={() => setVoiceCatOpen(v => { localStorage.setItem('ponoi_cat_voice_open', v ? '0' : '1'); return !v })}>
+            <span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}>▶</span>Голосовые каналы
+            {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh('voice') }}><Icon name="plus" size={14} /></button>}
+          </div>
+          {channels.filter(c => (c as any).kind === 'voice').filter(() => voiceCatOpen).map(c => (
+            <div key={c.id} className="ch" onClick={() => joinVoice(c)}>
+              <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
+              <span className="ch-acts">
+                <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
+                {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+              </span>
+            </div>
+          ))}
           {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}><Icon name="signout" size={14} /> покинуть сервер</div>}
         </div>
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
@@ -349,6 +412,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const fm = messages.find(m => m.content && m.author !== user?.id && mentionsUser(m.content, username))
             return fm ? <button className="pin-btn at-btn" title="К первому упоминанию тебя" onClick={() => jumpToMessage(fm.id)}>@</button> : null
           })()}
+          <button className="pin-btn" title="Пригласить на сервер" onClick={invite}><Icon name="user-plus" size={18} /></button>
           <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => { setShowPins(false); setShowSearch(s => !s) }}><Icon name="search" size={18} /></button>
           <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
           <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
@@ -369,6 +433,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         }} />}
         {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
+          {messages.length === 0 && curChannel && <div className="wlc">
+            <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>
+            <div className="wlc-sub">Это ваш новый сервер. Здесь приведены шаги, которые помогут вам начать с ним работу. Вы можете найти больше советов в нашем <a>руководстве для начинающих</a>.</div>
+            <button className="wlc-card" onClick={invite}><span className="wlc-ico">👋</span> Пригласите друзей <Icon name="chevron-right" size={16} /></button>
+            {isOwner && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
+            <button className="wlc-card" onClick={() => (document.querySelector('main.chat input:not([type="file"])') as HTMLInputElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
+          </div>}
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
@@ -443,7 +514,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           }}><Icon name="plus" size={14} /> Создать роль</div>
         </div>
       </>}
-      {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
+      {mini && <MiniProfile data={mini} onClose={() => setMini(null)}
+        onAddRole={isOwner ? () => { const m = mini; setMini(null); setRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
+      {showCreateCh && <CreateChannelModal initialKind={showCreateCh} onClose={() => setShowCreateCh(null)}
+        onCreate={(nm, kd, pv) => { setShowCreateCh(null); createChannel(nm, kd, pv) }} />}
+      {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
+        onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
+      {editProfile && user && <ProfileCard userId={user.id} name={username} avatarUrl={avatarUrl} status={statusOf(user.id)} onClose={() => setEditProfile(false)} />}
     </>
   )
 }

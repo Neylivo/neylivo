@@ -40,6 +40,17 @@ export function Home() {
   const [folders, setFolders] = useState<SrvFolder[]>(loadFolders())
   const [folderFor, setFolderFor] = useState<Server | null>(null)
   const [notifFor, setNotifFor] = useState<Server | null>(null)
+  // Открытие настроек/уведомлений сервера из меню в ServerView (клик по имени сервера).
+  useEffect(() => {
+    const openSettings = (e: any) => setSettingsServer(e.detail)
+    const openNotif = (e: any) => setNotifFor(e.detail)
+    window.addEventListener('ponoi-open-server-settings', openSettings as any)
+    window.addEventListener('ponoi-open-server-notif', openNotif as any)
+    return () => {
+      window.removeEventListener('ponoi-open-server-settings', openSettings as any)
+      window.removeEventListener('ponoi-open-server-notif', openNotif as any)
+    }
+  }, [])
   const [, setNotifVer] = useState(0) // ре-рендер при смене режима уведомлений
 
   // Непрочитанное на серверах: глобальная подписка на INSERT в messages.

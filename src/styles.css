@@ -1922,3 +1922,118 @@ body.no-anim .member-typing i { animation:none; }
 .csrv-req { color:#f23f43; }
 .csrv-terms { color:var(--mut); font-size:12px; margin-top:8px; }
 .csrv-terms a { color:#00a8fc; cursor:pointer; }
+
+
+/* ===== v1.24.0: сервер как в Discord — меню сервера, каналы, welcome, настройки каналов ===== */
+.channels { position:relative; }
+.srv-title.clickable { cursor:pointer; user-select:none; gap:8px; }
+.srv-title.clickable:hover { background:rgba(255,255,255,.04); }
+.srv-title-nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.srv-menu { position:absolute; top:52px; left:8px; right:8px; background:#111420; border-radius:8px; padding:6px; z-index:60; box-shadow:0 8px 24px rgba(0,0,0,.55); animation:pop .12s ease both; }
+.srv-mi { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-radius:5px; font-size:13.5px; color:var(--mut); cursor:pointer; }
+.srv-mi:hover { background:var(--brand); color:#fff; }
+.srv-msep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }
+.srv-mchk { width:18px; height:18px; border:1px solid var(--mut); border-radius:4px; display:flex; align-items:center; justify-content:center; flex:none; }
+.srv-mchk.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+.ch { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.ch-nm { display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ch-acts { display:none; gap:4px; flex:none; }
+.ch:hover .ch-acts { display:flex; }
+.ch-acts button { background:none; border:none; color:var(--mut); cursor:pointer; padding:2px; display:flex; }
+.ch-acts button:hover { color:#fff; }
+.ch.evt { justify-content:flex-start; gap:8px; font-weight:600; margin-bottom:4px; }
+.ch-sec { display:flex; align-items:center; }
+.ch-sec-add { margin-left:auto; background:none; border:none; color:var(--mut); cursor:pointer; padding:0 2px; display:flex; }
+.ch-sec-add:hover { color:#fff; }
+
+/* Экран «Добро пожаловать на сервер» */
+.wlc { max-width:460px; margin:40px auto 24px; text-align:center; display:flex; flex-direction:column; gap:10px; padding:0 16px; }
+.wlc-title { font-size:28px; font-weight:800; line-height:1.25; }
+.wlc-sub { color:var(--mut); font-size:13px; margin-bottom:8px; }
+.wlc-sub a { color:#00a8fc; cursor:pointer; }
+.wlc-card { display:flex; align-items:center; gap:12px; background:var(--bg2); border:none; border-radius:8px; padding:14px 16px; color:var(--tx); font-size:14px; font-weight:700; cursor:pointer; text-align:left; transition:background .15s ease; }
+.wlc-card:hover { background:var(--bg3); }
+.wlc-card svg:last-child { margin-left:auto; color:var(--mut); flex:none; }
+.wlc-ico { font-size:22px; }
+
+/* Полноэкранные настройки канала */
+.cset { position:fixed; inset:0; z-index:130; display:flex; background:var(--bg2); animation:pop .12s ease both; }
+.cset-side { width:34%; min-width:230px; background:rgba(0,0,0,.25); display:flex; justify-content:flex-end; padding:60px 12px 20px; overflow-y:auto; }
+.cset-nav { width:200px; }
+.cset-cat { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); padding:6px 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cset-tab { padding:6px 10px; border-radius:5px; color:var(--mut); font-size:15px; cursor:pointer; margin-bottom:2px; }
+.cset-tab:hover { background:rgba(255,255,255,.04); color:var(--tx); }
+.cset-tab.on { background:rgba(255,255,255,.08); color:#fff; }
+.cset-tab.danger { color:#ed4245; display:flex; align-items:center; justify-content:space-between; }
+.cset-sep { height:1px; background:rgba(255,255,255,.08); margin:8px 10px; }
+.cset-main { flex:1; padding:60px 40px 100px; overflow-y:auto; position:relative; max-width:780px; }
+.cset-h { font-size:20px; font-weight:800; margin-bottom:18px; }
+.cset-esc { position:fixed; top:56px; right:40px; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--mut); background:none; border:none; cursor:pointer; font-size:12px; font-weight:700; z-index:131; }
+.cset-esc-circle { width:36px; height:36px; border:2px solid var(--mut); border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.cset-esc:hover { color:var(--tx); }
+.cset-esc:hover .cset-esc-circle { border-color:var(--tx); }
+.cset-lbl { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin:22px 0 8px; }
+.cset-hint { color:var(--mut); font-size:12px; margin-top:6px; line-height:1.5; }
+.cset-topic { width:100%; min-height:110px; resize:vertical; background:var(--bg3); border:1px solid rgba(0,0,0,.4); border-radius:8px; padding:10px 12px; color:var(--tx); outline:none; font-size:14px; font-family:inherit; }
+.cset-count { text-align:right; color:var(--mut); font-size:12px; margin-top:2px; }
+.cset-row { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-top:22px; }
+.cset-row-t { font-weight:700; font-size:15px; }
+.cset-div { height:1px; background:rgba(255,255,255,.08); margin:24px 0; }
+.tgl { width:40px; height:24px; border-radius:12px; background:#4e5058; border:none; cursor:pointer; position:relative; transition:background .15s ease; flex:none; }
+.tgl::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s ease; }
+.tgl.on { background:#23a55a; }
+.tgl.on::after { left:19px; }
+.cset-slider { width:100%; }
+.cset-scale { display:flex; justify-content:space-between; color:var(--mut); font-size:11px; margin-bottom:2px; }
+.cset-sync { display:flex; align-items:center; gap:10px; background:var(--bg3); border-radius:8px; padding:12px 14px; font-size:14px; }
+.cset-priv { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bg3); border-radius:8px; padding:12px 14px; margin-top:12px; }
+.cset-role-chip { background:var(--bg3); padding:8px 10px; border-radius:5px; font-size:14px; width:200px; }
+.cset-perm { padding:14px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+.cset-perm-h { display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:15px; gap:12px; }
+.cset-tri { display:flex; gap:2px; flex:none; }
+.cset-tri button { width:28px; height:24px; border:1px solid rgba(255,255,255,.12); background:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; }
+.cset-tri button:first-child { border-radius:4px 0 0 4px; }
+.cset-tri button:last-child { border-radius:0 4px 4px 0; }
+.cset-tri .deny.on { background:#f23f43; border-color:#f23f43; color:#fff; }
+.cset-tri .def.on { background:#4e5058; border-color:#4e5058; color:#fff; }
+.cset-tri .allow.on { background:#23a55a; border-color:#23a55a; color:#fff; }
+.cset-link { color:#00a8fc; cursor:pointer; }
+.cset-pause { background:#da373c; border:none; color:#fff; padding:8px 14px; border-radius:4px; font-size:13px; font-weight:600; cursor:pointer; }
+.cset-pause.off { background:#4e5058; }
+.cset-inv-empty { text-align:center; color:var(--mut); padding:50px 20px; font-size:13px; line-height:1.6; }
+.cset-inv-empty b { display:block; color:var(--tx); letter-spacing:.5px; margin-bottom:8px; }
+.cset-inv { display:flex; align-items:center; justify-content:space-between; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,.06); font-size:14px; }
+.cset-inv code { background:var(--bg3); padding:2px 8px; border-radius:4px; }
+.cset-int { display:flex; align-items:center; gap:12px; background:var(--bg3); border-radius:8px; padding:14px 16px; margin-top:12px; }
+.cset-int-t { flex:1; }
+.cset-int-t b { display:block; font-size:15px; }
+.cset-int-t span { color:var(--mut); font-size:12px; }
+.cset-int button { background:var(--brand); border:none; color:#fff; padding:8px 14px; border-radius:4px; font-weight:600; cursor:pointer; }
+.cset-savebar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111420; border-radius:8px; padding:10px 12px 10px 16px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:140; }
+.cset-savebar span { font-size:14px; }
+.cset-save { background:#23a55a; border:none; color:#fff; padding:8px 16px; border-radius:4px; font-weight:600; cursor:pointer; }
+.cset-reset { background:none; border:none; color:var(--tx); cursor:pointer; font-size:14px; }
+.cset-radio { display:flex; align-items:center; gap:10px; padding:10px 0; cursor:pointer; font-size:15px; }
+.cset-radio .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--mut); display:flex; align-items:center; justify-content:center; flex:none; }
+.cset-radio.on .dot { border-color:var(--brand); }
+.cset-radio.on .dot::after { content:''; width:10px; height:10px; border-radius:50%; background:var(--brand); }
+
+/* Модалка «Создать канал» */
+.cch-type { display:flex; align-items:center; gap:12px; width:100%; background:var(--bg3); border:none; border-radius:8px; padding:12px 14px; color:var(--tx); cursor:pointer; text-align:left; margin-bottom:8px; }
+.cch-type:hover { background:var(--c-hover); }
+.cch-type.on { background:rgba(99,102,241,.25); }
+.cch-type.dis { opacity:.45; }
+.cch-type .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--mut); flex:none; display:flex; align-items:center; justify-content:center; }
+.cch-type.on .dot { border-color:#fff; }
+.cch-type.on .dot::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; }
+.cch-t { flex:1; }
+.cch-t b { display:block; font-size:15px; }
+.cch-t span { color:var(--mut); font-size:12px; line-height:1.4; }
+.cch-name { display:flex; align-items:center; gap:8px; background:var(--bg3); border:1px solid rgba(0,0,0,.4); border-radius:8px; padding:0 12px; }
+.cch-name input { flex:1; background:none; border:none; color:var(--tx); outline:none; font-size:15px; padding:11px 0; }
+.cch-priv { display:flex; align-items:center; gap:10px; margin-top:16px; font-weight:700; font-size:15px; }
+.cch-priv .tgl { margin-left:auto; }
+
+/* Кнопка «Добавить роль» в мини-профиле */
+.mini-addrole { display:flex; align-items:center; gap:6px; background:none; border:1px dashed var(--mut); border-radius:14px; color:var(--mut); font-size:12px; padding:4px 10px; cursor:pointer; margin-top:8px; }
+.mini-addrole:hover { color:var(--tx); border-color:var(--tx); }

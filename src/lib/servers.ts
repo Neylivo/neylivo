@@ -17,7 +17,12 @@ export async function createServer(name: string, meId: string, meName: string, a
   const { data, error } = await supabase.from('servers').insert({ name, owner: meId, avatar_url: avatarUrl ?? null }).select().single()
   if (error || !data) return { error }
   await supabase.from('server_members').insert({ server_id: data.id, user_id: meId, member_name: meName, role: 'owner' })
-  await supabase.from('channels').insert({ server_id: data.id, name: 'общий' })
+  // Стартовые каналы как в Discord: текстовый «основной» + голосовой «Основной».
+  const ins = await supabase.from('channels').insert([
+    { server_id: data.id, name: 'основной', kind: 'text' },
+    { server_id: data.id, name: 'Основной', kind: 'voice' },
+  ] as any)
+  if (ins.error) await supabase.from('channels').insert({ server_id: data.id, name: 'основной' })
   return { server: data as Server }
 }
 

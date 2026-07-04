@@ -56,8 +56,8 @@ export interface MiniProfileData {
   y: number
 }
 
-export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar }:
-  { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void }) {
+export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar, onAddRole }:
+  { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void; onAddRole?: () => void }) {
   const { user } = useAuth()
   const isMe = user?.id === data.userId
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
@@ -193,6 +193,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {data.role === 'owner'
             ? <div className="mini-role"><Icon name="crown" size={14} /> Владелец сервера</div>
             : data.role && !data.roleName && <div className="mini-role mini-role-mut">Роль: {data.role}</div>}
+          {onAddRole && <button className="mini-addrole" onClick={onAddRole}><Icon name="plus" size={13} /> Добавить роль</button>}
           {!isMe && mutuals.length > 0 && <div className="mini-mutuals">
             <span className="mini-mutual-avs">{mutuals.slice(0, 3).map(m => <span key={m.id} className="mini-mutual-av"><Avatar name={m.username} url={m.avatar_url} size={20} /></span>)}</span>
             {mutualLabel(mutuals.length)}
