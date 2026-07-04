@@ -40,15 +40,15 @@ export function AuthScreen() {
         <h1>{reg ? 'Создать учетную запись' : 'С возвращением!'}</h1>
         {!reg && <p className="auth-sub">Мы так рады видеть вас снова!</p>}
         <div className="auth-fields">
-          <label className="auth-lb">Электронная почта <i>*</i>
+          <label className="auth-lb"><span>Электронная почта <i>*</i></span>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           </label>
           {reg && (
-            <label className="auth-lb">Имя пользователя <i>*</i>
+            <label className="auth-lb"><span>Имя пользователя <i>*</i></span>
               <input value={username} onChange={e => setUsername(e.target.value)} required />
             </label>
           )}
-          <label className="auth-lb">Пароль <i>*</i>
+          <label className="auth-lb"><span>Пароль <i>*</i></span>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           </label>
         </div>
