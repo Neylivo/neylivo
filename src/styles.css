@@ -2617,3 +2617,57 @@ body.no-anim .member-typing i { animation:none; }
 .vp-screen { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:6px; background:rgba(255,255,255,.05); }
 .vp-screen-ic { color:#ed4245; display:inline-flex; }
 .vp-screen-t { flex:1; font-size:12.5px; font-weight:700; color:#dbdee1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* ===== v1.45.0: анимации уровня Discord по всему интерфейсу ===== */
+:root {
+  --ease-out4: cubic-bezier(.165,.84,.44,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+}
+
+/* Появление окон и меню: подложка растворяется, окно упруго «выпрыгивает» — как в Discord.
+   Используем свойства scale/translate (не transform), чтобы не ломать позиционирование. */
+@keyframes ovl-in  { from { opacity:0; } to { opacity:1; } }
+@keyframes win-in  { from { opacity:0; scale:.9; }  to { opacity:1; scale:1; } }
+@keyframes menu-in { from { opacity:0; scale:.95; } to { opacity:1; scale:1; } }
+
+.modal-overlay, .ms-overlay, .mini-overlay, .ctx-overlay, .pet-menu-overlay, .cfm-overlay { animation:ovl-in .14s ease both; }
+.modal, .ms-modal { animation:win-in .24s var(--ease-spring) both; }
+.ctx-menu, .ctxmenu, .status-menu, .plus-menu, .srv-menu, .pet-menu, .c2-menu, .c2-devmenu, .mus2-tog-pop { animation:menu-in .13s var(--ease-out4) both; }
+
+/* Сервер-рейл: упругий морфинг круга в квадрат, пружинная «пилюля», нажатие утапливает иконку */
+.srv { transition:border-radius .25s var(--ease-out4), background .2s ease, color .2s ease, transform .15s var(--ease-out4); }
+.srv:active { transform:translateY(2px); }
+.srv-wrap::before { transition:height .25s var(--ease-spring); }
+
+/* Кнопки: единый плавный ховер + «утапливание» при нажатии */
+.modal-primary, .modal-avbtn, .modal-tab, .modal-result, .sb-actions button, .cfm-btns button,
+.gp2-tabs button, .ep2-rail button, .composer button, .call-bar button, .msg-tools button,
+.pin-btn, .call-start, .srv-invite, .mus-ctl button, .mus2-ctl button, .mus-head-r button,
+.mus-head button, .ch-acts button, .req button, .emoji-tabs button, .modal-x {
+  transition-property: background, background-color, color, filter, border-color, box-shadow, scale;
+  transition-duration: .15s;
+  transition-timing-function: ease;
+}
+.modal-primary:active:not(:disabled), .modal-avbtn:active, .modal-tab:active,
+.sb-actions button:active:not(:disabled), .cfm-btns button:active,
+.gp2-tabs button:active, .ep2-rail button:active, .composer button:active,
+.call-bar button:active, .msg-tools button:active,
+.pin-btn:active, .call-start:active, .srv-invite:active,
+.mus-ctl button:active:not(:disabled), .mus2-ctl button:active:not(:disabled),
+.mus-head-r button:active, .mus-head button:active,
+.ch-acts button:active, .req button:active, .emoji-tabs button:active, .modal-x:active { scale:.96; }
+.emoji-btn:active { scale:.94; }
+
+/* Панель действий над сообщением: плавное всплытие вместо резкого появления */
+.msg-tools { display:flex; opacity:0; pointer-events:none; translate:0 3px; transition:opacity .12s ease, translate .15s var(--ease-out4); }
+.msg:hover .msg-tools, .msg-tools:focus-within { opacity:1; pointer-events:auto; translate:0 0; }
+
+/* Поля ввода: мягкое «загорание» фокуса */
+.modal-in, .pqs-in, .mus2-in, .auth-card input, .pfr-addin { transition:border-color .15s ease, box-shadow .15s ease; }
+
+/* Каналы и строки списков: чуть плавнее */
+.ch { transition:background .12s ease, color .12s ease; }
+
+/* Доступность: уважение к системной настройке «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
