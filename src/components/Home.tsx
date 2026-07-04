@@ -257,7 +257,7 @@ export function Home() {
       else if (t.kind === 'server') { setView({ kind: 'server', server: t.server }); clearUnread(t.server.id) }
       else { setView({ kind: 'dm' }); setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: t.friend })), 60) }
     }} />}
-    {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} />}
+    {showCreate && <CreateServerModal uid={user?.id ?? ''} onClose={() => setShowCreate(false)} onCreate={onCreate} onJoin={() => setShowFind(true)} />}
     {showFind && <FindServerModal onClose={() => setShowFind(false)} onFind={findServers} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettingsModal server={settingsServer} uid={user?.id ?? ''}

@@ -1889,3 +1889,21 @@ body.no-anim .member-typing i { animation:none; }
 /* Раньше просмотрщик рисовался внутри строки сообщения: transform/animation у предков
    ломали position:fixed — подложка не накрывала приложение, инструменты уезжали. */
 .lightbox { z-index: 999; }
+
+
+/* ===== v1.22.0: модалка «Создайте свой сервер» 1-в-1 как в Discord ===== */
+.modal.csrv { padding:0; width:440px; overflow:hidden; display:flex; flex-direction:column; }
+.csrv-head { padding:24px 16px 0; }
+.csrv-list { padding:16px 16px 10px; overflow-y:auto; max-height:46vh; display:flex; flex-direction:column; gap:8px; }
+.csrv-row { display:flex; align-items:center; gap:10px; width:100%; background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:9px 12px; cursor:pointer; color:var(--tx); font-size:15px; font-weight:700; text-align:left; transition:background .15s ease; }
+.csrv-row:hover { background:rgba(255,255,255,.07); }
+.csrv-ico { font-size:22px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex:none; }
+.csrv-lbl { flex:1; }
+.csrv-arr { color:var(--mut); font-size:22px; line-height:1; flex:none; }
+.csrv-sect { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); margin:8px 2px 0; }
+.csrv-join { background:var(--bg3); padding:16px; text-align:center; margin-top:4px; }
+.csrv-join-t { font-size:16px; font-weight:800; margin-bottom:10px; }
+.csrv-joinbtn { width:100%; background:#4e5058; border:none; color:#fff; padding:10px 0; border-radius:6px; font-weight:600; font-size:14px; cursor:pointer; transition:background .15s ease; }
+.csrv-joinbtn:hover { background:#6d6f78; }
+.csrv-body { padding:0 16px; }
+.csrv-foot { display:flex; justify-content:space-between; align-items:center; padding:16px; background:var(--bg3); margin-top:16px; }

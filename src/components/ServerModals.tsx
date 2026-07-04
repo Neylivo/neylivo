@@ -20,13 +20,30 @@ function Overlay({ onClose, children }: { onClose: () => void; children: React.R
   )
 }
 
-export function CreateServerModal({ uid, onClose, onCreate }:
-  { uid: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void }) {
+// Шаблоны для экрана «Создайте свой сервер» — 1-в-1 как в Discord.
+const SRV_TEMPLATES = [
+  { icon: '🎮', label: 'Игры' },
+  { icon: '💗', label: 'Друзья' },
+  { icon: '🍎', label: 'Учебная группа' },
+  { icon: '✏️', label: 'Школьный клуб' },
+  { icon: '🎨', label: 'Творческое сообщество' },
+  { icon: '🌍', label: 'Локальное сообщество' },
+]
+
+export function CreateServerModal({ uid, onClose, onCreate, onJoin }:
+  { uid: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void; onJoin?: () => void }) {
+  // Двухшаговая модалка как в Discord: выбор шаблона → персонализация (имя + значок).
+  const [step, setStep] = useState<'pick' | 'custom'>('pick')
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const initials = (name.trim() || 'PG').slice(0, 2).toUpperCase()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !uid) return
     setBusy(true)
@@ -34,26 +51,62 @@ export function CreateServerModal({ uid, onClose, onCreate }:
     catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
+  function chooseTpl(label: string | null) {
+    if (label) setName(label)
+    setStep('custom')
+  }
   return (
-    <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-      <div className="modal-title">Создать сервер</div>
-      <div className="modal-sub">Дай ему имя и аватарку — потом всё можно поменять.</div>
-      <div className="modal-avwrap">
-        <div className="modal-av" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>
-          {!avatar && initials}
-        </div>
-        <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="camera" size={16} /> Аватарка</>}</button>
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal csrv" onClick={e => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+        {step === 'pick' ? (<>
+          <div className="csrv-head">
+            <div className="modal-title">Создайте свой сервер</div>
+            <div className="modal-sub">Ваш сервер — это место, где вы можете тусоваться со своими друзьями. Создайте сервер и начните общаться.</div>
+          </div>
+          <div className="csrv-list">
+            <button className="csrv-row" onClick={() => chooseTpl(null)}>
+              <span className="csrv-ico">{'🚀'}</span>
+              <span className="csrv-lbl">Свой шаблон</span>
+              <span className="csrv-arr">{'›'}</span>
+            </button>
+            <div className="csrv-sect">Начните с шаблона</div>
+            {SRV_TEMPLATES.map(t => (
+              <button key={t.label} className="csrv-row" onClick={() => chooseTpl(t.label)}>
+                <span className="csrv-ico">{t.icon}</span>
+                <span className="csrv-lbl">{t.label}</span>
+                <span className="csrv-arr">{'›'}</span>
+              </button>
+            ))}
+          </div>
+          <div className="csrv-join">
+            <div className="csrv-join-t">У вас уже есть приглашение?</div>
+            <button className="csrv-joinbtn" onClick={() => { onClose(); onJoin?.() }}>Присоединиться к серверу</button>
+          </div>
+        </>) : (<>
+          <div className="csrv-head">
+            <div className="modal-title">Персонализируйте свой сервер</div>
+            <div className="modal-sub">Персонализируйте свой новый сервер, выбрав ему название и значок. Их всегда можно изменить.</div>
+          </div>
+          <div className="csrv-body">
+            <div className="modal-avwrap">
+              <div className="modal-av" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>
+                {!avatar && initials}
+              </div>
+              <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="camera" size={16} /> Аватарка</>}</button>
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
+            </div>
+            <label className="modal-lbl">Название сервера</label>
+            <input className="modal-in" autoFocus placeholder="Например, My Server" value={name}
+              onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
+          </div>
+          <div className="csrv-foot">
+            <button className="modal-ghost" onClick={() => setStep('pick')}>Назад</button>
+            <button className="modal-primary" disabled={!name.trim() || busy} onClick={() => onCreate(name.trim(), avatar)}>Создать</button>
+          </div>
+        </>)}
       </div>
-      <label className="modal-lbl">Название сервера</label>
-      <input className="modal-in" autoFocus placeholder="Например, My Server" value={name}
-        onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
-      <div className="modal-foot">
-        <button className="modal-ghost" onClick={onClose}>Отмена</button>
-        <button className="modal-primary" disabled={!name.trim() || busy} onClick={() => onCreate(name.trim(), avatar)}>Создать</button>
-      </div>
-    </Overlay>
+    </div>
   )
 }
 
