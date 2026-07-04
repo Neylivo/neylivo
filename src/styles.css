@@ -2688,3 +2688,13 @@ body.no-anim .member-typing i { animation:none; }
 .jsm-disc:hover .jsm-disc-arr { translate:3px 0; color:var(--tx); }
 .jsm-foot { display:flex; align-items:center; justify-content:space-between; margin:20px -24px 0; padding:16px 24px; background:var(--c-main); }
 .jsm-foot .modal-ghost { padding-left:0; }
+/* ===== v1.47.0: меню сервера (клик по названию) 1-в-1 как в Discord ===== */
+.srv-menu { top:56px; left:10px; right:10px; background:#111214; border-radius:8px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.6); }
+.srv-mi { padding:7px 8px; min-height:32px; font-size:14px; color:#b5bac1; border-radius:4px; }
+.srv-mi-lb { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.srv-mi:hover { background:var(--c-accent); color:#fff; }
+.srv-mi.danger { color:#f23f43; }
+.srv-mi.danger:hover { background:#f23f43; color:#fff; }
+.srv-mchk { width:20px; height:20px; border:1px solid #80848e; border-radius:6px; }
+.srv-mchk.on { background:var(--c-accent); border-color:var(--c-accent); color:#fff; }
+.srv-msep { margin:4px; background:rgba(255,255,255,.06); }
