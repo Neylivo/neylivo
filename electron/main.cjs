@@ -252,23 +252,32 @@ app.whenReady().then(() => {
         bcastUpd({ state: 'ready', version: info && info.version })
       })
       ipcMain.on('ponoi-apply-update', () => { try { autoUpdater.quitAndInstall() } catch {} })
-      // v1.31.0: не дёргаем GitHub на каждый запуск — если проверяли меньше
-      // 30 минут назад, стартовую проверку пропускаем (фон раз в 4 часа остаётся).
-      const fs = require('fs')
-      const stampFile = path.join(app.getPath('userData'), 'update-check.json')
-      const lastCheckAt = () => { try { return JSON.parse(fs.readFileSync(stampFile, 'utf8')).at || 0 } catch { return 0 } }
-      const check = () => {
-        try { fs.writeFileSync(stampFile, JSON.stringify({ at: Date.now() })) } catch {}
-        try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {}
-      }
-      if (Date.now() - lastCheckAt() > 30 * 60 * 1000) check()
-      setInterval(check, 4 * 60 * 60 * 1000)
+      // v1.37.1: обновления прилетают быстро — проверяем GitHub при каждом
+      // запуске и дальше каждые 30 минут (было: пропуск на старте + раз в 4 часа).
+      const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
+      check()
+      setInterval(check, 30 * 60 * 1000)
     } catch {}
   }
 
   // Игровая активность: первый скан сразу, дальше раз в 20 секунд.
   scanGames()
   setInterval(scanGames, 20_000)
+
+  // v1.37.1: после обновления версии один раз чистим HTTP- и код-кэш старой
+  // версии, чтобы ничего не лагало. Логин и настройки (localStorage) не трогаем.
+  try {
+    const fsv = require('fs')
+    const verFile = path.join(app.getPath('userData'), 'last-version.json')
+    let prev = null
+    try { prev = JSON.parse(fsv.readFileSync(verFile, 'utf8')).v } catch {}
+    if (prev !== app.getVersion()) {
+      try { fsv.writeFileSync(verFile, JSON.stringify({ v: app.getVersion() })) } catch {}
+      const { session } = require('electron')
+      try { session.defaultSession.clearCache().catch(() => {}) } catch {}
+      try { session.defaultSession.clearCodeCaches({}).catch(() => {}) } catch {}
+    }
+  } catch {}
 
   createSplash()
   createWindow()
