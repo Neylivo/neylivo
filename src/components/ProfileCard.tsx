@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
-import { fetchProfile, saveProfile, DEFAULT_PROFILE, type ProfilePrefs, type Integration } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { weekStats, type GameStat } from '../lib/activity'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
@@ -34,7 +34,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose }:
   const [stats, setStats] = useState<GameStat[] | null>(null)
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
-  const [ints, setInts] = useState<Integration[]>([])
   const [note, setNote] = useState(() => localStorage.getItem('ponoi_note_' + userId) ?? '')
   const [wish, setWish] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ponoi_wish_' + userId) || '[]') } catch { return [] } })
   const [favs, setFavs] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ponoi_favs_' + userId) || '[]') } catch { return [] } })
@@ -46,7 +45,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose }:
       if (!ok) return
       setPp(p)
       setPron(p.pronouns || localStorage.getItem('ponoi_pron_' + userId) || '')
-      setInts(p.integrations.length ? p.integrations : (() => { try { return JSON.parse(localStorage.getItem('ponoi_ints_' + userId) || '[]') } catch { return [] } })())
     })
     return () => { ok = false }
   }, [userId])
@@ -62,22 +60,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose }:
     setPron(v); setPronEdit(false)
     localStorage.setItem('ponoi_pron_' + userId, v)
     if (isMe) saveProfile(userId, { pronouns: v })
-  }
-  function addInt() {
-    const label = window.prompt('Название интеграции (например, TikTok или Twitch):')?.trim()
-    if (!label) return
-    const url = window.prompt('Ссылка на профиль:')?.trim()
-    if (!url) return
-    const next = [...ints, { label, url }]
-    setInts(next)
-    localStorage.setItem('ponoi_ints_' + userId, JSON.stringify(next))
-    if (isMe) saveProfile(userId, { integrations: next })
-  }
-  function rmInt(i: number) {
-    const next = ints.filter((_, k) => k !== i)
-    setInts(next)
-    localStorage.setItem('ponoi_ints_' + userId, JSON.stringify(next))
-    if (isMe) saveProfile(userId, { integrations: next })
   }
   function keepNote(v: string) {
     setNote(v)
@@ -115,32 +97,11 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose }:
                 : pron
                   ? <span className="pc-pron" onClick={() => isMe && setPronEdit(true)} title={isMe ? 'Изменить местоимения' : undefined}>{pron}</span>
                   : isMe && <button className="pc-pron-add" onClick={() => setPronEdit(true)}>Добавить местоимения</button>}
-              <span className="pc-tag"><Icon name="gamepad" size={11} /> PNOI <Icon name="chevron-down" size={11} /></span>
-            </div>
-            <div className="pc-badges">
-              <span className="pc-badge" title="Ранний житель Ponoi">🌱</span>
-              <span className="pc-badge" title="Меломан">🎵</span>
-              <span className="pc-badge" title="Геймер">🎮</span>
-            </div>
-            <div className="pc-btnrow">
-              <button className="pc-more" title="Копировать ID пользователя" onClick={() => navigator.clipboard?.writeText(userId)}>⋯</button>
             </div>
             {pp.about && <div className="pc-about">{pp.about}</div>}
             <div className="pc-sec">
               <div className="pc-sech">В числе участников с</div>
               <div className="pc-since">{fmtDate(memberSince)}</div>
-            </div>
-            <div className="pc-sec">
-              <div className="pc-sech">Интеграции</div>
-              {ints.map((it, i) => (
-                <div key={i} className="pc-int">
-                  <span className="pc-int-ic">{it.label.slice(0, 2).toUpperCase()}</span>
-                  <b>{it.label}</b>
-                  <button className="pc-int-open" title="Открыть" onClick={() => window.open(it.url, '_blank')}>↗</button>
-                  {isMe && <button className="pc-int-open" title="Убрать" onClick={() => rmInt(i)}><Icon name="close" size={13} /></button>}
-                </div>
-              ))}
-              {isMe && <button className="pc-int-add" onClick={addInt}><Icon name="plus" size={14} /> Добавить интеграцию</button>}
             </div>
             {isMe && <div className="pc-sec">
               <div className="pc-sech">Заметка (видна только вам)</div>
