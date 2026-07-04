@@ -210,7 +210,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                 </div>
               </>}
               <div className="fp-sect">Недавняя активность</div>
-              {isMe && <div className="fp-note">Здесь появится ваша активность за последние 30 дней. <span className="fp-link">Подробнее</span></div>}
+              {isMe && <div className="fp-note">Здесь появится ваша активность за последние 30 дней.</div>}
               {recent === null ? <div className="fp-empty">Загрузка…</div>
               : recent.length === 0 ? <div className="fp-empty"><Icon name="gamepad" size={26} /> За последние 30 дней игр не замечено.{isMe ? ' Запусти игру — и она появится здесь.' : ''}</div>
               : recent.map(g => (

@@ -227,7 +227,6 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
           <div className="cset-int">
             <Icon name="repeat" size={22} />
             <div className="cset-int-t"><b>Отслеживаемые каналы</b><span>0 каналов</span></div>
-            <button onClick={() => toastOk('Отслеживаемые каналы скоро появятся')}>Подробнее</button>
           </div>
         </>}
       </div>
