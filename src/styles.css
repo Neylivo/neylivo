@@ -2435,3 +2435,12 @@ body.no-anim .member-typing i { animation:none; }
 /* «+ Добавить роль» — компактная серая кнопка, как в Discord. */
 .mini2 .mini-addrole { margin-top:10px; display:inline-flex; align-items:center; gap:5px; background:#2b2d31; border:1px solid rgba(255,255,255,.06); border-radius:6px; color:#b5bac1; font-size:12px; font-weight:600; padding:3px 8px; cursor:pointer; }
 .mini2 .mini-addrole:hover { background:#35373c; color:#fff; border-color:rgba(255,255,255,.12); }
+
+/* ---- v1.33.0: иерархия ролей + «Управление сервером» ---- */
+.sset-rmove { display:flex; flex-direction:column; gap:1px; margin-right:2px; flex:none; }
+.sset-rmove button { width:18px; height:13px; display:flex; align-items:center; justify-content:center; background:none; border:0; color:var(--mut); cursor:pointer; padding:0; }
+.sset-rmove button:hover:not(:disabled) { color:#fff; }
+.sset-rmove button:disabled { opacity:.25; cursor:default; }
+.sset-rmanage { display:flex; align-items:center; gap:6px; margin-left:14px; font-size:12.5px; color:var(--mut); cursor:pointer; user-select:none; white-space:nowrap; }
+.sset-rmanage:hover { color:var(--tx); }
+.sset-rmanage input { accent-color:#5865f2; margin:0; }

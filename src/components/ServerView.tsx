@@ -127,6 +127,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const mm = members.find(z => z.user_id === userId)
     return mm?.role_id ? roleById[mm.role_id]?.color : undefined
   }
+  // Право на «Настройки сервера» (v1.33.0): владелец или роль с флагом «Управление сервером».
+  const myMember = members.find(z => z.user_id === user?.id)
+  const canManage = isOwner || !!(myMember?.role_id && roleById[myMember.role_id]?.manage)
 
   useEffect(() => { voiceRef.current = voice }, [voice])
   // Смена сервера: тихо выходим из голосового канала прошлого сервера.
@@ -527,7 +530,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !hideMuted; setHideMuted(nv); localStorage.setItem('ponoi_hide_muted', nv ? '1' : '0') }}>Скрыть заглушённые каналы <span className={'srv-mchk' + (hideMuted ? ' on' : '')}>{hideMuted && <Icon name="check" size={12} />}</span></div>
             {!isOwner && <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}>Показать все каналы <span className={'srv-mchk' + (showAllCh ? ' on' : '')}>{showAllCh && <Icon name="check" size={12} />}</span></div>}
             <div className="srv-msep" />
-            {isOwner && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}>Настройки сервера <Icon name="gear" size={16} /></div>}
+            {canManage && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}>Настройки сервера <Icon name="gear" size={16} /></div>}
             <div className="srv-mi" onClick={() => setShowPrivacy(true)}>Настройки конфиденциальности <Icon name="shield" size={16} /></div>
             <div className="srv-mi" onClick={() => setEditProfile(true)}>Редактировать личный профиль сервера <Icon name="edit" size={16} /></div>
             <div className="srv-msep" />
@@ -657,7 +660,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>
             <div className="wlc-sub">Это ваш новый сервер. Здесь приведены шаги, которые помогут вам начать с ним работу. Вы можете найти больше советов в нашем руководстве для начинающих.</div>
             <button className="wlc-card" onClick={invite}><span className="wlc-ico">👋</span> Пригласите друзей <Icon name="chevron-right" size={16} /></button>
-            {isOwner && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
+            {canManage && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat input:not([type="file"])') as HTMLInputElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
           </div>}
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
@@ -704,9 +707,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               {m.role === 'owner' && <span className="mut" title="Владелец"><Icon name="crown" size={14} /></span>}
             </div>
           )}
+          // Секции по ролям (v1.33.0, как в Discord): роли в порядке иерархии из настроек,
+          // затем «В сети» (без роли), затем все офлайн в «Не в сети».
+          const used = new Set<string>()
+          const roleSecs = roles.map(r => {
+            const list = on.filter(m => m.role_id === r.id)
+            list.forEach(m => used.add(m.user_id))
+            return { r, list }
+          }).filter(s => s.list.length > 0)
+          const rest = on.filter(m => !used.has(m.user_id))
           return <>
-            {on.length > 0 && <div className="dm-sec-t">В сети — {on.length}</div>}
-            {on.map(row)}
+            {roleSecs.map(({ r, list }) => <div key={r.id}>
+              <div className="dm-sec-t">{r.name} — {list.length}</div>
+              {list.map(row)}
+            </div>)}
+            {rest.length > 0 && <div className="dm-sec-t">В сети — {rest.length}</div>}
+            {rest.map(row)}
             {off.length > 0 && <div className="dm-sec-t">Не в сети — {off.length}</div>}
             {off.map(row)}
           </>

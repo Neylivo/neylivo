@@ -14,7 +14,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { uploadTo } from '../lib/storage'
 import { usePresence } from '../lib/presence'
 import { listMembers, createInvite, updateServer } from '../lib/servers'
-import { fetchRoles, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { fetchRoles, createRole, deleteRole, setRoleManage, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 
@@ -143,6 +143,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     const { error } = await createRole(server.id, nm, newRoleColor)
     if (error) return toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql' : String(error.message ?? error))
     setNewRole(''); setRoles(await fetchRoles(server.id)); toastOk('Роль «' + nm + '» создана')
+  }
+
+  // Перестановка ролей (иерархия): двигаем на шаг и сохраняем позиции 0..n-1.
+  async function moveRole(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= roles.length) return
+    const next = [...roles]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setRoles(next)
+    const { error } = await saveRoleOrder(next)
+    if (error) toastErr(String((error as any).message ?? error))
   }
 
   const tri = (k: string) => {
@@ -433,9 +444,22 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <button className="modal-primary" onClick={addRole}>Создание роли</button>
           </div>
           {roles.length > 0 && <div className="sset-rolelist">
-            {roles.map(r => (
+            <div className="cset-hint" style={{ margin: '0 0 6px' }}>Порядок ниже — это иерархия: чем выше роль, тем выше её секция в списке участников сервера.</div>
+            {roles.map((r, i) => (
               <div key={r.id} className="sset-rolerow">
+                <span className="sset-rmove">
+                  <button title="Выше" disabled={i === 0} onClick={() => moveRole(i, -1)}><Icon name="chevron-down" size={13} style={{ transform: 'rotate(180deg)' } as any} /></button>
+                  <button title="Ниже" disabled={i === roles.length - 1} onClick={() => moveRole(i, 1)}><Icon name="chevron-down" size={13} /></button>
+                </span>
                 <span className="role-dot" style={{ background: r.color }} /><b>{r.name}</b>
+                <label className="sset-rmanage" title="Участники с этой ролью могут открывать и менять настройки сервера">
+                  <input type="checkbox" checked={!!r.manage} onChange={async e => {
+                    const v = e.target.checked
+                    const { error } = await setRoleManage(r.id, v)
+                    if (error) return toastErr(String(error.message ?? error).toLowerCase().includes('manage') ? 'Сначала примени миграцию supabase/18_role_perms.sql в Supabase SQL Editor' : String(error.message ?? error))
+                    setRoles(await fetchRoles(server.id))
+                  }} /> Управление сервером
+                </label>
                 <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{members.filter(m => m.role_id === r.id).length} 👤</span>
                 <button className="sset-roledel" title="Удалить роль" onClick={async () => { await deleteRole(r.id); setRoles(await fetchRoles(server.id)) }}><Icon name="trash" size={14} /></button>
               </div>
