@@ -173,6 +173,13 @@ export function Settings({ username, avatarUrl, onClose }:
     return () => { ok = false }
   }, [user])
 
+  // v1.54.0: перетаскивание питомца в режиме «Свободно» — раздельно для мини и большого профиля
+  function moveFreePet(card: 'mini' | 'big', pos: { x: number; y: number }, done: boolean) {
+    const petFree = { ...prof.petFree, [card]: pos }
+    if (done) patchProf({ petPos: 'free', petFree })
+    else setProf(p => ({ ...p, petFree }))
+  }
+
   async function patchProf(patch: Partial<ProfilePrefs>) {
     setProf(p => ({ ...p, ...patch }))
     if (user) await saveProfile(user.id, patch)
@@ -447,6 +454,7 @@ export function Settings({ username, avatarUrl, onClose }:
                         <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
                       ))}
                     </div>
+                    {prof.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца прямо на превью ниже — позиции в мини- и большом профиле независимы.</div>}
                     <div className="pqs-lbl">Предпросмотр</div>
                     <div className="pet2-previews">
                       <div className="pet2-pv mini">
@@ -462,7 +470,7 @@ export function Settings({ username, avatarUrl, onClose }:
                           {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 80)}</p>}
                           <div className="pet2-pv-btn">Сообщение</div>
                         </div>
-                        <ProfilePet p={prof} scale={0.35} />
+                        <ProfilePet p={prof} scale={0.35} card="mini" bannerH={64} onFreeMove={moveFreePet} />
                       </div>
                       <div className="pet2-pv big">
                         <span className="pet2-pv-tag">Большой профиль</span>
@@ -477,7 +485,7 @@ export function Settings({ username, avatarUrl, onClose }:
                           {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 140)}</p>}
                           <div className="pet2-pv-btn">Сообщение</div>
                         </div>
-                        <ProfilePet p={prof} scale={0.5} />
+                        <ProfilePet p={prof} scale={0.5} card="big" bannerH={88} onFreeMove={moveFreePet} />
                       </div>
                     </div>
                   </div>}

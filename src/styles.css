@@ -2954,3 +2954,6 @@ body.no-anim .member-typing i { animation:none; }
 .pfr-add2-exic { width:40px; height:40px; flex:none; border-radius:10px; background:#23a55a; color:#fff;
   display:flex; align-items:center; justify-content:center; }
 .pfr-add2-extx { flex:1; font-size:15px; font-weight:700; color:#f2f3f5; }
+/* ===== v1.54.0: питомец профиля — на баннере, 3D-вращение, свободные позиции ===== */
+.pc-left { position:relative; }
+.pet2-freehint { margin:10px 2px 0; font-size:13px; color:#949cf7; }

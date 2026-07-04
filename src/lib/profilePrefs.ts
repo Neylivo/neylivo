@@ -5,6 +5,8 @@ import { supabase } from './supabase'
 export type PetKind = 'image' | 'gif' | 'video' | 'model' | 'none'
 export type PetPos = 'above' | 'br' | 'bl' | 'tr' | 'tl' | 'free'
 
+export interface PetFree { x: number; y: number } // позиция в % от карточки (центр питомца)
+
 export interface ProfilePrefs {
   primary: string          // profile card banner primary color
   accent: string           // profile card accent color
@@ -14,6 +16,7 @@ export interface ProfilePrefs {
   petOn: boolean
   petSize: number          // px
   petPos: PetPos
+  petFree: { mini: PetFree; big: PetFree } // «Свободно»: раздельные позиции мини/большого профиля
   pronouns: string         // местоимения (карточка профиля)
   integrations: Integration[]
   createdAt: string | null // profiles.created_at («В числе участников с»)
@@ -24,7 +27,26 @@ export interface Integration { label: string; url: string }
 export const DEFAULT_PROFILE: ProfilePrefs = {
   primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
+  petFree: { mini: { x: 80, y: 22 }, big: { x: 85, y: 16 } },
   pronouns: '', integrations: [], createdAt: null,
+}
+
+
+// pet_pos в БД — text: либо пресет ('tr', 'br', …), либо «free|mx,my|bx,by» —
+// проценты центра питомца для мини- и большого профиля. Миграция не нужна.
+function parsePetPos(v: any): { petPos: PetPos; petFree: { mini: PetFree; big: PetFree } } {
+  const def = DEFAULT_PROFILE.petFree
+  if (typeof v !== 'string' || !v) return { petPos: DEFAULT_PROFILE.petPos, petFree: def }
+  if (v.startsWith('free')) {
+    const seg = v.split('|')
+    const num = (s: string | undefined, d: PetFree): PetFree => {
+      const m = (s ?? '').split(',')
+      const x = parseFloat(m[0]), y = parseFloat(m[1])
+      return isFinite(x) && isFinite(y) ? { x, y } : d
+    }
+    return { petPos: 'free', petFree: { mini: num(seg[1], def.mini), big: num(seg[2], def.big) } }
+  }
+  return { petPos: v as PetPos, petFree: def }
 }
 
 function fromRow(r: any): ProfilePrefs {
@@ -37,14 +59,14 @@ function fromRow(r: any): ProfilePrefs {
     petKind: (r.pet_kind as PetKind) ?? 'none',
     petOn: !!r.pet_on,
     petSize: r.pet_size ?? DEFAULT_PROFILE.petSize,
-    petPos: (r.pet_pos as PetPos) ?? DEFAULT_PROFILE.petPos,
+    ...parsePetPos(r.pet_pos),
     pronouns: r.pronouns ?? '',
     integrations: Array.isArray(r.integrations) ? r.integrations : [],
     createdAt: r.created_at ?? null,
   }
 }
 
-function toRow(p: Partial<ProfilePrefs>): any {
+function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   const r: any = {}
   if (p.primary !== undefined) r.primary_color = p.primary
   if (p.accent !== undefined) r.accent_color = p.accent
@@ -53,7 +75,10 @@ function toRow(p: Partial<ProfilePrefs>): any {
   if (p.petKind !== undefined) r.pet_kind = p.petKind
   if (p.petOn !== undefined) r.pet_on = p.petOn
   if (p.petSize !== undefined) r.pet_size = p.petSize
-  if (p.petPos !== undefined) r.pet_pos = p.petPos
+  if (p.petPos !== undefined || p.petFree !== undefined)
+    r.pet_pos = full.petPos === 'free'
+      ? `free|${full.petFree.mini.x.toFixed(1)},${full.petFree.mini.y.toFixed(1)}|${full.petFree.big.x.toFixed(1)},${full.petFree.big.y.toFixed(1)}`
+      : full.petPos
   if (p.pronouns !== undefined) r.pronouns = p.pronouns
   if (p.integrations !== undefined) r.integrations = p.integrations
   return r
@@ -78,7 +103,7 @@ export async function fetchProfile(id: string): Promise<ProfilePrefs> {
 export async function saveProfile(id: string, patch: Partial<ProfilePrefs>): Promise<ProfilePrefs> {
   const next = { ...(cache[id] ?? DEFAULT_PROFILE), ...patch }
   cache[id] = next
-  await supabase.from('profiles').update(toRow(patch)).eq('id', id)
+  await supabase.from('profiles').update(toRow(patch, next)).eq('id', id)
   window.dispatchEvent(new CustomEvent('ponoi-profile', { detail: { id } }))
   return next
 }

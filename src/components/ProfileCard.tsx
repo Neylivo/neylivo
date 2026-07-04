@@ -5,6 +5,7 @@ import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
 import { fetchProfile, saveProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
+import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
 import { ClockElapsed } from './ActivityLabel'
@@ -122,6 +123,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
         <button className="pc-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="pc-left">
           <div className="pc-banner" style={{ background: `linear-gradient(100deg, ${pp.primary}, ${pp.accent})` }} />
+          <ProfilePet p={pp} scale={0.6} card="big" bannerH={150} />
           <div className="pc-avwrap">
             <div className="pc-av"><Avatar name={name} url={avatarUrl} size={124} /></div>
             <span className="pc-av-status"><StatusDot status={status} size={20} /></span>

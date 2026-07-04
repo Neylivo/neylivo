@@ -159,7 +159,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             <button onClick={() => { navigator.clipboard?.writeText(data.userId); setMore(false) }}>Скопировать ID</button>
           </div>}
         </div>}
-        <ProfilePet p={pp} scale={0.3} />
+        <ProfilePet p={pp} scale={0.3} card="mini" bannerH={74} />
         <div className="mini-avrow">
           <div className="mini-av" onClick={() => setFull(true)} title="Открыть полный профиль">
             <Avatar name={data.name} url={av} size={80} />
