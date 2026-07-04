@@ -84,7 +84,7 @@ function AudioSink({ p }: { p: any }) {
   return null
 }
 
-function Sinks({ room }: { room: Room }) {
+export function Sinks({ room }: { room: Room }) {
   const [, bump] = useState(0)
   useEffect(() => {
     const re = () => bump(v => v + 1)
@@ -250,8 +250,8 @@ function Stage({ room, avatars }: { room: Room; avatars: Record<string, string |
   )
 }
 
-export function CallRoom({ room, meId, meName, onLeave }:
-  { room: Room; meId: string; meName: string; onLeave: () => void }) {
+export function CallRoom({ room, meId, meName, onLeave, peer }:
+  { room: Room; meId: string; meName: string; onLeave: () => void; peer?: { name: string; avatarUrl?: string | null } | null }) {
   const { settings } = useSettings()
   const [mic, setMic] = useState(true)
   const [cam, setCam] = useState(false)
@@ -415,10 +415,10 @@ export function CallRoom({ room, meId, meName, onLeave }:
   const alone = status === 'connected' && count <= 1
   const statusLabel = status === 'reconnecting' ? 'Переподключение…'
     : status === 'connecting' ? 'Соединение…'
-    : alone ? 'Звоним…' : 'Голосовой звонок'
+    : alone ? (peer ? 'Звоним ' + peer.name + '…' : 'Звоним…') : 'Голосовой звонок'
 
   return (
-    <div className={'c2-wrap' + (fs ? ' fs' : '') + (flash ? ' sb-flash' : '')}>
+    <div className={'c2-wrap' + (fs ? ' fs' : '') + (flash ? ' sb-flash' : '') + (alone && peer ? ' ringing' : '')}>
       <Sinks room={room} />
       <div className="c2-top">
         <span className={'c2-status ' + (alone ? 'connecting' : status)}><i />{statusLabel}</span>
@@ -429,7 +429,7 @@ export function CallRoom({ room, meId, meName, onLeave }:
         </div>
       </div>
       <Stage room={room} avatars={avatars} />
-      {alone && <div className="c2-waiting">Ждём, пока кто-нибудь присоединится…</div>}
+      {alone && <div className="c2-waiting">{peer ? 'Ждём ответа — ' + peer.name + '…' : 'Ждём, пока кто-нибудь присоединится…'}</div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">
         <button className={'c2-btn' + (mic ? '' : ' lit')} onClick={toggleMic} title={mic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={mic ? 'mic' : 'mic-off'} size={20} /></button>

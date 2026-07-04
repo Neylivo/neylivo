@@ -57,3 +57,22 @@ export function sndLeave() { play([[523.25, 0.16], [392, 0.2]]) }
 export function sndMute() { play([[329.63, 0.14]], 'sine', 0.12) }
 /** Микрофон включён: тон выше ровно на кварту (A4) — сбалансированная пара. */
 export function sndUnmute() { play([[440, 0.14]], 'sine', 0.12) }
+
+// ---- v1.30.0: рингтон входящего и гудки исходящего звонка (как в Discord) ----
+let ringInt: number | null = null
+/** Входящий звонок: зовущая мелодия, крутится по кругу, пока не ответили. */
+export function startRingtone() {
+  if (ringInt !== null) return
+  const one = () => play([[659.25, 0.16], [523.25, 0.16], [659.25, 0.16], [523.25, 0.16], [783.99, 0.34]], 'sine', 0.11)
+  one(); ringInt = window.setInterval(one, 2600)
+}
+export function stopRingtone() { if (ringInt !== null) { window.clearInterval(ringInt); ringInt = null } }
+
+let backInt: number | null = null
+/** Исходящий звонок: длинный мягкий гудок раз в ~3 секунды. */
+export function startRingback() {
+  if (backInt !== null) return
+  const one = () => play([[440, 0.8]], 'sine', 0.05)
+  one(); backInt = window.setInterval(one, 3000)
+}
+export function stopRingback() { if (backInt !== null) { window.clearInterval(backInt); backInt = null } }

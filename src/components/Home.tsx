@@ -21,6 +21,7 @@ import { HotkeysModal } from './HotkeysModal'
 import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
+import { IncomingCall } from './IncomingCall'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -259,6 +260,13 @@ export function Home() {
         onClose={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}
         onStop={() => { setMusicOn(false); setView(v => v.kind === 'music' ? lastView.current : v) }} />}
     </div>
+    {user && <IncomingCall meId={user.id} onAccept={r => {
+      setView({ kind: 'dm' })
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: { id: r.fromId, name: r.fromName } }))
+        setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-join-call', { detail: { threadId: r.threadId } })), 300)
+      }, 60)
+    }} />}
     {hk && <HotkeysModal onClose={() => setHk(false)} />}
     {folderFor && <FolderModal server={folderFor} onClose={() => setFolderFor(null)} />}
     {notifFor && <ServerNotifModal server={notifFor} onClose={() => setNotifFor(null)} />}

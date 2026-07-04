@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
+import { Avatar } from './Avatar'
 import { usePresence } from '../lib/presence'
 import { notifyMessage, msgSound, uiChime } from '../lib/notify'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
@@ -16,8 +17,9 @@ import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine } from './ActivityLabel'
 import { createInvite, listMembers, updateServer } from '../lib/servers'
-import { CallRoom } from './CallRoom'
-import { joinRoom, Room } from '../lib/livekit'
+import { Sinks } from './CallRoom'
+import { joinRoom, Room, RoomEvent } from '../lib/livekit'
+import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -34,6 +36,29 @@ import { loadChMuted, setChMuted } from '../lib/chMute'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 
+// ---- v1.30.0: голос на сервере как в Discord — без экрана звонка. ----
+// Невидимое «подключение»: включает микрофон, играет звуки входа/выхода,
+// прокидывает звук участников и сообщает, кто сейчас говорит.
+function VoiceConn({ room, onSpeak }: { room: Room; onSpeak: (ids: string[]) => void }) {
+  useEffect(() => {
+    room.localParticipant.setMicrophoneEnabled(true).catch(() => {})
+    fadeInCall()
+    const onJoin = () => sndJoin()
+    const onGone = () => sndLeave()
+    const onSpk = (sp: any[]) => onSpeak(sp.map(p => String(p.identity)))
+    room.on(RoomEvent.ParticipantConnected, onJoin)
+    room.on(RoomEvent.ParticipantDisconnected, onGone)
+    room.on(RoomEvent.ActiveSpeakersChanged, onSpk)
+    return () => {
+      room.off(RoomEvent.ParticipantConnected, onJoin)
+      room.off(RoomEvent.ParticipantDisconnected, onGone)
+      room.off(RoomEvent.ActiveSpeakersChanged, onSpk)
+    }
+    // eslint-disable-next-line
+  }, [room])
+  return <Sinks room={room} />
+}
+
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   { server: Server; username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; onLeft: () => void }) {
   const { user } = useAuth()
@@ -46,7 +71,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const prevLen = useRef(0)
   const [atBottom, setAtBottom] = useState(true)
   const [unseen, setUnseen] = useState(0)
-  const [call, setCall] = useState<Room | null>(null)
+  // Голосовое подключение (v1.30.0): комната LiveKit + канал, без экрана звонка.
+  const [voice, setVoice] = useState<{ room: Room; ch: Channel } | null>(null)
+  const voiceRef = useRef<{ room: Room; ch: Channel } | null>(null)
+  const [vMic, setVMic] = useState(true)
+  const [speaking, setSpeaking] = useState<Record<string, boolean>>({})
+  const [voiceUsers, setVoiceUsers] = useState<Record<string, { userId: string; username: string; avatar?: string | null }[]>>({})
+  const voicePresRef = useRef<any>(null)
   const isOwner = server.owner === user?.id
   const { statusOf, activityOf, gameOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
@@ -97,7 +128,37 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return mm?.role_id ? roleById[mm.role_id]?.color : undefined
   }
 
-  useEffect(() => { loadChannels(); loadMembers(); loadRoles(); setSrvSettings((server as any).settings ?? {}) /* eslint-disable-next-line */ }, [server.id])
+  useEffect(() => { voiceRef.current = voice }, [voice])
+  // Смена сервера: тихо выходим из голосового канала прошлого сервера.
+  useEffect(() => {
+    if (voiceRef.current) { try { voiceRef.current.room.disconnect() } catch {} setVoice(null); setSpeaking({}) }
+    loadChannels(); loadMembers(); loadRoles(); setSrvSettings((server as any).settings ?? {}) /* eslint-disable-next-line */
+  }, [server.id])
+
+  // Кто сейчас в голосовых каналах: realtime presence-канал сервера, видно всем.
+  useEffect(() => {
+    if (!user) return
+    const ch = supabase.channel('voice:' + server.id, { config: { presence: { key: user.id } } })
+    ch.on('presence', { event: 'sync' }, () => {
+      const st = ch.presenceState() as Record<string, any[]>
+      const map: Record<string, { userId: string; username: string; avatar?: string | null }[]> = {}
+      for (const key of Object.keys(st)) {
+        const meta = st[key][0] as any
+        if (!meta?.chId) continue
+        if (!map[meta.chId]) map[meta.chId] = []
+        map[meta.chId].push({ userId: key, username: meta.username, avatar: meta.avatar ?? null })
+      }
+      setVoiceUsers(map)
+    })
+    ch.subscribe()
+    voicePresRef.current = ch
+    return () => { supabase.removeChannel(ch); voicePresRef.current = null }
+    // eslint-disable-next-line
+  }, [server.id, user?.id])
+
+  // При размонтировании выходим из голоса.
+  // eslint-disable-next-line
+  useEffect(() => () => { try { voiceRef.current?.room.disconnect() } catch {} }, [])
 
   async function loadMembers() { setMembers(await listMembers(server.id)) }
   async function loadRoles() { setRoles(await fetchRoles(server.id)) }
@@ -236,13 +297,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   useEffect(() => { msgsRef.current = messages }, [messages])
   useEffect(() => { curChannelRef.current = curChannel }, [curChannel])
 
-  // Предупреждение браузера при попытке закрыть вкладку с активным звонком.
+  // Предупреждение браузера при попытке закрыть вкладку с активным голосом.
   useEffect(() => {
-    if (!call) return
+    if (!voice) return
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
     window.addEventListener('beforeunload', h)
     return () => window.removeEventListener('beforeunload', h)
-  }, [call])
+  }, [voice])
 
   // Escape закрывает панель закреплённых.
   useEffect(() => {
@@ -295,10 +356,33 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     loadChannels()
   }
 
-  // Вход в голосовой канал по клику (комнаты те же, что и у звонков в текстовых каналах).
+  // Вход в голосовой канал (v1.30.0, как в Discord): никакого экрана звонка —
+  // просто подключаемся, появляемся под каналом у всех и в панели над профилем.
   async function joinVoice(c: Channel) {
     if (!user) return
-    try { setCall(await joinRoom('ch_' + c.id, user.id, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
+    if (voice?.ch.id === c.id) return
+    try {
+      if (voice) { try { voice.room.disconnect() } catch {} }
+      const room = await joinRoom('ch_' + c.id, user.id, username)
+      setVoice({ room, ch: c })
+      setVMic(true)
+      setSpeaking({})
+      voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null })
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
+
+  function leaveVoice() {
+    if (!voice) return
+    try { voice.room.disconnect() } catch {}
+    setVoice(null)
+    setSpeaking({})
+    voicePresRef.current?.untrack()
+  }
+
+  async function toggleVMic() {
+    if (!voice) return
+    const v = !vMic
+    try { await voice.room.localParticipant.setMicrophoneEnabled(v); setVMic(v); v ? sndUnmute() : sndMute() } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
   async function invite() {
@@ -368,10 +452,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setCatOpenMap(m => { const n = { ...m, [id]: !(m[id] ?? true) }; localStorage.setItem('ponoi_cat_open', JSON.stringify(n)); return n })
   }
 
-  async function startCall() {
-    if (!curChannel || !user) return
-    try { setCall(await joinRoom('ch_' + curChannel.id, user.id, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
-  }
 
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
     if (!curChannel || !user) return
@@ -458,12 +538,20 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const visible = (c: Channel) => !hideMuted || !mutedCh[c.id] || curChannel?.id === c.id
             const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 260) }) }
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
-              <div key={c.id} className={'ch' + (mutedCh[c.id] ? ' muted' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)}>
-                <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
-                <span className="ch-acts">
-                  <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
-                  {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
-                </span>
+              <div key={c.id}>
+                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)}>
+                  <span className="ch-nm"><Icon name="volume" size={15} /> {c.name}</span>
+                  <span className="ch-acts">
+                    <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
+                    {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+                  </span>
+                </div>
+                {(voiceUsers[c.id] ?? []).map(u => (
+                  <div key={u.userId} className={'vo' + (speaking[u.userId] ? ' speaking' : '')} title={u.username}>
+                    <span className="vo-av"><Avatar name={u.username} url={u.avatar} size={20} /></span>
+                    <span className="vo-nm">{u.username}</span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '') + (mutedCh[c.id] ? ' muted' : '')}
@@ -504,6 +592,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           })()}
           {!isOwner && <div className="ch add" style={{ color: '#ed4245' }} onClick={leave}><Icon name="signout" size={14} /> покинуть сервер</div>}
         </div>
+        {voice && <div className="vp">
+          <div className="vp-info">
+            <div className="vp-status"><span className="vp-dot" />Голос подключён</div>
+            <div className="vp-ch" title={voice.ch.name + ' / ' + server.name}>{voice.ch.name} / {server.name}</div>
+          </div>
+          <div className="vp-btns">
+            <button className={'vp-btn' + (vMic ? '' : ' off')} onClick={toggleVMic} title={vMic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={vMic ? 'mic' : 'mic-off'} size={17} /></button>
+            <button className="vp-btn danger" onClick={leaveVoice} title="Отключиться"><Icon name="phone-off" size={17} /></button>
+          </div>
+        </div>}
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
       <main className="chat">
@@ -517,7 +615,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <button className="pin-btn" title="Пригласить на сервер" onClick={invite}><Icon name="user-plus" size={18} /></button>
           <button className={'pin-btn' + (showSearch ? ' on' : '')} title="Поиск сообщений" onClick={() => { setShowPins(false); setShowSearch(s => !s) }}><Icon name="search" size={18} /></button>
           <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
-          <button className="call-start" title="Голосовой звонок" onClick={startCall}><Icon name="phone" size={18} /></button>
           <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
             onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
         </header>
@@ -545,7 +642,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           table: 'messages', channelIds: channels.map(c => c.id),
           channelName: id => channels.find(c => c.id === id)?.name ?? '?',
         }} />}
-        {call && <CallRoom room={call} meId={user!.id} meName={username} onLeave={() => setCall(null)} />}
+        {voice && <VoiceConn room={voice.room} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           {messages.length === 0 && curChannel && <div className="wlc">
             <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>

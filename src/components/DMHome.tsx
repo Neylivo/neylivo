@@ -15,7 +15,8 @@ import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { CallRoom } from './CallRoom'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
-import { joinRoom, Room } from '../lib/livekit'
+import { joinRoom, Room, RoomEvent } from '../lib/livekit'
+import { startRingback, stopRingback } from '../lib/callSounds'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -63,10 +64,94 @@ export function DMHome({ username, avatarUrl, onAvatar }:
   const prevHeight = useRef<number | null>(null)
   const prevTop = useRef(0)
 
-  async function startCall() {
-    if (!threadId) return
-    try { setCall(await joinRoom('dm_' + threadId, meId, username)) } catch (e: any) { toastErr(e.message ?? String(e)) }
+  // ---- v1.30.0: исходящий звонок как в Discord — «Звоним…» с гудками. ----
+  // Собеседнику летит «ring» по его личному realtime-каналу, пока он не ответит,
+  // не отклонит или не истекут 32 секунды.
+  const ringChRef = useRef<any>(null)
+  const ringTimerRef = useRef<number | null>(null)
+  const ringDeadlineRef = useRef<number | null>(null)
+  const [ringingTo, setRingingTo] = useState<Friend | null>(null)
+  const ringingRef = useRef<Friend | null>(null)
+  useEffect(() => { ringingRef.current = ringingTo }, [ringingTo])
+  const callRef = useRef<Room | null>(null)
+  useEffect(() => { callRef.current = call }, [call])
+
+  function endRing(sendCancel: boolean) {
+    stopRingback()
+    if (ringTimerRef.current) { window.clearInterval(ringTimerRef.current); ringTimerRef.current = null }
+    if (ringDeadlineRef.current) { window.clearTimeout(ringDeadlineRef.current); ringDeadlineRef.current = null }
+    const ch = ringChRef.current
+    if (ch) {
+      if (sendCancel) { try { ch.send({ type: 'broadcast', event: 'cancel', payload: { fromId: meId } }) } catch {} }
+      window.setTimeout(() => supabase.removeChannel(ch), 600)
+      ringChRef.current = null
+    }
+    setRingingTo(null)
   }
+
+  function hangUp(sendCancel: boolean) {
+    endRing(sendCancel)
+    try { callRef.current?.disconnect() } catch {}
+    setCall(null)
+  }
+
+  async function startCall() {
+    if (!threadId || !active || call) return
+    try {
+      const room = await joinRoom('dm_' + threadId, meId, username)
+      setCall(room)
+      // Гудки + повторяем ring, чтобы собеседник точно увидел модалку.
+      setRingingTo(active)
+      startRingback()
+      const payload = { threadId, fromId: meId, fromName: username, fromAvatar: avatarUrl ?? null }
+      const ch = supabase.channel('ring:' + active.id)
+      ringChRef.current = ch
+      ch.subscribe((st: string) => {
+        if (st !== 'SUBSCRIBED') return
+        ch.send({ type: 'broadcast', event: 'ring', payload })
+        ringTimerRef.current = window.setInterval(() => { try { ch.send({ type: 'broadcast', event: 'ring', payload }) } catch {} }, 2500)
+      })
+      // Не отвечает 32 секунды — вешаем трубку (как в Discord).
+      ringDeadlineRef.current = window.setTimeout(() => {
+        if (ringingRef.current) { toastErr(ringingRef.current.name + ' не отвечает'); hangUp(true) }
+      }, 32000)
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
+
+  // Собеседник подключился к комнате — гудки больше не нужны.
+  useEffect(() => {
+    if (!call) return
+    const onJoin = () => endRing(false)
+    call.on(RoomEvent.ParticipantConnected, onJoin)
+    return () => { call.off(RoomEvent.ParticipantConnected, onJoin) }
+    // eslint-disable-next-line
+  }, [call])
+
+  // Ответ на исходящий звонок: принял / отклонил (события шлёт глобальный слушатель IncomingCall).
+  useEffect(() => {
+    const acc = () => endRing(false)
+    const dec = () => { if (ringingRef.current) { toastErr(ringingRef.current.name + ' отклонил(а) звонок'); hangUp(false) } }
+    window.addEventListener('ponoi-call-accepted', acc)
+    window.addEventListener('ponoi-call-declined', dec)
+    return () => { window.removeEventListener('ponoi-call-accepted', acc); window.removeEventListener('ponoi-call-declined', dec) }
+    // eslint-disable-next-line
+  }, [])
+
+  // Принятый входящий звонок: модалка уже открыла нужный ЛС, осталось подключиться.
+  useEffect(() => {
+    const h = async (e: Event) => {
+      const tid = (e as CustomEvent).detail?.threadId
+      if (!tid || callRef.current) return
+      try { setCall(await joinRoom('dm_' + tid, meId, username)) } catch (err: any) { toastErr(err.message ?? String(err)) }
+    }
+    window.addEventListener('ponoi-join-call', h)
+    return () => window.removeEventListener('ponoi-join-call', h)
+    // eslint-disable-next-line
+  }, [])
+
+  // При размонтировании не оставляем «висящий» звонок и гудки.
+  // eslint-disable-next-line
+  useEffect(() => () => { endRing(false); try { callRef.current?.disconnect() } catch {} }, [])
 
   useEffect(() => { loadRequests() /* eslint-disable-next-line */ }, [])
 
@@ -310,7 +395,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                 <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
-          {call && <CallRoom room={call} meId={meId} meName={username} onLeave={() => setCall(null)} />}
+          {call && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               nameOf={id => id === meId ? username : active.name}
