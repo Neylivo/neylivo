@@ -132,7 +132,7 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
             <label className="modal-lbl">Название сервера <span className="csrv-req">*</span></label>
             <input className="modal-in" autoFocus value={name}
               onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
-            <div className="csrv-terms">Создавая сервер, вы соглашаетесь с <a>Правилами Сообщества</a> Ponoi.</div>
+            <div className="csrv-terms">Создавая сервер, вы соглашаетесь с Правилами Сообщества Ponoi.</div>
           </div>
           <div className="csrv-foot">
             <button className="modal-ghost" onClick={() => setStep('about')}>Назад</button>

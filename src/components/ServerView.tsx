@@ -549,7 +549,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           {messages.length === 0 && curChannel && <div className="wlc">
             <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>
-            <div className="wlc-sub">Это ваш новый сервер. Здесь приведены шаги, которые помогут вам начать с ним работу. Вы можете найти больше советов в нашем <a>руководстве для начинающих</a>.</div>
+            <div className="wlc-sub">Это ваш новый сервер. Здесь приведены шаги, которые помогут вам начать с ним работу. Вы можете найти больше советов в нашем руководстве для начинающих.</div>
             <button className="wlc-card" onClick={invite}><span className="wlc-ico">👋</span> Пригласите друзей <Icon name="chevron-right" size={16} /></button>
             {isOwner && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat input:not([type="file"])') as HTMLInputElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>

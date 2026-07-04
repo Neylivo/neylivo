@@ -222,10 +222,17 @@ app.whenReady().then(() => {
       const { autoUpdater } = require('electron-updater')
       autoUpdater.autoDownload = true
       autoUpdater.autoInstallOnAppQuit = true
-      // Реальный прогресс скачивания обновления показываем в splash-окне.
+      // v1.29.0: статус обновления транслируем в окно приложения — рендерер
+      // показывает красивую карточку с прогрессом и кнопкой «Перезапустить».
+      const bcastUpd = (data) => { for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('ponoi-update', data) } catch {} } }
+      autoUpdater.on('update-available', (info) => bcastUpd({ state: 'downloading', percent: 0, version: info && info.version }))
       autoUpdater.on('download-progress', (p) => {
+        // Реальный прогресс скачивания обновления показываем в splash-окне и в карточке.
         try { splash?.webContents.send('splash-progress', { percent: p?.percent ?? 0 }) } catch {}
+        bcastUpd({ state: 'downloading', percent: (p && p.percent) || 0 })
       })
+      autoUpdater.on('update-downloaded', (info) => bcastUpd({ state: 'ready', version: info && info.version }))
+      ipcMain.on('ponoi-apply-update', () => { try { autoUpdater.quitAndInstall() } catch {} })
       const check = () => { try { autoUpdater.checkForUpdatesAndNotify().catch(() => {}) } catch {} }
       check()
       setInterval(check, 4 * 60 * 60 * 1000)
