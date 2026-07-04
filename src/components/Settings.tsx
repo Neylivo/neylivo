@@ -1,4 +1,4 @@
-import { toastErr } from '../lib/toast'
+import { toastErr, toastOk } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
@@ -116,7 +116,10 @@ export function Settings({ username, avatarUrl, onClose }:
   const [name, setName] = useState(username)                 // ник (отображаемое имя) — свободный, может повторяться
   const [uname, setUname] = useState('')                      // юзернейм — уникальный, по нему добавляют в друзья
   const [nameChangedAt, setNameChangedAt] = useState<string | null>(null) // юзернейм меняется раз в 2 недели
-  const [orig, setOrig] = useState({ name: username, uname: '', about: '' }) // исходные значения — для плашки «несохранённые изменения»
+  const [orig, setOrig] = useState({ name: username, uname: '', about: '', primary: DEFAULT_PROFILE.primary, accent: DEFAULT_PROFILE.accent }) // исходные значения — для плашки «несохранённые изменения»
+  // v1.40.0: цвета профиля — тоже черновик: применяются только по «Сохранить изменения», как в Discord
+  const [primary, setPrimary] = useState(DEFAULT_PROFILE.primary)
+  const [accent, setAccent] = useState(DEFAULT_PROFILE.accent)
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
@@ -126,7 +129,7 @@ export function Settings({ username, avatarUrl, onClose }:
   useEffect(() => {
     if (!user) return
     let ok = true
-    fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about); setOrig(o => ({ ...o, about: p.about })) } })
+    fetchProfile(user.id).then(p => { if (ok) { setProf(p); setAbout(p.about); setPrimary(p.primary); setAccent(p.accent); setOrig(o => ({ ...o, about: p.about, primary: p.primary, accent: p.accent })) } })
     // v1.39.0: ник и юзернейм — разные поля; до миграций 20/21 части колонок может не быть — откатываемся.
     supabase.from('profiles').select('username, display_name, username_changed_at').eq('id', user.id).maybeSingle()
       .then(async ({ data, error }) => {
@@ -162,8 +165,8 @@ export function Settings({ username, avatarUrl, onClose }:
   }, [onClose])
 
   // v1.39.0: плашка «несохранённые изменения» — как в настройках сервера
-  const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about
-  function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about) }
+  const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about || primary !== orig.primary || accent !== orig.accent
+  function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about); setPrimary(orig.primary); setAccent(orig.accent) }
 
   async function saveAccount() {
     const newNick = name.trim()
@@ -193,8 +196,11 @@ export function Settings({ username, avatarUrl, onClose }:
       if (error) { toastErr(error.message ?? String(error)); return }
       localStorage.setItem('ponoi_username', newNick || newUname || username)
     }
-    await patchProf({ about })
-    setOrig({ name: newNick, uname: newUname || orig.uname, about })
+    await patchProf({ about, primary, accent })
+    setOrig({ name: newNick, uname: newUname || orig.uname, about, primary, accent })
+    // Мгновенно обновляем имя во всём приложении (Home слушает это событие) — без перезагрузки.
+    window.dispatchEvent(new CustomEvent('ponoi-profile-updated', { detail: { nick: newNick || newUname || username, handle: newUname || orig.uname } }))
+    toastOk('Изменения сохранены')
     setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
 
@@ -229,23 +235,26 @@ export function Settings({ username, avatarUrl, onClose }:
               </div>
             </div>
             <div className="pqs-acc-card">
-              <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
+              <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
               <div className="pqs-acc-row">
                 <div className="pqs-acc-av" style={{ background: settings.accent }}>
                   {avatarUrl ? <img src={avatarUrl} alt={username} /> : username.slice(0, 1).toUpperCase()}
                 </div>
-                <div className="pqs-acc-name">{username}</div>
+                <div className="pqs-acc-names">
+                  <div className="pqs-acc-name">{name || username}</div>
+                  <div className="pqs-acc-uname">{uname}</div>
+                </div>
               </div>
             </div>
             <div className="pqs-acc-card2">
               <div className="pqs-sec-t">Тема профиля</div>
-              <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю.</div>
+              <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю после «Сохранить изменения».</div>
               <div className="pqs-ptheme-row">
-                <label className="pqs-ptheme"><input type="color" value={prof.primary} onChange={e => patchProf({ primary: e.target.value })} /> Основной цвет</label>
-                <label className="pqs-ptheme"><input type="color" value={prof.accent} onChange={e => patchProf({ accent: e.target.value })} /> Акцент</label>
+                <label className="pqs-ptheme"><input type="color" value={primary} onChange={e => setPrimary(e.target.value)} /> Основной цвет</label>
+                <label className="pqs-ptheme"><input type="color" value={accent} onChange={e => setAccent(e.target.value)} /> Акцент</label>
               </div>
-              <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${prof.primary}, ${prof.accent})` }} />
-              <button className="pqs-save" onClick={() => patchProf({ primary: '#5865f2', accent: '#5865f2' })}>Сбросить</button>
+              <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
+              <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
             </div>
 
             <div className="pqs-acc-card2">

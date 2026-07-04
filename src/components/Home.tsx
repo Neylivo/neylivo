@@ -30,6 +30,7 @@ export function Home() {
   const { user } = useAuth()
   const { settings } = useSettings()
   const [username, setUsername] = useState(() => localStorage.getItem('ponoi_username') || '')
+  const [handle, setHandle] = useState('')   // v1.40.0: настоящий юзернейм (уникальный) — для «Добавить в друзья»
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [servers, setServers] = useState<Server[]>([])
   const [view, setView] = useState<View>({ kind: 'dm' })
@@ -56,6 +57,16 @@ export function Home() {
   }, [])
   // Мобильная версия (v1.34.0): при старте открываем шторку навигации, как в Discord.
   useEffect(() => { if (IS_MOBILE) openMobNav() }, [])
+  // v1.40.0: настройки сохранили ник/юзернейм — обновляем имя во всём приложении сразу, без перезагрузки.
+  useEffect(() => {
+    const h = (e: any) => {
+      const d = e.detail || {}
+      if (d.nick) { setUsername(d.nick); localStorage.setItem('ponoi_username', d.nick) }
+      if (d.handle) setHandle(d.handle)
+    }
+    window.addEventListener('ponoi-profile-updated', h as any)
+    return () => window.removeEventListener('ponoi-profile-updated', h as any)
+  }, [])
   const [, setNotifVer] = useState(0) // ре-рендер при смене режима уведомлений
 
   // Непрочитанное на серверах: глобальная подписка на INSERT в messages.
@@ -109,12 +120,13 @@ export function Home() {
         let d: any = data
         if (error) { const r = await supabase.from('profiles').select('username, avatar_url').eq('id', user.id).maybeSingle(); d = r.data }
         const disp = d?.display_name || d?.username
+        if (d?.username) setHandle(d.username)
         if (disp) { setUsername(disp); localStorage.setItem('ponoi_username', disp) }
         else if (user.email) {
           // Профиль без юзернейма (например, регистрация с подтверждением почты не успела его записать):
           // показываем часть почты до @ и сразу чиним профиль — «Вы» больше нигде не появляется (v1.37.0)
           const fb = localStorage.getItem('ponoi_username') || user.email.split('@')[0]
-          setUsername(fb); localStorage.setItem('ponoi_username', fb)
+          setUsername(fb); setHandle(fb); localStorage.setItem('ponoi_username', fb)
           supabase.from('profiles').upsert({ id: user.id, username: fb })
         }
         if (d?.avatar_url) setAvatarUrl(d.avatar_url)
@@ -271,7 +283,7 @@ export function Home() {
       <div className="mob-backdrop" onClick={closeMobNav} />
       {(() => { const bv = view.kind === 'music' ? lastView.current : view
         return <>
-          {bv.kind === 'dm' && <DMHome username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
+          {bv.kind === 'dm' && <DMHome username={username} handle={handle} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
           {bv.kind === 'server' && <ServerView server={bv.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
         </> })()}
       {(musicOn || view.kind === 'music') && <MusicPlayer me={username} meId={user?.id ?? ''}

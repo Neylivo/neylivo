@@ -27,8 +27,8 @@ import { GameLine, GameInline } from './ActivityLabel'
 
 interface Friend { id: string; name: string }
 
-export function DMHome({ username, avatarUrl, onAvatar }:
-  { username: string; avatarUrl?: string | null; onAvatar?: (u: string) => void }) {
+export function DMHome({ username, handle, avatarUrl, onAvatar }:
+  { username: string; handle?: string; avatarUrl?: string | null; onAvatar?: (u: string) => void }) {
   const { user } = useAuth()
   const meId = user!.id
   const [requests, setRequests] = useState<FriendRequest[]>([])
@@ -178,7 +178,7 @@ export function DMHome({ username, avatarUrl, onAvatar }:
 
   async function add(p: Profile) {
     const { error } = await sendRequest(meId, username, p)
-    if (error) toastErr(error.message); else { setQ(''); setResults([]); toastOk('Заявка отправлена ' + p.username) }
+    if (error) toastErr(error.message); else { setQ(''); setResults([]); toastOk('Заявка отправлена — ' + (p.display_name || p.username)) }
   }
 
   // Добавление по юзернейму, как в новом Discord (без #цифр).
@@ -432,9 +432,9 @@ export function DMHome({ username, avatarUrl, onAvatar }:
               <div className="pfr-codebox">
                 <div className="pfr-codeh">Мой юзернейм</div>
                 <div className="pfr-coderow">
-                  <span className="pfr-code">{username}</span>
+                  <span className="pfr-code">{handle || username}</span>
                   <span className="pfr-codehint">поделись им</span>
-                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
+                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(handle || username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{copied ? 'Скопировано \u2713' : 'Копировать'}</button>
                 </div>
                 <div className="pfr-codeh2">Добавить в друзья по юзернейму</div>
                 <div className="pfr-addcoderow">
@@ -443,12 +443,12 @@ export function DMHome({ username, avatarUrl, onAvatar }:
                 </div>
                 {codeMsg && <div className="pfr-codemsg">{codeMsg}</div>}
               </div>
-              <div className="pfr-addsub">Или найди по части имени.</div>
+              <div className="pfr-addsub">Или найди по нику или части юзернейма.</div>
               <input className="pfr-addin" placeholder="Введи имя пользователя…" value={q} onChange={e => doSearch(e.target.value)} />
               {results.map(p => (
                 <div key={p.id} className="pfr-row" onClick={() => add(p)}>
-                  <Avatar name={p.username} url={p.avatar_url} size={32} />
-                  <span className="pfr-name">{p.username}</span>
+                  <Avatar name={p.display_name || p.username} url={p.avatar_url} size={32} />
+                  <span className="pfr-name">{p.display_name || p.username}<span className="pfr-uname">{p.username}</span></span>
                   <span className="pfr-add-btn"><Icon name="plus" size={14} /> Добавить</span>
                 </div>
               ))}

@@ -5,8 +5,13 @@ import { tagFor, parseFriendCode } from './friendCode'
 export async function searchUsers(q: string, exceptId: string): Promise<Profile[]> {
   const term = q.trim()
   if (!term) return []
-  const { data } = await supabase.from('profiles').select('*')
-    .ilike('username', '%' + term + '%').limit(10)
+  // v1.40.0: ищем и по юзернейму, и по нику (display_name). До миграции 21 колонки
+  // display_name может не быть — тогда откатываемся на поиск только по юзернейму.
+  const safe = term.replace(/[,()]/g, '')
+  let { data, error } = await supabase.from('profiles').select('*')
+    .or('username.ilike.%' + safe + '%,display_name.ilike.%' + safe + '%').limit(10)
+  if (error) ({ data } = await supabase.from('profiles').select('*')
+    .ilike('username', '%' + term + '%').limit(10))
   return (data ?? []).filter(p => p.id !== exceptId)
 }
 
@@ -48,7 +53,8 @@ export async function mutualFriends(aId: string, bId: string): Promise<Profile[]
 
 export async function sendRequest(fromId: string, fromName: string, to: Profile) {
   return supabase.from('friend_requests').insert({
-    from_user: fromId, to_user: to.id, from_name: fromName, to_name: to.username, status: 'pending',
+    // v1.40.0: в заявке храним ник (display_name), а не юзернейм — в списках друзей показывается ник
+    from_user: fromId, to_user: to.id, from_name: fromName, to_name: (to.display_name || to.username), status: 'pending',
   })
 }
 

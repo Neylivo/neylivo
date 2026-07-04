@@ -84,6 +84,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
   const [meName, setMeName] = useState('')
+  const [uname, setUname] = useState('')   // v1.40.0: настоящий юзернейм показываемого пользователя
   const [mutuals, setMutuals] = useState<{ id: string; username: string; avatar_url: string | null }[]>([])
 
   // Для офлайн-пользователя подтягиваем время последнего визита (если миграция 11 применена).
@@ -103,11 +104,24 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
       .then(({ data: d }) => { if (ok && d?.avatar_url) setAv(d.avatar_url) })
     return () => { ok = false }
   }, [data.userId, data.avatarUrl])
+  // v1.40.0: настоящий юзернейм — под ником и в «Скопировать юзернейм»
+  // (раньше показывался ник в нижнем регистре, это было неверно).
+  useEffect(() => {
+    let ok = true
+    setUname('')
+    supabase.from('profiles').select('username').eq('id', data.userId).maybeSingle()
+      .then(({ data: d }) => { if (ok && d?.username) setUname(d.username) })
+    return () => { ok = false }
+  }, [data.userId])
   // Мой ник — для заявок в друзья и отправки сообщений из мини-профиля.
   useEffect(() => {
     if (!user) return
-    supabase.from('profiles').select('username').eq('id', user.id).maybeSingle()
-      .then(({ data: d }) => setMeName(d?.username ?? ''))
+    supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle()
+      .then(async ({ data, error }) => {
+        let d: any = data
+        if (error) { const r = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(); d = r.data }
+        setMeName(d?.display_name || d?.username || '')
+      })
   }, [user?.id])
   // Общие друзья (см. lib/friends.mutualFriends).
   useEffect(() => {
@@ -155,7 +169,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>
           <button title="Ещё" onClick={() => setMore(m => !m)}><Icon name="more" size={16} /></button>
           {more && <div className="mini-more">
-            <button onClick={() => { navigator.clipboard?.writeText(data.name); setMore(false) }}>Скопировать юзернейм</button>
+            <button onClick={() => { navigator.clipboard?.writeText(uname || data.name); setMore(false) }}>Скопировать юзернейм</button>
             <button onClick={() => { navigator.clipboard?.writeText(data.userId); setMore(false) }}>Скопировать ID</button>
           </div>}
         </div>}
@@ -169,7 +183,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
         <div className="mini-body">
           <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">
-            <span className="mini-uname">{data.name.toLowerCase()}</span>
+            <span className="mini-uname">{uname || data.name}</span>
             {(data.roleName || data.role) && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor ?? '#99aab5' }} />{data.roleName ?? 'Участник'}</span>}
           </div>
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
