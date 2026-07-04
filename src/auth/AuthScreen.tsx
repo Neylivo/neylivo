@@ -8,6 +8,25 @@ import authBg from '../assets/auth-bg.png'
 // по нику через RPC email_for_username (supabase/19_login_by_username.sql).
 // v1.41.0: подтверждение почты — 6-значным кодом из письма (verifyOtp), а не ссылкой.
 // В шаблоне письма Supabase («Confirm signup») должен стоять {{ .Token }}.
+// v1.44.1: все ошибки Auth — через authErrText(): без пустых «()», с понятным
+// текстом, когда письмо с кодом не удалось отправить (SMTP не настроен).
+
+// Человеческий текст для ошибок Supabase Auth. Главное — не показывать пустоту:
+// если письмо с кодом не ушло (SMTP не настроен / лимит), говорим это прямо.
+function authErrText(e: any): string {
+  const raw = String(e?.message ?? e ?? '').trim()
+  const low = raw.toLowerCase()
+  if (low.includes('error sending') || low.includes('confirmation email') || low.includes('smtp') ||
+      low.includes('rate limit') || low.includes('over_email_send_rate'))
+    return 'Не удалось отправить письмо с кодом — почтовый сервис Ponoi сейчас не настроен или исчерпал лимит. Сообщи владельцу, он подтвердит аккаунт вручную.'
+  if (!raw || raw === '()' || raw === '{}' || low === 'error' || low === '[object object]')
+    return 'Что-то пошло не так при обращении к серверу. Попробуй ещё раз через минуту.'
+  if (low.includes('invalid login credentials')) return 'Неверная почта/юзернейм или пароль'
+  if (low.includes('password should be at least')) return 'Пароль слишком короткий — минимум 6 символов'
+  if (low.includes('unable to validate email') || low.includes('invalid email')) return 'Похоже, в почте опечатка — проверь адрес'
+  return raw
+}
+
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [login, setLogin] = useState('')       // почта или юзернейм (вход); почта (регистрация)
@@ -79,7 +98,7 @@ export function AuthScreen() {
         }
       }
     } catch (e: any) {
-      setErr(e.message ?? String(e))
+      setErr(authErrText(e))
     } finally {
       setBusy(false)
     }
@@ -105,7 +124,7 @@ export function AuthScreen() {
       }
       // Дальше AuthProvider сам увидит сессию и откроет приложение
     } catch (e2: any) {
-      setErr(e2.message ?? String(e2))
+      setErr(authErrText(e2))
     } finally { setBusy(false) }
   }
 
@@ -113,7 +132,7 @@ export function AuthScreen() {
     if (!verifyEmail || resendIn > 0) return
     setErr(null)
     const { error } = await supabase.auth.resend({ type: 'signup', email: verifyEmail })
-    if (error) setErr(error.message ?? String(error))
+    if (error) setErr(authErrText(error))
     setResendIn(30)
   }
 
