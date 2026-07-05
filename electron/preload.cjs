@@ -21,4 +21,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // v1.91.0: надёжное копирование — текст и картинки через системный буфер (main-процесс).
   copyText: (t) => ipcRenderer.invoke('ponoi-clip-text', t),
   copyImage: (dataUrl) => ipcRenderer.invoke('ponoi-clip-image', dataUrl),
+  // v1.98.0: плашка-оверлей поверх игры «друг начал играть в ту же игру» (как оверлей Discord).
+  gameToast: (p) => ipcRenderer.send('ponoi-game-toast', p),
 })

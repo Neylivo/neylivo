@@ -5,6 +5,7 @@ import { resolveCover } from './gameCovers'
 import { startSession, endSession } from './activity'
 import { useAuth } from '../auth/AuthProvider'
 import { DEVICE } from './mobile'
+import { toast } from './toast'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
 export const STATUS_LABEL: Record<Status, string> = {
@@ -103,6 +104,43 @@ export function PresenceProvider({ username, avatarUrl, children }:
   }, [user?.id])
 
   useEffect(() => { propRef.current = { username, avatarUrl } }, [username, avatarUrl])
+
+  // v1.98.0: плашка «друг начал играть в ту же игру» — как оверлей Discord.
+  // Следим за сменой игр у друзей: друг только что зашёл в ту игру, в которой сейчас
+  // сидим мы, — десктоп показывает пилюлю поверх игры (окно-оверлей), веб — тост.
+  const friendIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!user) return
+    supabase.from('friend_requests').select('from_user, to_user').eq('status', 'accepted')
+      .or('from_user.eq.' + user.id + ',to_user.eq.' + user.id)
+      .then(({ data }) => {
+        friendIdsRef.current = new Set(((data ?? []) as any[]).map(r => (r.from_user === user.id ? r.to_user : r.from_user)))
+      })
+    // eslint-disable-next-line
+  }, [user?.id])
+  const prevGamesRef = useRef<Record<string, string | null>>({})
+  const gameToastAtRef = useRef<Record<string, number>>({})
+  useEffect(() => {
+    const my = gameRef.current?.name ?? null
+    const prev = prevGamesRef.current
+    const next: Record<string, string | null> = {}
+    for (const uid of Object.keys(online)) {
+      const gname = online[uid]?.game?.name ?? null
+      next[uid] = gname
+      if (!my || !user || uid === user.id) continue
+      if (!friendIdsRef.current.has(uid)) continue
+      if (!gname || gname !== my || prev[uid] === gname) continue   // триггер только на СТАРТ той же игры
+      const key = uid + '|' + gname
+      if (Date.now() - (gameToastAtRef.current[key] ?? 0) < 10 * 60_000) continue   // не чаще раза в 10 минут на друга+игру
+      gameToastAtRef.current[key] = Date.now()
+      const st = online[uid]
+      const d = (window as any).ponoiDesktop
+      if (d?.gameToast) d.gameToast({ name: st.username, avatar: st.avatar_url ?? null, game: gname, cover: gameRef.current?.cover ?? null })
+      else toast('Пользователь ' + st.username + ' начал играть в ' + gname)
+    }
+    prevGamesRef.current = next
+    // eslint-disable-next-line
+  }, [online, myGame])
 
   // Авто-детект игры (только в десктоп-приложении): Electron раз в 20 сек смотрит
   // процессы и присылает событие ТОЛЬКО при старте/выходе из игры. Сервер — «записная

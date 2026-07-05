@@ -159,6 +159,63 @@ ipcMain.handle('ponoi-clip-image', (_e, dataUrl) => {
   } catch { return false }
 })
 
+// ---- v1.98.0: плашка-оверлей «друг начал играть в ту же игру» — как оверлей Discord ----
+// Прозрачное click-through окно поверх всех окон, сверху по центру экрана: тёмная
+// пилюля «Пользователь <ник> начал играть в <иконка> ИГРА». Показывается на 6 секунд.
+// Работает поверх игр в оконном/безрамочном режиме; поверх эксклюзивного
+// полноэкранного режима Windows не рисует чужие окна (это ограничение самой ОС).
+let gameToastWin = null
+let gameToastTimer = null
+function showGameToast(p) {
+  try {
+    if (process.platform !== 'win32' && process.platform !== 'darwin' && process.platform !== 'linux') return
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    const rawName = (p && p.name) ? String(p.name) : '?'
+    const name = esc(rawName)
+    const game = esc(((p && p.game) ? String(p.game) : '').toUpperCase())
+    const okUrl = (u) => typeof u === 'string' && /^https:\/\//.test(u)
+    const avatar = okUrl(p && p.avatar) ? p.avatar : null
+    const cover = okUrl(p && p.cover) ? p.cover : null
+    const av = avatar ? '<img class="av" src="' + esc(avatar) + '">' : '<span class="av ph">' + esc(rawName[0].toUpperCase()) + '</span>'
+    const ic = cover ? '<img class="gic" src="' + esc(cover) + '">' : '<span class="gic ph2">&#127918;</span>'
+    const html = '<!doctype html><meta charset="utf-8"><style>' +
+      'html,body{margin:0;background:transparent;overflow:hidden;-webkit-user-select:none}' +
+      '.pill{display:flex;align-items:center;gap:10px;height:46px;padding:0 20px 0 7px;border-radius:23px;' +
+      'background:rgba(10,10,10,.85);color:#e8e8e8;font:500 14px "Segoe UI",system-ui,sans-serif;' +
+      'width:max-content;max-width:96vw;margin:8px auto 0;box-shadow:0 4px 18px rgba(0,0,0,.45);' +
+      'animation:in .25s ease}' +
+      '@keyframes in{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}' +
+      '.av{width:32px;height:32px;border-radius:50%;object-fit:cover;flex:none}' +
+      '.av.ph{display:flex;align-items:center;justify-content:center;background:#5865f2;color:#fff;font-weight:700;font-size:15px}' +
+      '.tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:7px}' +
+      'b{color:#fff;font-weight:700}' +
+      '.gic{width:24px;height:24px;border-radius:6px;object-fit:cover;flex:none;background:#fff}' +
+      '.ph2{display:flex;align-items:center;justify-content:center;background:transparent;font-size:18px}' +
+      '.g{color:#fff;font-weight:800;letter-spacing:.5px}' +
+      '</style><div class="pill">' + av + '<span class="tx"><span>Пользователь <b>' + name + '</b> начал играть в</span>' + ic + '<span class="g">' + game + '</span></span></div>'
+    const { screen } = require('electron')
+    const disp = screen.getPrimaryDisplay()
+    const w = Math.min(760, disp.workArea.width - 40), h = 62
+    if (!gameToastWin || gameToastWin.isDestroyed()) {
+      gameToastWin = new BrowserWindow({
+        width: w, height: h,
+        x: Math.round(disp.workArea.x + (disp.workArea.width - w) / 2), y: disp.workArea.y + 6,
+        frame: false, transparent: true, resizable: false, movable: false, skipTaskbar: true,
+        alwaysOnTop: true, focusable: false, show: false, hasShadow: false,
+        webPreferences: { sandbox: true, contextIsolation: true },
+      })
+      gameToastWin.setIgnoreMouseEvents(true)
+      gameToastWin.setAlwaysOnTop(true, 'screen-saver')
+      gameToastWin.setMenuBarVisibility(false)
+    }
+    gameToastWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    gameToastWin.showInactive()
+    clearTimeout(gameToastTimer)
+    gameToastTimer = setTimeout(() => { try { if (gameToastWin && !gameToastWin.isDestroyed()) gameToastWin.hide() } catch {} }, 6000)
+  } catch {}
+}
+ipcMain.on('ponoi-game-toast', (_e, p) => showGameToast(p))
+
 // ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
 // Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там
 // появляется строка «Joining game '<guid>' place <id> …» — из неё берём placeId,
