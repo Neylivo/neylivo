@@ -38,6 +38,10 @@ import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
 import { loadChMuted, setChMuted } from '../lib/chMute'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
+import { getMsgs, putMsgs } from '../lib/msgCache'
+
+// v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
+let svRxDeb: number | undefined
 
 // ---- v1.30.0: голос на сервере как в Discord — без экрана звонка. ----
 // Невидимое «подключение»: включает микрофон, играет звуки входа/выхода,
@@ -236,6 +240,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // Сброс случайного выделения текста при переключении канала.
     window.getSelection()?.removeAllRanges()
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
+    // v1.103.0: мгновенное открытие — если канал уже открывали, лента появляется сразу
+    // из кэша, а сеть освежает её в фоне.
+    const cachedList = getMsgs('ch_' + c.id)
+    if (cachedList?.length) {
+      const lr0 = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
+      const sp0 = scrollMem.current[c.id] ?? (() => { const v = localStorage.getItem('ponoi_scroll_' + c.id); return v === null ? undefined : Number(v) })()
+      pendingScroll.current = (!lr0 || Date.now() - lr0 > 7 * 24 * 3600 * 1000) ? 'bottom' : (sp0 ?? 'bottom')
+      setMessages(cachedList as Message[])
+    }
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
     const { data } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
@@ -405,11 +418,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels])
 
+  // v1.103.0: кэшируем последние сообщения открытого канала — повторное открытие мгновенно.
+  useEffect(() => { if (curChannel && messages.length) putMsgs('ch_' + curChannel.id, messages) }, [messages, curChannel])
+
   useEffect(() => {
     if (!curChannel) return
     const ch = supabase.channel('rx:' + curChannel.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' },
-        () => loadRx(msgsRef.current.map(m => m.id)))
+        () => { window.clearTimeout(svRxDeb); svRxDeb = window.setTimeout(() => loadRx(msgsRef.current.map(m => m.id)), 250) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])

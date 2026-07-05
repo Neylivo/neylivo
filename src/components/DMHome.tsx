@@ -26,6 +26,10 @@ import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
+import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
+
+// v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
+let dmRxDeb: number | undefined
 
 interface Friend { id: string; name: string }
 
@@ -337,8 +341,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     closeMobNav()
     // Сброс случайного выделения текста при переключении диалога.
     window.getSelection()?.removeAllRanges()
+    // v1.103.0: мгновенное открытие — id диалога и последние сообщения берём из кэша
+    // (лента появляется сразу), а сеть освежает её в фоне.
+    const cachedTid = getCachedThreadId(f.id)
+    if (cachedTid) {
+      setThreadId(cachedTid)
+      const cached = getMsgs('dm_' + cachedTid)
+      if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(cached as DMMessage[]) }
+    }
     const t = await openThread(meId, f.id)
     if (!t) return
+    rememberThreadId(f.id, t.id)
     setThreadId(t.id)
     // Загружаем последние 100 сообщений (раньше в длинных диалогах грузились самые старые 100).
     const { data } = await supabase.from('dm_messages').select('*')
@@ -473,11 +486,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     return () => window.removeEventListener('keydown', h)
   }, [showPins])
 
+  // v1.103.0: кэшируем последние сообщения открытого диалога — повторное открытие мгновенно.
+  useEffect(() => { if (threadId && messages.length) putMsgs('dm_' + threadId, messages) }, [messages, threadId])
+
   useEffect(() => {
     if (!threadId) return
     const ch = supabase.channel('drx:' + threadId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_reactions' },
-        () => loadRx(msgsRef.current.map(m => m.id)))
+        () => { window.clearTimeout(dmRxDeb); dmRxDeb = window.setTimeout(() => loadRx(msgsRef.current.map(m => m.id)), 250) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
