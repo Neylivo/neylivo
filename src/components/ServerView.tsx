@@ -134,7 +134,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [unreadCh, setUnreadCh] = useState<Record<string, boolean>>({})
   const curChannelRef = useRef<Channel | null>(null)
   // Память прокрутки по каналам + подгрузка старых сообщений при скролле вверх.
-  const scrollMem = useRef<Record<string, number>>({})
   const pendingScroll = useRef<number | 'bottom' | { unreadId: string } | null>(null)   // v1.108.0: { unreadId } — прыжок к первому непрочитанному
   const loadingOlder = useRef(false)
   const hasMore = useRef(true)
@@ -245,10 +244,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const cachedList = getMsgs('ch_' + c.id)
     if (cachedList?.length) {
       const lr0 = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
-      const sp0 = scrollMem.current[c.id] ?? (() => { const v = localStorage.getItem('ponoi_scroll_' + c.id); return v === null ? undefined : Number(v) })()
       // v1.108.0: как в Discord — есть непрочитанное, сразу прыгаем к нему (к разделителю «НОВОЕ»).
+      // v1.111.0: непрочитанного нет — всегда вниз к последним. Восстановление старой позиции
+      // убрано: scrollTop, записанный при другой высоте ленты, кидал в самый верх к старым.
       const firstNew0 = lr0 ? (cachedList as Message[]).find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lr0) : undefined
-      pendingScroll.current = firstNew0 ? { unreadId: firstNew0.id } : (!lr0 || Date.now() - lr0 > 7 * 24 * 3600 * 1000) ? 'bottom' : (sp0 ?? 'bottom')
+      pendingScroll.current = firstNew0 ? { unreadId: firstNew0.id } : 'bottom'
       if (firstNew0) setNewDividerId(firstNew0.id)
       setMessages(cachedList as Message[])
     }
@@ -257,21 +257,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
-    // v1.69.0: возвращаемся туда, где остановился в прошлый раз (позиция теперь
-    // переживает перезапуск через localStorage). Но если в канал не заходил больше
-    // недели — старая позиция бесполезна, кидаем сразу вниз к новым сообщениям.
     const lastRead = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
-    const staleWeek = !lastRead || Date.now() - lastRead > 7 * 24 * 3600 * 1000
-    const savedPos = scrollMem.current[c.id] ?? (() => {
-      const v = localStorage.getItem('ponoi_scroll_' + c.id)
-      return v === null ? undefined : Number(v)
-    })()
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в канал.
     const firstNew = lastRead ? list.find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) : undefined
     // v1.108.0: как в Discord — при входе в канал сразу прыгаем к первому непрочитанному
     // (последнее прочитанное сообщение оказывается прямо над разделителем «НОВОЕ»).
-    // Непрочитанного нет — как раньше: сохранённая позиция, после недели отсутствия — вниз.
-    pendingScroll.current = firstNew ? { unreadId: firstNew.id } : staleWeek ? 'bottom' : (savedPos ?? 'bottom')
+    // v1.111.0: непрочитанного нет — всегда вниз к последним. Восстановление сохранённой
+    // позиции убрано: scrollTop, записанный при другой высоте ленты (после подгрузки
+    // старых сообщений), при новом входе указывал в самый верх, к старым сообщениям.
+    pendingScroll.current = firstNew ? { unreadId: firstNew.id } : 'bottom'
     setMessages(list)
     setNewDividerId(firstNew?.id ?? null)
     localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
@@ -334,11 +328,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
   function onMsgsScroll() {
     const el = msgsBoxRef.current
-    if (el && curChannel) {
-      scrollMem.current[curChannel.id] = el.scrollTop
-      // v1.69.0: позиция чтения канала переживает перезапуск приложения.
-      localStorage.setItem('ponoi_scroll_' + curChannel.id, String(Math.round(el.scrollTop)))
-    }
     if (el && el.scrollTop < 60) loadOlder()
     const nb = nearBottom()
     setAtBottom(nb)
@@ -663,7 +652,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <div className="ch evt clickable" onClick={() => { const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}><Icon name="list" size={16} /> Каналы и роли</div>
           </> : <>
             <div className="ch evt clickable" onClick={() => setShowEvents(true)}><Icon name="calendar" size={16} /> Мероприятия</div>
-            <div className="ch evt clickable" onClick={() => toastOk('Бусты сервера скоро появятся')}><Icon name="boost" size={16} /> Бусты сервера</div>
           </>}
           <div className="ch-toprows-sep" />
           {(() => {
