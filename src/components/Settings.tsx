@@ -12,6 +12,7 @@ import { ProfilePet } from './ProfilePet'
 import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
+import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -242,8 +243,10 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     const f = e.target.files?.[0]; if (!f || !user) return
     setFontBusy(true)
     try {
+      const cov = await fileFontCoverage(f)
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ nickFontUrl: url })
+      if (cov && !cov.cyrillic) toastErr('В этом шрифте нет русских букв — русский ник останется обычным шрифтом')
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setFontBusy(false); e.target.value = '' }
   }
@@ -254,11 +257,27 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     const f = e.target.files?.[0]; if (!f || !user) return
     setMsgFontBusy(true)
     try {
+      const cov = await fileFontCoverage(f)
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ msgFontUrl: url })
+      if (cov && !cov.cyrillic) toastErr('В этом шрифте нет русских букв — русский текст останется обычным шрифтом')
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setMsgFontBusy(false); e.target.value = '' }
   }
+
+  // v1.115.0: предупреждение, если в выбранном своём шрифте нет кириллицы —
+  // иначе русский текст молча рендерится системным шрифтом и кажется, что
+  // «шрифт не работает» (частая ситуация: декоративные шрифты только с латиницей).
+  const [nickCyr, setNickCyr] = useState<boolean | null>(null)
+  const [msgCyr, setMsgCyr] = useState<boolean | null>(null)
+  useEffect(() => {
+    let ok = true
+    if (prof.nickFontUrl) urlFontCoverage(prof.nickFontUrl).then(c => { if (ok) setNickCyr(c ? c.cyrillic : null) })
+    else setNickCyr(null)
+    if (prof.msgFontUrl) urlFontCoverage(prof.msgFontUrl).then(c => { if (ok) setMsgCyr(c ? c.cyrillic : null) })
+    else setMsgCyr(null)
+    return () => { ok = false }
+  }, [prof.nickFontUrl, prof.msgFontUrl])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -515,6 +534,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       <small>{prof.nickFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
+                  {prof.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
                   {prof.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
                 </div>
@@ -526,15 +546,16 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     {FONTS.map(f => (
                       <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.msgFontUrl && (prof.msgFont ?? '') === f.id ? ' on' : '')}
                         onClick={() => patchProf({ msgFont: f.id, msgFontUrl: null })}>
-                        <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>Привет, как дела?</span>
+                        <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>Привет! Hello 123</span>
                         <small>{f.name}</small>
                       </button>
                     ))}
                     <button className={'pqs-font-btn' + (prof.msgFontUrl ? ' on' : '')} onClick={() => msgFontRef.current?.click()}>
-                      <span className="pqs-font-sample" style={prof.msgFontUrl ? { fontFamily: msgFontOf(prof) } : undefined}>{msgFontBusy ? 'Загрузка…' : 'Привет, как дела?'}</span>
+                      <span className="pqs-font-sample" style={prof.msgFontUrl ? { fontFamily: msgFontOf(prof) } : undefined}>{msgFontBusy ? 'Загрузка…' : 'Привет! Hello 123'}</span>
                       <small>{prof.msgFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
+                  {prof.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
                   {prof.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={msgFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickMsgFont} />
                 </div>

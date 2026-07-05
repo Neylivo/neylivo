@@ -3433,3 +3433,6 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .pqs-font-btn.on { border-color:var(--brand); background:color-mix(in srgb, var(--brand) 12%, transparent); }
 .pqs-font-sample { font-size:17px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pqs-font-btn small { font-size:11px; color:var(--mut); font-weight:400; }
+
+/* v1.115.0: предупреждение о шрифте без кириллицы */
+.pqs-font-warn { margin-top:10px; font-size:13px; line-height:1.45; color:#faa61a; }
