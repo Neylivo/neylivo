@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 
-// Красивые модалки подтверждения вместо системного confirm().
-// Использование: if (!await confirmUi('Удалить сообщение?')) return
-// Возвращает Promise<boolean>; Enter/кнопка — подтвердить, Esc/фон — отмена.
+// Красивые модалки подтверждения и ввода вместо системных confirm()/prompt().
+// if (!await confirmUi('Удалить сообщение?')) return
+// const name = await promptUi('Название роли', { placeholder: 'Модератор' }); if (!name) return
 
 interface Ask {
   id: number
   msg: string
   okText: string
   danger: boolean
-  resolve: (v: boolean) => void
+  input?: { placeholder?: string; initial?: string }
+  resolve: (v: any) => void
 }
 
 let seq = 1
@@ -21,11 +22,26 @@ export function confirmUi(msg: string, opts?: { okText?: string; danger?: boolea
   })
 }
 
+// v1.74.0: модалка с полем ввода — замена системному prompt() (как в Discord).
+// Возвращает введённый текст или null (отмена / пустое значение).
+export function promptUi(msg: string, opts?: { okText?: string; placeholder?: string; initial?: string }): Promise<string | null> {
+  return new Promise(resolve => {
+    window.dispatchEvent(new CustomEvent('ponoi-confirm', {
+      detail: {
+        id: seq++, msg, okText: opts?.okText ?? 'Сохранить', danger: false,
+        input: { placeholder: opts?.placeholder, initial: opts?.initial },
+        resolve,
+      },
+    }))
+  })
+}
+
 export function ConfirmHost() {
   const [ask, setAsk] = useState<Ask | null>(null)
+  const [val, setVal] = useState('')
 
   useEffect(() => {
-    const h = (e: Event) => setAsk((e as CustomEvent).detail as Ask)
+    const h = (e: Event) => { const a = (e as CustomEvent).detail as Ask; setVal(a.input?.initial ?? ''); setAsk(a) }
     window.addEventListener('ponoi-confirm', h)
     return () => window.removeEventListener('ponoi-confirm', h)
   }, [])
@@ -39,10 +55,12 @@ export function ConfirmHost() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ask])
+  }, [ask, val])
 
   function done(v: boolean) {
-    ask?.resolve(v)
+    if (!ask) return
+    if (ask.input) ask.resolve(v ? (val.trim() || null) : null)
+    else ask.resolve(v)
     setAsk(null)
   }
 
@@ -51,9 +69,14 @@ export function ConfirmHost() {
     <div className="cfm-overlay" onMouseDown={e => { if (e.target === e.currentTarget) done(false) }}>
       <div className="cfm-box">
         <div className="cfm-msg">{ask.msg}</div>
+        {ask.input && (
+          <input className="cfm-input" autoFocus value={val} placeholder={ask.input.placeholder ?? ''}
+            onChange={e => setVal(e.target.value)} />
+        )}
         <div className="cfm-btns">
           <button className="cfm-cancel" onClick={() => done(false)}>Отмена</button>
-          <button className={ask.danger ? 'cfm-ok danger' : 'cfm-ok'} autoFocus onClick={() => done(true)}>{ask.okText}</button>
+          <button className={ask.danger ? 'cfm-ok danger' : 'cfm-ok'} autoFocus={!ask.input}
+            disabled={!!ask.input && !val.trim()} onClick={() => done(true)}>{ask.okText}</button>
         </div>
       </div>
     </div>

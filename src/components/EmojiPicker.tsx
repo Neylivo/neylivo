@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { EMOJI_GROUPS, loadCustom, addCustom, removeCustom } from '../lib/emoji'
 import { uploadTo } from '../lib/storage'
 import { toastErr } from '../lib/toast'
+import { promptUi } from '../lib/confirm'
 import { Icon } from './icons'
 import { Em } from '../lib/twemoji'
 
@@ -39,7 +40,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   // Создание своего эмодзи из картинки: файл -> хранилище -> общая таблица.
   async function addFromFile(f: File) {
     if (!user) return
-    const name = prompt('Название эмодзи (латиница/цифры), напр. ponoi')?.trim()
+    const name = (await promptUi('Название эмодзи', { placeholder: 'латиница/цифры, напр. ponoi', okText: 'Создать' }))?.trim()
     if (!name) return
     try {
       const url = await uploadTo('attachments', user.id, f)

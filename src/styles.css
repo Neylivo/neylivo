@@ -1018,6 +1018,11 @@ body.no-anim .toast { animation:none; }
 .cfm-box { background:var(--bg2,#2b2d31); border:1px solid rgba(0,0,0,.4); border-radius:12px; padding:22px;
   width:min(400px, calc(100vw - 40px)); box-shadow:0 16px 48px rgba(0,0,0,.55); }
 .cfm-msg { font-size:15px; font-weight:600; line-height:1.45; margin-bottom:18px; }
+/* v1.74.0: поле ввода в модалке (замена системному prompt) */
+.cfm-input { width:100%; box-sizing:border-box; background:var(--bg1,#1e1f22); border:1px solid rgba(0,0,0,.4);
+  border-radius:8px; padding:10px 12px; font-size:14px; color:var(--tx,#dbdee1); margin:-6px 0 18px; outline:none; }
+.cfm-input:focus { border-color:var(--brand,#5865f2); }
+.cfm-ok:disabled { opacity:.5; cursor:not-allowed; }
 .cfm-btns { display:flex; gap:10px; justify-content:flex-end; }
 .cfm-btns button { border:none; border-radius:8px; padding:9px 18px; font-size:14px; font-weight:600; cursor:pointer; }
 .cfm-cancel { background:none; color:var(--tx,#dbdee1); }

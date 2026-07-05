@@ -13,6 +13,7 @@ import { mutualFriends } from '../lib/friends'
 import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
+import { promptUi } from '../lib/confirm'
 import type { Profile, Server } from '../types'
 
 function fmtMs(ms: number): string {
@@ -109,8 +110,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   }
   function saveWish(next: string[]) { setWish(next); localStorage.setItem('ponoi_wish_' + userId, JSON.stringify(next)) }
   function saveFavs(next: string[]) { setFavs(next); localStorage.setItem('ponoi_favs_' + userId, JSON.stringify(next)) }
-  function addFav(single: boolean) {
-    const g = window.prompt(single ? 'Любимая игра:' : 'Добавить игру в любимые:')?.trim()
+  async function addFav(single: boolean) {
+    const g = (await promptUi(single ? 'Любимая игра' : 'Добавить игру в любимые', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim()
     if (!g) return
     saveFavs(single ? [g, ...favs.slice(1)] : [...(favs.length ? favs : ['']), g].filter(Boolean))
   }
@@ -240,7 +241,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   {isMe && <button title="Убрать" onClick={() => saveWish(wish.filter((_, k) => k !== i))}><Icon name="close" size={13} /></button>}
                 </div>
               ))}
-              {isMe && <button className="pc-int-add" onClick={() => { const g = window.prompt('Игра, в которую хочешь поиграть:')?.trim(); if (g) saveWish([...wish, g]) }}><Icon name="plus" size={14} /> Добавить игру</button>}
+              {isMe && <button className="pc-int-add" onClick={async () => { const g = (await promptUi('Игра, в которую хочешь поиграть', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim(); if (g) saveWish([...wish, g]) }}><Icon name="plus" size={14} /> Добавить игру</button>}
             </>}
             {tab === 'servers' && !isMe && (
               srvs === null ? <div className="fp-empty">Загрузка…</div>

@@ -1,5 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { confirmUi } from '../lib/confirm'
+import { confirmUi, promptUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -456,7 +456,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setSrvSettings(next)
   }
   async function renameCategory(cat: any) {
-    const name = prompt('Название категории:', cat.name)?.trim()
+    const name = (await promptUi('Название категории', { initial: cat.name, okText: 'Переименовать' }))?.trim()
     if (!name || name === cat.name) return
     const next = { ...srvSettings, categories: (srvSettings.categories ?? []).map((c: any) => c.id === cat.id ? { ...c, name } : c) }
     const { error } = await updateServer(server.id, { settings: next } as any)
@@ -779,7 +779,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           })}
           {roles.length === 0 && <div className="role-empty">Ролей пока нет</div>}
           <div className="ctx-item" onClick={async () => {
-            const name = prompt('Название роли (например: Модератор)')?.trim(); if (!name) return
+            const name = (await promptUi('Название роли', { placeholder: 'например: Модератор', okText: 'Создать' }))?.trim(); if (!name) return
             const color = ROLE_COLORS[roles.length % ROLE_COLORS.length]
             const { error } = await createRole(server.id, name, color)
             if (error) { toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql в Supabase SQL Editor' : String(error.message ?? error)); return }
