@@ -47,3 +47,14 @@ export async function addTrack(t: NewTrack) {
 export async function removeTrackDb(id: string) {
   return supabase.from('music_tracks').delete().eq('id', id)
 }
+
+/** Дозапись метаданных трека (v1.79.0): если чей-то клиент смог получить
+ *  обложку/автора/play-URL — сохраняем в базу, чтобы видели все и навсегда.
+ *  Ошибки (нет колонок из 22_music_meta.sql, нет прав) молча игнорируем. */
+export async function updateTrackMeta(id: string, m: { author?: string; art?: string | null; play?: string | null }) {
+  try {
+    await supabase.from('music_tracks').update({
+      author: m.author || null, art: m.art ?? null, play_url: m.play ?? null,
+    }).eq('id', id)
+  } catch {}
+}

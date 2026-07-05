@@ -6,7 +6,7 @@ import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
-import { fetchTracks, addTrack, removeTrackDb } from '../lib/music'
+import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { isSoundcloudUrl, scMeta, scResolveTracks, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
@@ -176,13 +176,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // ---- Метаданные для всех ссылок в списке: SoundCloud / YouTube / Audius ----
   useEffect(() => {
     let ok = true
-    const missing = tracks.filter(t => !meta[t.url] && !(t.author || t.art || t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
+    // v1.79.0: тянем метаданные для всего, у чего нет обложки (раньше — только без любых метаданных).
+    const missing = tracks.filter(t => !meta[t.url] && !t.art && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
     ;(async () => {
       for (const t of missing) {
         const m = isSoundcloudUrl(t.url) ? await scMeta(t.url) : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
         if (!ok) return
-        if (m) setMeta(prev => ({ ...prev, [t.url]: m }))
+        if (m) {
+          setMeta(prev => ({ ...prev, [t.url]: m }))
+          // v1.79.0: дозаписываем в базу — обложка/название появятся у всех.
+          if (!t.art) updateTrackMeta(t.id, m)
+        }
       }
     })()
     return () => { ok = false }
@@ -208,7 +213,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     let gotDur = false
     // Если виджет молчит 10 секунд — почти всегда его режет блокировщик рекламы.
     const readyTimer = setTimeout(() => {
-      if (!disposed && !widgetRef.current) toastErr('SoundCloud не отвечает — отключи блокировщик рекламы (w.soundcloud.com) или попробуй другую ссылку')
+      if (!disposed && !widgetRef.current) toastErr('SoundCloud-плеер не отвечает — его режет блокировщик рекламы (w.soundcloud.com) или SoundCloud заблокирован в твоей сети (нужен VPN)')
     }, 10000)
     ;(async () => {
       try {

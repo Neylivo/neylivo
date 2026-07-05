@@ -29,32 +29,40 @@ export function cleanScUrl(u: string): string {
   return s
 }
 
-/** Track metadata via SoundCloud oEmbed (no API key needed). Cached in localStorage. */
+/** Разбор ответа oEmbed (прямого или через noembed) в ScMeta. */
+function parseOembed(j: any): ScMeta | null {
+  if (!j || j.error || !(j.title || j.thumbnail_url)) return null
+  let title = String(j.title || '')
+  const author = String(j.author_name || '')
+  if (author && title.endsWith(' by ' + author)) title = title.slice(0, title.length - (' by ' + author).length)
+  // Каноничный URL трека для виджета — достаём из oEmbed html (api.soundcloud.com/tracks/…).
+  // Критично для коротких ссылок on.soundcloud.com: oEmbed их резолвит, а сам виджет — нет.
+  let play: string | null = null
+  try {
+    const m = String(j.html || '').match(/src="([^"]+)"/)
+    if (m) play = new URL(m[1].replace(/&amp;/g, '&')).searchParams.get('url')
+  } catch {}
+  return { title: title || 'Трек', author, art: j.thumbnail_url ? String(j.thumbnail_url) : null, play }
+}
+
+/** Track metadata via SoundCloud oEmbed (no API key needed). Cached in localStorage.
+ *  v1.79.0: если прямой oEmbed молчит (блокировщик рекламы / SoundCloud заблокирован
+ *  в сети) — пробуем noembed.com: он ходит к SoundCloud со своего сервера. */
 export async function scMeta(url: string): Promise<ScMeta | null> {
   if (cache[url]) return cache[url]
+  let meta: ScMeta | null = null
   try {
     const r = await fetch('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(url))
-    if (!r.ok) return null
-    const j = await r.json()
-    let title = String(j.title || '')
-    const author = String(j.author_name || '')
-    if (author && title.endsWith(' by ' + author)) title = title.slice(0, title.length - (' by ' + author).length)
-    // Каноничный URL трека для виджета — достаём из oEmbed html (api.soundcloud.com/tracks/…).
-    // Критично для коротких ссылок on.soundcloud.com: oEmbed их резолвит, а сам виджет — нет.
-    let play: string | null = null
+    if (r.ok) meta = parseOembed(await r.json())
+  } catch {}
+  if (!meta) {
     try {
-      const m = String(j.html || '').match(/src="([^"]+)"/)
-      if (m) play = new URL(m[1].replace(/&amp;/g, '&')).searchParams.get('url')
+      const r = await fetch('https://noembed.com/embed?url=' + encodeURIComponent(url))
+      if (r.ok) meta = parseOembed(await r.json())
     } catch {}
-    const meta: ScMeta = {
-      title: title || 'Трек',
-      author,
-      art: j.thumbnail_url ? String(j.thumbnail_url) : null,
-      play,
-    }
-    cache[url] = meta; saveCache()
-    return meta
-  } catch { return null }
+  }
+  if (meta) { cache[url] = meta; saveCache() }
+  return meta
 }
 
 // ---- Widget API (w.soundcloud.com/player/api.js) ----
