@@ -221,7 +221,8 @@ ipcMain.on('ponoi-game-toast', (_e, p) => showGameToast(p))
 // панель: «Использование Ponoi из оверлея во время игры», кнопка «Открыть Ponoi» и список
 // «Пригласите друзей поиграть» (аватар, ник, наигранное время в этой игре, кнопка-приглашение).
 // Окно кликабельное (не click-through), но не забирает фокус у игры (focusable: false).
-// Само исчезает через 15 секунд. Поверх эксклюзивного полноэкранного режима Windows
+// v1.101.0: сама исчезает через 6 секунд (наведение мыши ставит таймер на паузу, чтобы
+// успеть нажать), время играющих друзей тикает в реальном времени. Поверх эксклюзивного полноэкранного режима Windows
 // сторонние окна не рисуются — это ограничение самой ОС.
 let overlayWin = null
 let overlayTimer = null
@@ -233,7 +234,7 @@ function showGameOverlay(p) {
     const game = esc(gameRaw)
     const okUrl = (u) => typeof u === 'string' && /^https:\/\//.test(u)
     const cover = okUrl(p && p.cover) ? p.cover : null
-    const friends = (Array.isArray(p && p.friends) ? p.friends : []).slice(0, 4)
+    const friends = (Array.isArray(p && p.friends) ? p.friends : []).slice(0, 5)
     const fmt = (ms) => {
       const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60
       const p2 = (n) => String(n).padStart(2, '0')
@@ -243,7 +244,7 @@ function showGameOverlay(p) {
     const rows = friends.map((f) => {
       const nm = String((f && f.name) || '?')
       const av = okUrl(f && f.avatar) ? '<img class="fav" src="' + esc(f.avatar) + '">' : '<span class="fav ph">' + esc(nm[0].toUpperCase()) + '</span>'
-      const sub = (f && f.ms > 0) ? '<span class="ftime">&#127918; ' + fmt(f.ms) + '</span>'
+      const sub = (f && f.ms > 0) ? '<span class="ftime" data-ms="' + Math.floor(f.ms) + '"' + ((f && f.inGame) ? ' data-live="1"' : '') + '>&#127918; ' + fmt(f.ms) + '</span>'
         : ((f && f.online) ? '<span class="fon">В сети</span>' : '<span class="foff">Не в сети</span>')
       return '<div class="fr"><span class="favw">' + av + ((f && f.online) ? '<i class="dot"></i>' : '') + '</span>' +
         '<span class="ftx"><b>' + esc(nm) + '</b>' + sub + '</span>' +
@@ -273,17 +274,27 @@ function showGameOverlay(p) {
       '.fon{color:#23a55a;font-size:12px}.foff{color:#80848e;font-size:12px}' +
       '.inv{flex:none;width:38px;height:34px;border-radius:6px;border:none;background:#2b2d31;color:#dbdee1;cursor:pointer;display:flex;align-items:center;justify-content:center}' +
       '.inv:hover{background:#35373c;color:#fff}' +
+      '.fr:hover{background:rgba(255,255,255,.045)}' +
+      '.ov-x{flex:none;width:22px;height:22px;margin-left:4px;border:none;border-radius:4px;background:transparent;color:#80848e;cursor:pointer;font-size:12px;line-height:1;padding:0}' +
+      '.ov-x:hover{color:#fff;background:rgba(255,255,255,.08)}' +
       '.sent{flex:none;width:38px;height:34px;display:flex;align-items:center;justify-content:center;color:#23a55a;font-weight:800;font-size:17px}' +
       '</style><div class="panel">' +
       '<div class="head">' + gic + '<div class="ht"><div class="h1">Использование Ponoi из оверлея во время игры</div>' +
-      '<div class="h2">Ponoi показывает уведомления поверх игры</div></div></div>' +
+      '<div class="h2">Ponoi показывает уведомления поверх игры</div></div><button class="ov-x" id="ovclose" title="Закрыть">&#10005;</button></div>' +
       '<button class="golive" id="openapp">Открыть Ponoi</button>' +
       (friends.length ? '<div class="sect">Пригласите друзей поиграть</div>' + rows : '') +
       '<div style="height:8px"></div></div>' +
       '<scr' + 'ipt>var GAME=' + JSON.stringify(gameRaw) + ';' +
       'document.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;' +
       'if(b.classList.contains("inv")){window.ponoiOverlay.invite(b.dataset.id,GAME);var s=document.createElement("span");s.className="sent";s.innerHTML="&#10003;";b.replaceWith(s);}' +
-      'if(b.id==="openapp"){window.ponoiOverlay.openApp();}});' +
+      'if(b.id==="openapp"){window.ponoiOverlay.openApp();}' +
+      'if(b.id==="ovclose"){window.ponoiOverlay.close();}});' +
+      'function FMT(ms){var s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60,p=function(n){return String(n).padStart(2,"0")};return h>0?h+":"+p(m)+":"+p(x):m+":"+p(x)}' +
+      'setInterval(function(){var els=document.querySelectorAll(".ftime[data-live]");for(var i=0;i<els.length;i++){var el=els[i],ms=(Number(el.dataset.ms)||0)+1000;el.dataset.ms=String(ms);el.innerHTML="&#127918; "+FMT(ms)}},1000);' +
+      'var over=false,left=6000;' +
+      'document.documentElement.addEventListener("mouseenter",function(){over=true});' +
+      'document.documentElement.addEventListener("mouseleave",function(){over=false});' +
+      'var tick=setInterval(function(){if(over)return;left-=200;if(left<=0){clearInterval(tick);window.ponoiOverlay.close();}},200);' +
       '</scr' + 'ipt>'
     const { screen } = require('electron')
     const wa = screen.getPrimaryDisplay().workArea
@@ -300,7 +311,7 @@ function showGameOverlay(p) {
     overlayWin.webContents.once('did-finish-load', () => { try { overlayWin.showInactive() } catch {} })
     overlayWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
     clearTimeout(overlayTimer)
-    overlayTimer = setTimeout(() => { try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {} }, 15_000)
+    overlayTimer = setTimeout(() => { try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {} }, 60_000)   // страховка; обычно панель закрывает себя сама через 6 сек
   } catch {}
 }
 ipcMain.on('ponoi-game-overlay', (_e, p) => showGameOverlay(p))

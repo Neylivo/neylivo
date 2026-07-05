@@ -149,7 +149,8 @@ export function PresenceProvider({ username, avatarUrl, children }:
 
   // v1.99.0: стартовый оверлей при входе в игру — «Пригласите друзей поиграть» (как у Discord).
   // Собираем друзей + их наигранное время в этой игре (за 90 дней) и отдаём main-процессу,
-  // который рисует панель поверх игры. Сортировка: кто уже в этой игре > кто в сети > по времени.
+  // который рисует панель поверх игры. v1.101.0: показываем до 5 друзей, отсортированных
+  // по свежести общения в ЛС (с кем переписывался позже всех — тот первый).
   async function overlayForGame(gname: string, cover: string | null) {
     const d = (window as any).ponoiDesktop
     const u = userRef.current
@@ -160,11 +161,26 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const ids = [...new Set(((fr ?? []) as any[]).map(r => (r.from_user === u.id ? r.to_user : r.from_user)))].slice(0, 50)
       if (!ids.length) return
       const from90 = new Date(Date.now() - 90 * 86400000).toISOString()
-      const [profsQ, sessQ] = await Promise.all([
+      const [profsQ, sessQ, thrQ] = await Promise.all([
         supabase.from('profiles').select('*').in('id', ids),
         supabase.from('activity_sessions').select('user_id, started_at, ended_at')
           .eq('name', gname).in('user_id', ids).gte('started_at', from90).limit(1000),
+        supabase.from('dm_threads').select('id, user_a, user_b')
+          .or('user_a.eq.' + u.id + ',user_b.eq.' + u.id),
       ])
+      // Свежесть общения: время последнего сообщения в ЛС с каждым другом.
+      const thrOf: Record<string, string> = {}
+      for (const t of ((thrQ.data ?? []) as any[])) thrOf[t.id] = t.user_a === u.id ? t.user_b : t.user_a
+      const lastComm: Record<string, number> = {}
+      const tids = Object.keys(thrOf)
+      if (tids.length) {
+        const { data: lm } = await supabase.from('dm_messages').select('thread_id, created_at')
+          .in('thread_id', tids).order('created_at', { ascending: false }).limit(400)
+        for (const mm of ((lm ?? []) as any[])) {
+          const fid = thrOf[mm.thread_id]
+          if (fid && !(fid in lastComm)) lastComm[fid] = new Date(mm.created_at).getTime()
+        }
+      }
       const total: Record<string, number> = {}
       for (const r of ((sessQ.data ?? []) as any[])) {
         const s = new Date(r.started_at).getTime()
@@ -177,10 +193,10 @@ export function PresenceProvider({ username, avatarUrl, children }:
         const st = onlineRef.current[id]
         return { id, name: (p.display_name || p.username) as string,
           avatar: (st?.avatar_url ?? p.avatar_url ?? null) as string | null,
-          online: !!st, inGame: st?.game?.name === gname, ms: total[id] ?? 0 }
-      }).filter(Boolean) as { id: string; name: string; avatar: string | null; online: boolean; inGame: boolean; ms: number }[]
-      list.sort((a, b) => (Number(b.inGame) - Number(a.inGame)) || (Number(b.online) - Number(a.online)) || (b.ms - a.ms))
-      d.gameOverlay({ game: gname, cover, friends: list.slice(0, 4) })
+          online: !!st, inGame: st?.game?.name === gname, ms: total[id] ?? 0, last: lastComm[id] ?? 0 }
+      }).filter(Boolean) as { id: string; name: string; avatar: string | null; online: boolean; inGame: boolean; ms: number; last: number }[]
+      list.sort((a, b) => (b.last - a.last) || (Number(b.inGame) - Number(a.inGame)) || (Number(b.online) - Number(a.online)) || (b.ms - a.ms))
+      d.gameOverlay({ game: gname, cover, friends: list.slice(0, 5) })
     } catch {}
   }
 

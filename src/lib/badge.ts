@@ -34,6 +34,16 @@ export function clearBadgeKey(key: string) {
   apply()
 }
 
+/** v1.101.0: входящий звонок в ЛС — горит на кружке, пока звонит; принял/отклонил/пропустил — гаснет. */
+export function setCallBadge(threadId: string, on: boolean) {
+  const key = 'call:' + threadId
+  if (on) {
+    if (counts[key]) return
+    counts[key] = 1
+    apply()
+  } else clearBadgeKey(key)
+}
+
 function total(): number {
   let n = 0
   for (const k of Object.keys(counts)) n += counts[k]
