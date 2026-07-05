@@ -3197,3 +3197,45 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { transform:
 .mpg-eq i:nth-child(2) { animation-delay:.18s; }
 .mpg-eq i:nth-child(3) { animation-delay:.36s; }
 @keyframes eq-bounce { 0%,100% { transform:scaleY(.35) } 50% { transform:scaleY(1) } }
+
+
+/* ===== v1.86.0: полировка маленьких деталей (как в Discord) ===== */
+/* Выделение текста — фирменный синий, как в Discord */
+::selection { background:rgba(88,101,242,.5); color:#fff; }
+/* Курсор ввода — фирменного цвета */
+input, textarea { caret-color:var(--brand,#5865f2); }
+/* Скроллбар тоньше и мягче */
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-thumb { background:rgba(0,0,0,.45); border-radius:8px; border:2px solid transparent; background-clip:padding-box; }
+::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,.7); background-clip:padding-box; }
+/* Аккуратный фокус с клавиатуры (Tab), без рамок при кликах мышью */
+:focus-visible { outline:2px solid var(--brand,#5865f2); outline-offset:2px; border-radius:4px; }
+/* Без серой вспышки при тапах на телефоне */
+* { -webkit-tap-highlight-color:transparent; }
+/* Реакции: приподнимаются при наведении, «прожимаются» при клике */
+.rx { transition:background .12s ease, border-color .12s ease, transform .12s ease; }
+.rx:hover { transform:translateY(-1px); }
+.rx:active { transform:scale(.92); }
+/* Тосты плавно выезжают снизу с упругим доводом */
+.toast { animation:toast-in .3s cubic-bezier(.34,1.45,.64,1) both; }
+@keyframes toast-in { from { opacity:0; transform:translateY(14px) scale(.96) } to { opacity:1; transform:none } }
+/* Контекстное меню появляется чуть живее */
+.ctx-menu { animation:menu-in .13s ease-out both; transform-origin:top left; }
+@keyframes menu-in { from { opacity:0; transform:scale(.94) translateY(-3px) } to { opacity:1; transform:none } }
+/* Быстрые реакции в контекстном меню подпрыгивают при наведении */
+.ctx-quick button { transition:transform .13s cubic-bezier(.34,1.56,.64,1), background .12s ease; }
+.ctx-quick button:hover { transform:scale(1.22) translateY(-1px); }
+/* Модалки открываются с мягким «всплытием» */
+.modal { animation:modal-in .2s cubic-bezier(.3,1.25,.6,1) both; }
+@keyframes modal-in { from { opacity:0; transform:scale(.95) translateY(10px) } to { opacity:1; transform:none } }
+/* Крестик модалки поворачивается при наведении */
+.modal-x { transition:transform .18s ease, background .15s ease, color .15s ease; }
+.modal-x:hover { transform:rotate(90deg); }
+/* Эмодзи в пикере слегка увеличиваются под курсором */
+.ep2-cell { transition:transform .12s cubic-bezier(.34,1.56,.64,1), background .12s ease; }
+.ep2-cell:hover { transform:scale(1.14); }
+/* Кнопки меню «плюса» — мягкое смещение содержимого при наведении */
+.plus-menu button { transition:background .12s ease, color .12s ease, padding-left .12s ease; }
+.plus-menu button:hover { padding-left:16px; }
+/* Кнопка отправки и «Редактировать профиль» прожимаются */
+.voice-send:active, .mini-editbtn:active, .mpg-add:active, .gp2-url-btns button:active { transform:scale(.96); }
