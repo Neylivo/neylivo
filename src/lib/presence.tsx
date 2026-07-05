@@ -56,8 +56,21 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const state = ch.presenceState() as Record<string, any[]>
       const map: Record<string, PresenceState> = {}
       for (const key of Object.keys(state)) {
-        const meta = state[key][0]
-        map[key] = { username: meta.username, status: meta.status, avatar_url: meta.avatar_url, activity: meta.activity ?? null, listening: meta.listening ?? null, game: meta.game ?? null, device: meta.device ?? 'desktop' }
+        // v1.67.0: у человека может быть несколько сессий сразу (десктоп + браузер +
+        // телефон). Раньше брали первую попавшуюся — и игра с десктопа терялась для
+        // всех, если первой лежала сессия браузера. Теперь склеиваем лучшее из всех:
+        // игра/музыка/активность берутся из той сессии, где они есть.
+        const metas = state[key]
+        const base = metas[0]
+        map[key] = {
+          username: base.username,
+          status: metas.find(m => m.status === 'online')?.status ?? base.status,
+          avatar_url: metas.find(m => m.avatar_url)?.avatar_url ?? null,
+          activity: metas.find(m => m.activity)?.activity ?? null,
+          listening: metas.find(m => m.listening)?.listening ?? null,
+          game: metas.find(m => m.game)?.game ?? null,
+          device: metas.some(m => (m.device ?? 'desktop') === 'desktop') ? 'desktop' : 'mobile',
+        }
       }
       setOnline(map)
     })
