@@ -3260,3 +3260,13 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .ep2-selcell { position:relative; outline:2px solid transparent; outline-offset:-2px; }
 .ep2-selcell.sel { outline-color:var(--brand,#5865f2); background:rgba(88,101,242,.18); }
 .ep2-selmark { position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:50%; background:var(--brand,#5865f2); color:#fff; display:flex; align-items:center; justify-content:center; }
+
+
+/* ==== v1.89.0: гифки по ссылке + режим игры (Roblox) ==== */
+/* Заглушка, пока страница Tenor/Giphy резолвится в прямой URL гифки */
+@keyframes gifPh { from { opacity: .45 } to { opacity: .9 } }
+.gif-embed-ph { width: 220px; height: 150px; margin-top: 4px; border-radius: 8px; background: rgba(255,255,255,.07); animation: gifPh .9s ease-in-out infinite alternate; }
+/* Режим игры (плейс Roblox) — серой строкой под названием, как state в Discord */
+.mpg-mode { font-size: 12px; color: #b5bac1; margin-top: 1px; max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-mode { font-size: 13px; color: #b5bac1; margin-top: 1px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mag-mode { font-weight: 400; opacity: .85; }

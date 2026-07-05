@@ -132,6 +132,72 @@ async function findCover(name) {
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
+// ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
+// Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там
+// появляется строка «Joining game '<guid>' place <id> …» — из неё берём placeId,
+// а имя плейса узнаём у публичного API Roblox (place -> universe -> название).
+const placeNameCache = new Map()   // placeId -> name (кэшируем только удачные ответы)
+async function robloxPlaceName(placeId) {
+  if (placeNameCache.has(placeId)) return placeNameCache.get(placeId)
+  let name = null
+  const u = await httpJson('https://apis.roblox.com/universes/v1/places/' + placeId + '/universe')
+  if (u && u.universeId) {
+    const g = await httpJson('https://games.roblox.com/v1/games?universeIds=' + u.universeId)
+    name = (g && g.data && g.data[0] && g.data[0].name) || null
+  }
+  if (name) placeNameCache.set(placeId, name)
+  return name
+}
+// Свежайший лог-файл Roblox и последнее событие в нём: если после последнего
+// входа в плейс не было выхода — игрок сейчас в этом плейсе.
+function robloxCurrentPlaceId() {
+  try {
+    const fsr = require('fs')
+    const dir = path.join(process.env.LOCALAPPDATA || '', 'Roblox', 'logs')
+    let newest = null, newestAt = 0
+    for (const f of fsr.readdirSync(dir)) {
+      if (!f.endsWith('.log')) continue
+      const at = fsr.statSync(path.join(dir, f)).mtimeMs
+      if (at > newestAt) { newestAt = at; newest = f }
+    }
+    if (!newest) return null
+    const full = path.join(dir, newest)
+    const size = fsr.statSync(full).size
+    const len = Math.min(size, 512 * 1024)   // хвоста в полмегабайта хватает с запасом
+    const buf = Buffer.alloc(len)
+    const fd = fsr.openSync(full, 'r')
+    fsr.readSync(fd, buf, 0, len, size - len)
+    fsr.closeSync(fd)
+    const txt = buf.toString('utf8')
+    let joinAt = -1, placeId = null
+    const re = /[Jj]oining game '[^']*' place (\d+)/g
+    let m
+    while ((m = re.exec(txt))) { joinAt = m.index; placeId = m[1] }
+    const leaveAt = Math.max(txt.lastIndexOf('leaveUGCGameInternal'), txt.lastIndexOf('Client:Disconnect'))
+    if (placeId == null || leaveAt > joinAt) return null
+    return placeId
+  } catch { return null }
+}
+let modeBusy = false
+let lastPlaceId = null
+async function scanRobloxMode() {
+  if (process.platform !== 'win32' || modeBusy) return
+  if (!curGame || curGame.name !== 'Roblox') { lastPlaceId = null; return }
+  modeBusy = true
+  try {
+    const pid = robloxCurrentPlaceId()
+    if (pid === lastPlaceId) return
+    lastPlaceId = pid
+    const mode = pid ? await robloxPlaceName(pid) : null
+    if (pid && !mode) lastPlaceId = null   // имя не узнали (сеть/API) — попробуем ещё раз
+    if (curGame && curGame.name === 'Roblox' && (curGame.mode ?? null) !== (mode ?? null)) {
+      curGame = { ...curGame, mode }
+      broadcastGame()
+    }
+  } finally { modeBusy = false }
+}
+
+
 // v1.56.0: управление окном из нашего тайтлбара (нативные кнопки убраны).
 ipcMain.on('win-minimize', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.minimize() } catch {} })
 ipcMain.on('win-toggle-max', (e) => { try { const w = BrowserWindow.fromWebContents(e.sender); if (w) w.isMaximized() ? w.unmaximize() : w.maximize() } catch {} })
@@ -474,6 +540,8 @@ app.whenReady().then(() => {
   // Игровая активность: первый скан сразу, дальше раз в 4 секунды (как в Discord).
   scanGames()
   setInterval(scanGames, 4_000)
+  // v1.89.0: режим Roblox (плейс) — проверяем лог раз в 10 секунд.
+  setInterval(scanRobloxMode, 10_000)
 
   // v1.37.1: после обновления версии один раз чистим HTTP- и код-кэш старой
   // версии, чтобы ничего не лагало. Логин и настройки (localStorage) не трогаем.

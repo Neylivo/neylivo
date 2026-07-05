@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
+import { resolveGif } from '../lib/gifUrl'
 
 // GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
 // (общая коллекция + избранное) и «Эмодзи» (переключает на пикер эмодзи).
@@ -47,7 +48,19 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
   const [mine, setMine] = useState<Gif[]>([])
   const [favs, setFavs] = useState<string[]>(loadFavs)
   const [urlIn, setUrlIn] = useState('')
+  const [urlGif, setUrlGif] = useState<string | null>(null)
   const debRef = useRef(0)
+
+  // v1.89.0: в «По ссылке» можно вставить не только прямой .gif, но и страницу
+  // Tenor/Giphy (например, «Копировать ссылку» на гифке в Discord) — резолвим её.
+  useEffect(() => {
+    const u = urlIn.trim()
+    setUrlGif(null)
+    if (!u) return
+    let on = true
+    resolveGif(u).then(r => { if (on && r) setUrlGif(r) })
+    return () => { on = false }
+  }, [urlIn])
 
   function toggleFav(url: string) {
     setFavs(f => {
@@ -114,11 +127,11 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
         </div>
       </>}
       {tab === 'url' && <div className="gp2-url">
-        <input placeholder="Вставь ссылку на .gif" value={urlIn} onChange={e => setUrlIn(e.target.value)} autoFocus />
-        {urlIn.trim() && <img className="gp2-preview" src={urlIn.trim()} alt="предпросмотр" />}
+        <input placeholder="Вставь ссылку на гифку — хоть из Discord" value={urlIn} onChange={e => setUrlIn(e.target.value)} autoFocus />
+        {urlIn.trim() && <img className="gp2-preview" src={urlGif ?? urlIn.trim()} alt="предпросмотр" />}
         <div className="gp2-url-btns">
-          <button disabled={!urlIn.trim()} onClick={() => { const u = urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
-          <button disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
+          <button disabled={!urlIn.trim()} onClick={() => { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
+          <button disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
         </div>
       </div>}
       {tab === 'mine' && <div className="emoji-scroll">

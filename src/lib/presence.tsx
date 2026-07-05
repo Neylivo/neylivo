@@ -21,7 +21,7 @@ export interface Activity { text: string; since: number }
 export interface Listening { title: string; author?: string; source?: string; pos: number; dur?: number; at: number }
 // Авто-активность «Играет в …»: десктоп присылает только старт/стоп ({ name, since }),
 // тикающий таймер каждый клиент досчитывает сам из разницы часов.
-export interface Game { name: string; since: number; cover?: string | null }
+export interface Game { name: string; since: number; cover?: string | null; mode?: string | null }   // mode — режим/плейс (v1.89.0, пока только Roblox)
 interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; device?: 'mobile' | 'desktop' }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
@@ -111,19 +111,24 @@ export function PresenceProvider({ username, avatarUrl, children }:
     const d = (window as any).ponoiDesktop
     if (!d?.onGame) return
     d.onGame(async (g: Game | null) => {
-      if ((g?.name ?? null) === (gameRef.current?.name ?? null)) return
-      // История активностей (миграция 14): закрываем прошлую сессию, начинаем новую.
-      if (sessRef.current) { endSession(sessRef.current); sessRef.current = null }
-      if (g && user) startSession(user.id, g.name, g.since).then(id => { sessRef.current = id })
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
         chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, device: DEVICE })
       }
+      if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
+        // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,
+        // не перезапуская игровую сессию и не трогая обложку.
+        if (g && gameRef.current && (g.mode ?? null) !== (gameRef.current.mode ?? null)) pub({ ...gameRef.current, mode: g.mode ?? null })
+        return
+      }
+      // История активностей (миграция 14): закрываем прошлую сессию, начинаем новую.
+      if (sessRef.current) { endSession(sessRef.current); sessRef.current = null }
+      if (g && user) startSession(user.id, g.name, g.since).then(id => { sessRef.current = id })
       if (!g) { pub(null); return }
       pub({ ...g, cover: null })                 // мгновенно: у друзей серый геймпад-заглушка
       const cover = await resolveCover(g.name)   // кэш в базе -> фоновый поиск Steam -> кэш
-      if (cover && gameRef.current?.name === g.name) pub({ ...g, cover })   // hot swap на обложку
+      if (cover && gameRef.current?.name === g.name) pub({ ...gameRef.current!, cover })   // hot swap на обложку (mode сохраняем)
     })
     // Приложение закрывают во время игры — честно фиксируем конец сессии.
     window.addEventListener('beforeunload', () => { if (sessRef.current) endSession(sessRef.current) })
@@ -142,7 +147,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   function activityOf(userId: string): Activity | null {
     // Приоритет как в Discord: игра > музыка > ручная активность.
     const g = userId === user?.id ? myGame : online[userId]?.game
-    if (g) return { text: '🎮 Играет в ' + g.name, since: g.since }
+    if (g) return { text: '🎮 Играет в ' + g.name + (g.mode ? ': ' + g.mode : ''), since: g.since }
     const l = userId === user?.id ? myListening : online[userId]?.listening
     if (l) {
       const text = '🎵 Слушает: ' + l.title + (l.author ? ' — ' + l.author : '') + (l.source ? ' · ' + l.source : '')

@@ -185,6 +185,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 : <span className="mpg-cover mpg-ph"><Icon name="gamepad" size={26} /></span>}
               <div className="mpg-info">
                 <div className="mpg-nm">{game.name}</div>
+                {game.mode && <div className="mpg-mode">{game.mode}</div>}{/* v1.89.0: режим (плейс Roblox) */}
                 <div className="mpg-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={game.since} /></div>
               </div>
             </div>

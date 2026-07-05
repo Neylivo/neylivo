@@ -9,6 +9,7 @@ import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
 import { copyMedia, saveMedia } from '../lib/copyMedia'
+import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
@@ -59,9 +60,32 @@ function firstImageUrl(text?: string | null): string | null {
   return m ? m[0] : null
 }
 
+// v1.89.0: гифка по ссылке из любого места (в т.ч. страницы Tenor/Giphy, которые даёт
+// «Копировать ссылку» в Discord) — резолвим в прямой URL и показываем как вложение.
+function GifEmbed({ url, meta }: { url: string; meta?: import('./Lightbox').LightboxMeta }) {
+  const [src, setSrc] = useState<string | null | undefined>(cachedGif(url))
+  useEffect(() => {
+    let on = true
+    resolveGif(url).then(u => { if (on) setSrc(u) })
+    return () => { on = false }
+  }, [url])
+  if (src === undefined) return <div className="gif-embed-ph" />
+  if (src === null) return null   // резолв не удался — текст-ссылка остаётся видимой
+  return <Attachment url={src} type="image" meta={meta} />
+}
+
+// Сообщение состоит только из ссылки на гифку — прячем текст-ссылку, оставляем саму гифку (как в Discord).
+function isOnlyGifLink(m: UiMessage): boolean {
+  if (m.attach_url || !m.content) return false
+  const l = findGifLink(m.content)
+  return !!l && m.content.trim() === l && cachedGif(l) !== null
+}
+
 // Картинка сообщения (вложение-image или ссылка на картинку в тексте) — для пунктов меню с изображениями.
 function msgImage(m: UiMessage): string | null {
   if (m.attach_url && m.attach_type === 'image') return m.attach_url.replace('#spoiler', '')
+  const l = findGifLink(m.content)
+  if (l) return cachedGif(l) ?? firstImageUrl(m.content)
   return firstImageUrl(m.content)
 }
 
@@ -280,9 +304,9 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       {fwd.text && <div className="msg-txt">{renderContent(fwd.text)}</div>}
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
-                  : m.content && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
-                {!m.attach_url && firstImageUrl(m.content) && <Attachment url={firstImageUrl(m.content)!} type="image" meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
+                {!m.attach_url && findGifLink(m.content) && <GifEmbed url={findGifLink(m.content)!} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
                 <span className="tg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {

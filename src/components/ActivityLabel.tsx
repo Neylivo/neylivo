@@ -49,7 +49,7 @@ export function ClockElapsed({ since }: { since: number }) {
 export function GameLine({ game }: { game: Game }) {
   return <small className="member-act game">
     {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name="gamepad" size={13} /></span>}
-    <span className="mag-tx">Играет в <b>{game.name}</b></span>
+    <span className="mag-tx">Играет в <b>{game.name}</b>{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </small>
 }
 
@@ -57,6 +57,6 @@ export function GameLine({ game }: { game: Game }) {
 export function GameInline({ game }: { game: Game }) {
   return <span className="game-inline">
     {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name="gamepad" size={14} /></span>}
-    <span>Играет в <b>{game.name}</b></span>
+    <span>Играет в <b>{game.name}</b>{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </span>
 }

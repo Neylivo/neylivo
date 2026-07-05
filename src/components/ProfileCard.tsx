@@ -201,6 +201,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                       : <span className="act-cover act-cover-lg act-cover-ph"><Icon name="gamepad" size={30} /></span>}
                     <div className="act-info">
                       <div className="act-name act-name-lg">{curGame.name}</div>
+                      {curGame.mode && <div className="act-mode">{curGame.mode}</div>}{/* v1.89.0: режим (плейс Roblox) */}
                       <div className="act-meta">
                         <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={curGame.since} /></span>
                         {(recent?.find(r => r.name === curGame.name)?.streak ?? 1) > 1 && <span><Icon name="zap" size={13} /> x{recent!.find(r => r.name === curGame.name)!.streak} д. подряд</span>}
