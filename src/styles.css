@@ -129,7 +129,7 @@ body {
 .srv-invite { background:none; border:none; color:var(--mut); cursor:pointer; font-size:15px; transition:color .15s ease; }
 .srv-invite:hover { color:#fff; }
 .members { width:200px; background:var(--bg2); padding:12px; overflow-y:auto; }
-.member { display:flex; align-items:center; gap:8px; padding:6px; border-radius:6px; }
+.member { display:flex; align-items:center; gap:12px; padding:4px 8px; border-radius:4px; }
 .member:hover { background:rgba(255,255,255,.04); }
 
 /* attachments */
@@ -234,9 +234,9 @@ body {
 .status-opt:hover { background:rgba(255,255,255,.06); }
 .status-opt .status-dot { width:10px; height:10px; }
 
-.member { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; }
+.member { display:flex; align-items:center; gap:12px; padding:4px 8px; border-radius:4px; cursor:pointer; }
 .member:hover { background:rgba(255,255,255,.04); }
-.member .me-nm { font-size:14px; }
+.member .me-nm { font-size:16px; }
 
 .mini-overlay { position:fixed; inset:0; z-index:70; }
 .mini { position:fixed; z-index:71; width:240px; background:var(--bg3); border-radius:12px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s ease both; }
@@ -1427,7 +1427,7 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .ch.on { font-weight:600; }
 /* Список участников: ширина и ритм Discord */
 .members { width:240px; padding:12px 8px; }
-.member { padding:5px 8px; cursor:pointer; }
+.member { padding:4px 8px; cursor:pointer; }
 /* Сообщения: мягче ховер, ровнее вертикальный ритм */
 .msg { padding:4px 12px; }
 .msg:hover { background:rgba(0,0,0,.08); }
@@ -1472,7 +1472,7 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .role-empty { padding:6px 10px; color:var(--mut); font-size:13px; }
 .mini-rolechip { margin-top:8px; display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:12px; background:rgba(255,255,255,.06); font-size:12px; font-weight:600; }
 .mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:13px; color:#dbdee1; }
-.member-act { display:block; font-weight:400; font-size:11px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.member-act { display:block; font-weight:400; font-size:12px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .status-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }
 
 /* Скрытый YouTube-плеер (музыка по ссылке YouTube) */
@@ -2276,7 +2276,7 @@ body.no-anim .member-typing i { animation:none; }
 .member-act.game { display:flex; align-items:center; gap:5px; }
 .member-act.game .mag-tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mag-cover { width:15px; height:15px; border-radius:4px; object-fit:cover; flex:none; animation:cover-in .3s ease; }
-.mag-ico { display:inline-flex; color:var(--mut); flex:none; }
+.mag-ico { display:inline-flex; color:#23a55a; flex:none; }
 .game-inline { display:inline-flex; align-items:center; gap:5px; vertical-align:middle; max-width:100%; }
 .game-inline .mag-cover { width:16px; height:16px; }
 

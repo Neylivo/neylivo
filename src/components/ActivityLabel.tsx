@@ -48,8 +48,8 @@ export function ClockElapsed({ since }: { since: number }) {
 // «Играет в …» с мини-обложкой — строка под ником (участники сервера, сайдбар ЛС).
 export function GameLine({ game }: { game: Game }) {
   return <small className="member-act game">
-    {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name="gamepad" size={13} /></span>}
-    <span className="mag-tx">Играет в <b>{game.name}</b>{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
+    <span className="mag-ico"><Icon name="gamepad" size={14} /></span>
+    <span className="mag-tx">{game.name}{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </small>
 }
 
