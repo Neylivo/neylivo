@@ -3026,3 +3026,35 @@ body.no-anim .member-typing i { animation:none; }
 button { cursor:pointer; -webkit-tap-highlight-color:transparent; }
 button:disabled { cursor:not-allowed; }
 button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2px; }
+
+/* ===== v1.68.0: панель «Пригласить друзей» + карточка приглашения — 1-в-1 как в Discord ===== */
+.inv-modal { width:440px; }
+.inv-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:26px; }
+.inv-sub { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--mut); margin-top:4px; }
+.inv-sub b { font-weight:600; color:var(--txt); }
+.inv-search { margin-top:12px; position:relative; }
+.inv-search input { width:100%; box-sizing:border-box; background:var(--bg3); border:none; border-radius:8px; padding:9px 36px 9px 12px; font-size:14px; color:var(--txt); outline:none; }
+.inv-sic { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--mut); display:flex; }
+.inv-list { max-height:280px; overflow-y:auto; margin-top:8px; display:flex; flex-direction:column; gap:2px; }
+.inv-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:8px; }
+.inv-row:hover { background:rgba(255,255,255,.05); }
+.inv-names { flex:1; min-width:0; display:flex; align-items:baseline; gap:8px; }
+.inv-nm { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-hd { font-size:12.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-btn { flex:none; padding:5px 16px; font-size:13.5px; border-radius:6px; border:1px solid #23a55a; background:transparent; color:var(--txt); transition:background .12s ease; }
+.inv-btn:hover:not(:disabled) { background:#23a55a; color:#fff; }
+.inv-btn.sent, .inv-btn:disabled { border-color:transparent; color:var(--mut); background:transparent; cursor:default; }
+.inv-foot { margin-top:10px; padding-top:12px; border-top:1px solid rgba(255,255,255,.07); }
+.inv-foot-lb { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.3px; color:var(--mut); margin-bottom:8px; }
+.inv-linkrow { display:flex; align-items:center; gap:6px; background:var(--bg3); border-radius:8px; padding:4px; }
+.inv-linkrow input { flex:1; min-width:0; background:transparent; border:none; color:var(--txt); font-size:13.5px; padding:6px 8px; outline:none; }
+.inv-copy { flex:none; background:var(--brand); color:#fff; border-radius:6px; padding:8px 18px; font-size:13.5px; font-weight:600; transition:background .12s ease; }
+.inv-copy.ok { background:#23a55a; }
+.inv-note { font-size:12px; color:var(--mut); margin-top:8px; }
+/* Карточка-приглашение в ленте сообщений */
+.inv-card { background:var(--bg3); border-radius:10px; padding:12px 14px; max-width:430px; margin:4px 0 4px 16px; }
+.inv-card-lb { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.3px; color:var(--mut); margin-bottom:10px; }
+.inv-card-row { display:flex; align-items:center; gap:12px; }
+.inv-card-nm { flex:1; min-width:0; font-weight:700; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-card-join { flex:none; background:#23a55a; color:#fff; border-radius:6px; padding:8px 16px; font-weight:600; font-size:13.5px; transition:background .12s ease; }
+.inv-card-join:hover { background:#1e8e4d; }

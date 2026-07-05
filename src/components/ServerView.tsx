@@ -16,7 +16,7 @@ import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine } from './ActivityLabel'
-import { createInvite, listMembers, updateServer } from '../lib/servers'
+import { listMembers, updateServer } from '../lib/servers'
 import { Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
@@ -31,6 +31,7 @@ import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
+import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
 import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
 import { loadChMuted, setChMuted } from '../lib/chMute'
@@ -97,6 +98,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showAllCh, setShowAllCh] = useState(() => localStorage.getItem('ponoi_show_all_channels') === '1')
   const [showCreateCh, setShowCreateCh] = useState<null | { kind: 'text' | 'voice'; cat?: string }>(null)
   const [showPrivacy, setShowPrivacy] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)   // v1.68.0: панель «Пригласить друзей»
   const [showCreateCat, setShowCreateCat] = useState(false)
   const [srvSettings, setSrvSettings] = useState<any>((server as any).settings ?? {})
   const [mutedCh, setMutedCh] = useState<Record<string, boolean>>(loadChMuted())
@@ -399,12 +401,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     try { await voice.room.localParticipant.setMicrophoneEnabled(v); setVMic(v); v ? sndUnmute() : sndMute() } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
+  // v1.68.0: вместо копирования кода — панель «Пригласить друзей» как в Discord.
   async function invite() {
     if (!user) return
-    const res = await createInvite(server.id, user.id)
-    if (res.error) return toastErr(res.error.message)
-    try { await navigator.clipboard.writeText(res.code!) } catch {}
-    toastOk('Код приглашения скопирован: ' + res.code)
+    setShowInvite(true)
   }
 
   async function leave() {
@@ -783,6 +783,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
       {showEvents && <ServerEvents server={server} channels={channels} onClose={() => setShowEvents(false)} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
+        {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
       {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}
       {chCtx && <>
         <div className="ctx-overlay" onClick={() => setChCtx(null)} onContextMenu={e => { e.preventDefault(); setChCtx(null) }} />

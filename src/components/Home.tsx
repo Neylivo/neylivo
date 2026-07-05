@@ -22,6 +22,7 @@ import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { IncomingCall } from './IncomingCall'
+import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
@@ -36,6 +37,7 @@ export function Home() {
   const [view, setView] = useState<View>({ kind: 'dm' })
   const [showCreate, setShowCreate] = useState(false)
   const [showFind, setShowFind] = useState(false)
+  const [inviteFor, setInviteFor] = useState<Server | null>(null)   // v1.68.0: панель «Пригласить друзей»
   // v1.53.0: карточка «Исследуйте доступные серверы» во вкладке «Добавить в друзья»
   useEffect(() => {
     const h = () => setShowFind(true)
@@ -238,6 +240,21 @@ export function Home() {
     }
   }
 
+  // v1.68.0: клик «Присоединиться» на карточке-приглашении в ленте сообщений.
+  useEffect(() => {
+    const h = async (e: Event) => {
+      const code = String((e as CustomEvent).detail ?? '')
+      if (!user || !code) return
+      const res = await joinByCode(code, user.id, username)
+      if ((res as any).error) return toastErr((res as any).error.message)
+      toastOk('Вы присоединились к серверу!')
+      refresh((res as any).serverId)
+    }
+    window.addEventListener('ponoi-join-invite', h)
+    return () => window.removeEventListener('ponoi-join-invite', h)
+    // eslint-disable-next-line
+  }, [user, username])
+
   async function onCreate(name: string, avatarUrl: string | null) {
     if (!name || !user) return
     const res = await createSrv(name, user.id, username, avatarUrl)
@@ -251,12 +268,7 @@ export function Home() {
     if (k === 'copyid') { navigator.clipboard?.writeText(server.id); return }
     if (k === 'folder') { setFolderFor(server); return }
     if (k === 'settings') { setSettingsServer(server); return }
-    if (k === 'invite') {
-      const { createInvite } = await import('../lib/servers')
-      const res = await createInvite(server.id, user.id)
-      if (res.code) { navigator.clipboard?.writeText(res.code); toastOk('Код приглашения скопирован: ' + res.code) }
-      return
-    }
+    if (k === 'invite') { setInviteFor(server); return }
     if (k === 'delete') {
       if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
       await deleteServer(server.id)
@@ -377,6 +389,7 @@ export function Home() {
         if (res.serverId) refresh(res.serverId)
       }} />}
     {showFind && <FindServerModal uid={user?.id ?? ''} username={username} onClose={() => setShowFind(false)} onJoined={id => { setShowFind(false); refresh(id) }} />}
+      {inviteFor && user && <InviteModal server={inviteFor} meId={user.id} meName={username} onClose={() => setInviteFor(null)} />}
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}

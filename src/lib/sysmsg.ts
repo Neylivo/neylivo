@@ -25,6 +25,11 @@ export function sysCallStart(): string { return SYS + 'sys:call:start' + SYS }
 export function sysCallEnded(sec: number): string { return SYS + 'sys:call:ended' + SYS + String(sec) }
 export function sysCallMissed(sec: number): string { return SYS + 'sys:call:missed' + SYS + String(sec) }
 
+// v1.68.0: приглашение на сервер в ЛС — карточка с кнопкой «Присоединиться».
+export function sysInvite(code: string, serverName: string): string {
+  return SYS + 'sys:invite:' + code + SYS + serverName
+}
+
 /** «несколько секунд» / «5 мин» / «1 ч 12 мин» — как пишет Discord. */
 export function fmtCallDur(sec: number): string {
   if (sec < 60) return 'несколько секунд'

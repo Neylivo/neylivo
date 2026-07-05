@@ -200,7 +200,16 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           return (
             <Fragment key={m.id}>
               {showSysDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-              {sys.type === 'call' ? (() => {
+              {sys.type === 'invite' ? (
+                <div className="inv-card">
+                  <div className="inv-card-lb">{currentUser && m.author === currentUser ? 'Вы отправили приглашение присоединиться к серверу' : m.author_name + ' приглашает вас присоединиться к серверу'}</div>
+                  <div className="inv-card-row">
+                    <Avatar name={sys.preview || 'S'} url={null} size={40} />
+                    <div className="inv-card-nm">{sys.preview}</div>
+                    <button className="inv-card-join" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-join-invite', { detail: sys.targetId }))}>Присоединиться</button>
+                  </div>
+                </div>
+              ) : sys.type === 'call' ? (() => {
                 // Системное сообщение о звонке — текст зависит от того, кто смотрит.
                 const mineCall = !!currentUser && m.author === currentUser
                 const st = sys.targetId
