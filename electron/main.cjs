@@ -58,6 +58,25 @@ const GAMES = {
   'stardewvalley.exe': 'Stardew Valley',
   'factorio.exe': 'Factorio',
   'hollowknight.exe': 'Hollow Knight',
+  'deltaforce.exe': 'Delta Force',
+  'deltaforceclient-win64-shipping.exe': 'Delta Force',
+  'escapefromtarkov.exe': 'Escape from Tarkov',
+  'discovery.exe': 'THE FINALS',
+  'helldivers2.exe': 'HELLDIVERS 2',
+  'bg3.exe': "Baldur's Gate 3",
+  'bg3_dx11.exe': "Baldur's Gate 3",
+  'starfield.exe': 'Starfield',
+  'hogwartslegacy.exe': 'Hogwarts Legacy',
+  'warframe.x64.exe': 'Warframe',
+  'destiny2.exe': 'Destiny 2',
+  'wow.exe': 'World of Warcraft',
+  'diablo iv.exe': 'Diablo IV',
+  'palworld-win64-shipping.exe': 'Palworld',
+  'readyornot-win64-shipping.exe': 'Ready or Not',
+  'deadbydaylight-win64-shipping.exe': 'Dead by Daylight',
+  'ts4_x64.exe': 'The Sims 4',
+  'rainbowsix.exe': 'Rainbow Six Siege',
+  'rainbowsix_dx11.exe': 'Rainbow Six Siege',
 }
 let curGame = null   // { name, since } | null
 
@@ -131,6 +150,11 @@ const NOT_GAMES = new Set([
   'launcher', 'robloxstudiobeta', 'itch', 'ubisoftconnect', 'upc', 'origin', 'eadesktop',
   'eabackgroundservice', 'crashhandler', 'unitycrashhandler32', 'unitycrashhandler64',
   'crashreportclient', 'easyanticheat', 'setup', 'unins000',
+  // v1.65.0: браузеры/приложения — страховка для универсальных правил по папкам
+  'chrome', 'msedge', 'firefox', 'opera', 'opera_gx', 'brave', 'discord', 'spotify',
+  'obs64', 'obs32', 'code', 'explorer', 'notepad', 'notepad++', 'wemod', 'medal',
+  'overwolf', 'nvcontainer', 'telegram', 'whatsapp', 'epic games', 'riot games',
+  'gog galaxy', 'wallpaper_engine', 'wallpaper32', 'wallpaper64',
 ])
 const GAME_DIRS = [
   [/steamapps[\\/]common[\\/]([^\\/]+)/i, 1],
@@ -141,14 +165,36 @@ const GAME_DIRS = [
   [/riot games[\\/]([^\\/]+)/i, 1],
   [/itch[\\/]apps[\\/]([^\\/]+)/i, 1],
   [/roblox[\\/]versions[\\/]/i, 0],
+  // v1.65.0: больше источников — Wargaming, Garena, Battlestate + универсальная
+  // папка Games/Игры на любом диске (D:\Games\<Игра>\...)
+  [/wargaming(?:\.net)?[\\/]([^\\/]+)/i, 1],
+  [/garena[\\/]games?[\\/]([^\\/]+)/i, 1],
+  [/battlestate games[\\/]([^\\/]+)/i, 1],
+  [/[\\/](?:games|игры)[\\/]([^\\/]+)/i, 1],
 ]
+function prettyName(s) {
+  return s.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+// Заголовки окон игр часто с хвостами («Игра  |  1.2.3», «Игра — сервер») —
+// берём первую осмысленную часть.
+function cleanTitle(t) {
+  let s = (t || '').split(/\s+[|\u2013\u2014]\s+| {2,}/)[0].trim()
+  if (s.length > 60) s = s.slice(0, 60).trim()
+  return s
+}
 function detectGame(proc, exePath, title) {
   const nm = GAME_BY_PROC[proc]
   if (nm) {
     if (proc === 'javaw' && !title.toLowerCase().includes('minecraft')) return null
     return nm
   }
-  if (!exePath || NOT_GAMES.has(proc)) return null
+  if (NOT_GAMES.has(proc)) return null
+  // v1.65.0: любой Unreal Engine-клиент (…-Win64-Shipping) — это игра. Работает
+  // даже когда путь к exe недоступен: анти-чит часто запускает игру с правами
+  // выше наших, и Windows прячет Path (так было с Delta Force).
+  const ue = proc.match(/^(.+?)(?:client|game)?-win(?:64|32)-shipping$/)
+  if (ue) return cleanTitle(title) || prettyName(ue[1])
+  if (!exePath) return null
   for (const [re, grp] of GAME_DIRS) {
     const m = exePath.match(re)
     if (!m) continue
@@ -156,8 +202,8 @@ function detectGame(proc, exePath, title) {
     let name = m[grp]
     if (!name || NOT_GAMES.has(name.toLowerCase())) return null
     // exe бывает зарыт в служебную папку — тогда лучше заголовок окна
-    if (/^(binaries|bin|win64|win32|shipping|game|live|retail|content)$/i.test(name)) name = title || name
-    return name.replace(/[-_]+/g, ' ').trim()
+    if (/^(binaries|bin|win64|win32|x64|x86|client|shipping|game|live|retail|content)$/i.test(name)) name = cleanTitle(title) || name
+    return prettyName(name)
   }
   return null
 }
