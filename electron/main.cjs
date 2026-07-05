@@ -101,6 +101,20 @@ function httpJson(u) {
     req.setTimeout(8000, () => { try { req.destroy() } catch {} resolve(null) })
   })
 }
+// Как httpJson, но без проверки сертификата — для локальных API игр
+// (Live Client Data API у League of Legends на 127.0.0.1:2999 отдаёт самоподписанный сертификат Riot).
+function httpJsonInsecure(u) {
+  return new Promise((resolve) => {
+    const https = require('https')
+    const req = https.get(u, { rejectUnauthorized: false }, (res) => {
+      let data = ''
+      res.on('data', (d) => { data += d })
+      res.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve(null) } })
+    })
+    req.on('error', () => resolve(null))
+    req.setTimeout(3000, () => { try { req.destroy() } catch {} resolve(null) })
+  })
+}
 // v1.28.0: два источника обложек. Steam покрывает ПК-игры, iTunes Search — не-стимовские
 // (Roblox, Fortnite, VALORANT и т.п. — у них есть iOS-версии с квадратными иконками).
 // v1.84.0: обложка не «первая попавшаяся», а реально совпадающая по названию —
@@ -236,15 +250,20 @@ function ensureGsiCfg(game, exe) {
 const CS_MODES = { competitive: 'Соревновательный', premier: 'Premier', scrimcomp2v2: 'Напарники',
   casual: 'Обычный', deathmatch: 'Бой насмерть', gungameprogressive: 'Гонка вооружений',
   gungametrbomb: 'Подрыв', survival: 'Запретная зона', coop: 'Кооператив' }
+// Человеческие имена карт CS2 — как показывает Discord (de_mirage -> Mirage).
+const CS_MAPS = { de_mirage: 'Mirage', de_dust2: 'Dust II', de_inferno: 'Inferno', de_nuke: 'Nuke',
+  de_ancient: 'Ancient', de_anubis: 'Anubis', de_vertigo: 'Vertigo', de_overpass: 'Overpass',
+  de_train: 'Train', de_cache: 'Cache', cs_office: 'Office', cs_italy: 'Italy' }
 function cs2Mode() {
   if (!lastGsi || lastGsi.appid !== '730' || Date.now() - lastGsi.at > 60_000) return null
   const d = lastGsi.data
   const map = d.map
   if (map && map.name) {
     const m = CS_MODES[String(map.mode || '').toLowerCase()] || null
+    const nice = CS_MAPS[String(map.name || '').toLowerCase()] || map.name
     const score = (map.team_ct && map.team_t && map.team_ct.score != null && map.team_t.score != null)
       ? ' · ' + map.team_ct.score + ':' + map.team_t.score : ''
-    return (m ? m + ' — ' : 'В матче — ') + map.name + score
+    return (m ? m + ' — ' : 'В матче — ') + nice + score
   }
   if (d.player && d.player.activity === 'menu') return 'В лобби'
   return null
@@ -290,6 +309,31 @@ function dbdMode() {
     return role || (map ? 'Карта: ' + map : null)
   } catch { return null }
 }
+// League of Legends: официальный Live Client Data API (порт 2999) — доступен только
+// во время матча. Берём своего чемпиона и режим; в лобби/клиенте порт закрыт.
+const LOL_MODES = { CLASSIC: 'Ущелье призывателей', ARAM: 'ARAM', CHERRY: 'Арена', URF: 'URF',
+  NEXUSBLITZ: 'Nexus Blitz', ULTBOOK: 'Книга заклинаний' }
+async function lolMode() {
+  const j = await httpJsonInsecure('https://127.0.0.1:2999/liveclientdata/allgamedata')
+  if (!j || !j.gameData) return null   // матч ещё грузится — покажем просто название игры
+  const mode = LOL_MODES[String(j.gameData.gameMode || '').toUpperCase()] || null
+  const meName = (j.activePlayer && j.activePlayer.summonerName) || ''
+  let champ = null
+  if (Array.isArray(j.allPlayers)) {
+    const p = j.allPlayers.find((x) => x.summonerName === meName || (x.riotIdGameName && meName.indexOf(x.riotIdGameName) === 0))
+    champ = (p && p.championName) || null
+  }
+  const head = champ ? 'В матче — ' + champ : 'В матче'
+  return head + (mode ? ' · ' + mode : '')
+}
+// Minecraft: режим берём из заголовка окна («… - Singleplayer» / «… - Multiplayer»).
+function mcMode() {
+  const t = String(curGameTitle || '')
+  if (!/minecraft/i.test(t)) return null
+  if (/single ?player|одиночн/i.test(t)) return 'Одиночная игра'
+  if (/multi ?player|сетев|server/i.test(t)) return 'Сетевая игра'
+  return null
+}
 let modeBusy = false
 let lastPlaceId = null
 let robloxModeName = null
@@ -311,6 +355,8 @@ async function scanGameMode() {
     } else if (g.name === 'Counter-Strike 2') { ensureGsiCfg('Counter-Strike 2', curGameExe); mode = cs2Mode() }
     else if (g.name === 'Dota 2') { ensureGsiCfg('Dota 2', curGameExe); mode = dotaMode() }
     else if (g.name === 'Dead by Daylight') mode = dbdMode()
+    else if (g.name === 'League of Legends') mode = await lolMode()
+    else if (g.name === 'Minecraft' || g.name === 'Minecraft (Java)') mode = mcMode()
     if (curGame && curGame.name === g.name && (curGame.mode ?? null) !== (mode ?? null)) {
       curGame = { ...curGame, mode }
       broadcastGame()
@@ -441,6 +487,7 @@ function detectGame(proc, exePath, title) {
 }
 let pendingGame = null   // кандидат на старт: { name, at, exe }
 let curGameExe = null    // путь exe текущей игры — чтобы подложить GSI-конфиг (v1.90.0)
+let curGameTitle = null  // заголовок окна текущей игры — детали для Minecraft (v1.97.0)
 let scanBusy = false     // не пускаем сканы внахлёст
 function scanGames() {
   if (process.platform !== 'win32' || scanBusy) return
@@ -461,24 +508,26 @@ function scanGames() {
       if (!title) continue
       const cand = detectGame(proc, exePath, title)
       if (!cand) continue
-      if (!best || cand.prio > best.prio) best = { ...cand, exe: exePath }
+      if (!best || cand.prio > best.prio) best = { ...cand, exe: exePath, title }
       if (best.prio >= 100) break
     }
     const found = best ? best.name : null
     if (found) {
-      if (curGame && curGame.name === found) { pendingGame = null; return }   // уже играет — молчим
+      if (curGame && curGame.name === found) { pendingGame = null; curGameTitle = best.title || curGameTitle; return }   // уже играет — обновляем заголовок окна
       if (pendingGame && pendingGame.name === found) {                        // подтверждено вторым сканом
         curGame = { name: found, since: pendingGame.at }
         curGameExe = pendingGame.exe || null
+        curGameTitle = pendingGame.title || null
         pendingGame = null
         broadcastGame()
       } else {
-        pendingGame = { name: found, at: Date.now(), exe: best.exe }          // ждём подтверждения вторым сканом
+        pendingGame = { name: found, at: Date.now(), exe: best.exe, title: best.title }   // ждём подтверждения вторым сканом
       }
       return
     }
     pendingGame = null
     curGameExe = null
+    curGameTitle = null
     if (curGame) { curGame = null; broadcastGame() }   // игра закрылась — гасим сразу
   })
 }

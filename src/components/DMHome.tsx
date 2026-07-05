@@ -747,7 +747,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 return (
                   <div key={f.id} className="an-card" onClick={() => openChat(f)}>
                     <div className="an-head">
-                      <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                      <AvatarWithStatus name={f.name} size={40} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
                       <div className="an-tx">
                         <div className="an-nm">{f.name}</div>
                         <div className="an-sub">{g!.name} — {dur(g!.since)}</div>
@@ -757,8 +757,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                     <div className="an-game">
                       {cover ? <img className="an-gcover" src={cover} alt="" /> : <span className="an-gcover an-gph"><Icon name="gamepad" size={20} /></span>}
                       <div className="an-gtx">
-                        <div className="an-gnm">{g!.name}</div>
-                        <div className="an-gsub">{g!.mode ?? ruPpl(same.length)}</div>
+                        {(() => {
+                          // Подробности игры («в лобби», «Напарники — Mirage · 5:3», «В матче — Ahri»)
+                          // показываем ВМЕСТО названия игры — как rich-подробности в Discord;
+                          // название игры и так есть в шапке карточки («Dota 2 — 6 ч.»).
+                          const md = g!.mode
+                          if (md && md.includes(' — ')) {
+                            const i = md.indexOf(' — ')
+                            return <><div className="an-gnm">{md.slice(0, i)}</div><div className="an-gsub">{md.slice(i + 3)}</div></>
+                          }
+                          return <><div className="an-gnm">{g!.name}</div><div className="an-gsub">{md ?? ruPpl(same.length)}</div></>
+                        })()}
                       </div>
                       <span className="an-gavs">{same.slice(0, 3).map(x => <Avatar key={x.f.id} name={x.f.name} size={24} />)}</span>
                     </div>
