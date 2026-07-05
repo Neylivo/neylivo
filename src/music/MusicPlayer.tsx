@@ -71,13 +71,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const curSc = !!cur && isSoundcloudUrl(cur.url)
   const curYt = !!cur && !curSc && isYouTubeUrl(cur.url)
   const curMeta = cur ? meta[cur.url] : undefined
-  const curArt = curMeta?.art ?? null
+  const curArt = curMeta?.art ?? cur?.art ?? null
   // URL, который реально отдаём виджету: каноничный из oEmbed, если он уже известен.
-  const scPlayUrl = curSc && cur ? (curMeta?.play || cur.url) : ''
+  // v1.80.0: play-URL и обложка берутся и из базы (22_music_meta.sql) — трек
+  // играет сразу и с обложкой, даже если oEmbed/виджет у этого клиента молчат.
+  const scPlayUrl = curSc && cur ? (curMeta?.play || cur.play || cur.url) : ''
   // YouTube: id видео прямо из ссылки.
   const ytId = curYt && cur ? (parseYouTubeId(cur.url) || '') : ''
   // Обычный <audio>: для Audius-ссылок подставляем прямой stream-URL из resolve.
-  const audioSrc = cur && !curSc && !curYt ? (curMeta?.play || cur.url) : undefined
+  const audioSrc = cur && !curSc && !curYt ? (curMeta?.play || cur.play || cur.url) : undefined
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
     '--mus-a': rgb(acc),
@@ -209,6 +211,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setCurT(0); setDur(0)
     if (!curSc || !cur) { widgetRef.current = null; return }
     const curUrl = cur.url
+    const curTrack = cur
     let disposed = false
     let gotDur = false
     // Если виджет молчит 10 секунд — почти всегда его режет блокировщик рекламы.
@@ -239,6 +242,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 play: old?.play,
               } }
             })
+            // v1.80.0: дозаписываем недостающие метаданные в базу — трек
+            // «чинится» для всех и навсегда, а не только в этом браузере.
+            if (curTrack.id && (!curTrack.art || !curTrack.author || !curTrack.play)) {
+              updateTrackMeta(curTrack.id, {
+                author: curTrack.author || s.user?.username || undefined,
+                art: curTrack.art ?? art,
+                play: curTrack.play ?? (s.id ? 'https://api.soundcloud.com/tracks/' + s.id : null),
+              })
+            }
           })
           if (playingRef.current) w.play()
         })

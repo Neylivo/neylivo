@@ -446,10 +446,15 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     try {
       // v1.64.0: contentHint подсказывает браузеру, что важнее (чёткость/плавность),
       // simulcast выключен — зритель всегда получает полное разрешение.
+      // v1.80.0: демка как в Discord — системный звук в чистом стерео без
+      // «улучшайзеров» (иначе музыка/игра звучат глухо и тихо), дорожка демки
+      // с высоким приоритетом — при слабой сети страдает камера, а не демка.
       await (room.localParticipant as any).setScreenShareEnabled(true,
-        { audio: true, resolution: { width: r.w, height: r.h, frameRate: sq.fps },
+        { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
+          systemAudio: 'include',
+          resolution: { width: r.w, height: r.h, frameRate: sq.fps },
           contentHint: sq.fps >= 30 ? 'motion' : 'detail' },
-        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps }, simulcast: false })
+        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps, priority: 'high' }, simulcast: false })
       setScreen(true)
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }

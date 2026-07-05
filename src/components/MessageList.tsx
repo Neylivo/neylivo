@@ -219,7 +219,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     <span className="sys-ic"><Icon name={st === 'missed' ? 'phone-off' : 'phone'} size={14} /></span>
                     <span>
                       {st === 'start' && <><b>{m.author_name}</b> начинает звонок.</>}
-                      {st === 'ended' && <>Звонок длился {fmtCallDur(dur)}.</>}
+                      {st === 'ended' && <><b>{m.author_name}</b> начал(а) звонок — он длился {fmtCallDur(dur)}.</>}
                       {st === 'missed' && (mineCall
                         ? <>Никто не ответил на звонок.</>
                         : <>Вы пропустили звонок от <b>{m.author_name}</b>, который длился {fmtCallDur(dur)}.</>)}

@@ -219,6 +219,30 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     // eslint-disable-next-line
   }, [call])
 
+  // ---- v1.80.0: остался один в звонке — авто-завершение через 3 минуты. ----
+  // Собеседник вышел: ждём 3 минуты (вдруг вернётся — например, переподключение
+  // или случайно закрыл вкладку); если за это время никто не зашёл — вешаем
+  // трубку сами, как в Discord. Возврат собеседника отменяет таймер.
+  const aloneTimerRef = useRef<number | null>(null)
+  useEffect(() => {
+    const clear = () => { if (aloneTimerRef.current) { window.clearTimeout(aloneTimerRef.current); aloneTimerRef.current = null } }
+    if (!call) { clear(); return }
+    const onLeft = () => {
+      const n = (call as any).remoteParticipants?.size ?? (call as any).participants?.size ?? 0
+      if (n > 0) return
+      clear()
+      aloneTimerRef.current = window.setTimeout(() => {
+        aloneTimerRef.current = null
+        if (callRef.current) { toastErr('Звонок завершён — вы остались одни'); hangUp(false) }
+      }, 180_000)
+    }
+    const onBack = () => clear()
+    call.on(RoomEvent.ParticipantDisconnected, onLeft)
+    call.on(RoomEvent.ParticipantConnected, onBack)
+    return () => { clear(); call.off(RoomEvent.ParticipantDisconnected, onLeft); call.off(RoomEvent.ParticipantConnected, onBack) }
+    // eslint-disable-next-line
+  }, [call])
+
   // Ответ на исходящий звонок: принял / отклонил (события шлёт глобальный слушатель IncomingCall).
   useEffect(() => {
     const acc = () => endRing(false)

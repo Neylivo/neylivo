@@ -25,8 +25,11 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   const { token, url } = data as { token: string; url: string }
   // v1.64.0: максимальное качество звонка — подавление эха/шума и автогромкость,
   // высокобитрейтный стерео-звук (RED + DTX), камера 1080p с simulcast.
+  // v1.80.0: как в Discord — кодек VP9 (та же картинка при меньшем битрейте,
+  // c запасным кодеком для старых устройств), чёткий даунскейл под реальный
+  // экран (pixelDensity: 'screen'), битрейт камеры поднят до 4.5 Мбит/с.
   const room = new Room({
-    adaptiveStream: true,
+    adaptiveStream: { pixelDensity: 'screen' },
     dynacast: true,
     audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     videoCaptureDefaults: { resolution: VideoPresets.h1080.resolution },
@@ -34,7 +37,9 @@ export async function joinRoom(roomName: string, identity: string, name: string)
       dtx: true,
       red: true,
       audioPreset: AudioPresets.musicHighQualityStereo,
-      videoEncoding: { maxBitrate: 3_500_000, maxFramerate: 30 },
+      videoCodec: 'vp9',
+      backupCodec: true,
+      videoEncoding: { maxBitrate: 4_500_000, maxFramerate: 30 },
       simulcast: true,
     },
   })
