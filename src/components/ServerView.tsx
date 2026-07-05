@@ -135,7 +135,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const curChannelRef = useRef<Channel | null>(null)
   // Память прокрутки по каналам + подгрузка старых сообщений при скролле вверх.
   const scrollMem = useRef<Record<string, number>>({})
-  const pendingScroll = useRef<number | 'bottom' | null>(null)
+  const pendingScroll = useRef<number | 'bottom' | { unreadId: string } | null>(null)   // v1.108.0: { unreadId } — прыжок к первому непрочитанному
   const loadingOlder = useRef(false)
   const hasMore = useRef(true)
   const prevHeight = useRef<number | null>(null)
@@ -246,7 +246,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (cachedList?.length) {
       const lr0 = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
       const sp0 = scrollMem.current[c.id] ?? (() => { const v = localStorage.getItem('ponoi_scroll_' + c.id); return v === null ? undefined : Number(v) })()
-      pendingScroll.current = (!lr0 || Date.now() - lr0 > 7 * 24 * 3600 * 1000) ? 'bottom' : (sp0 ?? 'bottom')
+      // v1.108.0: как в Discord — есть непрочитанное, сразу прыгаем к нему (к разделителю «НОВОЕ»).
+      const firstNew0 = lr0 ? (cachedList as Message[]).find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lr0) : undefined
+      pendingScroll.current = firstNew0 ? { unreadId: firstNew0.id } : (!lr0 || Date.now() - lr0 > 7 * 24 * 3600 * 1000) ? 'bottom' : (sp0 ?? 'bottom')
+      if (firstNew0) setNewDividerId(firstNew0.id)
       setMessages(cachedList as Message[])
     }
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
@@ -263,10 +266,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       const v = localStorage.getItem('ponoi_scroll_' + c.id)
       return v === null ? undefined : Number(v)
     })()
-    pendingScroll.current = staleWeek ? 'bottom' : (savedPos ?? 'bottom')
-    setMessages(list)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в канал.
     const firstNew = lastRead ? list.find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) : undefined
+    // v1.108.0: как в Discord — при входе в канал сразу прыгаем к первому непрочитанному
+    // (последнее прочитанное сообщение оказывается прямо над разделителем «НОВОЕ»).
+    // Непрочитанного нет — как раньше: сохранённая позиция, после недели отсутствия — вниз.
+    pendingScroll.current = firstNew ? { unreadId: firstNew.id } : staleWeek ? 'bottom' : (savedPos ?? 'bottom')
+    setMessages(list)
     setNewDividerId(firstNew?.id ?? null)
     localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
     loadRx(list.map(m => m.id))
@@ -304,8 +310,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       el.scrollTop = prevTop.current + (el.scrollHeight - prevHeight.current)
       prevHeight.current = null
     } else if (el && pendingScroll.current !== null) {
-      // Восстановление сохранённой позиции прокрутки при входе в канал.
-      el.scrollTop = pendingScroll.current === 'bottom' ? el.scrollHeight : pendingScroll.current
+      // Восстановление позиции при входе в канал: непрочитанное / сохранённая позиция / вниз.
+      const ps = pendingScroll.current
+      if (typeof ps === 'object' && ps !== null) {
+        // v1.108.0: разделитель «НОВОЕ» — у верхнего края окна, как в Discord.
+        const tgt = document.getElementById('msg-' + ps.unreadId)
+        if (tgt) el.scrollTop += tgt.getBoundingClientRect().top - el.getBoundingClientRect().top - 72
+        else el.scrollTop = el.scrollHeight
+      } else el.scrollTop = ps === 'bottom' ? el.scrollHeight : ps
       pendingScroll.current = null
       setUnseen(0); setAtBottom(nearBottom())
     } else if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
