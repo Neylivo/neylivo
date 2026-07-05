@@ -1,4 +1,4 @@
-import { Room, RoomEvent, Track, LocalTrackPublication, LocalAudioTrack, VideoPresets, AudioPresets } from 'livekit-client'
+import { Room, RoomEvent, Track, LocalTrackPublication, LocalAudioTrack, VideoPresets } from 'livekit-client'
 import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter'
 import { supabase } from './supabase'
 
@@ -28,23 +28,36 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   // v1.80.0: как в Discord — кодек VP9 (та же картинка при меньшем битрейте,
   // c запасным кодеком для старых устройств), чёткий даунскейл под реальный
   // экран (pixelDensity: 'screen'), битрейт камеры поднят до 4.5 Мбит/с.
+  // v1.113.0: звук ещё лучше — свой битрейт 256 кбит/с стерео (выше «музыкального»
+  // пресета), камера до 8 Мбит/с; выбранные ранее устройства (микрофон/камера)
+  // применяются сразу при входе в звонок.
+  const savedMic = localStorage.getItem('ponoi_dev_mic') || undefined
+  const savedCam = localStorage.getItem('ponoi_dev_cam') || undefined
   const room = new Room({
     adaptiveStream: { pixelDensity: 'screen' },
     dynacast: true,
-    audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    videoCaptureDefaults: { resolution: VideoPresets.h1080.resolution },
+    audioCaptureDefaults: { deviceId: savedMic, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    videoCaptureDefaults: { deviceId: savedCam, resolution: VideoPresets.h1080.resolution },
     publishDefaults: {
       dtx: true,
       red: true,
-      audioPreset: AudioPresets.musicHighQualityStereo,
+      audioPreset: { maxBitrate: 256_000 },
       videoCodec: 'vp9',
       backupCodec: true,
-      videoEncoding: { maxBitrate: 4_500_000, maxFramerate: 30 },
+      videoEncoding: { maxBitrate: 8_000_000, maxFramerate: 30 },
       simulcast: true,
     },
   })
   attachKrisp(room)
   await room.connect(url, token)
+  // v1.113.0: микрофон включается сразу при входе в звонок. Раньше это делал каждый
+  // экран сам, и любой сбой (занятое устройство, медленный ответ на разрешение)
+  // тихо оставлял микрофон выключенным. Теперь — до трёх попыток с паузой.
+  for (let i = 0; i < 3; i++) {
+    try { await room.localParticipant.setMicrophoneEnabled(true); break }
+    catch { await new Promise(r => setTimeout(r, 500)) }
+  }
+  ;(room as any).__ponoiInit = true
   return room
 }
 

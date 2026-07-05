@@ -23,11 +23,12 @@ import { audioCtx, master, fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } f
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Качества демонстрации экрана — как «Качество стрима» в Discord.
+// v1.113.0: битрейты подняты — 4K теперь действительно 4K (40 Мбит/с), а не мыло.
 const SHARE_RES = [
-  { label: '720p', w: 1280, h: 720, br: 3_500_000 },
-  { label: '1080p', w: 1920, h: 1080, br: 6_500_000 },
-  { label: '1440p', w: 2560, h: 1440, br: 12_000_000 },
-  { label: '4K', w: 3840, h: 2160, br: 25_000_000 },
+  { label: '720p', w: 1280, h: 720, br: 4_000_000 },
+  { label: '1080p', w: 1920, h: 1080, br: 10_000_000 },
+  { label: '1440p', w: 2560, h: 1440, br: 20_000_000 },
+  { label: '4K', w: 3840, h: 2160, br: 40_000_000 },
 ]
 const SHARE_FPS = [15, 30, 60]
 
@@ -272,8 +273,11 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [devMenu, setDevMenu] = useState<null | 'mic' | 'cam'>(null)
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [sq, setSq] = useState<{ res: string; fps: number }>(() => {
-    try { const s = JSON.parse(localStorage.getItem('ponoi_share_q') || '{}'); if (s.res && s.fps) return s } catch {}
-    return { res: '1080p', fps: 30 }
+    // v1.113.0: одноразовая миграция — качество демонстрации по умолчанию теперь 4K.
+    const mig = localStorage.getItem('ponoi_mig_113_4k')
+    try { const s = JSON.parse(localStorage.getItem('ponoi_share_q') || '{}'); if (s.res && s.fps && mig) return s } catch {}
+    localStorage.setItem('ponoi_mig_113_4k', '1')
+    return { res: '4K', fps: 30 }
   })
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
   const [count, setCount] = useState(1)
@@ -449,12 +453,15 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
       // v1.80.0: демка как в Discord — системный звук в чистом стерео без
       // «улучшайзеров» (иначе музыка/игра звучат глухо и тихо), дорожка демки
       // с высоким приоритетом — при слабой сети страдает камера, а не демка.
+      // v1.113.0: реальное 4K — до 60 FPS чёткость важнее плавности (contentHint
+      // 'detail'), и браузеру запрещено снижать разрешение под нагрузкой
+      // (degradationPreference: maintain-resolution) — лучше потерять кадры, чем мыло.
       await (room.localParticipant as any).setScreenShareEnabled(true,
         { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
           systemAudio: 'include',
           resolution: { width: r.w, height: r.h, frameRate: sq.fps },
-          contentHint: sq.fps >= 30 ? 'motion' : 'detail' },
-        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps, priority: 'high' }, simulcast: false })
+          contentHint: sq.fps >= 60 ? 'motion' : 'detail' },
+        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps, priority: 'high' }, degradationPreference: 'maintain-resolution', simulcast: false })
       setScreen(true)
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
