@@ -1,5 +1,6 @@
-// Модалка «Создать канал» — 1-в-1 как в Discord (v1.24.0).
-// Типы: Текст / Голос / Форум (форум пока в разработке), название с # и toggle «Приватный канал».
+// Модалка «Создать канал» — 1-в-1 как в Discord (v1.24.0; v1.81.0: тип «Объявления»).
+// Типы: Текст / Голос / Объявления / Форум (форум пока в разработке),
+// название с # и toggle «Приватный канал».
 import { useState } from 'react'
 import { toastOk } from '../lib/toast'
 import { Icon } from './icons'
@@ -7,29 +8,34 @@ import { Icon } from './icons'
 export function CreateChannelModal({ initialKind, onClose, onCreate }: {
   initialKind: 'text' | 'voice'
   onClose: () => void
-  onCreate: (name: string, kind: 'text' | 'voice', priv: boolean) => void
+  onCreate: (name: string, kind: 'text' | 'voice', priv: boolean, announce?: boolean) => void
 }) {
-  const [kind, setKind] = useState<'text' | 'voice'>(initialKind)
+  const [type, setType] = useState<'text' | 'voice' | 'announce'>(initialKind)
   const [name, setName] = useState('')
   const [priv, setPriv] = useState(false)
   function submit() {
+    const kind: 'text' | 'voice' = type === 'voice' ? 'voice' : 'text'
     const nm = kind === 'text' ? name.trim().toLowerCase().replace(/\s+/g, '-') : name.trim()
-    if (nm) onCreate(nm, kind, priv)
+    if (nm) onCreate(nm, kind, priv, type === 'announce')
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title" style={{ textAlign: 'left' }}>Создать канал</div>
-        <div className="modal-sub" style={{ textAlign: 'left' }}>в {kind === 'voice' ? 'Голосовые каналы' : 'Текстовые каналы'}</div>
+        <div className="modal-sub" style={{ textAlign: 'left' }}>в {type === 'voice' ? 'Голосовые каналы' : 'Текстовые каналы'}</div>
         <label className="modal-lbl">Тип канала</label>
-        <button className={'cch-type' + (kind === 'text' ? ' on' : '')} onClick={() => setKind('text')}>
+        <button className={'cch-type' + (type === 'text' ? ' on' : '')} onClick={() => setType('text')}>
           <span className="dot" /><Icon name="hash" size={20} />
           <span className="cch-t"><b>Текст</b><span>Отправляйте сообщения, изображения, GIF, эмодзи, мнения и приколы</span></span>
         </button>
-        <button className={'cch-type' + (kind === 'voice' ? ' on' : '')} onClick={() => setKind('voice')}>
+        <button className={'cch-type' + (type === 'voice' ? ' on' : '')} onClick={() => setType('voice')}>
           <span className="dot" /><Icon name="volume" size={20} />
           <span className="cch-t"><b>Голос</b><span>Общайтесь голосом или в видеочате и пользуйтесь функцией показа экрана</span></span>
+        </button>
+        <button className={'cch-type' + (type === 'announce' ? ' on' : '')} onClick={() => setType('announce')}>
+          <span className="dot" /><Icon name="megaphone" size={20} />
+          <span className="cch-t"><b>Объявления</b><span>Важные новости для ваших участников</span></span>
         </button>
         <button className="cch-type dis" onClick={() => toastOk('Форумы скоро появятся')}>
           <span className="dot" /><Icon name="message" size={20} />
@@ -37,7 +43,7 @@ export function CreateChannelModal({ initialKind, onClose, onCreate }: {
         </button>
         <label className="modal-lbl">Название канала</label>
         <div className="cch-name">
-          <Icon name={kind === 'voice' ? 'volume' : 'hash'} size={16} />
+          <Icon name={type === 'voice' ? 'volume' : type === 'announce' ? 'megaphone' : 'hash'} size={16} />
           <input autoFocus placeholder="новый-канал" value={name} onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit() }} />
         </div>

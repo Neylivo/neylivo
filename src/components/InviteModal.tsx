@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { openThread } from '../lib/friends'
 import { createInvite } from '../lib/servers'
 import { sysInvite } from '../lib/sysmsg'
+import { usePresence } from '../lib/presence'
 import { sendPush } from '../lib/push'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
@@ -26,6 +27,8 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
   const [code, setCode] = useState<string | null>(null)
   const [chName, setChName] = useState<string | null>(channelName ?? null)
   const [copied, setCopied] = useState(false)
+  const [memberIds, setMemberIds] = useState<string[]>([])
+  const { online } = usePresence()
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
@@ -38,6 +41,11 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
     const res = await createInvite(server.id, meId)
     if (res.code) setCode(res.code)
     else if (res.error) toastErr(res.error.message)
+    // v1.81.0: участники сервера — для счётчиков в карточке-приглашении.
+    try {
+      const { data: mm } = await supabase.from('server_members').select('user_id').eq('server_id', server.id)
+      setMemberIds(((mm ?? []) as any[]).map(r => r.user_id))
+    } catch {}
     // «Участники окажутся в …»: текущий канал, иначе первый текстовый.
     if (!channelName) {
       const { data } = await supabase.from('channels').select('*').eq('server_id', server.id)
@@ -78,8 +86,18 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
     try {
       const th = await openThread(meId, f.id)
       if (!th) throw new Error('Не удалось открыть диалог')
+      // v1.81.0: карточка как в Discord — вшиваем снапшот сервера в сообщение.
+      const st: any = (server as any).settings ?? {}
+      const meta = {
+        ic: (server as any).avatar_url ?? null,
+        bn: st.banner_url ?? null,
+        d: st.description ?? null,
+        m: Math.max(memberIds.length, 1),
+        o: Math.max(memberIds.filter(id => (online as any)[id] && (online as any)[id].status !== 'offline').length, 1),
+        c: server.created_at ?? null,
+      }
       const { error } = await supabase.from('dm_messages').insert({
-        thread_id: th.id, author: meId, author_name: meName, content: sysInvite(code, server.name),
+        thread_id: th.id, author: meId, author_name: meName, content: sysInvite(code, server.name, meta),
       })
       if (error) throw error
       setSent(s => ({ ...s, [f.id]: true }))

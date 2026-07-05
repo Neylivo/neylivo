@@ -3081,3 +3081,56 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .c2-click { display: contents; }
 .c2-grid .c2-tile, .c2-strip .c2-tile { cursor: pointer; }
 .c2-main .c2-tile { cursor: zoom-out; }
+
+
+/* ===== v1.81.0: приглашение, шапка сервера и каналы 1-в-1 как в Discord ===== */
+/* --- Карточка-приглашение в ленте (по образцу Discord) --- */
+.inv2-card { max-width:432px; margin:6px 0 6px 16px; }
+.inv2-lb { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.3px; color:var(--mut); margin-bottom:8px; }
+.inv2-box { background:var(--bg3); border-radius:10px; overflow:hidden; }
+.inv2-banner { height:110px; background-size:cover; background-position:center; }
+.inv2-body { position:relative; padding:14px 16px 16px; }
+.inv2-body.has-bn { padding-top:40px; }
+.inv2-ico { width:50px; height:50px; border-radius:14px; overflow:hidden; margin-bottom:10px; }
+.inv2-body.has-bn .inv2-ico { position:absolute; top:-30px; left:14px; width:56px; height:56px; border:5px solid var(--bg3); border-radius:18px; margin:0; box-sizing:content-box; background:var(--bg3); }
+.inv2-ico > * { width:100% !important; height:100% !important; border-radius:inherit !important; }
+.inv2-nm { display:flex; align-items:center; gap:6px; font-weight:800; font-size:16px; color:var(--tx,#f2f3f5); }
+.inv2-nm-t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.inv2-check { flex:none; width:16px; height:16px; border-radius:5px; background:#23a55a; color:#fff; display:inline-flex; align-items:center; justify-content:center; }
+.inv2-stats { display:flex; align-items:center; gap:14px; margin-top:6px; font-size:13px; color:var(--mut); }
+.inv2-st { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.inv2-st i { width:8px; height:8px; border-radius:50%; background:#80848e; flex:none; }
+.inv2-st i.on { background:#23a55a; }
+.inv2-meta { margin-top:8px; font-size:13px; color:var(--mut); }
+.inv2-desc { margin-top:10px; padding:10px 12px; background:rgba(0,0,0,.22); border-radius:8px; font-size:13.5px; line-height:1.35; color:var(--tx,#dbdee1); }
+.inv2-join { display:block; width:100%; margin-top:12px; background:#23a55a; color:#fff; border:none; border-radius:8px; padding:10px 0; font-weight:600; font-size:14px; cursor:pointer; transition:background .12s ease; }
+.inv2-join:hover { background:#1e8e4d; }
+
+/* --- Шапка сервера: пилюля с названием; с баннером — высокая, без — 48px --- */
+.srv-title.clickable { justify-content:flex-start; gap:8px; }
+.srv-pill { display:inline-flex; align-items:center; gap:6px; min-width:0; font-weight:700; font-size:15px; border-radius:8px; padding:5px 10px 5px 8px; }
+.srv-title:not(.banner) .srv-pill { padding:5px 8px 5px 4px; }
+.srv-title:not(.banner) .srv-pill:hover { background:rgba(255,255,255,.06); }
+.srv-title.banner { height:auto; min-height:135px; align-items:flex-start; padding:8px; background-size:cover; background-position:center; text-shadow:none; }
+.srv-title.banner .srv-pill { background:rgba(0,0,0,.6); }
+.srv-title.banner .srv-pill:hover { background:rgba(0,0,0,.75); }
+.srv-check { flex:none; width:15px; height:15px; border-radius:5px; background:#23a55a; color:#fff; display:inline-flex; align-items:center; justify-content:center; }
+.srv-head-inv { margin-left:auto; flex:none; background:none; border:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:5px; border-radius:50%; }
+.srv-head-inv:hover { color:#fff; }
+.srv-title.banner .srv-head-inv { background:rgba(0,0,0,.55); color:#fff; }
+.srv-title.banner .srv-head-inv:hover { background:rgba(0,0,0,.75); }
+
+/* --- Верхние строки списка каналов + разделитель --- */
+.ch-toprows-sep { height:1px; background:rgba(255,255,255,.08); margin:8px 10px 2px; }
+
+/* --- Категории: «— Имя ——— ⌄», линия по бокам, как в Discord --- */
+.ch-sec.clickable { gap:6px; }
+.ch-sec::before { content:''; width:8px; min-width:8px; height:1px; background:rgba(255,255,255,.14); }
+.ch-sec-line { flex:1; height:1px; background:rgba(255,255,255,.14); min-width:8px; }
+.ch-sec.clickable:hover::before, .ch-sec.clickable:hover .ch-sec-line { background:rgba(255,255,255,.26); }
+.ch-sec-add { margin-left:2px; }
+
+/* --- Канал: «# 💬 | имя» — эмодзи и вертикальная черта, как в Discord --- */
+.ch-emo { font-size:15px; line-height:1; flex:none; }
+.ch-vbar { width:1px; align-self:stretch; margin:3px 0; background:rgba(255,255,255,.16); flex:none; }
+.ch-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

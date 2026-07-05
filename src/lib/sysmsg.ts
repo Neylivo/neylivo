@@ -26,8 +26,18 @@ export function sysCallEnded(sec: number): string { return SYS + 'sys:call:ended
 export function sysCallMissed(sec: number): string { return SYS + 'sys:call:missed' + SYS + String(sec) }
 
 // v1.68.0: приглашение на сервер в ЛС — карточка с кнопкой «Присоединиться».
-export function sysInvite(code: string, serverName: string): string {
-  return SYS + 'sys:invite:' + code + SYS + serverName
+// v1.81.0: карточка 1-в-1 как в Discord — в preview вшивается JSON-снапшот
+// сервера (иконка, баннер, описание, участники, «в сети», дата основания),
+// потому что получатель до вступления не может читать сервер из-за RLS.
+// Старые сообщения, где preview — просто имя сервера, читаются как раньше.
+export interface InviteMeta { ic?: string | null; bn?: string | null; d?: string | null; m?: number; o?: number; c?: string | null }
+export function sysInvite(code: string, serverName: string, meta?: InviteMeta): string {
+  const body = meta ? JSON.stringify({ n: serverName, ...meta }) : serverName
+  return SYS + 'sys:invite:' + code + SYS + body
+}
+export function parseInviteMeta(preview: string): { n: string } & InviteMeta {
+  if (preview.startsWith('{')) { try { const j = JSON.parse(preview); if (j && typeof j.n === 'string') return j } catch {} }
+  return { n: preview }
 }
 
 /** «несколько секунд» / «5 мин» / «1 ч 12 мин» — как пишет Discord. */

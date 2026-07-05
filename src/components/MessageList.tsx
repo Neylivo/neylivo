@@ -7,7 +7,16 @@ import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
-import { parseSys, fmtCallDur } from '../lib/sysmsg'
+import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
+
+// v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
+const fmtN = (n: number) => n.toLocaleString('ru-RU')
+function ruMembers(n: number): string {
+  const d = n % 100
+  if (d >= 11 && d <= 14) return 'участников'
+  const r = n % 10
+  return r === 1 ? 'участник' : r >= 2 && r <= 4 ? 'участника' : 'участников'
+}
 import { parseFwd } from '../lib/fwd'
 import { ForwardModal } from './ForwardModal'
 import { EmojiPicker } from './EmojiPicker'
@@ -200,16 +209,32 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           return (
             <Fragment key={m.id}>
               {showSysDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-              {sys.type === 'invite' ? (
-                <div className="inv-card">
-                  <div className="inv-card-lb">{currentUser && m.author === currentUser ? 'Вы отправили приглашение присоединиться к серверу' : m.author_name + ' приглашает вас присоединиться к серверу'}</div>
-                  <div className="inv-card-row">
-                    <Avatar name={sys.preview || 'S'} url={null} size={40} />
-                    <div className="inv-card-nm">{sys.preview}</div>
-                    <button className="inv-card-join" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-join-invite', { detail: sys.targetId }))}>Присоединиться</button>
+              {sys.type === 'invite' ? (() => {
+                // v1.81.0: карточка-приглашение 1-в-1 как в Discord: баннер,
+                // иконка, галочка, «в сети»/«участников», дата основания,
+                // описание и зелёная кнопка «Перейти на сервер».
+                const inv = parseInviteMeta(sys.preview)
+                const founded = inv.c ? new Date(inv.c).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }) : null
+                return (
+                  <div className="inv2-card">
+                    <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы отправили приглашение присоединиться к серверу' : m.author_name + ' приглашает вас присоединиться к серверу'}</div>
+                    <div className="inv2-box">
+                      {inv.bn && <div className="inv2-banner" style={{ backgroundImage: `url(${inv.bn})` }} />}
+                      <div className={'inv2-body' + (inv.bn ? ' has-bn' : '')}>
+                        <div className="inv2-ico"><Avatar name={inv.n || 'S'} url={inv.ic ?? null} size={inv.bn ? 56 : 48} /></div>
+                        <div className="inv2-nm"><span className="inv2-nm-t">{inv.n}</span><span className="inv2-check" title="Проверенный сервер"><Icon name="check" size={10} /></span></div>
+                        <div className="inv2-stats">
+                          <span className="inv2-st"><i className="on" /> {fmtN(inv.o ?? 1)} в сети</span>
+                          <span className="inv2-st"><i /> {fmtN(inv.m ?? 1)} {ruMembers(inv.m ?? 1)}</span>
+                        </div>
+                        {founded && <div className="inv2-meta">Дата основания: {founded} г.</div>}
+                        {inv.d && <div className="inv2-desc">{inv.d}</div>}
+                        <button className="inv2-join" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-join-invite', { detail: sys.targetId }))}>Перейти на сервер</button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : sys.type === 'call' ? (() => {
+                )
+              })() : sys.type === 'call' ? (() => {
                 // Системное сообщение о звонке — текст зависит от того, кто смотрит.
                 const mineCall = !!currentUser && m.author === currentUser
                 const st = sys.targetId
