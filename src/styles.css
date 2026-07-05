@@ -3142,3 +3142,34 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .lb-ctx button { display:block; width:100%; text-align:left; background:none; border:none; color:#dbdee1; font-size:14px; font-weight:500; padding:8px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
 .lb-ctx button:hover { background:#4752c4; color:#fff; }
 .lb-ctx-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 4px; }
+
+
+/* ===== v1.83.0: txt/код-вложения — карточка с подсветкой, 1-в-1 как в Discord ===== */
+.cfc { max-width:520px; margin-top:6px; border:1px solid rgba(0,0,0,.3); border-radius:8px; overflow:visible; background:var(--bg3); }
+.cfc-pre { position:relative; border-radius:8px 8px 0 0; overflow:hidden; }
+.cfc-pre pre { margin:0; padding:12px 14px; overflow-x:auto; }
+.cfc-pre code { font-family:Consolas, 'Courier New', monospace; font-size:13px; line-height:1.45; white-space:pre; color:#dbdee1; }
+.cfc-pre.whole pre { max-height:420px; overflow:auto; }
+.cfc-fade { position:absolute; left:0; right:0; bottom:0; height:28px; background:linear-gradient(rgba(43,45,49,0), var(--bg3)); pointer-events:none; }
+.cfc-loading { padding:12px 14px; color:var(--mut); font-size:13px; }
+.cfc-foot { display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(0,0,0,.18); border-radius:0 0 8px 8px; }
+.cfc:has(.cfc-foot:first-child) .cfc-foot, .cfc-foot:first-child { border-radius:8px; }
+.cfc-chev { flex:none; width:26px; height:26px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.06); border:none; border-radius:6px; color:var(--mut); cursor:pointer; }
+.cfc-chev:hover { color:#fff; background:rgba(255,255,255,.1); }
+.cfc-nm { font-size:14px; font-weight:600; color:#f2f3f5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cfc-sz { flex:none; font-size:12px; color:var(--mut); }
+.cfc-acts { margin-left:auto; flex:none; display:flex; align-items:center; gap:2px; }
+.cfc-acts > button, .cfc-more-wrap > button { background:none; border:none; color:var(--mut); cursor:pointer; padding:5px; border-radius:4px; display:flex; align-items:center; }
+.cfc-acts > button:hover, .cfc-more-wrap > button:hover { color:#fff; background:rgba(255,255,255,.08); }
+.cfc-acts button:disabled { opacity:.4; cursor:default; }
+.cfc-more-wrap { position:relative; }
+.cfc-more-ov { position:fixed; inset:0; z-index:1001; }
+.cfc-more { position:absolute; right:0; bottom:calc(100% + 6px); z-index:1002; min-width:210px; background:#111214; border:1px solid rgba(255,255,255,.04); border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.55); }
+.cfc-more button { display:block; width:100%; text-align:left; background:none; border:none; color:#dbdee1; font-size:14px; font-weight:500; padding:8px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.cfc-more button:hover { background:#4752c4; color:#fff; }
+.cfc-full { position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; }
+.cfc-full-box { width:min(920px, 94vw); max-height:88vh; display:flex; flex-direction:column; background:var(--bg3); border-radius:10px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.6); }
+.cfc-full-head { display:flex; align-items:center; gap:8px; padding:10px 14px; background:rgba(0,0,0,.2); }
+.cfc-full-body { overflow:auto; }
+.cfc-full-body pre { margin:0; padding:14px 16px; }
+.cfc-full-body code { font-family:Consolas, 'Courier New', monospace; font-size:13px; line-height:1.5; white-space:pre; color:#dbdee1; }

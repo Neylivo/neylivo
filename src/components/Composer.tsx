@@ -6,6 +6,7 @@ import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
 import { Lightbox } from './Lightbox'
+import { CodeFileCard, isCodeFile } from './CodeFileCard'
 import { useSettings } from '../lib/settings'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -466,5 +467,7 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
       {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
   }
+  // v1.83.0: txt и файлы с кодом — карточка с подсветкой, 1-в-1 как в Discord.
+  if (isCodeFile(clean)) return <CodeFileCard url={clean} sizeLabel={size} />
   return <a className="msg-file" href={clean} target="_blank" rel="noreferrer" title={size ? 'Размер файла: ' + size : undefined}><Icon name="paperclip" size={16} /> Скачать файл{size && <span className="msg-file-size">{size}</span>}</a>
 }
