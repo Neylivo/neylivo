@@ -82,6 +82,26 @@ const DICT_EN: Record<string, string> = {
   'Открепить': 'Unpin', 'Удалить': 'Delete', 'Удалить сообщение?': 'Delete message?', 'изменено': 'edited',
   'Музыка': 'Music', 'печатает…': 'is typing…', 'печатают…': 'are typing…',
   'Несколько человек печатают…': 'Several people are typing…', 'Отмена': 'Cancel',
+  // v1.76.0: дополнение словаря — недостающие экраны
+  'Заявки': 'Requests', 'Все': 'All', 'Добавить друга': 'Add Friend', 'В ожидании': 'Pending',
+  'Пригласить друзей': 'Invite friends', 'Найти друзей': 'Search friends', 'Отправлено': 'Sent',
+  'Присоединиться': 'Join', 'Скопировано!': 'Copied!',
+  'Или отправьте другу ссылку-приглашение на сервер': 'Or send a friend an invite link to the server',
+  'Есть несохранённые изменения!': 'Careful — you have unsaved changes!',
+  'Сохранить изменения': 'Save Changes',
+  'Создать сервер': 'Create Server', 'Присоединиться к серверу': 'Join a Server',
+  'Название сервера': 'Server name', 'Пригласить на сервер': 'Invite to server',
+  'Настройки сервера': 'Server Settings', 'Настройки канала': 'Channel Settings',
+  'Создать канал': 'Create Channel', 'Название канала': 'Channel name', 'Приватный канал': 'Private Channel',
+  'Текстовый': 'Text', 'Голосовой': 'Voice', 'Категория': 'Category', 'Голосовые каналы': 'Voice channels',
+  'Роли': 'Roles', 'Создать роль': 'Create role', 'Название роли': 'Role name', 'Удалить роль': 'Delete role',
+  'Участники': 'Members', 'Название категории': 'Category name', 'Переименовать': 'Rename',
+  'Свернуть': 'Minimize', 'Развернуть': 'Maximize', 'Восстановить': 'Restore', 'Назад': 'Back', 'Вперёд': 'Forward',
+  'Подтвердить': 'Confirm', 'Ветки': 'Threads', 'Интеграции': 'Integrations',
+  'Ролей пока нет': 'No roles yet', 'Вишлист пуст': 'Wishlist is empty',
+  'Нет общих серверов': 'No mutual servers', 'Общие серверы': 'Mutual Servers', 'Общие друзья': 'Mutual Friends',
+  'Недавняя активность': 'Recent Activity', 'Любимая игра': 'Favorite game',
+  'Добавить игру': 'Add game', 'Заметка': 'Note',
 }
 
 const REGEX_EN: [RegExp, string][] = [
@@ -93,6 +113,11 @@ const REGEX_EN: [RegExp, string][] = [
   [/^Не в сети — (\d+)$/, 'Offline — $1'],
   [/^(.+), (.+) печатают…$/, '$1, $2 are typing…'],
   [/^(.+) печатает…$/, '$1 is typing…'],
+  [/^Новых сообщений: (\d+)$/, 'New messages: $1'],
+  [/^Играет в (.+)$/, 'Playing $1'],
+  [/^Слушает (.+)$/, 'Listening to $1'],
+  [/^Участники окажутся в (.+)$/, 'Members will land in $1'],
+  [/^Пригласить друзей в (.+)$/, 'Invite friends to $1'],
 ]
 
 function toEn(t: string): string {
@@ -113,17 +138,31 @@ function toStaro(t: string): string {
     .replace(/([бвгджзклмнпрстфхцчшщБВГДЖЗКЛМНПРСТФХЦЧШЩ])(?![а-яёіъьА-ЯЁІЪЬ])/g, '$1ъ')
 }
 
-// Долбоёбский: превед-стайл.
+// Долбоёбский (v1.76.0): коверкаем АБСОЛЮТНО каждое русское слово в кашу.
+// Раньше менялись только отдельные сочетания (жи/ши, тся…) — большинство слов
+// оставались нормальными. Плюс правила на \b не работали: в JS \b не считает
+// кириллицу «словом», так что /\bчто\b/ вообще никогда не срабатывал.
+// Теперь берём каждое слово целиком и прогоняем через цепочку превращений.
+const DOLB_SWAP: Record<string, string> = {
+  'а': 'о', 'о': 'а', 'е': 'и', 'и': 'е', 'я': 'йа', 'ю': 'йу',
+  'А': 'О', 'О': 'А', 'Е': 'И', 'И': 'Е', 'Я': 'Йа', 'Ю': 'Йу',
+}
+const DOLB_FINAL: Record<string, string> = { 'б': 'п', 'в': 'ф', 'г': 'к', 'д': 'т', 'з': 'с', 'ж': 'ш', 'к': 'г' }
 function toDolb(t: string): string {
   if (!CYR.test(t)) return t
-  return t
-    .replace(/привет/gi, m => (m[0] === 'П' ? 'Превед' : 'превед'))
-    .replace(/ться\b/g, 'цца').replace(/тся\b/g, 'цца')
-    .replace(/жи/g, 'жы').replace(/Жи/g, 'Жы')
-    .replace(/ши/g, 'шы').replace(/Ши/g, 'Шы')
-    .replace(/\bчто\b/g, 'што').replace(/\bЧто\b/g, 'Што')
-    .replace(/ик\b/g, 'ег')
-    .replace(/чн/g, 'шн')
+  return t.replace(/[а-яёА-ЯЁ]+/g, w => {
+    let out = w
+      .replace(/ться$|тся$/g, 'цца')
+      .replace(/^что$/i, m => (m[0] === 'Ч' ? 'Што' : 'што'))
+      .replace(/^привет/i, m => (m[0] === 'П' ? 'Превед' : 'превед'))
+      .replace(/жи/g, 'жы').replace(/Жи/g, 'Жы')
+      .replace(/ши/g, 'шы').replace(/Ши/g, 'Шы')
+      .replace(/чн/g, 'шн')
+      .replace(/ик$/g, 'ег').replace(/ики$/g, 'еги')
+    out = out.replace(/[аоеияюАОЕИЯЮ]/g, ch => DOLB_SWAP[ch] ?? ch)
+    out = out.replace(/[бвгдзжк]$/, c => DOLB_FINAL[c] ?? c)
+    return out
+  })
 }
 
 let cur = 'ru'
