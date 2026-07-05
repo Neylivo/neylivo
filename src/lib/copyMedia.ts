@@ -90,6 +90,14 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
+// v1.105.0: «Скопировать гифку» — копируем ссылку на сам .gif (ровно как Discord):
+// системный буфер обмена принимает картинки только как статичный PNG, поэтому
+// класть туда «изображение» значит убить анимацию. Ссылка же при вставке в чат
+// снова превращается в живую гифку (GifEmbed), а в других местах остаётся ссылкой.
+export async function copyGif(url: string): Promise<void> {
+  await copyText(url.replace('#spoiler', ''), 'Гифка скопирована')
+}
+
 // Копирование ссылки на медиафайл.
 export async function copyMediaLink(url: string): Promise<void> {
   await copyText(url.replace('#spoiler', ''), 'Ссылка скопирована')

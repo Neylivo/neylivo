@@ -8,7 +8,7 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
-import { copyMedia, saveMedia, copyText } from '../lib/copyMedia'
+import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
@@ -339,6 +339,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
 
       {menu && menuMsg && (() => {
         const img = msgImage(menuMsg)
+        // v1.105.0: правый клик по гифке — пункты меню про гифку, а не про изображение.
+        const isGif = !!img && /\.gif(?:$|\?)/i.test(img.split('#')[0])
         const fwdM = parseFwd(menuMsg.content)
         const textOf = fwdM ? fwdM.text : (menuMsg.content ?? '')
         const item = (label: string, icon: string, fn: () => void, cls = '') => (
@@ -363,11 +365,12 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {img ? <>
             <div className="ctx-sep" />
-            {item('Копировать изображение', 'image', () => { copyMedia(img) })}
-            {item('Сохранить изображение', 'download', () => { saveMedia(img) })}
+            {isGif ? item('Скопировать гифку', 'image', () => { copyGif(img) })
+                   : item('Копировать изображение', 'image', () => { copyMedia(img) })}
+            {item(isGif ? 'Сохранить гифку' : 'Сохранить изображение', 'download', () => { saveMedia(img) })}
             <div className="ctx-sep" />
-            {item('Копировать ссылку на изображение', 'link', () => { copyText(img, 'Ссылка скопирована') })}
-            {item('Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
+            {item(isGif ? 'Копировать ссылку на гифку' : 'Копировать ссылку на изображение', 'link', () => { copyText(img, 'Ссылка скопирована') })}
+            {item(isGif ? 'Открыть ссылку на гифку' : 'Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
           </> : null}
           {menuMsg.author === currentUser ? <>
             <div className="ctx-sep" />
