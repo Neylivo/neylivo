@@ -21,6 +21,9 @@ import { HotkeysModal } from './HotkeysModal'
 import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
+import { bumpDm, bumpMention, clearBadgeKey } from '../lib/badge'
+import { mentionsUser } from '../lib/md'
+import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
@@ -147,13 +150,17 @@ export function Home() {
     if (!user) return
     const ch = supabase.channel('unread:messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => {
-        const msg = p.new as { channel_id?: string; author?: string }
+        const msg = p.new as { channel_id?: string; author?: string; content?: string | null }
         if (!msg.channel_id || msg.author === user.id) return
         const sid = chMap.current[msg.channel_id]
         if (!sid) return
-        if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
         const v = viewRef.current
-        if (v.kind === 'server' && v.server.id === sid) return
+        const viewing = v.kind === 'server' && v.server.id === sid
+        // v1.100.0: @упоминание меня — красный кружок на иконке приложения.
+        // Работает даже на заглушенном сервере (как в Discord: mute прячет точку, но не пинги).
+        if (!viewing && (mentionsUser(msg.content ?? '', nameRef.current.username) || mentionsUser(msg.content ?? '', nameRef.current.handle))) bumpMention(sid)
+        if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
+        if (viewing) return
         setUnread(prev => { const n = new Set(prev); n.add(sid); return n })
       })
       .subscribe()
@@ -162,7 +169,35 @@ export function Home() {
   }, [user])
   function clearUnread(id: string) {
     setUnread(prev => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n })
+    clearBadgeKey('srv:' + id)   // v1.100.0: зашли на сервер — пинги с него сняты с кружка
   }
+
+  // v1.100.0: кружок на иконке приложения — глобальный счёт новых ЛС.
+  // Свои диалоги знаем по dm_threads; открытый сейчас диалог кружок не увеличивает
+  // (модулю бейджа его сообщает DMHome через setActiveDm).
+  const nameRef = useRef({ username: '', handle: '' })
+  useEffect(() => { nameRef.current = { username, handle } }, [username, handle])
+  const dmThreadsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!user) return
+    let alive = true
+    const load = () => { supabase.from('dm_threads').select('id')
+      .or('user_a.eq.' + user.id + ',user_b.eq.' + user.id)
+      .then(({ data }) => { if (alive) dmThreadsRef.current = new Set(((data ?? []) as any[]).map(t => t.id)) }) }
+    load()
+    const ch = supabase.channel('badge:dm')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_threads' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, p => {
+        const m = p.new as { thread_id?: string; author?: string; content?: string | null }
+        if (!m.thread_id || m.author === user.id) return
+        if (!dmThreadsRef.current.has(m.thread_id)) return
+        if (parseSys(m.content ?? null)) return   // системные («начал звонок») не считаем
+        bumpDm(m.thread_id)
+      })
+      .subscribe()
+    return () => { alive = false; supabase.removeChannel(ch) }
+    // eslint-disable-next-line
+  }, [user])
 
   useEffect(() => {
     if (!user) return

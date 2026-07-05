@@ -320,6 +320,28 @@ ipcMain.on('ponoi-overlay-open', () => {
 })
 ipcMain.on('ponoi-overlay-close', () => { try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {} })
 
+// ---- v1.100.0: красный кружок с числом непрочитанного на иконке в панели задач ----
+// Рендерер рисует кружок на canvas и присылает PNG + число; main вешает его
+// overlay-иконкой на окно (Windows). Ноль — снимаем. Если окно не в фокусе,
+// иконка в панели задач ещё и мигает (как у Discord).
+ipcMain.on('ponoi-badge', (_e, p) => {
+  try {
+    const n = Math.max(0, Number(p && p.count) || 0)
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w === overlayWin || w === gameToastWin || w === splash) continue
+      if (n > 0 && p && typeof p.dataUrl === 'string') {
+        const img = nativeImage.createFromDataURL(p.dataUrl)
+        if (!img.isEmpty()) {
+          w.setOverlayIcon(img, 'Непрочитанных: ' + n)
+          if (!w.isFocused()) w.flashFrame(true)
+        }
+      } else {
+        w.setOverlayIcon(null, '')
+      }
+    }
+  } catch {}
+})
+
 // ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
 // Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там
 // появляется строка «Joining game '<guid>' place <id> …» — из неё берём placeId,

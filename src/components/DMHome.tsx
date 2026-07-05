@@ -1,4 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
+import { setActiveDm } from '../lib/badge'
 import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -38,6 +39,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [results, setResults] = useState<Profile[]>([])
   const [active, setActive] = useState<Friend | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
+  // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
+  useEffect(() => { setActiveDm(threadId); return () => setActiveDm(null) }, [threadId])
   const [messages, setMessages] = useState<DMMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgsBoxRef = useRef<HTMLDivElement>(null)

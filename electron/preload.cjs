@@ -25,5 +25,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   gameToast: (p) => ipcRenderer.send('ponoi-game-toast', p),
   // v1.99.0: стартовый оверлей при входе в игру — «Пригласите друзей поиграть».
   gameOverlay: (p) => ipcRenderer.send('ponoi-game-overlay', p),
+  // v1.100.0: красный кружок с числом непрочитанного на иконке в панели задач.
+  setBadge: (dataUrl, count) => ipcRenderer.send('ponoi-badge', { dataUrl, count }),
   onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
 })
