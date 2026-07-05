@@ -657,7 +657,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                 </div>
                 {(voiceUsers[c.id] ?? []).map(u => (
                   <div key={u.userId} className={'vo' + (speaking[u.userId] ? ' speaking' : '')} title={u.username}>
-                    <span className="vo-av"><Avatar name={u.username} url={u.avatar} size={20} /></span>
+                    <span className="vo-av"><Avatar name={u.username} url={u.avatar} userId={u.userId} size={20} /></span>
                     <span className="vo-nm">{u.username}</span>
                   </div>
                 ))}
@@ -795,7 +795,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               anchor: 'member-list',
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
-              <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
+              <AvatarWithStatus name={m.member_name} url={m.avatar_url} userId={m.user_id} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
               <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}{(() => { const ic = topIconOf(m); return ic ? <img className="role-badge" src={ic} alt="" title={rr?.name} /> : null })()}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />

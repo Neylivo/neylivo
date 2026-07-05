@@ -162,7 +162,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
         <ProfilePet p={pp} scale={0.3} card="mini" bannerH={74} />
         <div className="mini-avrow">
           <div className="mini-av" onClick={() => setFull(true)} title="Открыть полный профиль">
-            <Avatar name={data.name} url={av} size={80} />
+            <Avatar name={data.name} url={av} userId={data.userId} size={80} />
             <span className="mini-av-status"><StatusDot status={data.status} size={18} /></span>
           </div>
         </div>

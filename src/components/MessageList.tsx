@@ -281,7 +281,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {grouped
                   ? <span className="msg-ts-hover" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                   : settings.showAvatars
-                  ? <span className="av-click" title="Профиль" onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}><Avatar name={m.author_name} url={m.author_avatar} size={40} /></span>
+                  ? <span className="av-click" title="Профиль" onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}><Avatar name={m.author_name} url={m.author_avatar} size={40} userId={m.author} /></span>
                   : null}
               </div>
               <div className="msg-body">

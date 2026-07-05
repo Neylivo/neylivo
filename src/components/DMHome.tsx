@@ -575,7 +575,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         <div className="ch-list">
           {friends.map(f => (
             <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
-              <AvatarWithStatus name={f.name} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+              <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
               <span className="me-nm">{f.name}
                 {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
               </span>
@@ -680,7 +680,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 <div className="pfr-sec">Похожие пользователи</div>
                 {results.filter(p => p.id !== meId).map(p => (
                   <div key={p.id} className="pfr-row" onClick={() => add(p)}>
-                    <Avatar name={p.display_name || p.username} url={p.avatar_url} size={32} />
+                    <Avatar name={p.display_name || p.username} url={p.avatar_url} userId={p.id} size={32} />
                     <span className="pfr-name">{p.display_name || p.username}<span className="pfr-uname">{p.username}</span></span>
                     <span className="pfr-add-btn"><Icon name="plus" size={14} /> Добавить</span>
                   </div>
@@ -700,7 +700,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
               {requests.length === 0 && <div className="pfr-empty">Нет входящих заявок</div>}
               {requests.map(r => (
                 <div key={r.id} className="pfr-row">
-                  <Avatar name={r.from_name} size={32} />
+                  <Avatar name={r.from_name} userId={r.from_user} size={32} />
                   <span className="pfr-name">{r.from_name}</span>
                   <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
                   <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
@@ -716,7 +716,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                   {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
                   {list.map(f => (
                     <div key={f.id} className="pfr-row pfr-row2" onClick={() => openChat(f)}>
-                      <AvatarWithStatus name={f.name} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                      <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
                       <span className="pfr-nm2">
                         <span className="pfr-name">{f.name}</span>
                         <span className="pfr-substatus">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
@@ -750,7 +750,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 return (
                   <div key={f.id} className="an-card" onClick={() => openChat(f)}>
                     <div className="an-head">
-                      <AvatarWithStatus name={f.name} size={40} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                      <AvatarWithStatus name={f.name} userId={f.id} size={40} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
                       <div className="an-tx">
                         <div className="an-nm">{f.name}</div>
                         <div className="an-sub">{g!.name} — {dur(g!.since)}</div>
@@ -772,7 +772,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                           return <><div className="an-gnm">{g!.name}</div><div className="an-gsub">{md ?? ruPpl(same.length)}</div></>
                         })()}
                       </div>
-                      <span className="an-gavs">{same.slice(0, 3).map(x => <Avatar key={x.f.id} name={x.f.name} size={24} />)}</span>
+                      <span className="an-gavs">{same.slice(0, 3).map(x => <Avatar key={x.f.id} name={x.f.name} userId={x.f.id} size={24} />)}</span>
                     </div>
                   </div>
                 )
