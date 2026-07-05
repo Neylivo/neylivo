@@ -76,11 +76,11 @@ body {
 .channels { width:240px; background:var(--bg2); display:flex; flex-direction:column; }
 .srv-title { padding:16px; font-weight:700; border-bottom:1px solid rgba(0,0,0,.2); box-shadow:0 1px 0 rgba(0,0,0,.2); display:flex; align-items:center; justify-content:space-between; }
 .ch-list { flex:1; overflow-y:auto; padding:8px; }
-.ch { padding:8px 10px; border-radius:6px; color:var(--mut); cursor:pointer; transition:background .15s ease, color .15s ease; }
+.ch { padding:8px 10px; border-radius:4px; color:var(--mut); cursor:pointer; transition:background .15s ease, color .15s ease; }
 .ch:hover { background:rgba(255,255,255,.04); color:var(--tx); }
 .ch.on { background:rgba(255,255,255,.08); color:#fff; }
 .ch.add { color:var(--green); }
-.me { display:flex; align-items:center; gap:8px; padding:10px; background:var(--c-main); }
+.me { display:flex; align-items:center; gap:8px; height:52px; padding:0 10px; background:var(--c-main); }
 .me-av { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:14px; overflow:hidden; cursor:pointer; }
 .me-av img { width:100%; height:100%; object-fit:cover; }
 .me-nm { flex:1; font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -98,27 +98,27 @@ body {
 .msg-hdr { display:flex; align-items:baseline; gap:8px; }
 .msg-hdr .nm { font-weight:600; color:#f2f3f5; }
 .msg-time { color:var(--mut); font-size:12px; }
-.msg-txt { margin-top:2px; white-space:pre-wrap; word-break:break-word; line-height:1.4; }
+.msg-txt { margin-top:2px; white-space:pre-wrap; word-break:break-word; line-height:1.375; }
 .composer { padding:0 16px 24px; display:flex; gap:8px; }
-.composer input { flex:1; background:var(--c-hover); border:none; border-radius:8px; padding:12px 14px; color:var(--tx); font-size:15px; outline:none; }
+.composer input { flex:1; background:var(--c-hover); border:none; border-radius:8px; padding:12px 14px; color:var(--tx); font-size:16px; outline:none; }
 .composer input::placeholder { color:var(--mut); }
 .composer button { background:var(--brand); border:none; color:#fff; border-radius:8px; padding:0 16px; cursor:pointer; font-size:16px; transition:filter .15s ease; }
 .composer button:hover { filter:brightness(1.1); }
 
 /* friends + DM */
 .mut { color: var(--mut); }
-.dm-side { width:260px; background:var(--bg2); display:flex; flex-direction:column; }
+.dm-side { width:240px; background:var(--bg2); display:flex; flex-direction:column; }
 .dm-side-top { padding:12px; border-bottom:1px solid rgba(0,0,0,.2); }
 .addfriend { display:flex; gap:6px; }
 .addfriend input { flex:1; background:var(--bg3); border:none; border-radius:6px; padding:9px 10px; color:var(--tx); outline:none; }
-.dm-sec-t { padding:12px 14px 4px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
+.dm-sec-t { padding:12px 14px 4px; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
 .req { display:flex; align-items:center; gap:8px; padding:6px 12px; }
 .req .nm { flex:1; font-size:14px; }
 .req button { border:none; border-radius:6px; cursor:pointer; width:28px; height:28px; font-size:14px; transition:filter .15s ease; }
 .req button:hover { filter:brightness(1.12); }
 .req .ok { background:var(--green); color:#fff; }
 .req .no { background:var(--red); color:#fff; }
-.dm-item { display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; border-radius:6px; margin:1px 6px; transition:background .12s ease; }
+.dm-item { display:flex; align-items:center; gap:8px; padding:7px 10px; cursor:pointer; border-radius:4px; margin:1px 6px; transition:background .12s ease; }
 .dm-item:hover { background:rgba(255,255,255,.04); }
 .dm-item.on { background:rgba(255,255,255,.08); }
 .dm-av { width:32px; height:32px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14px; overflow:hidden; }
@@ -135,7 +135,7 @@ body {
 /* attachments */
 .attach-btn { background:var(--c-hover); border:none; color:var(--tx); border-radius:8px; width:44px; font-size:20px; cursor:pointer; transition:background .15s ease; }
 .attach-btn:hover { background:#4e5058; }
-.msg-att { max-width:360px; max-height:300px; border-radius:8px; margin-top:6px; display:block; }
+.msg-att { max-width:550px; max-height:350px; border-radius:8px; margin-top:6px; display:block; }
 .msg-file { display:inline-block; margin-top:6px; color:var(--blue); text-decoration:none; }
 
 /* music */
@@ -200,7 +200,7 @@ body {
 .srv-wrap:hover::before { height:20px; }
 .srv-wrap.on::before { height:40px; }
 
-.ch-sec { padding:16px 8px 4px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
+.ch-sec { padding:16px 8px 4px; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
 
 /* message grouping */
 .msgs { gap:0; padding:12px 0 12px; }
@@ -209,7 +209,7 @@ body {
 .msg-gutter { width:40px; flex-shrink:0; display:flex; justify-content:center; }
 .msg.grouped { margin-top:0; }
 .msg.grouped .msg-txt { margin-top:0; }
-.msg-ts-hover { font-size:10px; color:var(--mut); opacity:0; align-self:center; line-height:1; }
+.msg-ts-hover { font-size:11px; color:var(--mut); opacity:0; align-self:center; line-height:1; }
 .msg.grouped:hover .msg-ts-hover { opacity:1; }
 .msg-tools { position:absolute; top:-12px; right:12px; display:none; background:var(--bg2); border:1px solid rgba(0,0,0,.2);
   border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
@@ -445,7 +445,7 @@ input[type=range] { accent-color:var(--brand); }
 .srv-title:hover { background:rgba(255,255,255,.03); }
 .ch-sec { display:flex; align-items:center; gap:4px; }
 .ch-sec::before { content:'⌄'; font-size:12px; opacity:.7; }
-.ch { display:flex; align-items:center; gap:6px; font-size:15px; }
+.ch { display:flex; align-items:center; gap:6px; font-size:16px; }
 .ch::before { content:'#'; color:var(--mut); font-size:18px; font-weight:400; }
 .ch.add::before, .ch[style]::before { content:''; }
 
@@ -900,7 +900,7 @@ body { font-size: var(--font-px, 16px); }
 @keyframes sbrec { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
 /* ===== Гибкие настройки (flexible settings) ===== */
 :root { --radius: 8px; --msg-gap: 0px; }
-.msg:not(.grouped) { margin-top: calc(8px + var(--msg-gap)); }
+.msg:not(.grouped) { margin-top: calc(17px + var(--msg-gap)); }
 .msg-txt.big-emoji { font-size: 2.6em; line-height: 1.25; }
 .msg-txt.big-emoji .inline-emoji { width: 2.6em; height: 2.6em; vertical-align: middle; }
 .composer, .pqs-in, select.pqs-in, .sb, .msg-att { border-radius: var(--radius); }
@@ -1426,7 +1426,7 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .ch { padding:6px 8px; margin:1px 0; font-weight:500; }
 .ch.on { font-weight:600; }
 /* Список участников: ширина и ритм Discord */
-.members { width:236px; padding:12px 8px; }
+.members { width:240px; padding:12px 8px; }
 .member { padding:5px 8px; cursor:pointer; }
 /* Сообщения: мягче ховер, ровнее вертикальный ритм */
 .msg { padding:4px 12px; }
@@ -1548,7 +1548,7 @@ body.no-anim .member-typing i { animation:none; }
 .ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }
 
 /* ===== Панель ввода 1-в-1 как в эталоне: единая тёмная капсула ===== */
-.composer { background:#383a40; border-radius:24px; margin:0 16px 20px; padding:0 8px 0 6px; gap:2px; min-height:46px; align-items:center; }
+.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:0 8px 0 6px; gap:2px; min-height:44px; align-items:center; }
 .composer input { background:transparent; border-radius:0; padding:12px 8px; }
 .composer .attach-btn { background:transparent; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#b5bac1; border-radius:50%; padding:0; }
 .composer .attach-btn:hover { background:transparent; color:#fff; }
@@ -1573,7 +1573,7 @@ body.no-anim .member-typing i { animation:none; }
 .voice-pill { margin:6px 16px 4px; }
 
 /* ===== Мини-профиль 1-в-1 как в эталоне (v1.8.0) ===== */
-.mini.mini2 { width:300px; border-radius:14px; }
+.mini.mini2 { width:340px; border-radius:14px; }
 .mini2 .mini-banner { height:74px; }
 /* Кнопки сверху справа: добавить в друзья и «…» */
 .mini-topbtns { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:3; }
@@ -2996,7 +2996,7 @@ body.no-anim .member-typing i { animation:none; }
 /* Решётка и динамик — настоящие иконки в разметке; псевдо-# больше не рисуем */
 .ch::before { content:none !important; }
 /* Строка канала: скругление 8px, иконка слева приглушённая, имя не съезжает при ховере */
-.ch { padding:6px 8px; margin:1px 0; border-radius:8px; font-size:15px; }
+.ch { padding:6px 8px; margin:1px 0; border-radius:4px; font-size:16px; }
 .ch:hover { padding-left:8px; }
 .ch .ch-nm { gap:8px; }
 .ch .ch-nm > svg { color:#80848e; flex:none; }
