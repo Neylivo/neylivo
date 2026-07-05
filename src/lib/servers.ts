@@ -55,10 +55,18 @@ export async function listMembers(serverId: string) {
   const members = (data ?? []) as any[]
   if (members.length === 0) return members
   const ids = members.map(m => m.user_id)
-  const { data: profs } = await supabase.from('profiles').select('id, avatar_url').in('id', ids)
-  const byId: Record<string, string | null> = {}
-  for (const p of ((profs ?? []) as any[])) byId[p.id] = p.avatar_url ?? null
-  return members.map(m => ({ ...m, avatar_url: byId[m.user_id] ?? null }))
+  // v1.95.0: тянем и «кубик» (nameplate); до миграции 24 колонок нет — откатываемся на базовый набор.
+  let profs: any[] | null = null
+  const r = await supabase.from('profiles').select('id, avatar_url, nameplate_url, nameplate_kind, nameplate_outline').in('id', ids)
+  if (!r.error) profs = (r.data ?? []) as any[]
+  else { const r2 = await supabase.from('profiles').select('id, avatar_url').in('id', ids); profs = (r2.data ?? []) as any[] }
+  const byId: Record<string, any> = {}
+  for (const p of (profs ?? [])) byId[p.id] = p
+  return members.map(m => ({ ...m,
+    avatar_url: byId[m.user_id]?.avatar_url ?? null,
+    nameplate_url: byId[m.user_id]?.nameplate_url ?? null,
+    nameplate_kind: byId[m.user_id]?.nameplate_kind ?? null,
+    nameplate_outline: byId[m.user_id]?.nameplate_outline ?? null }))
 }
 
 // Общие сервера двух пользователей (вкладка «Общие сервера» в фулл-профиле).

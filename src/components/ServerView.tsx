@@ -16,6 +16,7 @@ import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine } from './ActivityLabel'
+import { PlateBg } from './PlateBg'
 import { listMembers, updateServer } from '../lib/servers'
 import { Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
@@ -767,13 +768,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const rr = m.role_id ? roleById[m.role_id] : undefined
             const isTyping = typers.includes(m.member_name)
             return (
-            <div key={m.user_id} className="member"
+            <div key={m.user_id} className={'member' + (m.nameplate_outline ? ' plate-outline' : '')}
+              style={m.nameplate_outline ? { ['--plate-oc' as any]: m.nameplate_outline } : undefined}
               onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
               role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
               anchor: 'member-list',
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
+              {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
               <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}
                 {(() => { const g = gameOf(m.user_id)

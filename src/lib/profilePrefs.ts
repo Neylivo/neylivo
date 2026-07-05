@@ -20,6 +20,10 @@ export interface ProfilePrefs {
   pronouns: string         // местоимения (карточка профиля)
   integrations: Integration[]
   createdAt: string | null // profiles.created_at («В числе участников с»)
+  // v1.95.0: «кубик» (nameplate) — фон (фото/видео <=5 сек) и обводка панельки с ником
+  plateUrl: string | null
+  plateKind: 'image' | 'video' | 'none'
+  plateOutline: string | null
 }
 
 export interface Integration { label: string; url: string }
@@ -29,6 +33,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
   petFree: { x: 80, y: 22 },
   pronouns: '', integrations: [], createdAt: null,
+  plateUrl: null, plateKind: 'none', plateOutline: null,
 }
 
 
@@ -60,6 +65,9 @@ function fromRow(r: any): ProfilePrefs {
     pronouns: r.pronouns ?? '',
     integrations: Array.isArray(r.integrations) ? r.integrations : [],
     createdAt: r.created_at ?? null,
+    plateUrl: r.nameplate_url ?? null,
+    plateKind: (r.nameplate_kind as any) ?? 'none',
+    plateOutline: r.nameplate_outline ?? null,
   }
 }
 
@@ -78,6 +86,9 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
       : full.petPos
   if (p.pronouns !== undefined) r.pronouns = p.pronouns
   if (p.integrations !== undefined) r.integrations = p.integrations
+  if (p.plateUrl !== undefined) r.nameplate_url = p.plateUrl
+  if (p.plateKind !== undefined) r.nameplate_kind = p.plateKind
+  if (p.plateOutline !== undefined) r.nameplate_outline = p.plateOutline
   return r
 }
 
@@ -86,11 +97,14 @@ const cache: Record<string, ProfilePrefs> = {}
 
 const COLS_BASE = 'primary_color, accent_color, about, pet_url, pet_kind, pet_on, pet_size, pet_pos'
 const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
+const COLS_PLATE = COLS_EXT + ', nameplate_url, nameplate_kind, nameplate_outline'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
-  let { data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle()
+  // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
+  let { data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle())
   if (error) ({ data } = await supabase.from('profiles').select(COLS_BASE).eq('id', id).maybeSingle())
   const p = fromRow(data)
   cache[id] = p

@@ -6,6 +6,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { useSettings, type Settings as AppSettings, type CustomTheme } from '../lib/settings'
 import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
 import { uploadTo } from '../lib/storage'
+import { isVideoUrl, trimVideoTo5s } from '../lib/videoAvatar'
+import { PlateBg } from './PlateBg'
 import { ProfilePet } from './ProfilePet'
 import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
@@ -119,8 +121,8 @@ function ChatBgCard() {
   )
 }
 
-export function Settings({ username, avatarUrl, onClose }:
-  { username: string; avatarUrl?: string | null; onClose: () => void }) {
+export function Settings({ username, avatarUrl, onClose, onAvatar }:
+  { username: string; avatarUrl?: string | null; onClose: () => void; onAvatar?: (url: string) => void }) {
   const { user } = useAuth()
   const { settings, set, themes } = useSettings()
   // v1.63.0: черновик настроек приложения — изменения (масштаб, шрифт, тема и т.д.)
@@ -195,6 +197,34 @@ export function Settings({ username, avatarUrl, onClose }:
   async function patchProf(patch: Partial<ProfilePrefs>) {
     setProf(p => ({ ...p, ...patch }))
     if (user) await saveProfile(user.id, patch)
+  }
+  // v1.95.0: аватар фото/видео (<=5 сек) и «кубик» (nameplate) прямо из настроек
+  const avRef = useRef<HTMLInputElement>(null)
+  const [avBusy, setAvBusy] = useState(false)
+  const [avUrl, setAvUrl] = useState<string | null | undefined>(avatarUrl)
+  const plateRef = useRef<HTMLInputElement>(null)
+  const [plateBusy, setPlateBusy] = useState(false)
+  async function pickAv(e: React.ChangeEvent<HTMLInputElement>) {
+    let f = e.target.files?.[0]; if (!f || !user) return
+    setAvBusy(true)
+    try {
+      if (f.type.startsWith('video')) f = await trimVideoTo5s(f)   // видео-аватар: не длиннее 5 сек
+      const url = await uploadTo('avatars', user.id, f)
+      await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id)
+      setAvUrl(url); onAvatar?.(url)
+      window.dispatchEvent(new CustomEvent('ponoi-profile', { detail: { id: user.id } }))
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setAvBusy(false) }
+  }
+  async function pickPlate(e: React.ChangeEvent<HTMLInputElement>) {
+    let f = e.target.files?.[0]; if (!f || !user) return
+    setPlateBusy(true)
+    try {
+      if (f.type.startsWith('video')) f = await trimVideoTo5s(f)   // фон-видео «кубика»: не длиннее 5 сек
+      const url = await uploadTo('avatars', user.id, f)
+      await patchProf({ plateUrl: url, plateKind: f.type.startsWith('video') ? 'video' : 'image' })
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setPlateBusy(false) }
   }
   async function pickPet(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !user) return
@@ -416,14 +446,21 @@ export function Settings({ username, avatarUrl, onClose }:
                 <div className="pqs-acc-card">
                   <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
                   <div className="pqs-acc-row">
-                    <div className="pqs-acc-av" style={{ background: view.accent }}>
-                      {avatarUrl ? <img src={avatarUrl} alt={username} /> : username.slice(0, 1).toUpperCase()}
+                    <div className="pqs-acc-av" style={{ background: view.accent, cursor: 'pointer' }} onClick={() => avRef.current?.click()} title="Сменить аватар">
+                      {avUrl
+                        ? (isVideoUrl(avUrl)
+                          ? <video src={avUrl} muted loop autoPlay playsInline onTimeUpdate={e => { const el = e.currentTarget; if (el.currentTime >= 5) el.currentTime = 0 }} />
+                          : <img src={avUrl} alt={username} />)
+                        : username.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="pqs-acc-names">
                       <div className="pqs-acc-name">{name || username}</div>
                       <div className="pqs-acc-uname">{uname}</div>
                     </div>
+                    <button className="pqs2-btn primary" style={{ marginLeft: 'auto' }} onClick={() => avRef.current?.click()}>{avBusy ? 'Загрузка…' : 'Сменить аватар'}</button>
+                    <input ref={avRef} type="file" accept="image/*,video/*" hidden onChange={pickAv} />
                   </div>
+                  <div className="pqs-code-sub" style={{ margin: '0 16px 12px' }}>Аватар — фото или видео до 5 сек (длинное видео обрежется автоматически). Видео-аватар оживает при наведении мыши.</div>
                 </div>
                 <label className="pqs-lbl">О себе</label>
                 <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
@@ -436,6 +473,25 @@ export function Settings({ username, avatarUrl, onClose }:
                   </div>
                   <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
                   <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
+                </div>
+
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t">Кубик профиля</div>
+                  <div className="pqs-code-sub">Оформи «кубик» с ником и аватаркой (панель внизу слева и твоя строка в списке участников): фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Видно всем.</div>
+                  <div className={'plate-prev' + (prof.plateOutline ? ' plate-outline' : '')} style={prof.plateOutline ? { ['--plate-oc' as any]: prof.plateOutline } : undefined}>
+                    {prof.plateUrl && prof.plateKind !== 'none' && <PlateBg url={prof.plateUrl} kind={prof.plateKind} />}
+                    <div className="pqs-acc-av" style={{ background: view.accent }}>
+                      {avUrl ? (isVideoUrl(avUrl) ? <video src={avUrl} muted loop playsInline preload="metadata" /> : <img src={avUrl} alt="" />) : username.slice(0, 1).toUpperCase()}
+                    </div>
+                    <span className="plate-prev-nm">{name || username}</span>
+                  </div>
+                  <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <button className="pqs2-btn primary" onClick={() => plateRef.current?.click()}>{plateBusy ? 'Загрузка…' : (prof.plateUrl ? 'Заменить фон' : 'Фон: фото или видео')}</button>
+                    {prof.plateUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateUrl: null, plateKind: 'none' })}>Убрать фон</button>}
+                    <label className="pqs-ptheme"><input type="color" value={prof.plateOutline ?? '#5865f2'} onChange={e => patchProf({ plateOutline: e.target.value })} /> Обводка</label>
+                    {prof.plateOutline && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateOutline: null })}>Убрать обводку</button>}
+                  </div>
+                  <input ref={plateRef} type="file" accept="image/*,video/*" hidden onChange={pickPlate} />
                 </div>
 
                 <div className="pqs-acc-card2 pet2">

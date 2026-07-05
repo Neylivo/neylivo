@@ -3291,3 +3291,20 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .an-gavs > *:first-child { margin-left: 0; }
 .an-empty { font-size: 13px; color: #b5bac1; line-height: 1.45; padding: 6px 2px; }
 .an-empty b { display: block; color: #f2f3f5; margin-bottom: 2px; }
+
+/* ===== v1.95.0: видео-аватарки и «кубик» профиля (nameplate) ===== */
+/* Фон «кубика»: поверх фона строки, но под содержимым (контент приподнят z-index'ом).
+   Маска — плотнее справа, мягче у аватарки, как у табличек в Discord. */
+.plate-bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; z-index:0; border-radius:inherit;
+  -webkit-mask-image:linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.85) 55%, #000);
+  mask-image:linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.85) 55%, #000); }
+.member { position:relative; overflow:hidden; }
+.member > :not(.plate-bg) { position:relative; z-index:1; }
+.me-lift { position:relative; z-index:1; }
+.plate-outline { position:relative; }
+.plate-outline::after { content:''; position:absolute; inset:0; border:2px solid var(--plate-oc, #5865f2); border-radius:inherit; pointer-events:none; z-index:2; }
+.plate-prev { position:relative; overflow:hidden; display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--bg2, #2b2d31); max-width:320px; margin-top:10px; }
+.plate-prev > :not(.plate-bg) { position:relative; z-index:1; }
+.plate-prev .pqs-acc-av { width:36px; height:36px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; }
+.plate-prev-nm { font-weight:600; font-size:16px; }
+.pqs-acc-av video { width:100%; height:100%; object-fit:cover; }
