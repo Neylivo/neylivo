@@ -87,13 +87,21 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
       const th = await openThread(meId, f.id)
       if (!th) throw new Error('Не удалось открыть диалог')
       // v1.81.0: карточка как в Discord — вшиваем снапшот сервера в сообщение.
+      // v1.87.0: «участников» — ОБЩЕЕ число всех (включая тех, кто в сети):
+      // берём объединение списка участников + владелец + я + все, кто онлайн
+      // из этого набора; итог не может быть меньше числа «в сети».
       const st: any = (server as any).settings ?? {}
+      const idSet = new Set<string>(memberIds)
+      idSet.add(meId)
+      if ((server as any).owner) idSet.add((server as any).owner)
+      const allIds = Array.from(idSet)
+      const onlineCnt = Math.max(allIds.filter(id => (online as any)[id] && (online as any)[id].status !== 'offline').length, 1)
       const meta = {
         ic: (server as any).avatar_url ?? null,
         bn: st.banner_url ?? null,
         d: st.description ?? null,
-        m: Math.max(memberIds.length, 1),
-        o: Math.max(memberIds.filter(id => (online as any)[id] && (online as any)[id].status !== 'offline').length, 1),
+        m: Math.max(allIds.length, onlineCnt),
+        o: onlineCnt,
         c: server.created_at ?? null,
       }
       const { error } = await supabase.from('dm_messages').insert({

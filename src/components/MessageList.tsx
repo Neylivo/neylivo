@@ -200,7 +200,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         <div className="inv2-nm"><span className="inv2-nm-t">{inv.n}</span><span className="inv2-check" title="Проверенный сервер"><Icon name="check" size={10} /></span></div>
                         <div className="inv2-stats">
                           <span className="inv2-st"><i className="on" /> {fmtN(inv.o ?? 1)} в сети</span>
-                          <span className="inv2-st"><i /> {fmtN(inv.m ?? 1)} {ruMembers(inv.m ?? 1)}</span>
+                          <span className="inv2-st"><i /> {fmtN(Math.max(inv.m ?? 1, inv.o ?? 1))} {ruMembers(Math.max(inv.m ?? 1, inv.o ?? 1))}</span>
                         </div>
                         {founded && <div className="inv2-meta">Дата основания: {founded} г.</div>}
                         {inv.d && <div className="inv2-desc">{inv.d}</div>}
