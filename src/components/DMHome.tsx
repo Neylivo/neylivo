@@ -336,7 +336,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
         p => {
           const msg = p.new as DMMessage
-          setMessages(m => [...m, msg])
+          setMessages(m => mergeIncoming(m, msg))
           localStorage.setItem('ponoi_lastread_dm_' + threadId, String(Date.now()))
           if (msg.author !== meId && !parseSys(msg.content)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
         })
@@ -431,38 +431,73 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
 
+  // v1.66.0: мгновенная отправка (как в Discord) — сообщение появляется в ленте
+  // сразу, сеть догоняет в фоне; при ошибке черновик убирается с тостом.
+  function mergeIncoming(list: DMMessage[], msg: DMMessage): DMMessage[] {
+    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? msg : x)
+    if (msg.author === meId) {
+      const ti = list.findIndex(x => (x as any)._tmp && x.content === msg.content)
+      if (ti >= 0) { const c = list.slice(); c[ti] = msg; return c }
+    }
+    return [...list, msg]
+  }
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
     if (!threadId) return
-    const { error } = await supabase.from('dm_messages').insert({
+    const tmpId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const row = {
       thread_id: threadId, author: meId, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
-    })
-    if (error) { toastErr(error.message); return }
+    }
+    setMessages(m => [...m, { ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true } as any])
     setReplyTarget(null)
-    if (active) sendPush([active.id], username, t || 'Вложение', '/')
+    const peer = active
+    supabase.from('dm_messages').insert(row).select().single().then(({ data, error }) => {
+      if (error || !data) {
+        setMessages(m => m.filter(x => x.id !== tmpId))
+        toastErr(error?.message ?? 'Не удалось отправить сообщение')
+        return
+      }
+      const real = data as DMMessage
+      setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? real : x))
+      if (peer) sendPush([peer.id], username, t || 'Вложение', '/')
+    })
   }
 
   async function loadRx(ids: string[]) {
     const rows = await loadReactions('dm_reactions', ids)
     setReactions(groupReactions(rows))
   }
+  // v1.66.0: мгновенная реакция — счётчик меняется сразу, сеть догоняет в фоне.
+  function optimisticRx(mid: string, emoji: string, uid: string) {
+    setReactions(rx => {
+      const list = (rx[mid] ?? []).map(s => ({ ...s, users: [...s.users] }))
+      const i = list.findIndex(s => s.emoji === emoji)
+      if (i >= 0) {
+        const s = list[i]; const j = s.users.indexOf(uid)
+        if (j >= 0) { s.users.splice(j, 1); s.count-- } else { s.users.push(uid); s.count++ }
+        if (s.count <= 0) list.splice(i, 1)
+      } else list.push({ emoji, count: 1, users: [uid] })
+      return { ...rx, [mid]: list }
+    })
+  }
   async function react(id: string, emoji: string) {
+    optimisticRx(id, emoji, meId)
     await toggleReaction('dm_reactions', id, meId, emoji)
     loadRx(msgsRef.current.map(m => m.id))
   }
   async function pin(id: string, pinned: boolean) {
-    await setPin('dm_messages', id, pinned)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
+    await setPin('dm_messages', id, pinned)
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
-    await deleteMessage('dm_messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
+    deleteMessage('dm_messages', id)
   }
   async function editMsg(id: string, content: string) {
-    await editMessage('dm_messages', id, content)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
+    await editMessage('dm_messages', id, content)
   }
 
   const callRoomShown = !!call && !!active && callThread === threadId

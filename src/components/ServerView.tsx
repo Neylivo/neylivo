@@ -223,7 +223,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         { event: 'INSERT', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },
         p => {
           const msg = p.new as Message
-          setMessages(m => [...m, msg])
+          setMessages(m => mergeIncoming(m, msg))
           localStorage.setItem('ponoi_lastread_' + curChannel.id, String(Date.now()))
           if (msg.author !== user?.id && !parseSys(msg.content)) {
             const mode = notifModeOf(server.id)
@@ -456,31 +456,66 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
 
 
+  // v1.66.0: мгновенная отправка (как в Discord) — сообщение появляется в ленте
+  // сразу, сеть догоняет в фоне; при ошибке черновик убирается с тостом.
+  function mergeIncoming(list: Message[], msg: Message): Message[] {
+    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? msg : x)
+    if (msg.author === user?.id) {
+      const ti = list.findIndex(x => (x as any)._tmp && x.content === msg.content)
+      if (ti >= 0) { const c = list.slice(); c[ti] = msg; return c }
+    }
+    return [...list, msg]
+  }
   async function sendMsg(t: string, attach?: { url: string; type: string }) {
     if (!curChannel || !user) return
-    const { error } = await supabase.from('messages').insert({
+    const tmpId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    const row = {
       channel_id: curChannel.id, author: user.id, author_name: username, content: t,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
-    })
-    if (error) { toastErr(error.message); return }
+    }
+    setMessages(m => [...m, { ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true } as any])
     setReplyTarget(null)
+    const chName = curChannel.name
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
-    sendPush(targets, username + ' \u2014 #' + curChannel.name, t || 'Вложение', '/')
+    supabase.from('messages').insert(row).select().single().then(({ data, error }) => {
+      if (error || !data) {
+        setMessages(m => m.filter(x => x.id !== tmpId))
+        toastErr(error?.message ?? 'Не удалось отправить сообщение')
+        return
+      }
+      const real = data as Message
+      setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? real : x))
+      sendPush(targets, username + ' \u2014 #' + chName, t || 'Вложение', '/')
+    })
   }
 
   async function loadRx(ids: string[]) {
     const rows = await loadReactions('reactions', ids)
     setReactions(groupReactions(rows))
   }
+  // v1.66.0: мгновенная реакция — счётчик меняется сразу, сеть догоняет в фоне.
+  function optimisticRx(mid: string, emoji: string, uid: string) {
+    setReactions(rx => {
+      const list = (rx[mid] ?? []).map(s => ({ ...s, users: [...s.users] }))
+      const i = list.findIndex(s => s.emoji === emoji)
+      if (i >= 0) {
+        const s = list[i]; const j = s.users.indexOf(uid)
+        if (j >= 0) { s.users.splice(j, 1); s.count-- } else { s.users.push(uid); s.count++ }
+        if (s.count <= 0) list.splice(i, 1)
+      } else list.push({ emoji, count: 1, users: [uid] })
+      return { ...rx, [mid]: list }
+    })
+  }
   async function react(id: string, emoji: string) {
     if (!user) return
+    optimisticRx(id, emoji, user.id)
     await toggleReaction('reactions', id, user.id, emoji)
     loadRx(msgsRef.current.map(m => m.id))
   }
   async function pin(id: string, pinned: boolean) {
-    await setPin('messages', id, pinned)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
+    await setPin('messages', id, pinned)
     // Системное сообщение в ленте «X закрепил(а) сообщение» (как в Discord).
     if (pinned && user && curChannelRef.current) {
       const target = msgsRef.current.find(m => m.id === id)
@@ -492,12 +527,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
-    await deleteMessage('messages', id)
     setMessages(ms => ms.filter(m => m.id !== id))
+    deleteMessage('messages', id)
   }
   async function editMsg(id: string, content: string) {
-    await editMessage('messages', id, content)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
+    await editMessage('messages', id, content)
   }
 
   return (
