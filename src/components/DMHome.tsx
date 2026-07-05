@@ -499,6 +499,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     }
     setMessages(m => [...m, { ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true } as any])
     setReplyTarget(null)
+    // v1.88.0: после отправки всегда прыгаем вниз к своему сообщению.
+    stickToBottom(1200)
+    setUnseen(0); setAtBottom(true)
     const peer = active
     supabase.from('dm_messages').insert(row).select().single().then(({ data, error }) => {
       if (error || !data) {

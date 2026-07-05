@@ -3239,3 +3239,24 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .plus-menu button:hover { padding-left:16px; }
 /* Кнопка отправки и «Редактировать профиль» прожимаются */
 .voice-send:active, .mini-editbtn:active, .mpg-add:active, .gp2-url-btns button:active { transform:scale(.96); }
+
+
+/* ===== v1.88.0: эмодзи — избранные, паки, контекст-меню пикера ===== */
+.ep2-ctx-ov { position:fixed; inset:0; z-index:200; }
+.ep2-ctx { position:fixed; z-index:201; min-width:214px; background:var(--bg3,#1e1f22); border-radius:8px; padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:menu-in .13s ease-out both; display:flex; flex-direction:column; gap:2px; }
+.ep2-ctx button { display:flex; align-items:center; gap:8px; background:none; border:0; color:var(--tx,#dbdee1); padding:8px 10px; border-radius:6px; cursor:pointer; font-size:14px; text-align:left; }
+.ep2-ctx button:hover { background:var(--brand,#5865f2); color:#fff; }
+.ep2-ctx button.danger { color:var(--red,#ed4245); }
+.ep2-ctx button.danger:hover { background:var(--red,#ed4245); color:#fff; }
+.ep2-packbar { display:flex; gap:6px; padding:4px 8px 8px; }
+.ep2-mkpack { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.06); border:0; border-radius:6px; color:var(--tx,#dbdee1); padding:7px 12px; font-size:13.5px; cursor:pointer; transition:background .12s ease; }
+.ep2-mkpack:hover { background:rgba(255,255,255,.12); }
+.ep2-mkpack.ok { background:var(--green,#3ba55d); color:#fff; }
+.ep2-mkpack.ok:disabled { opacity:.5; cursor:default; }
+.ep2-packhdr { display:flex; align-items:center; justify-content:space-between; padding-right:8px; }
+.ep2-pack-acts { display:flex; gap:2px; }
+.ep2-pack-acts button { background:none; border:0; color:var(--mut,#949ba4); cursor:pointer; padding:2px 5px; border-radius:4px; }
+.ep2-pack-acts button:hover { color:#fff; background:rgba(255,255,255,.08); }
+.ep2-selcell { position:relative; outline:2px solid transparent; outline-offset:-2px; }
+.ep2-selcell.sel { outline-color:var(--brand,#5865f2); background:rgba(88,101,242,.18); }
+.ep2-selmark { position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:50%; background:var(--brand,#5865f2); color:#fff; display:flex; align-items:center; justify-content:center; }

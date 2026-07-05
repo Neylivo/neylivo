@@ -325,6 +325,19 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     setUnseen(0); setAtBottom(true)
   }
+  // v1.88.0: «прилипание» к низу после отправки — вложения догружаются после
+  // рендера и лента растёт, одноразового скролла не хватает (как в DMHome).
+  const stickUntil = useRef(0)
+  function stickToBottom(ms = 1500) {
+    stickUntil.current = Date.now() + ms
+    const step = () => {
+      const el = msgsBoxRef.current
+      if (!el || Date.now() > stickUntil.current) return
+      el.scrollTop = el.scrollHeight
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
 
   useEffect(() => { msgsRef.current = messages }, [messages])
   useEffect(() => { curChannelRef.current = curChannel }, [curChannel])
@@ -503,6 +516,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     }
     setMessages(m => [...m, { ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true } as any])
     setReplyTarget(null)
+    // v1.88.0: после отправки всегда прыгаем вниз к своему сообщению.
+    stickToBottom(1200)
+    setUnseen(0); setAtBottom(true)
     const chName = curChannel.name
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
     supabase.from('messages').insert(row).select().single().then(({ data, error }) => {
