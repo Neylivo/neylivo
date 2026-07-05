@@ -73,6 +73,20 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const hasMore = useRef(true)
   const prevHeight = useRef<number | null>(null)
   const prevTop = useRef(0)
+  // v1.75.0: «прилипание» к низу при открытии чата. Одноразового scrollTop
+  // не хватало: картинки/вложения догружаются после рендера, лента растёт —
+  // и позиция уезжала от низа. Пока идёт stick-период, каждый кадр держим низ.
+  const stickUntil = useRef(0)
+  function stickToBottom(ms = 1500) {
+    stickUntil.current = Date.now() + ms
+    const step = () => {
+      const el = msgsBoxRef.current
+      if (!el || Date.now() > stickUntil.current) return
+      el.scrollTop = el.scrollHeight
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
 
   // ---- v1.30.0: исходящий звонок как в Discord — «Звоним…» с гудками. ----
   // Собеседнику летит «ring» по его личному realtime-каналу, пока он не ответит,
@@ -364,9 +378,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
       prevHeight.current = null
     } else if (el && pendingScroll.current !== null) {
       // Восстановление сохранённой позиции прокрутки при входе в канал.
-      el.scrollTop = pendingScroll.current === 'bottom' ? el.scrollHeight : pendingScroll.current
+      if (pendingScroll.current === 'bottom') { el.scrollTop = el.scrollHeight; stickToBottom() }
+      else el.scrollTop = pendingScroll.current
       pendingScroll.current = null
-      setUnseen(0); setAtBottom(nearBottom())
+      setUnseen(0); setAtBottom(true)
     } else if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
     else setUnseen(u => u + Math.max(0, messages.length - prevLen.current))
     prevLen.current = messages.length
@@ -382,7 +397,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   function onMsgsScroll() {
     const el = msgsBoxRef.current
     if (el && threadId) scrollMem.current['dm_' + threadId] = el.scrollTop
-    if (el && el.scrollTop < 60) loadOlder()
+    if (el && el.scrollTop < 60 && Date.now() > stickUntil.current) loadOlder()
     const nb = nearBottom()
     setAtBottom(nb)
     if (nb) setUnseen(0)
@@ -572,7 +587,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
             ))}
           </div>}
           {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
-          <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
+          <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
+            onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
