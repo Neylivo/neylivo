@@ -256,16 +256,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     setFriends(fr)
   }
 
-  // v1.64.0: при входе в ЛС сразу открыт чат с последним (или первым) другом — как в Discord.
-  const autoOpened = useRef(false)
-  useEffect(() => {
-    if (autoOpened.current || IS_MOBILE || friends.length === 0 || active) return
-    autoOpened.current = true
-    let f: Friend | null = null
-    try { const s = JSON.parse(localStorage.getItem('ponoi_last_dm_friend') || 'null'); if (s?.id && s?.name && friends.some(x => x.id === s.id)) f = s } catch {}
-    openChat(f ?? friends[0])
-    // eslint-disable-next-line
-  }, [friends])
+  // v1.73.0: при запуске приложения всегда открывается список «Друзья» —
+  // авто-открытие чата с последним другом (v1.64.0) убрано по просьбе владельца.
+  // Открытый чат в рамках сессии по-прежнему переживает походы на серверы (v1.64.0).
 
   async function doSearch(v: string) { setQ(v); setResults(await searchUsers(v, meId)) }
 
