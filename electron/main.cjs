@@ -178,19 +178,127 @@ function robloxCurrentPlaceId() {
     return placeId
   } catch { return null }
 }
+// ---- v1.90.0: режимы/детали игр — расширяемая система ----
+// Discord получает «в лобби / в катке» от самих игр. У нас так же, где возможно:
+// CS2 и Dota 2 — через официальный Game State Integration (Valve): кладём конфиг
+// в папку игры, и игра сама шлёт состояние на локальный порт. Roblox — лог.
+// Dead by Daylight — best-effort по логу игры (официального API нет).
+let lastGsi = null   // { appid, data, at } — последний пакет от игры по GSI
+try {
+  const httpSrv = require('http')
+  httpSrv.createServer((req, res) => {
+    let body = ''
+    req.on('data', (d) => { body += d; if (body.length > 1e6) req.destroy() })
+    req.on('end', () => {
+      try {
+        const j = JSON.parse(body)
+        lastGsi = { appid: String((j.provider && j.provider.appid) || ''), data: j, at: Date.now() }
+      } catch {}
+      res.end('ok')
+    })
+  }).listen(3947, '127.0.0.1')
+} catch {}
+const GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
+  ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
+  '  "player_id" "1"', '  "player_state" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
+// Конфиг GSI подкладывается, когда игра запущена (путь берём из её exe).
+// Игра прочтёт его при СЛЕДУЮЩЕМ запуске — это ограничение самой Valve.
+function ensureGsiCfg(game, exe) {
+  try {
+    if (!exe) return
+    const fsr = require('fs')
+    const root = exe.replace(/[\\/]game[\\/].*$/i, '')
+    if (game === 'Counter-Strike 2') {
+      const dir = path.join(root, 'game', 'csgo', 'cfg')
+      if (fsr.existsSync(dir)) { const f = path.join(dir, 'gamestate_integration_ponoi.cfg'); if (!fsr.existsSync(f)) fsr.writeFileSync(f, GSI_CFG) }
+    } else if (game === 'Dota 2') {
+      if (!fsr.existsSync(path.join(root, 'game', 'dota'))) return
+      const dir = path.join(root, 'game', 'dota', 'cfg', 'gamestate_integration')
+      try { fsr.mkdirSync(dir, { recursive: true }) } catch {}
+      const f = path.join(dir, 'gamestate_integration_ponoi.cfg')
+      if (!fsr.existsSync(f)) fsr.writeFileSync(f, GSI_CFG)
+    }
+  } catch {}
+}
+const CS_MODES = { competitive: 'Соревновательный', premier: 'Premier', scrimcomp2v2: 'Напарники',
+  casual: 'Обычный', deathmatch: 'Бой насмерть', gungameprogressive: 'Гонка вооружений',
+  gungametrbomb: 'Подрыв', survival: 'Запретная зона', coop: 'Кооператив' }
+function cs2Mode() {
+  if (!lastGsi || lastGsi.appid !== '730' || Date.now() - lastGsi.at > 60_000) return null
+  const d = lastGsi.data
+  const map = d.map
+  if (map && map.name) {
+    const m = CS_MODES[String(map.mode || '').toLowerCase()] || null
+    const score = (map.team_ct && map.team_t && map.team_ct.score != null && map.team_t.score != null)
+      ? ' · ' + map.team_ct.score + ':' + map.team_t.score : ''
+    return (m ? m + ' — ' : 'В матче — ') + map.name + score
+  }
+  if (d.player && d.player.activity === 'menu') return 'В лобби'
+  return null
+}
+const DOTA_STATES = { DOTA_GAMERULES_STATE_HERO_SELECTION: 'Выбор героев', DOTA_GAMERULES_STATE_STRATEGY_TIME: 'Стадия стратегии',
+  DOTA_GAMERULES_STATE_TEAM_SHOWCASE: 'Показ команд', DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD: 'Загрузка',
+  DOTA_GAMERULES_STATE_PRE_GAME: 'Подготовка', DOTA_GAMERULES_STATE_GAME_IN_PROGRESS: 'В матче', DOTA_GAMERULES_STATE_POST_GAME: 'Конец матча' }
+function dotaMode() {
+  if (!lastGsi || lastGsi.appid !== '570' || Date.now() - lastGsi.at > 60_000) return null
+  const d = lastGsi.data
+  const st = d.map ? (DOTA_STATES[d.map.game_state] || null) : null
+  const hero = (d.hero && d.hero.name)
+    ? d.hero.name.replace(/^npc_dota_hero_/, '').replace(/_/g, ' ').replace(/(^|\s)[a-z]/g, (c) => c.toUpperCase()) : null
+  if (st && hero) return st + ' — ' + hero
+  if (st) return st
+  return null
+}
+// Dead by Daylight: официального API нет — читаем хвост лога игры.
+// Роль: внутренние имена DBD — Slasher (убийца) и Camper (выживший). Карта — последний
+// загруженный уровень. Если игра перестанет писать это в лог — просто не покажем ничего.
+function dbdMode() {
+  try {
+    const fsr = require('fs')
+    const f = path.join(process.env.LOCALAPPDATA || '', 'DeadByDaylight', 'Saved', 'Logs', 'DeadByDaylight.log')
+    if (!fsr.existsSync(f)) return null
+    const size = fsr.statSync(f).size
+    const len = Math.min(size, 256 * 1024)
+    const buf = Buffer.alloc(len)
+    const fd = fsr.openSync(f, 'r')
+    fsr.readSync(fd, buf, 0, len, size - len)
+    fsr.closeSync(fd)
+    const txt = buf.toString('utf8')
+    let role = null
+    const rm = [...txt.matchAll(/(?:VE_|EPlayerRole::)(Slasher|Camper)/g)]
+    if (rm.length) role = rm[rm.length - 1][1] === 'Slasher' ? 'За убийцу' : 'За выжившего'
+    let map = null
+    const mm = [...txt.matchAll(/[\\/]Game[\\/]Maps[\\/](?:[\w]+[\\/])*(?:Lvl_)?(\w{3,40}?)(?:_Procedural)?\.\w/g)]
+    if (mm.length) {
+      const raw = mm[mm.length - 1][1].replace(/^(Lvl|Map|Level)_?/i, '').replace(/_/g, ' ').trim()
+      if (raw && !/^(menu|lobby|offline|frontend)$/i.test(raw)) map = raw
+    }
+    if (role && map) return role + ' · ' + map
+    return role || (map ? 'Карта: ' + map : null)
+  } catch { return null }
+}
 let modeBusy = false
 let lastPlaceId = null
-async function scanRobloxMode() {
+let robloxModeName = null
+async function scanGameMode() {
   if (process.platform !== 'win32' || modeBusy) return
-  if (!curGame || curGame.name !== 'Roblox') { lastPlaceId = null; return }
+  const g = curGame
+  if (!g) { lastPlaceId = null; robloxModeName = null; return }
   modeBusy = true
   try {
-    const pid = robloxCurrentPlaceId()
-    if (pid === lastPlaceId) return
-    lastPlaceId = pid
-    const mode = pid ? await robloxPlaceName(pid) : null
-    if (pid && !mode) lastPlaceId = null   // имя не узнали (сеть/API) — попробуем ещё раз
-    if (curGame && curGame.name === 'Roblox' && (curGame.mode ?? null) !== (mode ?? null)) {
+    let mode = null
+    if (g.name === 'Roblox') {
+      const pid = robloxCurrentPlaceId()
+      if (pid !== lastPlaceId) {
+        lastPlaceId = pid
+        robloxModeName = pid ? await robloxPlaceName(pid) : null
+        if (pid && !robloxModeName) lastPlaceId = null   // имя не узнали (сеть/API) — попробуем ещё раз
+      }
+      mode = robloxModeName
+    } else if (g.name === 'Counter-Strike 2') { ensureGsiCfg('Counter-Strike 2', curGameExe); mode = cs2Mode() }
+    else if (g.name === 'Dota 2') { ensureGsiCfg('Dota 2', curGameExe); mode = dotaMode() }
+    else if (g.name === 'Dead by Daylight') mode = dbdMode()
+    if (curGame && curGame.name === g.name && (curGame.mode ?? null) !== (mode ?? null)) {
       curGame = { ...curGame, mode }
       broadcastGame()
     }
@@ -318,7 +426,8 @@ function detectGame(proc, exePath, title) {
   }
   return dirHit
 }
-let pendingGame = null   // кандидат на старт: { name, at }
+let pendingGame = null   // кандидат на старт: { name, at, exe }
+let curGameExe = null    // путь exe текущей игры — чтобы подложить GSI-конфиг (v1.90.0)
 let scanBusy = false     // не пускаем сканы внахлёст
 function scanGames() {
   if (process.platform !== 'win32' || scanBusy) return
@@ -339,7 +448,7 @@ function scanGames() {
       if (!title) continue
       const cand = detectGame(proc, exePath, title)
       if (!cand) continue
-      if (!best || cand.prio > best.prio) best = cand
+      if (!best || cand.prio > best.prio) best = { ...cand, exe: exePath }
       if (best.prio >= 100) break
     }
     const found = best ? best.name : null
@@ -347,14 +456,16 @@ function scanGames() {
       if (curGame && curGame.name === found) { pendingGame = null; return }   // уже играет — молчим
       if (pendingGame && pendingGame.name === found) {                        // подтверждено вторым сканом
         curGame = { name: found, since: pendingGame.at }
+        curGameExe = pendingGame.exe || null
         pendingGame = null
         broadcastGame()
       } else {
-        pendingGame = { name: found, at: Date.now() }                         // ждём подтверждения вторым сканом
+        pendingGame = { name: found, at: Date.now(), exe: best.exe }          // ждём подтверждения вторым сканом
       }
       return
     }
     pendingGame = null
+    curGameExe = null
     if (curGame) { curGame = null; broadcastGame() }   // игра закрылась — гасим сразу
   })
 }
@@ -540,8 +651,8 @@ app.whenReady().then(() => {
   // Игровая активность: первый скан сразу, дальше раз в 4 секунды (как в Discord).
   scanGames()
   setInterval(scanGames, 4_000)
-  // v1.89.0: режим Roblox (плейс) — проверяем лог раз в 10 секунд.
-  setInterval(scanRobloxMode, 10_000)
+  // v1.90.0: режимы игр (Roblox/CS2/Dota 2/DBD) — раз в 5 секунд.
+  setInterval(scanGameMode, 5_000)
 
   // v1.37.1: после обновления версии один раз чистим HTTP- и код-кэш старой
   // версии, чтобы ничего не лагало. Логин и настройки (localStorage) не трогаем.

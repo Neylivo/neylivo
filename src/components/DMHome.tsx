@@ -734,17 +734,37 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           <aside className="pfr-right">
             <div className="pfr-right-h">Активные контакты</div>
             {(() => {
-              const activeContacts = friends.filter(f => statusOf(f.id) !== 'offline')
-              if (activeContacts.length === 0) return <div className="pfr-actempty">Нет активных контактов</div>
-              return activeContacts.map(f => (
-                <div key={f.id} className="pfr-actcard pfr-actcard2" onClick={() => openChat(f)} style={{ cursor: 'pointer' }}>
-                  <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
-                  <div className="pfr-acttx">
-                    <div className="pfr-actnm">{f.name}</div>
-                    <div className="pfr-actsub">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</div>
+              // v1.90.0: 1-в-1 как «Сейчас активны» в Discord — карточки только у тех,
+              // кто прямо сейчас в игре: шапка (аватар, ник, «Игра — 6 ч.», иконка игры)
+              // и вложенный блок игры (обложка, название, детали/«N человек», аватарки).
+              const act = friends.map(f => ({ f, g: gameOf(f.id) })).filter(x => !!x.g)
+              if (act.length === 0) return <div className="an-empty"><b>Пока тихо…</b>Когда друг начнёт играть — это появится здесь!</div>
+              const dur = (since: number) => { const m = Math.floor((Date.now() - since) / 60000); return m >= 60 ? Math.floor(m / 60) + ' ч.' : Math.max(1, m) + ' мин.' }
+              const ruPpl = (n: number) => { const d = n % 100, r = n % 10; return n + ' ' + (d >= 11 && d <= 14 ? 'человек' : r === 1 ? 'человек' : r >= 2 && r <= 4 ? 'человека' : 'человек') }
+              return act.map(({ f, g }) => {
+                const same = act.filter(x => x.g!.name === g!.name)
+                const cover = g!.cover ?? same.find(x => x.g!.cover)?.g!.cover ?? null
+                return (
+                  <div key={f.id} className="an-card" onClick={() => openChat(f)}>
+                    <div className="an-head">
+                      <AvatarWithStatus name={f.name} size={32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                      <div className="an-tx">
+                        <div className="an-nm">{f.name}</div>
+                        <div className="an-sub">{g!.name} — {dur(g!.since)}</div>
+                      </div>
+                      {cover && <img className="an-gico" src={cover} alt="" />}
+                    </div>
+                    <div className="an-game">
+                      {cover ? <img className="an-gcover" src={cover} alt="" /> : <span className="an-gcover an-gph"><Icon name="gamepad" size={20} /></span>}
+                      <div className="an-gtx">
+                        <div className="an-gnm">{g!.name}</div>
+                        <div className="an-gsub">{g!.mode ?? ruPpl(same.length)}</div>
+                      </div>
+                      <span className="an-gavs">{same.slice(0, 3).map(x => <Avatar key={x.f.id} name={x.f.name} size={24} />)}</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             })()}
           </aside>
           </div>
