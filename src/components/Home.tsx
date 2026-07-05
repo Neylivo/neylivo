@@ -86,6 +86,12 @@ export function Home() {
   useEffect(() => { viewRef.current = view }, [view])
   // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
   const lastView = useRef<View>({ kind: 'dm' })
+
+  // v1.72.0: каждый раз, когда экран ЛС снова показан (возврат с сервера/музыки),
+  // сообщаем DMHome — тот плавно прокручивает открытый чат в самый низ, к новым.
+  useEffect(() => {
+    if (view.kind === 'dm') window.dispatchEvent(new Event('ponoi-dm-shown'))
+  }, [view.kind])
   useEffect(() => { if (view.kind !== 'music') lastView.current = view }, [view])
   // v1.64.0: сервер остаётся смонтированным при уходе в ЛС — звонок/голос не рвётся.
   const [lastServer, setLastServer] = useState<Server | null>(null)

@@ -330,6 +330,21 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     // eslint-disable-next-line
   }, [])
 
+  // v1.72.0: возвращение на экран ЛС (с сервера/музыки) — плавно в самый низ
+  // открытого чата, к новым сообщениям. Двойной rAF — ждём, пока экран снова
+  // станет видимым (display переключается с none), иначе скролл не сработает.
+  useEffect(() => {
+    const h = () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!bottomRef.current) return
+        bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+        setUnseen(0); setAtBottom(true)
+      }))
+    }
+    window.addEventListener('ponoi-dm-shown', h)
+    return () => window.removeEventListener('ponoi-dm-shown', h)
+  }, [])
+
   useEffect(() => {
     if (!threadId) return
     const ch = supabase.channel('dm:' + threadId)
