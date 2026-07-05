@@ -1,5 +1,21 @@
-import { Room, RoomEvent, Track, LocalTrackPublication, VideoPresets, AudioPresets } from 'livekit-client'
+import { Room, RoomEvent, Track, LocalTrackPublication, LocalAudioTrack, VideoPresets, AudioPresets } from 'livekit-client'
+import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter'
 import { supabase } from './supabase'
+
+// v1.71.0: AI-шумоподавление Krisp — то же, что использует Discord: отсекает
+// клавиатуру, вентиляторы, улицу и прочий фон, оставляя только голос.
+// Вешается на локальную дорожку микрофона при её публикации; если Krisp
+// недоступен (старый браузер / self-hosted LiveKit) — тихо остаёмся на
+// браузерном noiseSuppression, звонок работает как раньше.
+function attachKrisp(room: Room) {
+  room.on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
+    if (pub.source !== Track.Source.Microphone) return
+    const track = pub.track
+    if (!(track instanceof LocalAudioTrack)) return
+    if (!isKrispNoiseFilterSupported()) return
+    track.setProcessor(KrispNoiseFilter()).catch(() => { /* fallback: браузерный шумодав */ })
+  })
+}
 
 export async function joinRoom(roomName: string, identity: string, name: string): Promise<Room> {
   const { data, error } = await supabase.functions.invoke('livekit-token', {
@@ -22,6 +38,7 @@ export async function joinRoom(roomName: string, identity: string, name: string)
       simulcast: true,
     },
   })
+  attachKrisp(room)
   await room.connect(url, token)
   return room
 }
