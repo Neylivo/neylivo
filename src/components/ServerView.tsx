@@ -208,10 +208,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
-    pendingScroll.current = scrollMem.current[c.id] ?? 'bottom'
+    // v1.69.0: возвращаемся туда, где остановился в прошлый раз (позиция теперь
+    // переживает перезапуск через localStorage). Но если в канал не заходил больше
+    // недели — старая позиция бесполезна, кидаем сразу вниз к новым сообщениям.
+    const lastRead = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
+    const staleWeek = !lastRead || Date.now() - lastRead > 7 * 24 * 3600 * 1000
+    const savedPos = scrollMem.current[c.id] ?? (() => {
+      const v = localStorage.getItem('ponoi_scroll_' + c.id)
+      return v === null ? undefined : Number(v)
+    })()
+    pendingScroll.current = staleWeek ? 'bottom' : (savedPos ?? 'bottom')
     setMessages(list)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в канал.
-    const lastRead = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
     const firstNew = lastRead ? list.find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) : undefined
     setNewDividerId(firstNew?.id ?? null)
     localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
@@ -268,7 +276,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
   function onMsgsScroll() {
     const el = msgsBoxRef.current
-    if (el && curChannel) scrollMem.current[curChannel.id] = el.scrollTop
+    if (el && curChannel) {
+      scrollMem.current[curChannel.id] = el.scrollTop
+      // v1.69.0: позиция чтения канала переживает перезапуск приложения.
+      localStorage.setItem('ponoi_scroll_' + curChannel.id, String(Math.round(el.scrollTop)))
+    }
     if (el && el.scrollTop < 60) loadOlder()
     const nb = nearBottom()
     setAtBottom(nb)

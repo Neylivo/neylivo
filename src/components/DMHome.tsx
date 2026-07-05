@@ -311,7 +311,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
       .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
     const list = ((data ?? []) as DMMessage[]).reverse()
     hasMore.current = (data ?? []).length === 100
-    pendingScroll.current = scrollMem.current['dm_' + t.id] ?? 'bottom'
+    // v1.69.0: ЛС всегда открывается в самом низу — на последних сообщениях (как в Discord).
+    pendingScroll.current = 'bottom'
     setMessages(list)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в ЛС.
     const lastRead = Number(localStorage.getItem('ponoi_lastread_dm_' + t.id) ?? 0)
