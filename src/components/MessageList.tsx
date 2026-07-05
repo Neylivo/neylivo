@@ -8,6 +8,7 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
+import { copyMedia, saveMedia } from '../lib/copyMedia'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
@@ -64,34 +65,8 @@ function msgImage(m: UiMessage): string | null {
   return firstImageUrl(m.content)
 }
 
-// Копирование картинки в буфер: fetch -> bitmap -> canvas -> PNG (clipboard принимает только PNG).
-async function copyImageToClipboard(url: string) {
-  try {
-    if (!('ClipboardItem' in window)) throw new Error('nope')
-    const r = await fetch(url)
-    const blob = await r.blob()
-    const bmp = await createImageBitmap(blob)
-    const cv = document.createElement('canvas')
-    cv.width = bmp.width; cv.height = bmp.height
-    cv.getContext('2d')!.drawImage(bmp, 0, 0)
-    const png: Blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('fail')), 'image/png'))
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
-    toastOk('Изображение скопировано')
-  } catch { toastErr('Не удалось скопировать изображение') }
-}
-
-// Сохранение картинки как файла (blob, чтобы браузер не открывал вкладку).
-async function saveImage(url: string) {
-  try {
-    const r = await fetch(url)
-    const blob = await r.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = decodeURIComponent(url.split('/').pop()?.split('?')[0] ?? 'image')
-    document.body.appendChild(a); a.click(); a.remove()
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-  } catch { toastErr('Не удалось сохранить изображение') }
-}
+// v1.82.0: копирование/сохранение медиа переехало в src/lib/copyMedia.ts —
+// универсальный вариант с фолбэком (копирует «что угодно»).
 
 // «Зачитать сообщение» — озвучка через Web Speech API (как в Discord).
 function speakMsg(m: UiMessage) {
@@ -364,8 +339,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {img ? <>
             <div className="ctx-sep" />
-            {item('Копировать изображение', 'image', () => { copyImageToClipboard(img) })}
-            {item('Сохранить изображение', 'download', () => { saveImage(img) })}
+            {item('Копировать изображение', 'image', () => { copyMedia(img) })}
+            {item('Сохранить изображение', 'download', () => { saveMedia(img) })}
             <div className="ctx-sep" />
             {item('Копировать ссылку на изображение', 'link', () => { navigator.clipboard?.writeText(img); toastOk('Ссылка скопирована') })}
             {item('Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}

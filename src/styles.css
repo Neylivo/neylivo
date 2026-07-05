@@ -3134,3 +3134,11 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .ch-emo { font-size:15px; line-height:1; flex:none; }
 .ch-vbar { width:1px; align-self:stretch; margin:3px 0; background:rgba(255,255,255,.16); flex:none; }
 .ch-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+
+/* ===== v1.82.0: контекстное меню медиа в просмотрщике — 1-в-1 как в Discord ===== */
+.lb-ctx-ov { position:fixed; inset:0; z-index:1001; }
+.lb-ctx { position:fixed; z-index:1002; min-width:220px; background:#111214; border:1px solid rgba(255,255,255,.04); border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.55); display:flex; flex-direction:column; }
+.lb-ctx button { display:block; width:100%; text-align:left; background:none; border:none; color:#dbdee1; font-size:14px; font-weight:500; padding:8px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.lb-ctx button:hover { background:#4752c4; color:#fff; }
+.lb-ctx-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 4px; }

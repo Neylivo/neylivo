@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { toastOk, toastErr } from '../lib/toast'
+import { copyMedia, copyMediaLink, saveMedia } from '../lib/copyMedia'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
 
@@ -23,9 +23,13 @@ function whenLabel(iso?: string | null): string {
 // картинка крупно по центру поверх затемнённого приложения, слева сверху —
 // автор и время сообщения, справа сверху — панель инструментов
 // (зум, скачать, открыть в браузере, «…», закрыть). Esc/клик мимо — закрыть.
+// v1.82.0: правый клик по картинке — контекстное меню 1-в-1 как в Discord
+// («Копировать изображение», «Сохранить изображение», «Копировать ссылку на
+// медиа», «Открыть ссылку на медиафайл»).
 export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxMeta; onClose: () => void }) {
   const [zoom, setZoom] = useState(1)
   const [more, setMore] = useState(false)
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
   // Размер «на весь экран»: любая картинка (даже крошечная гифка) растягивается
   // до ~92vw x 86vh с сохранением пропорций — 1-в-1 как просмотрщик Discord.
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null)
@@ -47,51 +51,24 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   }, [])
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); ctx ? setCtx(null) : onClose() } }
     window.addEventListener('keydown', h, true)
     return () => window.removeEventListener('keydown', h, true)
-  }, [onClose])
+  }, [onClose, ctx])
 
-  // Новая картинка — зум и размер сбрасываются.
-  useEffect(() => { setZoom(1); setMore(false); setFit(null) }, [url])
+  // Новая картинка — зум, размер и меню сбрасываются.
+  useEffect(() => { setZoom(1); setMore(false); setFit(null); setCtx(null) }, [url])
 
   function wheel(e: React.WheelEvent) {
     e.stopPropagation()
     setZoom(z => Math.min(4, Math.max(0.25, +(z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)).toFixed(3))))
   }
 
-  // Копирование картинки в буфер обмена: через canvas в PNG (clipboard принимает только PNG).
-  async function copyImage() {
-    try {
-      const img = imgRef.current
-      if (!img || !('ClipboardItem' in window)) throw new Error('Буфер обмена недоступен')
-      const cv = document.createElement('canvas')
-      cv.width = img.naturalWidth; cv.height = img.naturalHeight
-      const cx = cv.getContext('2d')
-      if (!cx) throw new Error('Canvas недоступен')
-      cx.drawImage(img, 0, 0)
-      const blob: Blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('Не удалось получить изображение')), 'image/png'))
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      toastOk('Картинка скопирована')
-    } catch (err: any) { toastErr(err?.message ?? 'Не удалось скопировать') }
-  }
-
-  async function copyLink() {
-    try { await navigator.clipboard.writeText(url); toastOk('Ссылка скопирована') }
-    catch { toastErr('Не удалось скопировать ссылку') }
-  }
-
-  // Скачивание: тянем blob и отдаём как файл, чтобы браузер не открывал вкладку.
-  async function download() {
-    try {
-      const r = await fetch(url)
-      const blob = await r.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = decodeURIComponent(url.split('/').pop()?.split('?')[0] ?? 'image')
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-    } catch { toastErr('Не удалось скачать файл') }
+  // Правый клик по картинке — меню как в Discord.
+  function onImgCtx(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    setMore(false)
+    setCtx({ x: Math.min(e.clientX, window.innerWidth - 246), y: Math.min(e.clientY, window.innerHeight - 172) })
   }
 
   // Портал в document.body: просмотрщик всегда поверх всего приложения,
@@ -112,13 +89,13 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
       </div>}
       <div className="lb-tools" onClick={e => e.stopPropagation()}>
         <button title="Приблизить" onClick={() => setZoom(z => Math.min(4, +(z * 1.5).toFixed(3)))}><Icon name="zoom-in" size={18} /></button>
-        <button title="Скачать" onClick={download}><Icon name="download" size={18} /></button>
+        <button title="Скачать" onClick={() => saveMedia(url)}><Icon name="download" size={18} /></button>
         <button title="Открыть в браузере" onClick={() => window.open(url, '_blank')}><Icon name="external" size={18} /></button>
         <div className="lb-more-wrap">
           <button title="Ещё" onClick={() => setMore(v => !v)}><Icon name="dots" size={18} /></button>
           {more && <div className="lb-more">
-            <button onClick={() => { setMore(false); copyImage() }}>Скопировать картинку</button>
-            <button onClick={() => { setMore(false); copyLink() }}>Скопировать ссылку</button>
+            <button onClick={() => { setMore(false); copyMedia(url) }}>Скопировать картинку</button>
+            <button onClick={() => { setMore(false); copyMediaLink(url) }}>Скопировать ссылку</button>
             <button onClick={() => { setMore(false); setZoom(1) }}>Сбросить масштаб</button>
           </div>}
         </div>
@@ -132,8 +109,21 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
         style={{ width: fit?.w, height: fit?.h, transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
         onLoad={computeFit}
         onClick={e => e.stopPropagation()}
+        onContextMenu={onImgCtx}
         onDoubleClick={e => { e.stopPropagation(); setZoom(z => z === 1 ? 2 : 1) }} />
       {zoom !== 1 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setZoom(1) }} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>}
+      {ctx && <>
+        <div className="lb-ctx-ov" onClick={e => { e.stopPropagation(); setCtx(null) }}
+          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx(null) }} />
+        <div className="lb-ctx" style={{ left: ctx.x, top: ctx.y }} onClick={e => e.stopPropagation()}
+          onContextMenu={e => e.preventDefault()}>
+          <button onClick={() => { setCtx(null); copyMedia(url) }}>Копировать изображение</button>
+          <button onClick={() => { setCtx(null); saveMedia(url) }}>Сохранить изображение</button>
+          <div className="lb-ctx-sep" />
+          <button onClick={() => { setCtx(null); copyMediaLink(url) }}>Копировать ссылку на медиа</button>
+          <button onClick={() => { setCtx(null); window.open(url.replace('#spoiler', ''), '_blank') }}>Открыть ссылку на медиафайл</button>
+        </div>
+      </>}
     </div>,
     document.body,
   )
