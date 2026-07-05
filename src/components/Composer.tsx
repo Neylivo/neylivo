@@ -52,8 +52,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const { user } = useAuth()
   const { settings } = useSettings()
   const [text, setText] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [spoiler, setSpoiler] = useState(false)
+  // v1.70.0: несколько вложений в одном сообщении (как в Discord, до 10).
+  const [files, setFiles] = useState<File[]>([])
+  const [spoilers, setSpoilers] = useState<Record<number, boolean>>({})
   const [busy, setBusy] = useState(false)
   const [emoji, setEmoji] = useState(false)
   const [gif, setGif] = useState(false)
@@ -69,14 +70,30 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
   const [upProg, setUpProg] = useState<number | null>(null)
   // Предпросмотр картинки до отправки (v1.28.0): миниатюра + спойлер/просмотр/убрать.
-  const [preview, setPreview] = useState<string | null>(null)
-  const [pvOpen, setPvOpen] = useState(false)
+  const [previews, setPreviews] = useState<string[]>([])
+  const [pvOpen, setPvOpen] = useState<string | null>(null)
   useEffect(() => {
-    if (!file || !isImage(file)) { setPreview(null); setPvOpen(false); return }
-    const u = URL.createObjectURL(file)
-    setPreview(u)
-    return () => { URL.revokeObjectURL(u); setPvOpen(false) }
-  }, [file])
+    const urls = files.map(f => isImage(f) ? URL.createObjectURL(f) : '')
+    setPreviews(urls)
+    return () => { urls.forEach(u => { if (u) URL.revokeObjectURL(u) }); setPvOpen(null) }
+  }, [files])
+  const MAXFILES = 10
+  function addFiles(fs: File[]) {
+    if (fs.length === 0) return
+    setFiles(prev => {
+      const next = [...prev, ...fs]
+      if (next.length > MAXFILES) toastErr('Не больше ' + MAXFILES + ' вложений в одном сообщении')
+      return next.slice(0, MAXFILES)
+    })
+  }
+  function removeFile(i: number) {
+    setFiles(prev => prev.filter((_, x) => x !== i))
+    setSpoilers(s => {
+      const n: Record<number, boolean> = {}
+      Object.keys(s).forEach(k => { const ki = Number(k); if (ki < i) n[ki] = s[ki]; else if (ki > i) n[ki - 1] = s[ki] })
+      return n
+    })
+  }
   // Меню «плюса» слева (Фото / Файл / Папка / Голосовое) — как в Discord.
   const [plusMenu, setPlusMenu] = useState(false)
   const photoRef = useRef<HTMLInputElement>(null)
@@ -128,8 +145,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     const drop = (e: DragEvent) => {
       if (!hasFiles(e)) return
       e.preventDefault(); dragDepth.current = 0; setDrag(false)
-      const f = e.dataTransfer?.files?.[0]
-      if (f) { setFile(f); inputRef.current?.focus() }
+      const fs = Array.from(e.dataTransfer?.files ?? [])
+      if (fs.length) { addFiles(fs); inputRef.current?.focus() }
     }
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragover', over)
@@ -196,20 +213,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     finally { setBusy(false) }
   }
 
-  // Отправка нескольких файлов подряд (выбор папки): каждый файл — отдельным сообщением.
+  // Выбор папки (v1.70.0): файлы прикрепляются к сообщению группой (до 10),
+  // можно добавить подпись и отправить всё одним сообщением.
   async function sendFiles(fs: File[]) {
-    if (!user || fs.length === 0 || busy) return
-    const batch = fs.slice(0, 10)
-    if (fs.length > 10) toastErr('Отправляю первые 10 файлов из ' + fs.length)
-    setBusy(true)
-    try {
-      for (const f of batch) {
-        setUpProg(0)
-        const url = await uploadWithProgress('attachments', user.id, f, p => setUpProg(p))
-        await onSend('', { url, type: isImage(f) ? 'image' : 'file' })
-      }
-    } catch (err: any) { toastErr(err.message ?? String(err)) }
-    finally { setBusy(false); setUpProg(null) }
+    if (fs.length === 0) return
+    addFiles(fs)
+    inputRef.current?.focus()
   }
 
   // Голосовое сообщение: запись с микрофона, капсула с таймером, отмена/отправка.
@@ -254,26 +263,35 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     e.preventDefault()
     if (busy || sendingRef.current) return   // v1.42.0: защита от двойной отправки
     const t = polish(applySlash(text.trim()))
-    if ((!t && !file) || !user) return
+    if ((!t && files.length === 0) || !user) return
     // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
-    if (t && !file && !t.replace(/[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g, '').trim()) return
+    if (t && files.length === 0 && !t.replace(/[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g, '').trim()) return
     // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
-    if (t && !file && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
+    if (t && files.length === 0 && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
     sendingRef.current = true
     setBusy(true)
     try {
       let attach: { url: string; type: string } | undefined
-      if (file) {
-        setUpProg(0)
-        let url = await uploadWithProgress('attachments', user.id, file, p => setUpProg(p))
-        if (spoiler && isImage(file)) url += '#spoiler'
-        attach = { url, type: isImage(file) ? 'image' : 'file' }
+      if (files.length) {
+        const urls: string[] = []
+        const types: string[] = []
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i]
+          setUpProg(files.length > 1 ? i / files.length : 0)
+          let url = await uploadWithProgress('attachments', user.id, f,
+            p => setUpProg(files.length > 1 ? (i + p) / files.length : p))
+          if (spoilers[i] && isImage(f)) url += '#spoiler'
+          urls.push(url)
+          types.push(isImage(f) ? 'image' : 'file')
+        }
+        // v1.70.0: группа вложений кодируется в одну строку через \n — без миграции БД.
+        attach = { url: urls.join('\n'), type: types.join('\n') }
       }
       await onSend(t, attach)
       lastSent.current = { t, at: Date.now() }
       setFailed(false)
-      setText(''); keepDraft(''); setFile(null); setSpoiler(false); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
+      setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
     finally { setBusy(false); setUpProg(null); sendingRef.current = false }
   }
@@ -288,26 +306,31 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       </div>}
       {upProg !== null && <div className="up-progress">
         <div className="up-progress-fill" style={{ width: Math.round(upProg * 100) + '%' }} />
-        <span className="up-progress-tx">Загрузка{file ? ' «' + file.name + '»' : ''}… {Math.round(upProg * 100)}%</span>
+        <span className="up-progress-tx">Загрузка{files.length === 1 ? ' «' + files[0].name + '»' : files.length > 1 ? ' (файлов: ' + files.length + ')' : ''}… {Math.round(upProg * 100)}%</span>
       </div>}
-      {file && isImage(file) && preview && upProg === null && <div className="att-card">
-        <div className="att-card-actions">
-          <button type="button" className={'att-act' + (spoiler ? ' on' : '')} title={spoiler ? 'Картинка будет спойлером' : 'Отправить как спойлер'} onClick={() => setSpoiler(s => !s)}><span className="att-sp">| |</span></button>
-          <button type="button" className="att-act" title="Посмотреть" onClick={() => setPvOpen(true)}><Icon name="zoom-in" size={16} /></button>
-          <button type="button" className="att-act danger" title="Убрать вложение" onClick={() => { setFile(null); setSpoiler(false); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = '' }}><Icon name="trash" size={16} /></button>
-        </div>
-        <div className="att-thumb">
-          <img src={preview} alt="" className={spoiler ? 'blurred' : ''} />
-          {spoiler && <span className="att-spoiler-tag">СПОЙЛЕР</span>}
-        </div>
-        <div className="att-card-nm" title={file.name}>{file.name}</div>
-        <div className="att-card-sz">{fmtSize(file.size)}</div>
+      {files.length > 0 && upProg === null && <div className="att-row">
+        {files.map((f, i) => isImage(f) && previews[i] ? (
+          <div key={i} className="att-card">
+            <div className="att-card-actions">
+              <button type="button" className={'att-act' + (spoilers[i] ? ' on' : '')} title={spoilers[i] ? 'Картинка будет спойлером' : 'Отправить как спойлер'} onClick={() => setSpoilers(s => ({ ...s, [i]: !s[i] }))}><span className="att-sp">| |</span></button>
+              <button type="button" className="att-act" title="Посмотреть" onClick={() => setPvOpen(previews[i])}><Icon name="zoom-in" size={16} /></button>
+              <button type="button" className="att-act danger" title="Убрать вложение" onClick={() => removeFile(i)}><Icon name="trash" size={16} /></button>
+            </div>
+            <div className="att-thumb">
+              <img src={previews[i]} alt="" className={spoilers[i] ? 'blurred' : ''} />
+              {spoilers[i] && <span className="att-spoiler-tag">СПОЙЛЕР</span>}
+            </div>
+            <div className="att-card-nm" title={f.name}>{f.name}</div>
+            <div className="att-card-sz">{fmtSize(f.size)}</div>
+          </div>
+        ) : (
+          <div key={i} className="file-chip">
+            <Icon name="paperclip" size={14} /> <b className="file-chip-nm">{f.name}</b> <span className="file-chip-sz">{fmtSize(f.size)}</span>
+            <button type="button" className="file-chip-x" title="Убрать файл" onClick={() => removeFile(i)}><Icon name="close" size={14} /></button>
+          </div>
+        ))}
       </div>}
-      {pvOpen && preview && <Lightbox url={preview} onClose={() => setPvOpen(false)} />}
-      {file && !isImage(file) && upProg === null && <div className="file-chip">
-        <Icon name="paperclip" size={14} /> <b className="file-chip-nm">{file.name}</b> <span className="file-chip-sz">{fmtSize(file.size)}</span>
-        <button type="button" className="file-chip-x" title="Убрать файл" onClick={() => { setFile(null); setSpoiler(false); if (fileRef.current) fileRef.current.value = '' }}><Icon name="close" size={14} /></button>
-      </div>}
+      {pvOpen && <Lightbox url={pvOpen} onClose={() => setPvOpen(null)} />}
       {replyingTo && <div className="reply-banner">
         <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
         <span>{replyingTo.preview}</span>
@@ -343,14 +366,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             </div>
           </>}
         </div>
-        <input ref={fileRef} type="file" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
-        <input ref={photoRef} type="file" accept="image/*" hidden onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={fileRef} type="file" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
+        <input ref={photoRef} type="file" accept="image/*" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
-        <input ref={inputRef} placeholder={file ? file.name : placeholder} value={text}
+        <input ref={inputRef} placeholder={files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
           onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
           onPaste={e => {
-            const f = e.clipboardData?.files?.[0]
-            if (f) { e.preventDefault(); setFile(f); return }
+            const pf = Array.from(e.clipboardData?.files ?? [])
+            if (pf.length) { e.preventDefault(); addFiles(pf); return }
             // Вставленный текст очищаем от пробелов по краям.
             const p = e.clipboardData?.getData('text')
             if (p && p !== p.trim()) {
@@ -411,7 +434,7 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
   const [size, setSize] = useState<string | null>(null)
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
-    if (!url || type === 'image') { setSize(null); return }
+    if (!url || type === 'image' || url.includes('\n')) { setSize(null); return }
     let on = true
     fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
       .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) setSize(fmtSize(n)) })
@@ -419,6 +442,15 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
     return () => { on = false }
   }, [url, type])
   if (!url) return null
+  // v1.70.0: группа вложений в одном сообщении — url/type склеены через \n.
+  if (url.includes('\n')) {
+    const urls = url.split('\n')
+    const types = (type ?? '').split('\n')
+    const imgCount = types.filter(t => t === 'image').length
+    return <div className={'att-group' + (imgCount > 1 ? ' grid' : '')}>
+      {urls.map((u, i) => <Attachment key={i} url={u} type={types[i] ?? type} meta={meta} />)}
+    </div>
+  }
   const clean = url.replace('#spoiler', '')
   // Голосовое сообщение / аудио — встроенный плеер.
   if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
