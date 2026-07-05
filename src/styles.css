@@ -3072,3 +3072,12 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .att-group.grid .att-spoiler { min-width:0; }
 .att-group.grid .att-spoiler .msg-att { max-height:260px; }
 .att-group .msg-file { align-self:flex-start; }
+
+
+/* ---- v1.78.0: звонок 1-в-1 как в Discord ---- */
+.c2-wrap.fs .c2-bar, .c2-wrap.fs .c2-top { transition: opacity .3s ease; }
+.c2-wrap.fs.idle .c2-bar, .c2-wrap.fs.idle .c2-top { opacity: 0; pointer-events: none; }
+.c2-wrap.fs.idle { cursor: none; }
+.c2-click { display: contents; }
+.c2-grid .c2-tile, .c2-strip .c2-tile { cursor: pointer; }
+.c2-main .c2-tile { cursor: zoom-out; }

@@ -196,7 +196,7 @@ function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () 
 }
 
 /** Сцена: кружочки в голосовом режиме, плитки + лента при видео/демке. */
-function Stage({ room, avatars, colors, meName }: { room: Room; avatars: Record<string, string | null>; colors: Record<string, string | null>; meName?: string }) {
+function Stage({ room, avatars, colors, meName, onMainDblClick }: { room: Room; avatars: Record<string, string | null>; colors: Record<string, string | null>; meName?: string; onMainDblClick?: () => void }) {
   const [, bump] = useState(0)
   const [focus, setFocus] = useState<string | null>(null)
   useEffect(() => {
@@ -230,22 +230,31 @@ function Stage({ room, avatars, colors, meName }: { room: Room; avatars: Record<
     </div>
   )
 
-  const focused = shares.find(s => s.key === focus) ?? shares[0] ?? null
-  // Камеры без демки: сетка плиток.
-  if (!focused) return (
+  // v1.78.0: фокус как в Discord — кликом разворачивается не только демка,
+  // но и любой участник; клик по главной плитке возвращает обратно.
+  const pKey = (p: any) => 'p:' + String(p.sid || p.identity)
+  const focusedShare = focus && focus.startsWith('sh:') ? shares.find(s => s.key === focus) ?? null : null
+  const focusedPart = focus && focus.startsWith('p:') ? all.find(x => pKey(x.p) === focus) ?? null : null
+  const mainShare = focusedShare ?? (focusedPart ? null : shares[0] ?? null)
+  // Камеры без демки и без фокуса: сетка плиток, клик по плитке — развернуть.
+  if (!mainShare && !focusedPart) return (
     <div className="c2-board">
       <div className="c2-grid">
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} />)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} /></div>)}
       </div>
     </div>
   )
-  // Демка: главная сцена + лента маленьких плиток снизу.
+  // Главная сцена (демка или развёрнутый участник) + лента маленьких плиток снизу.
   return (
     <div className="c2-board">
-      <div className="c2-main"><ShareTile key={focused.key} pub={focused.pub} who={focused.who} /></div>
+      <div className="c2-main" onDoubleClick={onMainDblClick}>
+        {mainShare
+          ? <ShareTile key={mainShare.key} pub={mainShare.pub} who={mainShare.who} onClick={() => { if (focusedShare) setFocus(null) }} />
+          : <div className="c2-click" onClick={() => setFocus(null)}><Tile p={focusedPart!.p} isLocal={focusedPart!.local} avatar={av(focusedPart!.p)} color={col(focusedPart!.p)} meName={meName} /></div>}
+      </div>
       <div className="c2-strip">
-        {shares.filter(s => s.key !== focused.key).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
-        {all.map(({ p, local }) => <Tile key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} />)}
+        {shares.filter(s => s.key !== (mainShare && mainShare.key)).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} /></div>)}
       </div>
     </div>
   )
@@ -270,6 +279,8 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [count, setCount] = useState(1)
   const [showSb, setShowSb] = useState(false)
   const [flash, setFlash] = useState(false)
+  const [idle, setIdle] = useState(false)
+  const micBeforeDeaf = useRef(true)
   const recRef = useRef<CallRecorder | null>(null)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
   const [colors, setColors] = useState<Record<string, string | null>>({})
@@ -400,10 +411,28 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.sbKey])
 
-  async function toggleMic() { const v = !mic; await room.localParticipant.setMicrophoneEnabled(v); setMic(v); v ? sndUnmute() : sndMute() }
-  function toggleDeaf() {
+  // v1.78.0: как в Discord — «заглушить всех» глушит и твой микрофон,
+  // а включение микрофона при заглушке сначала снимает её.
+  async function toggleMic() {
+    if (deaf) {
+      try { master().gain.value = 1 } catch {}
+      setDeaf(false)
+      try { await room.localParticipant.setMicrophoneEnabled(true) } catch {}
+      setMic(true); sndUnmute()
+      return
+    }
+    const v = !mic; await room.localParticipant.setMicrophoneEnabled(v); setMic(v); v ? sndUnmute() : sndMute()
+  }
+  async function toggleDeaf() {
     const v = !deaf
     try { master().gain.value = v ? 0 : 1 } catch {}
+    if (v) {
+      micBeforeDeaf.current = mic
+      if (mic) { try { await room.localParticipant.setMicrophoneEnabled(false) } catch {}; setMic(false) }
+    } else if (micBeforeDeaf.current && !mic) {
+      try { await room.localParticipant.setMicrophoneEnabled(true) } catch {}
+      setMic(true)
+    }
     setDeaf(v); v ? sndMute() : sndUnmute()
   }
   async function toggleCam() {
@@ -446,6 +475,29 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     return () => window.removeEventListener('ponoi-call-toggle', h)
   })
 
+  // v1.78.0: горячие клавиши как в Discord — Ctrl+Shift+M (микрофон),
+  // Ctrl+Shift+D (заглушить всех), Esc — выход из полноэкранного режима.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') { e.preventDefault(); toggleMic() }
+      else if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') { e.preventDefault(); toggleDeaf() }
+      else if (e.key === 'Escape' && fs) setFs(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  // v1.78.0: в полноэкранном режиме панель и шапка прячутся, если мышь замерла.
+  useEffect(() => {
+    if (!fs) { setIdle(false); return }
+    let t = window.setTimeout(() => setIdle(true), 3000)
+    const wake = () => { setIdle(false); window.clearTimeout(t); t = window.setTimeout(() => setIdle(true), 3000) }
+    window.addEventListener('mousemove', wake)
+    return () => { window.clearTimeout(t); window.removeEventListener('mousemove', wake) }
+  }, [fs])
+
   // Выбор микрофона/камеры — как стрелочки у кнопок в Discord.
   async function openDev(kind: 'mic' | 'cam') {
     setQMenu(false)
@@ -470,7 +522,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     : alone ? (peer ? 'Звоним ' + peer.name + '…' : 'Звоним…') : 'Голосовой звонок'
 
   return (
-    <div className={'c2-wrap' + (fs ? ' fs' : '') + (flash ? ' sb-flash' : '') + (alone && peer ? ' ringing' : '')}>
+    <div className={'c2-wrap' + (fs ? ' fs' : '') + (fs && idle ? ' idle' : '') + (flash ? ' sb-flash' : '') + (alone && peer ? ' ringing' : '')}>
       <Sinks room={room} />
       <div className="c2-top">
         <span className={'c2-status ' + (alone ? 'connecting' : status)}><i />{statusLabel}</span>
@@ -480,7 +532,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
           <button title={fs ? 'Свернуть' : 'На весь экран'} onClick={() => setFs(f => !f)}><Icon name={fs ? 'shrink' : 'expand'} size={16} /></button>
         </div>
       </div>
-      <Stage room={room} avatars={avatars} colors={colors} meName={meName} />
+      <Stage room={room} avatars={avatars} colors={colors} meName={meName} onMainDblClick={() => setFs(f => !f)} />
       {alone && <div className="c2-waiting">{peer ? 'Ждём ответа — ' + peer.name + '…' : 'Ждём, пока кто-нибудь присоединится…'}</div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">
