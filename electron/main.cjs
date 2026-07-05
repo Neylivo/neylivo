@@ -103,18 +103,28 @@ function httpJson(u) {
 }
 // v1.28.0: два источника обложек. Steam покрывает ПК-игры, iTunes Search — не-стимовские
 // (Roblox, Fortnite, VALORANT и т.п. — у них есть iOS-версии с квадратными иконками).
+// v1.84.0: обложка не «первая попавшаяся», а реально совпадающая по названию —
+// раньше Steam мог подсунуть чужую игру (фейк-обложку). Не нашли похожую в
+// Steam — iTunes; не нашли и там — честный null (заглушка), а не чужая картинка.
+function normName(s) {
+  return String(s || '').toLowerCase().replace(/[\u2122\u00ae\u00a9]/g, '').replace(/[^a-z\u0430-\u044f\u04510-9]+/gi, ' ').trim()
+}
 async function findCover(name) {
   if (!name) return null
   if (coverCache.has(name)) return coverCache.get(name)
   const term = name.replace(/\(.*?\)/g, '').trim()   // «Minecraft (Java)» -> «Minecraft»
+  const nt = normName(term)
   let url = null
   const st = await httpJson('https://store.steampowered.com/api/storesearch/?l=en&cc=US&term=' + encodeURIComponent(term))
-  const item = ((st && st.items) || [])[0]
+  const items = (st && st.items) || []
+  let item = items.find((i) => normName(i.name) === nt)
+  if (!item) item = items.find((i) => { const n = normName(i.name); return n.startsWith(nt) || nt.startsWith(n) })
+  if (!item) item = items.find((i) => normName(i.name).includes(nt))
   if (item) url = 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + item.id + '/header.jpg'
   if (!url) {
-    const it = await httpJson('https://itunes.apple.com/search?media=software&limit=3&term=' + encodeURIComponent(term))
-    const w = term.split(/\s+/)[0].toLowerCase()
-    const app = ((it && it.results) || []).find((a) => String(a.trackName || '').toLowerCase().includes(w))
+    const it = await httpJson('https://itunes.apple.com/search?media=software&limit=5&term=' + encodeURIComponent(term))
+    const w = nt.split(' ')[0]
+    const app = ((it && it.results) || []).find((a) => normName(a.trackName).includes(w))
     if (app) url = app.artworkUrl512 || app.artworkUrl100 || null
   }
   coverCache.set(name, url)

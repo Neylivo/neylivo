@@ -3173,3 +3173,27 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .cfc-full-body { overflow:auto; }
 .cfc-full-body pre { margin:0; padding:14px 16px; }
 .cfc-full-body code { font-family:Consolas, 'Courier New', monospace; font-size:13px; line-height:1.5; white-space:pre; color:#dbdee1; }
+
+
+/* ===== v1.84.0: активности — полные названия игр, живые обложки, анимации ===== */
+/* Название игры всегда полностью — переносится на новые строки, без «…» */
+.mpg-nm, .mini-game-t, .act-name, .fp-game-nm { white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; }
+.member-act.game .mag-tx { white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; }
+.game-inline { white-space:normal; }
+/* Заглушка пока ищется обложка — «шиммер» вместо мёртвой серой плитки */
+.mpg-ph, .act-cover-ph, .mini-game-ph { position:relative; overflow:hidden; }
+.mpg-ph::after, .act-cover-ph::after, .mini-game-ph::after { content:''; position:absolute; inset:0; background:linear-gradient(105deg, transparent 32%, rgba(255,255,255,.13) 50%, transparent 68%); animation:cover-shimmer 1.4s linear infinite; }
+@keyframes cover-shimmer { from { transform:translateX(-100%) } to { transform:translateX(100%) } }
+/* Обложка появляется с упругим «поп»-эффектом и слегка растёт при наведении */
+img.mpg-cover, img.act-cover, img.mini-game-cover, img.mag-cover { animation:cover-pop .45s cubic-bezier(.34,1.56,.64,1) both; transition:transform .18s ease; }
+img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { transform:scale(1.06); }
+@keyframes cover-pop { from { opacity:0; transform:scale(.7) } to { opacity:1; transform:none } }
+/* Живой «эквалайзер» рядом с «Играет в» — зелёные столбики пульсируют */
+.mpg-head-l { display:flex; align-items:center; gap:7px; }
+.act-head { display:flex; align-items:center; gap:7px; }
+.mpg-eq { display:inline-flex; align-items:flex-end; gap:2px; height:12px; flex:none; }
+.mpg-eq i { width:3px; height:100%; background:#23a55a; border-radius:1.5px; transform-origin:bottom; animation:eq-bounce 1s ease-in-out infinite; }
+.mpg-eq i:nth-child(1) { animation-delay:0s; }
+.mpg-eq i:nth-child(2) { animation-delay:.18s; }
+.mpg-eq i:nth-child(3) { animation-delay:.36s; }
+@keyframes eq-bounce { 0%,100% { transform:scaleY(.35) } 50% { transform:scaleY(1) } }

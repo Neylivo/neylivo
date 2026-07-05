@@ -175,7 +175,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
-            <div className="mpg-head">Играет в
+            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-eq"><i /><i /><i /></span>Играет в</span>
               <button className="mpg-dots" title="Скопировать название игры"
                 onClick={() => { navigator.clipboard?.writeText(game.name); toastOk('Название игры скопировано') }}><Icon name="more" size={16} /></button>
             </div>

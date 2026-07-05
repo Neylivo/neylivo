@@ -194,7 +194,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
               {curGame && <>
                 <div className="fp-sect">Текущая активность</div>
                 <div className="act-card fp-cur">
-                  <div className="act-head">Играет в</div>
+                  <div className="act-head"><span className="mpg-eq"><i /><i /><i /></span>Играет в</div>
                   <div className="act-row">
                     {(curGame.cover ?? covers[curGame.name])
                       ? <img className="act-cover act-cover-lg" src={(curGame.cover ?? covers[curGame.name])!} alt="" />
