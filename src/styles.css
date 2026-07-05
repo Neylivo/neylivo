@@ -2041,7 +2041,7 @@ body.no-anim .member-typing i { animation:none; }
 .cset-int-t b { display:block; font-size:15px; }
 .cset-int-t span { color:var(--mut); font-size:12px; }
 .cset-int button { background:var(--brand); border:none; color:#fff; padding:8px 14px; border-radius:4px; font-weight:600; cursor:pointer; }
-.cset-savebar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111420; border-radius:8px; padding:10px 12px 10px 16px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:140; }
+.cset-savebar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111420; border-radius:8px; padding:10px 12px 10px 16px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:140; transition:opacity .28s ease, transform .28s ease; }
 .cset-savebar span { font-size:14px; }
 .cset-save { background:#23a55a; border:none; color:#fff; padding:8px 16px; border-radius:4px; font-weight:600; cursor:pointer; }
 .cset-reset { background:none; border:none; color:var(--tx); cursor:pointer; font-size:14px; }
@@ -3096,7 +3096,6 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .inv2-ico > * { width:100% !important; height:100% !important; border-radius:inherit !important; }
 .inv2-nm { display:flex; align-items:center; gap:6px; font-weight:800; font-size:16px; color:var(--tx,#f2f3f5); }
 .inv2-nm-t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.inv2-check { flex:none; width:16px; height:16px; border-radius:5px; background:#23a55a; color:#fff; display:inline-flex; align-items:center; justify-content:center; }
 .inv2-stats { display:flex; align-items:center; gap:14px; margin-top:6px; font-size:13px; color:var(--mut); }
 .inv2-st { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 .inv2-st i { width:8px; height:8px; border-radius:50%; background:#80848e; flex:none; }
@@ -3114,7 +3113,6 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .srv-title.banner { height:auto; min-height:135px; align-items:flex-start; padding:8px; background-size:cover; background-position:center; text-shadow:none; }
 .srv-title.banner .srv-pill { background:rgba(0,0,0,.6); }
 .srv-title.banner .srv-pill:hover { background:rgba(0,0,0,.75); }
-.srv-check { flex:none; width:15px; height:15px; border-radius:5px; background:#23a55a; color:#fff; display:inline-flex; align-items:center; justify-content:center; }
 .srv-head-inv { margin-left:auto; flex:none; background:none; border:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:5px; border-radius:50%; }
 .srv-head-inv:hover { color:#fff; }
 .srv-title.banner .srv-head-inv { background:rgba(0,0,0,.55); color:#fff; }
@@ -3420,3 +3418,14 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .mpg + .mpg { margin-top:8px; }
 .mpg-cover-music { display:flex; align-items:center; justify-content:center; color:#b5bac1; }
 .mpg-time-music { color:#23a55a; }
+
+/* --- v1.110.0: плашка «Сохранить изменения» плавно растворяется, когда изменений нет --- */
+.cset-savebar.bye { opacity:0; transform:translateX(-50%) translateY(14px) scale(.97); pointer-events:none; }
+
+/* --- v1.110.0: выбор шрифта ника в настройках профиля --- */
+.pqs-font-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; margin-top:10px; }
+.pqs-font-btn { background:rgba(255,255,255,.045); border:1px solid transparent; border-radius:8px; color:var(--tx); padding:12px 10px 9px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; overflow:hidden; }
+.pqs-font-btn:hover { background:rgba(255,255,255,.08); }
+.pqs-font-btn.on { border-color:var(--brand); background:rgba(88,101,242,.12); }
+.pqs-font-sample { font-size:17px; font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pqs-font-btn small { font-size:11px; color:var(--mut); font-weight:400; }

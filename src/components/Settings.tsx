@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings, type Settings as AppSettings, type CustomTheme } from '../lib/settings'
-import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { uploadTo } from '../lib/storage'
 import { isVideoUrl, trimVideoTo5s } from '../lib/videoAvatar'
 import { PlateBg } from './PlateBg'
@@ -235,6 +235,18 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setPetBusy(false) }
   }
+  // v1.110.0: свой файл шрифта для ника (.ttf/.otf/.woff/.woff2)
+  const fontRef = useRef<HTMLInputElement>(null)
+  const [fontBusy, setFontBusy] = useState(false)
+  async function pickFont(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setFontBusy(true)
+    try {
+      const url = await uploadTo('avatars', user.id, f)
+      await patchProf({ nickFontUrl: url })
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setFontBusy(false); e.target.value = '' }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -380,11 +392,11 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
             </div>
           </div>
           <div className="pqs2-main">
-            {dirty && <div className={'cset-savebar' + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
+            <div className={'cset-savebar' + (dirty ? '' : ' bye') + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
               <span>Есть несохранённые изменения!</span>
               <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
               <button className="cset-save" onClick={saveAccount} disabled={busy}>{busy ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
-            </div>}
+            </div>
             <div className="pqs2-inner">
               {cat === 'account' && <>
                 <h2 id="pqs2-acc-info">Информация об учётной записи</h2>
@@ -454,7 +466,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                         : username.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="pqs-acc-names">
-                      <div className="pqs-acc-name">{name || username}</div>
+                      <div className="pqs-acc-name" style={{ fontFamily: nickFontOf(prof) }}>{name || username}</div>
                       <div className="pqs-acc-uname">{uname}</div>
                     </div>
                     <button className="pqs2-btn primary" style={{ marginLeft: 'auto' }} onClick={() => avRef.current?.click()}>{avBusy ? 'Загрузка…' : 'Сменить аватар'}</button>
@@ -476,6 +488,26 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 </div>
 
                 <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t">Шрифт ника</div>
+                  <div className="pqs-code-sub">Твой ник — своим шрифтом: в мини-профиле, полном профиле и панельке внизу слева. Выбери из набора или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2). Видно всем, сохраняется сразу.</div>
+                  <div className="pqs-font-grid">
+                    {FONTS.map(f => (
+                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.nickFontUrl && (prof.nickFont ?? '') === f.id ? ' on' : '')}
+                        onClick={() => patchProf({ nickFont: f.id, nickFontUrl: null })}>
+                        <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>{name || username}</span>
+                        <small>{f.name}</small>
+                      </button>
+                    ))}
+                    <button className={'pqs-font-btn' + (prof.nickFontUrl ? ' on' : '')} onClick={() => fontRef.current?.click()}>
+                      <span className="pqs-font-sample" style={prof.nickFontUrl ? { fontFamily: nickFontOf(prof) } : undefined}>{fontBusy ? 'Загрузка…' : (name || username)}</span>
+                      <small>{prof.nickFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+                    </button>
+                  </div>
+                  {prof.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
+                  <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
+                </div>
+
+                <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Кубик профиля</div>
                   <div className="pqs-code-sub">Оформи «кубик» с ником и аватаркой (панель внизу слева и твоя строка в списке участников): фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Видно всем.</div>
                   <div className={'plate-prev' + (prof.plateOutline ? ' plate-outline' : '')} style={prof.plateOutline ? { ['--plate-oc' as any]: prof.plateOutline } : undefined}>
@@ -483,7 +515,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     <div className="pqs-acc-av" style={{ background: view.accent }}>
                       {avUrl ? (isVideoUrl(avUrl) ? <video src={avUrl} muted loop playsInline preload="metadata" /> : <img src={avUrl} alt="" />) : username.slice(0, 1).toUpperCase()}
                     </div>
-                    <span className="plate-prev-nm">{name || username}</span>
+                    <span className="plate-prev-nm" style={{ fontFamily: nickFontOf(prof) }}>{name || username}</span>
                   </div>
                   <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
                     <button className="pqs2-btn primary" onClick={() => plateRef.current?.click()}>{plateBusy ? 'Загрузка…' : (prof.plateUrl ? 'Заменить фон' : 'Фон: фото или видео')}</button>

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
-import { fetchProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
 import { sendRequest, openThread, mutualFriends } from '../lib/friends'
@@ -171,7 +171,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>
         </div>
         <div className="mini-body">
-          <div className="mini-name" onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
+          <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">
             <span className="mini-uname">{uname || data.name}</span>
             {(data.roleName || data.role) && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor ?? '#99aab5' }} />{data.roleName ?? 'Участник'}</span>}

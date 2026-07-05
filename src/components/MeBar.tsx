@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { PlateBg } from './PlateBg'
-import { fetchProfile } from '../lib/profilePrefs'
+import { fetchProfile, nickFontOf } from '../lib/profilePrefs'
 import { trimVideoTo5s } from '../lib/videoAvatar'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { ActivityLabel } from './ActivityLabel'
@@ -23,9 +23,10 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const [busy, setBusy] = useState(false)
   // v1.95.0: «кубик» (nameplate) — фон/обводка своей панельки, живёт в profiles.
   const [plate, setPlate] = useState<{ url: string | null; kind: string; outline: string | null }>({ url: null, kind: 'none', outline: null })
+  const [nickFam, setNickFam] = useState<string | undefined>(undefined)  // v1.110.0: шрифт ника
   useEffect(() => {
     if (!user) return
-    const load = () => { fetchProfile(user.id).then(p => setPlate({ url: p.plateUrl, kind: p.plateKind, outline: p.plateOutline })) }
+    const load = () => { fetchProfile(user.id).then(p => { setPlate({ url: p.plateUrl, kind: p.plateKind, outline: p.plateOutline }); setNickFam(nickFontOf(p)) }) }
     load()
     const h = (e: Event) => { if ((e as CustomEvent).detail?.id === user.id) load() }
     window.addEventListener('ponoi-profile', h)
@@ -70,7 +71,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
         <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} mobile={IS_MOBILE} />
       </span>
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
-      <span className="me-nm me-lift" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer' }} title="Мой профиль">
+      <span className="me-nm me-lift" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer', fontFamily: nickFam }} title="Мой профиль">
         {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : null; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
       </span>
       <button className={'me-ic me-mic me-lift' + (micIsOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}

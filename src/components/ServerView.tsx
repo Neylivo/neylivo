@@ -632,7 +632,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           style={(server as any).settings?.banner_url ? { backgroundImage: `linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.35)), url(${(server as any).settings.banner_url})` } : undefined}
           onClick={() => setSrvMenu(v => !v)}>
           <span className="srv-pill">
-            <span className="srv-check"><Icon name="check" size={9} /></span>
             <span className="srv-title-nm">{server.name}</span>
             <Icon name={srvMenu ? 'close' : 'chevron-down'} size={14} />
           </span>

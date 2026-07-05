@@ -221,7 +221,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       {inv.bn && <div className="inv2-banner" style={{ backgroundImage: `url(${inv.bn})` }} />}
                       <div className={'inv2-body' + (inv.bn ? ' has-bn' : '')}>
                         <div className="inv2-ico"><Avatar name={inv.n || 'S'} url={inv.ic ?? null} size={inv.bn ? 56 : 48} /></div>
-                        <div className="inv2-nm"><span className="inv2-nm-t">{inv.n}</span><span className="inv2-check" title="Проверенный сервер"><Icon name="check" size={10} /></span></div>
+                        <div className="inv2-nm"><span className="inv2-nm-t">{inv.n}</span></div>
                         <div className="inv2-stats">
                           <span className="inv2-st"><i className="on" /> {fmtN(inv.o ?? 1)} в сети</span>
                           <span className="inv2-st"><i /> {fmtN(Math.max(inv.m ?? 1, inv.o ?? 1))} {ruMembers(Math.max(inv.m ?? 1, inv.o ?? 1))}</span>

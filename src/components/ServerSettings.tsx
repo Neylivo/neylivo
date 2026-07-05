@@ -677,11 +677,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             onClick={() => { persistNow({ ...st }); toastOk('Шаблон «' + st.template.name + '» создан') }}>Создать шаблон</button>
         </>}
 
-        {dirty && <div className="cset-savebar">
+        <div className={'cset-savebar' + (dirty ? '' : ' bye')}>
           <span>Осторожно, вы не сохранили изменения!</span>
           <button className="cset-reset" onClick={resetAll}>Сбросить</button>
           <button className="cset-save" onClick={saveAll}>Сохранить изменения</button>
-        </div>}
+        </div>
       </div>
 
       {showDelete && <div className="modal-overlay" style={{ zIndex: 140 }} onClick={() => setShowDelete(false)}>

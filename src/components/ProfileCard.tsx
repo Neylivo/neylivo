@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
-import { fetchProfile, saveProfile, DEFAULT_PROFILE, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
@@ -130,7 +130,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             <span className="pc-av-status"><StatusDot status={status} size={20} /></span>
           </div>
           <div className="pc-body">
-            <div className="pc-name">{name}</div>
+            <div className="pc-name" style={{ fontFamily: nickFontOf(pp) }}>{name}</div>
             <div className="pc-userrow">
               <span>{name.toLowerCase()}</span>
               <span className="pc-dot">•</span>

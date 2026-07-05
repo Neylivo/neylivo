@@ -234,11 +234,11 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
         <span className="cset-esc-circle"><Icon name="close" size={16} /></span>
         ESC
       </button>
-      {dirty && <div className="cset-savebar">
+      <div className={'cset-savebar' + (dirty ? '' : ' bye')}>
         <span>Осторожно — вы не сохранили изменения!</span>
         <button className="cset-reset" onClick={reset}>Сбросить</button>
         <button className="cset-save" onClick={save}>Сохранить изменения</button>
-      </div>}
+      </div>
     </div>,
     document.body
   )

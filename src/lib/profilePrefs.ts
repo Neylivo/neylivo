@@ -24,6 +24,9 @@ export interface ProfilePrefs {
   plateUrl: string | null
   plateKind: 'image' | 'video' | 'none'
   plateOutline: string | null
+  // v1.110.0: шрифт ника — пресет (CSS font-family) и/или свой загруженный файл шрифта
+  nickFont: string
+  nickFontUrl: string | null
 }
 
 export interface Integration { label: string; url: string }
@@ -34,6 +37,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   petFree: { x: 80, y: 22 },
   pronouns: '', integrations: [], createdAt: null,
   plateUrl: null, plateKind: 'none', plateOutline: null,
+  nickFont: '', nickFontUrl: null,
 }
 
 
@@ -68,6 +72,8 @@ function fromRow(r: any): ProfilePrefs {
     plateUrl: r.nameplate_url ?? null,
     plateKind: (r.nameplate_kind as any) ?? 'none',
     plateOutline: r.nameplate_outline ?? null,
+    nickFont: r.nick_font ?? '',
+    nickFontUrl: r.nick_font_url ?? null,
   }
 }
 
@@ -89,6 +95,8 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.plateUrl !== undefined) r.nameplate_url = p.plateUrl
   if (p.plateKind !== undefined) r.nameplate_kind = p.plateKind
   if (p.plateOutline !== undefined) r.nameplate_outline = p.plateOutline
+  if (p.nickFont !== undefined) r.nick_font = p.nickFont || null
+  if (p.nickFontUrl !== undefined) r.nick_font_url = p.nickFontUrl
   return r
 }
 
@@ -98,12 +106,14 @@ const cache: Record<string, ProfilePrefs> = {}
 const COLS_BASE = 'primary_color, accent_color, about, pet_url, pet_kind, pet_on, pet_size, pet_pos'
 const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
 const COLS_PLATE = COLS_EXT + ', nameplate_url, nameplate_kind, nameplate_outline'
+const COLS_FONT = COLS_PLATE + ', nick_font, nick_font_url'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle())
   if (error) ({ data } = await supabase.from('profiles').select(COLS_BASE).eq('id', id).maybeSingle())
   const p = fromRow(data)
@@ -126,4 +136,23 @@ export function petKindOf(file: File): PetKind {
   if (t.startsWith('image')) return 'image'
   if (/\.(glb|gltf)$/i.test(file.name)) return 'model'
   return 'image'
+}
+// v1.110.0: шрифт ника. Пресет хранится как CSS font-family; свой файл шрифта —
+// как URL (Supabase Storage), под него на лету создаётся @font-face.
+const fontFaces = new Map<string, string>()
+export function customNickFamily(url: string): string {
+  let fam = fontFaces.get(url)
+  if (fam) return fam
+  let h = 0
+  for (let i = 0; i < url.length; i++) h = ((h << 5) - h + url.charCodeAt(i)) | 0
+  fam = 'ponoi-nick-' + Math.abs(h).toString(36)
+  const st = document.createElement('style')
+  st.textContent = `@font-face{font-family:'${fam}';src:url('${url.replace(/'/g, '%27')}');font-display:swap;}`
+  document.head.appendChild(st)
+  fontFaces.set(url, fam)
+  return fam
+}
+export function nickFontOf(p: Pick<ProfilePrefs, 'nickFont' | 'nickFontUrl'>): string | undefined {
+  if (p.nickFontUrl) return `'${customNickFamily(p.nickFontUrl)}', sans-serif`
+  return p.nickFont || undefined
 }
