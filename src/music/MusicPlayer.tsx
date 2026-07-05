@@ -1,4 +1,4 @@
-import { toastErr } from '../lib/toast'
+import { toastErr, toastOk } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
@@ -340,13 +340,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const url = cleanScUrl(scUrl); if (!url || !meId) return
     if (!/^https?:\/\//i.test(url)) { toastErr('Вставь полную ссылку (https://…)'); return }
     if (isSoundcloudUrl(url)) {
-      // SoundCloud (трек ИЛИ плейлист/сет): разворачиваем ссылку в полный список
-      // треков и сохраняем каждый в общую трекотеку — с названием, автором,
-      // обложкой и длительностью прямо в базе: видно всем и навсегда.
+      // SoundCloud (трек ИЛИ плейлист/сет): пробуем развернуть ссылку в полный
+      // список треков через виджет. v1.77.0: если виджет молчит/зарезан
+      // блокировщиком — ссылка ВСЁ РАВНО сохраняется в трекотеку (метаданные
+      // берём из oEmbed, а без него — хотя бы имя из самой ссылки).
       setImporting('Читаю SoundCloud…')
       try {
         const list = await scResolveTracks(url, (d, t) => setImporting(t > 1 ? `Добавляю: ${d}/${t}…` : 'Добавляю трек…'))
-        if (list.length === 0) { toastErr('Не удалось прочитать треки по ссылке'); return }
+        if (list.length === 0) throw new Error('empty')
         const have = new Set(tracks.map(x => x.url))
         let added = 0
         for (const s of list) {
@@ -359,7 +360,23 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         setScUrl('')
         setTracks(await fetchTracks())
         if (added === 0) toastErr('Эти треки уже есть в трекотеке')
-      } catch (err: any) { toastErr(err?.message ?? String(err)) }
+        else toastOk(added === 1 ? 'Трек добавлен в трекотеку' : `Добавлено треков: ${added}`)
+      } catch {
+        // Запасной путь: сохраняем сам линк с oEmbed-метаданными.
+        try {
+          setImporting('Сохраняю трек…')
+          const m = await scMeta(url)
+          if (tracks.some(x => x.url === url)) { toastErr('Этот трек уже есть в трекотеке') }
+          else {
+            const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
+            if (m) setMeta(prev => ({ ...prev, [url]: m }))
+            await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
+            setTracks(await fetchTracks())
+            toastOk('Трек добавлен в трекотеку' + (m ? '' : ' (название уточнится при воспроизведении)'))
+          }
+          setScUrl('')
+        } catch (err: any) { toastErr(err?.message ?? String(err)) }
+      }
       finally { setImporting('') }
       return
     }

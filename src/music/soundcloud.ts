@@ -110,7 +110,7 @@ export async function scResolveTracks(url: string, onProgress?: (done: number, t
   const w = SC.Widget(frame)
   try {
     await new Promise<void>((res, rej) => {
-      const t = setTimeout(() => rej(new Error('SoundCloud не отвечает — проверь ссылку или блокировщик рекламы')), 12000)
+      const t = setTimeout(() => rej(new Error('SoundCloud не отвечает — проверь ссылку или блокировщик рекламы')), 20000)
       w.bind(SC.Widget.Events.READY, () => { clearTimeout(t); res() })
       w.bind(SC.Widget.Events.ERROR, () => { clearTimeout(t); rej(new Error('SoundCloud: ссылка не читается')) })
     })
