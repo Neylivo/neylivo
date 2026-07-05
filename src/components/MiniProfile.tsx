@@ -59,8 +59,10 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const { user } = useAuth()
   const isMe = user?.id === data.userId
   const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
-  const { gameOf } = usePresence()
+  const { gameOf, listeningOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
+  const listening = listeningOf(data.userId)   // v1.106.0: вторая активность «Слушает музыку»
+  const [moreActs, setMoreActs] = useState(false)   // v1.106.0: раскрыты ли все активности («Ещё»)
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
@@ -82,6 +84,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     return () => { ok = false }
   }, [data.userId, data.status])
   useEffect(() => { let ok = true; fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
+  // v1.106.0: при открытии другого профиля активности снова свёрнуты до кнопки «Ещё».
+  useEffect(() => { setMoreActs(false) }, [data.userId])
   // Аватар: если не передали (например, клик по сообщению в ЛС) — берём из profiles.
   useEffect(() => {
     let ok = true
@@ -197,8 +201,25 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 toastOk('Добавлено к текущим играм')
               } catch {}
             }}>Добавить к текущим играм</button>}
+            {listening && <button className="mpg-morebtn" onClick={() => setMoreActs(m => !m)}>{/* v1.106.0: как в Discord — «Ещё N» раскрывает остальные активности */}
+              {moreActs ? 'Скрыть' : 'Ещё 1'}{!moreActs && <Icon name="chevron-down" size={13} />}
+            </button>}
           </div>}
-          {data.activity && !game && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
+          {listening && (moreActs || !game) && <div className="mpg mpg-music">{/* v1.106.0: карточка «Слушает музыку» — вторая активность или единственная */}
+            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-eq"><i /><i /><i /></span>Слушает музыку</span>
+              <button className="mpg-dots" title="Скопировать название трека"
+                onClick={() => { navigator.clipboard?.writeText(listening.title); toastOk('Название трека скопировано') }}><Icon name="more" size={16} /></button>
+            </div>
+            <div className="mpg-row">
+              <span className="mpg-cover mpg-cover-music"><Icon name="music" size={26} /></span>
+              <div className="mpg-info">
+                <div className="mpg-nm">{listening.title}</div>
+                {(listening.author || listening.source) && <div className="mpg-mode">{listening.author ?? ''}{listening.author && listening.source ? ' · ' : ''}{listening.source ?? ''}</div>}
+                <div className="mpg-time mpg-time-music"><Icon name="music" size={13} /> <ClockElapsed since={listening.at - Math.floor(listening.pos * 1000)} /></div>
+              </div>
+            </div>
+          </div>}
+          {data.activity && !game && !listening && <div className="mini-activity"><Icon name="gamepad" size={14} /> <ActivityLabel activity={data.activity} /></div>}
           {onAddRole && <button className="mini-addrole" onClick={onAddRole}><Icon name="plus" size={13} /> Добавить роль</button>}
           {!isMe && mutuals.length > 0 && <div className="mini-mutuals">
             <span className="mini-mutual-avs">{mutuals.slice(0, 3).map(m => <span key={m.id} className="mini-mutual-av"><Avatar name={m.username} url={m.avatar_url} size={20} /></span>)}</span>

@@ -32,9 +32,10 @@ interface PresenceCtx {
   activityOf: (userId: string) => Activity | null
   setMyListening: (l: Listening | null) => void
   gameOf: (userId: string) => Game | null
+  listeningOf: (userId: string) => Listening | null
   deviceOf: (userId: string) => 'mobile' | 'desktop'
 }
-const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, deviceOf: () => 'desktop' })
+const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, listeningOf: () => null, deviceOf: () => 'desktop' })
 
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
@@ -277,6 +278,12 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.game ?? null
   }
 
+  // v1.106.0: доступ к «Слушает…» напрямую — мини-профиль показывает все активности («Ещё»).
+  function listeningOf(userId: string): Listening | null {
+    if (userId === user?.id) return myListening
+    return online[userId]?.listening ?? null
+  }
+
   function statusOf(userId: string): Status {
     if (userId === user?.id) return myStatus
     return online[userId]?.status ?? 'offline'
@@ -288,7 +295,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.device ?? 'desktop'
   }
 
-  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf, deviceOf }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf, listeningOf, deviceOf }}>{children}</Ctx.Provider>
 }
 
 export const usePresence = () => useContext(Ctx)

@@ -3410,3 +3410,13 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 
 /* Шапка чата мягко появляется при входе в канал/диалог */
 .chat-head { animation:view-in .18s var(--ease-out4) both; }
+
+/* v1.106.0: несколько активностей в мини-профиле — кнопка «Ещё» раскрывает все (как в Discord) */
+.mpg-morebtn { width:100%; margin-top:10px; height:28px; border:none; border-radius:6px; background:rgba(255,255,255,.06);
+  color:#b5bac1; font-size:12.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  gap:5px; transition:background .15s, color .15s; }
+.mpg-morebtn:hover { background:rgba(255,255,255,.11); color:#f2f3f5; }
+.mpg-morebtn:active { transform:scale(.97); }
+.mpg + .mpg { margin-top:8px; }
+.mpg-cover-music { display:flex; align-items:center; justify-content:center; color:#b5bac1; }
+.mpg-time-music { color:#23a55a; }
