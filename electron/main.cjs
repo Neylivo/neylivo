@@ -165,57 +165,92 @@ const NOT_GAMES = new Set([
   'obs64', 'obs32', 'code', 'explorer', 'notepad', 'notepad++', 'wemod', 'medal',
   'overwolf', 'nvcontainer', 'telegram', 'whatsapp', 'epic games', 'riot games',
   'gog galaxy', 'wallpaper_engine', 'wallpaper32', 'wallpaper64',
+  // v1.85.0: ещё не-игры, чтобы детект ничего не путал — лаунчеры/оверлеи/медиа/системное
+  'playnite', 'playnite.desktopapp', 'playnite.fullscreenapp', 'geforce experience',
+  'nvidia app', 'nvidia share', 'nvidia overlay', 'msiafterburner', 'rtss',
+  'vlc', 'mpc-hc', 'mpc-hc64', 'potplayer', 'potplayermini64', 'obs',
+  'applicationframehost', 'systemsettings', 'taskmgr', 'devenv', 'rider64',
+  'idea64', 'pycharm64', 'webstorm64', 'photoshop', 'afterfx', 'gamebar',
+  'gamingservices', 'xboxpcapp', 'vesktop', 'slack', 'skype', 'zoom', 'viber',
+  'steamerrorreporter', 'gameoverlayui', 'ponoi',
 ])
 const GAME_DIRS = [
-  [/steamapps[\\/]common[\\/]([^\\/]+)/i, 1],
-  [/epic games[\\/]([^\\/]+)/i, 1],
-  [/gog galaxy[\\/]games[\\/]([^\\/]+)/i, 1],
-  [/gog games[\\/]([^\\/]+)/i, 1],
-  [/xboxgames[\\/]([^\\/]+)/i, 1],
-  [/riot games[\\/]([^\\/]+)/i, 1],
-  [/itch[\\/]apps[\\/]([^\\/]+)/i, 1],
-  [/roblox[\\/]versions[\\/]/i, 0],
-  // v1.65.0: больше источников — Wargaming, Garena, Battlestate + универсальная
-  // папка Games/Игры на любом диске (D:\Games\<Игра>\...)
-  [/wargaming(?:\.net)?[\\/]([^\\/]+)/i, 1],
-  [/garena[\\/]games?[\\/]([^\\/]+)/i, 1],
-  [/battlestate games[\\/]([^\\/]+)/i, 1],
-  [/[\\/](?:games|игры)[\\/]([^\\/]+)/i, 1],
+  // Папки игровых магазинов — надёжный источник имени игры (приоритет 60)
+  [/steamapps[\\/]common[\\/]([^\\/]+)/i, 1, 60],
+  [/epic games[\\/]([^\\/]+)/i, 1, 60],
+  [/gog galaxy[\\/]games[\\/]([^\\/]+)/i, 1, 60],
+  [/gog games[\\/]([^\\/]+)/i, 1, 60],
+  [/xboxgames[\\/]([^\\/]+)/i, 1, 60],
+  [/riot games[\\/]([^\\/]+)/i, 1, 60],
+  [/itch[\\/]apps[\\/]([^\\/]+)/i, 1, 60],
+  [/roblox[\\/]versions[\\/]/i, 0, 60],
+  // v1.65.0: больше источников — Wargaming, Garena, Battlestate
+  [/wargaming(?:\.net)?[\\/]([^\\/]+)/i, 1, 60],
+  [/garena[\\/]games?[\\/]([^\\/]+)/i, 1, 60],
+  [/battlestate games[\\/]([^\\/]+)/i, 1, 60],
+  // Универсальная папка Games/Игры на любом диске — самый слабый сигнал (приоритет 40):
+  // сюда легко попадает и не-игра, поэтому такой кандидат легко перебивается
+  [/[\\/](?:games|игры)[\\/]([^\\/]+)/i, 1, 40],
 ]
 function prettyName(s) {
   return s.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
-// Заголовки окон игр часто с хвостами («Игра  |  1.2.3», «Игра — сервер») —
-// берём первую осмысленную часть.
+// Заголовки окон игр часто с хвостами («Игра  |  1.2.3», «Игра — сервер»,
+// версии, ™/®) — берём первую осмысленную часть и чистим мусор.
 function cleanTitle(t) {
   let s = (t || '').split(/\s+[|\u2013\u2014]\s+| {2,}/)[0].trim()
+  s = s.replace(/[\u2122\u00ae\u00a9]/g, '').replace(/\s+v?\d+(\.\d+)+\s*$/i, '').trim()
   if (s.length > 60) s = s.slice(0, 60).trim()
   return s
 }
+// Мусорные имена не публикуем: слишком короткие, голые цифры, служебные слова.
+function isJunkName(s) {
+  const n = (s || '').trim()
+  if (n.length < 2) return true
+  if (/^[\d.\s]+$/.test(n)) return true
+  if (NOT_GAMES.has(n.toLowerCase())) return true
+  return false
+}
+// v1.85.0: детект возвращает кандидата с приоритетом — чем надёжнее источник,
+// тем выше. Раньше бралась первая попавшаяся строка скана, и случайный процесс
+// (чужое окно, лаунчер из папки Games) мог перебить настоящую игру.
+//   100 — известный процесс из словаря GAMES
+//    80 — Unreal Engine-клиент (…-Win64-Shipping)
+//    60 — exe в папке игрового магазина (Steam/Epic/GOG/Xbox/Riot/itch/…)
+//    40 — универсальная папка Games/Игры
 function detectGame(proc, exePath, title) {
   const nm = GAME_BY_PROC[proc]
   if (nm) {
     if (proc === 'javaw' && !title.toLowerCase().includes('minecraft')) return null
-    return nm
+    return { name: nm, prio: 100 }
   }
   if (NOT_GAMES.has(proc)) return null
+  // Сначала папка магазина: имя из неё надёжнее заголовка окна.
+  let dirHit = null
+  if (exePath) {
+    for (const [re, grp, prio] of GAME_DIRS) {
+      const m = exePath.match(re)
+      if (!m) continue
+      if (grp === 0) { dirHit = { name: 'Roblox', prio }; break }
+      let name = m[grp]
+      if (!name || NOT_GAMES.has(name.toLowerCase())) break
+      // exe бывает зарыт в служебную папку — тогда лучше заголовок окна
+      if (/^(binaries|bin|win64|win32|x64|x86|client|shipping|game|live|retail|content)$/i.test(name)) name = cleanTitle(title) || name
+      name = prettyName(name)
+      if (!isJunkName(name)) dirHit = { name, prio }
+      break
+    }
+  }
   // v1.65.0: любой Unreal Engine-клиент (…-Win64-Shipping) — это игра. Работает
   // даже когда путь к exe недоступен: анти-чит часто запускает игру с правами
   // выше наших, и Windows прячет Path (так было с Delta Force).
+  // Имя берём по надёжности: папка магазина > заголовок окна > имя процесса.
   const ue = proc.match(/^(.+?)(?:client|game)?-win(?:64|32)-shipping$/)
-  if (ue) return cleanTitle(title) || prettyName(ue[1])
-  if (!exePath) return null
-  for (const [re, grp] of GAME_DIRS) {
-    const m = exePath.match(re)
-    if (!m) continue
-    if (grp === 0) return 'Roblox'
-    let name = m[grp]
-    if (!name || NOT_GAMES.has(name.toLowerCase())) return null
-    // exe бывает зарыт в служебную папку — тогда лучше заголовок окна
-    if (/^(binaries|bin|win64|win32|x64|x86|client|shipping|game|live|retail|content)$/i.test(name)) name = cleanTitle(title) || name
-    return prettyName(name)
+  if (ue) {
+    const name = (dirHit && dirHit.name) || cleanTitle(title) || prettyName(ue[1])
+    return isJunkName(name) ? null : { name, prio: 80 }
   }
-  return null
+  return dirHit
 }
 let pendingGame = null   // кандидат на старт: { name, at }
 let scanBusy = false     // не пускаем сканы внахлёст
@@ -226,7 +261,9 @@ function scanGames() {
   execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', PS_SCAN], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, out) => {
     scanBusy = false
     if (err || !out) return
-    let found = null
+    // v1.85.0: собираем ВСЕХ кандидатов и берём самого надёжного (по приоритету),
+    // а не первую попавшуюся строку — так случайные окна не путают игры.
+    let best = null
     for (const line of String(out).split('\n')) {
       const parts = line.split('|')
       if (parts.length < 3) continue
@@ -234,11 +271,12 @@ function scanGames() {
       const exePath = parts[1].trim()
       const title = parts.slice(2).join('|').trim()
       if (!title) continue
-      const nm = detectGame(proc, exePath, title)
-      if (!nm) continue
-      found = nm
-      break
+      const cand = detectGame(proc, exePath, title)
+      if (!cand) continue
+      if (!best || cand.prio > best.prio) best = cand
+      if (best.prio >= 100) break
     }
+    const found = best ? best.name : null
     if (found) {
       if (curGame && curGame.name === found) { pendingGame = null; return }   // уже играет — молчим
       if (pendingGame && pendingGame.name === found) {                        // подтверждено вторым сканом
