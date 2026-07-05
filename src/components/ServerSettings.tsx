@@ -14,7 +14,8 @@ import { toastOk, toastErr } from '../lib/toast'
 import { uploadTo } from '../lib/storage'
 import { usePresence } from '../lib/presence'
 import { listMembers, createInvite, updateServer } from '../lib/servers'
-import { fetchRoles, createRole, deleteRole, setRoleManage, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRoleManage, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { RoleEditor } from './RoleEditor'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 
@@ -54,13 +55,15 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const s0: any = (server as any).settings ?? {}
   const { statusOf } = usePresence()
   const [tab, setTab] = useState<Tab>('profile')
-  const [rolesView, setRolesView] = useState<'main' | 'everyone'>('main')
+  const [rolesView, setRolesView] = useState<'main' | 'everyone' | 'edit'>('main')
+  const [selRoleId, setSelRoleId] = useState<string | null>(null)   // роль, открытая в редакторе (v1.96.0)
   const [name, setName] = useState(server.name)
   const [st, setSt] = useState<any>({ ...s0 })
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
   const [members, setMembers] = useState<any[]>([])
   const [roles, setRoles] = useState<ServerRole[]>([])
+  const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [invites, setInvites] = useState<any[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [mq, setMq] = useState('')       // поиск по участникам
@@ -87,6 +90,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   useEffect(() => {
     listMembers(server.id).then(setMembers)
     fetchRoles(server.id).then(setRoles)
+    fetchMemberRoles(server.id).then(setMemberRoles)
     supabase.from('channels').select('*').eq('server_id', server.id).order('name')
       .then(({ data }) => setChannels((data ?? []) as Channel[]))
     supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
@@ -143,6 +147,13 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     const { error } = await createRole(server.id, nm, newRoleColor)
     if (error) return toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql' : String(error.message ?? error))
     setNewRole(''); setRoles(await fetchRoles(server.id)); toastOk('Роль «' + nm + '» создана')
+  }
+
+  // v1.96.0: полный перезабор ролей/назначений после правок в редакторе ролей.
+  async function reloadRoles() {
+    setRoles(await fetchRoles(server.id))
+    setMemberRoles(await fetchMemberRoles(server.id))
+    setMembers(await listMembers(server.id))
   }
 
   // Перестановка ролей (иерархия): двигаем на шаг и сохраняем позиции 0..n-1.
@@ -398,7 +409,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <thead><tr><th>Имя</th><th>В числе участников с</th><th>В Ponoi с</th><th>Способ вступления</th><th>Роли</th><th>Сигналы</th></tr></thead>
             <tbody>
               {filtered.map(m => {
-                const rr = m.role_id ? roles.find(r => r.id === m.role_id) : undefined
+                const mrs = (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).map(id => roles.find(r => r.id === id)).filter(Boolean) as ServerRole[]
                 return (
                   <tr key={m.user_id}>
                     <td><div className="sset-mrow">
@@ -408,7 +419,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     <td>{m.joined_at ? fmtD(m.joined_at) : '—'}</td>
                     <td>—</td>
                     <td>{m.role === 'owner' ? 'Создатель сервера' : 'Приглашение'}</td>
-                    <td><span className="sset-rolechip"><span className="role-dot" style={{ background: rr ? rr.color : '#99aab5' }} />{rr ? rr.name : 'Участник'}</span></td>
+                    <td>{mrs.length === 0
+                      ? <span className="sset-rolechip"><span className="role-dot" style={{ background: '#99aab5' }} />Участник</span>
+                      : mrs.map(r => <span key={r.id} className="sset-rolechip"><span className="role-dot" style={{ background: r.color }} />{r.name}</span>)}</td>
                     <td>—</td>
                   </tr>
                 )
@@ -451,7 +464,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                   <button title="Выше" disabled={i === 0} onClick={() => moveRole(i, -1)}><Icon name="chevron-down" size={13} style={{ transform: 'rotate(180deg)' } as any} /></button>
                   <button title="Ниже" disabled={i === roles.length - 1} onClick={() => moveRole(i, 1)}><Icon name="chevron-down" size={13} /></button>
                 </span>
-                <span className="role-dot" style={{ background: r.color }} /><b>{r.name}</b>
+                <span className="role-dot" style={{ background: r.color }} /><b className="sset-rolename" title="Редактировать роль" onClick={() => { setSelRoleId(r.id); setRolesView('edit') }}>{r.name}</b>
                 <label className="sset-rmanage" title="Участники с этой ролью могут открывать и менять настройки сервера">
                   <input type="checkbox" checked={!!r.manage} onChange={async e => {
                     const v = e.target.checked
@@ -460,7 +473,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     setRoles(await fetchRoles(server.id))
                   }} /> Управление сервером
                 </label>
-                <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{members.filter(m => m.role_id === r.id).length} 👤</span>
+                <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{members.filter(m => (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).includes(r.id)).length} 👤</span>
+                <button className="sset-roledel" title="Редактировать роль" onClick={() => { setSelRoleId(r.id); setRolesView('edit') }}><Icon name="edit" size={14} /></button>
                 <button className="sset-roledel" title="Удалить роль" onClick={async () => { await deleteRole(r.id); setRoles(await fetchRoles(server.id)) }}><Icon name="trash" size={14} /></button>
               </div>
             ))}
@@ -472,6 +486,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <Icon name="chevron-right" size={18} />
           </div>
         </>}
+
+        {tab === 'roles' && rolesView === 'edit' && selRoleId && <RoleEditor server={server} roles={roles} members={members} memberRoles={memberRoles}
+          roleId={selRoleId} onSelectRole={setSelRoleId} onBack={() => setRolesView('main')} onEveryone={() => setRolesView('everyone')} onReload={reloadRoles} />}
 
         {tab === 'roles' && rolesView === 'everyone' && <>
           <div className="sset-back" onClick={() => setRolesView('main')}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' } as any} /> НАЗАД</div>

@@ -27,7 +27,7 @@ import { Icon } from './icons'
 import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
-import { fetchRoles, createRole, deleteRole, assignRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -99,6 +99,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const { statusOf, activityOf, gameOf, deviceOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [roles, setRoles] = useState<ServerRole[]>([])
+  const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
@@ -138,16 +139,33 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
 
-  // Цветные роли: id -> роль и цвет имени участника.
+  // Цветные роли: id -> роль. С v1.96.0 у участника может быть сколько угодно
+  // ролей (member_roles); до миграции 25 — старое одиночное server_members.role_id.
   const roleById: Record<string, ServerRole> = {}
   for (const r of roles) roleById[r.id] = r
+  function rolesOfId(userId: string): string[] {
+    const multi = memberRoles[userId]
+    if (multi && multi.length) return multi
+    const mm = members.find(z => z.user_id === userId)
+    return mm?.role_id ? [mm.role_id] : []
+  }
+  // Высшая роль (position меньше — выше): её цвет и её секция в списке участников, как в Discord.
+  function topRoleOf(m: any): ServerRole | undefined {
+    let best: ServerRole | undefined
+    for (const id of rolesOfId(m.user_id)) { const r = roleById[id]; if (r && (!best || r.position < best.position)) best = r }
+    return best
+  }
+  // Значок высшей роли со значком (как в Discord: «видят значок высшей из них»).
+  function topIconOf(m: any): string | undefined {
+    const rs = rolesOfId(m.user_id).map(id => roleById[id]).filter(Boolean).sort((a, b) => a.position - b.position)
+    return rs.find(r => r.icon_url)?.icon_url ?? undefined
+  }
   function roleColorOf(userId: string): string | undefined {
     const mm = members.find(z => z.user_id === userId)
-    return mm?.role_id ? roleById[mm.role_id]?.color : undefined
+    return mm ? topRoleOf(mm)?.color : undefined
   }
-  // Право на «Настройки сервера» (v1.33.0): владелец или роль с флагом «Управление сервером».
-  const myMember = members.find(z => z.user_id === user?.id)
-  const canManage = isOwner || !!(myMember?.role_id && roleById[myMember.role_id]?.manage)
+  // Право на «Настройки сервера»: владелец или любая роль с флагом «Управление сервером».
+  const canManage = isOwner || rolesOfId(user?.id ?? '').some(id => roleById[id]?.manage)
 
   useEffect(() => { voiceRef.current = voice }, [voice])
   // Смена сервера: тихо выходим из голосового канала прошлого сервера.
@@ -182,7 +200,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   useEffect(() => () => { try { voiceRef.current?.room.disconnect() } catch {} }, [])
 
   async function loadMembers() { setMembers(await listMembers(server.id)) }
-  async function loadRoles() { setRoles(await fetchRoles(server.id)) }
+  async function loadRoles() { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
 
   async function loadChannels() {
     const { data } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
@@ -746,7 +764,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) localStorage.setItem('ponoi_lastread_' + curChannelRef.current.id, String(new Date(m.created_at).getTime() - 1)) }}
-            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm?.role_id ? roleById[mm.role_id] : undefined
+            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm ? topRoleOf(mm) : undefined
               setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, roleName: rr?.name, roleColor: rr?.color, activity: activityOf(m.author), x, y }) }} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
@@ -765,7 +783,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           const off = members.filter(m => statusOf(m.user_id) === 'offline')
           const row = (m: any) => {
             const act = activityOf(m.user_id)
-            const rr = m.role_id ? roleById[m.role_id] : undefined
+            const rr = topRoleOf(m)
             const isTyping = typers.includes(m.member_name)
             return (
             <div key={m.user_id} className={'member' + (m.nameplate_outline ? ' plate-outline' : '')}
@@ -778,7 +796,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
-              <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}
+              <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}{(() => { const ic = topIconOf(m); return ic ? <img className="role-badge" src={ic} alt="" title={rr?.name} /> : null })()}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
@@ -791,7 +809,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           // затем «В сети» (без роли), затем все офлайн в «Не в сети».
           const used = new Set<string>()
           const roleSecs = roles.map(r => {
-            const list = on.filter(m => m.role_id === r.id)
+            const list = on.filter(m => !used.has(m.user_id) && topRoleOf(m)?.id === r.id)
             list.forEach(m => used.add(m.user_id))
             return { r, list }
           }).filter(s => s.list.length > 0)
@@ -811,12 +829,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {rolePop && <>
         <div className="ctx-overlay" onClick={() => setRolePop(null)} onContextMenu={e => { e.preventDefault(); setRolePop(null) }} />
         <div className="ctx-menu role-pop" style={{ left: rolePop.x, top: rolePop.y }}>
-          <div className="role-pop-h">Роль участника</div>
+          <div className="role-pop-h">Роли участника</div>
           {roles.map(r => {
-            const mm = members.find(z => z.user_id === rolePop.userId)
-            const on = mm?.role_id === r.id
+            const on = rolesOfId(rolePop.userId).includes(r.id)
             return <div key={r.id} className={'ctx-item role-item' + (on ? ' on' : '')}
-              onClick={async () => { await assignRole(server.id, rolePop.userId, on ? null : r.id); await loadMembers(); setRolePop(null) }}>
+              onClick={async () => { await toggleMemberRole(server.id, rolePop.userId, r.id, !on); await loadRoles(); await loadMembers() }}>
               <span className="role-dot" style={{ background: r.color }} />{r.name}
               {on && <Icon name="check" size={14} />}
               <span className="role-del" title="Удалить роль" onClick={async e => { e.stopPropagation(); if (!await confirmUi('Удалить роль «' + r.name + '»?', { okText: 'Удалить' })) return; await deleteRole(r.id); await Promise.all([loadRoles(), loadMembers()]) }}><Icon name="trash" size={13} /></span>

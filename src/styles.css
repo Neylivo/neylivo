@@ -3308,3 +3308,61 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .plate-prev .pqs-acc-av { width:36px; height:36px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; }
 .plate-prev-nm { font-weight:600; font-size:16px; }
 .pqs-acc-av video { width:100%; height:100%; object-fit:cover; }
+
+/* ===== v1.96.0: редактор ролей (1-в-1 как в Discord), значки ролей, много ролей ===== */
+.role-badge { width:16px; height:16px; border-radius:4px; object-fit:cover; margin-left:5px; vertical-align:-3px; display:inline-block; }
+.sset-rolename { cursor:pointer; }
+.sset-rolename:hover { text-decoration:underline; }
+.redit { display:flex; min-height:480px; }
+.redit-side { width:200px; flex:none; border-right:1px solid rgba(255,255,255,.06); padding-right:8px; }
+.redit-back { display:flex; align-items:center; gap:6px; font-weight:700; font-size:13px; color:var(--mut); cursor:pointer; padding:6px 8px; }
+.redit-back:hover { color:var(--tx); }
+.redit-side-h { display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; letter-spacing:.4px; color:var(--mut); padding:10px 8px 4px; }
+.redit-plus { background:none; border:none; color:var(--mut); cursor:pointer; padding:0; }
+.redit-plus:hover { color:var(--tx); }
+.redit-role { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:4px; cursor:pointer; font-weight:600; font-size:15px; }
+.redit-role:hover { background:rgba(255,255,255,.04); }
+.redit-role.on { background:rgba(255,255,255,.08); }
+.redit-role-nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.redit-rmove { display:none; gap:2px; }
+.redit-role:hover .redit-rmove { display:inline-flex; }
+.redit-rmove button { background:none; border:none; color:var(--mut); cursor:pointer; font-size:10px; padding:0 2px; }
+.redit-rmove button:disabled { opacity:.3; cursor:default; }
+.redit-rmove button:hover:not(:disabled) { color:var(--tx); }
+.redit-main { flex:1; padding-left:20px; min-width:0; }
+.redit-head { display:flex; align-items:center; gap:10px; }
+.redit-title { font-weight:700; font-size:15px; letter-spacing:.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.redit-dots { background:none; border:none; color:var(--mut); cursor:pointer; flex:none; }
+.redit-dots:hover { color:#ed4245; }
+.redit-manage { margin-left:auto; color:var(--mut); font-size:13px; cursor:pointer; white-space:nowrap; flex:none; }
+.redit-manage:hover { color:var(--tx); text-decoration:underline; }
+.redit-tabs { display:flex; gap:18px; border-bottom:1px solid rgba(255,255,255,.08); margin:14px 0 18px; }
+.redit-tabs span { padding:6px 2px 8px; font-size:15px; color:var(--mut); cursor:pointer; border-bottom:2px solid transparent; }
+.redit-tabs span:hover { color:var(--tx); }
+.redit-tabs span.on { color:#00a8fc; border-bottom-color:#00a8fc; }
+.redit-body .req { color:#ed4245; font-style:normal; }
+.redit-colors { display:flex; gap:10px; align-items:flex-start; margin:10px 0 6px; }
+.redit-sw { width:20px; height:20px; border-radius:4px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:#fff; }
+.redit-sw.big { width:60px; height:44px; border-radius:6px; flex:none; }
+.redit-sw.custom { position:relative; background:#fff; color:#4e5058; overflow:hidden; }
+.redit-sw.custom input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.redit-grid { display:grid; grid-template-columns:repeat(10, 20px); gap:6px; }
+.redit-iconrow { display:flex; align-items:center; gap:10px; margin-top:10px; }
+.redit-iconprev { width:64px; height:64px; border-radius:8px; background:var(--bg2); display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:22px; flex:none; }
+.redit-iconprev img { width:100%; height:100%; object-fit:cover; }
+.redit-preview { display:flex; gap:12px; background:var(--bg2); border-radius:8px; padding:12px 14px; margin-top:18px; max-width:480px; }
+.redit-prev-av { width:40px; height:40px; border-radius:50%; background:#5865f2; flex:none; display:flex; align-items:center; justify-content:center; font-size:20px; }
+.redit-members { width:260px; flex:none; border-left:1px solid rgba(255,255,255,.06); padding-left:14px; margin-left:14px; }
+.redit-mem-h { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; }
+.redit-mem-list { display:flex; flex-direction:column; gap:2px; margin-top:8px; max-height:340px; overflow-y:auto; }
+.redit-mem { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:4px; font-size:14px; cursor:pointer; }
+.redit-mem:hover { background:rgba(255,255,255,.04); }
+.redit-mem-av { width:24px; height:24px; border-radius:50%; background:#5865f2; background-size:cover; background-position:center; flex:none; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+.redit-mem-x { margin-left:auto; color:var(--mut); cursor:pointer; }
+.redit-mem-x:hover { color:#ed4245; }
+@media (max-width: 768px) {
+  .redit { flex-wrap:wrap; }
+  .redit-side { width:100%; border-right:none; padding-right:0; }
+  .redit-main { padding-left:0; }
+  .redit-members { width:100%; border-left:none; margin-left:0; padding-left:0; }
+}
