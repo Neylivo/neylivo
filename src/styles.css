@@ -3366,3 +3366,47 @@ input, textarea { caret-color:var(--brand,#5865f2); }
   .redit-main { padding-left:0; }
   .redit-members { width:100%; border-left:none; margin-left:0; padding-left:0; }
 }
+
+/* ===== v1.104.0: «быстро, но плавно» — второй слой анимаций (как в Discord) =====
+   Только лёгкие CSS-переходы: композитор анимирует opacity/scale/translate,
+   на скорость не влияет. Всё отключается системной настройкой «уменьшить движение»
+   (@media prefers-reduced-motion выше) и переключателем анимаций (body.no-anim). */
+
+/* Реакции: чип «выпрыгивает» пружинкой, нажатие утапливает */
+@keyframes rx-in { from { opacity:0; scale:.4; } to { opacity:1; scale:1; } }
+.rx { animation:rx-in .2s var(--ease-spring) both; transition:background .15s ease, border-color .15s ease, scale .1s ease; }
+.rx:active { scale:.9; }
+.rx-quick, .tools-quick { animation:menu-in .12s var(--ease-out4) both; }
+
+/* Вкладки «Друзей» и правая колонка: содержимое мягко всплывает при переключении */
+@keyframes view-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+.pfr-body > * { animation:view-in .16s var(--ease-out4) both; }
+.pfr-right { animation:view-in .2s var(--ease-out4) both; }
+
+/* Эмодзи-пикер: клетки чуть подрастают под курсором и сжимаются при клике */
+.emoji-btn { transition:background .1s ease, transform .12s var(--ease-spring); }
+.emoji-btn:hover { transform:scale(1.14); }
+
+/* Точка непрочитанного у канала появляется с «поп»-эффектом */
+@keyframes dot-in { from { scale:0; } to { scale:1; } }
+.ch.unread::after { display:inline-block; animation:dot-in .25s var(--ease-spring) both; }
+
+/* Карточки «Активных контактов»: лёгкий подъём при наведении */
+.pfr-actcard2 { transition:background .15s ease, transform .18s var(--ease-out4), box-shadow .18s ease; }
+.pfr-actcard2:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.25); }
+
+/* Кнопки «Друзей»: плавный ховер + утапливание при нажатии */
+.pfr-cbtn, .pfr-add2-send, .pfr-addfriend, .pfr-tab, .pfr-ok, .pfr-no, .pfr-copy, .pfr-addbtn2 {
+  transition:background .15s ease, color .15s ease, transform .12s ease; }
+.pfr-cbtn:active, .pfr-add2-send:active:not(:disabled), .pfr-addfriend:active, .pfr-tab:active,
+.pfr-ok:active, .pfr-no:active, .pfr-copy:active, .pfr-addbtn2:active { transform:scale(.95); }
+
+/* Строки списков: единая мягкость ховера */
+.member, .pfr-row, .pfr-row2 { transition:background .13s ease; }
+
+/* Вложения-картинки: мягкая подсветка под курсором (открываются в лайтбокс) */
+.msg-att.zoomable { transition:filter .15s ease; }
+.msg-att.zoomable:hover { filter:brightness(1.07); }
+
+/* Шапка чата мягко появляется при входе в канал/диалог */
+.chat-head { animation:view-in .18s var(--ease-out4) both; }
