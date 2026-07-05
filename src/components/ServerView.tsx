@@ -17,6 +17,7 @@ import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
+import { useUserFonts } from '../lib/userFonts'
 import { listMembers, updateServer } from '../lib/servers'
 import { Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
@@ -87,6 +88,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [curChannel, setCurChannel] = useState<Channel | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [members, setMembers] = useState<any[]>([])
+  const memberFonts = useUserFonts(members.map(z => z.user_id))  // v1.112.0: шрифты ников в списке участников
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgsBoxRef = useRef<HTMLDivElement>(null)
   const prevLen = useRef(0)
@@ -811,7 +813,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} userId={m.user_id} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
-              <span className="me-nm" style={{ color: rr?.color }}>{m.member_name}{(() => { const ic = topIconOf(m); return ic ? <img className="role-badge" src={ic} alt="" title={rr?.name} /> : null })()}
+              <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ic = topIconOf(m); return ic ? <img className="role-badge" src={ic} alt="" title={rr?.name} /> : null })()}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}

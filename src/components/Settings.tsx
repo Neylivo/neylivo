@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings, type Settings as AppSettings, type CustomTheme } from '../lib/settings'
-import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, nickFontOf, msgFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { uploadTo } from '../lib/storage'
 import { isVideoUrl, trimVideoTo5s } from '../lib/videoAvatar'
 import { PlateBg } from './PlateBg'
@@ -246,6 +246,18 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       await patchProf({ nickFontUrl: url })
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setFontBusy(false); e.target.value = '' }
+  }
+  // v1.112.0: свой файл шрифта для сообщений (.ttf/.otf/.woff/.woff2)
+  const msgFontRef = useRef<HTMLInputElement>(null)
+  const [msgFontBusy, setMsgFontBusy] = useState(false)
+  async function pickMsgFont(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setMsgFontBusy(true)
+    try {
+      const url = await uploadTo('avatars', user.id, f)
+      await patchProf({ msgFontUrl: url })
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setMsgFontBusy(false); e.target.value = '' }
   }
 
   useEffect(() => {
@@ -489,7 +501,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Шрифт ника</div>
-                  <div className="pqs-code-sub">Твой ник — своим шрифтом: в мини-профиле, полном профиле и панельке внизу слева. Выбери из набора или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2). Видно всем, сохраняется сразу.</div>
+                  <div className="pqs-code-sub">Твой ник — своим шрифтом: в чате, списке участников, мини-профиле, полном профиле и панельке внизу слева. Выбери из набора или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2). Видно всем, сохраняется сразу.</div>
                   <div className="pqs-font-grid">
                     {FONTS.map(f => (
                       <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.nickFontUrl && (prof.nickFont ?? '') === f.id ? ' on' : '')}
@@ -505,6 +517,26 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   </div>
                   {prof.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
+                </div>
+
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t">Шрифт сообщений</div>
+                  <div className="pqs-code-sub">Шрифт, которым пишутся твои сообщения в чате. Видно всем — но каждый может выключить чужие шрифты у себя («Внешний вид» → «Чужие шрифты в чате»). Сохраняется сразу.</div>
+                  <div className="pqs-font-grid">
+                    {FONTS.map(f => (
+                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.msgFontUrl && (prof.msgFont ?? '') === f.id ? ' on' : '')}
+                        onClick={() => patchProf({ msgFont: f.id, msgFontUrl: null })}>
+                        <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>Привет, как дела?</span>
+                        <small>{f.name}</small>
+                      </button>
+                    ))}
+                    <button className={'pqs-font-btn' + (prof.msgFontUrl ? ' on' : '')} onClick={() => msgFontRef.current?.click()}>
+                      <span className="pqs-font-sample" style={prof.msgFontUrl ? { fontFamily: msgFontOf(prof) } : undefined}>{msgFontBusy ? 'Загрузка…' : 'Привет, как дела?'}</span>
+                      <small>{prof.msgFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+                    </button>
+                  </div>
+                  {prof.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
+                  <input ref={msgFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickMsgFont} />
                 </div>
 
                 <div className="pqs-acc-card2">
@@ -677,6 +709,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 </Row>
                 <Row title="Крупные эмодзи" desc="Сообщения только из эмодзи показывать крупно">
                   <Toggle on={view.bigEmoji} onChange={v => setD('bigEmoji', v)} />
+                </Row>
+                <Row title="Чужие шрифты в чате" desc="Показывать шрифты ника и сообщений других пользователей">
+                  <Toggle on={view.otherFonts} onChange={v => setD('otherFonts', v)} />
                 </Row>
                 <div className="pqs-sec-t">Отправка сообщений</div>
                 <div className="pqs-preset-grid">

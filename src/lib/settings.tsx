@@ -38,6 +38,7 @@ export interface Settings {
   showAvatars: boolean
   groupMessages: boolean
   bigEmoji: boolean    // render emoji-only messages large
+  otherFonts: boolean  // v1.112.0: показывать шрифты ника/сообщений других пользователей в чате
   sendKey: 'enter' | 'ctrl'
   keyMusic: string
   keyHome: string
@@ -69,7 +70,7 @@ export const DEFAULTS: Settings = {
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
   micVol: 100, spkVol: 100, lang: 'ru', dmAll: true, dmMembers: true, dataCollect: true,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
-  fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true,
+  fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
 }
 

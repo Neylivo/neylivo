@@ -27,6 +27,9 @@ export interface ProfilePrefs {
   // v1.110.0: шрифт ника — пресет (CSS font-family) и/или свой загруженный файл шрифта
   nickFont: string
   nickFontUrl: string | null
+  // v1.112.0: шрифт сообщений — каким шрифтом пишутся твои сообщения в чате (видно всем)
+  msgFont: string
+  msgFontUrl: string | null
 }
 
 export interface Integration { label: string; url: string }
@@ -38,6 +41,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   pronouns: '', integrations: [], createdAt: null,
   plateUrl: null, plateKind: 'none', plateOutline: null,
   nickFont: '', nickFontUrl: null,
+  msgFont: '', msgFontUrl: null,
 }
 
 
@@ -74,6 +78,8 @@ function fromRow(r: any): ProfilePrefs {
     plateOutline: r.nameplate_outline ?? null,
     nickFont: r.nick_font ?? '',
     nickFontUrl: r.nick_font_url ?? null,
+    msgFont: r.msg_font ?? '',
+    msgFontUrl: r.msg_font_url ?? null,
   }
 }
 
@@ -97,6 +103,8 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.plateOutline !== undefined) r.nameplate_outline = p.plateOutline
   if (p.nickFont !== undefined) r.nick_font = p.nickFont || null
   if (p.nickFontUrl !== undefined) r.nick_font_url = p.nickFontUrl
+  if (p.msgFont !== undefined) r.msg_font = p.msgFont || null
+  if (p.msgFontUrl !== undefined) r.msg_font_url = p.msgFontUrl
   return r
 }
 
@@ -107,12 +115,14 @@ const COLS_BASE = 'primary_color, accent_color, about, pet_url, pet_kind, pet_on
 const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
 const COLS_PLATE = COLS_EXT + ', nameplate_url, nameplate_kind, nameplate_outline'
 const COLS_FONT = COLS_PLATE + ', nick_font, nick_font_url'
+const COLS_MSG = COLS_FONT + ', msg_font, msg_font_url'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle())
   if (error) ({ data } = await supabase.from('profiles').select(COLS_BASE).eq('id', id).maybeSingle())
@@ -155,4 +165,9 @@ export function customNickFamily(url: string): string {
 export function nickFontOf(p: Pick<ProfilePrefs, 'nickFont' | 'nickFontUrl'>): string | undefined {
   if (p.nickFontUrl) return `'${customNickFamily(p.nickFontUrl)}', sans-serif`
   return p.nickFont || undefined
+}
+// v1.112.0: шрифт сообщений — тот же принцип, что и шрифт ника.
+export function msgFontOf(p: Pick<ProfilePrefs, 'msgFont' | 'msgFontUrl'>): string | undefined {
+  if (p.msgFontUrl) return `'${customNickFamily(p.msgFontUrl)}', sans-serif`
+  return p.msgFont || undefined
 }

@@ -6,6 +6,7 @@ import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
+import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
@@ -152,6 +153,8 @@ interface Props {
 
 export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
   const { settings } = useSettings()
+  // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
+  const fontsOf = useUserFonts(messages.map(m => m.author))
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
@@ -271,6 +274,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         const rx = reactions[m.id] ?? []
         const meMentioned = !!(currentUserName && m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName))
         const fwd = parseFwd(m.content)
+        const uf: UserFonts = (settings.otherFonts || m.author === currentUser) ? fontsOf(m.author) : {}
         return (
           <Fragment key={m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
@@ -287,7 +291,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author) }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 {editing === m.id
                   ? <div className="msg-edit">
                       <textarea className="msg-edit-in" value={editText} autoFocus
@@ -304,7 +308,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       {fwd.text && <div className="msg-txt">{renderContent(fwd.text)}</div>}
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
-                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
                 {!m.attach_url && findGifLink(m.content) && <GifEmbed url={findGifLink(m.content)!} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
                 <span className="tg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
