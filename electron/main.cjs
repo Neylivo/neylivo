@@ -216,6 +216,110 @@ function showGameToast(p) {
 }
 ipcMain.on('ponoi-game-toast', (_e, p) => showGameToast(p))
 
+// ---- v1.99.0: стартовый оверлей при входе в игру — как у Discord ----
+// Как только пользователь сам зашёл в игру, поверх неё в левом верхнем углу всплывает
+// панель: «Использование Ponoi из оверлея во время игры», кнопка «Открыть Ponoi» и список
+// «Пригласите друзей поиграть» (аватар, ник, наигранное время в этой игре, кнопка-приглашение).
+// Окно кликабельное (не click-through), но не забирает фокус у игры (focusable: false).
+// Само исчезает через 15 секунд. Поверх эксклюзивного полноэкранного режима Windows
+// сторонние окна не рисуются — это ограничение самой ОС.
+let overlayWin = null
+let overlayTimer = null
+const SEND_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 11.5 20.5 3.6c.5-.2 1 .3.8.8L13.4 22c-.2.5-.9.5-1.1 0l-2.6-6.3c-.1-.2-.3-.4-.5-.5L3 12.6c-.5-.2-.5-.9 0-1.1Z" fill="currentColor"/></svg>'
+function showGameOverlay(p) {
+  try {
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    const gameRaw = (p && p.game) ? String(p.game) : ''
+    const game = esc(gameRaw)
+    const okUrl = (u) => typeof u === 'string' && /^https:\/\//.test(u)
+    const cover = okUrl(p && p.cover) ? p.cover : null
+    const friends = (Array.isArray(p && p.friends) ? p.friends : []).slice(0, 4)
+    const fmt = (ms) => {
+      const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60
+      const p2 = (n) => String(n).padStart(2, '0')
+      return h > 0 ? h + ':' + p2(mm) + ':' + p2(ss) : mm + ':' + p2(ss)
+    }
+    const gic = cover ? '<img class="gic" src="' + esc(cover) + '">' : '<span class="gic ph2">&#127918;</span>'
+    const rows = friends.map((f) => {
+      const nm = String((f && f.name) || '?')
+      const av = okUrl(f && f.avatar) ? '<img class="fav" src="' + esc(f.avatar) + '">' : '<span class="fav ph">' + esc(nm[0].toUpperCase()) + '</span>'
+      const sub = (f && f.ms > 0) ? '<span class="ftime">&#127918; ' + fmt(f.ms) + '</span>'
+        : ((f && f.online) ? '<span class="fon">В сети</span>' : '<span class="foff">Не в сети</span>')
+      return '<div class="fr"><span class="favw">' + av + ((f && f.online) ? '<i class="dot"></i>' : '') + '</span>' +
+        '<span class="ftx"><b>' + esc(nm) + '</b>' + sub + '</span>' +
+        '<button class="inv" data-id="' + esc(String((f && f.id) || '')) + '" title="Пригласить">' + SEND_SVG + '</button></div>'
+    }).join('')
+    const html = '<!doctype html><meta charset="utf-8"><style>' +
+      'html,body{margin:0;background:transparent;overflow:hidden;-webkit-user-select:none;font:500 14px "Segoe UI",system-ui,sans-serif}' +
+      '.panel{background:rgba(17,18,20,.92);border-radius:8px;margin:6px;box-shadow:0 6px 22px rgba(0,0,0,.5);overflow:hidden;animation:in .22s ease}' +
+      '@keyframes in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}' +
+      '.head{display:flex;gap:12px;padding:14px 14px 10px;align-items:flex-start}' +
+      '.gic{width:40px;height:40px;border-radius:8px;object-fit:cover;flex:none;background:#fff}' +
+      '.ph2{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);font-size:22px}' +
+      '.ht{flex:1;min-width:0}' +
+      '.h1{color:#f2f3f5;font-weight:700;font-size:15px;line-height:1.25}' +
+      '.h2{color:#949ba4;font-size:12px;margin-top:4px}' +
+      '.golive{display:inline-block;margin:2px 14px 12px;background:#248046;color:#fff;font-weight:600;font-size:14px;border:none;border-radius:4px;padding:8px 18px;cursor:pointer}' +
+      '.golive:hover{background:#1a6334}' +
+      '.sect{border-top:1px solid rgba(255,255,255,.07);padding:10px 14px 6px;color:#b5bac1;font-size:13px;font-weight:600}' +
+      '.fr{display:flex;align-items:center;gap:10px;padding:7px 14px}' +
+      '.favw{position:relative;flex:none;width:36px;height:36px}' +
+      '.fav{width:36px;height:36px;border-radius:50%;object-fit:cover;display:block}' +
+      '.fav.ph{display:flex;align-items:center;justify-content:center;background:#5865f2;color:#fff;font-weight:700;font-size:16px}' +
+      '.dot{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;background:#23a55a;border:3px solid #111214}' +
+      '.ftx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}' +
+      '.ftx b{color:#f2f3f5;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.ftime{color:#23a55a;font-size:12px;font-weight:600}' +
+      '.fon{color:#23a55a;font-size:12px}.foff{color:#80848e;font-size:12px}' +
+      '.inv{flex:none;width:38px;height:34px;border-radius:6px;border:none;background:#2b2d31;color:#dbdee1;cursor:pointer;display:flex;align-items:center;justify-content:center}' +
+      '.inv:hover{background:#35373c;color:#fff}' +
+      '.sent{flex:none;width:38px;height:34px;display:flex;align-items:center;justify-content:center;color:#23a55a;font-weight:800;font-size:17px}' +
+      '</style><div class="panel">' +
+      '<div class="head">' + gic + '<div class="ht"><div class="h1">Использование Ponoi из оверлея во время игры</div>' +
+      '<div class="h2">Ponoi показывает уведомления поверх игры</div></div></div>' +
+      '<button class="golive" id="openapp">Открыть Ponoi</button>' +
+      (friends.length ? '<div class="sect">Пригласите друзей поиграть</div>' + rows : '') +
+      '<div style="height:8px"></div></div>' +
+      '<scr' + 'ipt>var GAME=' + JSON.stringify(gameRaw) + ';' +
+      'document.addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;' +
+      'if(b.classList.contains("inv")){window.ponoiOverlay.invite(b.dataset.id,GAME);var s=document.createElement("span");s.className="sent";s.innerHTML="&#10003;";b.replaceWith(s);}' +
+      'if(b.id==="openapp"){window.ponoiOverlay.openApp();}});' +
+      '</scr' + 'ipt>'
+    const { screen } = require('electron')
+    const wa = screen.getPrimaryDisplay().workArea
+    const h = Math.min(wa.height - 40, 152 + (friends.length ? 40 + 50 * friends.length : 0))
+    if (overlayWin && !overlayWin.isDestroyed()) { try { overlayWin.destroy() } catch {} }
+    overlayWin = new BrowserWindow({
+      width: 372, height: h, x: wa.x + 10, y: wa.y + 10,
+      frame: false, transparent: true, resizable: false, movable: false, skipTaskbar: true,
+      alwaysOnTop: true, focusable: false, show: false, hasShadow: false,
+      webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, 'overlay-preload.cjs') },
+    })
+    overlayWin.setAlwaysOnTop(true, 'screen-saver')
+    overlayWin.setMenuBarVisibility(false)
+    overlayWin.webContents.once('did-finish-load', () => { try { overlayWin.showInactive() } catch {} })
+    overlayWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    clearTimeout(overlayTimer)
+    overlayTimer = setTimeout(() => { try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {} }, 15_000)
+  } catch {}
+}
+ipcMain.on('ponoi-game-overlay', (_e, p) => showGameOverlay(p))
+ipcMain.on('ponoi-overlay-invite', (_e, p) => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w === overlayWin || w === gameToastWin) continue
+    try { w.webContents.send('ponoi-overlay-invite', p) } catch {}
+  }
+})
+ipcMain.on('ponoi-overlay-open', () => {
+  try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {}
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w === overlayWin || w === gameToastWin) continue
+    try { w.show(); w.focus() } catch {}
+    break
+  }
+})
+ipcMain.on('ponoi-overlay-close', () => { try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {} })
+
 // ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
 // Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там
 // появляется строка «Joining game '<guid>' place <id> …» — из неё берём placeId,

@@ -23,4 +23,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   copyImage: (dataUrl) => ipcRenderer.invoke('ponoi-clip-image', dataUrl),
   // v1.98.0: плашка-оверлей поверх игры «друг начал играть в ту же игру» (как оверлей Discord).
   gameToast: (p) => ipcRenderer.send('ponoi-game-toast', p),
+  // v1.99.0: стартовый оверлей при входе в игру — «Пригласите друзей поиграть».
+  gameOverlay: (p) => ipcRenderer.send('ponoi-game-overlay', p),
+  onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
 })

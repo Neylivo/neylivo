@@ -6,6 +6,7 @@ import { startSession, endSession } from './activity'
 import { useAuth } from '../auth/AuthProvider'
 import { DEVICE } from './mobile'
 import { toast } from './toast'
+import { openThread } from './friends'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
 export const STATUS_LABEL: Record<Status, string> = {
@@ -39,6 +40,10 @@ export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
   const { user } = useAuth()
   const [online, setOnline] = useState<Record<string, PresenceState>>({})
+  const onlineRef = useRef<Record<string, PresenceState>>({})
+  useEffect(() => { onlineRef.current = online }, [online])
+  const userRef = useRef(user)
+  useEffect(() => { userRef.current = user }, [user])
   // Статус вручную не выбирается: в приложении — «В сети», вышел из приложения — «Не в сети».
   // Ручная активность тоже удалена: активность только автоматическая (игра/музыка).
   const myStatus: Status = 'online'
@@ -142,6 +147,62 @@ export function PresenceProvider({ username, avatarUrl, children }:
     // eslint-disable-next-line
   }, [online, myGame])
 
+  // v1.99.0: стартовый оверлей при входе в игру — «Пригласите друзей поиграть» (как у Discord).
+  // Собираем друзей + их наигранное время в этой игре (за 90 дней) и отдаём main-процессу,
+  // который рисует панель поверх игры. Сортировка: кто уже в этой игре > кто в сети > по времени.
+  async function overlayForGame(gname: string, cover: string | null) {
+    const d = (window as any).ponoiDesktop
+    const u = userRef.current
+    if (!d?.gameOverlay || !u) return
+    try {
+      const { data: fr } = await supabase.from('friend_requests').select('from_user, to_user')
+        .eq('status', 'accepted').or('from_user.eq.' + u.id + ',to_user.eq.' + u.id)
+      const ids = [...new Set(((fr ?? []) as any[]).map(r => (r.from_user === u.id ? r.to_user : r.from_user)))].slice(0, 50)
+      if (!ids.length) return
+      const from90 = new Date(Date.now() - 90 * 86400000).toISOString()
+      const [profsQ, sessQ] = await Promise.all([
+        supabase.from('profiles').select('*').in('id', ids),
+        supabase.from('activity_sessions').select('user_id, started_at, ended_at')
+          .eq('name', gname).in('user_id', ids).gte('started_at', from90).limit(1000),
+      ])
+      const total: Record<string, number> = {}
+      for (const r of ((sessQ.data ?? []) as any[])) {
+        const s = new Date(r.started_at).getTime()
+        const e = r.ended_at ? new Date(r.ended_at).getTime() : Date.now()
+        total[r.user_id] = (total[r.user_id] ?? 0) + Math.min(Math.max(0, e - s), 8 * 3600000)
+      }
+      const list = ids.map(id => {
+        const p = ((profsQ.data ?? []) as any[]).find(x => x.id === id)
+        if (!p) return null
+        const st = onlineRef.current[id]
+        return { id, name: (p.display_name || p.username) as string,
+          avatar: (st?.avatar_url ?? p.avatar_url ?? null) as string | null,
+          online: !!st, inGame: st?.game?.name === gname, ms: total[id] ?? 0 }
+      }).filter(Boolean) as { id: string; name: string; avatar: string | null; online: boolean; inGame: boolean; ms: number }[]
+      list.sort((a, b) => (Number(b.inGame) - Number(a.inGame)) || (Number(b.online) - Number(a.online)) || (b.ms - a.ms))
+      d.gameOverlay({ game: gname, cover, friends: list.slice(0, 4) })
+    } catch {}
+  }
+
+  // Приглашение из оверлея: кнопка-стрелка у друга шлёт ему личное сообщение-приглашение.
+  useEffect(() => {
+    const d = (window as any).ponoiDesktop
+    if (!d?.onOverlayInvite || !user) return
+    d.onOverlayInvite(async (p: { id: string; game: string }) => {
+      const u = userRef.current
+      if (!u || !p?.id) return
+      try {
+        const t = await openThread(u.id, p.id)
+        if (!t) return
+        await supabase.from('dm_messages').insert({
+          thread_id: t.id, author: u.id, author_name: propRef.current.username,
+          content: '🎮 Я играю в ' + p.game + ' — заходи!',
+        })
+      } catch {}
+    })
+    // eslint-disable-next-line
+  }, [user?.id])
+
   // Авто-детект игры (только в десктоп-приложении): Electron раз в 20 сек смотрит
   // процессы и присылает событие ТОЛЬКО при старте/выходе из игры. Сервер — «записная
   // книжка»: хранит имя игры и момент старта; тикает таймер у каждого зрителя локально.
@@ -167,6 +228,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       pub({ ...g, cover: null })                 // мгновенно: у друзей серый геймпад-заглушка
       const cover = await resolveCover(g.name)   // кэш в базе -> фоновый поиск Steam -> кэш
       if (cover && gameRef.current?.name === g.name) pub({ ...gameRef.current!, cover })   // hot swap на обложку (mode сохраняем)
+      overlayForGame(g.name, cover ?? null)      // v1.99.0: стартовый оверлей «Пригласите друзей поиграть»
     })
     // Приложение закрывают во время игры — честно фиксируем конец сессии.
     window.addEventListener('beforeunload', () => { if (sessRef.current) endSession(sessRef.current) })
