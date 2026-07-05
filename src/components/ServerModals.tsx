@@ -320,7 +320,7 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
         </div>
       </>}
 
-      {tab === 'roles' && <div className="modal-note">Роли и права: скоро. Сейчас владелец сервера управляет всем, участники — обычные.</div>}
+      {tab === 'roles' && <div className="modal-note">Роли и права настраиваются в «Настройках сервера» → вкладка «Роли»: там можно создавать роли, менять цвета и права, выдавать роли участникам.</div>}
       {tab === 'channels' && <div className="modal-note">Каналы создаются и удаляются на боковой панели сервера (＋ канал).</div>}
 
       <div className="modal-foot">

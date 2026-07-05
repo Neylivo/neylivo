@@ -68,6 +68,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [channels, setChannels] = useState<Channel[]>([])
   const [mq, setMq] = useState('')       // поиск по участникам
   const [bq, setBq] = useState('')       // поиск по банам
+  const [bqDone, setBqDone] = useState<string | null>(null)  // v1.109.0: выполненный поиск по банам
   const [newRole, setNewRole] = useState('')
   const [newRoleColor, setNewRoleColor] = useState(ROLE_COLORS[0])
   const [showDelete, setShowDelete] = useState(false)
@@ -600,10 +601,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-h">Список банов сервера</div>
           <div className="cset-hint" style={{ marginTop: -12 }}>По умолчанию баны выдаются по учётной записи и IP-адресу. Пользователь сможет обойти бан по IP-адресу, используя прокси. Включение проверки по мобильному телефону во вкладке «Модерация» сделает процесс обхода бана намного сложнее.</div>
           <div className="sset-banfind">
-            <input className="modal-in" style={{ margin: 0, flex: 1 }} placeholder="Поиск банов по ID или имени пользователя" value={bq} onChange={e => setBq(e.target.value)} />
-            <button className="modal-primary">Поиск</button>
+            <input className="modal-in" style={{ margin: 0, flex: 1 }} placeholder="Поиск банов по ID или имени пользователя" value={bq}
+              onChange={e => { setBq(e.target.value); if (!e.target.value.trim()) setBqDone(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') setBqDone(bq.trim() || null) }} />
+            <button className="modal-primary" onClick={() => setBqDone(bq.trim() || null)}>Поиск</button>
           </div>
-          <div className="sset-empty" style={{ paddingTop: 70 }}>🔨<b>НЕТ БАНОВ</b>Вы ещё никого не банили… но если надо, не стесняйтесь!</div>
+          {bqDone
+            ? <div className="sset-empty" style={{ paddingTop: 70 }}>🔎<b>НИЧЕГО НЕ НАЙДЕНО</b>Банов по запросу «{bqDone}» нет. Попробуйте другой ID или имя.</div>
+            : <div className="sset-empty" style={{ paddingTop: 70 }}>🔨<b>НЕТ БАНОВ</b>Вы ещё никого не банили… но если надо, не стесняйтесь!</div>}
         </>}
 
         {tab === 'automod' && <>
