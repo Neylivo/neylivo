@@ -1652,10 +1652,10 @@ body.no-anim .member-typing i { animation:none; }
 
 /* ===== Свой попап из нижней панели 1-в-1 как на фото (v1.11.0): группы строк + подменю ===== */
 .mini-addstatus-ph { color:var(--mut); font-size:13px; margin-left:6px; }
-.mini-grp { margin-top:12px; background:rgba(0,0,0,.28); border-radius:10px; overflow:hidden; }
-.mini-row { width:100%; display:flex; align-items:center; gap:10px; background:none; border:0; color:#dbdee1; padding:11px 12px; font-size:13.5px; font-weight:500; cursor:pointer; text-align:left; }
+.mini-grp { margin-top:12px; background:rgba(255,255,255,.045); border-radius:8px; overflow:hidden; }   /* v1.107.0: как в Discord — группа светлее фона, радиус 8px */
+.mini-row { width:100%; display:flex; align-items:center; gap:12px; background:none; border:0; color:#dbdee1; min-height:48px; padding:0 12px; font-size:14px; font-weight:500; cursor:pointer; text-align:left; }   /* v1.107.0: ряд 48px, шрифт 14px — 1-в-1 Discord */
 .mini-row:hover { background:rgba(255,255,255,.06); color:#fff; }
-.mini-rowsep { height:1px; background:rgba(255,255,255,.06); margin:0 12px; }
+.mini-rowsep { height:1px; background:rgba(255,255,255,.06); margin:0; }   /* v1.107.0: разделитель во всю ширину группы, как в Discord */
 .mini-row-chev { margin-left:auto; display:flex; color:var(--mut); transform:rotate(-90deg); }
 /* Подменю (статусы / учётные записи) выезжает справа от попапа */
 .mini-sub { position:absolute; left:calc(100% + 8px); bottom:14px; width:270px; background:#111214; border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:6px; box-shadow:0 12px 36px rgba(0,0,0,.6); animation:pop .12s ease both; }
@@ -2779,8 +2779,8 @@ body.no-anim .member-typing i { animation:none; }
 .mpg-info { min-width:0; display:flex; flex-direction:column; gap:3px; }
 .mpg-nm { font-weight:700; font-size:14.5px; color:#f2f3f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mpg-time { display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; color:#23a55a; }
-.mpg-add { width:100%; margin-top:12px; height:36px; border:none; border-radius:6px; background:rgba(255,255,255,.09);
-  color:#f2f3f5; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .15s; }
+.mpg-add { width:100%; margin-top:12px; height:32px; border:none; border-radius:8px; background:rgba(255,255,255,.09);
+  color:#f2f3f5; font-size:14px; font-weight:500; cursor:pointer; transition:background .15s; }   /* v1.107.0: 32px/радиус 8px/шрифт 14px — замерено по Discord */
 .mpg-add:hover { background:rgba(255,255,255,.14); }
 .mpg-add:active { scale:.97; }
 /* ===== v1.50.0: настройки 1-в-1 как в новом Discord ===== */

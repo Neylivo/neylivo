@@ -227,16 +227,16 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>}
           {isMe && meControls && <>
             <div className="mini-grp">
-              <button className="mini-row" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>
+              <button className="mini-row" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Редактировать профиль</button>
             </div>
             <div className="mini-grp">
               <button className="mini-row" onClick={() => setSub(s => s === 'acc' ? null : 'acc')}>
-                <Icon name="users" size={15} /> Переключение между учётными записями
+                <Icon name="users" size={16} /> Переключение между учётными записями
                 <span className="mini-row-chev"><Icon name="chevron-down" size={14} /></span>
               </button>
               <div className="mini-rowsep" />
               <button className="mini-row" onClick={() => { navigator.clipboard?.writeText(data.userId); onClose() }}>
-                <Icon name="id-card" size={15} /> Копировать ID пользователя
+                <Icon name="id-card" size={16} /> Копировать ID пользователя
               </button>
             </div>
             {sub === 'acc' && <div className="mini-sub">
