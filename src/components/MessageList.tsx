@@ -8,7 +8,7 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
-import { copyMedia, saveMedia } from '../lib/copyMedia'
+import { copyMedia, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
@@ -356,17 +356,17 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {onReply ? item('Ответить', 'reply', () => onReply(menuMsg)) : null}
           {currentUser ? item('Переслать', 'forward', () => setFwdFor(menuMsg)) : null}
           <div className="ctx-sep" />
-          {textOf ? item('Скопировать текст', 'copy', () => { navigator.clipboard?.writeText(textOf); toastOk('Текст скопирован') }) : null}
+          {textOf ? item('Скопировать текст', 'copy', () => { copyText(textOf, 'Текст скопирован') }) : null}
           {(canPin ? canPin(menuMsg) : true) ? item(menuMsg.pinned ? 'Открепить сообщение' : 'Закрепить сообщение', 'pin', () => onPin?.(menu.id, !menuMsg.pinned)) : null}
           {onMarkUnread ? item('Отметить как непрочитанное', 'message', () => { onMarkUnread(menuMsg); toastOk('Отмечено как непрочитанное') }) : null}
-          {item('Скопировать ссылку на сообщение', 'link', () => { navigator.clipboard?.writeText('ponoi://msg/' + menuMsg.id); toastOk('Ссылка скопирована') })}
+          {item('Скопировать ссылку на сообщение', 'link', () => { copyText('ponoi://msg/' + menuMsg.id, 'Ссылка скопирована') })}
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {img ? <>
             <div className="ctx-sep" />
             {item('Копировать изображение', 'image', () => { copyMedia(img) })}
             {item('Сохранить изображение', 'download', () => { saveMedia(img) })}
             <div className="ctx-sep" />
-            {item('Копировать ссылку на изображение', 'link', () => { navigator.clipboard?.writeText(img); toastOk('Ссылка скопирована') })}
+            {item('Копировать ссылку на изображение', 'link', () => { copyText(img, 'Ссылка скопирована') })}
             {item('Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
           </> : null}
           {menuMsg.author === currentUser ? <>
@@ -374,7 +374,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {item('Удалить сообщение', 'trash', () => onDelete?.(menu.id), ' danger')}
           </> : null}
           <div className="ctx-sep" />
-          {item('Копировать ID сообщения', 'id-card', () => { navigator.clipboard?.writeText(menuMsg.id); toastOk('ID скопирован') })}
+          {item('Копировать ID сообщения', 'id-card', () => { copyText(menuMsg.id, 'ID скопирован') })}
         </div>
         </>
       })()}

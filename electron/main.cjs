@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage } = require('electron')
+const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage, clipboard } = require('electron')
 const path = require('path')
 
 const isDev = !app.isPackaged
@@ -131,6 +131,19 @@ async function findCover(name) {
   return url
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
+
+// ---- v1.91.0: надёжное копирование (текст/картинки) через системный буфер ----
+// Браузерный Clipboard API в Electron может молча отказывать («document is not
+// focused», file://-происхождение) — main-процесс кладёт в буфер напрямую.
+ipcMain.handle('ponoi-clip-text', (_e, t) => { try { clipboard.writeText(String(t ?? '')); return true } catch { return false } })
+ipcMain.handle('ponoi-clip-image', (_e, dataUrl) => {
+  try {
+    const img = nativeImage.createFromDataURL(String(dataUrl || ''))
+    if (img.isEmpty()) return false
+    clipboard.writeImage(img)
+    return true
+  } catch { return false }
+})
 
 // ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
 // Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там

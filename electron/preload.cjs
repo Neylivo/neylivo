@@ -18,4 +18,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   winToggleMax: () => ipcRenderer.send('win-toggle-max'),
   winClose: () => ipcRenderer.send('win-close'),
   onMaximize: (cb) => { ipcRenderer.removeAllListeners('win-maximized'); ipcRenderer.on('win-maximized', (_e, m) => cb(!!m)) },
+  // v1.91.0: надёжное копирование — текст и картинки через системный буфер (main-процесс).
+  copyText: (t) => ipcRenderer.invoke('ponoi-clip-text', t),
+  copyImage: (dataUrl) => ipcRenderer.invoke('ponoi-clip-image', dataUrl),
 })
