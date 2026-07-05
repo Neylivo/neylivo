@@ -3178,7 +3178,7 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 /* ===== v1.84.0: активности — полные названия игр, живые обложки, анимации ===== */
 /* Название игры всегда полностью — переносится на новые строки, без «…» */
 .mpg-nm, .mini-game-t, .act-name, .fp-game-nm { white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; }
-.member-act.game .mag-tx { white-space:normal; overflow:visible; text-overflow:clip; word-break:break-word; }
+.member-act.game .mag-tx { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .game-inline { white-space:normal; }
 /* Заглушка пока ищется обложка — «шиммер» вместо мёртвой серой плитки */
 .mpg-ph, .act-cover-ph, .mini-game-ph { position:relative; overflow:hidden; }
