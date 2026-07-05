@@ -24,10 +24,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Качества демонстрации экрана — как «Качество стрима» в Discord.
 const SHARE_RES = [
-  { label: '720p', w: 1280, h: 720, br: 2_500_000 },
-  { label: '1080p', w: 1920, h: 1080, br: 4_500_000 },
-  { label: '1440p', w: 2560, h: 1440, br: 8_000_000 },
-  { label: '4K', w: 3840, h: 2160, br: 15_000_000 },
+  { label: '720p', w: 1280, h: 720, br: 3_500_000 },
+  { label: '1080p', w: 1920, h: 1080, br: 6_500_000 },
+  { label: '1440p', w: 2560, h: 1440, br: 12_000_000 },
+  { label: '4K', w: 3840, h: 2160, br: 25_000_000 },
 ]
 const SHARE_FPS = [15, 30, 60]
 
@@ -415,9 +415,12 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     const r = SHARE_RES.find(x => x.label === sq.res) ?? SHARE_RES[1]
     try { localStorage.setItem('ponoi_share_q', JSON.stringify(sq)) } catch {}
     try {
+      // v1.64.0: contentHint подсказывает браузеру, что важнее (чёткость/плавность),
+      // simulcast выключен — зритель всегда получает полное разрешение.
       await (room.localParticipant as any).setScreenShareEnabled(true,
-        { audio: true, resolution: { width: r.w, height: r.h, frameRate: sq.fps } },
-        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps } })
+        { audio: true, resolution: { width: r.w, height: r.h, frameRate: sq.fps },
+          contentHint: sq.fps >= 30 ? 'motion' : 'detail' },
+        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps }, simulcast: false })
       setScreen(true)
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }

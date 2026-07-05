@@ -85,6 +85,9 @@ export function Home() {
   // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
   const lastView = useRef<View>({ kind: 'dm' })
   useEffect(() => { if (view.kind !== 'music') lastView.current = view }, [view])
+  // v1.64.0: сервер остаётся смонтированным при уходе в ЛС — звонок/голос не рвётся.
+  const [lastServer, setLastServer] = useState<Server | null>(null)
+  useEffect(() => { if (view.kind === 'server') setLastServer(view.server) }, [view])
 
   // v1.56.0: история переходов между разделами — стрелки назад/вперёд в тайтлбаре (как в Discord).
   const sameView = (a: View, b: View) => a.kind === b.kind && (a.kind !== 'server' || (b as any).server?.id === a.server.id)
@@ -257,7 +260,7 @@ export function Home() {
     if (k === 'delete') {
       if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
       await deleteServer(server.id)
-      setView({ kind: 'dm' }); refresh()
+      setLastServer(null); setView({ kind: 'dm' }); refresh()
       return
     }
     if (k === 'read') { clearUnread(server.id); toastOk('Отмечено прочитанным'); return }
@@ -327,9 +330,16 @@ export function Home() {
       </nav>
       <div className="mob-backdrop" onClick={closeMobNav} />
       {(() => { const bv = view.kind === 'music' ? lastView.current : view
+        const srv = bv.kind === 'server' ? bv.server : lastServer
+        // v1.64.0: ЛС и сервер не размонтируются при навигации — активный звонок
+        // продолжает жить, неактивный экран просто скрывается.
         return <>
-          {bv.kind === 'dm' && <DMHome username={username} handle={handle} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />}
-          {bv.kind === 'server' && <ServerView server={bv.server} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setView({ kind: 'dm' }); refresh() }} />}
+          <div style={{ display: bv.kind === 'dm' ? 'contents' : 'none' }}>
+            <DMHome username={username} handle={handle} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
+          </div>
+          {srv && <div style={{ display: bv.kind === 'server' ? 'contents' : 'none' }}>
+            <ServerView server={srv} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setLastServer(null); setView({ kind: 'dm' }); refresh() }} />
+          </div>}
         </> })()}
       {(musicOn || view.kind === 'music') && <MusicPlayer me={username} meId={user?.id ?? ''}
         visible={view.kind === 'music'}
@@ -371,7 +381,7 @@ export function Home() {
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
       onChanged={() => refresh()}
-      onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setView({ kind: 'dm' }); refresh() }} />}
+      onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setLastServer(null); setView({ kind: 'dm' }); refresh() }} />}
     </PresenceProvider>
   )
 }

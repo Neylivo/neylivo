@@ -256,6 +256,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     setFriends(fr)
   }
 
+  // v1.64.0: при входе в ЛС сразу открыт чат с последним (или первым) другом — как в Discord.
+  const autoOpened = useRef(false)
+  useEffect(() => {
+    if (autoOpened.current || IS_MOBILE || friends.length === 0 || active) return
+    autoOpened.current = true
+    let f: Friend | null = null
+    try { const s = JSON.parse(localStorage.getItem('ponoi_last_dm_friend') || 'null'); if (s?.id && s?.name && friends.some(x => x.id === s.id)) f = s } catch {}
+    openChat(f ?? friends[0])
+    // eslint-disable-next-line
+  }, [friends])
+
   async function doSearch(v: string) { setQ(v); setResults(await searchUsers(v, meId)) }
 
   async function add(p: Profile) {
@@ -287,6 +298,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   }
 
   async function openChat(f: Friend) {
+    try { localStorage.setItem('ponoi_last_dm_friend', JSON.stringify({ id: f.id, name: f.name })) } catch {}
     setActive(f)
     closeMobNav()
     // Сброс случайного выделения текста при переключении диалога.
