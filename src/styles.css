@@ -2833,7 +2833,8 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-sub:hover { color:#dbdee1; background:rgba(255,255,255,.04); }
 .pqs2-navsep { height:1px; background:rgba(255,255,255,.08); margin:10px 10px; }
 .pqs2-main { flex:1; min-width:0; overflow-y:auto; position:relative; }
-.pqs2-inner { max-width:740px; padding:32px 40px 120px; }
+/* v1.118.0: контент настроек занимает всю ширину окна (справа было пусто) */
+.pqs2-inner { max-width:none; padding:32px 48px 120px; }
 .pqs2-inner h2 { font-size:22px; font-weight:800; color:#f2f3f5; margin:0 0 18px; scroll-margin-top:20px; }
 .pqs2-inner h2 + .pqs2-rows { margin-top:2px; }
 .pqs2-rows { display:flex; flex-direction:column; }
