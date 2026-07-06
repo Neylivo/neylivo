@@ -3689,3 +3689,20 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   0%, 100% { transform:scale(1); }
   50% { transform:scale(1.12); }
 }
+
+
+/* ==== v1.142.0: моментальный вход в голосовой + «рождение» аватарки ==== */
+/* Аватарки участников голосового «рождаются» быстрым pop'ом, а не появляются встык. */
+@keyframes avBirth {
+  0% { opacity:0; transform:scale(.2); }
+  60% { opacity:1; transform:scale(1.12); }
+  100% { transform:scale(1); }
+}
+.vo-av { animation:avBirth .34s cubic-bezier(.2,.8,.3,1.4) both; }
+.c2-bub-av.birth { animation:avBirth .42s cubic-bezier(.2,.8,.3,1.4) both; }
+/* Плейсхолдер подключения: пока идёт коннект к LiveKit, показываем твою аватарку
+   (кружок) с пульсом — вход ощущается мгновенным, глаз не ловит задержку. */
+.c2-connecting { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; height:100%; }
+.c2-connecting .c2-bub-av { box-shadow:0 0 0 3px rgba(88,101,242,.5); animation:avBirth .42s cubic-bezier(.2,.8,.3,1.4) both, ringPulse 1.7s ease .42s infinite; }
+.vp-status.connecting { color:#faa61a; }
+.vp-status.connecting .vp-dot { background:#faa61a; }

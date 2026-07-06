@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { uploadTo } from '../lib/storage'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { PlateBg } from './PlateBg'
-import { fetchProfile, nickFontOf } from '../lib/profilePrefs'
+import { fetchProfile, cachedProfile, nickFontOf } from '../lib/profilePrefs'
 import { trimVideoTo5s } from '../lib/videoAvatar'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { ActivityLabel } from './ActivityLabel'
@@ -23,8 +23,10 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   // v1.95.0: «кубик» (nameplate) — фон/обводка своей панельки, живёт в profiles.
-  const [plate, setPlate] = useState<{ url: string | null; kind: string; outline: string | null }>({ url: null, kind: 'none', outline: null })
-  const [nickFam, setNickFam] = useState<string | undefined>(undefined)  // v1.110.0: шрифт ника
+  const [plate, setPlate] = useState<{ url: string | null; kind: string; outline: string | null }>(() => {
+    const c = cachedProfile(user?.id); return c ? { url: c.plateUrl, kind: c.plateKind, outline: c.plateOutline } : { url: null, kind: 'none', outline: null }
+  })   // v1.142.0: «кубик» сразу из кэша — не мелькает
+  const [nickFam, setNickFam] = useState<string | undefined>(() => { const c = cachedProfile(user?.id); return c ? nickFontOf(c) : undefined })  // v1.110.0: шрифт ника (v1.142.0: сразу из кэша)
   useEffect(() => {
     if (!user) return
     const load = () => { fetchProfile(user.id).then(p => { setPlate({ url: p.plateUrl, kind: p.plateKind, outline: p.plateOutline }); setNickFam(nickFontOf(p)) }) }

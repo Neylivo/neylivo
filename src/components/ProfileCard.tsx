@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
-import { fetchProfile, saveProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, saveProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
@@ -49,7 +49,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const { user } = useAuth()
   const { gameOf } = usePresence()
   const isMe = user?.id === userId
-  const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const [pp, setPp] = useState<ProfilePrefs>(() => cachedProfile(userId) ?? DEFAULT_PROFILE)   // v1.142.0: сразу из кэша, без мелькания
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
@@ -66,6 +66,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
 
   useEffect(() => {
     let ok = true
+    const c = cachedProfile(userId); if (c) setPp(c)   // v1.142.0: сразу из кэша, сеть догоняет
     fetchProfile(userId).then(p => {
       if (!ok) return
       setPp(p)

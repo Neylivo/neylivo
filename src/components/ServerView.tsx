@@ -105,9 +105,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const voiceRef = useRef<{ room: Room; ch: Channel } | null>(null)
   const [vMic, setVMic] = useState(true)
   const [voicePanel, setVoicePanel] = useState(false)   // v1.130.0: панель голосового канала (как в Discord)
+  const [connecting, setConnecting] = useState<Channel | null>(null)   // v1.142.0: канал, к которому идёт подключение — панель и аватар показываем сразу, LiveKit коннектится в фоне
   const [speaking, setSpeaking] = useState<Record<string, boolean>>({})
   const [voiceUsers, setVoiceUsers] = useState<Record<string, { userId: string; username: string; avatar?: string | null; live?: boolean }[]>>({})
   const voicePresRef = useRef<any>(null)
+  const joinSeq = useRef(0)   // v1.142.0: поздно завершившийся коннект не должен перебить более свежий вход/выход
   const isOwner = server.owner === user?.id
   const { statusOf, activityOf, gameOf, deviceOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
@@ -484,22 +486,38 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function joinVoice(c: Channel) {
     if (!user) return
     if (voice?.ch.id === c.id) { setVoicePanel(true); closeMobNav(); return }   // v1.133.0: как в Discord — клик по своему каналу снова открывает его вид
+    // v1.142.0: вход моментальный — панель голосового канала и твоя аватарка
+    // появляются сразу (оптимистично, через presence), а подключение к LiveKit
+    // (токен + connect + микрофон) идёт в фоне. Раньше всё это ждали до показа —
+    // и канал «залипал» на доли секунды.
+    const seq = ++joinSeq.current
+    if (voice) { try { voice.room.disconnect() } catch {} }
+    setVoice(null)
+    setConnecting(c)
+    setSpeaking({})
+    setVoicePanel(true)
+    closeMobNav()
+    voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null, live: false })
     try {
-      if (voice) { try { voice.room.disconnect() } catch {} }
       const room = await joinRoom('ch_' + c.id, user.id, username)
+      if (joinSeq.current !== seq) { try { room.disconnect() } catch {}; return }   // пользователь уже ушёл/сменил канал
       setVoice({ room, ch: c })
       setVMic(true)
-      setSpeaking({})
-      setVoicePanel(true)   // v1.133.0: как в Discord — вход в голосовой канал сразу открывает его вид
-      closeMobNav()
-      voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null, live: false })
-    } catch (e: any) { toastErr(e.message ?? String(e)) }
+    } catch (e: any) {
+      if (joinSeq.current !== seq) return
+      toastErr(e.message ?? String(e))
+      setVoicePanel(false)
+      voicePresRef.current?.untrack()
+    } finally {
+      if (joinSeq.current === seq) setConnecting(null)
+    }
   }
 
   function leaveVoice() {
-    if (!voice) return
-    try { voice.room.disconnect() } catch {}
+    joinSeq.current++   // v1.142.0: отменяем незавершённый вход, если он ещё в процессе
+    if (voice) { try { voice.room.disconnect() } catch {} }
     setVoice(null)
+    setConnecting(null)
     setVoicePanel(false)
     setSpeaking({})
     voicePresRef.current?.untrack()
@@ -750,24 +768,24 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             </>
           })()}
         </div>
-        {voice && <div className="vp">
+        {(voice || connecting) && <div className="vp">
           <div className="vp-info">
-            <div className="vp-status"><span className="vp-dot" />Голос подключён</div>
-            <div className="vp-ch" title={voice.ch.name + ' / ' + server.name}>{voice.ch.name} / {server.name}</div>
+            <div className={'vp-status' + (voice ? '' : ' connecting')}><span className="vp-dot" />{voice ? 'Голос подключён' : 'Подключаемся…'}</div>
+            <div className="vp-ch" title={(voice?.ch.name ?? connecting?.name ?? '') + ' / ' + server.name}>{(voice?.ch.name ?? connecting?.name ?? '')} / {server.name}</div>
           </div>
           <div className="vp-btns">
-            <button className={'vp-btn' + (vMic ? '' : ' off')} onClick={toggleVMic} title={vMic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={vMic ? 'mic' : 'mic-off'} size={17} /></button>
+            <button className={'vp-btn' + (vMic ? '' : ' off')} onClick={toggleVMic} disabled={!voice} title={vMic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={vMic ? 'mic' : 'mic-off'} size={17} /></button>
             <button className="vp-btn danger" onClick={leaveVoice} title="Отключиться"><Icon name="phone-off" size={17} /></button>
           </div>
         </div>}
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
-      <main className={'chat' + (voice && voicePanel ? ' voicemode' : '')}>
+      <main className={'chat' + ((voice || connecting) && voicePanel ? ' voicemode' : '')}>
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
-          <span className="ph2-hash">{voice && voicePanel ? <Icon name="volume" size={20} /> : '#'}</span>
-          {(() => { const hc: any = voice && voicePanel ? voice.ch : curChannel; const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
+          <span className="ph2-hash">{(voice || connecting) && voicePanel ? <Icon name="volume" size={20} /> : '#'}</span>
+          {(() => { const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel); const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
             <button className={'pin-btn' + (curChannel && mutedCh[curChannel.id] ? ' on' : '')} title={curChannel && mutedCh[curChannel.id] ? 'Включить уведомления канала' : 'Заглушить канал'} onClick={() => curChannel && toggleMuteCh(curChannel.id)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
@@ -802,6 +820,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         }} />}
         {voice && <VoiceConn room={voice.room} sinks={!voicePanel} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
         {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }} />}
+        {connecting && !voice && voicePanel && <div className="c2-wrap c2-connecting">
+          <div className="c2-bubbles"><div className="c2-bub"><div className="c2-bub-av birth"><Avatar name={username} url={avatarUrl} size={84} /></div><div className="c2-bub-nm">{username}</div></div></div>
+          <div className="c2-waiting">Подключаемся…</div>
+        </div>}
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           {messages.length === 0 && curChannel && <div className="wlc">
             <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>

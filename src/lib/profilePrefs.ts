@@ -108,8 +108,26 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   return r
 }
 
-// last-known values per user, so partial saves can merge without a re-fetch
+// last-known values per user, so partial saves can merge without a re-fetch.
+// v1.142.0: зеркалим последние настройки в localStorage, чтобы украшения профиля
+// (цвета баннера, питомец, «кубик», шрифт ника) показывались сразу при открытии
+// аккаунта/мини-профиля — без мелькания стандартного оформления перед загрузкой.
 const cache: Record<string, ProfilePrefs> = {}
+const ppLsKey = (id: string) => 'ponoi_pp_' + id
+function persistProfile(id: string, p: ProfilePrefs) {
+  try { localStorage.setItem(ppLsKey(id), JSON.stringify(p)) } catch {}
+}
+// Синхронный доступ к последним известным настройкам профиля (память -> localStorage
+// -> null). Для мгновенной инициализации карточек профиля без ожидания сети.
+export function cachedProfile(id?: string | null): ProfilePrefs | null {
+  if (!id) return null
+  if (cache[id]) return cache[id]
+  try {
+    const raw = localStorage.getItem(ppLsKey(id))
+    if (raw) { const p = { ...DEFAULT_PROFILE, ...JSON.parse(raw) } as ProfilePrefs; cache[id] = p; return p }
+  } catch {}
+  return null
+}
 
 const COLS_BASE = 'primary_color, accent_color, about, pet_url, pet_kind, pet_on, pet_size, pet_pos'
 const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
@@ -128,12 +146,14 @@ export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (error) ({ data } = await supabase.from('profiles').select(COLS_BASE).eq('id', id).maybeSingle())
   const p = fromRow(data)
   cache[id] = p
+  persistProfile(id, p)
   return p
 }
 
 export async function saveProfile(id: string, patch: Partial<ProfilePrefs>): Promise<ProfilePrefs> {
   const next = { ...(cache[id] ?? DEFAULT_PROFILE), ...patch }
   cache[id] = next
+  persistProfile(id, next)
   await supabase.from('profiles').update(toRow(patch, next)).eq('id', id)
   window.dispatchEvent(new CustomEvent('ponoi-profile', { detail: { id } }))
   return next

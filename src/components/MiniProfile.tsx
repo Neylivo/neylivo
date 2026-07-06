@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
-import { fetchProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
 import { sendRequest, openThread, mutualFriends } from '../lib/friends'
@@ -59,7 +59,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void; onAddRole?: () => void }) {
   const { user } = useAuth()
   const isMe = user?.id === data.userId
-  const [pp, setPp] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const [pp, setPp] = useState<ProfilePrefs>(() => cachedProfile(data.userId) ?? DEFAULT_PROFILE)   // v1.142.0: сразу из кэша, без мелькания
   const { gameOf, listeningOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
   const listening = listeningOf(data.userId)   // v1.106.0: вторая активность «Слушает музыку»
@@ -84,7 +84,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
       .then(({ data: d }: any) => { if (ok && d?.last_seen) setLastSeen(d.last_seen) })
     return () => { ok = false }
   }, [data.userId, data.status])
-  useEffect(() => { let ok = true; fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
+  useEffect(() => { let ok = true; const c = cachedProfile(data.userId); if (c) setPp(c); fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
   // v1.106.0: при открытии другого профиля активности снова свёрнуты до кнопки «Ещё».
   useEffect(() => { setMoreActs(false) }, [data.userId])
   // Аватар: если не передали (например, клик по сообщению в ЛС) — берём из profiles.
