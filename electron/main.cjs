@@ -136,8 +136,14 @@ async function findCover(name) {
   const st = await httpJson('https://store.steampowered.com/api/storesearch/?l=en&cc=US&term=' + encodeURIComponent(term))
   const items = (st && st.items) || []
   let item = items.find((i) => normName(i.name) === nt)
-  if (!item) item = items.find((i) => { const n = normName(i.name); return n.startsWith(nt) || nt.startsWith(n) })
-  if (!item) item = items.find((i) => normName(i.name).includes(nt))
+  // v1.144.0: подзаголовок через разделитель («PUBG: BATTLEGROUNDS») — та же игра,
+  // но НЕ другая игра через пробел+слово («Minecraft Dungeons» для «Minecraft»),
+  // иначе Steam подставлял чужую обложку (Minecraft Java на Steam нет — уйдём в iTunes).
+  if (!item) {
+    const escT = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim()
+    const sub = new RegExp('^' + escT + '\\s*[:\\-–—]', 'i')
+    item = items.find((i) => sub.test(String(i.name || '')))
+  }
   if (item) url = 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + item.id + '/header.jpg'
   if (!url) {
     const it = await httpJson('https://itunes.apple.com/search?media=software&limit=5&term=' + encodeURIComponent(term))

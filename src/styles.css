@@ -3708,3 +3708,9 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .c2-connecting .c2-bub-av { box-shadow:0 0 0 3px rgba(88,101,242,.5); animation:avBirth .42s cubic-bezier(.2,.8,.3,1.4) both, ringPulse 1.7s ease .42s infinite; }
 .vp-status.connecting { color:#faa61a; }
 .vp-status.connecting .vp-dot { background:#faa61a; }
+
+/* ==== v1.144.0: строка ввода чуть выше и без лишнего пустого места снизу ==== */
+.composer input { padding-top:15px; padding-bottom:15px; }
+@media (min-width: 901px) {
+  .composer { min-height:52px; margin-bottom:14px; }
+}

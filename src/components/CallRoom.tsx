@@ -268,7 +268,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [cam, setCam] = useState(false)
   const [screen, setScreen] = useState(false)
   const [deaf, setDeaf] = useState(false)
-  const [fs, setFs] = useState(false)
+  const [fs, setFs] = useState(() => { const f = (window as any).__ponoiCallFull; (window as any).__ponoiCallFull = false; return !!f })
   const [qMenu, setQMenu] = useState(false)
   const [devMenu, setDevMenu] = useState<null | 'mic' | 'cam'>(null)
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
@@ -501,6 +501,14 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  // v1.144.0: двойной клик по голосовому каналу (из сайдбара) открывает большой вид,
+  // даже если экран звонка уже смонтирован (тот же канал).
+  useEffect(() => {
+    const h = () => setFs(true)
+    window.addEventListener('ponoi-call-fs', h)
+    return () => window.removeEventListener('ponoi-call-fs', h)
+  }, [])
+
   // v1.78.0: в полноэкранном режиме панель и шапка прячутся, если мышь замерла.
   useEffect(() => {
     if (!fs) { setIdle(false); return }
@@ -531,13 +539,13 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const alone = status === 'connected' && count <= 1
   const statusLabel = status === 'reconnecting' ? 'Переподключение…'
     : status === 'connecting' ? 'Соединение…'
-    : alone ? (peer ? 'Звоним ' + peer.name + '…' : 'Звоним…') : 'Голосовой звонок'
+    : alone && peer ? 'Звоним ' + peer.name + '…' : 'Голосовой звонок'
 
   return (
     <div className={'c2-wrap' + (fs ? ' fs' : '') + (fs && idle ? ' idle' : '') + (flash ? ' sb-flash' : '') + (alone && peer ? ' ringing' : '')}>
       <Sinks room={room} />
       <div className="c2-top">
-        <span className={'c2-status ' + (alone ? 'connecting' : status)}><i />{statusLabel}</span>
+        <span className={'c2-status ' + (alone && peer ? 'connecting' : status)}><i />{statusLabel}</span>
         <span className="c2-cnt"><Icon name="users" size={14} /> {count}</span>
         {flash && <span className="c2-flashtag"><Icon name="soundboard" size={13} /> Момент сохранён</span>}
         <div className="c2-topbtns">
@@ -545,7 +553,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
         </div>
       </div>
       <Stage room={room} avatars={avatars} colors={colors} meName={meName} onMainDblClick={() => setFs(f => !f)} />
-      {alone && <div className="c2-waiting">{peer ? 'Ждём ответа — ' + peer.name + '…' : 'Ждём, пока кто-нибудь присоединится…'}</div>}
+      {alone && peer && <div className="c2-waiting">{'Ждём ответа — ' + peer.name + '…'}</div>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">
         <div className="c2-grp">

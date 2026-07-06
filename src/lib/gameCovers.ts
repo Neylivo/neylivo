@@ -10,6 +10,7 @@ import { supabase } from './supabase'
 
 const NOT_FOUND_TTL = 6 * 60 * 60 * 1000   // 6 часов: источники пополняются — пробуем снова
 const SOURCES_UPGRADED_AT = Date.parse('2026-07-05T00:00:00Z')   // v1.84.0: точный матчинг Steam + поиск в браузере
+const OK_REVALIDATE_AT = Date.parse('2026-07-06T00:00:00Z')   // v1.144.0: перепроверить ok-записи с возможной чужой обложкой (Minecraft -> Dungeons)
 
 // iTunes Search в браузере: обычный fetch блокируется CORS, но у API есть
 // JSONP-режим (callback=...), который работает из любого окна.
@@ -40,13 +41,20 @@ function itunesJsonp(term: string): Promise<string | null> {
 export async function resolveCover(name: string): Promise<string | null> {
   if (!name) return null
   // 1) Общий кэш в базе: одна игра ищется один раз на всех.
+  let prior: string | null = null
   try {
     const { data } = await supabase.from('game_covers')
       .select('cover_url,status,checked_at').eq('name', name).maybeSingle()
     if (data) {
-      if (data.status === 'ok' && data.cover_url) return data.cover_url
+      const checked = new Date(data.checked_at).getTime()
+      if (data.status === 'ok' && data.cover_url) {
+        // v1.144.0: ok-записи до перепроверки могли содержать чужую обложку
+        // (Steam подставлял игру-сиквел, напр. «Minecraft» -> «Minecraft Dungeons»).
+        // Перепроверяем такие один раз, сохраняя старую как запасную.
+        if (checked > OK_REVALIDATE_AT) return data.cover_url
+        prior = data.cover_url
+      }
       if (data.status === 'not_found') {
-        const checked = new Date(data.checked_at).getTime()
         // Записи «не нашлось» до апгрейда источников не считаются — ищем заново.
         if (checked > SOURCES_UPGRADED_AT && Date.now() - checked < NOT_FOUND_TTL) return null
       }
@@ -59,7 +67,8 @@ export async function resolveCover(name: string): Promise<string | null> {
   try {
     const d = (window as any).ponoiDesktop
     url = d?.findCover ? await d.findCover(name) : await itunesJsonp(term)
-  } catch { return null }
+  } catch { return prior }
+  if (!url && prior) url = prior   // v1.144.0: поиск подвёл — оставляем прежнюю рабочую обложку, а не null
   // 3) Кэшируем результат (включая not_found) для всех.
   try {
     await supabase.from('game_covers').upsert({

@@ -523,6 +523,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     voicePresRef.current?.untrack()
   }
 
+  // v1.144.0: двойной клик по голосовому каналу открывает большой (полноэкранный) вид.
+  function joinVoiceFull(c: Channel) {
+    ;(window as any).__ponoiCallFull = true
+    joinVoice(c)
+    window.dispatchEvent(new CustomEvent('ponoi-call-fs'))
+  }
+
   async function toggleVMic() {
     if (!voice) return
     const v = !vMic
@@ -714,7 +721,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 260) }) }
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
-                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
+                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onDoubleClick={() => joinVoiceFull(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
                   <ChName c={c} srv={srvSettings} />
                   <span className="ch-acts">
                     <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
