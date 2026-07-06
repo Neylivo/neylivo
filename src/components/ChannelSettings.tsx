@@ -11,6 +11,7 @@ import { createInvite } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
+import { CH_FONTS, CH_COLOR_PRESETS, chNameStyle } from '../lib/chStyle'
 
 const SLOW_OPTS = ['Выкл', '5с', '10с', '15с', '30с', '1м', '2м', '5м', '10м', '15м', '30м', '1ч', '2ч', '6ч']
 const HIDE_OPTS = ['1 час', '24 часа', '3 дней', '1 неделя']
@@ -46,12 +47,16 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [priv, setPriv] = useState<boolean>(!!s0.private)
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
   const [paused, setPaused] = useState<boolean>(!!s0.invites_paused)
+  // v1.138.0: шрифт и раскраска названия канала (см. src/lib/chStyle.ts)
+  const [nameFont, setNameFont] = useState<string>(s0.name_font ?? '')
+  const [nameColors, setNameColors] = useState<string[]>(Array.isArray(s0.name_colors) ? s0.name_colors : [])
+  const [nameAnim, setNameAnim] = useState<boolean>(!!s0.name_anim)
   const [invites, setInvites] = useState<any[]>([])
   // v1.128.0: «несохранённые изменения» считаются сравнением с последними
   // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
   const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
-  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused })
-  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused }))
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused, nameFont, nameColors, nameAnim })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim }))
   const dirty = snapAll() !== base
   const setDirty = (_d: boolean) => {}
 
@@ -70,7 +75,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   function setPerm(k: string, v: Tri) { setPerms(p => ({ ...p, [k]: v })); setDirty(true) }
 
   async function save() {
-    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused }
+    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim }
     const nm = name.trim() || channel.name
     const { error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id)
     if (error) {
@@ -89,7 +94,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const b = JSON.parse(base)
     setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
     setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
-    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused)
+    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim)
   }
 
   async function del() {
@@ -151,6 +156,41 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
           <div className="cset-h">Обзор</div>
           <label className="cset-lbl">Название канала</label>
           <input className="modal-in" value={name} onChange={e => { setName(e.target.value); setDirty(true) }} />
+          <label className="cset-lbl">Шрифт названия</label>
+          <select className="modal-in" value={nameFont} onChange={e => { setNameFont(e.target.value); setDirty(true) }}>
+            <option value="">Как на сервере</option>
+            {CH_FONTS.filter(f => f.id).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+          <div className="cset-hint">Шрифт названия только этого канала. «Как на сервере» — общий шрифт каналов из настроек сервера («Профиль сервера»).</div>
+          <label className="cset-lbl">Раскраска названия</label>
+          <div className="cset-chc-row">
+            {CH_COLOR_PRESETS.map(p => {
+              const on = JSON.stringify(nameColors) === JSON.stringify(p.colors) && nameAnim === !!p.anim
+              const stl: any = p.colors.length >= 2 ? { backgroundImage: 'linear-gradient(90deg, ' + (p.anim ? [...p.colors, p.colors[0]] : p.colors).join(', ') + ')' } : p.colors.length === 1 ? { color: p.colors[0] } : undefined
+              return <button key={p.name} className={'cset-chc-btn' + (on ? ' on' : '')} onClick={() => { setNameColors(p.colors); setNameAnim(!!p.anim); setDirty(true) }}>
+                <span className={p.colors.length >= 2 ? 'ch-grad' + (p.anim ? ' ch-grad-anim' : '') : ''} style={stl}>{p.name}</span>
+              </button>
+            })}
+          </div>
+          <div className="cset-chc-custom">
+            {nameColors.map((c0, i) => (
+              <span key={i} className="cset-chc-swatch">
+                <input type="color" value={c0} onChange={e => { const v = e.target.value; setNameColors(cs2 => cs2.map((x, j) => j === i ? v : x)); setDirty(true) }} />
+                <button title="Убрать цвет" onClick={() => { setNameColors(cs2 => cs2.filter((_, j) => j !== i)); setDirty(true) }}>×</button>
+              </span>
+            ))}
+            {nameColors.length < 4 && <button className="cset-chc-add" onClick={() => { setNameColors(cs2 => [...cs2, cs2.length ? cs2[cs2.length - 1] : '#f5d76b']); setDirty(true) }}>+ цвет</button>}
+          </div>
+          <div className="cset-hint">До 4 своих цветов: один — сплошной цвет, два и больше — градиент по буквам.</div>
+          <div className="cset-row">
+            <div>
+              <div className="cset-row-t">Переливание</div>
+              <div className="cset-hint">Цвета плавно бегут по названию — особенно красиво для «Золотого». Работает от двух цветов.</div>
+            </div>
+            <button className={'tgl' + (nameAnim ? ' on' : '')} onClick={() => { setNameAnim(!nameAnim); setDirty(true) }} />
+          </div>
+          <label className="cset-lbl">Предпросмотр</label>
+          <div className="cset-chc-prev">{(() => { const cs2 = chNameStyle({ name_font: nameFont, name_colors: nameColors, name_anim: nameAnim }, (server as any).settings ?? {}); return <span className={(cs2.grad ? 'ch-grad' : '') + (cs2.anim ? ' ch-grad-anim' : '')} style={cs2.style}>{isVoice ? '🔊 ' : '# '}{name || channel.name}</span> })()}</div>
           {!isVoice && <>
             <label className="cset-lbl">Тема канала</label>
             <textarea className="cset-topic" maxLength={1024} placeholder="Расскажите участникам, как пользоваться этим каналом!"

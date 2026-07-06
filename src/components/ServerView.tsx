@@ -18,6 +18,7 @@ import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
+import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer } from '../lib/servers'
 import { CallRoom, Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
@@ -54,11 +55,14 @@ function splitEmoji(name: string): { emo: string | null; rest: string } {
   const m = name.match(EMOJI_RE)
   return m ? { emo: m[1], rest: m[2] } : { emo: null, rest: name }
 }
-function ChName({ c }: { c: Channel }) {
+// v1.138.0: шрифт названия (серверный ch_font или свой name_font) и раскраска
+// (name_colors: 1–4 цвета, name_anim — переливание) — см. src/lib/chStyle.ts.
+function ChName({ c, srv }: { c: Channel; srv?: any }) {
   const ann = !!(c as any).settings?.announce
   const icon = (c as any).kind === 'voice' ? 'volume' : ann ? 'megaphone' : 'hash'
   const s = splitEmoji(c.name)
-  return <span className="ch-nm"><Icon name={icon} size={18} />{s.emo && <><span className="ch-emo">{s.emo}</span><span className="ch-vbar" /></>}<span className="ch-txt">{s.rest}</span></span>
+  const cs = chNameStyle((c as any).settings, srv)
+  return <span className="ch-nm"><Icon name={icon} size={18} />{s.emo && <><span className="ch-emo">{s.emo}</span><span className="ch-vbar" /></>}<span className={'ch-txt' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{s.rest}</span></span>
 }
 
 function VoiceConn({ room, onSpeak, sinks }: { room: Room; onSpeak: (ids: string[]) => void; sinks: boolean }) {
@@ -693,7 +697,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
                 <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
-                  <ChName c={c} />
+                  <ChName c={c} srv={srvSettings} />
                   <span className="ch-acts">
                     <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
                     <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
@@ -711,7 +715,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             ) : (
               <div key={c.id} className={'ch' + (curChannel?.id === c.id ? ' on' : '') + (unreadCh[c.id] ? ' unread' : '') + (mutedCh[c.id] ? ' muted' : '')}
                 onClick={() => selectChannel(c)} onContextMenu={onChCtx(c)}>
-                <ChName c={c} />
+                <ChName c={c} srv={srvSettings} />
                 <span className="ch-acts">
                   <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
                   {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
@@ -763,7 +767,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
           <span className="ph2-hash">{voice && voicePanel ? <Icon name="volume" size={20} /> : '#'}</span>
-          <span className="ph2-name">{voice && voicePanel ? voice.ch.name : (curChannel?.name ?? '—')}</span>
+          {(() => { const hc: any = voice && voicePanel ? voice.ch : curChannel; const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
             <button className={'pin-btn' + (curChannel && mutedCh[curChannel.id] ? ' on' : '')} title={curChannel && mutedCh[curChannel.id] ? 'Включить уведомления канала' : 'Заглушить канал'} onClick={() => curChannel && toggleMuteCh(curChannel.id)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>

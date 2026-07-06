@@ -18,6 +18,7 @@ import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRoleManage, sa
 import { RoleEditor } from './RoleEditor'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
+import { CH_FONTS } from '../lib/chStyle'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'community' | 'template'
 
@@ -257,6 +258,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             </div>
             {st.invite_bg && <button className="modal-ghost" style={{ marginTop: 8 }} onClick={() => persistNow({ ...st, invite_bg: null })}>Убрать фон</button>}
             <input ref={invBgRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, url => persistNow({ ...st, invite_bg: url }))} />
+            <div className="cset-div" />
+            <label className="cset-lbl">Шрифт названий каналов</label>
+            <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Этим шрифтом пишутся названия всех каналов в списке слева. Отдельному каналу можно задать свой шрифт в его настройках («Обзор»).</div>
+            <div className="pqs-font-grid">
+              {CH_FONTS.map(f => (
+                <button key={f.id || 'sys'} className={'pqs-font-btn' + ((st.ch_font ?? '') === f.id ? ' on' : '')} onClick={() => up('ch_font', f.id)}>
+                  <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}># общий</span>
+                  <small>{f.name}</small>
+                </button>
+              ))}
+            </div>
             <div className="cset-div" />
             <label className="cset-lbl">Особенности</label>
             <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Добавьте до 5 особенностей, соответствующих интересам и характеру участников вашего сервера.</div>
