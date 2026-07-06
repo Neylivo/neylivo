@@ -565,6 +565,48 @@ function mcMode() {
   if (/multi ?player|сетев|server/i.test(t)) return 'Сетевая игра'
   return null
 }
+// v1.134.0: Minecraft (Java) — «На сервере <адрес>» или «Одиночная игра» по логу
+// лаунчера (%APPDATA%\.minecraft\logs\latest.log): вход на сервер — «Connecting to
+// <адрес>, <порт>», одиночный мир — «Starting integrated minecraft server», выход
+// из мира — «Stopping worker threads». Лог от прошлой сессии (mtime старше старта
+// игры) не считаем. Модпак-лаунчеры с другой папкой игры так не увидим — тогда
+// остаётся режим из заголовка окна (mcMode выше).
+function mcJavaLogMode(since) {
+  try {
+    const fsr = require('fs')
+    const f = path.join(process.env.APPDATA || '', '.minecraft', 'logs', 'latest.log')
+    if (!fsr.existsSync(f)) return null
+    if (since && fsr.statSync(f).mtimeMs < since - 60_000) return null
+    const txt = readLogTail(f, 128 * 1024)
+    if (!txt) return null
+    let at = -1, mode = null
+    const cm = [...txt.matchAll(/Connecting to ([\w.-]+), \d+/g)]
+    if (cm.length) { const m = cm[cm.length - 1]; at = m.index; mode = 'На сервере ' + m[1] }
+    const sm = [...txt.matchAll(/Starting integrated minecraft server/g)]
+    if (sm.length && sm[sm.length - 1].index > at) { at = sm[sm.length - 1].index; mode = 'Одиночная игра' }
+    const stop = Math.max(txt.lastIndexOf('Stopping worker threads'), txt.lastIndexOf('Stopping singleplayer server'))
+    if (stop > at) return null
+    return mode
+  } catch { return null }
+}
+// v1.134.0: детали для ЛЮБОЙ Unreal-игры (а не только Fortnite/Delta Force) — по
+// стандартному логу движка %LOCALAPPDATA%\<Проект>\Saved\Logs\<Проект>.log.
+// Имя проекта берём из пути exe (…\<Проект>\Binaries\Win64\…) или из имени
+// процесса (…-Win64-Shipping). Лога нет / игра пишет иначе — просто без деталей.
+function ueGenericMode() {
+  const exe = String(curGameExe || '')
+  const names = []
+  const bm = exe.match(/[\\/]([^\\/]+)[\\/]Binaries[\\/]Win(?:64|32)[\\/]/i)
+  if (bm && bm[1]) names.push(bm[1])
+  const pm = exe.match(/[\\/]([^\\/]+?)(?:Client|Game)?-Win(?:64|32)-Shipping\.exe$/i)
+  if (pm && pm[1]) names.push(pm[1])
+  for (const nm of Array.from(new Set(names))) {
+    if (!nm || /^(binaries|win64|win32)$/i.test(nm)) continue
+    const mode = ueLogMode(path.join(process.env.LOCALAPPDATA || '', nm, 'Saved', 'Logs', nm + '.log'))
+    if (mode) return mode
+  }
+  return null
+}
 // ---- v1.132.0: детали по логам Unreal-игр (Fortnite, Delta Force) ----
 // У Unreal-игр стандартный лог: %LOCALAPPDATA%\<Игра>\Saved\Logs\<Игра>.log, куда
 // движок пишет смену состояний матча («Match State Changed from X to Y») и загрузку
@@ -633,7 +675,9 @@ async function scanGameMode() {
     else if (g.name === 'Fortnite') mode = fortniteMode()
     else if (g.name === 'Delta Force') mode = deltaForceMode()
     else if (g.name === 'League of Legends') mode = await lolMode()
-    else if (g.name === 'Minecraft' || g.name === 'Minecraft (Java)') mode = mcMode()
+    else if (g.name === 'Minecraft (Java)') mode = mcJavaLogMode(g.since) || mcMode()
+    else if (g.name === 'Minecraft') mode = mcMode()
+    else mode = ueGenericMode()
     if (curGame && curGame.name === g.name && (curGame.mode ?? null) !== (mode ?? null)) {
       curGame = { ...curGame, mode }
       broadcastGame()
