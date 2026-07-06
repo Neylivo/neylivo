@@ -3596,3 +3596,13 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 /* ==== v1.122.0: вкладка «Ожидание» — входящие и исходящие заявки ==== */
 .pfr-sec-out { margin-top: 16px; }
 .pfr-name .pfr-sub { display:block; font-size:12px; color:var(--mut); font-weight:400; margin-top:1px; }
+
+
+/* ==== v1.123.0: шрифты — чёткие зоны ответственности ==== */
+/* Личный «Шрифт интерфейса» (Внешний вид, localStorage) меняет только надписи
+   приложения. Ник и текст сообщений он не трогает: они закреплены за базовым
+   шрифтом, а поверх него работают только «Шрифт ника» и «Шрифт сообщений» из
+   профиля (видны всем, задаются inline-стилями и потому побеждают это правило). */
+.msg-txt, .msg-hdr .nm, .me-nm, .mini-name, .pc-name, .pqs-acc-name, .plate-prev-nm {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}

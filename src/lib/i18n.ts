@@ -1322,3 +1322,10 @@ Object.assign(DICT_EN, {
   'Отменить заявку': 'Cancel request',
   'Заявка уже отправлена — ждём ответа': 'Request already sent — awaiting reply',
 })
+
+
+// v1.123.0: перевод описания личного шрифта интерфейса
+Object.assign(DICT_EN, {
+  'Меняет все надписи приложения: настройки, меню, панели. Видно только тебе. Ник и текст сообщений в чате не меняет — за них отвечают «Шрифт ника» и «Шрифт сообщений» в «Профиле» (их видят все).':
+    'Changes every label in the app: settings, menus, panels. Only you can see it. It does not affect nicknames or message text — those come from "Nickname font" and "Message font" in "Profile" (visible to everyone).',
+})

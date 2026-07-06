@@ -245,7 +245,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       const cov = await fileFontCoverage(f)
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ nickFontUrl: url })
-      if (cov && !cov.cyrillic) toastErr('В этом шрифте нет русских букв — русский ник останется обычным шрифтом')
+      if (cov && !cov.cyrillic && settings.lang !== 'en') toastErr('В этом шрифте нет русских букв — русский ник останется обычным шрифтом')
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setFontBusy(false); e.target.value = '' }
   }
@@ -259,7 +259,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       const cov = await fileFontCoverage(f)
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ msgFontUrl: url })
-      if (cov && !cov.cyrillic) toastErr('В этом шрифте нет русских букв — русский текст останется обычным шрифтом')
+      if (cov && !cov.cyrillic && settings.lang !== 'en') toastErr('В этом шрифте нет русских букв — русский текст останется обычным шрифтом')
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setMsgFontBusy(false); e.target.value = '' }
   }
@@ -536,7 +536,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       <small>{prof.nickFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
-                  {prof.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
+                  {settings.lang !== 'en' && prof.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
                   {prof.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
                 </div>
@@ -557,7 +557,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       <small>{prof.msgFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
-                  {prof.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
+                  {settings.lang !== 'en' && prof.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
                   {prof.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={msgFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickMsgFont} />
                 </div>
@@ -709,6 +709,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
                 <div className="pqs-sec-t">Шрифт и форма</div>
                 <label className="pqs-lbl">Шрифт интерфейса</label>
+                <div className="pqs-code-sub">Меняет все надписи приложения: настройки, меню, панели. Видно только тебе. Ник и текст сообщений в чате не меняет — за них отвечают «Шрифт ника» и «Шрифт сообщений» в «Профиле» (их видят все).</div>
                 <select className="pqs-in" value={view.fontFamily} onChange={e => setD('fontFamily', e.target.value)}>
                   {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
