@@ -3612,3 +3612,10 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .me-game { display:inline-flex; align-items:center; gap:5px; max-width:100%; vertical-align:bottom; }
 .me-game-nm { text-transform:uppercase; font-weight:600; font-size:11px; letter-spacing:.3px; color:#dbdee1;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ==== v1.128.0: пузырёк-значение над ползунками настроек голосового канала ==== */
+.cset-slider { accent-color:var(--brand); }
+.cset-slidewrap { position:relative; padding-top:36px; }
+.cset-slidewrap .cset-slider { margin:0; }
+.cset-bubble { position:absolute; top:2px; transform:translateX(-50%); background:#111420; color:#fff; font-size:13px; font-weight:600; padding:5px 10px; border-radius:6px; white-space:nowrap; pointer-events:none; box-shadow:0 4px 12px rgba(0,0,0,.4); z-index:2; }
+.cset-bubble::after { content:''; position:absolute; left:50%; bottom:-4px; transform:translateX(-50%); border:5px solid transparent; border-top-color:#111420; border-bottom:none; }

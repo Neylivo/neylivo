@@ -59,7 +59,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [selRoleId, setSelRoleId] = useState<string | null>(null)   // роль, открытая в редакторе (v1.96.0)
   const [name, setName] = useState(server.name)
   const [st, setSt] = useState<any>({ ...s0 })
-  const [dirty, setDirty] = useState(false)
+  // v1.128.0: «несохранённые изменения» считаются сравнением с последними
+  // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
+  const SETTING_DEFAULTS: Record<string, any> = { verification: 0, content_filter: 0, banner: '', description: '', sys_channel: '', default_notif: 'all', afk_channel: '', afk_timeout: '5 минут', access: 'invite' }
+  const normSt = (o: any) => { const r: any = {}; for (const k of Object.keys(o ?? {}).sort()) { const v = o[k]; if (v === undefined || v === null || v === false || v === '' || JSON.stringify(v) === JSON.stringify(SETTING_DEFAULTS[k])) continue; r[k] = v } return r }
+  const [baseName, setBaseName] = useState(server.name)
+  const [baseSt, setBaseSt] = useState(() => JSON.stringify(normSt(s0)))
+  const dirty = name !== baseName || JSON.stringify(normSt(st)) !== baseSt
+  const setDirty = (_d: boolean) => {}
   const [busy, setBusy] = useState(false)
   const [members, setMembers] = useState<any[]>([])
   const [roles, setRoles] = useState<ServerRole[]>([])
@@ -103,6 +110,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   // Загрузки файлов и «мгновенные» действия сохраняются сразу.
   async function persistNow(next: any) {
     setSt(next)
+    setBaseSt(JSON.stringify(normSt(next)))   // v1.128.0: мгновенное сохранение — сразу в «базу»
     const { error } = await supabase.from('servers').update({ settings: next } as any).eq('id', server.id)
     if (error) toastErr('Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются')
     else onChanged()
@@ -115,9 +123,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       if (r2.error) return toastErr(r2.error.message)
       toastErr('Имя сохранено. Для остальных настроек примени миграцию supabase/17_server_settings.sql')
     } else toastOk('Изменения сохранены')
-    setDirty(false); onChanged()
+    setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(st))); onChanged()   // v1.128.0
   }
-  function resetAll() { setName(server.name); setSt({ ...s0 }); setDirty(false) }
+  function resetAll() { setName(baseName); setSt(JSON.parse(baseSt)) }   // v1.128.0: сброс к последним сохранённым
 
   async function pickFile(e: React.ChangeEvent<HTMLInputElement>, cb: (url: string, f: File) => void) {
     const f = e.target.files?.[0]; if (!f) return

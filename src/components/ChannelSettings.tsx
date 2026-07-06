@@ -40,14 +40,20 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [nsfw, setNsfw] = useState<boolean>(!!s0.nsfw)
   const [hide, setHide] = useState<string>(s0.hide ?? '3 дней')
   const [bitrate, setBitrate] = useState<number>(s0.bitrate ?? 64)
-  const [vq, setVq] = useState<'auto' | '720p'>(s0.video_quality ?? 'auto')
+  const [vq, setVq] = useState<string>(s0.video_quality ?? 'auto')   // v1.128.0: 'auto' | '144p'…'1440p'
   const [limit, setLimit] = useState<number>(s0.user_limit ?? 0)
   const [region, setRegion] = useState<string>(s0.region ?? 'Автоматически')
   const [priv, setPriv] = useState<boolean>(!!s0.private)
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
   const [paused, setPaused] = useState<boolean>(!!s0.invites_paused)
   const [invites, setInvites] = useState<any[]>([])
-  const [dirty, setDirty] = useState(false)
+  // v1.128.0: «несохранённые изменения» считаются сравнением с последними
+  // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
+  const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused }))
+  const dirty = snapAll() !== base
+  const setDirty = (_d: boolean) => {}
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -73,16 +79,17 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
       if (r2.error) return toastErr(r2.error.message)
       toastErr('Для темы и настроек примени миграцию supabase/16_channel_settings.sql')
     }
-    setDirty(false)
+    setBase(snapAll())   // v1.128.0: сохранённое становится новой «базой»
     toastOk('Изменения сохранены')
     onChanged()
   }
 
   function reset() {
-    setName(channel.name); setTopic((channel as any).topic ?? ''); setSlow(s0.slow ?? 'Выкл'); setNsfw(!!s0.nsfw)
-    setHide(s0.hide ?? '3 дней'); setBitrate(s0.bitrate ?? 64); setVq(s0.video_quality ?? 'auto'); setLimit(s0.user_limit ?? 0)
-    setRegion(s0.region ?? 'Автоматически'); setPriv(!!s0.private); setPerms(s0.perms ?? {}); setPaused(!!s0.invites_paused)
-    setDirty(false)
+    // v1.128.0: сброс к последним сохранённым значениям (из базового снимка)
+    const b = JSON.parse(base)
+    setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
+    setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
+    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused)
   }
 
   async function del() {
@@ -117,6 +124,13 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
         <button className={'allow' + (v === 'allow' ? ' on' : '')} title="Разрешить" onClick={() => setPerm(k, 'allow')}><Icon name="check" size={13} /></button>
       </div>
     )
+  }
+
+  // v1.128.0: пузырёк-значение над бегунком ползунка (как в Discord)
+  const plural = (n: number, one: string, few: string, many: string) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many }
+  const bubble = (val: number, min: number, max: number, label: string) => {
+    const p = (val - min) / (max - min)
+    return <span className="cset-bubble" style={{ left: `calc(${(p * 100).toFixed(2)}% + ${((0.5 - p) * 18).toFixed(1)}px)` }}>{label}</span>
   }
 
   return createPortal(
@@ -162,15 +176,22 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
             <div className="cset-div" />
             <label className="cset-lbl">Битрейт</label>
             <div className="cset-scale"><span>8kbps</span><span>64kbps</span><span>96kbps</span></div>
-            <input type="range" className="cset-slider" min={8} max={96} value={bitrate} onChange={e => { setBitrate(Number(e.target.value)); setDirty(true) }} />
+            <div className="cset-slidewrap">
+              {bubble(bitrate, 8, 96, bitrate + ' kbps')}
+              <input type="range" className="cset-slider" min={8} max={96} value={bitrate} onChange={e => { setBitrate(Number(e.target.value)); setDirty(true) }} />
+            </div>
             <div className="cset-hint">ВНИМАНИЕ! Не поднимайте битрейт выше 64 кбит/с, чтобы не создать проблемы людям с низкой скоростью соединения.</div>
             <label className="cset-lbl">Качество видео</label>
-            <div className={'cset-radio' + (vq === 'auto' ? ' on' : '')} onClick={() => { setVq('auto'); setDirty(true) }}><span className="dot" /> Автоматически</div>
-            <div className={'cset-radio' + (vq === '720p' ? ' on' : '')} onClick={() => { setVq('720p'); setDirty(true) }}><span className="dot" /> 720p</div>
+            {['auto', '144p', '240p', '360p', '480p', '720p', '1080p', '1440p'].map(q => (
+              <div key={q} className={'cset-radio' + (vq === q ? ' on' : '')} onClick={() => { setVq(q); setDirty(true) }}><span className="dot" /> {q === 'auto' ? 'Автоматически' : q === '1440p' ? '1440p (2K)' : q}</div>
+            ))}
             <div className="cset-hint">Устанавливает качество изображения для всех участников канала. Выберите <b>Автоматически</b> для оптимальной производительности.</div>
             <label className="cset-lbl">Лимит пользователей</label>
             <div className="cset-scale"><span>∞</span><span>99</span></div>
-            <input type="range" className="cset-slider" min={0} max={99} value={limit} onChange={e => { setLimit(Number(e.target.value)); setDirty(true) }} />
+            <div className="cset-slidewrap">
+              {bubble(limit, 0, 99, limit === 0 ? '∞' : limit + ' ' + plural(limit, 'пользователь', 'пользователя', 'пользователей'))}
+              <input type="range" className="cset-slider" min={0} max={99} value={limit} onChange={e => { setLimit(Number(e.target.value)); setDirty(true) }} />
+            </div>
             <div className="cset-hint">Ограничивает количество пользователей, которые могут подключаться к этому голосовому каналу. Пользователи с правом на <b>перемещение участников</b> могут игнорировать это ограничение и перемещать других пользователей в канал.</div>
             <label className="cset-lbl">Назначение региона</label>
             <select className="modal-in" value={region} onChange={e => { setRegion(e.target.value); setDirty(true) }}>{REGIONS.map(o => <option key={o}>{o}</option>)}</select>
