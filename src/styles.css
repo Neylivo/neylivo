@@ -3667,3 +3667,25 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 /* Вместо трёх полосок-эквалайзера в заголовке «Играет в» — иконка жанра */
 /* (автомат/меч/машина/куб/мяч/череп/нота), зелёная, как остальная активность. */
 .mpg-kind { display:inline-flex; align-items:center; color:#23a55a; flex:none; }
+
+/* ==== v1.141.0: анимация «идут сигналы» у значка активности ==== */
+/* От значка жанра (и ноты у музыки) расходятся пульсирующие кольца, как радиосигнал, */
+/* а сам значок мягко «дышит». Работает и в мини-профиле (.mpg-kind), и в строках (.mag-ico). */
+.mag-ico, .mpg-kind { position:relative; }
+.mag-ico svg, .mpg-kind svg { position:relative; z-index:1; animation:act-ico-pulse 2.4s ease-in-out infinite; }
+.mag-ico::before, .mag-ico::after, .mpg-kind::before, .mpg-kind::after {
+  content:''; position:absolute; left:50%; top:50%; width:110%; height:110%;
+  border:1.5px solid currentColor; border-radius:50%;
+  transform:translate(-50%,-50%) scale(.55); opacity:0; pointer-events:none;
+  animation:act-ico-ping 2.4s ease-out infinite;
+}
+.mag-ico::after, .mpg-kind::after { animation-delay:1.2s; }
+@keyframes act-ico-ping {
+  0% { transform:translate(-50%,-50%) scale(.55); opacity:.75; }
+  70% { opacity:.12; }
+  100% { transform:translate(-50%,-50%) scale(1.8); opacity:0; }
+}
+@keyframes act-ico-pulse {
+  0%, 100% { transform:scale(1); }
+  50% { transform:scale(1.12); }
+}
