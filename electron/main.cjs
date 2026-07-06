@@ -460,11 +460,28 @@ function cs2Mode() {
   if (!lastGsi || lastGsi.appid !== '730' || Date.now() - lastGsi.at > 60_000) return null
   const d = lastGsi.data
   const map = d.map
+  // v1.131.0: детальная активность CS2 — фазы матча из GSI, как показывает Discord.
+  // Своя сторона (CT/T) приходит в player.team и после смены сторон обновляется сама,
+  // поэтому счёт можно показывать «свои:чужие», а победу/поражение — от лица игрока.
+  // Чего GSI НЕ отдаёт: поиск матча и состав лобби (соло/вдвоём) — это Steam Rich
+  // Presence, доступный только клиенту Steam; официального способа получить нет.
+  const myTeam = (d.player && d.player.team) ? String(d.player.team).toUpperCase() : null
   if (map && map.name) {
     const m = CS_MODES[String(map.mode || '').toLowerCase()] || null
     const nice = CS_MAPS[String(map.name || '').toLowerCase()] || map.name
-    const score = (map.team_ct && map.team_t && map.team_ct.score != null && map.team_t.score != null)
-      ? ' · ' + map.team_ct.score + ':' + map.team_t.score : ''
+    const ct = map.team_ct ? map.team_ct.score : null
+    const t = map.team_t ? map.team_t.score : null
+    const haveScore = ct != null && t != null
+    const mine = myTeam === 'T' ? t : ct
+    const their = myTeam === 'T' ? ct : t
+    const phase = String(map.phase || '').toLowerCase()
+    if (phase === 'warmup') return 'Разминка — ' + nice + (m ? ' · ' + m : '')
+    if (phase === 'gameover' && haveScore) {
+      const res = myTeam ? (mine > their ? 'Победа' : (mine < their ? 'Поражение' : 'Ничья')) : 'Конец матча'
+      return res + ' — ' + nice + ' · ' + (myTeam ? mine + ':' + their : ct + ':' + t)
+    }
+    // Счёт «свои:чужие», если знаем свою сторону; иначе как раньше CT:T
+    const score = haveScore ? ' · ' + (myTeam ? mine + ':' + their : ct + ':' + t) : ''
     return (m ? m + ' — ' : 'В матче — ') + nice + score
   }
   if (d.player && d.player.activity === 'menu') return 'В лобби'
