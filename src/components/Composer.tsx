@@ -139,21 +139,31 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [drag, setDrag] = useState(false)
   const dragDepth = useRef(0)
   useEffect(() => {
+    // v1.127.0: перетаскивания, начавшиеся ВНУТРИ приложения (картинка из чата, аватарка и т.п.),
+    // не считаются вложениями — прикрепить можно только файлы, притащенные снаружи (из проводника).
+    let internalDrag = false
+    const dstart = () => { internalDrag = true }
+    const dend = () => { internalDrag = false }
     const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
-    const enter = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDrag(true) }
-    const over = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault() }
-    const leave = (e: DragEvent) => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDrag(false) }
+    const enter = (e: DragEvent) => { if (internalDrag || !hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDrag(true) }
+    const over = (e: DragEvent) => { if (!internalDrag && hasFiles(e)) e.preventDefault() }
+    const leave = (e: DragEvent) => { if (internalDrag || !hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDrag(false) }
     const drop = (e: DragEvent) => {
+      if (internalDrag) { e.preventDefault(); internalDrag = false; dragDepth.current = 0; setDrag(false); return }
       if (!hasFiles(e)) return
       e.preventDefault(); dragDepth.current = 0; setDrag(false)
       const fs = Array.from(e.dataTransfer?.files ?? [])
       if (fs.length) { addFiles(fs); inputRef.current?.focus() }
     }
+    window.addEventListener('dragstart', dstart, true)
+    window.addEventListener('dragend', dend, true)
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragover', over)
     window.addEventListener('dragleave', leave)
     window.addEventListener('drop', drop)
     return () => {
+      window.removeEventListener('dragstart', dstart, true)
+      window.removeEventListener('dragend', dend, true)
       window.removeEventListener('dragenter', enter)
       window.removeEventListener('dragover', over)
       window.removeEventListener('dragleave', leave)
@@ -458,12 +468,12 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
   if (type === 'image') {
     if (url.includes('#spoiler') && !revealed) return (
       <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
-        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" />
+        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} />
         <span className="att-spoiler-tag">СПОЙЛЕР</span>
       </div>
     )
     return <>
-      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" onClick={() => setViewer(true)} />
+      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} />
       {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
   }
