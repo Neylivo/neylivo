@@ -5,6 +5,7 @@
 // Раскраска: channels.settings.name_colors — массив 1–4 hex-цветов (1 — сплошной,
 // 2–4 — градиент по буквам, класс ch-grad), name_anim — «переливание» (класс ch-grad-anim).
 import type { CSSProperties } from 'react'
+import { customNickFamily } from './profilePrefs'
 
 // Тот же набор пресетов, что у шрифтов ника/сообщений (Settings.tsx).
 export const CH_FONTS = [
@@ -31,8 +32,18 @@ export const CH_COLOR_PRESETS: { name: string; colors: string[]; anim?: boolean 
 // Итоговый стиль названия канала: шрифт канала (name_font) или серверный (ch_font);
 // 1 цвет — color, 2–4 — градиент (ch-grad красит текст по фону-градиенту).
 // Для «переливания» первый цвет дублируется в конец — градиент зацикливается бесшовно.
+// v1.140.0: свой файл шрифта — channels.settings.name_font_url / servers.settings.ch_font_url
+// (URL из Supabase Storage, @font-face создаётся на лету, как у шрифта ника).
+export function chFontFamily(url: string): string {
+  return `'${customNickFamily(url)}', sans-serif`
+}
+
 export function chNameStyle(chSettings: any, srvSettings: any): { style?: CSSProperties; grad: boolean; anim: boolean } {
-  const font = (chSettings?.name_font || srvSettings?.ch_font || '') as string
+  // Приоритет: свой файл канала > пресет канала > свой файл сервера > пресет сервера.
+  const font = (chSettings?.name_font_url ? chFontFamily(chSettings.name_font_url)
+    : chSettings?.name_font ? chSettings.name_font
+    : srvSettings?.ch_font_url ? chFontFamily(srvSettings.ch_font_url)
+    : (srvSettings?.ch_font || '')) as string
   const colors: string[] = Array.isArray(chSettings?.name_colors) ? chSettings.name_colors.filter(Boolean).slice(0, 4) : []
   const grad = colors.length >= 2
   const anim = grad && !!chSettings?.name_anim

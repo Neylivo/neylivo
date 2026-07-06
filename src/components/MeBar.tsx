@@ -65,8 +65,9 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const { myStatus, activityOf, gameOf } = usePresence()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [miniOpen, setMiniOpen] = useState(false)   // свой мини-профиль над панелью (как в Discord)
+  const meRef = useRef<HTMLDivElement>(null)   // v1.140.0: мерим панельку — мини-профиль открывается ровно над ней
   return (
-    <div className={'me' + (plate.outline ? ' plate-outline' : '')} style={plate.outline ? { ['--plate-oc' as any]: plate.outline } : undefined}>
+    <div ref={meRef} className={'me' + (plate.outline ? ' plate-outline' : '')} style={plate.outline ? { ['--plate-oc' as any]: plate.outline } : undefined}>
       {plate.url && plate.kind !== 'none' && <PlateBg url={plate.url} kind={plate.kind} />}
       <span className="me-lift" onClick={() => setMiniOpen(v => !v)} title="Мой профиль" style={{ cursor: 'pointer' }}>
         <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} mobile={IS_MOBILE} />
@@ -93,7 +94,9 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       <button className="me-out me-lift" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
       {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} onClose={() => setSettingsOpen(false)} />}
       {miniOpen && user && <MiniProfile
-        data={{ userId: user.id, name: username, avatarUrl, status: myStatus, anchor: 'me', x: 8, y: 0 }}
+        data={{ userId: user.id, name: username, avatarUrl, status: myStatus, anchor: 'me',
+          x: meRef.current?.getBoundingClientRect().left ?? 8,
+          y: meRef.current?.getBoundingClientRect().top ?? (window.innerHeight - 60) }}
         meControls onPickAvatar={() => fileRef.current?.click()}
         onClose={() => setMiniOpen(false)} />}
     </div>

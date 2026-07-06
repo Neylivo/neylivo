@@ -146,7 +146,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   if (full) return <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="activity" onClose={onClose} />
 
   const posStyle: React.CSSProperties = data.anchor === 'me'
-    ? { left: 8, bottom: 68 }
+    ? { left: Math.max(8, data.x), bottom: Math.max(8, window.innerHeight - data.y + 8) }   // v1.140.0: ровно над нижней панелькой
     : data.anchor === 'member-list'
     ? { right: 252, top: Math.max(12, Math.min(data.y - 60, window.innerHeight - 540)) }
     : { left: data.x, top: data.y }

@@ -18,7 +18,7 @@ import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRoleManage, sa
 import { RoleEditor } from './RoleEditor'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
-import { CH_FONTS } from '../lib/chStyle'
+import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'community' | 'template'
 
@@ -69,6 +69,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const dirty = name !== baseName || JSON.stringify(normSt(st)) !== baseSt
   const setDirty = (_d: boolean) => {}
   const [busy, setBusy] = useState(false)
+  const chFontRef = useRef<HTMLInputElement>(null)   // v1.140.0: свой файл шрифта названий каналов
   const [members, setMembers] = useState<any[]>([])
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
@@ -263,12 +264,18 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Этим шрифтом пишутся названия всех каналов в списке слева. Отдельному каналу можно задать свой шрифт в его настройках («Обзор»).</div>
             <div className="pqs-font-grid">
               {CH_FONTS.map(f => (
-                <button key={f.id || 'sys'} className={'pqs-font-btn' + ((st.ch_font ?? '') === f.id ? ' on' : '')} onClick={() => up('ch_font', f.id)}>
+                <button key={f.id || 'sys'} className={'pqs-font-btn' + (!st.ch_font_url && (st.ch_font ?? '') === f.id ? ' on' : '')} onClick={() => { up('ch_font', f.id); if (st.ch_font_url) up('ch_font_url', null) }}>
                   <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}># общий</span>
                   <small>{f.name}</small>
                 </button>
               ))}
+              <button className={'pqs-font-btn' + (st.ch_font_url ? ' on' : '')} onClick={() => chFontRef.current?.click()}>{/* v1.140.0: свой файл шрифта */}
+                <span className="pqs-font-sample" style={st.ch_font_url ? { fontFamily: chFontFamily(st.ch_font_url) } : undefined}># общий</span>
+                <small>{st.ch_font_url ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+              </button>
             </div>
+            <input ref={chFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={e => pickFile(e, url => persistNow({ ...st, ch_font_url: url }))} />
+            {st.ch_font_url && <button className="pqs2-btn ghost" style={{ marginTop: 8 }} onClick={() => persistNow({ ...st, ch_font_url: null })}>Убрать свой шрифт</button>}
             <div className="cset-div" />
             <label className="cset-lbl">Особенности</label>
             <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Добавьте до 5 особенностей, соответствующих интересам и характеру участников вашего сервера.</div>

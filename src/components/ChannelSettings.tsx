@@ -2,13 +2,14 @@
 // У текстовых каналов вкладки: Обзор / Права доступа / Приглашения / Интеграция.
 // У голосовых — те же, но БЕЗ «Интеграции» (прямое указание пользователя),
 // а в «Обзоре» дополнительно битрейт, качество видео, лимит пользователей и регион.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { createInvite } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
+import { uploadTo } from '../lib/storage'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 import { CH_FONTS, CH_COLOR_PRESETS, chNameStyle } from '../lib/chStyle'
@@ -51,12 +52,13 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [nameFont, setNameFont] = useState<string>(s0.name_font ?? '')
   const [nameColors, setNameColors] = useState<string[]>(Array.isArray(s0.name_colors) ? s0.name_colors : [])
   const [nameAnim, setNameAnim] = useState<boolean>(!!s0.name_anim)
+  const [nameFontUrl, setNameFontUrl] = useState<string | null>(s0.name_font_url ?? null)   // v1.140.0: свой файл шрифта
   const [invites, setInvites] = useState<any[]>([])
   // v1.128.0: «несохранённые изменения» считаются сравнением с последними
   // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
   const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
-  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused, nameFont, nameColors, nameAnim })
-  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim }))
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null }))
   const dirty = snapAll() !== base
   const setDirty = (_d: boolean) => {}
 
@@ -74,10 +76,23 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
 
   function setPerm(k: string, v: Tri) { setPerms(p => ({ ...p, [k]: v })); setDirty(true) }
 
+  // v1.140.0: свой файл шрифта для названия канала (.ttf/.otf/.woff/.woff2)
+  const chFontFileRef = useRef<HTMLInputElement>(null)
+  const [fontBusy, setFontBusy] = useState(false)
+  async function pickNameFont(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setFontBusy(true)
+    try { setNameFontUrl(await uploadTo('avatars', user.id, f)); setDirty(true) }
+    catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setFontBusy(false); e.target.value = '' }
+  }
+
   async function save() {
-    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim }
+    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim }
     const nm = name.trim() || channel.name
-    const { error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id)
+    const { data: upd, error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id).select('id')
+    // v1.140.0: без RLS-политики UPDATE база молча обновляет 0 строк — ловим это и подсказываем миграцию.
+    if (!error && (!upd || upd.length === 0)) return toastErr('Не сохранилось: в базе нет права изменять каналы — примени миграцию supabase/29_channels_update_policy.sql')
     if (error) {
       // Скорее всего не применена миграция 16 — сохраняем хотя бы название.
       const r2 = await supabase.from('channels').update({ name: nm }).eq('id', channel.id)
@@ -94,13 +109,14 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const b = JSON.parse(base)
     setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
     setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
-    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim)
+    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null)
   }
 
   async function del() {
     if (!await confirmUi('Удалить канал «' + channel.name + '»? Это действие необратимо.', { okText: 'Удалить канал' })) return
-    const { error } = await supabase.from('channels').delete().eq('id', channel.id)
+    const { data: deld, error } = await supabase.from('channels').delete().eq('id', channel.id).select('id')
     if (error) return toastErr(error.message)
+    if (!deld || deld.length === 0) return toastErr('Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql')
     toastOk('Канал удалён')
     onDeleted()
   }
@@ -161,7 +177,12 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
             <option value="">Как на сервере</option>
             {CH_FONTS.filter(f => f.id).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
-          <div className="cset-hint">Шрифт названия только этого канала. «Как на сервере» — общий шрифт каналов из настроек сервера («Профиль сервера»).</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>{/* v1.140.0: свой файл шрифта */}
+            <button className="pqs2-btn ghost" onClick={() => chFontFileRef.current?.click()}>{fontBusy ? 'Загрузка…' : (nameFontUrl ? 'Свой шрифт — заменить файл' : 'Загрузить свой шрифт (.ttf/.otf/.woff2)')}</button>
+            {nameFontUrl && <button className="pqs2-btn ghost" onClick={() => { setNameFontUrl(null); setDirty(true) }}>Убрать свой шрифт</button>}
+          </div>
+          <input ref={chFontFileRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickNameFont} />
+          <div className="cset-hint">Шрифт названия только этого канала. «Как на сервере» — общий шрифт каналов из настроек сервера («Профиль сервера»). Свой загруженный файл важнее выбора из списка.</div>
           <label className="cset-lbl">Раскраска названия</label>
           <div className="cset-chc-row">
             {CH_COLOR_PRESETS.map(p => {
@@ -190,7 +211,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
             <button className={'tgl' + (nameAnim ? ' on' : '')} onClick={() => { setNameAnim(!nameAnim); setDirty(true) }} />
           </div>
           <label className="cset-lbl">Предпросмотр</label>
-          <div className="cset-chc-prev">{(() => { const cs2 = chNameStyle({ name_font: nameFont, name_colors: nameColors, name_anim: nameAnim }, (server as any).settings ?? {}); return <span className={(cs2.grad ? 'ch-grad' : '') + (cs2.anim ? ' ch-grad-anim' : '')} style={cs2.style}>{isVoice ? '🔊 ' : '# '}{name || channel.name}</span> })()}</div>
+          <div className="cset-chc-prev">{(() => { const cs2 = chNameStyle({ name_font: nameFont, name_font_url: nameFontUrl, name_colors: nameColors, name_anim: nameAnim }, (server as any).settings ?? {}); return <span className={(cs2.grad ? 'ch-grad' : '') + (cs2.anim ? ' ch-grad-anim' : '')} style={cs2.style}>{isVoice ? '🔊 ' : '# '}{name || channel.name}</span> })()}</div>
           {!isVoice && <>
             <label className="cset-lbl">Тема канала</label>
             <textarea className="cset-topic" maxLength={1024} placeholder="Расскажите участникам, как пользоваться этим каналом!"
