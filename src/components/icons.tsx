@@ -98,7 +98,7 @@ export function Icon({ name, size, className }: { name: string; size?: number; c
     case 'user': return <svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     // Значки жанров игр для строки активности (см. src/lib/gameIcon.ts).
     // v1.141.0: значки жанров — солидные силуэты (fill), чтобы читались в 12–14px
-    case 'rifle': return <svg {...p} fill="currentColor" stroke="none"><path d="M22.7 6.4 21.9 4.6 13.6 7.4H3.4C2.6 7.4 2 8 2 8.8v2.5c0 .8.6 1.4 1.4 1.4h.9l1-2.1h5.3l-1.9 7.2h3.3l1.7-6.5h1.9c.9 0 1.7-.6 1.9-1.5l.3-1.2 4.9-1.5z"/></svg>
+    case 'rifle': return <svg {...p} fill="currentColor" stroke="none"><path d="M1.5 7.5L13 7.5L13 8L19 8L19 6.6L19.8 6.6L19.8 8L22.6 8L22.6 9.3L14 9.3L14 10.7L1.5 10.7ZM11.9 10.7L13.9 10.7C14.5 13.1 15.3 15.6 16.1 18L14.2 18.5C13.4 16 12.6 13.4 12.1 10.7ZM9 10.7L11 10.7L10 15.1L8.6 15.1Z"/></svg>
     case 'sword': return <svg {...p} fill="currentColor" stroke="none"><path d="M22 2.7c0-.4-.3-.7-.7-.7h-3.5c-.3 0-.5.1-.7.3L6.5 12.9l4.6 4.6L21.7 6.9c.2-.2.3-.4.3-.7zM5.2 14.2l-1 1 4.6 4.6 1-1zM3 16.4l-1.7 1.7c-.4.4-.4 1 0 1.4l3.2 3.2c.4.4 1 .4 1.4 0L7.6 21z"/></svg>
     case 'car': return <svg {...p} fill="currentColor" stroke="none"><path fillRule="evenodd" d="M5.3 6.8A3 3 0 0 1 8 5h8a3 3 0 0 1 2.7 1.8l1.7 3.6A3 3 0 0 1 22 13v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a3 3 0 0 1 1.6-2.6zM8.3 7a1 1 0 0 0-.9.6L6.3 10h11.4l-1.1-2.4a1 1 0 0 0-.9-.6zM7 17.3a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8zm10 0a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8z"/></svg>
     case 'cube': return <svg {...p} fill="currentColor" stroke="none"><path d="M12 2.2 19.7 6.6 12 11 4.3 6.6z"/><path d="M3.4 8.1v8.7l7.6 4.4v-8.7z"/><path d="M20.6 8.1 13 12.5v8.7l7.6-4.4z"/></svg>
