@@ -3631,3 +3631,12 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .ch.vconn .ch-nm svg { color:#23a55a; }
 .vo { display:flex; align-items:center; }
 .vo-live { margin-left:auto; margin-right:6px; background:#f23f43; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; padding:2px 6px; border-radius:5px; flex:none; }
+
+/* ==== v1.133.0: голосовые каналы как в Discord — полноэкранный вид канала ==== */
+/* Вид голосового канала занимает всю центральную область (не полоска над чатом): */
+/* чат, композер и панели скрываются, CallRoom растягивается на всё пространство. */
+.chat.voicemode > *:not(.c2-wrap):not(.chat-head) { display:none !important; }
+.chat.voicemode .c2-wrap { flex:1 1 auto; height:auto; min-height:0; }
+.chat.voicemode .c2-wrap:has(.c2-board) { height:auto; min-height:0; }
+.chat.voicemode .ph2-btns { display:none; }
+.chat.voicemode .ph2-hash { display:inline-flex; align-items:center; }

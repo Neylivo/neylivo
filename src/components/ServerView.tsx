@@ -178,7 +178,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   useEffect(() => { voiceRef.current = voice }, [voice])
   // Смена сервера: тихо выходим из голосового канала прошлого сервера.
   useEffect(() => {
-    if (voiceRef.current) { try { voiceRef.current.room.disconnect() } catch {} setVoice(null); setSpeaking({}) }
+    if (voiceRef.current) { try { voiceRef.current.room.disconnect() } catch {} setVoice(null); setSpeaking({}); setVoicePanel(false) }
     loadChannels(); loadMembers(); loadRoles(); setSrvSettings((server as any).settings ?? {}) /* eslint-disable-next-line */
   }, [server.id])
 
@@ -256,6 +256,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   async function selectChannel(c: Channel) {
     setCurChannel(c); closeMobNav()
+    setVoicePanel(false)   // v1.133.0: текстовый канал возвращает чат, голос остаётся подключён
     // Сброс случайного выделения текста при переключении канала.
     window.getSelection()?.removeAllRanges()
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
@@ -472,13 +473,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // просто подключаемся, появляемся под каналом у всех и в панели над профилем.
   async function joinVoice(c: Channel) {
     if (!user) return
-    if (voice?.ch.id === c.id) { setVoicePanel(p => !p); return }   // v1.130.0: повторный клик — открыть/закрыть панель канала
+    if (voice?.ch.id === c.id) { setVoicePanel(true); closeMobNav(); return }   // v1.133.0: как в Discord — клик по своему каналу снова открывает его вид
     try {
       if (voice) { try { voice.room.disconnect() } catch {} }
       const room = await joinRoom('ch_' + c.id, user.id, username)
       setVoice({ room, ch: c })
       setVMic(true)
       setSpeaking({})
+      setVoicePanel(true)   // v1.133.0: как в Discord — вход в голосовой канал сразу открывает его вид
+      closeMobNav()
       voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null, live: false })
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
@@ -683,7 +686,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 260) }) }
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
-                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть панель канала' : undefined}>
+                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
                   <ChName c={c} />
                   <span className="ch-acts">
                     <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
@@ -749,12 +752,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>}
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
-      <main className="chat">
+      <main className={'chat' + (voice && voicePanel ? ' voicemode' : '')}>
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
-          <span className="ph2-hash">#</span>
-          <span className="ph2-name">{curChannel?.name ?? '—'}</span>
+          <span className="ph2-hash">{voice && voicePanel ? <Icon name="volume" size={20} /> : '#'}</span>
+          <span className="ph2-name">{voice && voicePanel ? voice.ch.name : (curChannel?.name ?? '—')}</span>
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
             <button className={'pin-btn' + (curChannel && mutedCh[curChannel.id] ? ' on' : '')} title={curChannel && mutedCh[curChannel.id] ? 'Включить уведомления канала' : 'Заглушить канал'} onClick={() => curChannel && toggleMuteCh(curChannel.id)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
