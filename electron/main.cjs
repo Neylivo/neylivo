@@ -8,10 +8,14 @@ const isDev = !app.isPackaged
 // даже когда окно «выключено». Полный выход — через меню трея.
 let tray = null
 let quitting = false
-const startHidden = process.argv.includes('--hidden')   // автозапуск стартует скрыто, сразу в трей
+let startHidden = process.argv.includes('--hidden')   // автозапуск стартует скрыто, сразу в трей
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json')
 function readPrefs() { try { return JSON.parse(require('fs').readFileSync(prefsFile(), 'utf8')) } catch { return {} } }
 function writePrefs(p) { try { require('fs').writeFileSync(prefsFile(), JSON.stringify(p)) } catch {} }
+// v1.124.0: после тихой фоновой установки обновления перезапускаемся сразу в трей,
+// не показывая окно (флаг resumeHidden ставится перед установкой и тут же снимается).
+try { const p0 = readPrefs(); if (p0.resumeHidden) { startHidden = true; writePrefs({ ...p0, resumeHidden: false }) } } catch {}
+let trySilentInstall = () => false   // назначается после инициализации автообновлений (v1.124.0)
 
 // Вторая копия приложения не запускается — просто показывает уже работающую.
 if (!app.requestSingleInstanceLock()) {
@@ -795,7 +799,11 @@ function createWindow() {
 
   // v1.55.0: закрытие окна = свернуть в трей (как в Discord). Полный выход — из меню трея.
   win.on('close', (e) => {
-    if (!quitting) { e.preventDefault(); win.hide() }
+    if (!quitting) {
+      e.preventDefault(); win.hide()
+      // v1.124.0: окно ушло в трей — если обновление уже скачано, ставим его тихо.
+      setTimeout(() => { try { trySilentInstall() } catch {} }, 1500)
+    }
   })
 
   win.once('ready-to-show', () => closeSplashAndShow(win))
@@ -870,6 +878,22 @@ app.whenReady().then(() => {
         for (const w of BrowserWindow.getAllWindows()) { try { w.destroy() } catch {} }
         try { autoUpdater.quitAndInstall(true, true) } catch {}
       }
+      // v1.124.0: тихая установка в фоне. Если все окна приложения спрятаны (оно живёт
+      // в трее) и ничего не воспроизводит звук (звонок, музыка) — скачанное обновление
+      // ставится сразу, и приложение перезапускается обратно в трей, не показывая окно.
+      let updateReady = false
+      const maybeSilentInstall = () => {
+        if (!updateReady || quitting) return false
+        const wins = BrowserWindow.getAllWindows().filter(w => w !== splash && w !== overlayWin && w !== gameToastWin && !w.isDestroyed())
+        if (wins.some(w => w.isVisible())) return false
+        if (wins.some(w => { try { return w.webContents.isCurrentlyAudible() } catch { return false } })) return false
+        writePrefs({ ...readPrefs(), resumeHidden: true })
+        forceQuitAndInstall()
+        return true
+      }
+      trySilentInstall = maybeSilentInstall
+      // Страховка: если в момент скачивания шёл звонок или играла музыка — пробуем ещё раз каждые 5 минут.
+      setInterval(() => { try { maybeSilentInstall() } catch {} }, 5 * 60 * 1000)
       autoUpdater.on('update-available', (info) => bcastUpd({ state: 'downloading', percent: 0, version: info && info.version }))
       autoUpdater.on('download-progress', (p) => {
         // Реальный прогресс скачивания обновления показываем в splash-окне и в карточке.
@@ -886,6 +910,9 @@ app.whenReady().then(() => {
           forceQuitAndInstall()
           return
         }
+        updateReady = true
+        // v1.124.0: приложение в трее — ставим обновление тихо, карточку не показываем.
+        if (maybeSilentInstall()) return
         bcastUpd({ state: 'ready', version: info && info.version })
       })
       // v1.47.1: ошибка обновления больше не подвешивает сплэш/карточку — прячем
