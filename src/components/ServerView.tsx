@@ -269,7 +269,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       // v1.111.0: непрочитанного нет — всегда вниз к последним. Восстановление старой позиции
       // убрано: scrollTop, записанный при другой высоте ленты, кидал в самый верх к старым.
       const firstNew0 = lr0 ? (cachedList as Message[]).find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lr0) : undefined
-      pendingScroll.current = firstNew0 ? { unreadId: firstNew0.id } : 'bottom'
+      // v1.136.0: вход в канал ВСЕГДА проматывает в самый низ (как просил пользователь);
+      // разделитель «НОВОЕ» остаётся в ленте — до него можно доскроллить вручную.
+      pendingScroll.current = 'bottom'
       if (firstNew0) setNewDividerId(firstNew0.id)
       setMessages(cachedList as Message[])
     }
@@ -286,7 +288,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // v1.111.0: непрочитанного нет — всегда вниз к последним. Восстановление сохранённой
     // позиции убрано: scrollTop, записанный при другой высоте ленты (после подгрузки
     // старых сообщений), при новом входе указывал в самый верх, к старым сообщениям.
-    pendingScroll.current = firstNew ? { unreadId: firstNew.id } : 'bottom'
+    // v1.136.0: всегда вниз (разделитель «НОВОЕ» остаётся видимым выше по ленте).
+    pendingScroll.current = 'bottom'
     setMessages(list)
     setNewDividerId(firstNew?.id ?? null)
     localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
@@ -333,6 +336,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         if (tgt) el.scrollTop += tgt.getBoundingClientRect().top - el.getBoundingClientRect().top - 72
         else el.scrollTop = el.scrollHeight
       } else el.scrollTop = ps === 'bottom' ? el.scrollHeight : ps
+      // v1.136.0: одноразового scrollTop мало — вложения/эмбеды дорисовываются после
+      // рендера и лента растёт, из-за чего низ «уезжал». Держим низ, как после отправки.
+      if (ps === 'bottom') stickToBottom(800)
       pendingScroll.current = null
       setUnseen(0); setAtBottom(nearBottom())
     } else if (nearBottom()) { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setUnseen(0) }
