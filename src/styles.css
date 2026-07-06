@@ -1576,7 +1576,9 @@ body.no-anim .member-typing i { animation:none; }
 .voice-pill { margin:6px 16px 4px; }
 
 /* ===== Мини-профиль 1-в-1 как в эталоне (v1.8.0) ===== */
-.mini.mini2 { width:340px; border-radius:14px; }
+/* v1.135.0: ширина 300px — как поповер профиля в Discord (был 340px, выглядел «толстым»);
+   контент при этом вытягивается по вертикали. Высоту баннера не трогаем — на неё завязан ProfilePet (bannerH=74). */
+.mini.mini2 { width:300px; border-radius:14px; }
 .mini2 .mini-banner { height:74px; }
 /* Кнопки сверху справа: добавить в друзья и «…» */
 .mini-topbtns { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:3; }
