@@ -13,6 +13,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { Settings } from './Settings'
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
+import { gameIconOf } from '../lib/gameIcon'
 import type { Profile } from '../types'
 
 // «Был(а) в сети 5 мин назад» — относительное время последнего визита.
@@ -179,7 +180,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
-            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-eq"><i /><i /><i /></span>Играет в</span>
+            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-kind"><Icon name={gameIconOf(game.name)} size={14} /></span>Играет в</span>{/* v1.139.0: значок по жанру игры */}
               <button className="mpg-dots" title="Скопировать название игры"
                 onClick={() => { navigator.clipboard?.writeText(game.name); toastOk('Название игры скопировано') }}><Icon name="more" size={16} /></button>
             </div>
@@ -206,7 +207,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             </button>}
           </div>}
           {listening && (moreActs || !game) && <div className="mpg mpg-music">{/* v1.106.0: карточка «Слушает музыку» — вторая активность или единственная */}
-            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-eq"><i /><i /><i /></span>Слушает музыку</span>
+            <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-kind"><Icon name="music" size={14} /></span>Слушает музыку</span>{/* v1.139.0: нота вместо эквалайзера */}
               <button className="mpg-dots" title="Скопировать название трека"
                 onClick={() => { navigator.clipboard?.writeText(listening.title); toastOk('Название трека скопировано') }}><Icon name="more" size={16} /></button>
             </div>

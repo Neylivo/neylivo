@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Activity, Game } from '../lib/presence'
 import { Icon } from './icons'
+import { gameIconOf } from '../lib/gameIcon'
 
 // «2 ч 34 мин 1 сек» — сколько длится активность.
 export function fmtElapsed(since: number): string {
@@ -48,7 +49,7 @@ export function ClockElapsed({ since }: { since: number }) {
 // «Играет в …» с мини-обложкой — строка под ником (участники сервера, сайдбар ЛС).
 export function GameLine({ game }: { game: Game }) {
   return <small className="member-act game">
-    <span className="mag-ico"><Icon name="gamepad" size={14} /></span>
+    <span className="mag-ico"><Icon name={gameIconOf(game.name)} size={14} /></span>
     <span className="mag-tx">{game.name}{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </small>
 }
@@ -56,7 +57,7 @@ export function GameLine({ game }: { game: Game }) {
 // То же, но в строку — вкладка «Друзья» и карточки «Активные контакты».
 export function GameInline({ game }: { game: Game }) {
   return <span className="game-inline">
-    {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name="gamepad" size={14} /></span>}
+    {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name={gameIconOf(game.name)} size={14} /></span>}
     <span>Играет в <b>{game.name}</b>{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </span>
 }

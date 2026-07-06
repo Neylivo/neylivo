@@ -13,6 +13,7 @@ import { ActivityLabel } from './ActivityLabel'
 import { Settings } from './Settings'
 import { MiniProfile } from './MiniProfile'
 import { Icon } from './icons'
+import { gameIconOf } from '../lib/gameIcon'
 import { IS_MOBILE } from '../lib/mobile'
 
 // Нижняя панель пользователя. Статус и активность вручную больше не ставятся:
@@ -76,7 +77,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
           // v1.125.0: игра в своей панельке — компактно, как в Discord: зелёный геймпад +
           // НАЗВАНИЕ ИГРЫ заглавными, без «Играет в», без режима и без таймера.
           const g = user ? gameOf(user.id) : null
-          if (g) return <span className="me-game"><span className="mag-ico"><Icon name="gamepad" size={12} /></span><span className="me-game-nm">{g.name}</span></span>
+          if (g) return <span className="me-game"><span className="mag-ico"><Icon name={gameIconOf(g.name)} size={12} /></span><span className="me-game-nm">{g.name}</span></span>
           const a = user ? activityOf(user.id) : null
           return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus]
         })()}</small>
