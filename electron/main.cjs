@@ -171,6 +171,8 @@ ipcMain.handle('ponoi-clip-image', (_e, dataUrl) => {
 let gameToastWin = null
 let gameToastTimer = null
 function showGameToast(p) {
+  // v1.126.0: оверлеи поверх игры отключены по просьбе владельца — плашка не показывается.
+  return
   try {
     if (process.platform !== 'win32' && process.platform !== 'darwin' && process.platform !== 'linux') return
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -232,6 +234,8 @@ let overlayWin = null
 let overlayTimer = null
 const SEND_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 11.5 20.5 3.6c.5-.2 1 .3.8.8L13.4 22c-.2.5-.9.5-1.1 0l-2.6-6.3c-.1-.2-.3-.4-.5-.5L3 12.6c-.5-.2-.5-.9 0-1.1Z" fill="currentColor"/></svg>'
 function showGameOverlay(p) {
+  // v1.126.0: оверлеи поверх игры отключены по просьбе владельца — панель не показывается.
+  return
   try {
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
     const gameRaw = (p && p.game) ? String(p.game) : ''
