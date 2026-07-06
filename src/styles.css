@@ -3518,3 +3518,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   .ctxmenu-item:hover, .ctxmenu-item:active, .app-ver:hover { transform: none; letter-spacing: normal; }
   .chlog-overlay, .chlog { animation: none; }
 }
+
+
+/* ==== v1.120.0: панель ЛС шире — чат не такой огромный ==== */
+/* Только на десктопе: на телефонах панель остаётся выезжающей (max-width:320px). */
+@media (min-width: 901px) {
+  .dm-side { width: clamp(300px, 24vw, 380px); }
+}
