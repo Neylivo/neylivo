@@ -3458,3 +3458,63 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .chlog-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .chlog-list li { font-size: 14px; color: var(--text-normal, #dbdee1); line-height: 1.45; }
 .pqs2-desc { font-size: 14px; color: var(--text-muted, #949ba4); line-height: 1.45; margin: -6px 0 14px; }
+
+
+/* ==== v1.119.0: дюжина приятных мелочей — микрополировка интерфейса ==== */
+
+/* 1. Единая аккуратная фокус-рамка для управления с клавиатуры */
+button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--brand, #5865f2); outline-offset: 2px; border-radius: 6px;
+}
+
+/* 2. Выделение текста — фирменный оттенок вместо системного синего */
+::selection { background: rgba(88,101,242,.38); color: inherit; }
+
+/* 3. Крестик закрытия настроек мягко поворачивается при наведении */
+.pqs2-x { transition: background .12s, color .12s, transform .25s var(--ease-out4, ease); }
+.pqs2-x:hover { transform: rotate(90deg); }
+
+/* 4. Иконки пунктов в меню настроек чуть сдвигаются вправо при наведении */
+.pqs2-item-ic { transition: transform .18s var(--ease-out4, ease); }
+.pqs2-item:hover .pqs2-item-ic { transform: translateX(2px); }
+
+/* 5. Аватар в карточке настроек слегка «оживает» */
+.pqs2-me-av { transition: transform .2s var(--ease-out4, ease), box-shadow .2s; }
+.pqs2-me:hover .pqs2-me-av { transform: scale(1.07) rotate(-2deg); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+
+/* 6. Поиск в настройках подсвечивается при фокусе */
+.pqs2-search { transition: box-shadow .15s; }
+.pqs2-search:focus-within { box-shadow: 0 0 0 2px rgba(88,101,242,.45); }
+
+/* 7. Строки настроек мягко подсвечиваются под курсором */
+.pqs2-row { border-radius: 8px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; transition: background .15s; }
+.pqs2-row:hover { background: rgba(255,255,255,.025); }
+
+/* 8. Пункты контекстного меню плавно сдвигаются и «нажимаются» */
+.ctxmenu-item { transition: background .12s, color .12s, transform .15s var(--ease-out4, ease); }
+.ctxmenu-item:hover { transform: translateX(2px); }
+.ctxmenu-item:active { transform: translateX(2px) scale(.98); }
+
+/* 9. Окно «Что нового» появляется с мягкой анимацией, маркеры списка — в цвет бренда */
+.chlog-overlay { animation: fade-in .15s ease both; }
+.chlog { animation: pop .18s var(--ease-out4, ease) both; }
+.chlog-list li::marker { color: var(--brand, #5865f2); }
+.chlog-badge { background: linear-gradient(135deg, var(--brand, #5865f2), #7983f5); }
+
+/* 10. Номер версии в углу мягко «проявляется» при наведении */
+.app-ver { transition: opacity .2s, letter-spacing .2s; }
+.app-ver:hover { letter-spacing: .4px; }
+
+/* 11. Тумблеры переключаются с плавным переходом */
+.tgl, .tgl * { transition: background-color .18s ease, transform .18s var(--ease-out4, ease), box-shadow .18s ease; }
+
+/* 12. Подзаголовки групп в меню настроек чуть подсвечиваются, когда курсор в сайдбаре */
+.pqs2-side:hover .pqs2-grp { color: #949ba4; }
+.pqs2-grp { transition: color .25s ease; }
+
+/* Уважение к настройке «меньше движения» — отключаем новые трансформации */
+@media (prefers-reduced-motion: reduce) {
+  .pqs2-x:hover, .pqs2-item:hover .pqs2-item-ic, .pqs2-me:hover .pqs2-me-av,
+  .ctxmenu-item:hover, .ctxmenu-item:active, .app-ver:hover { transform: none; letter-spacing: normal; }
+  .chlog-overlay, .chlog { animation: none; }
+}
