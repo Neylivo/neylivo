@@ -3525,3 +3525,69 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 @media (min-width: 901px) {
   .dm-side { width: clamp(300px, 24vw, 380px); }
 }
+
+
+/* ==== v1.121.0: большой мобильный апгрейд — удобство на телефонах ==== */
+
+/* Без серой вспышки при тапе и без задержки/двойного зума на кнопках (везде безопасно) */
+* { -webkit-tap-highlight-color: transparent; }
+button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-action: manipulation; }
+
+@media (max-width: 768px) {
+  /* 1. Честная высота экрана: интерфейс не прячется за клавиатурой и панелями браузера */
+  @supports (height: 100dvh) {
+    html, body, #root { height: 100dvh; }
+  }
+
+  /* 2. Нет случайного pull-to-refresh и «резинки» всего приложения */
+  body { overscroll-behavior: none; }
+  .msgs, .dm-side, .channels, .members, .servers,
+  .pqs2-main, .pqs2-side, .emoji-scroll, .thr-panel {
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  }
+
+  /* 3. iOS не зумит страницу при фокусе на поле ввода (шрифт >= 16px) */
+  input, textarea, select { font-size: 16px; }
+
+  /* 4. Контекстное меню — нижняя шторка, как в мобильном Discord */
+  .ctxmenu {
+    left: 0 !important; right: 0 !important; top: auto !important;
+    bottom: 0 !important; transform: none !important;
+    min-width: 0; width: 100vw; max-height: 65vh; overflow-y: auto;
+    border-radius: 16px 16px 0 0; border: none;
+    padding: 6px 10px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -12px 40px rgba(0,0,0,.55);
+    animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
+  }
+  .ctxmenu::before {
+    content: ''; display: block; width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,.25); margin: 4px auto 8px;
+  }
+  .ctxmenu-item { padding: 13px 14px; font-size: 15.5px; border-radius: 10px; }
+  .ctxmenu-item:hover { transform: none; }
+
+  /* 5. Крупнее зоны нажатия там, где было впритык */
+  .pqs2-item { padding: 11px 10px; font-size: 15px; }
+  .pqs2-sub { padding-top: 9px; padding-bottom: 9px; font-size: 14px; }
+  .pqs2-x, .mob-burger { min-width: 42px; min-height: 42px; }
+  .rx { min-height: 30px; }
+
+  /* 6. Учёт вырезов экрана в альбомной ориентации и по бокам */
+  .composer { padding-left: calc(8px + env(safe-area-inset-left)); padding-right: calc(8px + env(safe-area-inset-right)); }
+  .members { padding-right: env(safe-area-inset-right); }
+  .chat-head { padding-left: calc(10px + env(safe-area-inset-left)); padding-right: calc(10px + env(safe-area-inset-right)); }
+
+  /* 7. Настройки на телефоне: сайдбар и контент дышат свободнее */
+  .pqs2-side { width: min(78vw, 300px); }
+  .pqs2-inner { padding: 20px 14px calc(96px + env(safe-area-inset-bottom)); }
+  .pqs2-head { padding-top: calc(env(safe-area-inset-top)); height: calc(48px + env(safe-area-inset-top)); }
+
+  /* 8. Тосты не прилипают к самому краю и вырезу */
+  .toast { margin-bottom: env(safe-area-inset-bottom); }
+}
+
+@keyframes ctx-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctxmenu { animation: none; }
+}
