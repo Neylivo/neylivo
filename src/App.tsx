@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
 import { Home } from './components/Home'
-import { Toasts } from './lib/toast'
+import { Toasts, toastOk } from './lib/toast'
+import { loadFavs, toggleFav } from './lib/emoji'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
 import { CHANGELOG } from './lib/changelog'
@@ -130,6 +131,31 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// v1.137.0: правый клик по кастом-эмодзи в любом сообщении (сервер/ЛС) — меню
+// «В избранное». Слушает событие 'ponoi-emoji-ctx' из рендерера сообщений (md.tsx).
+function EmojiCtxHost() {
+  const { user } = useAuth()
+  const [ctx, setCtx] = useState<{ name: string; x: number; y: number } | null>(null)
+  const [, setVer] = useState(0)
+  useEffect(() => {
+    const h = (e: any) => setCtx(e.detail)
+    const h2 = () => setVer(v => v + 1)
+    window.addEventListener('ponoi-emoji-ctx', h as any)
+    window.addEventListener('ponoi-emoji-favs', h2)
+    return () => { window.removeEventListener('ponoi-emoji-ctx', h as any); window.removeEventListener('ponoi-emoji-favs', h2) }
+  }, [])
+  if (!ctx || !user) return null
+  const fav = loadFavs().has(ctx.name)
+  return <>
+    <div className="ep2-ctx-ov" onClick={() => setCtx(null)} onContextMenu={e => { e.preventDefault(); setCtx(null) }} />
+    <div className="ep2-ctx" style={{ left: Math.min(ctx.x, window.innerWidth - 230), top: Math.min(ctx.y, window.innerHeight - 110) }}>
+      <button onClick={async () => { const added = await toggleFav(user.id, ctx.name); toastOk(added ? ':' + ctx.name + ': — в избранном, ищи в пикере под звёздочкой' : ':' + ctx.name + ': убран из избранного'); setCtx(null) }}>
+        <Icon name="star" size={14} /> {fav ? 'Убрать из избранного' : 'В избранное'}
+      </button>
+    </div>
+  </>
+}
+
 export default function App() {
   const { session, loading } = useAuth()
   // v1.116.0: три быстрых клика по версии — окно «Что нового»
@@ -143,6 +169,7 @@ export default function App() {
   return <>
     <Toasts />
     <ConfirmHost />
+    <EmojiCtxHost />
     {isDesktop && <Titlebar />}
     {isDesktop && <UpdateBanner />}
     <div className="app-viewport">

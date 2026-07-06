@@ -60,7 +60,8 @@ function inline(text: string, depth = 0): ReactNode[] {
     { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])} title={m[0]}>{shortUrl(m[0])}</a> },
     { re: EMAIL_RE, render: m => <a key={k()} className="md-link" href={'mailto:' + m[0]}>{m[0]}</a> },
     { re: PHONE_RE, render: m => <a key={k()} className="md-link" href={'tel:' + m[0].replace(/[^+\d]/g, '')}>{m[0]}</a> },
-    { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} /> : m[0] },
+    // v1.137.0: правый клик по кастом-эмодзи прямо в сообщении — меню «В избранное» (глобальный хост EmojiCtxHost в App.tsx).
+    { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} title={m[0]} onContextMenu={e => { e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('ponoi-emoji-ctx', { detail: { name: m[1], x: e.clientX, y: e.clientY } })) }} /> : m[0] },
     { re: /#([0-9a-fA-F]{6})(?![0-9a-zA-Z])/, render: m => <span key={k()} className="md-hex"><i style={{ background: '#' + m[1] }} />#{m[1]}</span> },
     { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => <span key={k()} className="md-mention">@{m[1]}</span> },
   ]

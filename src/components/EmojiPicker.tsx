@@ -67,7 +67,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
     try {
       const url = await uploadTo('attachments', user.id, f)
       setCustom({ ...(await addCustom(name, url, user.id)) })
-      toastOk('Эмодзи создан — теперь он доступен всем')
+      toastOk('Эмодзи создан — он личный и виден в пикере только тебе')
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
   }
 
@@ -83,9 +83,13 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   }
 
   const entries = Object.entries(custom)
+  // v1.137.0: эмодзи персональные — в пикере видны только СВОИ и избранные.
+  // Чужие больше не показываются общим списком (но в сообщениях рендерятся,
+  // и правым кликом по чужому эмодзи в сообщении его можно забрать в избранное).
+  const mine = entries.filter(([n]) => (user ? emojiOwner(n) === user.id : false))
   const favEntries = entries.filter(([n]) => favs.has(n))
   const mineOrFav = entries.filter(([n]) => favs.has(n) || (user ? emojiOwner(n) === user.id : false))
-  const found = q.trim() ? entries.filter(([n]) => n.toLowerCase().includes(q.trim().toLowerCase())) : entries
+  const found = q.trim() ? mineOrFav.filter(([n]) => n.toLowerCase().includes(q.trim().toLowerCase())) : mineOrFav
 
   const cell = ([n, u]: [string, string]) => selecting ? (
     <button key={n} className={'ep2-cell ep2-selcell' + (sel.has(n) ? ' sel' : '')} title={':' + n + ':'}
@@ -144,7 +148,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
           </> : cat === -2 ? <>
             <div className="emoji-grp">ИЗБРАННЫЕ</div>
             <div className="ep2-grid">{favEntries.map(cell)}</div>
-            {favEntries.length === 0 && <div className="ep2-hint">Пока пусто. Правый клик по любому кастом-эмодзи (даже чужому) — «В избранное». Можно добавить и целый пак — звёздочка у названия пака.</div>}
+            {favEntries.length === 0 && <div className="ep2-hint">Пока пусто. Правый клик по кастом-эмодзи — в пикере или прямо по чужому эмодзи в сообщении — «В избранное». Можно добавить и целый пак — звёздочка у названия пака.</div>}
           </> : cat === -3 ? <>
             <div className="emoji-grp">ПАКИ ЭМОДЗИ</div>
             {!selecting && <div className="ep2-packbar">
@@ -165,9 +169,9 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
             <div className="emoji-grp">СВОИ ЭМОДЗИ</div>
             <div className="ep2-grid">
               <button className="ep2-cell ep2-add" title="Создать эмодзи из картинки" onClick={() => fileRef.current?.click()}><Icon name="plus" size={20} /></button>
-              {entries.map(cell)}
+              {mine.map(cell)}
             </div>
-            {entries.length === 0 && <div className="ep2-hint">Нажми +, чтобы сделать свои эмодзи из любой картинки. Правый клик по эмодзи — меню: в избранное / удалить.</div>}
+            {mine.length === 0 && <div className="ep2-hint">Нажми +, чтобы сделать свои эмодзи из любой картинки. Правый клик по эмодзи — меню: в избранное / удалить.</div>}
           </> : <>
             {cat === 0 && top.length > 0 && <>
               <div className="emoji-grp">Часто используемые</div>
