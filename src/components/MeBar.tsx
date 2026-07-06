@@ -61,7 +61,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
     finally { setBusy(false) }
   }
 
-  const { myStatus, activityOf } = usePresence()
+  const { myStatus, activityOf, gameOf } = usePresence()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [miniOpen, setMiniOpen] = useState(false)   // свой мини-профиль над панелью (как в Discord)
   return (
@@ -72,7 +72,14 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
       </span>
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
       <span className="me-nm me-lift" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer', fontFamily: nickFam }} title="Мой профиль">
-        {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => { const a = user ? activityOf(user.id) : null; return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus] })()}</small>
+        {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => {
+          // v1.125.0: игра в своей панельке — компактно, как в Discord: зелёный геймпад +
+          // НАЗВАНИЕ ИГРЫ заглавными, без «Играет в», без режима и без таймера.
+          const g = user ? gameOf(user.id) : null
+          if (g) return <span className="me-game"><span className="mag-ico"><Icon name="gamepad" size={12} /></span><span className="me-game-nm">{g.name}</span></span>
+          const a = user ? activityOf(user.id) : null
+          return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus]
+        })()}</small>
       </span>
       <button className={'me-ic me-mic me-lift' + (micIsOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
         onClick={() => { if (cst) { if (cst.mic) setMicAnim(true); window.dispatchEvent(new CustomEvent('ponoi-call-toggle', { detail: { what: 'mic' } })); return } setMicOff(m => { if (!m) setMicAnim(true); return !m }) }}

@@ -3606,3 +3606,9 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .msg-txt, .msg-hdr .nm, .me-nm, .mini-name, .pc-name, .pqs-acc-name, .plate-prev-nm {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
+
+
+/* ==== v1.125.0: игра в нижней панельке — просто геймпад + НАЗВАНИЕ (как в Discord) ==== */
+.me-game { display:inline-flex; align-items:center; gap:5px; max-width:100%; vertical-align:bottom; }
+.me-game-nm { text-transform:uppercase; font-weight:600; font-size:11px; letter-spacing:.3px; color:#dbdee1;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
