@@ -43,7 +43,6 @@ const LANGS = [
   { id: 'ru', flag: '🇷🇺', name: 'Русский', sub: 'Russian' },
   { id: 'en', flag: '🇬🇧', name: 'English', sub: 'English' },
   { id: 'dolb', flag: '🤪', name: 'Долбоёбский', sub: 'на свой страх и риск' },
-  { id: 'staro', flag: '📜', name: 'Старорусскій', sub: 'дореформенный' },
 ]
 
 const FONTS = [
@@ -431,6 +430,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
             <div className="pqs2-inner">
               {cat === 'account' && <>
                 <h2 id="pqs2-acc-info">Информация об учётной записи</h2>
+                <div className="pqs2-desc">Твои основные данные: ник, юзернейм и почта. Нажми «Изменить» рядом с полем, чтобы его поменять.</div>
                 <div className="pqs2-rows">
                   <div className="pqs2-row">
                     <div className="pqs2-row-k">Ник (отображаемое имя)</div>
@@ -468,6 +468,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 </div>
                 <div className="pqs2-divider" />
                 <h2 id="pqs2-acc-security">Пароль и безопасность</h2>
+                <div className="pqs2-desc">Смена пароля в пару кликов. Советуем длинный пароль, который ты не используешь на других сайтах.</div>
                 <div className="pqs2-rows">
                   <div className="pqs2-row">
                     <div className="pqs2-row-k">Пароль</div>
@@ -486,6 +487,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'profile' && <>
                 <h2>Профиль</h2>
+                <div className="pqs2-desc">Так тебя видят другие: аватар, цвета карточки, шрифты и питомец.</div>
                 <div className="pqs-acc-card">
                   <div className="pqs-acc-banner" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
                   <div className="pqs-acc-row">
@@ -652,6 +654,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'appearance' && <>
                 <h2>Внешний вид</h2>
+                <div className="pqs2-desc">Темы и оформление приложения. Выбери готовую тему — или собери свою из любых цветов.</div>
                 <ChatBgCard />
 
                 <div className="pqs-custom">
@@ -719,6 +722,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'chat' && <>
                 <h2>Чат</h2>
+                <div className="pqs2-desc">Как выглядят и отправляются сообщения: формат времени, аватары, эмодзи и клавиша отправки.</div>
                 <Row title="24-часовой формат времени" desc="Например, 14:30 вместо 2:30 PM">
                   <Toggle on={view.time24} onChange={v => setD('time24', v)} />
                 </Row>
@@ -747,6 +751,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'notifications' && <>
                 <h2>Уведомления</h2>
+                <div className="pqs2-desc">Какие события присылают уведомления и нужен ли звук.</div>
                 <Row title="Системные уведомления"><Toggle on={view.notifSystem} onChange={v => setD('notifSystem', v)} /></Row>
                 <Row title="Звуки уведомлений"><Toggle on={view.notifSounds} onChange={v => setD('notifSounds', v)} /></Row>
                 <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={view.mentionsOnly} onChange={v => setD('mentionsOnly', v)} /></Row>
@@ -755,6 +760,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'voice' && <>
                 <h2>Голос и видео</h2>
+                <div className="pqs2-desc">Громкость микрофона и динамиков в звонках.</div>
                 <Row title="Громкость микрофона" desc={view.micVol + '%'}>
                   <input type="range" min={0} max={100} value={view.micVol} onChange={e => setD('micVol', Number(e.target.value))} />
                 </Row>
@@ -766,6 +772,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'keybinds' && <>
                 <h2>Горячие клавиши</h2>
+                <div className="pqs2-desc">Быстрые действия с клавиатуры. Нажми на поле и введи своё сочетание.</div>
                 <div className="pqs-sec-t">Настраиваемые</div>
                 <Row title="Открыть Музыку" desc="Быстрый переход в Ponoi Music">
                   <KeyCapture value={view.keyMusic} onChange={v => setD('keyMusic', v)} />
@@ -787,7 +794,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'language' && <>
                 <h2>Язык</h2>
-                <div className="pqs-code-sub">Перевод применяется сразу ко всему интерфейсу. English покрывает основные надписи, шуточные языки переводятся «на лету». Сообщения пользователей не переводятся.</div>
+                <div className="pqs2-desc">Язык всех надписей приложения.</div>
+                <div className="pqs-code-sub">Перевод применяется сразу ко всему интерфейсу и охватывает все надписи приложения. Сообщения пользователей не переводятся.</div>
                 <div className="pqs-langs">
                   {LANGS.map(l => (
                     <button key={l.id} className={'pqs-lang' + (view.lang === l.id ? ' on' : '')} onClick={() => setD('lang', l.id)}>
@@ -802,6 +810,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'display' && <>
                 <h2>Дисплей</h2>
+                <div className="pqs2-desc">Масштаб интерфейса — сделай всё крупнее или мельче.</div>
                 <Row title="Масштаб интерфейса" desc={view.zoom + '%'}>
                   <input type="range" min={70} max={130} step={5} value={view.zoom} onChange={e => setD('zoom', Number(e.target.value))} />
                 </Row>
@@ -810,6 +819,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'privacy' && <>
                 <h2>Данные и конфиденциальность</h2>
+                <div className="pqs2-desc">Кто может писать тебе в личку и какие данные хранит приложение.</div>
                 <Row title="ЛС от всех пользователей"><Toggle on={view.dmAll} onChange={v => setD('dmAll', v)} /></Row>
                 <Row title="ЛС с участниками сервера"><Toggle on={view.dmMembers} onChange={v => setD('dmMembers', v)} /></Row>
                 <Row title="Сбор данных об использовании" desc="Помогает улучшить приложение"><Toggle on={view.dataCollect} onChange={v => setD('dataCollect', v)} /></Row>
@@ -817,12 +827,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'activity' && <>
                 <h2>Активность</h2>
+                <div className="pqs2-desc">Показывай друзьям, во что играешь и чем занимаешься.</div>
                 <Row title="Своя активность" desc="Показывать пользовательский статус"><Toggle on={view.actOn} onChange={v => setD('actOn', v)} /></Row>
                 {view.actOn && <input className="pqs-in" value={view.actText} onChange={e => setD('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
               </>}
 
               {cat === 'advanced' && <>
                 <h2>Дополнительно</h2>
+                <div className="pqs2-desc">Инструменты для продвинутых: режим разработчика и очистка данных.</div>
                 <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={view.devmode} onChange={v => setD('devmode', v)} /></Row>
                 <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
               </>}

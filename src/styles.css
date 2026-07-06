@@ -3436,3 +3436,24 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 
 /* v1.115.0: предупреждение о шрифте без кириллицы */
 .pqs-font-warn { margin-top:10px; font-size:13px; line-height:1.45; color:#faa61a; }
+
+
+/* ==== v1.116.0: окно «Что нового» (тройной клик по версии) + описания разделов настроек ==== */
+.app-ver { pointer-events: auto; cursor: pointer; }
+.app-ver:hover { opacity: .95; }
+.chlog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+.chlog { width: min(560px, calc(100vw - 32px)); max-height: min(72vh, 640px); background: var(--bg-primary, #313338); border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.chlog-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 16px 10px; }
+.chlog-title { font-size: 20px; font-weight: 700; color: var(--header-primary, #f2f3f5); }
+.chlog-sub { font-size: 13px; color: var(--text-muted, #949ba4); margin-top: 2px; }
+.chlog-x { background: none; border: 0; color: var(--text-muted, #949ba4); cursor: pointer; padding: 4px; border-radius: 4px; }
+.chlog-x:hover { color: var(--header-primary, #f2f3f5); background: rgba(255,255,255,.06); }
+.chlog-body { overflow-y: auto; padding: 0 16px 16px; }
+.chlog-ver { margin-top: 14px; }
+.chlog-ver-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.chlog-badge { background: var(--brand, #5865f2); color: #fff; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.chlog-cur { font-size: 11px; font-weight: 600; color: #23a55a; border: 1px solid #23a55a; padding: 1px 6px; border-radius: 999px; }
+.chlog-date { font-size: 12px; color: var(--text-muted, #949ba4); }
+.chlog-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.chlog-list li { font-size: 14px; color: var(--text-normal, #dbdee1); line-height: 1.45; }
+.pqs2-desc { font-size: 14px; color: var(--text-muted, #949ba4); line-height: 1.45; margin: -6px 0 14px; }

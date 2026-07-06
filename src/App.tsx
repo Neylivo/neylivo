@@ -1,12 +1,13 @@
 
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
 import { Home } from './components/Home'
 import { Toasts } from './lib/toast'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
+import { CHANGELOG } from './lib/changelog'
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -93,8 +94,52 @@ function Titlebar() {
   )
 }
 
+// v1.116.0: окно «Что нового» — открывается тройным кликом по версии в правом нижнем углу.
+function ChangelogModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="chlog-overlay" onClick={onClose}>
+      <div className="chlog" onClick={e => e.stopPropagation()}>
+        <div className="chlog-head">
+          <div>
+            <div className="chlog-title">Что нового</div>
+            <div className="chlog-sub">История обновлений Ponoi</div>
+          </div>
+          <button className="chlog-x" title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
+        </div>
+        <div className="chlog-body">
+          {CHANGELOG.map(v => (
+            <div key={v.version} className="chlog-ver">
+              <div className="chlog-ver-h">
+                <span className="chlog-badge">v{v.version}</span>
+                {v.version === __APP_VERSION__ && <span className="chlog-cur">текущая</span>}
+                <span className="chlog-date">{v.date}</span>
+              </div>
+              <ul className="chlog-list">
+                {v.items.map((it, i) => <li key={i}>{it}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const { session, loading } = useAuth()
+  // v1.116.0: три быстрых клика по версии — окно «Что нового»
+  const [showLog, setShowLog] = useState(false)
+  const verClicks = useRef<number[]>([])
+  function verClick() {
+    const now = Date.now()
+    verClicks.current = [...verClicks.current.filter(t => now - t < 1200), now]
+    if (verClicks.current.length >= 3) { verClicks.current = []; setShowLog(true) }
+  }
   return <>
     <Toasts />
     <ConfirmHost />
@@ -104,6 +149,7 @@ export default function App() {
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>
     {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу */}
-    <div className="app-ver">v{__APP_VERSION__}</div>
+    <div className="app-ver" onClick={verClick} title="Три клика — что нового в Ponoi">v{__APP_VERSION__}</div>
+    {showLog && <ChangelogModal onClose={() => setShowLog(false)} />}
   </>
 }
