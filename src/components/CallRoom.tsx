@@ -268,7 +268,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
   const [cam, setCam] = useState(false)
   const [screen, setScreen] = useState(false)
   const [deaf, setDeaf] = useState(false)
-  const [fs, setFs] = useState(() => { const f = (window as any).__ponoiCallFull; (window as any).__ponoiCallFull = false; return !!f })
+  const [fs, setFs] = useState(false)
   const [qMenu, setQMenu] = useState(false)
   const [devMenu, setDevMenu] = useState<null | 'mic' | 'cam'>(null)
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
@@ -500,14 +500,6 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
-
-  // v1.144.0: двойной клик по голосовому каналу (из сайдбара) открывает большой вид,
-  // даже если экран звонка уже смонтирован (тот же канал).
-  useEffect(() => {
-    const h = () => setFs(true)
-    window.addEventListener('ponoi-call-fs', h)
-    return () => window.removeEventListener('ponoi-call-fs', h)
-  }, [])
 
   // v1.78.0: в полноэкранном режиме панель и шапка прячутся, если мышь замерла.
   useEffect(() => {
