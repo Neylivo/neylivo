@@ -41,6 +41,18 @@ export interface UiMessage {
 }
 
 import { Em } from '../lib/twemoji'
+import { loadCustom } from '../lib/emoji'
+
+// v1.129.0: эмодзи реакции — кастомные (:имя:) рендерятся картинкой из общего
+// стора, юникодные — как обычно через Twemoji. Список сообщений уже
+// перерисовывается по событию 'ponoi-custom-emoji', так что картинка появится,
+// как только кэш кастомных эмодзи догрузится.
+function RxEmoji({ e }: { e: string }) {
+  const mm = e.match(/^:([a-zA-Z0-9_]+):$/)
+  const url = mm ? loadCustom()[mm[1]] : undefined
+  if (url) return <img className="rx-cust" src={url} alt={e} draggable={false} />
+  return <Em>{e}</Em>
+}
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '🎉', '😢']
 
@@ -316,8 +328,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false
                     return <button key={r.emoji} className={'rx' + (mine ? ' mine' : '')} onClick={() => onReact?.(m.id, r.emoji)}>
-                      <span><Em>{r.emoji}</Em></span><span className="rx-n">{r.count}</span>
-                      <span className="rx-tip"><span className="rx-tip-e"><Em>{r.emoji}</Em></span>{rxWho(r.users, currentUser, nameOf, currentUserName)}</span>
+                      <span><RxEmoji e={r.emoji} /></span><span className="rx-n">{r.count}</span>
+                      <span className="rx-tip"><span className="rx-tip-e"><RxEmoji e={r.emoji} /></span>{rxWho(r.users, currentUser, nameOf, currentUserName)}</span>
                     </button>
                   })}
                   <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>

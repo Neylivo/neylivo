@@ -3619,3 +3619,9 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .cset-slidewrap .cset-slider { margin:0; }
 .cset-bubble { position:absolute; top:2px; transform:translateX(-50%); background:#111420; color:#fff; font-size:13px; font-weight:600; padding:5px 10px; border-radius:6px; white-space:nowrap; pointer-events:none; box-shadow:0 4px 12px rgba(0,0,0,.4); z-index:2; }
 .cset-bubble::after { content:''; position:absolute; left:50%; bottom:-4px; transform:translateX(-50%); border:5px solid transparent; border-top-color:#111420; border-bottom:none; }
+
+/* ==== v1.129.0: кастомные эмодзи в реакциях + эмодзи реакций покрупнее ==== */
+.rx img.twemoji { width:20px; height:20px; vertical-align:-4px; }
+.rx-cust { width:20px; height:20px; object-fit:contain; vertical-align:-4px; }
+.rx { padding:3px 8px; }
+.rx-tip-e img.twemoji, .rx-tip-e .rx-cust { width:24px; height:24px; }
