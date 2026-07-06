@@ -1311,3 +1311,14 @@ export function applyLang(lang: string) {
     attributes: true, attributeFilter: ['placeholder', 'title'],
   })
 }
+
+
+// v1.122.0: переводы вкладки «Ожидание» (входящие/исходящие заявки)
+Object.assign(DICT_EN, {
+  'Входящие — ': 'Incoming — ',
+  'Исходящие — ': 'Outgoing — ',
+  'Нет исходящих заявок': 'No outgoing requests',
+  'Ждём ответа': 'Awaiting reply',
+  'Отменить заявку': 'Cancel request',
+  'Заявка уже отправлена — ждём ответа': 'Request already sent — awaiting reply',
+})

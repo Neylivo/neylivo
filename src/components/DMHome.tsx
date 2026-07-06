@@ -38,6 +38,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const { user } = useAuth()
   const meId = user!.id
   const [requests, setRequests] = useState<FriendRequest[]>([])
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>([])
   const [friends, setFriends] = useState<Friend[]>([])
   const [q, setQ] = useState('')
   const [results, setResults] = useState<Profile[]>([])
@@ -296,6 +297,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
       .or('from_user.eq.' + meId + ',to_user.eq.' + meId)
     const all = (data ?? []) as FriendRequest[]
     setRequests(all.filter(r => r.status === 'pending' && r.to_user === meId))
+    setOutgoing(all.filter(r => r.status === 'pending' && r.from_user === meId))
     const fr: Friend[] = all.filter(r => r.status === 'accepted').map(r =>
       r.from_user === meId ? { id: r.to_user, name: r.to_name } : { id: r.from_user, name: r.from_name })
     setFriends(fr)
@@ -307,7 +309,30 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
 
   async function doSearch(v: string) { setQ(v); setResults(await searchUsers(v, meId)) }
 
+  // v1.122.0: перед отправкой проверяем, что заявка вообще уместна.
+  // Возвращает 'ACCEPTED' (встречная входящая — приняли и вы теперь друзья),
+  // текст причины отказа, либо null (можно отправлять).
+  async function precheck(p: Profile): Promise<string | null> {
+    const { data } = await supabase.from('friend_requests').select('*')
+      .or(`and(from_user.eq.${meId},to_user.eq.${p.id}),and(from_user.eq.${p.id},to_user.eq.${meId})`)
+    const rows = (data ?? []) as FriendRequest[]
+    if (rows.some(r => r.status === 'accepted')) return 'Вы уже друзья с ' + (p.display_name || p.username)
+    const incoming = rows.find(r => r.status === 'pending' && r.from_user === p.id)
+    if (incoming) { await respondRequest(incoming.id, true); loadRequests(); return 'ACCEPTED' }
+    if (rows.some(r => r.status === 'pending' && r.from_user === meId)) return 'Заявка уже отправлена — ждём ответа'
+    return null
+  }
+
+  // v1.122.0: отмена своей исходящей заявки
+  async function cancelOutgoing(r: FriendRequest) {
+    await supabase.from('friend_requests').delete().eq('id', r.id)
+    loadRequests()
+  }
+
   async function add(p: Profile) {
+    const why = await precheck(p)
+    if (why === 'ACCEPTED') { setQ(''); setResults([]); toastOk((p.display_name || p.username) + ' уже отправил(а) вам заявку — теперь вы друзья!'); return }
+    if (why) { toastErr(why); return }
     const { error } = await sendRequest(meId, username, p)
     if (error) toastErr(error.message); else { setQ(''); setResults([]); toastOk('Заявка отправлена — ' + (p.display_name || p.username)) }
   }
@@ -320,6 +345,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     const p = await findByUsername(name)
     if (!p) { setCodeOk(false); setCodeMsg('Хм, не получилось. Проверь, что имя пользователя введено правильно.'); return }
     if (p.id === meId) { setCodeOk(false); setCodeMsg('Это твой собственный юзернейм :)'); return }
+    const why = await precheck(p)
+    if (why === 'ACCEPTED') { setCode(''); setResults([]); setCodeOk(true); setCodeMsg('У вас уже была входящая заявка от ' + (p.display_name || p.username) + ' — теперь вы друзья!'); return }
+    if (why) { setCodeOk(false); setCodeMsg(why); return }
     const { error } = await sendRequest(meId, username, p)
     if (error) { setCodeOk(false); setCodeMsg(error.message) }
     else { setCode(''); setResults([]); setCodeOk(true); setCodeMsg('Успешно! Запрос дружбы отправлен пользователю ' + (p.display_name || p.username) + '.') }
@@ -712,7 +740,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
               </button>
             </div>
             : tab === 'pending' ? <>
-              <div className="pfr-sec">Ожидание — {requests.length}</div>
+              <div className="pfr-sec">Входящие — {requests.length}</div>
               {requests.length === 0 && <div className="pfr-empty">Нет входящих заявок</div>}
               {requests.map(r => (
                 <div key={r.id} className="pfr-row">
@@ -720,6 +748,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                   <span className="pfr-name">{r.from_name}</span>
                   <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
                   <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
+                </div>
+              ))}
+              <div className="pfr-sec pfr-sec-out">Исходящие — {outgoing.length}</div>
+              {outgoing.length === 0 && <div className="pfr-empty">Нет исходящих заявок</div>}
+              {outgoing.map(r => (
+                <div key={r.id} className="pfr-row">
+                  <Avatar name={r.to_name} userId={r.to_user} size={32} />
+                  <span className="pfr-name">{r.to_name}<small className="pfr-sub">Ждём ответа</small></span>
+                  <button className="pfr-no" title="Отменить заявку" onClick={() => cancelOutgoing(r)}><Icon name="close" size={16} /></button>
                 </div>
               ))}
             </>

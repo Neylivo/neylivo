@@ -3591,3 +3591,8 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 @media (prefers-reduced-motion: reduce) {
   .ctxmenu { animation: none; }
 }
+
+
+/* ==== v1.122.0: вкладка «Ожидание» — входящие и исходящие заявки ==== */
+.pfr-sec-out { margin-top: 16px; }
+.pfr-name .pfr-sub { display:block; font-size:12px; color:var(--mut); font-weight:400; margin-top:1px; }
