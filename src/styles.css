@@ -3714,3 +3714,31 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 @media (min-width: 901px) {
   .composer { min-height:52px; margin-bottom:14px; }
 }
+
+
+/* v1.146.0: Стена росписи в профиле */
+.wall-add { display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; background:#5865f2; color:#fff; font-weight:700; font-size:13px; padding:8px 14px; cursor:pointer; margin:4px 0 12px; }
+.wall-add:hover { filter:brightness(1.1); }
+.wall-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.wall-item { position:relative; border-radius:10px; overflow:hidden; background:#2b2d31; aspect-ratio:16/10; }
+.wall-item img { width:100%; height:100%; object-fit:cover; display:block; }
+.wall-author { position:absolute; left:6px; bottom:6px; font-size:11px; font-weight:700; color:#fff; background:rgba(0,0,0,.55); padding:2px 7px; border-radius:6px; max-width:calc(100% - 40px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wall-del { position:absolute; top:6px; right:6px; width:26px; height:26px; border:none; border-radius:7px; background:rgba(0,0,0,.55); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s ease, background .12s ease; }
+.wall-item:hover .wall-del { opacity:1; }
+.wall-del:hover { background:#ed4245; }
+.wall-modal-bg { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+.wall-modal { background:#313338; border-radius:14px; padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.wall-modal-h { font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:12px; }
+.wall-canvas { display:block; border-radius:10px; background:#2b2d31; cursor:crosshair; touch-action:none; max-width:80vw; }
+.wall-tools { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+.wall-colors { display:flex; gap:5px; }
+.wall-col { width:24px; height:24px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+.wall-col.on { border-color:#fff; }
+.wall-tools input[type=range] { accent-color:#5865f2; width:120px; }
+.wall-tbtn { width:34px; height:34px; border:none; border-radius:8px; background:#1e1f22; color:#b5bac1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.wall-tbtn:hover, .wall-tbtn.on { background:#5865f2; color:#fff; }
+.wall-tools-r { margin-left:auto; display:flex; gap:8px; }
+.wall-cancel { border:none; background:transparent; color:#b5bac1; font-weight:600; padding:8px 14px; cursor:pointer; border-radius:8px; }
+.wall-cancel:hover { color:#fff; }
+.wall-save { border:none; border-radius:8px; background:#5865f2; color:#fff; font-weight:700; padding:8px 18px; cursor:pointer; }
+.wall-save:hover { filter:brightness(1.1); }

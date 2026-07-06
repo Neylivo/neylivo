@@ -16,6 +16,8 @@ import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
 import { promptUi } from '../lib/confirm'
 import type { Profile, Server } from '../types'
+import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
+import { WallDraw } from './WallDraw'
 
 function fmtMs(ms: number): string {
   const h = Math.floor(ms / 3600000)
@@ -37,7 +39,7 @@ function agoLabel(ms: number): string {
   return Math.floor(d / 7) + ' нед. назад'
 }
 
-export type ProfileTab = 'board' | 'activity' | 'wishlist' | 'servers' | 'friends'
+export type ProfileTab = 'board' | 'activity' | 'wall' | 'servers' | 'friends'
 
 // Единый профиль (v1.27.0): большой профиль и «Редактировать профиль» — один и
 // тот же экран. «Редактировать профиль» открывает вкладку «Доска», клик по
@@ -54,7 +56,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
   const [note, setNote] = useState(() => localStorage.getItem('ponoi_note_' + userId) ?? '')
-  const [wish, setWish] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ponoi_wish_' + userId) || '[]') } catch { return [] } })
   const [favs, setFavs] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ponoi_favs_' + userId) || '[]') } catch { return [] } })
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
@@ -63,6 +64,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [covers, setCovers] = useState<Record<string, string | null>>({})
   const [srvs, setSrvs] = useState<Server[] | null>(null)
   const [frs, setFrs] = useState<Profile[] | null>(null)
+  const [drawings, setDrawings] = useState<Drawing[]>([])
+  const [wallOpen, setWallOpen] = useState(false)
 
   useEffect(() => {
     let ok = true
@@ -87,6 +90,14 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     })
     return () => { ok = false }
   }, [userId])
+  // v1.146.0: «Стена росписи» — общие рисунки на профиле (realtime).
+  useEffect(() => {
+    let ok = true
+    const load = () => fetchWall(userId).then(d => { if (ok) setDrawings(d) })
+    load()
+    const unsub = subscribeWall(userId, load)
+    return () => { ok = false; unsub() }
+  }, [userId])
   useEffect(() => {
     if (isMe || !user) return
     let ok = true
@@ -110,7 +121,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     setNote(v)
     if (v) localStorage.setItem('ponoi_note_' + userId, v); else localStorage.removeItem('ponoi_note_' + userId)
   }
-  function saveWish(next: string[]) { setWish(next); localStorage.setItem('ponoi_wish_' + userId, JSON.stringify(next)) }
   function saveFavs(next: string[]) { setFavs(next); localStorage.setItem('ponoi_favs_' + userId, JSON.stringify(next)) }
   async function addFav(single: boolean) {
     const g = (await promptUi(single ? 'Любимая игра' : 'Добавить игру в любимые', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim()
@@ -159,7 +169,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
           <div className="pc-tabs">
             <button className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>Доска</button>
             <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>Активность</button>
-            <button className={tab === 'wishlist' ? 'on' : ''} onClick={() => setTab('wishlist')}>Вишлист</button>
+            <button className={tab === 'wall' ? 'on' : ''} onClick={() => setTab('wall')}>Стена</button>
             {!isMe && <button className={tab === 'servers' ? 'on' : ''} onClick={() => setTab('servers')}>Общие сервера{srvs ? ' — ' + srvs.length : ''}</button>}
             {!isMe && <button className={tab === 'friends' ? 'on' : ''} onClick={() => setTab('friends')}>Общие друзья{frs ? ' — ' + frs.length : ''}</button>}
           </div>
@@ -185,10 +195,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   {!curGame && <span className="pc-widget-plus"><Icon name="plus" size={16} /></span>}
                   <span className="pc-widget-nm">{curGame ? '🕹️ Сейчас: ' + curGame.name : 'Текущие игры'}</span>
                 </div>
-                <div className="pc-widget" onClick={() => setTab('wishlist')}>
+                <div className="pc-widget" onClick={() => setTab('wall')}>
                   <span className="pc-skel"><i /><i /></span>
-                  <span className="pc-widget-plus"><Icon name="plus" size={16} /></span>
-                  <span className="pc-widget-nm">Хочу поиграть</span>
+                  <span className="pc-widget-plus"><Icon name="edit" size={16} /></span>
+                  <span className="pc-widget-nm">Стена росписи</span>
                 </div>
               </div>
             </>}
@@ -237,14 +247,19 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                 </div>
               ))}
             </>}
-            {tab === 'wishlist' && <>
-              {wish.length === 0 && <div className="pc-empty2">Вишлист пуст</div>}
-              {wish.map((w, i) => (
-                <div key={i} className="pc-wish"><Icon name="gamepad" size={16} /> {w}
-                  {isMe && <button title="Убрать" onClick={() => saveWish(wish.filter((_, k) => k !== i))}><Icon name="close" size={13} /></button>}
-                </div>
-              ))}
-              {isMe && <button className="pc-int-add" onClick={async () => { const g = (await promptUi('Игра, в которую хочешь поиграть', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim(); if (g) saveWish([...wish, g]) }}><Icon name="plus" size={14} /> Добавить игру</button>}
+            {tab === 'wall' && <>
+              <div className="fp-sect">Стена росписи</div>
+              <div className="fp-note">Здесь любой может что-нибудь нарисовать{isMe ? '. Свои рисунки и любые рисунки на своей стене можно удалять.' : ''}</div>
+              <button className="wall-add" onClick={() => setWallOpen(true)}><Icon name="edit" size={14} /> Нарисовать</button>
+              {drawings.length === 0
+                ? <div className="pc-empty2">Пока пусто — нарисуй первым!</div>
+                : <div className="wall-grid">{drawings.map(d => (
+                    <div key={d.id} className="wall-item">
+                      <img src={d.image_url} alt="" loading="lazy" />
+                      <span className="wall-author">{d.author_name || 'аноним'}</span>
+                      {(isMe || d.author_id === user?.id) && <button className="wall-del" title="Удалить" onClick={() => deleteDrawing(d.id)}><Icon name="trash" size={13} /></button>}
+                    </div>
+                  ))}</div>}
             </>}
             {tab === 'servers' && !isMe && (
               srvs === null ? <div className="fp-empty">Загрузка…</div>
@@ -270,6 +285,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             )}
           </div>
         </div>
+        {wallOpen && <WallDraw onClose={() => setWallOpen(false)} onSave={async blob => { try { await addDrawing(userId, user!.id, localStorage.getItem('ponoi_username') || 'аноним', blob) } catch {} setWallOpen(false) }} />}
       </div>
     </div>
   )
