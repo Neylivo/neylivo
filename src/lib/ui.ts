@@ -25,13 +25,13 @@ export function dayLabel(iso: string) {
   return d.toLocaleDateString('ru-RU', opts)
 }
 
-// Discord-style время сообщения: сегодня — просто время; иначе — короткая дата,
-// год добавляется, только если сообщение не из текущего года.
+// Discord-style время сообщения: сегодня — просто время; иначе — короткая дата
+// плюс время рядом (год добавляется, только если сообщение не из текущего года).
 export function msgTime(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
   if (d.toDateString() === now.toDateString()) return timeShort(iso)
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
   if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric'
-  return d.toLocaleDateString('ru-RU', opts)
+  return d.toLocaleDateString('ru-RU', opts) + ', ' + timeShort(iso)
 }
