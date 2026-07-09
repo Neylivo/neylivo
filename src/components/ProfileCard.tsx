@@ -5,6 +5,7 @@ import { Avatar } from './Avatar'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
 import { fetchProfile, saveProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
+import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
@@ -59,7 +60,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
-  const [note, setNote] = useState(() => localStorage.getItem('ponoi_note_' + userId) ?? '')
+  const [note, setNote] = useState(() => getUserPrefs().notes[userId] ?? '')
   const favs = pp.favGames
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
@@ -125,6 +126,14 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+  // Приватная заметка: подхватываем, когда user_prefs догрузится с сети (карточка
+  // могла открыться раньше, чем ответил Supabase) или когда сменили пользователя.
+  useEffect(() => {
+    setNote(getUserPrefs().notes[userId] ?? '')
+    const onSync = () => setNote(getUserPrefs().notes[userId] ?? '')
+    window.addEventListener('ponoi-uprefs', onSync)
+    return () => window.removeEventListener('ponoi-uprefs', onSync)
+  }, [userId])
 
   // Локальное зеркало: до применения миграции 15 местоимения/интеграции живут в localStorage.
   function savePron(v: string) {
@@ -134,7 +143,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   }
   function keepNote(v: string) {
     setNote(v)
-    if (v) localStorage.setItem('ponoi_note_' + userId, v); else localStorage.removeItem('ponoi_note_' + userId)
+    const notes = { ...getUserPrefs().notes }
+    if (v) notes[userId] = v; else delete notes[userId]
+    patchUserPrefs({ notes })
   }
   function saveFavs(next: string[]) { setPp(p => ({ ...p, favGames: next })); saveProfile(userId, { favGames: next }) }
   function pickGame(g: string) {

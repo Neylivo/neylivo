@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
-import { fetchProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
+import { fetchProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, saveProfile, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
 import { sendRequest, openThread, mutualFriends } from '../lib/friends'
@@ -223,12 +223,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               </div>
             </div>
             {isMe && <button className="mpg-add" onClick={() => {
-              try {
-                const k = 'ponoi_favs_' + data.userId
-                const cur: string[] = JSON.parse(localStorage.getItem(k) || '[]')
-                if (!cur.includes(game.name)) localStorage.setItem(k, JSON.stringify([...cur, game.name]))
-                toastOk('Добавлено к текущим играм')
-              } catch {}
+              if (!pp.favGames.includes(game.name)) saveProfile(data.userId, { favGames: [...pp.favGames, game.name] })
+              toastOk('Добавлено к текущим играм')
             }}>Добавить к текущим играм</button>}
             {listening && <button className="mpg-morebtn" onClick={() => setMoreActs(m => !m)}>{/* v1.106.0: как в Discord — «Ещё N» раскрывает остальные активности */}
               {moreActs ? 'Скрыть' : 'Ещё 1'}{!moreActs && <Icon name="chevron-down" size={13} />}

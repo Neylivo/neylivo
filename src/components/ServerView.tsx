@@ -39,6 +39,7 @@ import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
 import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
 import { loadChMuted, setChMuted } from '../lib/chMute'
+import { getChRead, setChRead } from '../lib/userPrefs'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
@@ -268,7 +269,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       if (seen.has(m.channel_id)) continue
       seen.add(m.channel_id)
       if (loadChMuted()[m.channel_id]) continue
-      const lastRead = Number(localStorage.getItem('ponoi_lastread_' + m.channel_id) ?? 0)
+      const lastRead = getChRead(m.channel_id)
       if (m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) un[m.channel_id] = true
     }
     setUnreadCh(un)
@@ -284,7 +285,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // из кэша, а сеть освежает её в фоне.
     const cachedList = getMsgs('ch_' + c.id)
     if (cachedList?.length) {
-      const lr0 = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
+      const lr0 = getChRead(c.id)
       // v1.108.0: как в Discord — есть непрочитанное, сразу прыгаем к нему (к разделителю «НОВОЕ»).
       // v1.111.0: непрочитанного нет — всегда вниз к последним. Восстановление старой позиции
       // убрано: scrollTop, записанный при другой высоте ленты, кидал в самый верх к старым.
@@ -300,7 +301,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
-    const lastRead = Number(localStorage.getItem('ponoi_lastread_' + c.id) ?? 0)
+    const lastRead = getChRead(c.id)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в канал.
     const firstNew = lastRead ? list.find(m => m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) : undefined
     // v1.108.0: как в Discord — при входе в канал сразу прыгаем к первому непрочитанному
@@ -312,7 +313,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     pendingScroll.current = 'bottom'
     setMessages(list)
     setNewDividerId(firstNew?.id ?? null)
-    localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
+    setChRead(c.id, Date.now())
     loadRx(list.map(m => m.id))
   }
 
@@ -346,7 +347,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => {
           const msg = p.new as Message
           setMessages(m => mergeIncoming(m, msg))
-          localStorage.setItem('ponoi_lastread_' + curChannel.id, String(Date.now()))
+          setChRead(curChannel.id, Date.now())
           if (msg.author !== user?.id && !parseSys(msg.content)) {
             const mode = notifModeOf(server.id)
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
@@ -587,7 +588,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     toastOk(next ? 'Канал заглушен' : 'Уведомления канала включены')
   }
   function markChRead(c: Channel) {
-    localStorage.setItem('ponoi_lastread_' + c.id, String(Date.now()))
+    setChRead(c.id, Date.now())
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
     toastOk('Отмечено прочитанным')
   }
@@ -883,7 +884,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
-            onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) localStorage.setItem('ponoi_lastread_' + curChannelRef.current.id, String(new Date(m.created_at).getTime() - 1)) }}
+            onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) setChRead(curChannelRef.current.id, new Date(m.created_at).getTime() - 1) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm ? topRoleOf(mm) : undefined
               setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, roleName: rr?.name, roleColor: rr?.color, activity: activityOf(m.author), x, y }) }} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>

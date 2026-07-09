@@ -1,14 +1,16 @@
-// Персональное заглушение каналов (как в Discord): хранится в localStorage,
-// влияет на звук/подсветку непрочитанного и на пункт «Скрыть заглушённые каналы».
-const KEY = 'ponoi_ch_muted'
+// Персональное заглушение каналов (как в Discord): влияет на звук/подсветку
+// непрочитанного и на пункт «Скрыть заглушённые каналы».
+// v1.164.0: раньше жило только в localStorage — теперь синхронизируется через
+// user_prefs (миграция 39), как остальные личные настройки.
+import { getUserPrefs, patchUserPrefs } from './userPrefs'
 
 export function loadChMuted(): Record<string, boolean> {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} }
+  return getUserPrefs().ch_muted
 }
 
 export function setChMuted(id: string, muted: boolean) {
-  const all = loadChMuted()
+  const all = { ...loadChMuted() }
   if (muted) all[id] = true
   else delete all[id]
-  localStorage.setItem(KEY, JSON.stringify(all))
+  patchUserPrefs({ ch_muted: all })
 }

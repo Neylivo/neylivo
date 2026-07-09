@@ -13,14 +13,13 @@ import { Icon } from '../components/icons'
 import { isSoundcloudUrl, scMeta, scResolveTracks, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
+import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 
-const PLAYLISTS_KEY = 'ponoi_mus_playlists_v1'
 interface Playlist { id: string; name: string; trackIds: string[] }
 
-function loadPlaylists(): Playlist[] {
-  try { return JSON.parse(localStorage.getItem(PLAYLISTS_KEY) || '[]') } catch { return [] }
-}
-function savePlaylists(p: Playlist[]) { localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(p)) }
+// Плейлисты синхронизируются через user_prefs (миграция 39), как остальные личные настройки.
+function loadPlaylists(): Playlist[] { return getUserPrefs().mus_playlists as Playlist[] }
+function savePlaylists(p: Playlist[]) { patchUserPrefs({ mus_playlists: p }) }
 function fmt(s: number) {
   if (!isFinite(s)) return '0:00'
   const m = Math.floor(s / 60), ss = Math.floor(s % 60)
@@ -95,6 +94,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // Пока трек играет — публикуем название/автора/источник и позицию; на паузе сбрасываем.
   const { setMyListening } = usePresence()
   const curTRef = useRef(0)
+  // Плейлисты могли догрузиться с сети уже после открытия плеера.
+  useEffect(() => {
+    const onSync = () => setPlaylists(loadPlaylists())
+    window.addEventListener('ponoi-uprefs', onSync)
+    return () => window.removeEventListener('ponoi-uprefs', onSync)
+  }, [])
   useEffect(() => { curTRef.current = curT }, [curT])
   useEffect(() => {
     if (!playing || !cur) { setMyListening(null); return }

@@ -27,6 +27,7 @@ import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
 import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
+import { getDmRead, setDmRead } from '../lib/userPrefs'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
@@ -400,10 +401,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     pendingScroll.current = 'bottom'
     setMessages(list)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в ЛС.
-    const lastRead = Number(localStorage.getItem('ponoi_lastread_dm_' + t.id) ?? 0)
+    const lastRead = getDmRead(t.id)
     const firstNew = lastRead ? list.find(m => m.author !== meId && new Date(m.created_at).getTime() > lastRead) : undefined
     setNewDividerId(firstNew?.id ?? null)
-    localStorage.setItem('ponoi_lastread_dm_' + t.id, String(Date.now()))
+    setDmRead(t.id, Date.now())
     loadRx(list.map(m => m.id))
   }
 
@@ -463,7 +464,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         p => {
           const msg = p.new as DMMessage
           setMessages(m => mergeIncoming(m, msg))
-          localStorage.setItem('ponoi_lastread_dm_' + threadId, String(Date.now()))
+          setDmRead(threadId, Date.now())
           if (msg.author !== meId && !parseSys(msg.content)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
         })
       .on('postgres_changes',
@@ -714,7 +715,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
               nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
-              onMarkUnread={m => { setNewDividerId(m.id); if (threadId) localStorage.setItem('ponoi_lastread_dm_' + threadId, String(new Date(m.created_at).getTime() - 1)) }}
+              onMarkUnread={m => { setNewDividerId(m.id); if (threadId) setDmRead(threadId, new Date(m.created_at).getTime() - 1) }}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
             {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />

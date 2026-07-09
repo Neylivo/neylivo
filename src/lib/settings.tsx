@@ -2,6 +2,21 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { setTime24 } from './ui'
 import { applyLang } from './i18n'
 import { applyAppIcon, DEFAULT_APP_ICON } from './appIcon'
+import { getUserPrefs, patchUserPrefs } from './userPrefs'
+
+// Account-level переключатели (уведомления, кто может писать в ЛС, сбор данных) —
+// синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
+// Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
+// остаются в localStorage.
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dmAll', 'dmMembers', 'dataCollect'] as const
+type AccountKey = typeof ACCOUNT_KEYS[number]
+function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
+function withAccount(s: Settings): Settings {
+  const acc = getUserPrefs().account
+  const next = { ...s }
+  for (const k of ACCOUNT_KEYS) if (acc[k] !== undefined) (next as any)[k] = acc[k]
+  return next
+}
 
 export interface CustomTheme {
   dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
@@ -100,14 +115,14 @@ function load(): Settings {
         localStorage.setItem('ponoi_mig_162', '1')
         localStorage.setItem('ponoi_settings', JSON.stringify(s))
       }
-      return s
+      return withAccount(s)
     }
     localStorage.setItem('ponoi_mig_162', '1')
   } catch {}
   const s = { ...DEFAULTS }
   const lang = localStorage.getItem('ponoi_lang'); if (lang) s.lang = lang
   const zoom = localStorage.getItem('ponoi_zoom'); if (zoom) s.zoom = Number(zoom)
-  return s
+  return withAccount(s)
 }
 
 function apply(s: Settings) {
@@ -153,9 +168,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const id = setInterval(() => setSettings(prev => ({ ...prev })), 60000)
     return () => clearInterval(id)
   }, [settings.autoTheme])
+  // Account-level часть настроек могла догрузиться с сети уже после старта приложения.
+  useEffect(() => {
+    const onSync = () => setSettings(prev => withAccount(prev))
+    window.addEventListener('ponoi-uprefs', onSync)
+    return () => window.removeEventListener('ponoi-uprefs', onSync)
+  }, [])
   function persist(next: Settings) { localStorage.setItem('ponoi_settings', JSON.stringify(next)); return next }
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
     setSettings(prev => persist({ ...prev, [k]: v }))
+    if (isAccountKey(k as string)) patchUserPrefs({ account: { ...getUserPrefs().account, [k]: v } })
   }
   function setCustom(patch: Partial<CustomTheme>) {
     setSettings(prev => persist({ ...prev, custom: { ...prev.custom, ...patch } }))

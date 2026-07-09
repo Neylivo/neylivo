@@ -1,15 +1,15 @@
 // Папки серверов в левой колонке (как в Discord).
-// Хранятся локально (localStorage) — это персональная организация серверов,
-// на других устройствах пользователь может сгруппировать по-своему.
+// v1.164.0: раньше жили только в localStorage (на других устройствах терялись) —
+// теперь синхронизируются через user_prefs (миграция 39), как остальные личные настройки.
+import { getUserPrefs, patchUserPrefs } from './userPrefs'
+
 export interface SrvFolder { id: string; name: string; color: string; servers: string[]; open: boolean }
 
-const KEY = 'ponoi_srv_folders'
-
 export function loadFolders(): SrvFolder[] {
-  try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] }
+  return getUserPrefs().srv_folders as SrvFolder[]
 }
 function save(f: SrvFolder[]) {
-  localStorage.setItem(KEY, JSON.stringify(f))
+  patchUserPrefs({ srv_folders: f })
   window.dispatchEvent(new Event('ponoi-folders'))
 }
 export function folderOf(folders: SrvFolder[], serverId: string): SrvFolder | undefined {

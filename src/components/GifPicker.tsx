@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
 import { resolveGif, TENOR_KEY, TENOR_V2 } from '../lib/gifUrl'
+import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 
 // GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
 // (общая коллекция + избранное) и «Эмодзи» (переключает на пикер эмодзи).
@@ -22,12 +23,8 @@ async function tenorGifs(path: string): Promise<string[]> {
 
 interface Gif { id: string; url: string }
 
-// Избранные GIF: личный список, хранится локально и переживает перезагрузку.
-const FAV_KEY = 'ponoi_fav_gifs'
-function loadFavs(): string[] {
-  try { const v = JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]'); return Array.isArray(v) ? v : [] }
-  catch { return [] }
-}
+// Избранные GIF: личный список, синхронизируется через user_prefs (миграция 39).
+function loadFavs(): string[] { return getUserPrefs().gif_favs }
 
 export function GifPicker({ onPick, onClose, onEmojiTab }:
   { onPick: (url: string) => void; onClose: () => void; onEmojiTab?: () => void }) {
@@ -58,10 +55,16 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
   function toggleFav(url: string) {
     setFavs(f => {
       const next = f.includes(url) ? f.filter(u => u !== url) : [url, ...f].slice(0, 24)
-      localStorage.setItem(FAV_KEY, JSON.stringify(next))
+      patchUserPrefs({ gif_favs: next })
       return next
     })
   }
+  // Избранное могло догрузиться с сети уже после открытия пикера.
+  useEffect(() => {
+    const onSync = () => setFavs(loadFavs())
+    window.addEventListener('ponoi-uprefs', onSync)
+    return () => window.removeEventListener('ponoi-uprefs', onSync)
+  }, [])
 
   // «Гифки»: без запроса — популярные (featured), с запросом — поиск (с задержкой при вводе).
   useEffect(() => {

@@ -5,6 +5,7 @@ import type { Server } from '../types'
 import { uploadTo } from '../lib/storage'
 import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } from '../lib/servers'
 import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
+import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { Icon } from './icons'
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
@@ -364,13 +365,17 @@ export function ServerNotifModal({ server, onClose }: { server: Server; onClose:
 }
 
 
-// Настройки конфиденциальности сервера — персональные, хранятся в localStorage (как в Discord).
+// Настройки конфиденциальности сервера — персональные, синхронизируются через
+// user_prefs (миграция 39), как остальные личные настройки.
 export function ServerPrivacyModal({ server, onClose }: { server: Server; onClose: () => void }) {
-  const KEY = 'ponoi_privacy_' + server.id
   const [prefs, setPrefs] = useState<{ dm: boolean; activity: boolean }>(() => {
-    try { return { dm: true, activity: true, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') } } catch { return { dm: true, activity: true } }
+    const p = getUserPrefs().srv_privacy[server.id]
+    return p ? { dm: p.dm, activity: p.activity } : { dm: true, activity: true }
   })
-  function save(p: { dm: boolean; activity: boolean }) { setPrefs(p); localStorage.setItem(KEY, JSON.stringify(p)) }
+  function save(p: { dm: boolean; activity: boolean }) {
+    setPrefs(p)
+    patchUserPrefs({ srv_privacy: { ...getUserPrefs().srv_privacy, [server.id]: p } })
+  }
   return (
     <Overlay onClose={onClose}>
       <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
@@ -384,7 +389,7 @@ export function ServerPrivacyModal({ server, onClose }: { server: Server; onClos
         <div className="priv-t"><b>Статус активности</b><span>Делиться статусом вашей игровой активности с участниками этого сервера.</span></div>
         <button className={'tgl' + (prefs.activity ? ' on' : '')} onClick={() => save({ ...prefs, activity: !prefs.activity })} />
       </div>
-      <div className="cset-hint">Эти настройки применяются только к серверу «{server.name}» и хранятся на этом устройстве.</div>
+      <div className="cset-hint">Эти настройки применяются только к серверу «{server.name}».</div>
       <div className="modal-foot"><button className="modal-ghost" onClick={onClose}>Готово</button></div>
     </Overlay>
   )

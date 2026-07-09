@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { initUserPrefs } from '../lib/userPrefs'
 
 interface AuthCtx { session: Session | null; user: User | null; loading: boolean }
 const Ctx = createContext<AuthCtx>({ session: null, user: null, loading: true })
@@ -14,6 +15,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  // Приватные настройки (папки, мьюты, заметки, ...) грузятся с аккаунта при входе.
+  useEffect(() => { initUserPrefs(session?.user?.id ?? null) }, [session?.user?.id])
 
   return <Ctx.Provider value={{ session, user: session?.user ?? null, loading }}>{children}</Ctx.Provider>
 }

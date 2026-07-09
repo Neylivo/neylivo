@@ -1,23 +1,19 @@
 // Режим уведомлений на сервер (как в Discord): все / только @упоминания / без уведомлений.
-// Хранится в localStorage — персональная настройка, не синхронизируется.
+// v1.164.0: раньше жил только в localStorage — теперь синхронизируется через
+// user_prefs (миграция 39), как остальные личные настройки.
+import { getUserPrefs, patchUserPrefs } from './userPrefs'
 
 export type NotifMode = 'all' | 'mentions' | 'mute'
 
-const KEY = 'ponoi_srv_notif'
-
-function load(): Record<string, NotifMode> {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} }
-}
-
 export function notifModeOf(serverId: string): NotifMode {
-  return load()[serverId] ?? 'all'
+  return (getUserPrefs().srv_notif[serverId] as NotifMode) ?? 'all'
 }
 
 export function setNotifMode(serverId: string, mode: NotifMode) {
-  const all = load()
+  const all = { ...getUserPrefs().srv_notif }
   if (mode === 'all') delete all[serverId]
   else all[serverId] = mode
-  localStorage.setItem(KEY, JSON.stringify(all))
+  patchUserPrefs({ srv_notif: all })
   window.dispatchEvent(new Event('ponoi-notif'))
 }
 
