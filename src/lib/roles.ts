@@ -6,7 +6,7 @@ import { supabase } from './supabase'
 // (миграция 12). Код читает обе: до миграции 25 всё работает по-старому.
 // Иерархия ролей (position, 0 — высшая) и флаг «Управление сервером» (manage) —
 // миграция 18. Значок роли (icon_url) — миграция 25.
-export interface ServerRole { id: string; server_id: string; name: string; color: string; position: number; manage?: boolean; icon_url?: string | null }
+export interface ServerRole { id: string; server_id: string; name: string; color: string; position: number; manage?: boolean; icon_url?: string | null; permissions?: number }
 
 export const ROLE_COLORS = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c', '#e67e22', '#00b0f4', '#99aab5']
 
@@ -36,6 +36,11 @@ export async function assignRole(serverId: string, userId: string, roleId: strin
 // Флаг «Управление сервером»: роль даёт доступ к настройкам сервера (миграция 18_role_perms.sql).
 export async function setRoleManage(id: string, manage: boolean) {
   return supabase.from('server_roles').update({ manage }).eq('id', id)
+}
+
+// Битовая маска прав роли (миграция 34_permissions.sql, см. src/lib/permissions.ts).
+export async function setRolePermissions(id: string, permissions: number) {
+  return supabase.from('server_roles').update({ permissions }).eq('id', id)
 }
 
 // Сохранить иерархию: позиции 0..n-1 в порядке массива (0 — самая высокая роль).

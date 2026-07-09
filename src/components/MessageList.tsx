@@ -149,6 +149,9 @@ interface Props {
   currentUser?: string
   currentUserName?: string
   canPin?: (m: UiMessage) => boolean
+  // v1.156.0: кто может удалить ЧУЖОЕ сообщение (право «Управление сообщениями»).
+  // Без этого пропа — как раньше, только автор (используется в ЛС, где ролей нет).
+  canDelete?: (m: UiMessage) => boolean
   onReact?: (id: string, emoji: string) => void
   onPin?: (id: string, pinned: boolean) => void
   onDelete?: (id: string) => void
@@ -165,7 +168,7 @@ interface Props {
   onMarkUnread?: (m: UiMessage) => void
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -399,7 +402,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {item(isGif ? 'Копировать ссылку на гифку' : 'Копировать ссылку на изображение', 'link', () => { copyText(img, 'Ссылка скопирована') })}
             {item(isGif ? 'Открыть ссылку на гифку' : 'Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
           </> : null}
-          {menuMsg.author === currentUser ? <>
+          {(canDelete ? canDelete(menuMsg) : menuMsg.author === currentUser) ? <>
             <div className="ctx-sep" />
             {item('Удалить сообщение', 'trash', () => onDelete?.(menu.id), ' danger')}
           </> : null}

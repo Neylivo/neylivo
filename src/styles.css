@@ -2027,6 +2027,9 @@ body.no-anim .member-typing i { animation:none; }
 .cset-role-chip { background:var(--bg3); padding:8px 10px; border-radius:5px; font-size:14px; width:200px; }
 .cset-perm { padding:14px 0; border-bottom:1px solid rgba(255,255,255,.06); }
 .cset-perm-h { display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:15px; gap:12px; }
+.redit-permgrp { margin-bottom:8px; }
+.redit-permgrp-h { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); margin:18px 0 4px; }
+.redit-permgrp:first-child .redit-permgrp-h { margin-top:0; }
 .cset-tri { display:flex; gap:2px; flex:none; }
 .cset-tri button { width:28px; height:24px; border:1px solid rgba(255,255,255,.12); background:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; }
 .cset-tri button:first-child { border-radius:4px 0 0 4px; }
@@ -2123,6 +2126,13 @@ body.no-anim .member-typing i { animation:none; }
 .sset-mrow { display:flex; align-items:center; gap:8px; font-weight:600; }
 .sset-mav { width:26px; height:26px; border-radius:50%; background-color:var(--bg3); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex:none; }
 .sset-rolechip { display:inline-flex; align-items:center; gap:6px; background:var(--bg3); border-radius:10px; padding:2px 8px; font-size:12px; }
+.sset-mactions { display:flex; gap:4px; justify-content:flex-end; }
+.sset-mact { width:28px; height:28px; border:none; border-radius:6px; background:var(--bg3); color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.sset-mact:hover { color:#fff; background:#4e5058; }
+.sset-mact.danger:hover { background:#ed4245; color:#fff; }
+.sset-banlist { display:flex; flex-direction:column; gap:6px; margin-top:14px; }
+.sset-banrow { display:flex; align-items:center; gap:10px; background:var(--bg3); border-radius:8px; padding:8px 12px; }
+.sset-baninfo { display:flex; flex-direction:column; flex:1; gap:2px; }
 
 .sset-rhero { background:linear-gradient(180deg,#93a8e4,#c3d0f0); border-radius:10px; padding:26px 0; display:flex; align-items:center; justify-content:center; margin-bottom:18px; }
 .sset-rwump { background:#232428; border-radius:12px; padding:16px 24px; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,.35); }

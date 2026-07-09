@@ -30,6 +30,7 @@ import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { PERM, hasPerm, kickMember, banMember } from '../lib/permissions'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -178,8 +179,21 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const mm = members.find(z => z.user_id === userId)
     return mm ? topRoleOf(mm)?.color : undefined
   }
-  // Право на «Настройки сервера»: владелец или любая роль с флагом «Управление сервером».
-  const canManage = isOwner || rolesOfId(user?.id ?? '').some(id => roleById[id]?.manage)
+  // Битовая маска прав текущего пользователя (сумма прав всех его ролей) — v1.156.0.
+  const myPerms = rolesOfId(user?.id ?? '').reduce((m, id) => m | (roleById[id]?.permissions ?? 0), 0)
+  // Право на «Настройки сервера»: владелец или любая из административных ролей.
+  const canManage = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_ROLES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+  const canManageChannels = isOwner || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+  const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
+  const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
+  const canKick = isOwner || hasPerm(myPerms, PERM.KICK_MEMBERS)
+  const canBan = isOwner || hasPerm(myPerms, PERM.BAN_MEMBERS)
+  // Позиция самой старшей роли участника — для иерархии (нельзя кикнуть/забанить ровню или старшего).
+  function topPositionOfId(userId: string): number {
+    let best = Infinity
+    for (const id of rolesOfId(userId)) { const r = roleById[id]; if (r && r.position < best) best = r.position }
+    return best
+  }
 
   useEffect(() => { voiceRef.current = voice }, [voice])
   // Смена сервера: тихо выходим из голосового канала прошлого сервера.
@@ -683,8 +697,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="srv-menu" onClick={() => setSrvMenu(false)}>
             <div className="srv-mi" onClick={invite}><span className="srv-mi-lb">Пригласить на сервер</span> <Icon name="user-plus" size={16} /></div>
             {canManage && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="srv-mi-lb">Настройки сервера</span> <Icon name="gear" size={16} /></div>}
-            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCh({ kind: 'text' })}><span className="srv-mi-lb">Создать канал</span> <Icon name="plus-circle" size={16} /></div>}
-            {isOwner && <div className="srv-mi" onClick={() => setShowCreateCat(true)}><span className="srv-mi-lb">Создать категорию</span> <Icon name="folder" size={16} /></div>}
+            {canManageChannels && <div className="srv-mi" onClick={() => setShowCreateCh({ kind: 'text' })}><span className="srv-mi-lb">Создать канал</span> <Icon name="plus-circle" size={16} /></div>}
+            {canManageChannels && <div className="srv-mi" onClick={() => setShowCreateCat(true)}><span className="srv-mi-lb">Создать категорию</span> <Icon name="folder" size={16} /></div>}
             {isOwner && <div className="srv-mi" onClick={() => setShowEvents(true)}><span className="srv-mi-lb">Создать событие</span> <Icon name="calendar" size={16} /></div>}
             <div className="srv-msep" />
             {!isOwner && <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}><span className="srv-mi-lb">Показать все каналы</span> <span className={'srv-mchk' + (showAllCh ? ' on' : '')}>{showAllCh && <Icon name="check" size={12} />}</span></div>}
@@ -719,7 +733,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                   <span className="ch-acts">
                     <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
                     <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
-                    {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+                    {canManageChannels && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
                   </span>
                 </div>
                 {(voiceUsers[c.id] ?? []).map(u => (
@@ -736,7 +750,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                 <ChName c={c} srv={srvSettings} />
                 <span className="ch-acts">
                   <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
-                  {isOwner && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
+                  {canManageChannels && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
                 </span>
               </div>
             )
@@ -744,13 +758,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <div className="ch-sec clickable" title={catOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
                 onClick={() => setCatOpen(v => { localStorage.setItem('ponoi_cat_text_open', v ? '0' : '1'); return !v })}>
                 <span className="ch-sec-nm">Текстовые каналы</span><span className="ch-sec-line" /><span className={'ch-caret' + (catOpen ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
-                {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text' }) }}><Icon name="plus" size={14} /></button>}
+                {canManageChannels && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text' }) }}><Icon name="plus" size={14} /></button>}
               </div>
               {channels.filter(c => (c as any).kind !== 'voice' && !catOf(c)).filter(c => (catOpen && visible(c)) || curChannel?.id === c.id).map(chRow)}
               <div className="ch-sec clickable" title={voiceCatOpen ? 'Свернуть категорию' : 'Развернуть категорию'}
                 onClick={() => setVoiceCatOpen(v => { localStorage.setItem('ponoi_cat_voice_open', v ? '0' : '1'); return !v })}>
                 <span className="ch-sec-nm">Голосовые каналы</span><span className="ch-sec-line" /><span className={'ch-caret' + (voiceCatOpen ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
-                {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'voice' }) }}><Icon name="plus" size={14} /></button>}
+                {canManageChannels && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'voice' }) }}><Icon name="plus" size={14} /></button>}
               </div>
               {channels.filter(c => (c as any).kind === 'voice' && !catOf(c)).filter(c => voiceCatOpen && visible(c)).map(chRow)}
               {cats.map((cat: any) => {
@@ -758,9 +772,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                 return <div key={cat.id}>
                   <div className="ch-sec clickable" title={open ? 'Свернуть категорию' : 'Развернуть категорию'}
                     onClick={() => toggleCat(cat.id)}
-                    onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setCatCtx({ cat, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 200) }) }}>
+                    onContextMenu={e => { if (!canManageChannels) return; e.preventDefault(); setCatCtx({ cat, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 200) }) }}>
                     <span className="ch-sec-nm">{cat.private ? '🔒 ' : ''}{cat.name}</span><span className="ch-sec-line" /><span className={'ch-caret' + (open ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
-                    {isOwner && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text', cat: cat.id }) }}><Icon name="plus" size={14} /></button>}
+                    {canManageChannels && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text', cat: cat.id }) }}><Icon name="plus" size={14} /></button>}
                   </div>
                   {channels.filter(c => catOf(c) === cat.id).filter(c => (open && visible(c)) || curChannel?.id === c.id).map(chRow)}
                 </div>
@@ -834,7 +848,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           </div>}
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
-            canPin={m => isOwner || m.author === user?.id} onReact={react} onPin={pin} onDelete={removeMsg}
+            canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
+            onReact={react} onPin={pin} onDelete={removeMsg}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) localStorage.setItem('ponoi_lastread_' + curChannelRef.current.id, String(new Date(m.created_at).getTime() - 1)) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm ? topRoleOf(mm) : undefined
@@ -861,7 +876,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             return (
             <div key={m.user_id} className={'member' + (m.nameplate_outline ? ' plate-outline' : '')}
               style={m.nameplate_outline ? { ['--plate-oc' as any]: m.nameplate_outline } : undefined}
-              onContextMenu={e => { if (!isOwner) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
+              onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
               role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
@@ -902,28 +917,52 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {rolePop && <>
         <div className="ctx-overlay" onClick={() => setRolePop(null)} onContextMenu={e => { e.preventDefault(); setRolePop(null) }} />
         <div className="ctx-menu role-pop" style={{ left: rolePop.x, top: rolePop.y }}>
-          <div className="role-pop-h">Роли участника</div>
-          {roles.map(r => {
-            const on = rolesOfId(rolePop.userId).includes(r.id)
-            return <div key={r.id} className={'ctx-item role-item' + (on ? ' on' : '')}
-              onClick={async () => { await toggleMemberRole(server.id, rolePop.userId, r.id, !on); await loadRoles(); await loadMembers() }}>
-              <span className="role-dot" style={{ background: r.color }} />{r.name}
-              {on && <Icon name="check" size={14} />}
-              <span className="role-del" title="Удалить роль" onClick={async e => { e.stopPropagation(); if (!await confirmUi('Удалить роль «' + r.name + '»?', { okText: 'Удалить' })) return; await deleteRole(r.id); await Promise.all([loadRoles(), loadMembers()]) }}><Icon name="trash" size={13} /></span>
-            </div>
-          })}
-          {roles.length === 0 && <div className="role-empty">Ролей пока нет</div>}
-          <div className="ctx-item" onClick={async () => {
-            const name = (await promptUi('Название роли', { placeholder: 'например: Модератор', okText: 'Создать' }))?.trim(); if (!name) return
-            const color = ROLE_COLORS[roles.length % ROLE_COLORS.length]
-            const { error } = await createRole(server.id, name, color)
-            if (error) { toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql в Supabase SQL Editor' : String(error.message ?? error)); return }
-            await loadRoles(); toastOk('Роль «' + name + '» создана')
-          }}><Icon name="plus" size={14} /> Создать роль</div>
+          {canManageRoles && <>
+            <div className="role-pop-h">Роли участника</div>
+            {roles.map(r => {
+              const on = rolesOfId(rolePop.userId).includes(r.id)
+              return <div key={r.id} className={'ctx-item role-item' + (on ? ' on' : '')}
+                onClick={async () => { await toggleMemberRole(server.id, rolePop.userId, r.id, !on); await loadRoles(); await loadMembers() }}>
+                <span className="role-dot" style={{ background: r.color }} />{r.name}
+                {on && <Icon name="check" size={14} />}
+                <span className="role-del" title="Удалить роль" onClick={async e => { e.stopPropagation(); if (!await confirmUi('Удалить роль «' + r.name + '»?', { okText: 'Удалить' })) return; await deleteRole(r.id); await Promise.all([loadRoles(), loadMembers()]) }}><Icon name="trash" size={13} /></span>
+              </div>
+            })}
+            {roles.length === 0 && <div className="role-empty">Ролей пока нет</div>}
+            <div className="ctx-item" onClick={async () => {
+              const name = (await promptUi('Название роли', { placeholder: 'например: Модератор', okText: 'Создать' }))?.trim(); if (!name) return
+              const color = ROLE_COLORS[roles.length % ROLE_COLORS.length]
+              const { error } = await createRole(server.id, name, color)
+              if (error) { toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql в Supabase SQL Editor' : String(error.message ?? error)); return }
+              await loadRoles(); toastOk('Роль «' + name + '» создана')
+            }}><Icon name="plus" size={14} /> Создать роль</div>
+          </>}
+          {/* v1.156.0: кик/бан — не себе, не владельцу, и только если моя старшая роль строго выше жертвы. */}
+          {(() => {
+            const targetOwner = rolePop.userId === server.owner
+            const targetSelf = rolePop.userId === user?.id
+            const outranks = isOwner || topPositionOfId(user?.id ?? '') < topPositionOfId(rolePop.userId)
+            const showKick = canKick && !targetOwner && !targetSelf && outranks
+            const showBan = canBan && !targetOwner && !targetSelf && outranks
+            if (!showKick && !showBan) return null
+            return <>
+              {canManageRoles && <div className="ctx-sep" />}
+              {showKick && <div className="ctx-item danger" onClick={async () => {
+                if (!await confirmUi('Кикнуть этого участника с сервера?', { okText: 'Кикнуть' })) return
+                try { await kickMember(server.id, rolePop.userId); setRolePop(null); await loadMembers(); toastOk('Участник кикнут') }
+                catch (e: any) { toastErr(e.message ?? String(e)) }
+              }}><Icon name="signout" size={14} /> Кикнуть с сервера</div>}
+              {showBan && <div className="ctx-item danger" onClick={async () => {
+                if (!await confirmUi('Забанить этого участника? Он не сможет вернуться по приглашению.', { okText: 'Забанить' })) return
+                try { await banMember(server.id, rolePop.userId); setRolePop(null); await loadMembers(); toastOk('Участник забанен') }
+                catch (e: any) { toastErr(e.message ?? String(e)) }
+              }}><Icon name="trash" size={14} /> Забанить</div>}
+            </>
+          })()}
         </div>
       </>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)}
-        onAddRole={isOwner ? () => { const m = mini; setMini(null); setRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
+        onAddRole={(isOwner || canManageRoles || canKick || canBan) ? () => { const m = mini; setMini(null); setRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
       {showCreateCh && <CreateChannelModal initialKind={showCreateCh.kind} onClose={() => setShowCreateCh(null)}
         onCreate={(nm, kd, pv, ann) => { const cat = showCreateCh.cat; setShowCreateCh(null); createChannel(nm, kd, pv, cat, ann) }} />}
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
@@ -938,7 +977,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="ctx-item" onClick={() => markChRead(chCtx.ch)}><Icon name="check" size={14} /> Пометить как прочитанное</div>
           <div className="ctx-item" onClick={invite}><Icon name="user-plus" size={14} /> Пригласить на сервер</div>
           <div className="ctx-item" onClick={() => toggleMuteCh(chCtx.ch.id)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell' : 'bell-off'} size={14} /> {mutedCh[chCtx.ch.id] ? 'Включить уведомления' : 'Заглушить канал'}</div>
-          {isOwner && <div className="ctx-item" onClick={() => setChSettings(chCtx.ch)}><Icon name="gear" size={14} /> Настройки канала</div>}
+          {canManageChannels && <div className="ctx-item" onClick={() => setChSettings(chCtx.ch)}><Icon name="gear" size={14} /> Настройки канала</div>}
           <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(chCtx.ch.id); toastOk('ID канала скопирован') }}><Icon name="id-card" size={14} /> Копировать ID канала</div>
         </div>
       </>}

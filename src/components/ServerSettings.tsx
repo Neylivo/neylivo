@@ -14,7 +14,9 @@ import { toastOk, toastErr } from '../lib/toast'
 import { uploadTo } from '../lib/storage'
 import { usePresence } from '../lib/presence'
 import { listMembers, createInvite, updateServer } from '../lib/servers'
-import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRoleManage, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRolePermissions, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { PERM, hasPerm, kickMember, banMember, unbanMember, fetchBans, type ServerBan } from '../lib/permissions'
+import { confirmUi } from '../lib/confirm'
 import { RoleEditor } from './RoleEditor'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
@@ -78,6 +80,45 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [mq, setMq] = useState('')       // поиск по участникам
   const [bq, setBq] = useState('')       // поиск по банам
   const [bqDone, setBqDone] = useState<string | null>(null)  // v1.109.0: выполненный поиск по банам
+  // v1.156.0: реальный список банов + кик/бан участников (миграция 34_permissions.sql).
+  const [bans, setBans] = useState<(ServerBan & { name?: string; avatar_url?: string | null })[]>([])
+  const isOwner = server.owner === uid
+  const rolesOfId = (userId: string): string[] => {
+    const multi = memberRoles[userId]
+    if (multi && multi.length) return multi
+    const mm = members.find(m => m.user_id === userId)
+    return mm?.role_id ? [mm.role_id] : []
+  }
+  const permsOfId = (userId: string): number => rolesOfId(userId).reduce((m, id) => m | (roles.find(r => r.id === id)?.permissions ?? 0), 0)
+  const topPositionOfId = (userId: string): number => {
+    let best = Infinity
+    for (const id of rolesOfId(userId)) { const r = roles.find(x => x.id === id); if (r && r.position < best) best = r.position }
+    return best
+  }
+  const myPerms = permsOfId(uid)
+  const canKick = isOwner || hasPerm(myPerms, PERM.KICK_MEMBERS)
+  const canBan = isOwner || hasPerm(myPerms, PERM.BAN_MEMBERS)
+  async function loadBans() {
+    const list = await fetchBans(server.id)
+    if (list.length === 0) { setBans([]); return }
+    const { data } = await supabase.from('profiles').select('id, username, avatar_url').in('id', list.map(b => b.user_id))
+    const byId = new Map(((data ?? []) as any[]).map(p => [p.id, p]))
+    setBans(list.map(b => ({ ...b, name: byId.get(b.user_id)?.username, avatar_url: byId.get(b.user_id)?.avatar_url ?? null })))
+  }
+  async function doKick(m: any) {
+    if (!await confirmUi('Кикнуть «' + m.member_name + '» с сервера?', { okText: 'Кикнуть' })) return
+    try { await kickMember(server.id, m.user_id); setMembers(await listMembers(server.id)); toastOk('Участник кикнут') }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
+  async function doBan(m: any) {
+    if (!await confirmUi('Забанить «' + m.member_name + '»? Он не сможет вернуться по приглашению.', { okText: 'Забанить' })) return
+    try { await banMember(server.id, m.user_id); setMembers(await listMembers(server.id)); await loadBans(); toastOk('Участник забанен') }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
+  async function doUnban(userId: string) {
+    try { await unbanMember(server.id, userId); await loadBans(); toastOk('Разбанен') }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
   const [newRole, setNewRole] = useState('')
   const [newRoleColor, setNewRoleColor] = useState(ROLE_COLORS[0])
   const [showDelete, setShowDelete] = useState(false)
@@ -101,6 +142,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     listMembers(server.id).then(setMembers)
     fetchRoles(server.id).then(setRoles)
     fetchMemberRoles(server.id).then(setMemberRoles)
+    loadBans()
     supabase.from('channels').select('*').eq('server_id', server.id).order('name')
       .then(({ data }) => setChannels((data ?? []) as Channel[]))
     supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
@@ -434,10 +476,12 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <input className="modal-in" style={{ width: 240, margin: 0 }} placeholder="Поиск по имени пользователя" value={mq} onChange={e => setMq(e.target.value)} />
           </div>
           <table className="sset-table">
-            <thead><tr><th>Имя</th><th>В числе участников с</th><th>В Ponoi с</th><th>Способ вступления</th><th>Роли</th><th>Сигналы</th></tr></thead>
+            <thead><tr><th>Имя</th><th>В числе участников с</th><th>В Ponoi с</th><th>Способ вступления</th><th>Роли</th><th>Сигналы</th><th /></tr></thead>
             <tbody>
               {filtered.map(m => {
                 const mrs = (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).map(id => roles.find(r => r.id === id)).filter(Boolean) as ServerRole[]
+                // v1.156.0: кик/бан — не владельцу, не себе, и только если моя старшая роль строго выше жертвы.
+                const targetable = m.user_id !== uid && m.role !== 'owner' && (isOwner || topPositionOfId(uid) < topPositionOfId(m.user_id))
                 return (
                   <tr key={m.user_id}>
                     <td><div className="sset-mrow">
@@ -451,6 +495,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                       ? <span className="sset-rolechip"><span className="role-dot" style={{ background: '#99aab5' }} />Участник</span>
                       : mrs.map(r => <span key={r.id} className="sset-rolechip"><span className="role-dot" style={{ background: r.color }} />{r.name}</span>)}</td>
                     <td>—</td>
+                    <td>{targetable && <div className="sset-mactions">
+                      {canKick && <button className="sset-mact" title="Кикнуть" onClick={() => doKick(m)}><Icon name="signout" size={14} /></button>}
+                      {canBan && <button className="sset-mact danger" title="Забанить" onClick={() => doBan(m)}><Icon name="trash" size={14} /></button>}
+                    </div>}</td>
                   </tr>
                 )
               })}
@@ -493,11 +541,12 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                   <button title="Ниже" disabled={i === roles.length - 1} onClick={() => moveRole(i, 1)}><Icon name="chevron-down" size={13} /></button>
                 </span>
                 <span className="role-dot" style={{ background: r.color }} /><b className="sset-rolename" title="Редактировать роль" onClick={() => { setSelRoleId(r.id); setRolesView('edit') }}>{r.name}</b>
-                <label className="sset-rmanage" title="Участники с этой ролью могут открывать и менять настройки сервера">
-                  <input type="checkbox" checked={!!r.manage} onChange={async e => {
+                <label className="sset-rmanage" title="Участники с этой ролью могут открывать и менять настройки сервера. Остальные права — в редакторе роли.">
+                  <input type="checkbox" checked={hasPerm(r.permissions, PERM.MANAGE_SERVER)} onChange={async e => {
                     const v = e.target.checked
-                    const { error } = await setRoleManage(r.id, v)
-                    if (error) return toastErr(String(error.message ?? error).toLowerCase().includes('manage') ? 'Сначала примени миграцию supabase/18_role_perms.sql в Supabase SQL Editor' : String(error.message ?? error))
+                    const next = v ? ((r.permissions ?? 0) | PERM.MANAGE_SERVER) : ((r.permissions ?? 0) & ~PERM.MANAGE_SERVER)
+                    const { error } = await setRolePermissions(r.id, next)
+                    if (error) return toastErr(String(error.message ?? error).includes('permissions') ? 'Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor' : String(error.message ?? error))
                     setRoles(await fetchRoles(server.id))
                   }} /> Управление сервером
                 </label>
@@ -633,9 +682,24 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               onKeyDown={e => { if (e.key === 'Enter') setBqDone(bq.trim() || null) }} />
             <button className="modal-primary" onClick={() => setBqDone(bq.trim() || null)}>Поиск</button>
           </div>
-          {bqDone
-            ? <div className="sset-empty" style={{ paddingTop: 70 }}>🔎<b>НИЧЕГО НЕ НАЙДЕНО</b>Банов по запросу «{bqDone}» нет. Попробуйте другой ID или имя.</div>
-            : <div className="sset-empty" style={{ paddingTop: 70 }}>🔨<b>НЕТ БАНОВ</b>Вы ещё никого не банили… но если надо, не стесняйтесь!</div>}
+          {(() => {
+            const q = (bqDone ?? '').toLowerCase()
+            const list = q ? bans.filter(b => (b.name ?? '').toLowerCase().includes(q) || b.user_id.toLowerCase().includes(q)) : bans
+            if (list.length === 0 && bqDone) return <div className="sset-empty" style={{ paddingTop: 70 }}>🔎<b>НИЧЕГО НЕ НАЙДЕНО</b>Банов по запросу «{bqDone}» нет. Попробуйте другой ID или имя.</div>
+            if (list.length === 0) return <div className="sset-empty" style={{ paddingTop: 70 }}>🔨<b>НЕТ БАНОВ</b>Вы ещё никого не банили… но если надо, не стесняйтесь!</div>
+            return <div className="sset-banlist">
+              {list.map(b => (
+                <div key={b.user_id} className="sset-banrow">
+                  <div className="sset-mav" style={b.avatar_url ? { backgroundImage: `url(${b.avatar_url})` } : undefined}>{!b.avatar_url && (b.name ?? '?').slice(0, 1).toUpperCase()}</div>
+                  <div className="sset-baninfo">
+                    <b>{b.name ?? b.user_id}</b>
+                    <span className="cset-hint">{b.reason ? b.reason + ' · ' : ''}{fmtD(b.created_at)}</span>
+                  </div>
+                  {canBan && <button className="modal-ghost" onClick={() => doUnban(b.user_id)}>Разбанить</button>}
+                </div>
+              ))}
+            </div>
+          })()}
         </>}
 
         {tab === 'automod' && <>

@@ -3,7 +3,8 @@ import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { uploadTo } from '../lib/storage'
 import { useAuth } from '../auth/AuthProvider'
-import { createRole, deleteRole, updateRole, toggleMemberRole, saveRoleOrder, type ServerRole } from '../lib/roles'
+import { createRole, deleteRole, updateRole, toggleMemberRole, saveRoleOrder, setRolePermissions, type ServerRole } from '../lib/roles'
+import { PERM_GROUPS, hasPerm } from '../lib/permissions'
 import type { Server } from '../types'
 import { Icon } from './icons'
 
@@ -57,9 +58,12 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
     if (error) return toastErr(String(error.message ?? error))
     await onReload()
   }
-  const toggleManage = async (v: boolean) => {
-    const { error } = await updateRole(role.id, { manage: v })
-    if (error) return toastErr(String(error.message ?? error).toLowerCase().includes('manage') ? 'Сначала примени миграцию supabase/18_role_perms.sql в Supabase SQL Editor' : String(error.message ?? error))
+  // v1.156.0: битовая маска прав (миграция 34_permissions.sql) вместо одного
+  // флага manage — переключатель конкретного права меняет только его бит.
+  const togglePerm = async (bit: number, on: boolean) => {
+    const next = on ? ((role.permissions ?? 0) | bit) : ((role.permissions ?? 0) & ~bit)
+    const { error } = await setRolePermissions(role.id, next)
+    if (error) return toastErr(String(error.message ?? error).includes('permissions') ? 'Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor' : String(error.message ?? error))
     await onReload()
   }
   const pickIcon = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,15 +169,25 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
           </div>
         </div>}
         {rtab === 'perms' && <div className="redit-body">
-          <div className="cset-perm">
-            <div className="cset-perm-h">Управление сервером
-              <label className="sset-rmanage" style={{ marginLeft: 'auto' }}>
-                <input type="checkbox" checked={!!role.manage} onChange={e => toggleManage(e.target.checked)} /> Разрешить
-              </label>
+          {PERM_GROUPS.map(g => (
+            <div key={g.title} className="redit-permgrp">
+              <div className="redit-permgrp-h">{g.title}</div>
+              {g.perms.map(p => {
+                const on = hasPerm(role.permissions, p.bit)
+                return (
+                  <div key={p.bit} className="cset-perm">
+                    <div className="cset-perm-h">{p.label}
+                      <label className="sset-rmanage" style={{ marginLeft: 'auto' }}>
+                        <input type="checkbox" checked={on} onChange={e => togglePerm(p.bit, e.target.checked)} /> Разрешить
+                      </label>
+                    </div>
+                    <div className="cset-hint">{p.hint}</div>
+                  </div>
+                )
+              })}
             </div>
-            <div className="cset-hint">Участники с этой ролью могут открывать «Настройки сервера» и менять сервер, каналы и роли.</div>
-          </div>
-          <div className="cset-hint" style={{ marginTop: 14 }}>Остальные права (писать сообщения, подключаться к голосовым каналам и т.д.) настраиваются в «Права по умолчанию» (@everyone) и действуют на всех участников.</div>
+          ))}
+          <div className="cset-hint" style={{ marginTop: 14 }}>Право видеть/писать в конкретном канале, подключаться к голосовым каналам и т.д. настраивается в «Права по умолчанию» (@everyone) и действует на всех участников.</div>
         </div>}
         {rtab === 'links' && <div className="redit-body">
           <div className="sset-empty">🔗<b>ПОКА НЕТ ССЫЛОК</b>Ссылки, привязанные к этой роли, появятся здесь.</div>
