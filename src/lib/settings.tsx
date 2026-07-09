@@ -43,7 +43,7 @@ export interface Settings {
   sendKey: 'enter' | 'ctrl'
   keyMusic: string
   keyHome: string
-  appIcon: string   // v1.158.0: логотип приложения — id из src/lib/appIcon.ts APP_ICONS
+  appIcon: string   // v1.160.0: свой логотип приложения — data URL загруженного файла, '' = стандартный
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases

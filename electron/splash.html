@@ -60,15 +60,15 @@
 </style>
 </head>
 <body>
-  <img class="logo" id="logo" src="./logos/logo-classic.svg" alt="Ponoi">
+  <img class="logo" id="logo" src="./icon.png" alt="Ponoi">
   <div class="status" id="status">Запуск</div>
   <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
 <script>
-  // v1.158.0: какой логотип выбрал пользователь в настройках — main-процесс
-  // передаёт id через query-параметр при loadFile(), сам сплэш ничего не решает.
+  // v1.160.0: свой логотип (если загружен в настройках) — main-процесс передаёт
+  // file:// путь к сохранённому PNG через query-параметр, сам сплэш ничего не решает.
   try {
-    const iconId = new URLSearchParams(location.search).get('icon')
-    if (iconId) document.getElementById('logo').src = './logos/logo-' + iconId + '.svg'
+    const iconUrl = new URLSearchParams(location.search).get('icon')
+    if (iconUrl) document.getElementById('logo').src = iconUrl
   } catch {}
   // Честный сплэш: никакого выдуманного прогресса и слова «Установка».
   // Полоса появляется только когда реально качается обновление.

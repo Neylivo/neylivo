@@ -13,7 +13,7 @@ import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
-import { APP_ICONS } from '../lib/appIcon'
+import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -151,6 +151,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)      // идёт сохранение — кнопки заблокированы
   const [shake, setShake] = useState(false)    // тряска плашки при попытке закрыть без сохранения
+  const [iconBusy, setIconBusy] = useState(false)   // v1.160.0: свой логотип приложения — идёт чтение файла
+  const iconInputRef = useRef<HTMLInputElement>(null)
   const dirtyRef = useRef(false)
   const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
@@ -226,6 +228,20 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       await patchProf({ plateUrl: url, plateKind: f.type.startsWith('video') ? 'video' : 'image' })
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setPlateBusy(false) }
+  }
+  // v1.160.0: свой логотип приложения — хранится локально (data URL прямо в
+  // настройках), без загрузки в Supabase: это личная настройка устройства,
+  // применяется сразу (не через «Сохранить»), как и остальные загрузки файлов.
+  async function pickAppIcon(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!f.type.startsWith('image/')) { toastErr('Нужен файл изображения'); return }
+    if (f.size > MAX_ICON_BYTES) { toastErr('Файл слишком большой — максимум 2 МБ'); return }
+    setIconBusy(true)
+    try { set('appIcon', await readFileAsDataUrl(f)) }
+    catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setIconBusy(false) }
   }
   async function pickPet(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !user) return
@@ -696,15 +712,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 </div>
 
                 <div className="pqs-sec-t">Логотип приложения</div>
-                <div className="pqs2-desc" style={{ marginTop: -6 }}>Меняется везде: в панели серверов, на экране загрузки{(window as any).ponoiDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
-                <div className="pqs-preset-grid">
-                  {APP_ICONS.map(ic => (
-                    <button key={ic.id} className={'pqs-preset' + (view.appIcon === ic.id ? ' on' : '')} onClick={() => setD('appIcon', ic.id)}>
-                      <span className="pqs-preset-sw logo-sw"><img src={ic.file} alt="" width={28} height={28} /></span>
-                      <span className="pqs-preset-nm">{ic.name}</span>
-                    </button>
-                  ))}
+                <div className="pqs2-desc" style={{ marginTop: -6 }}>Свой логотип вместо стандартного — меняется везде: в панели серверов, на экране загрузки{(window as any).ponoiDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
+                <div className="pqs-iconrow">
+                  <span className="pqs-iconprev"><img src={settings.appIcon || DEFAULT_ICON_URL} alt="" width={40} height={40} /></span>
+                  <button className="modal-primary" onClick={() => iconInputRef.current?.click()}>{iconBusy ? 'Загрузка…' : 'Загрузить свой логотип'}</button>
+                  {settings.appIcon && <button className="pqs2-btn ghost" onClick={() => set('appIcon', '')}>Сбросить</button>}
+                  <input ref={iconInputRef} type="file" accept="image/*" hidden onChange={pickAppIcon} />
                 </div>
+                <div className="cset-hint" style={{ marginTop: 6 }}>PNG, JPG или SVG, до 2 МБ.</div>
 
                 <Row title="Размер шрифта" desc={view.fontPx + 'px'}>
                   <input type="range" min={12} max={20} step={1} value={view.fontPx} onChange={e => setD('fontPx', Number(e.target.value))} />

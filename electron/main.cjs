@@ -390,15 +390,34 @@ ipcMain.on('ponoi-badge', (_e, p) => {
   } catch {}
 })
 
-// ---- v1.158.0: смена логотипа приложения (Настройки -> Внешний вид) ----
-// Рендерер растеризует выбранный SVG в PNG на canvas и присылает dataURL + id;
-// main ставит его иконкой всех окон (панель задач) и трея, и запоминает id в
-// prefs.json, чтобы сплэш-экран при следующем запуске сразу открылся с ним же.
+// ---- v1.160.0: свой логотип приложения (Настройки -> Внешний вид) ----
+// Рендерер растеризует загруженный файл в PNG на canvas и присылает dataURL;
+// main ставит его иконкой всех окон (панель задач) и трея, и сохраняет PNG на
+// диск (userData) — путь к нему, а не сама data URL, запоминается в prefs.json,
+// чтобы сплэш-экран при следующем запуске открылся с тем же логотипом (гигантскую
+// base64-строку в query loadFile() совать не хотим — путь к файлу короткий и надёжный).
+const customIconPath = () => path.join(app.getPath('userData'), 'custom-app-icon.png')
+function defaultAppIcon() {
+  let icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.ico'))
+  if (icon.isEmpty()) icon = nativeImage.createFromPath(path.join(__dirname, '..', 'dist', 'icon.png'))
+  return icon
+}
 ipcMain.handle('ponoi-set-icon', (_e, p) => {
   try {
     const dataUrl = p && p.dataUrl
-    const id = p && p.id
-    if (typeof dataUrl !== 'string') return { ok: false }
+    const fsr = require('fs')
+    if (!dataUrl) {
+      // Сброс к стандартной иконке.
+      const def = defaultAppIcon()
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w === overlayWin || w === gameToastWin || w === splash) continue
+        try { w.setIcon(def) } catch {}
+      }
+      try { tray?.setImage(def) } catch {}
+      try { fsr.unlinkSync(customIconPath()) } catch {}
+      try { writePrefs({ ...readPrefs(), appIcon: '' }) } catch {}
+      return { ok: true }
+    }
     const img = nativeImage.createFromDataURL(dataUrl)
     if (img.isEmpty()) return { ok: false }
     for (const w of BrowserWindow.getAllWindows()) {
@@ -406,7 +425,11 @@ ipcMain.handle('ponoi-set-icon', (_e, p) => {
       try { w.setIcon(img) } catch {}
     }
     try { tray?.setImage(img) } catch {}
-    if (id) { try { writePrefs({ ...readPrefs(), appIcon: id }) } catch {} }
+    try {
+      const b64 = String(dataUrl).split(',')[1] || ''
+      fsr.writeFileSync(customIconPath(), Buffer.from(b64, 'base64'))
+      writePrefs({ ...readPrefs(), appIcon: customIconPath() })
+    } catch {}
     return { ok: true }
   } catch { return { ok: false } }
 })
@@ -951,11 +974,15 @@ function createSplash() {
       nodeIntegration: false,
     },
   })
-  // v1.158.0: сплэш показывает тот же логотип, что выбран в настройках — id
-  // сохранён в prefs.json при последней смене (см. 'ponoi-set-icon' ниже).
-  let iconId = 'classic'
-  try { iconId = readPrefs().appIcon || 'classic' } catch {}
-  splash.loadFile(path.join(__dirname, 'splash.html'), { query: { icon: iconId } })
+  // v1.160.0: сплэш показывает тот же свой логотип, что выбран в настройках —
+  // путь к сохранённому PNG лежит в prefs.json (см. 'ponoi-set-icon' выше).
+  // Query, а не гигантская data URL — путь к файлу короткий и надёжный.
+  let iconUrl = ''
+  try {
+    const p = readPrefs().appIcon
+    if (p && require('fs').existsSync(p)) iconUrl = 'file:///' + p.replace(/\\/g, '/')
+  } catch {}
+  splash.loadFile(path.join(__dirname, 'splash.html'), { query: { icon: iconUrl } })
   splashShownAt = Date.now()
   splash.on('closed', () => { splash = null })
 }

@@ -1,9 +1,9 @@
 import { useSettings } from '../lib/settings'
-import { iconUrlOf } from '../lib/appIcon'
+import { DEFAULT_ICON_URL } from '../lib/appIcon'
 
-// Текущий логотип приложения (v1.158.0) — реагирует на выбор в Настройках
-// сразу же, без перезагрузки (settings уже в контексте).
+// Логотип приложения (v1.160.0) — стандартная иконка, пока пользователь не
+// загрузил свою в Настройках; реагирует на смену сразу же (settings в контексте).
 export function AppLogo({ size = 32, className }: { size?: number; className?: string }) {
   const { settings } = useSettings()
-  return <img className={'app-logo' + (className ? ' ' + className : '')} src={iconUrlOf(settings.appIcon)} width={size} height={size} alt="Ponoi" draggable={false} />
+  return <img className={'app-logo' + (className ? ' ' + className : '')} src={settings.appIcon || DEFAULT_ICON_URL} width={size} height={size} alt="Ponoi" draggable={false} />
 }

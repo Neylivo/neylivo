@@ -1,21 +1,23 @@
-// Система смены логотипа приложения (v1.158.0) — 4 варианта, лежат в public/logos/
-// (и продублированы в electron/logos/ для сплэш-экрана — он грузится напрямую из
-// electron/, минуя dist/, см. комментарий в electron/main.cjs createSplash()).
-export interface AppIconDef { id: string; name: string; file: string }
-export const APP_ICONS: AppIconDef[] = [
-  { id: 'classic', name: 'Классика', file: '/logos/logo-classic.svg' },
-  { id: 'dark', name: 'Тёмная', file: '/logos/logo-dark.svg' },
-  { id: 'neon', name: 'Неон', file: '/logos/logo-neon.svg' },
-  { id: 'cyberpunk', name: 'Киберпанк', file: '/logos/logo-cyberpunk.svg' },
-]
-export const DEFAULT_APP_ICON = 'classic'
+// Свой логотип приложения (v1.160.0) — только загрузка своего файла, без
+// пресетов. Хранится как data URL прямо в настройках (ponoi_settings,
+// localStorage) — так же локально, как и все остальные настройки внешнего
+// вида, без обращения к Supabase Storage (это личная настройка устройства).
+export const DEFAULT_APP_ICON = ''   // пусто = свой логотип не задан, используем стандартную иконку
+export const DEFAULT_ICON_URL = '/icon.png'   // тот же файл, что и favicon по умолчанию
+export const MAX_ICON_BYTES = 2 * 1024 * 1024   // 2 МБ на исходный файл
 
-export function iconUrlOf(id: string | undefined | null): string {
-  return (APP_ICONS.find(i => i.id === id) ?? APP_ICONS[0]).file
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result))
+    r.onerror = () => reject(new Error('Не удалось прочитать файл'))
+    r.readAsDataURL(file)
+  })
 }
 
-// Растеризация SVG в PNG data URL через canvas — нужна для Electron: nativeImage
+// Растеризация в PNG data URL через canvas — нужна для Electron: nativeImage
 // (win.setIcon/tray.setImage) не понимает SVG напрямую, только растровые форматы.
+// Для уже растровых файлов (png/jpg) это заодно приводит их к одному размеру.
 function rasterize(url: string, size = 256): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -33,17 +35,17 @@ function rasterize(url: string, size = 256): Promise<string> {
 }
 
 // Применить логотип везде: favicon вкладки (веб/PWA) + иконка окна и трея (Electron).
-export async function applyAppIcon(id: string): Promise<void> {
-  const url = iconUrlOf(id)
+// url — data URL своего логотипа, или '' чтобы вернуть стандартную иконку.
+export async function applyAppIcon(url: string): Promise<void> {
   try {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
-    if (link) link.href = url
+    if (link) link.href = url || DEFAULT_ICON_URL
   } catch {}
   const d = (window as any).ponoiDesktop
-  if (d?.setAppIcon) {
-    try {
-      const dataUrl = await rasterize(url, 256)
-      await d.setAppIcon(dataUrl, id)
-    } catch {}
-  }
+  if (!d?.setAppIcon) return
+  if (!url) { try { await d.setAppIcon(null) } catch {} ; return }
+  try {
+    const dataUrl = await rasterize(url, 256)
+    await d.setAppIcon(dataUrl)
+  } catch {}
 }
