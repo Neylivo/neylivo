@@ -33,6 +33,7 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'appearance', label: 'Внешний вид', icon: 'image' },
     { k: 'chat', label: 'Чат', icon: 'message' },
     { k: 'voice', label: 'Голос и видео', icon: 'mic' },
+    { k: 'sounds', label: 'Звуки', icon: 'volume' },
     { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' },
     { k: 'language', label: 'Язык', icon: 'compass' },
     { k: 'display', label: 'Дисплей', icon: 'expand' },
@@ -165,6 +166,32 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     setSteamId(id)
     patchUserPrefs({ account: { ...getUserPrefs().account, steamId: id } })
   }
+  // v1.166.0: свои звуки — уведомление о сообщении, рингтон входящего, гудки
+  // исходящего. Приватная account-настройка (см. src/lib/userPrefs.ts), синхронизируется
+  // на все устройства. Пусто — играет встроенный тон/мелодия (src/lib/notify.ts, callSounds.ts).
+  const [notifSoundUrl, setNotifSoundUrl] = useState(() => getUserPrefs().account.notifSoundUrl || '')
+  const [ringtoneUrl, setRingtoneUrl] = useState(() => getUserPrefs().account.ringtoneUrl || '')
+  const [ringbackUrl, setRingbackUrl] = useState(() => getUserPrefs().account.ringbackUrl || '')
+  const notifSoundRef = useRef<HTMLInputElement>(null)
+  const ringtoneRef = useRef<HTMLInputElement>(null)
+  const ringbackRef = useRef<HTMLInputElement>(null)
+  const [soundBusy, setSoundBusy] = useState<string | null>(null)
+  const SOUND_SET: Record<string, (v: string) => void> = { notifSoundUrl: setNotifSoundUrl, ringtoneUrl: setRingtoneUrl, ringbackUrl: setRingbackUrl }
+  async function pickSound(key: 'notifSoundUrl' | 'ringtoneUrl' | 'ringbackUrl', e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setSoundBusy(key)
+    try {
+      const url = await uploadTo('attachments', user.id, f)
+      patchUserPrefs({ account: { ...getUserPrefs().account, [key]: url } })
+      SOUND_SET[key](url)
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setSoundBusy(null); e.target.value = '' }
+  }
+  function resetSound(key: 'notifSoundUrl' | 'ringtoneUrl' | 'ringbackUrl') {
+    patchUserPrefs({ account: { ...getUserPrefs().account, [key]: '' } })
+    SOUND_SET[key]('')
+  }
+  function previewSound(url: string) { try { new Audio(url).play().catch(() => {}) } catch {} }
   // v1.50.0: строки «Изменить» и смена почты/пароля как в Discord
   const [showEmail, setShowEmail] = useState(false)
   const [editNick, setEditNick] = useState(false)
@@ -295,6 +322,23 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   // «шрифт не работает» (частая ситуация: декоративные шрифты только с латиницей).
   const [nickCyr, setNickCyr] = useState<boolean | null>(null)
   const [msgCyr, setMsgCyr] = useState<boolean | null>(null)
+  // v1.166.0: свой файл шрифта интерфейса — как ник/сообщения, но применяется сразу
+  // (не через черновик), тот же паттерн, что и «Загрузить свой логотип».
+  const appFontRef = useRef<HTMLInputElement>(null)
+  const [appFontBusy, setAppFontBusy] = useState(false)
+  const [appFontCyr, setAppFontCyr] = useState<boolean | null>(null)
+  async function pickAppFont(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    setAppFontBusy(true)
+    try {
+      const cov = await fileFontCoverage(f)
+      setAppFontCyr(cov ? cov.cyrillic : null)
+      const url = await uploadTo('avatars', user.id, f)
+      set('fontFamilyUrl', url)
+      if (cov && !cov.cyrillic && settings.lang !== 'en') toastErr('В этом шрифте нет русских букв — интерфейс останется обычным шрифтом')
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setAppFontBusy(false); e.target.value = '' }
+  }
   useEffect(() => {
     let ok = true
     if (prof.nickFontUrl) urlFontCoverage(prof.nickFontUrl).then(c => { if (ok) setNickCyr(c ? c.cyrillic : null) })
@@ -746,9 +790,15 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs-sec-t">Шрифт и форма</div>
                 <label className="pqs-lbl">Шрифт интерфейса</label>
                 <div className="pqs-code-sub">Меняет все надписи приложения: настройки, меню, панели. Видно только тебе. Ник и текст сообщений в чате не меняет — за них отвечают «Шрифт ника» и «Шрифт сообщений» в «Профиле» (их видят все).</div>
-                <select className="pqs-in" value={view.fontFamily} onChange={e => setD('fontFamily', e.target.value)}>
+                <select className="pqs-in" value={view.fontFamily} onChange={e => { setD('fontFamily', e.target.value); if (settings.fontFamilyUrl) set('fontFamilyUrl', '') }}>
                   {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
+                <div className="pqs-iconrow" style={{ marginTop: 8 }}>
+                  <button className="modal-primary" onClick={() => appFontRef.current?.click()}>{appFontBusy ? 'Загрузка…' : (settings.fontFamilyUrl ? 'Свой шрифт — заменить' : 'Загрузить свой шрифт (.ttf/.otf/.woff2)')}</button>
+                  {settings.fontFamilyUrl && <button className="pqs2-btn ghost" onClick={() => set('fontFamilyUrl', '')}>Сбросить</button>}
+                  <input ref={appFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickAppFont} />
+                </div>
+                {settings.lang !== 'en' && settings.fontFamilyUrl && appFontCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — интерфейс останется обычным шрифтом.</div>}
                 <Row title="Скругление углов" desc={view.radius + 'px'}>
                   <input type="range" min={0} max={20} value={view.radius} onChange={e => setD('radius', Number(e.target.value))} />
                 </Row>
@@ -805,6 +855,29 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   <input type="range" min={0} max={100} value={view.spkVol} onChange={e => setD('spkVol', Number(e.target.value))} />
                 </Row>
                 <div className="pqs-note">Выбор устройств и обработка голоса применяются при звонке (LiveKit).</div>
+              </>}
+
+              {cat === 'sounds' && <>
+                <h2>Звуки</h2>
+                <div className="pqs2-desc">Замени встроенные тоны своими файлами — везде, где играет звук приложения. Пусто — играет обычный тон.</div>
+                {([
+                  { key: 'notifSoundUrl' as const, title: 'Звук уведомления', desc: 'Входящее сообщение', url: notifSoundUrl, ref: notifSoundRef },
+                  { key: 'ringtoneUrl' as const, title: 'Рингтон', desc: 'Входящий звонок', url: ringtoneUrl, ref: ringtoneRef },
+                  { key: 'ringbackUrl' as const, title: 'Гудки', desc: 'Исходящий звонок (пока не ответили)', url: ringbackUrl, ref: ringbackRef },
+                ]).map(s => (
+                  <div className="pqs-acc-card2" key={s.key}>
+                    <div className="pqs-sec-t">{s.title}</div>
+                    <div className="pqs-code-sub">{s.desc}</div>
+                    <div className="pqs-iconrow">
+                      <button className="modal-primary" onClick={() => s.ref.current?.click()}>
+                        {soundBusy === s.key ? 'Загрузка…' : (s.url ? 'Заменить файл' : 'Загрузить свой файл')}
+                      </button>
+                      {s.url && <button className="pqs2-btn ghost" onClick={() => previewSound(s.url)}>Прослушать</button>}
+                      {s.url && <button className="pqs2-btn ghost" onClick={() => resetSound(s.key)}>Сбросить</button>}
+                      <input ref={s.ref} type="file" accept="audio/*" hidden onChange={e => pickSound(s.key, e)} />
+                    </div>
+                  </div>
+                ))}
               </>}
 
               {cat === 'keybinds' && <>

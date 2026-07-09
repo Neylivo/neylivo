@@ -1,8 +1,13 @@
 // Звуки звонка + плавное нарастание громкости при подключении.
-// Всё генерируется WebAudio-осцилляторами — никаких аудиофайлов в бандле.
+// По умолчанию всё генерируется WebAudio-осцилляторами — никаких аудиофайлов в
+// бандле. v1.166.0: рингтон и гудки можно заменить своим файлом (Настройки ->
+// Звуки) — тогда вместо мелодии из нот крутится загруженный <audio>, громкость
+// та же, что у динамиков в звонке.
 // Один общий AudioContext на приложение: через master-гейн идёт звук
 // участников звонка (это позволяет делать мягкий fade-in), короткие
 // сигналы играются напрямую.
+import { getSettings } from './settings'
+import { getUserPrefs } from './userPrefs'
 
 let _ctx: AudioContext | null = null
 export function audioCtx(): AudioContext {
@@ -58,21 +63,43 @@ export function sndMute() { play([[329.63, 0.14]], 'sine', 0.12) }
 /** Микрофон включён: тон выше ровно на кварту (A4) — сбалансированная пара. */
 export function sndUnmute() { play([[440, 0.14]], 'sine', 0.12) }
 
+// Свой файл вместо встроенной мелодии — крутится в цикле, громкость как у
+// динамиков звонка (settings.spkVol).
+function loopCustom(url: string): HTMLAudioElement {
+  const a = new Audio(url)
+  a.loop = true
+  a.volume = getSettings().spkVol / 100
+  a.play().catch(() => {})
+  return a
+}
+
 // ---- v1.30.0: рингтон входящего и гудки исходящего звонка (как в Discord) ----
 let ringInt: number | null = null
+let ringAudio: HTMLAudioElement | null = null
 /** Входящий звонок: зовущая мелодия, крутится по кругу, пока не ответили. */
 export function startRingtone() {
-  if (ringInt !== null) return
+  if (ringInt !== null || ringAudio) return
+  const url = getUserPrefs().account.ringtoneUrl
+  if (url) { ringAudio = loopCustom(url); return }
   const one = () => play([[659.25, 0.16], [523.25, 0.16], [659.25, 0.16], [523.25, 0.16], [783.99, 0.34]], 'sine', 0.11)
   one(); ringInt = window.setInterval(one, 2600)
 }
-export function stopRingtone() { if (ringInt !== null) { window.clearInterval(ringInt); ringInt = null } }
+export function stopRingtone() {
+  if (ringInt !== null) { window.clearInterval(ringInt); ringInt = null }
+  if (ringAudio) { ringAudio.pause(); ringAudio = null }
+}
 
 let backInt: number | null = null
+let backAudio: HTMLAudioElement | null = null
 /** Исходящий звонок: длинный мягкий гудок раз в ~3 секунды. */
 export function startRingback() {
-  if (backInt !== null) return
+  if (backInt !== null || backAudio) return
+  const url = getUserPrefs().account.ringbackUrl
+  if (url) { backAudio = loopCustom(url); return }
   const one = () => play([[440, 0.8]], 'sine', 0.05)
   one(); backInt = window.setInterval(one, 3000)
 }
-export function stopRingback() { if (backInt !== null) { window.clearInterval(backInt); backInt = null } }
+export function stopRingback() {
+  if (backInt !== null) { window.clearInterval(backInt); backInt = null }
+  if (backAudio) { backAudio.pause(); backAudio = null }
+}

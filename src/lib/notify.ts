@@ -2,6 +2,8 @@
 // Shows a native notification for an incoming message when the app is open but the
 // tab is not focused. This is the "notifications" first step; true push (delivered
 // when the app/tab is closed) would need a service worker + VAPID + a sender.
+import { getSettings } from './settings'
+import { getUserPrefs } from './userPrefs'
 
 export function initNotifications() {
   try {
@@ -42,9 +44,25 @@ function tone(freq: number, vol: number, dur = 0.09, when = 0) {
   o.start(c.currentTime + when); o.stop(c.currentTime + when + dur + 0.05)
 }
 
+// v1.166.0: свой звук уведомления вместо встроенного тона (Настройки -> Звуки),
+// плюс переключатель «Звуки уведомлений» — раньше существовал в настройках,
+// но ни на что не влиял (реальный баг).
+let notifAudio: HTMLAudioElement | null = null
+function playCustomSound(url: string) {
+  try {
+    if (!notifAudio || notifAudio.src !== url) { notifAudio = new Audio(url) }
+    notifAudio.volume = getSettings().spkVol / 100
+    notifAudio.currentTime = 0
+    notifAudio.play().catch(() => {})
+  } catch {}
+}
+
 /** Звук входящего сообщения: в фокусе — короткий и тихий, не в фокусе — ниже и заметнее. */
 export function msgSound() {
   try {
+    if (!getSettings().notifSounds) return
+    const url = getUserPrefs().account.notifSoundUrl
+    if (url) { playCustomSound(url); return }
     const focused = document.visibilityState === 'visible' && document.hasFocus()
     if (focused) tone(880, 0.035, 0.07)
     else { tone(620, 0.09); tone(830, 0.07, 0.12, 0.09) }

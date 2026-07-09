@@ -3,6 +3,7 @@ import { setTime24 } from './ui'
 import { applyLang } from './i18n'
 import { applyAppIcon, DEFAULT_APP_ICON } from './appIcon'
 import { getUserPrefs, patchUserPrefs } from './userPrefs'
+import { customNickFamily } from './profilePrefs'
 
 // Account-level переключатели (уведомления, кто может писать в ЛС, сбор данных) —
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
@@ -48,6 +49,7 @@ export interface Settings {
   actText: string
   sbKey: string   // in-call: save last 15s of the conversation
   fontFamily: string   // '' = system
+  fontFamilyUrl: string   // v1.166.0: свой файл шрифта интерфейса (.ttf/.otf/.woff/.woff2), '' = использовать fontFamily
   radius: number       // UI corner radius px
   msgGap: number       // extra gap between messages px
   time24: boolean      // 24h vs 12h clock
@@ -87,7 +89,7 @@ export const DEFAULTS: Settings = {
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
   micVol: 100, spkVol: 100, lang: 'ru', dmAll: true, dmMembers: true, dataCollect: true,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
-  fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
+  fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,
 }
@@ -151,13 +153,18 @@ function apply(s: Settings) {
   ;(document.body.style as any).zoom = String(s.zoom / 100)
   root.style.setProperty('--radius', s.radius + 'px')
   root.style.setProperty('--msg-gap', s.msgGap + 'px')
-  document.body.style.fontFamily = s.fontFamily || ''
+  document.body.style.fontFamily = s.fontFamilyUrl ? customNickFamily(s.fontFamilyUrl) : (s.fontFamily || '')
   setTime24(s.time24)
 }
 
+// Синхронный доступ к текущим настройкам вне React (звуки, интервалы) — модульное
+// зеркало, обновляется вместе с состоянием провайдера.
+let _current: Settings = DEFAULTS
+export function getSettings(): Settings { return _current }
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(load)
-  useEffect(() => { apply(settings) }, [settings])
+  useEffect(() => { apply(settings); _current = settings }, [settings])
   // Язык интерфейса: применяем перевод при старте и при смене.
   useEffect(() => { applyLang(settings.lang) }, [settings.lang])
   // v1.158.0: логотип приложения — favicon сразу, иконка окна/трея в Electron (асинхронно).
