@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // Авто-детект игр: main-процесс присылает { name, since } при старте игры и null при выходе.
   // removeAllListeners — защита от дублей подписки при перелогине (v1.28.0).
   onGame: (cb) => { ipcRenderer.removeAllListeners('ponoi-game'); ipcRenderer.on('ponoi-game', (_e, g) => cb(g ?? null)) },
+  // v1.150.0: конец матча (CS2 через GSI) — { game, mode, map, score, result }.
+  onMatchEnd: (cb) => { ipcRenderer.removeAllListeners('ponoi-match-end'); ipcRenderer.on('ponoi-match-end', (_e, m) => cb(m)) },
   // Поиск обложки игры в магазине Steam (в main-процессе, без CORS).
   findCover: (name) => ipcRenderer.invoke('ponoi-find-cover', name),
   // Авто-обновление (v1.29.0): статус скачивания и команда «Перезапустить и обновить».

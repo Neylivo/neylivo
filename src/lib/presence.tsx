@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { supabase } from './supabase'
 import { resolveCover } from './gameCovers'
 import { startSession, endSession } from './activity'
+import { saveMatch } from './gameMatches'
 import { useAuth } from '../auth/AuthProvider'
 import { DEVICE } from './mobile'
 import { toast } from './toast'
@@ -250,6 +251,18 @@ export function PresenceProvider({ username, avatarUrl, children }:
     // Приложение закрывают во время игры — честно фиксируем конец сессии.
     window.addEventListener('beforeunload', () => { if (sessRef.current) endSession(sessRef.current) })
     // eslint-disable-next-line
+  }, [])
+
+  // v1.150.0: конец матча (CS2 через GSI) — main-процесс прислал итоговый счёт/карту/режим,
+  // сохраняем в game_matches (own-only RLS, см. миграцию 32) для статистики за 30 дней.
+  useEffect(() => {
+    const d = (window as any).ponoiDesktop
+    if (!d?.onMatchEnd) return
+    d.onMatchEnd((m: { game: string; mode?: string | null; map?: string | null; score?: string | null; result?: 'win' | 'loss' | 'draw' | null }) => {
+      const u = userRef.current
+      if (!u) return
+      saveMatch(u.id, m).catch(() => {})
+    })
   }, [])
 
   function setMyListening(l: Listening | null) {

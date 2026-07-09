@@ -90,6 +90,15 @@ function broadcastGame() {
   }
 }
 
+// v1.150.0: конец матча (сейчас только CS2 через GSI) — рендерер сам пишет
+// строку в Supabase (game_matches), у него уже есть авторизованный клиент;
+// main-процесс тут просто гонец, без доступа к Supabase.
+function broadcastMatchEnd(m) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.webContents.send('ponoi-match-end', m) } catch {}
+  }
+}
+
 // ---- Поиск обложки игры (магазин Steam, без ключей) ----
 // Вызывается рендерером через IPC; ищем в main-процессе (Node, нет CORS).
 const coverCache = new Map()   // name -> url | null (кэш на время работы приложения)
@@ -462,6 +471,10 @@ const CS_MODES = { competitive: 'Соревновательный', premier: 'Pr
 const CS_MAPS = { de_mirage: 'Mirage', de_dust2: 'Dust II', de_inferno: 'Inferno', de_nuke: 'Nuke',
   de_ancient: 'Ancient', de_anubis: 'Anubis', de_vertigo: 'Vertigo', de_overpass: 'Overpass',
   de_train: 'Train', de_cache: 'Cache', cs_office: 'Office', cs_italy: 'Italy' }
+// v1.150.0: фиксация конца матча (game_matches в Supabase, статистика за 30 дней).
+// cs2MatchLogged гасит повторную отправку, пока GSI продолжает слать ту же
+// gameover-фазу каждые 5 сек (сбрасывается, как только матч выходит из gameover).
+let cs2MatchLogged = false
 function cs2Mode() {
   if (!lastGsi || lastGsi.appid !== '730' || Date.now() - lastGsi.at > 60_000) return null
   const d = lastGsi.data
@@ -481,15 +494,25 @@ function cs2Mode() {
     const mine = myTeam === 'T' ? t : ct
     const their = myTeam === 'T' ? ct : t
     const phase = String(map.phase || '').toLowerCase()
-    if (phase === 'warmup') return 'Разминка — ' + nice + (m ? ' · ' + m : '')
     if (phase === 'gameover' && haveScore) {
+      if (!cs2MatchLogged) {
+        cs2MatchLogged = true
+        broadcastMatchEnd({
+          game: 'Counter-Strike 2', mode: m, map: nice,
+          score: (myTeam ? mine : ct) + ':' + (myTeam ? their : t),
+          result: myTeam ? (mine > their ? 'win' : (mine < their ? 'loss' : 'draw')) : null,
+        })
+      }
       const res = myTeam ? (mine > their ? 'Победа' : (mine < their ? 'Поражение' : 'Ничья')) : 'Конец матча'
       return res + ' — ' + nice + ' · ' + (myTeam ? mine + ':' + their : ct + ':' + t)
     }
+    cs2MatchLogged = false
+    if (phase === 'warmup') return 'Разминка — ' + nice + (m ? ' · ' + m : '')
     // Счёт «свои:чужие», если знаем свою сторону; иначе как раньше CT:T
     const score = haveScore ? ' · ' + (myTeam ? mine + ':' + their : ct + ':' + t) : ''
     return (m ? m + ' — ' : 'В матче — ') + nice + score
   }
+  cs2MatchLogged = false
   if (d.player && d.player.activity === 'menu') return 'В лобби'
   return null
 }

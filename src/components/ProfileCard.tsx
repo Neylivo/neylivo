@@ -19,6 +19,8 @@ import { toastErr } from '../lib/toast'
 import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
 import { WallDraw } from './WallDraw'
+import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
+import { GameStatsModal } from './GameStatsModal'
 
 function fmtMs(ms: number): string {
   const h = Math.floor(ms / 3600000)
@@ -67,6 +69,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [frs, setFrs] = useState<Profile[] | null>(null)
   const [drawings, setDrawings] = useState<Drawing[]>([])
   const [wallOpen, setWallOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
 
   useEffect(() => {
     let ok = true
@@ -210,7 +213,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             {tab === 'activity' && <>
               {curGame && <>
                 <div className="fp-sect">Текущая активность</div>
-                <div className="act-card fp-cur">
+                {/* v1.150.0: клик по своей активности в GSI-отслеживаемой игре открывает статистику за 30 дней. */}
+                <div className={'act-card fp-cur' + (isMe && MATCH_TRACKED_GAMES.has(curGame.name) ? ' clickable' : '')}
+                  title={isMe && MATCH_TRACKED_GAMES.has(curGame.name) ? 'Статистика за 30 дней' : undefined}
+                  onClick={() => { if (isMe && MATCH_TRACKED_GAMES.has(curGame.name)) setStatsOpen(true) }}>
                   <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
                   <div className="act-row">
                     {(curGame.cover ?? covers[curGame.name])
@@ -223,6 +229,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                         <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={curGame.since} /></span>
                         {(recent?.find(r => r.name === curGame.name)?.streak ?? 1) > 1 && <span><Icon name="zap" size={13} /> x{recent!.find(r => r.name === curGame.name)!.streak} д. подряд</span>}
                         {popular.has(curGame.name) && <span><Icon name="flame" size={13} /> Популярное</span>}
+                        {isMe && MATCH_TRACKED_GAMES.has(curGame.name) && <span><Icon name="list" size={13} /> Статистика</span>}
                       </div>
                     </div>
                   </div>
@@ -299,6 +306,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             throw new Error('wall save failed')
           }
         }} />}
+        {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} onClose={() => setStatsOpen(false)} />}
       </div>
     </div>
   )

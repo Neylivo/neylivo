@@ -10,7 +10,21 @@ import { CodeFileCard, isCodeFile } from './CodeFileCard'
 import { useSettings } from '../lib/settings'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
-const MAXLEN = 2000
+const MAXLEN = 50000
+// v1.150.0: лимит подняли до 50 000 символов — без анти-спам-проверки это была бы
+// дыра для «залить чат 50 000 одинаковых букв». Реальный текст никогда не повторяет
+// один и тот же символ подряд сотни раз, поэтому режем длинные однобуквенные пробеги.
+const MAX_SAME_CHAR_RUN = 300
+function hasSpamRun(t: string): boolean {
+  let run = 1
+  for (let i = 1; i < t.length; i++) {
+    run = t[i] === t[i - 1] ? run + 1 : 1
+    if (run > MAX_SAME_CHAR_RUN) return true
+  }
+  return false
+}
+// 40 ГБ — потолок для вложений (см. также migration 33: file_size_limit бакетов Storage).
+const MAX_FILE_SIZE = 40 * 1024 ** 3
 
 // Человекочитаемый размер файла для подсказки на ссылке скачивания.
 function fmtSize(n: number): string {
@@ -81,8 +95,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const MAXFILES = 10
   function addFiles(fs: File[]) {
     if (fs.length === 0) return
+    const tooBig = fs.filter(f => f.size > MAX_FILE_SIZE)
+    if (tooBig.length) toastErr('Слишком большой файл (максимум 40 ГБ): ' + tooBig.map(f => f.name).join(', '))
+    const ok = fs.filter(f => f.size <= MAX_FILE_SIZE)
+    if (ok.length === 0) return
     setFiles(prev => {
-      const next = [...prev, ...fs]
+      const next = [...prev, ...ok]
       if (next.length > MAXFILES) toastErr('Не больше ' + MAXFILES + ' вложений в одном сообщении')
       return next.slice(0, MAXFILES)
     })
@@ -280,6 +298,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
     if (t && files.length === 0 && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
+    if (t && hasSpamRun(t)) { toastErr('Слишком много одинаковых символов подряд'); return }
     sendingRef.current = true
     setBusy(true)
     try {
