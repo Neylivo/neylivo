@@ -6,6 +6,7 @@ import { highlight, normLang } from './hl'
 import { toastOk } from './toast'
 import { Icon } from '../components/icons'
 import { emojify } from './twemoji'
+import { openMsgLink } from './deepLink'
 
 // Мини-маркдаун как в Discord: **жирный**, *курсив*, __подчёркнутый__, ~~зачёркнутый~~,
 // `код`, ```блок кода```, > цитата, ||спойлер|| (клик — раскрыть), кликабельные ссылки
@@ -30,6 +31,8 @@ function shortUrl(u: string): string {
   if (u.length <= 64) return u
   try { const p = new URL(u); return p.host + (p.pathname + p.search).slice(0, 28) + '\u2026' } catch { return u.slice(0, 61) + '\u2026' }
 }
+
+const PONOI_MSG_RE = /ponoi:\/\/msg\/\S+/
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]*\w/
 const PHONE_RE = /\+\d[\d ()-]{8,16}\d/
@@ -57,6 +60,7 @@ function inline(text: string, depth = 0): ReactNode[] {
     { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1)}</s> },
     { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
     { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
+    { re: PONOI_MSG_RE, render: m => <a key={k()} className="md-link" href="#" title="Перейти к сообщению" onClick={e => { e.preventDefault(); openMsgLink(m[0]) }}>{m[0]}</a> },
     { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])} title={m[0]}>{shortUrl(m[0])}</a> },
     { re: EMAIL_RE, render: m => <a key={k()} className="md-link" href={'mailto:' + m[0]}>{m[0]}</a> },
     { re: PHONE_RE, render: m => <a key={k()} className="md-link" href={'tel:' + m[0].replace(/[^+\d]/g, '')}>{m[0]}</a> },

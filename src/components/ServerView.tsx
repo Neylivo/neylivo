@@ -316,6 +316,28 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     loadRx(list.map(m => m.id))
   }
 
+  // Диплинк «Скопировать ссылку на сообщение»: Home.tsx уже переключил вид на этот сервер,
+  // осталось выбрать канал и (когда лента подгрузится) прыгнуть к самому сообщению.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail as { channelId: string; messageId?: string } | undefined
+      if (!d?.channelId) return
+      const ch = channels.find(c => c.id === d.channelId)
+      if (ch) selectChannel(ch)
+      const mid = d.messageId
+      if (!mid) return
+      let tries = 0
+      const tick = () => {
+        if (document.getElementById('msg-' + mid)) { jumpToMessage(mid); return }
+        if (++tries < 20) window.setTimeout(tick, 250)
+      }
+      window.setTimeout(tick, 400)
+    }
+    window.addEventListener('ponoi-open-channel-msg', h)
+    return () => window.removeEventListener('ponoi-open-channel-msg', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels])
+
   useEffect(() => {
     if (!curChannel) return
     const ch = supabase.channel('messages:' + curChannel.id)
@@ -708,7 +730,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {canManage && <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="srv-mi-lb">Настройки сервера</span> <Icon name="gear" size={16} /></div>}
             {canManageChannels && <div className="srv-mi" onClick={() => setShowCreateCh({ kind: 'text' })}><span className="srv-mi-lb">Создать канал</span> <Icon name="plus-circle" size={16} /></div>}
             {canManageChannels && <div className="srv-mi" onClick={() => setShowCreateCat(true)}><span className="srv-mi-lb">Создать категорию</span> <Icon name="folder" size={16} /></div>}
-            {isOwner && <div className="srv-mi" onClick={() => setShowEvents(true)}><span className="srv-mi-lb">Создать событие</span> <Icon name="calendar" size={16} /></div>}
+            {canManageChannels && <div className="srv-mi" onClick={() => setShowEvents(true)}><span className="srv-mi-lb">Создать событие</span> <Icon name="calendar" size={16} /></div>}
             <div className="srv-msep" />
             {!isOwner && <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}><span className="srv-mi-lb">Показать все каналы</span> <span className={'srv-mchk' + (showAllCh ? ' on' : '')}>{showAllCh && <Icon name="check" size={12} />}</span></div>}
             <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-notif', { detail: server }))}><span className="srv-mi-lb">Параметры уведомлений</span> <Icon name="bell" size={16} /></div>
@@ -856,6 +878,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat input:not([type="file"])') as HTMLInputElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
           </div>}
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
+            linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
@@ -976,7 +999,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         onCreate={(nm, kd, pv, ann) => { const cat = showCreateCh.cat; setShowCreateCh(null); createChannel(nm, kd, pv, cat, ann) }} />}
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
-      {showEvents && <ServerEvents server={server} channels={channels} onClose={() => setShowEvents(false)} />}
+      {showEvents && <ServerEvents server={server} channels={channels} canCreate={canManageChannels} onClose={() => setShowEvents(false)} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
         {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
       {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}

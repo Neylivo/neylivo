@@ -73,7 +73,7 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
     try {
       let sel = supabase.from(scope.table).select('*')
       if (scope.table === 'messages') sel = sel.in('channel_id', scope.channelIds ?? [])
-      else sel = sel.eq('dm_id', scope.dmId)
+      else sel = sel.eq('thread_id', scope.dmId)   // dm_messages.thread_id, не dm_id — такой колонки не существует
       if (p.text) sel = sel.ilike('content', '%' + p.text + '%')
       if (p.from) sel = sel.ilike('author_name', p.from + '%')
       if (p.after) sel = sel.gte('created_at', p.after)
@@ -83,6 +83,7 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
       const { data } = await sel.order('created_at', { ascending: false }).limit(50)
       let rows = (data ?? []) as Hit[]
       if (p.has === 'image') rows = rows.filter(h => (h as any).attach_type?.startsWith?.('image'))
+      if (p.has === 'file') rows = rows.filter(h => !(h as any).attach_type?.startsWith?.('image'))   // «файл» — не картинка, у той свой фильтр
       setHits(rows)
     } finally { setBusy(false) }
   }

@@ -30,6 +30,9 @@ export interface ProfilePrefs {
   // v1.112.0: шрифт сообщений — каким шрифтом пишутся твои сообщения в чате (видно всем)
   msgFont: string
   msgFontUrl: string | null
+  // v1.161.0: любимые игры — раньше жили в localStorage (видны только на своём же
+  // устройстве владельца), теперь в profiles, как остальные украшения профиля.
+  favGames: string[]
 }
 
 export interface Integration { label: string; url: string }
@@ -42,6 +45,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   plateUrl: null, plateKind: 'none', plateOutline: null,
   nickFont: '', nickFontUrl: null,
   msgFont: '', msgFontUrl: null,
+  favGames: [],
 }
 
 
@@ -80,6 +84,7 @@ function fromRow(r: any): ProfilePrefs {
     nickFontUrl: r.nick_font_url ?? null,
     msgFont: r.msg_font ?? '',
     msgFontUrl: r.msg_font_url ?? null,
+    favGames: Array.isArray(r.fav_games) ? r.fav_games : [],
   }
 }
 
@@ -105,6 +110,7 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.nickFontUrl !== undefined) r.nick_font_url = p.nickFontUrl
   if (p.msgFont !== undefined) r.msg_font = p.msgFont || null
   if (p.msgFontUrl !== undefined) r.msg_font_url = p.msgFontUrl
+  if (p.favGames !== undefined) r.fav_games = p.favGames
   return r
 }
 
@@ -134,12 +140,14 @@ const COLS_EXT = COLS_BASE + ', pronouns, integrations, created_at'
 const COLS_PLATE = COLS_EXT + ', nameplate_url, nameplate_kind, nameplate_outline'
 const COLS_FONT = COLS_PLATE + ', nick_font, nick_font_url'
 const COLS_MSG = COLS_FONT + ', msg_font, msg_font_url'
+const COLS_FAV = COLS_MSG + ', fav_games'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_EXT).eq('id', id).maybeSingle())

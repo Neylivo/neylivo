@@ -8,7 +8,7 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 
-export function ServerEvents({ server, channels, onClose }: { server: Server; channels: Channel[]; onClose: () => void }) {
+export function ServerEvents({ server, channels, canCreate, onClose }: { server: Server; channels: Channel[]; canCreate: boolean; onClose: () => void }) {
   const { user } = useAuth()
   const [events, setEvents] = useState<any[]>([])
   const [create, setCreate] = useState(false)
@@ -66,12 +66,14 @@ export function ServerEvents({ server, channels, onClose }: { server: Server; ch
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         {!create && <>
           <div className="sev-head"><Icon name="calendar" size={20} /> <b>Мероприятия</b>
-            <button className="modal-primary" style={{ marginLeft: 8 }} onClick={() => setCreate(true)}>Создать событие</button></div>
+            {canCreate && <button className="modal-primary" style={{ marginLeft: 8 }} onClick={() => setCreate(true)}>Создать событие</button>}</div>
           {events.length === 0
             ? <div className="sev-empty">
               <div className="sev-cal-big"><Icon name="calendar" size={34} /></div>
               <b>Нет предстоящих событий.</b>
-              <div>Назначьте событие для любой запланированной деятельности на вашем сервере.<br />Вы можете разрешить другим людям создавать события, перейдя в раздел «Роли» в настройках сервера.</div>
+              <div>{canCreate
+                ? 'Назначьте событие для любой запланированной деятельности на вашем сервере.'
+                : 'Создавать события могут владелец сервера и роли с правом «Управление каналами».'}</div>
             </div>
             : <div className="sev-list">{events.map(ev => (
               <div key={ev.id} className="sev-row">

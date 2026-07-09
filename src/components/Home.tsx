@@ -265,13 +265,31 @@ export function Home() {
     return () => window.removeEventListener('ponoi-folders', h)
   }, [])
 
-  // Переход на сервер из фулл-профиля (вкладка «Общие сервера»).
+  // Переход на сервер из фулл-профиля (вкладка «Общие сервера») — а также диплинк на
+  // сообщение (detail — объект с channelId/messageId вместо простого id сервера).
   useEffect(() => {
-    const h = (e: any) => { const s = servers.find(x => x.id === e.detail); if (s) { setView({ kind: 'server', server: s }); clearUnread(s.id) } }
+    const h = (e: any) => {
+      const d = e.detail
+      const id = typeof d === 'string' ? d : d?.id
+      const s = servers.find(x => x.id === id)
+      if (!s) return
+      setView({ kind: 'server', server: s }); clearUnread(s.id)
+      if (d && typeof d === 'object' && d.channelId) {
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-open-channel-msg', { detail: { channelId: d.channelId, messageId: d.messageId } })), 60)
+      }
+    }
     window.addEventListener('ponoi-open-server', h)
     return () => window.removeEventListener('ponoi-open-server', h)
     // eslint-disable-next-line
   }, [servers])
+
+  // Диплинк на сообщение в ЛС: переключаем экран на «Личные сообщения» — сам диалог
+  // и прыжок к сообщению открывает DMHome (он смонтирован постоянно, см. ниже).
+  useEffect(() => {
+    const h = () => setView({ kind: 'dm' })
+    window.addEventListener('ponoi-open-dm-thread', h)
+    return () => window.removeEventListener('ponoi-open-dm-thread', h)
+  }, [])
 
   async function refresh(selectId?: string) {
     const list = await myServers()

@@ -43,6 +43,10 @@ export async function joinByCode(code: string, meId: string, meName: string) {
   const clean = code.trim().replace(/^.*\//, '')  // allow pasting a full link
   const inv = await supabase.from('server_invites').select('*').eq('code', clean).maybeSingle()
   if (!inv.data) return { error: { message: 'Приглашение не найдено' } }
+  // v1.161.0: «Приостановить приглашения» в настройках сервера раньше ничего не проверяло —
+  // ссылка продолжала пускать новых участников даже при включённой паузе.
+  const srv = await supabase.from('servers').select('settings').eq('id', inv.data.server_id).maybeSingle()
+  if ((srv.data as any)?.settings?.invites_paused) return { error: { message: 'Приглашения на этот сервер приостановлены' } }
   const { error } = await supabase.from('server_members')
     .insert({ server_id: inv.data.server_id, user_id: meId, member_name: meName, role: 'member' })
   if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }

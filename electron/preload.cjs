@@ -34,4 +34,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // main-процесс ведёт сам, см. 'ponoi-set-icon'.
   setAppIcon: (dataUrl) => ipcRenderer.invoke('ponoi-set-icon', { dataUrl }),
   onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
+  // v1.161.0: диплинк на сообщение (ponoi://msg/...), пришедший запуском .exe с URL.
+  onDeepLink: (cb) => { ipcRenderer.removeAllListeners('ponoi-deep-link'); ipcRenderer.on('ponoi-deep-link', (_e, url) => cb(url)) },
 })

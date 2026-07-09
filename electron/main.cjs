@@ -24,6 +24,20 @@ function writePrefs(p) { try { require('fs').writeFileSync(prefsFile(), JSON.str
 try { const p0 = readPrefs(); if (p0.resumeHidden) { startHidden = true; writePrefs({ ...p0, resumeHidden: false }) } } catch {}
 let trySilentInstall = () => false   // назначается после инициализации автообновлений (v1.124.0)
 
+// v1.161.0: диплинки ponoi://msg/... («Скопировать ссылку на сообщение»). Windows
+// запускает наш .exe заново с URL в аргументах — если приложение уже открыто, это
+// приходит вторым экземпляром (второй if-branch ниже); если ещё не запущено —
+// URL есть в process.argv уже при первом старте, и мы досылаем его рендереру,
+// как только страница прогрузится (см. createWindow).
+app.setAsDefaultProtocolClient('ponoi')
+function extractPonoiUrl(argv) { return argv.find(a => a.startsWith('ponoi://')) || null }
+let pendingDeepLink = extractPonoiUrl(process.argv)
+function sendDeepLink(url) {
+  const w = BrowserWindow.getAllWindows().find(x => x !== splash)
+  if (w) { try { w.webContents.send('ponoi-deep-link', url) } catch {} }
+  else pendingDeepLink = url
+}
+
 // Вторая копия приложения не запускается — просто показывает уже работающую.
 // v1.155.0: app.quit() сам по себе НЕ останавливает выполнение остального
 // модуля — это асинхронная команда, а скрипт продолжает грузиться дальше
@@ -35,7 +49,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 } else {
-  app.on('second-instance', () => showMainWindow())
+  app.on('second-instance', (_e, argv) => {
+    showMainWindow()
+    const url = extractPonoiUrl(argv)
+    if (url) sendDeepLink(url)
+  })
 }
 
 function showMainWindow() {
@@ -1059,6 +1077,15 @@ function createWindow() {
 
   // Свежеоткрытому окну сразу сообщаем текущую игру (если она уже запущена).
   win.webContents.on('did-finish-load', () => { if (curGame) { try { win.webContents.send('ponoi-game', curGame) } catch {} } })
+
+  // Диплинк, с которым приложение было запущено «холодно» (ponoi://msg/... в
+  // process.argv) — ждём чуть-чуть после загрузки страницы, чтобы рендерер успел
+  // подписаться на событие, и досылаем.
+  win.webContents.on('did-finish-load', () => {
+    if (!pendingDeepLink) return
+    const url = pendingDeepLink; pendingDeepLink = null
+    setTimeout(() => { try { win.webContents.send('ponoi-deep-link', url) } catch {} }, 800)
+  })
 
   if (isDev) {
     win.loadURL('http://localhost:5173')

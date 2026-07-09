@@ -9,6 +9,7 @@ import { loadFavs, toggleFav } from './lib/emoji'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
 import { CHANGELOG } from './lib/changelog'
+import { openMsgLink } from './lib/deepLink'
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -158,6 +159,9 @@ function EmojiCtxHost() {
 
 export default function App() {
   const { session, loading } = useAuth()
+  // v1.161.0: диплинк ponoi://msg/... — приложение было открыто/поднято таким URL
+  // (десктоп, см. electron/main.cjs). Разбираем и переходим к сообщению.
+  useEffect(() => { (window as any).ponoiDesktop?.onDeepLink?.((url: string) => openMsgLink(url)) }, [])
   // v1.116.0: три быстрых клика по версии — окно «Что нового»
   const [showLog, setShowLog] = useState(false)
   const verClicks = useRef<number[]>([])

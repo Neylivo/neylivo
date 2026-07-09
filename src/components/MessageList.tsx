@@ -11,6 +11,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
+import { buildMsgLink, type MsgLinkCtx } from '../lib/deepLink'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
@@ -170,9 +171,12 @@ interface Props {
   colorOf?: (userId: string) => string | undefined
   // «Отметить как непрочитанное» — ставит разделитель НОВОЕ на это сообщение.
   onMarkUnread?: (m: UiMessage) => void
+  // Контекст (сервер+канал или ЛС) для «Скопировать ссылку на сообщение» — без него ссылка
+  // не может привести туда же, где было само сообщение.
+  linkCtx?: MsgLinkCtx
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread, linkCtx }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -397,7 +401,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {textOf ? item('Скопировать текст', 'copy', () => { copyText(textOf, 'Текст скопирован') }) : null}
           {(canPin ? canPin(menuMsg) : true) ? item(menuMsg.pinned ? 'Открепить сообщение' : 'Закрепить сообщение', 'pin', () => onPin?.(menu.id, !menuMsg.pinned)) : null}
           {onMarkUnread ? item('Отметить как непрочитанное', 'message', () => { onMarkUnread(menuMsg); toastOk('Отмечено как непрочитанное') }) : null}
-          {item('Скопировать ссылку на сообщение', 'link', () => { copyText('ponoi://msg/' + menuMsg.id, 'Ссылка скопирована') })}
+          {item('Скопировать ссылку на сообщение', 'link', () => { copyText(linkCtx ? buildMsgLink(linkCtx, menuMsg.id) : 'ponoi://msg/' + menuMsg.id, 'Ссылка скопирована') })}
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {img ? <>
             <div className="ctx-sep" />

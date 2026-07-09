@@ -415,6 +415,31 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     // eslint-disable-next-line
   }, [])
 
+  // Диплинк «Скопировать ссылку на сообщение» из ЛС: известен id диалога, а не
+  // друга — находим собеседника через dm_threads и открываем чат как обычно.
+  useEffect(() => {
+    const h = async (e: Event) => {
+      const d = (e as CustomEvent).detail as { threadId: string; messageId?: string } | undefined
+      if (!d?.threadId) return
+      const { data: t } = await supabase.from('dm_threads').select('user_a,user_b').eq('id', d.threadId).maybeSingle()
+      if (!t) { toastErr('Диалог не найден'); return }
+      const otherId = t.user_a === meId ? t.user_b : t.user_a
+      const f = friends.find(x => x.id === otherId) ?? { id: otherId, name: 'Пользователь' }
+      await openChat(f)
+      const mid = d.messageId
+      if (!mid) return
+      let tries = 0
+      const tick = () => {
+        if (document.getElementById('msg-' + mid)) { jumpToMessage(mid); return }
+        if (++tries < 20) window.setTimeout(tick, 250)
+      }
+      window.setTimeout(tick, 400)
+    }
+    window.addEventListener('ponoi-open-dm-thread', h)
+    return () => window.removeEventListener('ponoi-open-dm-thread', h)
+    // eslint-disable-next-line
+  }, [friends])
+
   // v1.72.0: возвращение на экран ЛС (с сервера/музыки) — плавно в самый низ
   // открытого чата, к новым сообщениям. Двойной rAF — ждём, пока экран снова
   // станет видимым (display переключается с none), иначе скролл не сработает.
@@ -685,6 +710,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
+              linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}

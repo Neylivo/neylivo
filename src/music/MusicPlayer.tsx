@@ -1,4 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
+import { promptUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
@@ -432,8 +433,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const prev = () => setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
   nextRef.current = next
 
-  function addToPlaylist(trackId: string) {
-    const name = prompt('Название плейлиста (существующее или новое)')?.trim(); if (!name) return
+  async function addToPlaylist(trackId: string) {
+    const name = (await promptUi('Название плейлиста (существующее или новое)', { placeholder: 'Моя музыка' }))?.trim(); if (!name) return
     setPlaylists(ps => {
       const found = ps.find(p => p.name === name)
       let n: Playlist[]
@@ -446,8 +447,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const code = Math.random().toString(36).slice(2, 8).toUpperCase()
     setTogether({ code, host: true }); setTogetherUi(false)
   }
-  function joinTogether() {
-    const code = prompt('Код совместного прослушивания')?.trim().toUpperCase(); if (!code) return
+  async function joinTogether() {
+    const code = (await promptUi('Код совместного прослушивания', { placeholder: 'ABC123' }))?.trim().toUpperCase(); if (!code) return
     setTogether({ code, host: false }); setTogetherUi(false)
   }
 

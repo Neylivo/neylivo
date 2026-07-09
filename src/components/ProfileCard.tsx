@@ -52,14 +52,14 @@ export type ProfileTab = 'board' | 'activity' | 'wall' | 'servers' | 'friends'
 export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialTab = 'board' }:
   { userId: string; name: string; avatarUrl?: string | null; status: Status; onClose: () => void; initialTab?: ProfileTab }) {
   const { user } = useAuth()
-  const { gameOf } = usePresence()
+  const { gameOf, statusOf } = usePresence()
   const isMe = user?.id === userId
   const [pp, setPp] = useState<ProfilePrefs>(() => cachedProfile(userId) ?? DEFAULT_PROFILE)   // v1.142.0: сразу из кэша, без мелькания
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
   const [note, setNote] = useState(() => localStorage.getItem('ponoi_note_' + userId) ?? '')
-  const [favs, setFavs] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('ponoi_favs_' + userId) || '[]') } catch { return [] } })
+  const favs = pp.favGames
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
   const [recent, setRecent] = useState<RecentGame[] | null>(null)
@@ -70,6 +70,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [drawings, setDrawings] = useState<Drawing[]>([])
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
     let ok = true
@@ -125,7 +126,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     setNote(v)
     if (v) localStorage.setItem('ponoi_note_' + userId, v); else localStorage.removeItem('ponoi_note_' + userId)
   }
-  function saveFavs(next: string[]) { setFavs(next); localStorage.setItem('ponoi_favs_' + userId, JSON.stringify(next)) }
+  function saveFavs(next: string[]) { setPp(p => ({ ...p, favGames: next })); saveProfile(userId, { favGames: next }) }
   async function addFav(single: boolean) {
     const g = (await promptUi(single ? 'Любимая игра' : 'Добавить игру в любимые', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim()
     if (!g) return
@@ -289,7 +290,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
               frs === null ? <div className="fp-empty">Загрузка…</div>
               : frs.length === 0 ? <div className="fp-empty">Нет общих друзей</div>
               : frs.map(f => (
-                <div key={f.id} className="fp-friend">
+                <div key={f.id} className="fp-friend" title={'Открыть профиль: ' + f.username} onClick={() => setFriendProfile(f)}>
                   <Avatar name={f.username} url={(f as any).avatar_url} size={32} />
                   <span>{f.username}</span>
                 </div>
@@ -308,6 +309,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
         }} />}
         {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} onClose={() => setStatsOpen(false)} />}
       </div>
+      {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
+        status={statusOf(friendProfile.id)} initialTab="activity" onClose={() => setFriendProfile(null)} />}
     </div>
   )
 }
