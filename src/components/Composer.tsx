@@ -78,7 +78,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [mQ, setMQ] = useState<string | null>(null)
   const [mIdx, setMIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
   // v1.42.0: синхронный замок от двойной отправки (второй Enter до того, как busy успеет выставиться)
   const sendingRef = useRef(false)
@@ -135,6 +135,15 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (v) localStorage.setItem('ponoi_draft_' + draftKey, v)
     else localStorage.removeItem('ponoi_draft_' + draftKey)
   }
+
+  // v1.163.0: многострочный композер — поле растёт вместе с текстом (Shift+Enter —
+  // новая строка, как в Discord), CSS max-height/overflow-y ограничивают рост дальше.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [text])
 
   // Любая буква/цифра возвращает фокус в строку ввода, где бы ни был курсор (как в Discord).
   useEffect(() => {
@@ -401,7 +410,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <input ref={fileRef} type="file" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={photoRef} type="file" accept="image/*" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
-        <input ref={inputRef} placeholder={files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
+        <textarea ref={inputRef} rows={1} placeholder={files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
           onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
           onPaste={e => {
             const pf = Array.from(e.clipboardData?.files ?? [])
@@ -410,7 +419,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             const p = e.clipboardData?.getData('text')
             if (p && p !== p.trim()) {
               e.preventDefault()
-              const el = e.target as HTMLInputElement
+              const el = e.target as HTMLTextAreaElement
               const s = el.selectionStart ?? text.length, en = el.selectionEnd ?? s
               const ins = p.trim()
               const nv = text.slice(0, s) + ins + text.slice(en)
@@ -418,7 +427,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               requestAnimationFrame(() => { const c = s + ins.length; el.setSelectionRange(c, c) })
             }
           }}
-          onClick={e => updateMention(text, (e.target as HTMLInputElement).selectionStart)}
+          onClick={e => updateMention(text, (e.target as HTMLTextAreaElement).selectionStart)}
           onKeyDown={e => {
             // Ctrl+B — жирный, Ctrl+I — курсив, Ctrl+E — код, Ctrl+Shift+S — спойлер.
             if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -438,10 +447,16 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             if (e.key === 'Escape') { setEmoji(false); setGif(false); onCancelReply?.(); return }
             if (e.key === 'Enter') {
               const hasCtrl = e.ctrlKey || e.metaKey
+              // v1.163.0: textarea больше не отправляет форму сама по Enter (как раньше
+              // делал однострочный input) — многострочность даёт Shift+Enter/обычный
+              // Enter вставить перенос, смотря по режиму settings.sendKey.
               if (settings.sendKey === 'ctrl') {
-                if (hasCtrl) { e.preventDefault(); submit(e as any) } else { e.preventDefault() }
+                if (hasCtrl) { e.preventDefault(); submit(e as any) }
+                // иначе — обычный Enter вставляет перенос строки (поведение textarea по умолчанию)
+              } else if (!e.shiftKey && !hasCtrl) {
+                e.preventDefault(); submit(e as any)
               }
-              // 'enter' mode: let the form submit naturally
+              // Shift+Enter (или Ctrl+Enter в режиме 'enter') — перенос строки по умолчанию
             }
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}

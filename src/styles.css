@@ -92,7 +92,10 @@ body {
 
 .chat { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
 .chat-head { padding:16px; font-weight:700; border-bottom:1px solid rgba(0,0,0,.2); box-shadow:0 1px 0 rgba(0,0,0,.2); display:flex; align-items:center; }
-.msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:2px; }
+.msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:2px; position:relative; }
+/* v1.163.0: плавающая дата при скролле старой истории — см. StickyDatePill в MessageList.tsx */
+.sticky-date-pill { position:absolute; left:50%; transform:translateX(-50%); z-index:6; background:rgba(0,0,0,.6); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); color:#dfe7ee; font-size:12px; font-weight:700; padding:5px 14px; border-radius:999px; pointer-events:none; opacity:0; transition:opacity .25s ease; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+.sticky-date-pill.show { opacity:1; }
 .msg { display:flex; gap:16px; padding:6px 12px; border-radius:6px; transition:background .1s ease; animation:msgIn .2s ease both; }
 .msg:hover { background:rgba(0,0,0,.12); }
 .msg-av { width:40px; height:40px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; overflow:hidden; }
@@ -103,8 +106,9 @@ body {
 .msg-time { color:var(--mut); font-size:12px; }
 .msg-txt { margin-top:2px; white-space:pre-wrap; word-break:break-word; line-height:1.375; }
 .composer { padding:0 16px 24px; display:flex; gap:8px; }
-.composer input { flex:1; background:var(--c-hover); border:none; border-radius:8px; padding:12px 14px; color:var(--tx); font-size:16px; outline:none; }
-.composer input::placeholder { color:var(--mut); }
+/* v1.163.0: многострочный композер (textarea, авто-рост) вместо однострочного input — Shift+Enter теперь переносит строку, как в Discord. */
+.composer textarea { flex:1; background:var(--c-hover); border:none; border-radius:8px; padding:12px 14px; color:var(--tx); font-size:16px; outline:none; font-family:inherit; line-height:1.375; resize:none; overflow-y:auto; max-height:50vh; }
+.composer textarea::placeholder { color:var(--mut); }
 .composer button { background:var(--brand); border:none; color:#fff; border-radius:8px; padding:0 16px; cursor:pointer; font-size:16px; transition:filter .15s ease; }
 .composer button:hover { filter:brightness(1.1); }
 
@@ -1244,8 +1248,10 @@ body.no-anim .msg-flash { animation:none; }
 .search-hit:hover { background:var(--c-hover, #383a40); }
 
 /* ===== Профиль-карточка из чата ===== */
-.av-click { cursor:pointer; }
+.av-click { cursor:pointer; display:inline-flex; transition:transform .15s cubic-bezier(.34,1.56,.64,1); }
+.av-click:hover { transform:scale(1.08); }
 .msg-hdr .nm.clickable { cursor:pointer; }
+.msg-hdr .nm.clickable:hover { text-decoration:underline; }
 .msg-hdr .nm.clickable:hover { text-decoration:underline; }
 
 /* ===== Индикатор непрочитанного на серверах ===== */
@@ -1578,8 +1584,8 @@ body.no-anim .member-typing i { animation:none; }
 .ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }
 
 /* ===== Панель ввода 1-в-1 как в эталоне: единая тёмная капсула ===== */
-.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:0 8px 0 6px; gap:2px; min-height:44px; align-items:center; }
-.composer input { background:transparent; border-radius:0; padding:12px 8px; }
+.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:3px 8px 3px 6px; gap:2px; min-height:44px; align-items:flex-end; }
+.composer textarea { background:transparent; border-radius:0; padding:12px 8px; }
 .composer .attach-btn { background:transparent; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#b5bac1; border-radius:50%; padding:0; }
 .composer .attach-btn:hover { background:transparent; color:#fff; }
 .composer .ctool { background:transparent; height:38px; min-width:36px; padding:0 6px; color:#b5bac1; display:flex; align-items:center; justify-content:center; }
@@ -2611,7 +2617,7 @@ body.no-anim .member-typing i { animation:none; }
 
   /* Композер: тёмная панель, меньше кнопок, круглая синяя «Отправить» */
   .composer { padding:6px 8px calc(8px + env(safe-area-inset-bottom)); background:#17212b; gap:4px; }
-  .composer input { background:transparent; padding:12px 6px; font-size:16px; }
+  .composer textarea { background:transparent; padding:12px 6px; font-size:16px; }
   .attach-btn { background:transparent; color:#8b9ba8; width:40px; }
   .ctool { background:transparent; color:#8b9ba8; min-width:38px; height:40px; padding:0 6px; }
   .ctool-clip, .gif-badge { display:none; }
@@ -3759,7 +3765,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .vp-status.connecting .vp-dot { background:#faa61a; }
 
 /* ==== v1.144.0: строка ввода чуть выше и без лишнего пустого места снизу ==== */
-.composer input { padding-top:15px; padding-bottom:15px; }
+.composer textarea { padding-top:15px; padding-bottom:15px; }
 @media (min-width: 901px) {
   .composer { min-height:52px; margin-bottom:14px; }
 }

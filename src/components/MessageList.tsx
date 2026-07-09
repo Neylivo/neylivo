@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, timeFull, dayLabel, msgTime } from '../lib/ui'
@@ -65,6 +65,39 @@ export function jumpToMessage(id: string) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('msg-flash')
   window.setTimeout(() => el.classList.remove('msg-flash'), 1600)
+}
+
+// v1.163.0: плавающая дата при скролле старой истории (как в Slack/Telegram) — показывает
+// дату верхнего видимого дня и сама прячется, если прокрутка остановилась у самого начала.
+function StickyDatePill() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [label, setLabel] = useState<string | null>(null)
+  const [visible, setVisible] = useState(false)
+  const hideTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    const container = el?.closest('.msgs') as HTMLElement | null
+    if (!container) return
+    const onScroll = () => {
+      const top = container.getBoundingClientRect().top
+      const seps = container.querySelectorAll('.day-sep')
+      let cur: string | null = null
+      for (const s of Array.from(seps)) {
+        if (s.getBoundingClientRect().top - top <= 36) cur = s.textContent
+        else break
+      }
+      if (el) el.style.top = container.scrollTop + 8 + 'px'
+      setLabel(cur)
+      setVisible(!!cur && container.scrollTop > 40)
+      if (hideTimer.current) window.clearTimeout(hideTimer.current)
+      hideTimer.current = window.setTimeout(() => setVisible(false), 1400)
+    }
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => { container.removeEventListener('scroll', onScroll); if (hideTimer.current) window.clearTimeout(hideTimer.current) }
+  }, [])
+
+  return <div ref={ref} className={'sticky-date-pill' + (visible ? ' show' : '')}>{label}</div>
 }
 
 // Ссылка на картинку в тексте — показываем превью самой картинки под сообщением.
@@ -234,6 +267,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
 
   return (
     <>
+      <StickyDatePill />
       {messages.map(m => {
         // Системное сообщение («X закрепил сообщение») — компактная строка, как в Discord.
         const sys = parseSys(m.content)
