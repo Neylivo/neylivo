@@ -16,6 +16,7 @@ import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { CallRoom, Sinks } from './CallRoom'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
+import { ProfileCard } from './ProfileCard'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
 import { startRingback, stopRingback, master, sndMute, sndUnmute } from '../lib/callSounds'
 import { sysCallStart, sysCallEnded, sysCallMissed, parseSys } from '../lib/sysmsg'
@@ -28,6 +29,7 @@ import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
 import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
 import { getDmRead, setDmRead } from '../lib/userPrefs'
+import { useAvatarOf } from '../lib/avatars'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
@@ -44,6 +46,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [q, setQ] = useState('')
   const [results, setResults] = useState<Profile[]>([])
   const [active, setActive] = useState<Friend | null>(null)
+  // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord, открыта
+  // по умолчанию на десктопе (как «Показать участников» на сервере).
+  const [showProfile, setShowProfile] = useState(() => !IS_MOBILE)
+  const activeAvatar = useAvatarOf(active?.id)
   const [threadId, setThreadId] = useState<string | null>(null)
   // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
   useEffect(() => { setActiveDm(threadId); return () => setActiveDm(null) }, [threadId])
@@ -696,6 +702,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           <header className="chat-head"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>{!IS_MOBILE && '@ '}{active.name}
             <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
             <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
+            <button className={'pin-btn' + (showProfile ? ' on' : '')} title={showProfile ? 'Скрыть профиль' : 'Показать профиль'}
+              onClick={() => setShowProfile(v => !v)}><Icon name="user" size={18} /></button>
           </header>
           {showPins && <div className="pins-panel">
             <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
@@ -883,6 +891,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           </div>
         </>}
       </main>
+      {active && showProfile && <aside className="dm-profile-panel">
+        <ProfileCard panel userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
+          onClose={() => setShowProfile(false)} />
+      </aside>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )

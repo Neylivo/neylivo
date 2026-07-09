@@ -1771,6 +1771,14 @@ body.no-anim .member-typing i { animation:none; }
 .pc-card { position:relative; width:min(1040px, 94vw); height:min(760px, 92vh); background:#111214; border-radius:14px; display:grid; grid-template-columns:400px 1fr; overflow:hidden; animation:pop .15s ease both; box-shadow:0 24px 80px rgba(0,0,0,.6); }
 .pc-x { position:absolute; top:14px; right:14px; z-index:5; width:34px; height:34px; border-radius:50%; border:none; background:rgba(0,0,0,.45); color:#dbdee1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .pc-x:hover { background:rgba(0,0,0,.7); color:#fff; }
+
+/* v1.168.0: панель профиля справа в ЛС — 1-в-1 как в Discord (не модалка, а
+   постоянная колонка рядом с чатом). Переиспользует ту же разметку/логику
+   pc-card, просто выключает бэкдроп и складывает две колонки в одну. */
+.pc-panel-wrap { position:relative; height:100%; flex:none; }
+.pc-card.panel { position:static; width:360px; height:100%; grid-template-columns:1fr; border-radius:0; box-shadow:none; animation:none; border-left:1px solid rgba(255,255,255,.06); }
+.pc-card.panel .pc-right { border-left:none; }
+@media (max-width:1100px) { .pc-panel-wrap { display:none; } }
 .pc-left { overflow-y:auto; }
 .pc-banner { height:150px; }
 .pc-avwrap { position:relative; margin:-70px 0 0 24px; width:140px; height:140px; }
