@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { StatusDot } from './StatusDot'
@@ -75,6 +75,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [meName, setMeName] = useState('')
   const [uname, setUname] = useState('')   // v1.40.0: настоящий юзернейм показываемого пользователя
   const [mutuals, setMutuals] = useState<{ id: string; username: string; avatar_url: string | null }[]>([])
+  // v1.159.0: «умное» позиционирование — карточка меряет свой реальный размер
+  // после рендера (высота зависит от контента: баннер, роли, активности,
+  // общие друзья и т.д. — заранее не известна) и, если вылезает за край
+  // экрана, сдвигается так, чтобы поместиться целиком с отступом MARGIN.
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [adj, setAdj] = useState<{ top: number; left: number } | null>(null)
 
   // Для офлайн-пользователя подтягиваем время последнего визита (если миграция 11 применена).
   useEffect(() => {
@@ -87,6 +93,22 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   useEffect(() => { let ok = true; const c = cachedProfile(data.userId); if (c) setPp(c); fetchProfile(data.userId).then(p => { if (ok) setPp(p) }); return () => { ok = false } }, [data.userId])
   // v1.106.0: при открытии другого профиля активности снова свёрнуты до кнопки «Ещё».
   useEffect(() => { setMoreActs(false) }, [data.userId])
+  // Измеряем реальный размер карточки СРАЗУ после монтирования (useLayoutEffect —
+  // синхронно, до отрисовки кадра, поэтому «прыжка» позиции пользователь не видит).
+  // key={data.userId} на самой карточке ниже гарантирует свежий DOM-узел под
+  // каждый новый профиль, так что здесь всегда актуальные метки без гонок.
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const M = 20
+    const r = el.getBoundingClientRect()
+    let top = r.top, left = r.left, changed = false
+    if (r.bottom > window.innerHeight - M) { top = Math.max(M, window.innerHeight - M - r.height); changed = true }
+    else if (r.top < M) { top = M; changed = true }
+    if (r.right > window.innerWidth - M) { left = Math.max(M, window.innerWidth - M - r.width); changed = true }
+    else if (r.left < M) { left = M; changed = true }
+    if (changed) setAdj({ top, left })
+  }, [])
   // Аватар: если не передали (например, клик по сообщению в ЛС) — берём из profiles.
   useEffect(() => {
     let ok = true
@@ -145,16 +167,22 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // Шаг 2 цепочки: клик по аватарке/нику в мини-профиле открывает фулл-профиль по центру.
   if (full) return <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="activity" onClose={onClose} />
 
-  const posStyle: React.CSSProperties = data.anchor === 'me'
+  // Первая (грубая) прикидка — на ней рисуется самый первый кадр; useLayoutEffect
+  // выше тут же поправит её по-настоящему, если карточка не влезла в экран.
+  const basePos: React.CSSProperties = data.anchor === 'me'
     ? { left: Math.max(8, data.x), bottom: Math.max(8, window.innerHeight - data.y + 8) }   // v1.140.0: ровно над нижней панелькой
     : data.anchor === 'member-list'
     ? { right: 252, top: Math.max(12, Math.min(data.y - 60, window.innerHeight - 540)) }
     : { left: data.x, top: data.y }
+  // adj — уже измеренная и гарантированно влезающая позиция; когда она есть,
+  // полностью заменяет грубую прикидку (top+bottom одновременно не задаём —
+  // иначе position:fixed без явной height растянет карточку между ними).
+  const posStyle: React.CSSProperties = adj ? { top: adj.top, left: adj.left } : basePos
 
   return (
     <>
       <div className="mini-overlay" onClick={onClose} />
-      <div className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
+      <div key={data.userId} ref={boxRef} className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
         <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
         {!isMe && <div className="mini-topbtns">
           <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>
