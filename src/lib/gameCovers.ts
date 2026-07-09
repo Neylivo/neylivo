@@ -38,6 +38,23 @@ function itunesJsonp(term: string): Promise<string | null> {
   })
 }
 
+// v1.165.0: SteamGridDB — специализированный каталог обложек игр (свободный ключ на
+// steamgriddb.com/profile/preferences/api), последний рубеж, когда Steam Store и iTunes
+// не нашли ничего (инди/малоизвестные игры, которых нет в обоих магазинах). Без ключа
+// (VITE_STEAMGRIDDB_KEY не задан) — просто пропускается, как и поиск гифок без VITE_TENOR_KEY.
+const SGDB_KEY = (import.meta.env.VITE_STEAMGRIDDB_KEY as string | undefined) ?? ''
+async function steamGridDbCover(term: string): Promise<string | null> {
+  if (!SGDB_KEY) return null
+  try {
+    const auth = { Authorization: 'Bearer ' + SGDB_KEY }
+    const sr = await fetch('https://www.steamgriddb.com/api/v2/search/autocomplete/' + encodeURIComponent(term), { headers: auth }).then(r => r.json())
+    const id = sr?.data?.[0]?.id
+    if (!id) return null
+    const gr = await fetch('https://www.steamgriddb.com/api/v2/grids/game/' + id + '?dimensions=460x215', { headers: auth }).then(r => r.json())
+    return gr?.data?.[0]?.url ?? null
+  } catch { return null }
+}
+
 export async function resolveCover(name: string): Promise<string | null> {
   if (!name) return null
   // 1) Общий кэш в базе: одна игра ищется один раз на всех.
@@ -67,6 +84,7 @@ export async function resolveCover(name: string): Promise<string | null> {
   try {
     const d = (window as any).ponoiDesktop
     url = d?.findCover ? await d.findCover(name) : await itunesJsonp(term)
+    if (!url) url = await steamGridDbCover(term)
   } catch { return prior }
   if (!url && prior) url = prior   // v1.144.0: поиск подвёл — оставляем прежнюю рабочую обложку, а не null
   // 3) Кэшируем результат (включая not_found) для всех.

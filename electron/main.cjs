@@ -526,25 +526,30 @@ try {
   gsiServer.on('error', (err) => { console.warn('[gsi] listen failed:', err && err.message) })
   gsiServer.listen(3947, '127.0.0.1')
 } catch {}
+// v1.165.0: добавлена подписка "player_match_stats" "1" — Valve присылает в ней
+// живые kills/deaths/assists/mvps/score, которых раньше не хватало для статистики CS2.
 const GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
   ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
-  '  "player_id" "1"', '  "player_state" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
+  '  "player_id" "1"', '  "player_state" "1"', '  "player_match_stats" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
 // Конфиг GSI подкладывается, когда игра запущена (путь берём из её exe).
 // Игра прочтёт его при СЛЕДУЮЩЕМ запуске — это ограничение самой Valve.
+// v1.165.0: перезаписываем файл, если его содержимое устарело (не совпадает с
+// текущим GSI_CFG) — иначе те, у кого конфиг уже стоял с прошлой версии, никогда
+// не получили бы новую подписку player_match_stats.
 function ensureGsiCfg(game, exe) {
   try {
     if (!exe) return
     const fsr = require('fs')
     const root = exe.replace(/[\\/]game[\\/].*$/i, '')
+    const put = (f) => { if (!fsr.existsSync(f) || fsr.readFileSync(f, 'utf8') !== GSI_CFG) fsr.writeFileSync(f, GSI_CFG) }
     if (game === 'Counter-Strike 2') {
       const dir = path.join(root, 'game', 'csgo', 'cfg')
-      if (fsr.existsSync(dir)) { const f = path.join(dir, 'gamestate_integration_ponoi.cfg'); if (!fsr.existsSync(f)) fsr.writeFileSync(f, GSI_CFG) }
+      if (fsr.existsSync(dir)) put(path.join(dir, 'gamestate_integration_ponoi.cfg'))
     } else if (game === 'Dota 2') {
       if (!fsr.existsSync(path.join(root, 'game', 'dota'))) return
       const dir = path.join(root, 'game', 'dota', 'cfg', 'gamestate_integration')
       try { fsr.mkdirSync(dir, { recursive: true }) } catch {}
-      const f = path.join(dir, 'gamestate_integration_ponoi.cfg')
-      if (!fsr.existsSync(f)) fsr.writeFileSync(f, GSI_CFG)
+      put(path.join(dir, 'gamestate_integration_ponoi.cfg'))
     }
   } catch {}
 }
@@ -581,10 +586,15 @@ function cs2Mode() {
     if (phase === 'gameover' && haveScore) {
       if (!cs2MatchLogged) {
         cs2MatchLogged = true
+        // v1.165.0: kills/deaths/assists/mvps своего игрока за матч — приходят в
+        // player.match_stats благодаря подписке "player_match_stats" в GSI_CFG.
+        const ms = d.player && d.player.match_stats
         broadcastMatchEnd({
           game: 'Counter-Strike 2', mode: m, map: nice,
           score: (myTeam ? mine : ct) + ':' + (myTeam ? their : t),
           result: myTeam ? (mine > their ? 'win' : (mine < their ? 'loss' : 'draw')) : null,
+          kills: ms ? ms.kills : null, deaths: ms ? ms.deaths : null,
+          assists: ms ? ms.assists : null, mvps: ms ? ms.mvps : null,
         })
       }
       const res = myTeam ? (mine > their ? 'Победа' : (mine < their ? 'Поражение' : 'Ничья')) : 'Конец матча'

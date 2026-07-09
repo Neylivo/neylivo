@@ -15,6 +15,7 @@ import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
+import { colorFor, initial } from '../lib/ui'
 import { confirmUi } from '../lib/confirm'
 import { GamePickerModal } from './GamePickerModal'
 import { toastErr } from '../lib/toast'
@@ -44,6 +45,26 @@ function agoLabel(ms: number): string {
   return Math.floor(d / 7) + ' нед. назад'
 }
 
+// Подключения (v1.165.0): произвольная ссылка + название — Steam, TikTok, YouTube
+// или что угодно ещё. Для известных доменов подставляем человеческое название,
+// если пользователь не указал своё.
+const KNOWN_LABELS: [RegExp, string][] = [
+  [/(^|\.)steamcommunity\.com$/, 'Steam'], [/(^|\.)steampowered\.com$/, 'Steam'],
+  [/(^|\.)tiktok\.com$/, 'TikTok'], [/(^|\.)youtube\.com$/, 'YouTube'], [/^youtu\.be$/, 'YouTube'],
+  [/(^|\.)twitch\.tv$/, 'Twitch'], [/(^|\.)(twitter|x)\.com$/, 'X (Twitter)'],
+  [/(^|\.)instagram\.com$/, 'Instagram'], [/(^|\.)github\.com$/, 'GitHub'],
+  [/(^|\.)discord\.(gg|com)$/, 'Discord'], [/(^|\.)reddit\.com$/, 'Reddit'],
+  [/(^|\.)vk\.com$/, 'VK'], [/(^|\.)(t|telegram)\.me$/, 'Telegram'],
+  [/(^|\.)spotify\.com$/, 'Spotify'], [/(^|\.)pinterest\./, 'Pinterest'],
+  [/(^|\.)facebook\.com$/, 'Facebook'], [/(^|\.)roblox\.com$/, 'Roblox'],
+]
+function hostOf(url: string): string { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } }
+function labelFromUrl(url: string): string {
+  const h = hostOf(url)
+  for (const [re, name] of KNOWN_LABELS) if (re.test(h)) return name
+  return h
+}
+
 export type ProfileTab = 'board' | 'activity' | 'wall' | 'servers' | 'friends'
 
 // Единый профиль (v1.27.0): большой профиль и «Редактировать профиль» — один и
@@ -61,6 +82,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [pron, setPron] = useState('')
   const [pronEdit, setPronEdit] = useState(false)
   const [note, setNote] = useState(() => getUserPrefs().notes[userId] ?? '')
+  const [connAdd, setConnAdd] = useState(false)
+  const [connLabel, setConnLabel] = useState('')
+  const [connUrl, setConnUrl] = useState('')
   const favs = pp.favGames
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
@@ -148,6 +172,18 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     patchUserPrefs({ notes })
   }
   function saveFavs(next: string[]) { setPp(p => ({ ...p, favGames: next })); saveProfile(userId, { favGames: next }) }
+  function addIntegration() {
+    const raw = connUrl.trim()
+    if (!raw) return
+    const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw
+    const next = [...pp.integrations, { label: connLabel.trim() || labelFromUrl(url), url }]
+    setPp(p => ({ ...p, integrations: next })); saveProfile(userId, { integrations: next })
+    setConnLabel(''); setConnUrl(''); setConnAdd(false)
+  }
+  function removeIntegration(i: number) {
+    const next = pp.integrations.filter((_, idx) => idx !== i)
+    setPp(p => ({ ...p, integrations: next })); saveProfile(userId, { integrations: next })
+  }
   function pickGame(g: string) {
     saveFavs(gamePicker === 'single' ? [g, ...favs.slice(1)] : [...(favs.length ? favs : ['']), g].filter(Boolean))
     setGamePicker(null)
@@ -184,6 +220,28 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   : isMe && <button className="pc-pron-add" onClick={() => setPronEdit(true)}>Добавить местоимения</button>}
             </div>
             {pp.about && <div className="pc-about">{pp.about}</div>}
+            {(pp.integrations.length > 0 || isMe) && <div className="pc-sec">
+              <div className="pc-sech">Подключения</div>
+              {pp.integrations.map((it, i) => (
+                <a key={i} className="pc-int" href={it.url} target="_blank" rel="noreferrer">
+                  <span className="pc-int-ic" style={{ background: colorFor(it.label) }}>{initial(it.label)}</span>
+                  <b>{it.label}</b>
+                  {isMe && <button className="pc-int-open" title="Удалить"
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); removeIntegration(i) }}><Icon name="close" size={13} /></button>}
+                </a>
+              ))}
+              {isMe && (connAdd
+                ? <div className="pc-conn-add">
+                    <input className="pc-conn-in" placeholder="Название (необязательно)" value={connLabel} onChange={e => setConnLabel(e.target.value)} />
+                    <input className="pc-conn-in" autoFocus placeholder="Ссылка — steam, tiktok, youtube…" value={connUrl} onChange={e => setConnUrl(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') addIntegration(); if (e.key === 'Escape') setConnAdd(false) }} />
+                    <div className="pc-conn-btns">
+                      <button className="pc-conn-cancel" onClick={() => setConnAdd(false)}><Icon name="close" size={14} /></button>
+                      <button className="pc-conn-ok" disabled={!connUrl.trim()} onClick={addIntegration}><Icon name="check" size={14} /></button>
+                    </div>
+                  </div>
+                : <button className="pc-pron-add" onClick={() => setConnAdd(true)}>Добавить подключение</button>)}
+            </div>}
             <div className="pc-sec">
               <div className="pc-sech">В числе участников с</div>
               <div className="pc-since">{fmtDate(memberSince)}</div>

@@ -258,7 +258,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   useEffect(() => {
     const d = (window as any).ponoiDesktop
     if (!d?.onMatchEnd) return
-    d.onMatchEnd((m: { game: string; mode?: string | null; map?: string | null; score?: string | null; result?: 'win' | 'loss' | 'draw' | null }) => {
+    d.onMatchEnd((m: { game: string; mode?: string | null; map?: string | null; score?: string | null; result?: 'win' | 'loss' | 'draw' | null; kills?: number | null; deaths?: number | null; assists?: number | null; mvps?: number | null }) => {
       const u = userRef.current
       if (!u) return
       saveMatch(u.id, m).catch(() => {})

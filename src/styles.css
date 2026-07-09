@@ -1800,6 +1800,15 @@ body.no-anim .member-typing i { animation:none; }
 .pc-int-open { margin-left:auto; color:var(--mut); cursor:pointer; background:none; border:none; font-size:14px; }
 .pc-int-open + .pc-int-open { margin-left:4px; }
 .pc-int-open:hover { color:#fff; }
+.pc-int { text-decoration:none; cursor:pointer; }
+.pc-int-ic { color:#fff; }
+.pc-conn-add { display:flex; flex-direction:column; gap:6px; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,.03); margin-bottom:6px; }
+.pc-conn-in { background:var(--bg3); border:1px solid rgba(0,0,0,.3); border-radius:6px; color:var(--tx); padding:5px 8px; font-size:13px; outline:none; width:100%; }
+.pc-conn-btns { display:flex; justify-content:flex-end; gap:4px; }
+.pc-conn-ok, .pc-conn-cancel { background:none; border:none; color:var(--mut); cursor:pointer; padding:2px; }
+.pc-conn-ok:hover { color:#3ba55d; }
+.pc-conn-cancel:hover { color:#ed4245; }
+.pc-conn-ok:disabled { opacity:.4; cursor:default; }
 .pc-note { width:100%; background:transparent; border:none; resize:none; color:var(--tx); font-family:inherit; font-size:13px; outline:none; min-height:36px; }
 .pc-note::placeholder { color:var(--mut); font-style:italic; }
 .pc-right { background:#0c0d10; border-left:1px solid rgba(255,255,255,.04); display:flex; flex-direction:column; overflow:hidden; }
@@ -3807,6 +3816,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .gstat-hdr { display:flex; align-items:center; gap:8px; font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:14px; }
 .gstat-empty { color:var(--mut); text-align:center; padding:40px 10px; }
 .gstat-summary { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:16px; }
+.gstat-summary-5 { grid-template-columns:repeat(5, 1fr); }
 .gstat-num { background:rgba(255,255,255,.05); border-radius:8px; padding:10px 6px; text-align:center; }
 .gstat-num b { display:block; font-size:20px; color:#fff; }
 .gstat-num span { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.3px; }
@@ -3819,7 +3829,9 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .gstat-row-v { color:var(--mut); }
 .gstat-matches { display:flex; flex-direction:column; gap:4px; }
 .gstat-match { display:grid; grid-template-columns:78px 1fr 1fr 60px 50px; gap:8px; align-items:center; padding:6px 10px; border-radius:6px; background:rgba(255,255,255,.03); font-size:12.5px; color:#dbdee1; }
+.gstat-match.has-kda { grid-template-columns:78px 1fr 1fr 60px 60px 50px; }
 .gstat-match.win .gstat-match-res { color:#3ba55d; font-weight:700; }
 .gstat-match.loss .gstat-match-res { color:#ed4245; font-weight:700; }
 .gstat-match-map, .gstat-match-mode { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gstat-match-kda { color:var(--mut); text-align:center; }
 .gstat-match-date { color:var(--mut); text-align:right; }

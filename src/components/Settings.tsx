@@ -14,6 +14,7 @@ import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
+import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -156,6 +157,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const dirtyRef = useRef(false)
   const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
+  // v1.165.0: SteamID64 — привязка нужна только для статистики Dota 2 (OpenDota),
+  // сохраняется сразу (не через черновик), как заметка/местоимения в профиле.
+  const [steamId, setSteamId] = useState(() => getUserPrefs().account.steamId || '')
+  function saveSteamId(v: string) {
+    const id = v.trim()
+    setSteamId(id)
+    patchUserPrefs({ account: { ...getUserPrefs().account, steamId: id } })
+  }
   // v1.50.0: строки «Изменить» и смена почты/пароля как в Discord
   const [showEmail, setShowEmail] = useState(false)
   const [editNick, setEditNick] = useState(false)
@@ -858,6 +867,11 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs2-desc">Показывай друзьям, во что играешь и чем занимаешься.</div>
                 <Row title="Своя активность" desc="Показывать пользовательский статус"><Toggle on={view.actOn} onChange={v => setD('actOn', v)} /></Row>
                 {view.actOn && <input className="pqs-in" value={view.actText} onChange={e => setD('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
+                <div className="pqs-sec-t">Статистика Dota 2</div>
+                <div className="pqs2-desc">Valve не отдаёт MMR через GSI — привяжи SteamID64, и статистика (MMR, последние матчи) подтянется из открытого API OpenDota.</div>
+                <input className="pqs-in" value={steamId} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="76561198000000000" inputMode="numeric" />
+                <div className="pqs-code-sub">Свой SteamID64 можно найти на <a href="https://steamid.io" target="_blank" rel="noreferrer">steamid.io</a> — вставь ссылку на профиль Steam.</div>
               </>}
 
               {cat === 'advanced' && <>

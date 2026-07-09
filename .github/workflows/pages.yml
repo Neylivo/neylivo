@@ -40,6 +40,7 @@ jobs:
           echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
           echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env
           echo "VITE_TENOR_KEY=${{ secrets.VITE_TENOR_KEY }}" >> .env
+          echo "VITE_STEAMGRIDDB_KEY=${{ secrets.VITE_STEAMGRIDDB_KEY }}" >> .env
       - name: Build
         run: npm run build
       - uses: actions/upload-pages-artifact@v3
