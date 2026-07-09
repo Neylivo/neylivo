@@ -142,6 +142,7 @@ body {
 .msg-file { display:inline-block; margin-top:6px; color:var(--blue); text-decoration:none; }
 .msg-att-broken { display:inline-flex; align-items:center; gap:8px; margin-top:6px; padding:10px 14px; border-radius:8px; background:var(--bg3); color:var(--mut); text-decoration:none; font-size:13px; }
 .msg-att-broken:hover { color:var(--tx); }
+.msg-att-video { background:#000; min-width:220px; min-height:124px; }
 
 /* music */
 .mus-full { flex:1; position:relative; display:flex; flex-direction:column; overflow:hidden; background:linear-gradient(160deg,#2b2d31,#1e1f22); }
@@ -3180,6 +3181,8 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .cfc-full-body { overflow:auto; }
 .cfc-full-body pre { margin:0; padding:14px 16px; }
 .cfc-full-body code { font-family:Consolas, 'Courier New', monospace; font-size:13px; line-height:1.5; white-space:pre; color:#dbdee1; }
+.cfc-web-box { width:min(1100px, 94vw); height:88vh; }
+.cfc-web-frame { flex:1; width:100%; border:none; background:#fff; }
 
 
 /* ===== v1.84.0: активности — полные названия игр, живые обложки, анимации ===== */

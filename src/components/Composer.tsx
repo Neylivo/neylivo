@@ -1,7 +1,7 @@
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { uploadWithProgress, isImage } from '../lib/storage'
+import { uploadWithProgress, isImage, isVideo } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
@@ -313,7 +313,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             p => setUpProg(files.length > 1 ? (i + p) / files.length : p))
           if (spoilers[i] && isImage(f)) url += '#spoiler'
           urls.push(url)
-          types.push(isImage(f) ? 'image' : 'file')
+          types.push(isImage(f) ? 'image' : isVideo(f) ? 'video' : 'file')
         }
         // v1.70.0: группа вложений кодируется в одну строку через \n — без миграции БД.
         attach = { url: urls.join('\n'), type: types.join('\n') }
@@ -465,7 +465,7 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
   const [failed, setFailed] = useState(false)
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
-    if (!url || type === 'image' || url.includes('\n')) { setSize(null); return }
+    if (!url || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); return }
     let on = true
     fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
       .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) setSize(fmtSize(n)) })
@@ -501,6 +501,15 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
       <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} onError={() => setFailed(true)} />
       {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
+  }
+  // v1.153.0: видео проигрывается прямо в чате (как в Discord), не скачивается как файл.
+  if (type === 'video') {
+    if (failed) return (
+      <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
+        <Icon name="video" size={16} /> Не удалось загрузить видео
+      </a>
+    )
+    return <video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />
   }
   // v1.83.0: txt и файлы с кодом — карточка с подсветкой, 1-в-1 как в Discord.
   if (isCodeFile(clean)) return <CodeFileCard url={clean} sizeLabel={size} />

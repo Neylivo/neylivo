@@ -15,6 +15,9 @@ export async function uploadTo(bucket: string, uid: string, file: File): Promise
 export const isImage = (f: File | string) =>
   typeof f === 'string' ? /\.(png|jpe?g|gif|webp|svg)$/i.test(f) : f.type.startsWith('image/')
 
+export const isVideo = (f: File | string) =>
+  typeof f === 'string' ? /\.(mp4|webm|mov|m4v|mkv|avi)(\?|$)/i.test(f) : f.type.startsWith('video/')
+
 
 // Загрузка с прогрессом: XMLHttpRequest даёт события progress, которых нет в supabase-js.
 // Заголовки и путь те же, что использует supabase.storage.upload, поэтому политики бакета работают как раньше.

@@ -43,8 +43,11 @@ export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: stri
   const [whole, setWhole] = useState(false)   // «<>» — весь код прямо в карточке
   const [full, setFull] = useState(false)     // полноэкранный просмотр
   const [more, setMore] = useState(false)     // меню «…»
+  const [webPreview, setWebPreview] = useState(false)   // v1.153.0: HTML как страница, не текст
   const name = codeFileName(url)
-  const lang = CODE_EXT[extOf(url)] || null
+  const ext = extOf(url)
+  const lang = CODE_EXT[ext] || null
+  const isHtml = ext === 'html' || ext === 'htm'
 
   useEffect(() => {
     let on = true
@@ -60,13 +63,13 @@ export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: stri
     return () => { on = false }
   }, [url])
 
-  // Esc закрывает полноэкранный просмотр.
+  // Esc закрывает полноэкранный просмотр (текст кода или HTML-страницу).
   useEffect(() => {
-    if (!full) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setFull(false) } }
+    if (!full && !webPreview) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setFull(false); setWebPreview(false) } }
     window.addEventListener('keydown', h, true)
     return () => window.removeEventListener('keydown', h, true)
-  }, [full])
+  }, [full, webPreview])
 
   async function copyText() {
     try { await navigator.clipboard.writeText(text ?? ''); toastOk('Текст скопирован') }
@@ -98,6 +101,7 @@ export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: stri
           {more && <>
             <div className="cfc-more-ov" onClick={() => setMore(false)} />
             <div className="cfc-more">
+              {isHtml && <button onClick={() => { setMore(false); setWebPreview(true) }}>Просмотреть как страницу</button>}
               <button disabled={text === null} onClick={() => { setMore(false); copyText() }}>Скопировать текст</button>
               <button onClick={() => { setMore(false); saveMedia(url) }}>Скачать</button>
               <button onClick={() => { setMore(false); copyMediaLink(url) }}>Копировать ссылку на файл</button>
@@ -118,6 +122,22 @@ export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: stri
           </span>
         </div>
         <div className="cfc-full-body"><pre><code>{highlight(text, lang)}</code></pre></div>
+      </div>
+    </div>}
+    {webPreview && <div className="cfc-full" onClick={() => setWebPreview(false)}>
+      <div className="cfc-full-box cfc-web-box" onClick={e => e.stopPropagation()}>
+        <div className="cfc-full-head">
+          <span className="cfc-nm">{name}</span>
+          <span className="cfc-acts">
+            <button title="Открыть в браузере" onClick={() => window.open(url, '_blank')}><Icon name="external" size={16} /></button>
+            <button title="Закрыть (Esc)" onClick={() => setWebPreview(false)}><Icon name="close" size={16} /></button>
+          </span>
+        </div>
+        {/* Без allow-same-origin: страница рендерится в изолированном origin —
+            скрипты внутри неё не достанут ни до куки/localStorage приложения,
+            ни до родительского окна. Только allow-scripts — навигация/попапы/формы
+            всё ещё запрещены песочницей по умолчанию. */}
+        <iframe className="cfc-web-frame" src={url} sandbox="allow-scripts" referrerPolicy="no-referrer" title={name} />
       </div>
     </div>}
   </div>
