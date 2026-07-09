@@ -31,7 +31,7 @@ function fmtMs(ms: number): string {
   return h > 0 ? h + ' ч ' + m + ' мин' : m + ' мин'
 }
 const MONTHS = ['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.']
-function fmtDate(iso: string | null | undefined): string {
+export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
   return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + ' г.'
@@ -72,8 +72,8 @@ export type ProfileTab = 'board' | 'activity' | 'wall' | 'servers' | 'friends'
 // нику/аватарке — вкладку «Активность» (1-в-1 как в Discord). Слева — баннер,
 // аватар, имя, местоимения, «В числе участников с» и приватная заметка; справа —
 // вкладки. Чужой профиль дополнительно получает «Общие сервера» и «Общие друзья».
-export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialTab = 'board', panel = false }:
-  { userId: string; name: string; avatarUrl?: string | null; status: Status; onClose: () => void; initialTab?: ProfileTab; panel?: boolean }) {
+export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialTab = 'board' }:
+  { userId: string; name: string; avatarUrl?: string | null; status: Status; onClose: () => void; initialTab?: ProfileTab }) {
   const { user } = useAuth()
   const { gameOf, statusOf } = usePresence()
   const isMe = user?.id === userId
@@ -146,11 +146,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     return () => { ok = false }
   }, [userId, isMe, user?.id])
   useEffect(() => {
-    if (panel) return   // панель в ЛС не модальная — Esc её не закрывает
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, panel])
+  }, [onClose])
   // Приватная заметка: подхватываем, когда user_prefs догрузится с сети (карточка
   // могла открыться раньше, чем ответил Supabase) или когда сменили пользователя.
   useEffect(() => {
@@ -197,9 +196,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const memberSince = isMe ? ((user as any)?.created_at ?? pp.createdAt) : pp.createdAt
 
   return (
-    <div className={panel ? 'pc-panel-wrap' : 'pc-backdrop'} onClick={panel ? undefined : onClose}>
-      <div className={'pc-card' + (panel ? ' panel' : '')} onClick={e => e.stopPropagation()}>
-        {!panel && <button className="pc-x" onClick={onClose}><Icon name="close" size={16} /></button>}
+    <div className="pc-backdrop" onClick={onClose}>
+      <div className="pc-card" onClick={e => e.stopPropagation()}>
+        <button className="pc-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="pc-left">
           <div className="pc-banner" style={{ background: `linear-gradient(100deg, ${pp.primary}, ${pp.accent})` }} />
           <ProfilePet p={pp} scale={0.6} card="big" bannerH={150} />

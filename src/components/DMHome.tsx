@@ -16,7 +16,8 @@ import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
 import { CallRoom, Sinks } from './CallRoom'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
-import { ProfileCard } from './ProfileCard'
+import { ProfileCard, type ProfileTab } from './ProfileCard'
+import { DmProfilePanel } from './DmProfilePanel'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
 import { startRingback, stopRingback, master, sndMute, sndUnmute } from '../lib/callSounds'
 import { sysCallStart, sysCallEnded, sysCallMissed, parseSys } from '../lib/sysmsg'
@@ -49,6 +50,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord, открыта
   // по умолчанию на десктопе (как «Показать участников» на сервере).
   const [showProfile, setShowProfile] = useState(() => !IS_MOBILE)
+  const [fullProfileTab, setFullProfileTab] = useState<ProfileTab | null>(null)
   const activeAvatar = useAvatarOf(active?.id)
   const [threadId, setThreadId] = useState<string | null>(null)
   // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
@@ -891,10 +893,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           </div>
         </>}
       </main>
-      {active && showProfile && <aside className="dm-profile-panel">
-        <ProfileCard panel userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
-          onClose={() => setShowProfile(false)} />
-      </aside>}
+      {active && showProfile && <DmProfilePanel userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
+        onExpand={tab => setFullProfileTab(tab ?? 'board')} />}
+      {active && fullProfileTab && <ProfileCard userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
+        initialTab={fullProfileTab} onClose={() => setFullProfileTab(null)} />}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
     </>
   )
