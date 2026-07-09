@@ -22,12 +22,29 @@ function attachKrisp(room: Room) {
   })
 }
 
-export async function joinRoom(roomName: string, identity: string, name: string): Promise<Room> {
+// v1.152.0: короткий кэш токена — LiveKit-токен живёт часы на сервере, но раньше
+// joinRoom() ходил за новым при КАЖДОМ входе, даже если человек просто быстро
+// переключился между голосовыми каналами/перезашёл в тот же звонок. 4 минуты
+// кэша не портят безопасность (токен и так столько живёт), но убирают лишний
+// сетевой round-trip до Edge Function на самых частых повторных входах.
+const tokenCache = new Map<string, { token: string; url: string; at: number }>()
+const TOKEN_TTL = 4 * 60_000
+async function getToken(roomName: string, identity: string, name: string): Promise<{ token: string; url: string }> {
+  const key = roomName + '|' + identity
+  const cached = tokenCache.get(key)
+  if (cached && Date.now() - cached.at < TOKEN_TTL) return cached
   const { data, error } = await supabase.functions.invoke('livekit-token', {
     body: { room: roomName, identity, name },
   })
   if (error) throw error
-  const { token, url } = data as { token: string; url: string }
+  const out = data as { token: string; url: string }
+  tokenCache.set(key, { ...out, at: Date.now() })
+  return out
+}
+
+export async function joinRoom(roomName: string, identity: string, name: string): Promise<Room> {
+  const tokenKey = roomName + '|' + identity
+  let { token, url } = await getToken(roomName, identity, name)
   // v1.64.0: максимальное качество звонка — подавление эха/шума и автогромкость,
   // высокобитрейтный стерео-звук (RED + DTX), камера 1080p с simulcast.
   // v1.80.0: как в Discord — кодек VP9 (та же картинка при меньшем битрейте,
@@ -54,13 +71,24 @@ export async function joinRoom(roomName: string, identity: string, name: string)
     },
   })
   attachKrisp(room)
-  await room.connect(url, token)
+  try {
+    await room.connect(url, token)
+  } catch (e) {
+    // Кэшированный токен мог не подойти (комната пересоздана, сервер перезапущен) —
+    // берём заведомо свежий и пробуем один раз ещё, не роняя вызов на кэше.
+    tokenCache.delete(tokenKey)
+    ;({ token, url } = await getToken(roomName, identity, name))
+    await room.connect(url, token)
+  }
   // v1.113.0: микрофон включается сразу при входе в звонок. Раньше это делал каждый
   // экран сам, и любой сбой (занятое устройство, медленный ответ на разрешение)
-  // тихо оставлял микрофон выключенным. Теперь — до трёх попыток с паузой.
-  for (let i = 0; i < 3; i++) {
+  // тихо оставлял микрофон выключенным. Теперь — до нескольких попыток с паузой.
+  // v1.152.0: пауза укорочена (500 -> 200мс), попыток больше (3 -> 4) — тот же
+  // запас надёжности, но заметно быстрее в типичном случае, когда устройство
+  // освобождается почти сразу.
+  for (let i = 0; i < 4; i++) {
     try { await room.localParticipant.setMicrophoneEnabled(true); break }
-    catch { await new Promise(r => setTimeout(r, 500)) }
+    catch { await new Promise(r => setTimeout(r, 200)) }
   }
   ;(room as any).__ponoiInit = true
   return room

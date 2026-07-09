@@ -1000,10 +1000,21 @@ app.whenReady().then(() => {
     cb(['media', 'audioCapture', 'videoCapture', 'display-capture', 'notifications'].includes(permission))
   })
 
-  // Screen-share support: hand the first available screen to getDisplayMedia().
+  // Screen-share support (v1.152.0): раньше всегда брался sources[0] — на
+  // мультимониторных сетапах это не обязательно основной/самый большой экран,
+  // так что запрошенное "4K" в демке могло молча уехать на маленький второй
+  // монитор. Теперь ищем источник, совпадающий с ОСНОВНЫМ дисплеем Windows;
+  // если сопоставить не удалось (display_id недоступен на этой ОС) — прежнее
+  // поведение (первый источник) как безопасный откат.
   session.defaultSession.setDisplayMediaRequestHandler((request, cb) => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      cb({ video: sources[0], audio: 'loopback' })
+      let pick = sources[0]
+      try {
+        const { screen } = require('electron')
+        const primaryId = String(screen.getPrimaryDisplay().id)
+        pick = sources.find((s) => String(s.display_id) === primaryId) || sources[0]
+      } catch {}
+      cb({ video: pick, audio: 'loopback' })
     }).catch(() => cb({}))
   }, { useSystemPicker: true })
 

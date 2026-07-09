@@ -2344,6 +2344,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-vol span { font-size:11px; color:#949ba4; min-width:34px; text-align:right; }
 
 .c2-waiting { flex:none; text-align:center; color:#80848e; font-size:13px; padding-bottom:4px; }
+.dm-call-connecting { display:flex; align-items:center; gap:8px; margin:8px 16px; padding:10px 14px; border-radius:8px; background:rgba(88,101,242,.12); color:#5865f2; font-size:13px; font-weight:600; }
 .c2-audio-blocked { align-self:center; display:flex; align-items:center; gap:8px; margin:4px 0; padding:8px 16px; border:none; border-radius:20px; background:#faa61a; color:#1e1f22; font-weight:700; font-size:13px; cursor:pointer; }
 .c2-audio-blocked:hover { filter:brightness(1.05); }
 

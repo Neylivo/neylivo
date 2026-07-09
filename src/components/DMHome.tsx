@@ -114,6 +114,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   // обрабатывает запасной слушатель ниже.
   const [callThread, setCallThread] = useState<string | null>(null)
   const [callPeer, setCallPeer] = useState<Friend | null>(null)
+  // v1.152.0: мгновенный отклик на звонок 1-в-1 — раньше клик по «позвонить»/«принять»
+  // не показывал вообще ничего, пока joinRoom() (токен + LiveKit connect) не завершится
+  // целиком (полсекунды-секунда тишины). Теперь баннер «Соединение…» появляется сразу,
+  // сам путь подключения (joinRoom) при этом не меняется — только визуальный отклик.
+  const [connectingThread, setConnectingThread] = useState<string | null>(null)
+  const [connectingPeer, setConnectingPeer] = useState<Friend | null>(null)
   const activeRef = useRef<Friend | null>(null)
   useEffect(() => { activeRef.current = active }, [active])
   const callMsgRef = useRef<string | null>(null)
@@ -164,6 +170,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
 
   async function startCall() {
     if (!threadId || !active || call) return
+    setConnectingThread(threadId); setConnectingPeer(active)
     try {
       const room = await joinRoom('dm_' + threadId, meId, username)
       setCall(room)
@@ -194,6 +201,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         if (ringingRef.current) { toastErr(ringingRef.current.name + ' не отвечает'); hangUp(true) }
       }, 32000)
     } catch (e: any) { toastErr(e.message ?? String(e)) }
+    finally { setConnectingThread(null); setConnectingPeer(null) }
   }
 
   // Кнопки панели/MeBar работают и когда CallRoom не на экране (другая вкладка/чат).
@@ -266,12 +274,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     const h = async (e: Event) => {
       const tid = (e as CustomEvent).detail?.threadId
       if (!tid || callRef.current) return
+      setConnectingThread(tid); setConnectingPeer(activeRef.current)
       try {
         const room = await joinRoom('dm_' + tid, meId, username)
         setCall(room)
         setCallThread(tid)
         setCallPeer(activeRef.current)
       } catch (err: any) { toastErr(err.message ?? String(err)) }
+      finally { setConnectingThread(null); setConnectingPeer(null) }
     }
     window.addEventListener('ponoi-join-call', h)
     return () => window.removeEventListener('ponoi-join-call', h)
@@ -660,6 +670,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
                 <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
+          {connectingThread === threadId && !(call && callThread === threadId) &&
+            <div className="dm-call-connecting"><Icon name="phone" size={15} /> Соединение{connectingPeer ? ' с ' + connectingPeer.name : ''}…</div>}
           {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
