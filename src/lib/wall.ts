@@ -28,9 +28,17 @@ export async function addDrawing(wallUserId: string, authorId: string, authorNam
   if (error) throw error
 }
 
-export async function deleteDrawing(id: string): Promise<void> {
-  const { error } = await supabase.from('wall_drawings').delete().eq('id', id)
+// Путь объекта в бакете avatars — всё после "/avatars/" в публичном URL.
+function storagePathOf(imageUrl: string): string | null {
+  const m = imageUrl.match(/\/avatars\/(.+)$/)
+  return m ? m[1] : null
+}
+
+export async function deleteDrawing(d: Drawing): Promise<void> {
+  const { error } = await supabase.from('wall_drawings').delete().eq('id', d.id)
   if (error) throw error
+  const path = storagePathOf(d.image_url)
+  if (path) supabase.storage.from('avatars').remove([path]).catch(() => {})
 }
 
 // Realtime: любые изменения стены этого пользователя дёргают колбэк (перезагрузка списка).

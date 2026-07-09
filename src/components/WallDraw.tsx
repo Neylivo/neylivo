@@ -6,11 +6,12 @@ const BG = '#2b2d31'
 
 // Холст «Стены росписи» (v1.146.0): рисование указателем (мышь/тач), палитра,
 // толщина кисти, ластик и «очистить». Сохранение отдаёт PNG-блоб наверх.
-export function WallDraw({ onClose, onSave }: { onClose: () => void; onSave: (blob: Blob) => void }) {
+export function WallDraw({ onClose, onSave }: { onClose: () => void; onSave: (blob: Blob) => Promise<void> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [color, setColor] = useState('#5865f2')
   const [size, setSize] = useState(6)
   const [eraser, setEraser] = useState(false)
+  const [saving, setSaving] = useState(false)
   const drawing = useRef(false)
   const last = useRef<{ x: number; y: number } | null>(null)
 
@@ -49,7 +50,14 @@ export function WallDraw({ onClose, onSave }: { onClose: () => void; onSave: (bl
     const c = canvasRef.current!; const ctx = c.getContext('2d')!
     ctx.fillStyle = BG; ctx.fillRect(0, 0, c.width, c.height)
   }
-  function save() { canvasRef.current!.toBlob(b => { if (b) onSave(b) }, 'image/png') }
+  function save() {
+    if (saving) return
+    canvasRef.current!.toBlob(async b => {
+      if (!b) return
+      setSaving(true)
+      try { await onSave(b) } catch { /* родитель уже показал ошибку тостом */ } finally { setSaving(false) }
+    }, 'image/png')
+  }
 
   return (
     <div className="wall-modal-bg" onClick={onClose}>
@@ -63,10 +71,10 @@ export function WallDraw({ onClose, onSave }: { onClose: () => void; onSave: (bl
           </div>
           <input type="range" min={2} max={40} value={size} onChange={e => setSize(+e.target.value)} title="Толщина" />
           <button className={'wall-tbtn' + (eraser ? ' on' : '')} onClick={() => setEraser(x => !x)} title="Ластик"><Icon name="close" size={15} /></button>
-          <button className="wall-tbtn" onClick={clear} title="Очистить"><Icon name="trash" size={15} /></button>
+          <button className="wall-tbtn" onClick={clear} title="Очистить" disabled={saving}><Icon name="trash" size={15} /></button>
           <div className="wall-tools-r">
-            <button className="wall-cancel" onClick={onClose}>Отмена</button>
-            <button className="wall-save" onClick={save}>Сохранить</button>
+            <button className="wall-cancel" onClick={onClose} disabled={saving}>Отмена</button>
+            <button className="wall-save" onClick={save} disabled={saving}>{saving ? 'Сохранение…' : 'Сохранить'}</button>
           </div>
         </div>
       </div>

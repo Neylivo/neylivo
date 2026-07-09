@@ -14,7 +14,8 @@ import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
-import { promptUi } from '../lib/confirm'
+import { promptUi, confirmUi } from '../lib/confirm'
+import { toastErr } from '../lib/toast'
 import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
 import { WallDraw } from './WallDraw'
@@ -126,6 +127,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     const g = (await promptUi(single ? 'Любимая игра' : 'Добавить игру в любимые', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim()
     if (!g) return
     saveFavs(single ? [g, ...favs.slice(1)] : [...(favs.length ? favs : ['']), g].filter(Boolean))
+  }
+  async function removeDrawing(d: Drawing) {
+    if (!await confirmUi('Удалить рисунок?', { okText: 'Удалить' })) return
+    try { await deleteDrawing(d) } catch { toastErr('Не удалось удалить рисунок') }
   }
 
   const memberSince = isMe ? ((user as any)?.created_at ?? pp.createdAt) : pp.createdAt
@@ -257,7 +262,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                     <div key={d.id} className="wall-item">
                       <img src={d.image_url} alt="" loading="lazy" />
                       <span className="wall-author">{d.author_name || 'аноним'}</span>
-                      {(isMe || d.author_id === user?.id) && <button className="wall-del" title="Удалить" onClick={() => deleteDrawing(d.id)}><Icon name="trash" size={13} /></button>}
+                      {(isMe || d.author_id === user?.id) && <button className="wall-del" title="Удалить" onClick={() => removeDrawing(d)}><Icon name="trash" size={13} /></button>}
                     </div>
                   ))}</div>}
             </>}
@@ -285,7 +290,15 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             )}
           </div>
         </div>
-        {wallOpen && <WallDraw onClose={() => setWallOpen(false)} onSave={async blob => { try { await addDrawing(userId, user!.id, localStorage.getItem('ponoi_username') || 'аноним', blob) } catch {} setWallOpen(false) }} />}
+        {wallOpen && <WallDraw onClose={() => setWallOpen(false)} onSave={async blob => {
+          try {
+            await addDrawing(userId, user!.id, localStorage.getItem('ponoi_username') || 'аноним', blob)
+            setWallOpen(false)
+          } catch {
+            toastErr('Не удалось сохранить рисунок')
+            throw new Error('wall save failed')
+          }
+        }} />}
       </div>
     </div>
   )
