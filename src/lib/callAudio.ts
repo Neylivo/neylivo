@@ -10,6 +10,7 @@
 // audio track so everyone in the room hears it, while also playing it locally
 // for the person who triggered it. The track is unpublished when playback ends.
 import { Room, Track } from './livekit'
+import { audioCtx, master } from './callSounds'
 
 export class CallRecorder {
   ctx: AudioContext
@@ -92,8 +93,11 @@ export async function playToAll(
   url: string,
   opts: { onEnded?: () => void } = {},
 ): Promise<{ stop: () => void }> {
-  const Ctx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
-  const ctx = new Ctx()
+  // v1.150.0: раньше локальный мониторинг шёл в свой отдельный AudioContext напрямую
+  // на destination, в обход общего master()-гейна — из-за этого «заглушить всех»
+  // (deafen) не приглушало собственное прослушивание запущенного звука саундборда.
+  // Теперь используем общий контекст приложения и подключаемся через master().
+  const ctx = audioCtx()
   const resp = await fetch(url)
   const arr = await resp.arrayBuffer()
   const buf = await ctx.decodeAudioData(arr)
@@ -101,7 +105,7 @@ export async function playToAll(
   const src = ctx.createBufferSource()
   src.buffer = buf
   src.connect(dest)
-  src.connect(ctx.destination) // local monitor for the presser
+  src.connect(master()) // local monitor for the presser — through the shared deafen-aware gain
   const track = dest.stream.getAudioTracks()[0]
 
   let cleaned = false
@@ -110,7 +114,7 @@ export async function playToAll(
     cleaned = true
     try { room.localParticipant.unpublishTrack(track) } catch {}
     try { src.stop() } catch {}
-    try { ctx.close() } catch {}
+    // ctx общий на всё приложение (audioCtx()) — не закрываем его здесь.
     opts.onEnded?.()
   }
 

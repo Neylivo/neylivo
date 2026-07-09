@@ -28,6 +28,9 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
     return () => { supabase.removeChannel(ch) }
   }, [])
 
+  // Закрыли панель во время предпрослушивания — не оставляем звук играть в фоне.
+  useEffect(() => () => { previewRef.current?.pause() }, [])
+
   // Save the last 15 seconds of the ongoing call as a clip.
   async function saveMoment() {
     setBusy('moment')
@@ -62,12 +65,16 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
   }
 
   async function blast(c: Clip) {
-    if (playingId) { stopRef.current?.(); return }
+    // Клик по уже играющему клипу — это кнопка «Стоп» (onEnded этого клипа сам обнулит playingId).
+    if (playingId === c.id) { stopRef.current?.(); return }
+    // Клик по ДРУГОМУ клипу, пока что-то играет — раньше это молча только останавливало
+    // старый звук и не запускало новый; теперь останавливаем старый и сразу играем новый.
+    if (playingId) stopRef.current?.()
     setPlayingId(c.id)
     try {
-      const { stop } = await playToAll(room, c.url, { onEnded: () => { setPlayingId(null); stopRef.current = null } })
+      const { stop } = await playToAll(room, c.url, { onEnded: () => { setPlayingId(id => id === c.id ? null : id); stopRef.current = null } })
       stopRef.current = stop
-    } catch (e: any) { toastErr(e.message ?? String(e)); setPlayingId(null) }
+    } catch (e: any) { toastErr(e.message ?? String(e)); setPlayingId(id => id === c.id ? null : id) }
   }
 
   async function openTrim(c: Clip) {

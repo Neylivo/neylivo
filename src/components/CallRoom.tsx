@@ -2,7 +2,7 @@
 
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
-import { Room, RoomEvent } from '../lib/livekit'
+import { Room, RoomEvent, DisconnectReason } from '../lib/livekit'
 import { Icon } from './icons'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
@@ -352,6 +352,16 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
       if (pub?.source === 'camera') setCam(false)
     }
     room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpub)
+    // v1.150.0: раньше окончательный обрыв связи (LiveKit исчерпал реконнекты,
+    // сервер закрыл сессию, истёк токен) никак не обрабатывался — экран звонка
+    // замирал в «Переподключение…» навсегда. CLIENT_INITIATED — это наш же
+    // leave(), там onLeave() уже вызван явно, здесь не дублируем и не пугаем тостом.
+    const onDisc = (reason?: DisconnectReason) => {
+      if (reason === DisconnectReason.CLIENT_INITIATED) return
+      toastErr('Звонок прерван — соединение потеряно')
+      onLeave()
+    }
+    room.on(RoomEvent.Disconnected, onDisc)
     return () => {
       room.off(RoomEvent.Connected, onConn)
       room.off(RoomEvent.Reconnecting, onRec)
@@ -359,7 +369,20 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
       room.off(RoomEvent.ParticipantConnected, onPJoin)
       room.off(RoomEvent.ParticipantDisconnected, onPLeave)
       room.off(RoomEvent.LocalTrackUnpublished, onLocalUnpub)
+      room.off(RoomEvent.Disconnected, onDisc)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room])
+
+  // v1.150.0: браузер/Electron иногда блокирует автовоспроизведение аудио удалённых
+  // участников (нет предшествующего пользовательского жеста — например, звонок
+  // открылся из уведомления). Раньше это происходило молча — звук просто не играл.
+  const [audioBlocked, setAudioBlocked] = useState(false)
+  useEffect(() => {
+    const check = () => setAudioBlocked(!room.canPlaybackAudio)
+    check()
+    room.on(RoomEvent.AudioPlaybackStatusChanged, check)
+    return () => { room.off(RoomEvent.AudioPlaybackStatusChanged, check) }
   }, [room])
 
   // Rolling recorder: mix local mic + all remote audio into a ring buffer so the
@@ -546,6 +569,9 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
       </div>
       <Stage room={room} avatars={avatars} colors={colors} meName={meName} onMainDblClick={() => setFs(f => !f)} />
       {alone && peer && <div className="c2-waiting">{'Ждём ответа — ' + peer.name + '…'}</div>}
+      {audioBlocked && <button className="c2-audio-blocked" onClick={() => room.startAudio().catch(() => {})}>
+        <Icon name="volume" size={14} /> Браузер заблокировал звук — нажми, чтобы включить
+      </button>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
       <div className="c2-bar">
         <div className="c2-grp">

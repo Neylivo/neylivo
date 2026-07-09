@@ -1,19 +1,24 @@
-import { Room, RoomEvent, Track, LocalTrackPublication, LocalAudioTrack, VideoPresets } from 'livekit-client'
-import { KrispNoiseFilter, isKrispNoiseFilterSupported } from '@livekit/krisp-noise-filter'
+import { Room, RoomEvent, Track, DisconnectReason, LocalTrackPublication, LocalAudioTrack, VideoPresets } from 'livekit-client'
 import { supabase } from './supabase'
 
 // v1.71.0: AI-шумоподавление Krisp — то же, что использует Discord: отсекает
 // клавиатуру, вентиляторы, улицу и прочий фон, оставляя только голос.
 // Вешается на локальную дорожку микрофона при её публикации; если Krisp
-// недоступен (старый браузер / self-hosted LiveKit) — тихо остаёмся на
-// браузерном noiseSuppression, звонок работает как раньше.
+// недоступен (старый браузер / self-hosted LiveKit / пакет не установился при
+// сборке) — тихо остаёмся на браузерном noiseSuppression, звонок работает как раньше.
+// v1.150.0: импорт сделан динамическим — раньше это был статический import,
+// и когда пакет однажды не резолвился (см. build_environment_issue), падал
+// не только Krisp, а ВЕСЬ этот файл и, соответственно, все звонки целиком.
 function attachKrisp(room: Room) {
-  room.on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
+  room.on(RoomEvent.LocalTrackPublished, async (pub: LocalTrackPublication) => {
     if (pub.source !== Track.Source.Microphone) return
     const track = pub.track
     if (!(track instanceof LocalAudioTrack)) return
-    if (!isKrispNoiseFilterSupported()) return
-    track.setProcessor(KrispNoiseFilter()).catch(() => { /* fallback: браузерный шумодав */ })
+    try {
+      const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter')
+      if (!isKrispNoiseFilterSupported()) return
+      await track.setProcessor(KrispNoiseFilter())
+    } catch { /* пакет недоступен или процессор не завёлся — остаёмся на браузерном шумодаве */ }
   })
 }
 
@@ -61,5 +66,5 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   return room
 }
 
-export { Room, RoomEvent, Track }
+export { Room, RoomEvent, Track, DisconnectReason }
 export type { LocalTrackPublication }
