@@ -3,6 +3,13 @@ const path = require('path')
 
 const isDev = !app.isPackaged
 
+// v1.155.0: подстраховка от полного краха приложения ("A JavaScript error
+// occurred in the main process") на любой необработанной ошибке в фоновой
+// логике (например, второй такой же баг с занятым портом где-то ещё) —
+// логируем и продолжаем работу вместо падения всего процесса на пользователя.
+process.on('uncaughtException', (err) => { console.error('[main] uncaught exception:', err) })
+process.on('unhandledRejection', (err) => { console.error('[main] unhandled rejection:', err) })
+
 // ---- v1.55.0: приложение живёт в фоне (трей + автозапуск с Windows) ----
 // Закрытие окна сворачивает в трей: активность, звонки и уведомления работают,
 // даже когда окно «выключено». Полный выход — через меню трея.
@@ -18,8 +25,15 @@ try { const p0 = readPrefs(); if (p0.resumeHidden) { startHidden = true; writePr
 let trySilentInstall = () => false   // назначается после инициализации автообновлений (v1.124.0)
 
 // Вторая копия приложения не запускается — просто показывает уже работающую.
+// v1.155.0: app.quit() сам по себе НЕ останавливает выполнение остального
+// модуля — это асинхронная команда, а скрипт продолжает грузиться дальше
+// (top-level код) до app.whenReady(). Именно поэтому вторая копия успевала
+// дойти до .listen(3947, ...) для GSI и падала с EADDRINUSE, натыкаясь на
+// порт, уже занятый первой (настоящей) копией — process.exit(0) обрывает
+// это немедленно, без шанса добраться до чего-либо ещё.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
+  process.exit(0)
 } else {
   app.on('second-instance', () => showMainWindow())
 }
@@ -430,7 +444,7 @@ function robloxCurrentPlaceId() {
 let lastGsi = null   // { appid, data, at } — последний пакет от игры по GSI
 try {
   const httpSrv = require('http')
-  httpSrv.createServer((req, res) => {
+  const gsiServer = httpSrv.createServer((req, res) => {
     let body = ''
     req.on('data', (d) => { body += d; if (body.length > 1e6) req.destroy() })
     req.on('end', () => {
@@ -440,7 +454,15 @@ try {
       } catch {}
       res.end('ok')
     })
-  }).listen(3947, '127.0.0.1')
+  })
+  // v1.155.0: ошибка listen (например EADDRINUSE — порт уже занят зависшим
+  // процессом с прошлого запуска или другой программой) раньше роняла ВЕСЬ
+  // Electron main-процесс необработанным исключением — она приходит асинхронно
+  // через событие 'error', а не через синхронный try/catch вокруг .listen().
+  // Без GSI на этот сеанс детальный статус CS2/Dota2 (карта/счёт) просто не
+  // покажется — остальной детект игр от порта не зависит, ничего не падает.
+  gsiServer.on('error', (err) => { console.warn('[gsi] listen failed:', err && err.message) })
+  gsiServer.listen(3947, '127.0.0.1')
 } catch {}
 const GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
   ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
