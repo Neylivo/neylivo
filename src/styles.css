@@ -1086,6 +1086,20 @@ body.no-anim .cfm-overlay { animation:none; }
 .att-spoiler:hover .att-spoiler-tag { background:rgba(0,0,0,.88); }
 .ctool.spoiler-t { font-weight:800; letter-spacing:1px; }
 .ctool.spoiler-t.on { color:var(--brand,#5865f2); }
+
+/* ===== v1.157.0: «Изменить вложение» — карандаш на краю фото/текстового при наведении ===== */
+.att-editwrap { position:relative; display:inline-block; max-width:100%; }
+.att-edit-btn { position:absolute; top:6px; right:6px; width:26px; height:26px; border:none; border-radius:7px;
+  background:rgba(0,0,0,.55); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .12s ease, background .12s ease; }
+.att-editwrap:hover .att-edit-btn { opacity:1; }
+.att-edit-btn:hover { background:#5865f2; }
+.att-spoiler-file { display:block; }
+.att-spoiler-blur { filter:blur(6px); pointer-events:none; user-select:none; }
+.att-desc { margin-top:4px; font-size:12.5px; color:var(--mut); max-width:420px; }
+.att-edit-ov { position:fixed; inset:0; z-index:210; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+.att-edit-box { width:min(420px, 92vw); background:#313338; border-radius:12px; padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.att-edit-h { font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:10px; }
 .pin-btn.on { color:var(--brand,#5865f2); }
 
 /* ===== Ctrl+K панель быстрого перехода ===== */

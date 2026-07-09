@@ -1,5 +1,6 @@
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { uploadWithProgress, isImage, isVideo } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
@@ -8,6 +9,7 @@ import { Icon } from './icons'
 import { Lightbox } from './Lightbox'
 import { CodeFileCard, isCodeFile } from './CodeFileCard'
 import { useSettings } from '../lib/settings'
+import type { AttachPatch } from '../lib/reactions'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 50000
@@ -458,11 +460,66 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   )
 }
 
-export function Attachment({ url, type, meta }: { url?: string | null; type?: string | null; meta?: import('./Lightbox').LightboxMeta }) {
+type AttachMetaItem = { name?: string; desc?: string } | null
+
+// v1.157.0: «Изменить вложение» — карандаш на краю фото/текстового файла при
+// наведении; спойлер/название/описание. Модалка общая для обоих типов.
+function AttachEditModal({ initial, onSave, onClose }: {
+  initial: { spoiler: boolean; name: string; desc: string }
+  onSave: (patch: AttachPatch) => void | Promise<void>
+  onClose: () => void
+}) {
+  const [spoiler, setSpoiler] = useState(initial.spoiler)
+  const [name, setName] = useState(initial.name)
+  const [desc, setDesc] = useState(initial.desc)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+  async function save() {
+    setBusy(true)
+    try { await onSave({ spoiler, name, desc }); onClose() }
+    finally { setBusy(false) }
+  }
+  return createPortal(
+    <div className="att-edit-ov" onClick={onClose}>
+      <div className="att-edit-box" onClick={e => e.stopPropagation()}>
+        <div className="att-edit-h">Изменить вложение</div>
+        <div className="cset-row" style={{ marginTop: 0 }}>
+          <div><div className="cset-row-t">Спойлер</div><div className="cset-hint">Размывает вложение, пока не нажмут «показать»</div></div>
+          <button type="button" className={'tgl' + (spoiler ? ' on' : '')} onClick={() => setSpoiler(v => !v)} />
+        </div>
+        <label className="modal-lbl">Название файла</label>
+        <input className="modal-in" value={name} onChange={e => setName(e.target.value)} placeholder="По умолчанию" maxLength={100} />
+        <label className="modal-lbl">Описание</label>
+        <textarea className="cset-topic" style={{ minHeight: 60 }} value={desc} onChange={e => setDesc(e.target.value)} placeholder="Необязательно" maxLength={300} />
+        <div className="modal-foot">
+          <button className="modal-ghost" onClick={onClose}>Отмена</button>
+          <button className="modal-primary" disabled={busy} onClick={save}>{busy ? 'Сохранение…' : 'Сохранить'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+export function Attachment({ url, type, meta, editable, attachMeta, attachIndex, onEditAttachment }: {
+  url?: string | null; type?: string | null; meta?: import('./Lightbox').LightboxMeta
+  editable?: boolean
+  attachMeta?: AttachMetaItem[] | null
+  attachIndex?: number
+  onEditAttachment?: (index: number, patch: AttachPatch) => void | Promise<void>
+}) {
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
   const [size, setSize] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const idx = attachIndex ?? 0
+  const myMeta = attachMeta?.[idx] ?? null
+  const canEdit = !!editable && !!onEditAttachment
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
     if (!url || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); return }
@@ -479,7 +536,8 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
     const types = (type ?? '').split('\n')
     const imgCount = types.filter(t => t === 'image').length
     return <div className={'att-group' + (imgCount > 1 ? ' grid' : '')}>
-      {urls.map((u, i) => <Attachment key={i} url={u} type={types[i] ?? type} meta={meta} />)}
+      {urls.map((u, i) => <Attachment key={i} url={u} type={types[i] ?? type} meta={meta}
+        editable={editable} attachMeta={attachMeta} attachIndex={i} onEditAttachment={onEditAttachment} />)}
     </div>
   }
   const clean = url.replace('#spoiler', '')
@@ -492,13 +550,24 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
       </a>
     )
     if (url.includes('#spoiler') && !revealed) return (
-      <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
-        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
-        <span className="att-spoiler-tag">СПОЙЛЕР</span>
+      <div className="att-editwrap">
+        <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
+          <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
+          <span className="att-spoiler-tag">СПОЙЛЕР</span>
+        </div>
+        {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
+        {editOpen && <AttachEditModal initial={{ spoiler: true, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
+          onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
       </div>
     )
     return <>
-      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} onError={() => setFailed(true)} />
+      <div className="att-editwrap">
+        <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} onError={() => setFailed(true)} />
+        {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
+        {editOpen && <AttachEditModal initial={{ spoiler: false, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
+          onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
+      </div>
+      {myMeta?.desc && <div className="att-desc">{myMeta.desc}</div>}
       {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
   }
@@ -512,6 +581,28 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
     return <video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />
   }
   // v1.83.0: txt и файлы с кодом — карточка с подсветкой, 1-в-1 как в Discord.
-  if (isCodeFile(clean)) return <CodeFileCard url={clean} sizeLabel={size} />
+  if (isCodeFile(clean)) {
+    const isSpoiler = url.includes('#spoiler')
+    if (isSpoiler && !revealed) return (
+      <div className="att-editwrap">
+        <div className="att-spoiler att-spoiler-file" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
+          <div className="att-spoiler-blur"><CodeFileCard url={clean} sizeLabel={size} nameOverride={myMeta?.name} /></div>
+          <span className="att-spoiler-tag">СПОЙЛЕР</span>
+        </div>
+        {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
+        {editOpen && <AttachEditModal initial={{ spoiler: true, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
+          onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
+      </div>
+    )
+    return <>
+      <div className="att-editwrap">
+        <CodeFileCard url={clean} sizeLabel={size} nameOverride={myMeta?.name} />
+        {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
+        {editOpen && <AttachEditModal initial={{ spoiler: false, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
+          onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
+      </div>
+      {myMeta?.desc && <div className="att-desc">{myMeta.desc}</div>}
+    </>
+  }
   return <a className="msg-file" href={clean} target="_blank" rel="noreferrer" title={size ? 'Размер файла: ' + size : undefined}><Icon name="paperclip" size={16} /> Скачать файл{size && <span className="msg-file-size">{size}</span>}</a>
 }

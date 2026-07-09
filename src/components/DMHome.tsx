@@ -19,8 +19,8 @@ import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
 import { startRingback, stopRingback, master, sndMute, sndUnmute } from '../lib/callSounds'
 import { sysCallStart, sysCallEnded, sysCallMissed, parseSys } from '../lib/sysmsg'
-import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
-import type { RxSummary } from '../lib/reactions'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage, updateAttachment } from '../lib/reactions'
+import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { useTyping } from '../lib/typing'
@@ -607,6 +607,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
     await editMessage('dm_messages', id, content)
   }
+  // v1.157.0: спойлер/название/описание одного вложения — карандаш на краю фото/текстового файла.
+  async function editAttachment(messageId: string, index: number, patch: AttachPatch) {
+    const msg = messages.find(m => m.id === messageId)
+    if (!msg) return
+    try {
+      const res = await updateAttachment('dm_messages', msg as any, index, patch)
+      if (res) setMessages(ms => ms.map(m => (m.id === messageId ? ({ ...m, attach_url: res.attach_url, attach_meta: res.attach_meta } as any) : m)))
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
 
   const callRoomShown = !!call && !!active && callThread === threadId
   useEffect(() => { crShownRef.current = callRoomShown }, [callRoomShown])
@@ -677,7 +686,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               nameOf={id => id === meId ? username : active.name}
-              canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg}
+              canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
               onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
               onMarkUnread={m => { setNewDividerId(m.id); if (threadId) localStorage.setItem('ponoi_lastread_dm_' + threadId, String(new Date(m.created_at).getTime() - 1)) }}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />

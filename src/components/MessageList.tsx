@@ -32,6 +32,7 @@ export interface UiMessage {
   created_at: string
   attach_url?: string | null
   attach_type?: string | null
+  attach_meta?: ({ name?: string; desc?: string } | null)[] | null
   author_avatar?: string | null
   pinned?: boolean
   reply_to?: string | null
@@ -157,6 +158,9 @@ interface Props {
   onDelete?: (id: string) => void
   onReply?: (m: UiMessage) => void
   onEdit?: (id: string, content: string) => void | Promise<void>
+  // v1.157.0: правка одного вложения (спойлер/название/описание) — index в
+  // группе, склеенной через '\n' (см. AttachPatch в src/lib/reactions.ts).
+  onEditAttachment?: (messageId: string, index: number, patch: { spoiler?: boolean; name?: string; desc?: string }) => void | Promise<void>
   onProfile?: (m: UiMessage, x: number, y: number) => void
   newDividerId?: string | null
   ownerId?: string | null
@@ -168,7 +172,7 @@ interface Props {
   onMarkUnread?: (m: UiMessage) => void
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -335,7 +339,9 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
                   : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
-                <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />
+                <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }}
+                  editable={m.author === currentUser} attachMeta={m.attach_meta}
+                  onEditAttachment={onEditAttachment ? (i, patch) => onEditAttachment(m.id, i, patch) : undefined} />
                 {!m.attach_url && findGifLink(m.content) && <GifEmbed url={findGifLink(m.content)!} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
                 <span className="tg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                 {rx.length > 0 && <div className="rx-bar">

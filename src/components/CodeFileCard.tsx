@@ -36,7 +36,7 @@ export function isCodeFile(url: string): boolean {
   return extOf(url) in CODE_EXT
 }
 
-export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: string | null }) {
+export function CodeFileCard({ url, sizeLabel, nameOverride }: { url: string; sizeLabel?: string | null; nameOverride?: string }) {
   const [text, setText] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState(true)      // превью развёрнуто (шеврон)
@@ -44,7 +44,9 @@ export function CodeFileCard({ url, sizeLabel }: { url: string; sizeLabel?: stri
   const [full, setFull] = useState(false)     // полноэкранный просмотр
   const [more, setMore] = useState(false)     // меню «…»
   const [webPreview, setWebPreview] = useState(false)   // v1.153.0: HTML как страница, не текст
-  const name = codeFileName(url)
+  // v1.157.0: можно переименовать вложение из модалки «Изменить вложение» —
+  // не трогает файл в Storage, только то, что показано в карточке.
+  const name = nameOverride || codeFileName(url)
   const ext = extOf(url)
   const lang = CODE_EXT[ext] || null
   const isHtml = ext === 'html' || ext === 'htm'

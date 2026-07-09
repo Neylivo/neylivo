@@ -47,3 +47,32 @@ export async function deleteMessage(table: PinTable, id: string) {
 export async function editMessage(table: PinTable, id: string, content: string) {
   await supabase.from(table).update({ content, edited: true }).eq('id', id)
 }
+
+// v1.157.0: правка одного вложения из группы (спойлер/название/описание) —
+// index соответствует позиции в attach_url, склеенном через '\n' (миграция v1.70.0).
+export type AttachMetaItem = { name?: string; desc?: string } | null
+export interface AttachPatch { spoiler?: boolean; name?: string; desc?: string }
+export async function updateAttachment(
+  table: PinTable,
+  msg: { id: string; attach_url?: string | null; attach_meta?: AttachMetaItem[] | null },
+  index: number,
+  patch: AttachPatch,
+): Promise<{ attach_url: string; attach_meta: AttachMetaItem[] } | null> {
+  if (!msg.attach_url) return null
+  const urls = msg.attach_url.split('\n')
+  if (index < 0 || index >= urls.length) return null
+  if (patch.spoiler !== undefined) {
+    const clean = urls[index].replace('#spoiler', '')
+    urls[index] = patch.spoiler ? clean + '#spoiler' : clean
+  }
+  const metaArr: AttachMetaItem[] = Array.isArray(msg.attach_meta) ? [...msg.attach_meta] : []
+  while (metaArr.length < urls.length) metaArr.push(null)
+  const cur = { ...(metaArr[index] ?? {}) } as { name?: string; desc?: string }
+  if (patch.name !== undefined) { if (patch.name.trim()) cur.name = patch.name.trim(); else delete cur.name }
+  if (patch.desc !== undefined) { if (patch.desc.trim()) cur.desc = patch.desc.trim(); else delete cur.desc }
+  metaArr[index] = (cur.name || cur.desc) ? cur : null
+  const attach_url = urls.join('\n')
+  const { error } = await supabase.from(table).update({ attach_url, attach_meta: metaArr }).eq('id', msg.id)
+  if (error) throw error
+  return { attach_url, attach_meta: metaArr }
+}

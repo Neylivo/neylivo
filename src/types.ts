@@ -10,6 +10,7 @@ export interface Message {
   created_at: string
   attach_url?: string | null
   attach_type?: string | null
+  attach_meta?: ({ name?: string; desc?: string } | null)[] | null
   pinned?: boolean
   reply_to?: string | null
   reply_author?: string | null
@@ -36,6 +37,7 @@ export interface DMMessage {
   created_at: string
   attach_url?: string | null
   attach_type?: string | null
+  attach_meta?: ({ name?: string; desc?: string } | null)[] | null
   pinned?: boolean
   reply_to?: string | null
   reply_author?: string | null

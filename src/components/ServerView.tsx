@@ -23,8 +23,8 @@ import { listMembers, updateServer } from '../lib/servers'
 import { CallRoom, Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
-import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage } from '../lib/reactions'
-import type { RxSummary } from '../lib/reactions'
+import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage, updateAttachment } from '../lib/reactions'
+import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
@@ -679,6 +679,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
     await editMessage('messages', id, content)
   }
+  // v1.157.0: спойлер/название/описание одного вложения — карандаш на краю фото/текстового файла.
+  async function editAttachment(messageId: string, index: number, patch: AttachPatch) {
+    const msg = messages.find(m => m.id === messageId)
+    if (!msg) return
+    try {
+      const res = await updateAttachment('messages', msg as any, index, patch)
+      if (res) setMessages(ms => ms.map(m => (m.id === messageId ? ({ ...m, attach_url: res.attach_url, attach_meta: res.attach_meta } as any) : m)))
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
 
   return (
     <>
@@ -849,7 +858,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
-            onReact={react} onPin={pin} onDelete={removeMsg}
+            onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) localStorage.setItem('ponoi_lastread_' + curChannelRef.current.id, String(new Date(m.created_at).getTime() - 1)) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm ? topRoleOf(mm) : undefined
