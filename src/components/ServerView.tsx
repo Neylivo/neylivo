@@ -209,7 +209,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const ch = supabase.channel('voice:' + server.id, { config: { presence: { key: user.id } } })
     ch.on('presence', { event: 'sync' }, () => {
       const st = ch.presenceState() as Record<string, any[]>
-      const map: Record<string, { userId: string; username: string; avatar?: string | null }[]> = {}
+      const map: Record<string, { userId: string; username: string; avatar?: string | null; live?: boolean }[]> = {}
       for (const key of Object.keys(st)) {
         const meta = st[key][0] as any
         if (!meta?.chId) continue

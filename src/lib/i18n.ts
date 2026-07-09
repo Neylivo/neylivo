@@ -77,7 +77,7 @@ const DICT_EN: Record<string, string> = {
   'Профиль': 'Profile', 'К последним': 'Jump to present',
   'Перейти к сообщению': 'Jump to message', 'Переместить в папку': 'Move to folder',
   'Существующие папки': 'Existing folders', 'Новая папка': 'New folder',
-  'Название папки': 'Folder name', 'Создать': 'Create', 'Горячие клавиши': 'Hotkeys', 'Поиск сообщений': 'Search messages',
+  'Название папки': 'Folder name', 'Создать': 'Create', 'Поиск сообщений': 'Search messages',
   'Ничего не найдено': 'No results', 'вложение': 'attachment', 'Ответить': 'Reply', 'Изменить': 'Edit', 'Закрепить': 'Pin',
   'Открепить': 'Unpin', 'Удалить': 'Delete', 'Удалить сообщение?': 'Delete message?', 'изменено': 'edited',
   'Музыка': 'Music', 'печатает…': 'is typing…', 'печатают…': 'are typing…',

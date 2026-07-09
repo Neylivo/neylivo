@@ -15,8 +15,8 @@ const S = (size = 20): React.SVGProps<SVGSVGElement> => ({
 
 // A single monochrome (currentColor) icon component in the Lucide/Discord line style.
 // Usage: <Icon name="mic" size={18} />  — replaces emoji used as UI icons.
-export function Icon({ name, size, className }: { name: string; size?: number; className?: string }) {
-  const p = { ...S(size), className }
+export function Icon({ name, size, className, style }: { name: string; size?: number; className?: string; style?: React.CSSProperties }) {
+  const p = { ...S(size), className, style }
   switch (name) {
     case 'home': return <svg {...p}><path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>
     case 'music': return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>

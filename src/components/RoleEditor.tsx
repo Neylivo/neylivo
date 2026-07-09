@@ -96,7 +96,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
   return (
     <div className="redit">
       <div className="redit-side">
-        <div className="redit-back" onClick={onBack}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' } as any} /> НАЗАД</div>
+        <div className="redit-back" onClick={onBack}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' }} /> НАЗАД</div>
         <div className="redit-side-h">
           <span>РОЛИ</span>
           <button className="redit-plus" title="Создать роль" onClick={async () => {

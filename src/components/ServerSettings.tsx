@@ -537,7 +537,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             {roles.map((r, i) => (
               <div key={r.id} className="sset-rolerow">
                 <span className="sset-rmove">
-                  <button title="Выше" disabled={i === 0} onClick={() => moveRole(i, -1)}><Icon name="chevron-down" size={13} style={{ transform: 'rotate(180deg)' } as any} /></button>
+                  <button title="Выше" disabled={i === 0} onClick={() => moveRole(i, -1)}><Icon name="chevron-down" size={13} style={{ transform: 'rotate(180deg)' }} /></button>
                   <button title="Ниже" disabled={i === roles.length - 1} onClick={() => moveRole(i, 1)}><Icon name="chevron-down" size={13} /></button>
                 </span>
                 <span className="role-dot" style={{ background: r.color }} /><b className="sset-rolename" title="Редактировать роль" onClick={() => { setSelRoleId(r.id); setRolesView('edit') }}>{r.name}</b>
@@ -568,7 +568,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           roleId={selRoleId} onSelectRole={setSelRoleId} onBack={() => setRolesView('main')} onEveryone={() => setRolesView('everyone')} onReload={reloadRoles} />}
 
         {tab === 'roles' && rolesView === 'everyone' && <>
-          <div className="sset-back" onClick={() => setRolesView('main')}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' } as any} /> НАЗАД</div>
+          <div className="sset-back" onClick={() => setRolesView('main')}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' }} /> НАЗАД</div>
           <div className="cset-h">Права по умолчанию — @everyone</div>
           {EVERYONE_PERMS.map(p => (
             <div key={p.k} className="cset-perm">

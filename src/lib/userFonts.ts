@@ -24,8 +24,10 @@ export function useUserFonts(ids: (string | undefined | null)[]): (id?: string |
     need.forEach(id => pending.add(id))
     ;(async () => {
       // До миграции 27 нет msg_font, до 26 — nick_font: откатываемся ступенчато.
-      let { data, error } = await supabase.from('profiles').select('id, nick_font, nick_font_url, msg_font, msg_font_url').in('id', need)
-      if (error) ({ data, error } = await supabase.from('profiles').select('id, nick_font, nick_font_url').in('id', need))
+      // supabase-js выводит из строки .select() строгий структурный тип столбцов —
+      // у отката набор колонок уже, поэтому явно приводим оба результата к any[].
+      let { data, error } = await supabase.from('profiles').select('id, nick_font, nick_font_url, msg_font, msg_font_url').in('id', need) as { data: any[] | null; error: any }
+      if (error) ({ data, error } = await supabase.from('profiles').select('id, nick_font, nick_font_url').in('id', need) as { data: any[] | null; error: any })
       need.forEach(id => pending.delete(id))
       if (error) { need.forEach(id => cache.set(id, {})); return }
       for (const id of need) {
