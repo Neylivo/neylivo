@@ -1185,6 +1185,9 @@ const REGEX_EN: [RegExp, string][] = [
   [/^Слушает (.+)$/, 'Listening to $1'],
   [/^Участники окажутся в (.+)$/, 'Members will land in $1'],
   [/^Пригласить друзей в (.+)$/, 'Invite friends to $1'],
+  [/^Отправить код ещё раз \(через (\d+) с\)$/, 'Resend code (in $1s)'],
+  [/^Юзернейм можно менять раз в 2 недели\. Осталось дней: (\d+)$/, 'You can change your username once every 2 weeks. Days left: $1'],
+  [/^Добавлено треков: (\d+)$/, 'Tracks added: $1'],
 ]
 
 function toEn(t: string): string {
@@ -1328,4 +1331,291 @@ Object.assign(DICT_EN, {
 Object.assign(DICT_EN, {
   'Меняет все надписи приложения: настройки, меню, панели. Видно только тебе. Ник и текст сообщений в чате не меняет — за них отвечают «Шрифт ника» и «Шрифт сообщений» в «Профиле» (их видят все).':
     'Changes every label in the app: settings, menus, panels. Only you can see it. It does not affect nicknames or message text — those come from "Nickname font" and "Message font" in "Profile" (visible to everyone).',
+})
+
+// v1.167.0: словарь не обновлялся с v1.123.0 — за 40+ версий (папки серверов,
+// звуки, интеграции профиля, статистика CS2/Dota2, права, автомод и многое
+// другое) переключение на английский оставляло половину интерфейса русской.
+// Полный проход по исходникам, добор всех непереведённых строк.
+Object.assign(DICT_EN, {
+  // Calls (CallRoom / DMHome voice)
+  "— экран": "— screen",
+  "Браузер заблокировал звук — нажми, чтобы включить": "Browser blocked audio — click to enable",
+  "Звонок прерван — соединение потеряно": "Call interrupted — connection lost",
+  "Ожидание": "Pending",
+  "Соединение": "Connecting",
+
+  // Channel Settings
+  "+ цвет": "+ color",
+  "Для всех пользователей канала независимо от их местонахождения будет предпринята попытка подключения к указанному вами региону. От региона может зависеть качество видео и звука.": "All users of this channel will attempt to connect to the region you specify, regardless of their location. Video and audio quality may depend on the region.",
+  "Для просмотра содержимого этого канала пользователям необходимо подтвердить, что они достигли совершеннолетия. В каналах с возрастными ограничениями отсутствует фильтр нежелательного контента.": "Users will need to confirm they are of legal age to view the content of this channel. Age-restricted channels have no explicit content filter.",
+  "До 4 своих цветов: один — сплошной цвет, два и больше — градиент по буквам.": "Up to 4 custom colors: one is a solid color, two or more make a letter-by-letter gradient.",
+  "Загрузить свой шрифт (.ttf/.otf/.woff2)": "Upload your own font (.ttf/.otf/.woff2)",
+  "Как на сервере": "Same as server",
+  "Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql": "The channel wasn't deleted: apply the supabase/29_channels_update_policy.sql migration",
+  "Не видите перед собой цели? Вас несёт, словно бумажный самолётик, дрейфующий по небу? Пригласите сюда своих друзей, создав ссылку-приглашение!": "Don't see a purpose ahead of you? Are you drifting like a paper airplane across the sky? Invite your friends here by creating an invite link!",
+  "Не сохранилось: в базе нет права изменять каналы — примени миграцию supabase/29_channels_update_policy.sql": "Not saved: no permission to update channels in the database — apply the supabase/29_channels_update_policy.sql migration",
+  "Переливание": "Shimmer",
+  "Персонализируйте свой сервер с помощью интеграций. Управляйте вебхуками и отслеживаемыми каналами, публикации с которых появляются на этом канале.": "Personalize your server with integrations. Manage webhooks and followed channels whose posts appear in this channel.",
+  "Права синхронизированы с категорией «": "Permissions synced with category \"",
+  "Раскраска названия": "Name coloring",
+  "Свой шрифт — заменить файл": "Custom font — replace file",
+  "Убрать цвет": "Remove color",
+  "Участники не смогут отправлять больше одного сообщения и создавать больше одной ветки в течение этого периода времени, кроме случаев, когда у них есть право обходить медленный режим.": "Members won't be able to send more than one message or create more than one thread during this period, unless they have permission to bypass slowmode.",
+  "Цвета плавно бегут по названию — особенно красиво для «Золотого». Работает от двух цветов.": "Colors smoothly flow across the name — looks especially good with \"Gold\". Works from two colors.",
+  "Шрифт названия": "Name font",
+  "Шрифт названия только этого канала. «Как на сервере» — общий шрифт каналов из настроек сервера («Профиль сервера»). Свой загруженный файл важнее выбора из списка.": "The font for this channel's name only. \"Same as server\" is the shared channel font from server settings (\"Server Profile\"). An uploaded font takes priority over the list selection.",
+
+  // Attachments / Composer
+  "Загрузка": "Uploading",
+  "Изменить вложение": "Edit Attachment",
+  "Название файла": "File Name",
+  "Не удалось загрузить видео": "Failed to load the video",
+  "Не удалось загрузить изображение": "Failed to load the image",
+  "Необязательно": "Optional",
+  "Открыть ссылку в браузере": "Open Link in Browser",
+  "Размывает вложение, пока не нажмут «показать»": "Blurs the attachment until someone clicks \"reveal\"",
+  "Скачать файл": "Download File",
+  "Слишком большой файл (максимум 40 ГБ): ": "File too large (max 40 GB): ",
+  "Слишком много одинаковых символов подряд": "Too many repeated characters in a row",
+  "Сообщение не отправлено — проверь соединение": "Message not sent — check your connection",
+  "Спойлер": "Spoiler",
+  "Просмотреть как страницу": "View as Page",
+
+  // Create Channel Modal
+  "в": "in",
+
+  // DM Home / Friends
+  "— скопировано ✓": "— copied ✓",
+  "Диалог не найден": "Dialog not found",
+  "Входящие —": "Incoming —",
+  "Исходящие —": "Outgoing —",
+  " уже отправил(а) вам заявку — теперь вы друзья!": " already sent you a friend request — you're friends now!",
+  "Пользователь": "User",
+
+  // Emoji Picker
+  "Пока пусто. Правый клик по кастом-эмодзи — в пикере или прямо по чужому эмодзи в сообщении — «В избранное». Можно добавить и целый пак — звёздочка у названия пака.": "Empty for now. Right-click a custom emoji — in the picker, or directly on someone else's emoji in a message — \"Add to Favorites\". You can also add a whole pack — the star next to the pack name.",
+  "Создать (": "Create (",
+  "Удалить эмодзи": "Delete Emoji",
+  "Эмодзи создан — он личный и виден в пикере только тебе": "Emoji created — it's private and only visible to you in the picker",
+  ": — в избранном, ищи в пикере под звёздочкой": ": — added to Favorites, find it in the picker under the star",
+  ": убран из избранного": ": removed from Favorites",
+
+  // Folders
+  "Папка для «": "Folder for \"",
+  "Убрать из папки «": "Remove from folder \"",
+
+  // Game Picker / Activity
+  "Добавить «": "Add \"",
+  "игрок": "player",
+  "игроков": "players",
+  "Игры, в которые играют на Ponoi": "Games people play on Ponoi",
+  "Поиск игры…": "Search for a game…",
+  "Пока никто не играл ни во что на этом сервере": "No one has played anything on this server yet",
+
+  // Game Stats (CS2 / Dota)
+  "— статистика": "— stats",
+  "% побед": "% wins",
+  "винрейт": "win rate",
+  "за 30 дней": "over 30 days",
+  "За последние 30 дней матчей не найдено — сыграй партию, и она появится здесь.": "No matches found in the last 30 days — play a round and it'll show up here.",
+  "Карты": "Maps",
+  "матчей": "matches",
+  "Матчей не найдено — либо их не было, либо профиль скрыт настройками приватности Dota.": "No matches found — either there weren't any, or the profile is hidden by Dota privacy settings.",
+  "медаль": "rank",
+  "Не удалось получить данные OpenDota — профиль Dota может быть скрыт настройками приватности, либо SteamID указан неверно.": "Failed to fetch OpenDota data — the Dota profile may be hidden by privacy settings, or the SteamID is incorrect.",
+  "Ничья": "Draw",
+  "побед": "wins",
+  "Победа": "Win",
+  "помощи/матч": "assists/match",
+  "Поражение": "Loss",
+  "поражений": "losses",
+  "Последние матчи": "Recent Matches",
+  "Привяжи SteamID64 в Настройках → Активность, чтобы видеть статистику Dota 2 (медаль, MMR, последние матчи).": "Link your SteamID64 in Settings → Activity to see Dota 2 stats (rank, MMR, recent matches).",
+  "Режимы": "Modes",
+  "смертей/матч": "deaths/match",
+  "убийств/матч": "kills/match",
+  "MMR (оценка)": "MMR (estimate)",
+
+  // GIF Picker
+  "Не удалось загрузить превью — проверь ссылку": "Failed to load the preview — check the link",
+  "Ничего не найдено по «": "Nothing found for \"",
+  "Поиск гифок пока не настроен. Добавь свою на вкладке «По ссылке» — вставится любая ссылка на .gif, Tenor или Giphy.": "GIF search isn't set up yet. Add your own on the \"From Link\" tab — any .gif, Tenor or Giphy link works.",
+
+  // Invite Modal
+  "Пригласить друзей в": "Invite friends to",
+
+  // Message List (system messages)
+  ", который длился": ", which lasted",
+  "в сети": "online",
+  "г.": ".",
+  "Дата основания:": "Founded:",
+  "закрепил(а) сообщение": "pinned a message",
+  "начал(а) звонок — он длился": "started a call — it lasted",
+
+  // Mini Profile
+  "был(а) в сети": "was online",
+  "Копировать ID пользователя": "Copy User ID",
+  "Переключение между учётными записями": "Switch Accounts",
+
+  // Profile Card (wall / connections / activity)
+  ". Свои рисунки и любые рисунки на своей стене можно удалять.": ". You can delete your own drawings, and any drawing on your own wall.",
+  "аноним": "anonymous",
+  "д. подряд": "d. in a row",
+  "Добавить подключение": "Add Connection",
+  "За последние 30 дней игр не замечено.": "No games seen in the last 30 days.",
+  "Здесь любой может что-нибудь нарисовать": "Anyone can draw something here",
+  "Марафон в": "Marathon of",
+  "мес. отсутствия": "mo. away",
+  "Название (необязательно)": "Name (optional)",
+  "Нарисовать": "Draw",
+  "Не удалось сохранить рисунок": "Failed to save the drawing",
+  "Не удалось удалить рисунок": "Failed to delete the drawing",
+  "Общие сервера": "Mutual Servers",
+  "Подключения": "Connections",
+  "Пока пусто — нарисуй первым!": "Nothing here yet — be the first to draw!",
+  "Снова в деле спустя": "Back in action after",
+  "Ссылка — steam, tiktok, youtube…": "Link — steam, tiktok, youtube…",
+  "Статистика": "Stats",
+  "Статистика за 30 дней": "30-day stats",
+  "Стена": "Wall",
+  "Стена росписи": "Drawing Wall",
+  "Удалить рисунок?": "Delete drawing?",
+
+  // Role Editor & Permissions
+  "Вампус": "Wumpus",
+  "Загрузите изображение размером менее 256 Кб. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.": "Upload an image under 256 KB. We recommend a resolution of at least 64x64 pixels. If members have multiple roles, they'll see the icon of the highest one.",
+  "Право видеть/писать в конкретном канале, подключаться к голосовым каналам и т.д. настраивается в «Права по умолчанию» (@everyone) и действует на всех участников.": "The right to view/write in a specific channel, connect to voice channels, etc. is configured in \"Default Permissions\" (@everyone) and applies to all members.",
+  "РЕДАКТИРОВАТЬ РОЛЬ —": "EDIT ROLE —",
+  "Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor": "Apply the supabase/34_permissions.sql migration in the Supabase SQL Editor first",
+  "Управлять участниками (": "Manage Members (",
+  "Банить участников": "Ban Members",
+  "Кикать участников": "Kick Members",
+  "Общие права сервера": "General Server Permissions",
+  "Открывать «Настройки сервера» и менять профиль, доступ, автомодерацию": "Open \"Server Settings\" and change the profile, access, and AutoMod",
+  "Права текстовых каналов": "Text Channel Permissions",
+  "Создавать, изменять и удалять каналы и категории": "Create, edit, and delete channels and categories",
+  "Создавать, изменять и удалять роли; назначать их участникам": "Create, edit, and delete roles; assign them to members",
+  "Удалять и закреплять чужие сообщения": "Delete and pin other members' messages",
+  "Удалять участников с сервера — они смогут вернуться по новому приглашению": "Remove members from the server — they can rejoin with a new invite",
+  "Удалять участников с сервера без возможности вернуться": "Remove members from the server with no way to return",
+  "Управление каналами": "Manage Channels",
+  "Управление ролями": "Manage Roles",
+  "Управление сообщениями": "Manage Messages",
+
+  // Server Events
+  "Создавать события могут владелец сервера и роли с правом «Управление каналами».": "Events can be created by the server owner and roles with the \"Manage Channels\" permission.",
+
+  // Server Modals (summary popovers)
+  "Настройки сервера —": "Server Settings —",
+  "Роли и права настраиваются в «Настройках сервера» → вкладка «Роли»: там можно создавать роли, менять цвета и права, выдавать роли участникам.": "Roles and permissions are configured in \"Server Settings\" → \"Roles\" tab: you can create roles, change colors and permissions, and assign roles to members there.",
+  "Уведомления —": "Notifications —",
+  "Эти настройки применяются только к серверу «": "These settings only apply to the server \"",
+
+  // Server Settings
+  "» нет. Попробуйте другой ID или имя.": "\" found. Try a different ID or name.",
+  "» с сервера?": "\" from the server?",
+  "»? Он не сможет вернуться по приглашению.": "\"? They won't be able to rejoin with an invite.",
+  "# общий": "# general",
+  "Банов по запросу «": "Bans matching \"",
+  "Выберите, могут ли участники сервера делиться изображениями откровенного характера. Эта настройка будет применяться на каналах, не имеющих возрастных ограничений.": "Choose whether server members can share explicit images. This setting applies to channels without age restrictions.",
+  "Выберите, могут ли участники сервера делиться изображениями, отмеченными как контент откровенного характера. Эта настройка будет применяться на каналах, не имеющих возрастных ограничений.": "Choose whether server members can share images flagged as explicit content. This setting applies to channels without age restrictions.",
+  "Добавьте пользовательские эмодзи для всех на этом сервере. В Ponoi — без лимитов и подписок: любые эмодзи, в том числе анимированные, доступны всем.": "Add custom emoji for everyone on this server. On Ponoi there are no limits or subscriptions: any emoji, including animated ones, are available to everyone.",
+  "Если вы хотите загрузить несколько эмодзи или пропустить редактирование, перетащите файлы на эту страницу. Эмодзи будут названы именем файла.": "If you want to upload multiple emoji or skip editing, drag files onto this page. Emoji will be named after their file.",
+  "Забанить": "Ban",
+  "Забанить «": "Ban \"",
+  "Загружайте стикеры, которые будут доступны всем участникам сервера. В Ponoi нет уровней и слотов — стикеров может быть сколько угодно, бесплатно.": "Upload stickers that will be available to all server members. Ponoi has no tiers or slots — you can have as many stickers as you want, for free.",
+  "Кикнуть": "Kick",
+  "Кикнуть «": "Kick \"",
+  "Настройте отображение вашего сервера в ссылках-приглашениях, а также сообщениях «Путешествия по серверам» и канала с объявлениями, если эти функции активны": "Customize how your server appears in invite links, as well as \"Server Discovery\" messages and the announcements channel, if those features are active",
+  "Облегчите работу модераторам и наведите порядок на сервере! Настройте фильтры для модерирования контента и задайте текст автоматического оповещения, отправляемого при выявлении нарушений. Остальное Автомод сделает за вас.": "Make life easier for your moderators and keep your server in order! Set up content moderation filters and the automatic alert text sent when violations are detected. AutoMod takes care of the rest.",
+  "По умолчанию баны выдаются по учётной записи и IP-адресу. Пользователь сможет обойти бан по IP-адресу, используя прокси. Включение проверки по мобильному телефону во вкладке «Модерация» сделает процесс обхода бана намного сложнее.": "By default, bans are issued by account and IP address. A user can bypass an IP ban using a proxy. Enabling phone verification in the \"Moderation\" tab makes bypassing a ban much harder.",
+  "После обновления тега всем участникам сервера потребуется заново установить его у себя в профиле. Мы делаем это в целях предотвращения злоупотребления.": "After updating the tag, all server members will need to set it again on their profile. We do this to prevent abuse.",
+  "Превратите сервер в сервер сообщества, чтобы получить доступ к дополнительным административным инструментам, которые помогут модерировать и развивать его.": "Turn your server into a community server to get access to additional admin tools that help you moderate and grow it.",
+  "При включении этого параметра страницы участников будут показаны в списке каналов. Это позволит вам быстро посмотреть, кто недавно присоединился к вашему серверу, и принять решение в отношении пользователей, замеченных в подозрительной деятельности.": "When this setting is on, member pages will show up in the channel list. This lets you quickly see who recently joined your server and take action on users showing suspicious activity.",
+  "Примерные правила: Будьте вежливы и уважительны · Не рассылайте спам и не занимайтесь самопродвижением · Не публикуйте непристойные материалы, а также контент с ограничениями по возрасту.": "Example rules: Be polite and respectful · Don't spam or self-promote · Don't post obscene material or age-restricted content.",
+  "Разбанен": "Unbanned",
+  "Разбанить": "Unban",
+  "Серверы сообщества — большие площадки, где могут собираться люди с общими интересами. Включив функцию «Сообщество», вы не сделаете сервер видимым в «Путешествии по серверам».": "Community servers are large hubs where people with shared interests can gather. Turning on \"Community\" doesn't make your server visible in \"Server Discovery\".",
+  "Создайте тег, который будет отображаться рядом с именем участников вашего сервера (если они захотят, конечно)! Благодаря тегу сервера любой пользователь Ponoi сможет просматривать профиль вашего сервера — и даже подать заявку на вступление, если у вас включена эта опция. В Ponoi теги бесплатны для всех серверов.": "Create a tag that shows up next to the names of your server's members (if they choose to, of course)! Thanks to the server tag, any Ponoi user can view your server's profile — and even apply to join, if you have that option enabled. On Ponoi, tags are free for every server.",
+  "Удалить '": "Delete '",
+  "Управление сервером": "Manage Server",
+  "Участник забанен": "Member banned",
+  "Участник кикнут": "Member kicked",
+  "Участники с этой ролью могут открывать и менять настройки сервера. Остальные права — в редакторе роли.": "Members with this role can open and change server settings. Other permissions are in the role editor.",
+  "Участники сервера должны соответствовать указанным критериям, чтобы писать в текстовые каналы или отправлять личные сообщения. Данное условие не действует, если у участника есть назначенная роль.": "Server members must meet the specified criteria to post in text channels or send direct messages. This requirement doesn't apply if the member has an assigned role.",
+  "Шаблон сервера — это простой способ поделиться образцом вашего сервера и помочь другим пользователям быстро создать свой сервер. Щёлкнув по ссылке на ваш шаблон, другой пользователь создаст новый сервер с такими же каналами, ролями, правами и настройками, как и на вашем сервере.": "A server template is a simple way to share a copy of your server and help other users quickly create their own. Clicking your template link creates a new server for that user with the same channels, roles, permissions and settings as yours.",
+  "Шрифт названий каналов": "Channel Name Font",
+  "Этим шрифтом пишутся названия всех каналов в списке слева. Отдельному каналу можно задать свой шрифт в его настройках («Обзор»).": "This font is used for all channel names in the list on the left. An individual channel can have its own font set in its settings (\"Overview\").",
+  "Это изображение будет отображаться при просмотре вашего приглашения на сервер в браузере, а также на экране подтверждения приглашения и во время адаптации. Рекомендуемый минимальный размер составляет 1920x1080, рекомендуемое соотношение сторон — 16:9. В Ponoi это бесплатно.": "This image is shown when your server invite is viewed in a browser, as well as on the invite confirmation screen and during onboarding. The recommended minimum size is 1920x1080, with a 16:9 aspect ratio. It's free on Ponoi.",
+  "Это изображение будет помещено над списком ваших каналов. Рекомендуемый минимальный размер составляет 960x540, рекомендуемое соотношение сторон — 16:9. В Ponoi это бесплатно.": "This image is placed above your channel list. The recommended minimum size is 960x540, with a 16:9 aspect ratio. It's free on Ponoi.",
+
+  // Server View
+  "Забанить этого участника? Он не сможет вернуться по приглашению.": "Ban this member? They won't be able to rejoin with an invite.",
+  "Кикнуть с сервера": "Kick from Server",
+  "Кикнуть этого участника с сервера?": "Kick this member from the server?",
+  "Нажмите ещё раз — открыть канал": "Click again to open the channel",
+  "Не в сети —": "Offline —",
+  "Не отвлекайтесь от беседы с помощью веток — временных текстовых каналов.": "Don't get sidetracked — use threads for temporary text channels.",
+  "Подключаемся…": "Connecting…",
+  "Участник —": "Member —",
+  "Это ваш новый сервер. Здесь приведены шаги, которые помогут вам начать с ним работу. Вы можете найти больше советов в нашем руководстве для начинающих.": "This is your new server. Here are the steps to help you get started with it. You can find more tips in our beginner's guide.",
+
+  // Settings (fonts, logo, sounds, Dota integration)
+  "— вставь ссылку на профиль Steam.": "— paste your Steam profile link.",
+  ", и в панели задач Windows": ", and the Windows taskbar",
+  "⚠️ В этом шрифте нет русских букв — интерфейс останется обычным шрифтом.": "⚠️ This font has no Russian letters — the interface will stay in the regular font.",
+  "В этом шрифте нет русских букв — интерфейс останется обычным шрифтом": "This font has no Russian letters — the interface will stay in the regular font",
+  "Входящее сообщение": "Incoming message",
+  "Входящий звонок": "Incoming call",
+  "Гудки": "Ringback tone",
+  "Загрузить свой логотип": "Upload Your Own Logo",
+  "Загрузить свой файл": "Upload Your Own File",
+  "Замени встроенные тоны своими файлами — везде, где играет звук приложения. Пусто — играет обычный тон.": "Replace the built-in tones with your own files — everywhere the app plays a sound. Empty means the default tone plays.",
+  "Звук уведомления": "Notification sound",
+  "Звуки": "Sounds",
+  "Исходящий звонок (пока не ответили)": "Outgoing call (not yet answered)",
+  "Логотип приложения": "App Logo",
+  "Нужен файл изображения": "An image file is required",
+  "Оформи «кубик» с ником и аватаркой (панель внизу слева и твоя строка в списке участников): фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Видно всем.": "Style your \"plate\" with your nickname and avatar (the bottom-left panel and your row in the member list): a background — photo or video up to 5 sec (plays on hover), and/or a colored outline. Visible to everyone.",
+  "Рингтон": "Ringtone",
+  "Свой логотип вместо стандартного — меняется везде: в панели серверов, на экране загрузки": "A custom logo instead of the default one — changes everywhere: the server list, the loading screen",
+  "Свой SteamID64 можно найти на": "You can find your SteamID64 at",
+  "Статистика Dota 2": "Dota 2 Stats",
+  "Твой ник — своим шрифтом: в чате, списке участников, мини-профиле, полном профиле и панельке внизу слева. Выбери из набора или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2). Видно всем, сохраняется сразу.": "Your nickname, in your own font: in chat, the member list, mini profile, full profile, and the bottom-left panel. Choose from the set or upload your own font file (.ttf, .otf, .woff, .woff2). Visible to everyone, saved instantly.",
+  "Файл слишком большой — максимум 2 МБ": "File too large — maximum 2 MB",
+  "Шрифт, которым пишутся твои сообщения в чате. Видно всем — но каждый может выключить чужие шрифты у себя («Внешний вид» → «Чужие шрифты в чате»). Сохраняется сразу.": "The font your chat messages are written in. Visible to everyone — but anyone can turn off others' fonts for themselves (\"Appearance\" → \"Others' fonts in chat\"). Saved instantly.",
+  "PNG, JPG или SVG, до 2 МБ.": "PNG, JPG, or SVG, up to 2 MB.",
+  "Valve не отдаёт MMR через GSI — привяжи SteamID64, и статистика (MMR, последние матчи) подтянется из открытого API OpenDota.": "Valve doesn't expose MMR through GSI — link your SteamID64 and stats (MMR, recent matches) will be pulled from the public OpenDota API.",
+
+  // Soundboard
+  "Длительность:": "Duration:",
+  "Конец:": "End:",
+  "Начало:": "Start:",
+  "Обрезать:": "Trim:",
+  "с": "s",
+
+  // Wall Draw
+  "Ластик": "Eraser",
+  "Нарисуй что-нибудь на стене": "Draw something on the wall",
+  "Толщина": "Thickness",
+
+  // Channel name color presets
+  "Золотой": "Gold",
+  "Лёд": "Ice",
+  "Неон": "Neon",
+  "Обычный": "Normal",
+  "Огонь": "Fire",
+  "Радуга": "Rainbow",
+
+  // Servers / invites (lib)
+  "Приглашения на этот сервер приостановлены": "Invites to this server are paused",
+
+  // Music
+  "Вместе": "Together",
+  "Вместе · код": "Together · code",
+  "Загрузить файл": "Upload File",
+  "Затемнение:": "Dim:",
+  "Моя музыка": "My Music",
+  "трек.": "tracks",
 })

@@ -122,7 +122,11 @@ function load(): Settings {
     localStorage.setItem('ponoi_mig_162', '1')
   } catch {}
   const s = { ...DEFAULTS }
-  const lang = localStorage.getItem('ponoi_lang'); if (lang) s.lang = lang
+  // v1.167.0: первый запуск, языка ещё нигде не сохранено — угадываем по языку
+  // ОС/браузера, а не жёстко на русский. Не трогает тех, у кого lang уже сохранён.
+  const lang = localStorage.getItem('ponoi_lang')
+  if (lang) s.lang = lang
+  else if (typeof navigator !== 'undefined' && !/^ru/i.test(navigator.language || '')) s.lang = 'en'
   const zoom = localStorage.getItem('ponoi_zoom'); if (zoom) s.zoom = Number(zoom)
   return withAccount(s)
 }
