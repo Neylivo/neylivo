@@ -2,6 +2,10 @@
 // показывается сама гифка, а не ссылка. «Копировать ссылку» в Discord даёт
 // страницу tenor.com/view/… — её (и страницы Giphy) резолвим в прямой URL
 // картинки; результат кэшируется на время работы приложения.
+// v1.149.0: Tenor API v1 отключён Google — переехали на v2 (ключ из VITE_TENOR_KEY).
+
+export const TENOR_KEY = (import.meta.env.VITE_TENOR_KEY as string | undefined) ?? ''
+export const TENOR_V2 = 'https://tenor.googleapis.com/v2'
 
 const DIRECT_RE = /https?:\/\/[^\s<>]+\.(?:gif|png|jpe?g|webp)(?:\?[^\s<>]*)?/i
 const TENOR_PAGE_RE = /https?:\/\/(?:www\.)?tenor\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?view\/[\w-]+(?:\?[^\s<>]*)?/i
@@ -28,11 +32,11 @@ export async function resolveGif(url: string): Promise<string | null> {
   } else if (TENOR_PAGE_RE.test(url)) {
     // ID тенора — цифры в конце пути страницы.
     const id = (url.split(/[?#]/)[0].match(/(\d+)$/) ?? [])[1]
-    if (id) {
+    if (id && TENOR_KEY) {
       try {
-        const r = await fetch('https://g.tenor.com/v1/gifs?ids=' + id + '&key=LIVDSRZULELA&media_filter=minimal')
+        const r = await fetch(TENOR_V2 + '/posts?ids=' + id + '&key=' + TENOR_KEY + '&client_key=ponoi&media_filter=tinygif,gif')
         const j = await r.json()
-        const m = (j?.results?.[0]?.media?.[0]) as any
+        const m = (j?.results?.[0]?.media_formats) as any
         out = m?.gif?.url ?? m?.tinygif?.url ?? null
       } catch { out = null }
     }
@@ -42,5 +46,8 @@ export async function resolveGif(url: string): Promise<string | null> {
     if (id) out = 'https://media.giphy.com/media/' + id + '/giphy.gif'
   }
   cache.set(url, out)
+  // Сообщение с этой ссылкой уже могло отрендериться до того, как резолв
+  // завершился (кэш ещё пуст) — дёргаем список сообщений на перерисовку.
+  window.dispatchEvent(new Event('ponoi-gif-resolved'))
   return out
 }

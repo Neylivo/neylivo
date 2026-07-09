@@ -3,29 +3,20 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
-import { resolveGif } from '../lib/gifUrl'
+import { resolveGif, TENOR_KEY, TENOR_V2 } from '../lib/gifUrl'
 
 // GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
 // (общая коллекция + избранное) и «Эмодзи» (переключает на пикер эмодзи).
-// Поиск и «популярные» работают через публичный демо-ключ Tenor v1; если сеть
-// или ключ недоступны — показывается встроенный список.
-const TENOR = 'https://g.tenor.com/v1'
-const TENOR_KEY = 'LIVDSRZULELA'
-
-const BUILTIN = [
-  'https://media.tenor.com/BeAr7d5A1AsAAAAC/cat.gif',
-  'https://media.tenor.com/8Nl6zY0Jd0kAAAAC/thumbs-up.gif',
-  'https://media.tenor.com/1B9zC3zVvJcAAAAC/dance.gif',
-  'https://media.tenor.com/qtF0oS6t9nkAAAAC/lol.gif',
-  'https://media.tenor.com/wZmQ0hqk3zEAAAAC/cry.gif',
-  'https://media.tenor.com/gUjT4H8mZk4AAAAC/heart.gif',
-]
+// Поиск и «популярные» работают через Tenor API v2 (нужен VITE_TENOR_KEY —
+// Tenor v1 отключён Google). Без ключа вкладка «Гифки» показывает подсказку,
+// но «По ссылке»/«Мои GIF» работают без него, ключ не требуется.
 
 async function tenorGifs(path: string): Promise<string[]> {
+  if (!TENOR_KEY) return []
   try {
-    const r = await fetch(TENOR + '/' + path + '&key=' + TENOR_KEY + '&limit=24&media_filter=minimal')
+    const r = await fetch(TENOR_V2 + '/' + path + '&key=' + TENOR_KEY + '&client_key=ponoi&limit=24&media_filter=tinygif')
     const j = await r.json()
-    return ((j.results ?? []) as any[]).map(it => it.media?.[0]?.tinygif?.url).filter(Boolean)
+    return ((j.results ?? []) as any[]).map(it => it.media_formats?.tinygif?.url).filter(Boolean)
   } catch { return [] }
 }
 
@@ -49,7 +40,9 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
   const [favs, setFavs] = useState<string[]>(loadFavs)
   const [urlIn, setUrlIn] = useState('')
   const [urlGif, setUrlGif] = useState<string | null>(null)
+  const [broken, setBroken] = useState<Set<string>>(new Set())
   const debRef = useRef(0)
+  const markBroken = (u: string) => setBroken(b => (b.has(u) ? b : new Set(b).add(u)))
 
   // v1.89.0: в «По ссылке» можно вставить не только прямой .gif, но и страницу
   // Tenor/Giphy (например, «Копировать ссылку» на гифке в Discord) — резолвим её.
@@ -70,14 +63,14 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
     })
   }
 
-  // «Гифки»: без запроса — популярные, с запросом — поиск (с задержкой при вводе).
+  // «Гифки»: без запроса — популярные (featured), с запросом — поиск (с задержкой при вводе).
   useEffect(() => {
-    if (tab !== 'gifs') return
+    if (tab !== 'gifs' || !TENOR_KEY) return
     setLoading(true)
     window.clearTimeout(debRef.current)
     debRef.current = window.setTimeout(async () => {
-      const res = await tenorGifs(q.trim() ? 'search?q=' + encodeURIComponent(q.trim()) : 'trending?')
-      setList(res.length ? res : BUILTIN)
+      const res = await tenorGifs(q.trim() ? 'search?q=' + encodeURIComponent(q.trim()) : 'featured?')
+      setList(res)
       setLoading(false)
     }, q.trim() ? 350 : 0)
     return () => window.clearTimeout(debRef.current)
@@ -100,9 +93,9 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
     refresh()
   }
 
-  const cell = (u: string, del?: string) => (
+  const cell = (u: string, del?: string) => broken.has(u) ? null : (
     <div key={(del ?? '') + u} className="gif-cell" onClick={() => onPick(u)}>
-      <img src={u} alt="gif" loading="lazy" />
+      <img src={u} alt="gif" loading="lazy" onError={() => markBroken(u)} />
       <span className={'gif-fav' + (favs.includes(u) ? ' on' : '')}
         title={favs.includes(u) ? 'Убрать из избранного' : 'В избранное'}
         onClick={ev => { ev.stopPropagation(); toggleFav(u) }}>★</span>
@@ -122,13 +115,20 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
       {tab === 'gifs' && <>
         <div className="gp2-search"><input placeholder="Поиск гифок…" value={q} onChange={e => setQ(e.target.value)} autoFocus /></div>
         <div className="emoji-scroll">
-          {loading && <div className="ep2-hint">Ищу гифки…</div>}
+          {!TENOR_KEY
+            ? <div className="ep2-hint">Поиск гифок пока не настроен. Добавь свою на вкладке «По ссылке» — вставится любая ссылка на .gif, Tenor или Giphy.</div>
+            : loading
+            ? <div className="ep2-hint">Ищу гифки…</div>
+            : list.length === 0 && q.trim()
+            ? <div className="ep2-hint">Ничего не найдено по «{q.trim()}»</div>
+            : null}
           <div className="gif-grid">{list.map(u => cell(u))}</div>
         </div>
       </>}
       {tab === 'url' && <div className="gp2-url">
         <input placeholder="Вставь ссылку на гифку — хоть из Discord" value={urlIn} onChange={e => setUrlIn(e.target.value)} autoFocus />
-        {urlIn.trim() && <img className="gp2-preview" src={urlGif ?? urlIn.trim()} alt="предпросмотр" />}
+        {urlIn.trim() && !broken.has(urlGif ?? urlIn.trim()) && <img className="gp2-preview" src={urlGif ?? urlIn.trim()} alt="предпросмотр" onError={() => markBroken(urlGif ?? urlIn.trim())} />}
+        {urlIn.trim() && broken.has(urlGif ?? urlIn.trim()) && <div className="ep2-hint">Не удалось загрузить превью — проверь ссылку</div>}
         <div className="gp2-url-btns">
           <button disabled={!urlIn.trim()} onClick={() => { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
           <button disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>

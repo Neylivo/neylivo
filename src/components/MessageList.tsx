@@ -88,10 +88,12 @@ function GifEmbed({ url, meta }: { url: string; meta?: import('./Lightbox').Ligh
 }
 
 // Сообщение состоит только из ссылки на гифку — прячем текст-ссылку, оставляем саму гифку (как в Discord).
+// Важно: пока резолв не завершился (cachedGif === undefined) или провалился (null) — текст остаётся
+// видимым, иначе сообщение с нерезолвящейся ссылкой (например, Tenor без ключа) станет невидимым совсем.
 function isOnlyGifLink(m: UiMessage): boolean {
   if (m.attach_url || !m.content) return false
   const l = findGifLink(m.content)
-  return !!l && m.content.trim() === l && cachedGif(l) !== null
+  return !!l && m.content.trim() === l && !!cachedGif(l)
 }
 
 // Картинка сообщения (вложение-image или ссылка на картинку в тексте) — для пунктов меню с изображениями.
@@ -180,6 +182,15 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     const h = () => setEmojiVer(v => v + 1)
     window.addEventListener('ponoi-custom-emoji', h)
     return () => window.removeEventListener('ponoi-custom-emoji', h)
+  }, [])
+
+  // Перерисовать список, когда где-то отрезолвилась ссылка на гифку — иначе
+  // сообщение из одной ссылки на гифку так и останется с текстом рядом с
+  // картинкой (isOnlyGifLink читает кэш только на момент рендера).
+  useEffect(() => {
+    const h = () => setEmojiVer(v => v + 1)
+    window.addEventListener('ponoi-gif-resolved', h)
+    return () => window.removeEventListener('ponoi-gif-resolved', h)
   }, [])
 
   // ↑ в пустом композере — редактировать своё последнее сообщение (событие из Composer).

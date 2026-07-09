@@ -140,6 +140,8 @@ body {
 .attach-btn:hover { background:#4e5058; }
 .msg-att { max-width:550px; max-height:350px; border-radius:8px; margin-top:6px; display:block; }
 .msg-file { display:inline-block; margin-top:6px; color:var(--blue); text-decoration:none; }
+.msg-att-broken { display:inline-flex; align-items:center; gap:8px; margin-top:6px; padding:10px 14px; border-radius:8px; background:var(--bg3); color:var(--mut); text-decoration:none; font-size:13px; }
+.msg-att-broken:hover { color:var(--tx); }
 
 /* music */
 .mus-full { flex:1; position:relative; display:flex; flex-direction:column; overflow:hidden; background:linear-gradient(160deg,#2b2d31,#1e1f22); }

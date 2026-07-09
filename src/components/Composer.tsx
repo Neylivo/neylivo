@@ -443,6 +443,7 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
   const [size, setSize] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
     if (!url || type === 'image' || url.includes('\n')) { setSize(null); return }
@@ -466,14 +467,19 @@ export function Attachment({ url, type, meta }: { url?: string | null; type?: st
   // Голосовое сообщение / аудио — встроенный плеер.
   if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
   if (type === 'image') {
+    if (failed) return (
+      <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
+        <Icon name="image" size={16} /> Не удалось загрузить изображение
+      </a>
+    )
     if (url.includes('#spoiler') && !revealed) return (
       <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
-        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} />
+        <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
         <span className="att-spoiler-tag">СПОЙЛЕР</span>
       </div>
     )
     return <>
-      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} />
+      <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} onError={() => setFailed(true)} />
       {viewer && <Lightbox url={clean} meta={meta} onClose={() => setViewer(false)} />}
     </>
   }
