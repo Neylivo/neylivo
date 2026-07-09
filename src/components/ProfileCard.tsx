@@ -14,7 +14,8 @@ import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
-import { promptUi, confirmUi } from '../lib/confirm'
+import { confirmUi } from '../lib/confirm'
+import { GamePickerModal } from './GamePickerModal'
 import { toastErr } from '../lib/toast'
 import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
@@ -71,6 +72,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
+  const [gamePicker, setGamePicker] = useState<'single' | 'multi' | null>(null)
+  const [favCovers, setFavCovers] = useState<Record<string, string | null>>({})
 
   useEffect(() => {
     let ok = true
@@ -82,6 +85,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     })
     return () => { ok = false }
   }, [userId])
+  // Обложки для виджетов «Любимая игра»/«Мои любимые игры» — тот же общий кэш обложек.
+  useEffect(() => {
+    let ok = true
+    for (const n of favs) if (n) resolveCover(n).then(u => { if (ok) setFavCovers(c => ({ ...c, [n]: u })) })
+    return () => { ok = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favs.join('|')])
   // «Недавняя активность» за 30 дней + метки «Популярное» + обложки из общего кэша.
   useEffect(() => {
     let ok = true
@@ -127,10 +137,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     if (v) localStorage.setItem('ponoi_note_' + userId, v); else localStorage.removeItem('ponoi_note_' + userId)
   }
   function saveFavs(next: string[]) { setPp(p => ({ ...p, favGames: next })); saveProfile(userId, { favGames: next }) }
-  async function addFav(single: boolean) {
-    const g = (await promptUi(single ? 'Любимая игра' : 'Добавить игру в любимые', { placeholder: 'Название игры', okText: 'Добавить' }))?.trim()
-    if (!g) return
-    saveFavs(single ? [g, ...favs.slice(1)] : [...(favs.length ? favs : ['']), g].filter(Boolean))
+  function pickGame(g: string) {
+    saveFavs(gamePicker === 'single' ? [g, ...favs.slice(1)] : [...(favs.length ? favs : ['']), g].filter(Boolean))
+    setGamePicker(null)
   }
   async function removeDrawing(d: Drawing) {
     if (!await confirmUi('Удалить рисунок?', { okText: 'Удалить' })) return
@@ -189,14 +198,20 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                 <div className="pc-board-sub">Выберите виджет из библиотеки, чтобы рассказать больше о себе и своих интересах</div>
               </>}
               <div className="pc-wgrid">
-                <div className="pc-widget" onClick={() => isMe && addFav(true)} title={isMe ? 'Указать любимую игру' : undefined}>
-                  <span className="pc-skel"><i /><i /></span>
+                <div className={'pc-widget' + (favs[0] && favCovers[favs[0]] ? ' has-cover' : '')}
+                  style={favs[0] && favCovers[favs[0]] ? { backgroundImage: `url(${favCovers[favs[0]]})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                  onClick={() => isMe && setGamePicker('single')} title={isMe ? 'Указать любимую игру' : undefined}>
+                  {!favs[0] && <span className="pc-skel"><i /><i /></span>}
                   {!favs[0] && <span className="pc-widget-plus"><Icon name="plus" size={16} /></span>}
+                  {favs[0] && !favCovers[favs[0]] && <span className="pc-widget-ph"><Icon name={gameIconOf(favs[0])} size={28} /></span>}
                   <span className="pc-widget-nm">{favs[0] ? '⭐ ' + favs[0] : 'Любимая игра'}</span>
                 </div>
-                <div className="pc-widget" onClick={() => isMe && addFav(false)} title={isMe ? 'Добавить любимые игры' : undefined}>
-                  <span className="pc-skel"><i /><i /></span>
+                <div className={'pc-widget' + (favs[1] && favCovers[favs[1]] ? ' has-cover' : '')}
+                  style={favs[1] && favCovers[favs[1]] ? { backgroundImage: `url(${favCovers[favs[1]]})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                  onClick={() => isMe && setGamePicker('multi')} title={isMe ? 'Добавить любимые игры' : undefined}>
+                  {favs.length < 2 && <span className="pc-skel"><i /><i /></span>}
                   {favs.length < 2 && <span className="pc-widget-plus"><Icon name="plus" size={16} /></span>}
+                  {favs[1] && !favCovers[favs[1]] && <span className="pc-widget-ph"><Icon name={gameIconOf(favs[1])} size={28} /></span>}
                   <span className="pc-widget-nm">{favs.length > 1 ? '🎮 ' + favs.slice(1).join(', ') : 'Мои любимые игры'}</span>
                 </div>
                 <div className="pc-widget" onClick={() => setTab('activity')}>
@@ -311,6 +326,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
         status={statusOf(friendProfile.id)} initialTab="activity" onClose={() => setFriendProfile(null)} />}
+      {gamePicker && <GamePickerModal title={gamePicker === 'single' ? 'Любимая игра' : 'Добавить игру в любимые'}
+        onPick={pickGame} onClose={() => setGamePicker(null)} />}
     </div>
   )
 }

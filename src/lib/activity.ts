@@ -94,6 +94,19 @@ export async function recentActivity(userId: string): Promise<RecentGame[]> {
   } catch { return [] }
 }
 
+// Каталог игр для пикера «Любимая игра» (v1.162.0, как в Discord) — реально
+// сыгранные на Ponoi игры, отсортированы по числу разных игроков. Пустой
+// запрос — топ популярных, иначе поиск по подстроке (server-side, миграция 38).
+export interface CatalogGame { name: string; players: number; lastPlayed: number }
+
+export async function fetchGameCatalog(query?: string, limit = 60): Promise<CatalogGame[]> {
+  try {
+    const { data, error } = await supabase.rpc('game_catalog', { p_query: query?.trim() || null, p_limit: limit })
+    if (error || !data) return []
+    return (data as any[]).map(r => ({ name: r.name, players: Number(r.players), lastPlayed: new Date(r.last_played).getTime() }))
+  } catch { return [] }
+}
+
 // «Популярное»: игрой за последние 2 недели занимались ≥2 разных человек.
 export async function popularGames(names: string[]): Promise<Set<string>> {
   const out = new Set<string>()
