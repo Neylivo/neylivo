@@ -92,13 +92,13 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   const found = q.trim() ? mineOrFav.filter(([n]) => n.toLowerCase().includes(q.trim().toLowerCase())) : mineOrFav
 
   const cell = ([n, u]: [string, string]) => selecting ? (
-    <button key={n} className={'ep2-cell ep2-selcell' + (sel.has(n) ? ' sel' : '')} title={':' + n + ':'}
+    <button type="button" key={n} className={'ep2-cell ep2-selcell' + (sel.has(n) ? ' sel' : '')} title={':' + n + ':'}
       onClick={() => setSel(s => { const t = new Set(s); if (t.has(n)) t.delete(n); else t.add(n); return t })}>
       <img src={u} alt={n} />
       {sel.has(n) && <span className="ep2-selmark"><Icon name="check" size={9} /></span>}
     </button>
   ) : (
-    <button key={n} className="ep2-cell" title={':' + n + ':  (правый клик — меню)'}
+    <button type="button" key={n} className="ep2-cell" title={':' + n + ':  (правый клик — меню)'}
       onClick={() => onPick(':' + n + ':')}
       onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, name: n }) }}>
       <img src={u} alt={n} />
@@ -110,12 +110,12 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
       <div className="emoji-grp ep2-packhdr">
         <span>{p.name}</span>
         <span className="ep2-pack-acts">
-          <button title="Добавить пак в избранное"
+          <button type="button" title="Добавить пак в избранное"
             onClick={() => { if (user) addFavs(user.id, p.items).then(() => toastOk('Пак «' + p.name + '» добавлен в избранное')) }}>
             <Icon name="star" size={13} />
           </button>
           {user && p.owner === user.id && (
-            <button title="Удалить пак" onClick={async () => {
+            <button type="button" title="Удалить пак" onClick={async () => {
               if (await confirmUi('Удалить пак «' + p.name + '»?', { danger: true, okText: 'Удалить' })) deletePack(p.id)
             }}><Icon name="trash" size={13} /></button>
           )}
@@ -128,16 +128,17 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   return (
     <div className="emoji-pop ep2" onClick={e => e.stopPropagation()}>
       <div className="ep2-search">
-        <input placeholder="Поиск (свои эмодзи — по названию)" value={q} onChange={e => setQ(e.target.value)} autoFocus />
-        <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
+        <input placeholder="Поиск (свои эмодзи — по названию)" value={q} onChange={e => setQ(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} autoFocus />
+        <button type="button" className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       <div className="ep2-body">
         <div className="ep2-rail">
-          <button className={cat === -2 ? 'on' : ''} title="Избранные" onClick={() => { setCat(-2); setQ('') }}><Icon name="star" size={18} /></button>
-          <button className={cat === -1 ? 'on' : ''} title="Свои эмодзи" onClick={() => { setCat(-1); setQ('') }}><Icon name="smile" size={18} /></button>
-          <button className={cat === -3 ? 'on' : ''} title="Паки эмодзи" onClick={() => { setCat(-3); setQ('') }}><Icon name="folder" size={18} /></button>
+          <button type="button" className={cat === -2 ? 'on' : ''} title="Избранные" onClick={() => { setCat(-2); setQ('') }}><Icon name="star" size={18} /></button>
+          <button type="button" className={cat === -1 ? 'on' : ''} title="Свои эмодзи" onClick={() => { setCat(-1); setQ('') }}><Icon name="smile" size={18} /></button>
+          <button type="button" className={cat === -3 ? 'on' : ''} title="Паки эмодзи" onClick={() => { setCat(-3); setQ('') }}><Icon name="folder" size={18} /></button>
           {EMOJI_GROUPS.map((g, i) => (
-            <button key={g.title} className={cat === i ? 'on' : ''} title={g.title} onClick={() => { setCat(i); setQ('') }}><Em>{g.emojis[0]}</Em></button>
+            <button type="button" key={g.title} className={cat === i ? 'on' : ''} title={g.title} onClick={() => { setCat(i); setQ('') }}><Em>{g.emojis[0]}</Em></button>
           ))}
         </div>
         <div className="emoji-scroll ep2-scroll">
@@ -152,15 +153,15 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
           </> : cat === -3 ? <>
             <div className="emoji-grp">ПАКИ ЭМОДЗИ</div>
             {!selecting && <div className="ep2-packbar">
-              <button className="ep2-mkpack" onClick={() => { setSelecting(true); setSel(new Set()) }}><Icon name="plus" size={14} /> Создать пак</button>
+              <button type="button" className="ep2-mkpack" onClick={() => { setSelecting(true); setSel(new Set()) }}><Icon name="plus" size={14} /> Создать пак</button>
             </div>}
             {selecting && <>
               <div className="ep2-hint">Выбери эмодзи для пака — из своих и избранных, — затем нажми «Создать».</div>
               <div className="ep2-grid">{mineOrFav.map(cell)}</div>
               {mineOrFav.length === 0 && <div className="ep2-hint">Нет своих или избранных эмодзи — сначала создай эмодзи или добавь чужие в избранное.</div>}
               <div className="ep2-packbar">
-                <button className="ep2-mkpack ok" disabled={sel.size === 0} onClick={doCreatePack}><Icon name="check" size={14} /> Создать ({sel.size})</button>
-                <button className="ep2-mkpack" onClick={() => { setSelecting(false); setSel(new Set()) }}>Отмена</button>
+                <button type="button" className="ep2-mkpack ok" disabled={sel.size === 0} onClick={doCreatePack}><Icon name="check" size={14} /> Создать ({sel.size})</button>
+                <button type="button" className="ep2-mkpack" onClick={() => { setSelecting(false); setSel(new Set()) }}>Отмена</button>
               </div>
             </>}
             {packs.map(packBlock)}
@@ -168,18 +169,18 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
           </> : cat === -1 ? <>
             <div className="emoji-grp">СВОИ ЭМОДЗИ</div>
             <div className="ep2-grid">
-              <button className="ep2-cell ep2-add" title="Создать эмодзи из картинки" onClick={() => fileRef.current?.click()}><Icon name="plus" size={20} /></button>
+              <button type="button" className="ep2-cell ep2-add" title="Создать эмодзи из картинки" onClick={() => fileRef.current?.click()}><Icon name="plus" size={20} /></button>
               {mine.map(cell)}
             </div>
             {mine.length === 0 && <div className="ep2-hint">Нажми +, чтобы сделать свои эмодзи из любой картинки. Правый клик по эмодзи — меню: в избранное / удалить.</div>}
           </> : <>
             {cat === 0 && top.length > 0 && <>
               <div className="emoji-grp">Часто используемые</div>
-              <div className="ep2-grid">{top.map(e => <button key={'t' + e} className="ep2-cell" onClick={() => pick(e)}><Em>{e}</Em></button>)}</div>
+              <div className="ep2-grid">{top.map(e => <button type="button" key={'t' + e} className="ep2-cell" onClick={() => pick(e)}><Em>{e}</Em></button>)}</div>
             </>}
             <div className="emoji-grp">{EMOJI_GROUPS[cat].title}</div>
             <div className="ep2-grid">
-              {EMOJI_GROUPS[cat].emojis.map(e => <button key={e} className="ep2-cell" onClick={() => pick(e)}><Em>{e}</Em></button>)}
+              {EMOJI_GROUPS[cat].emojis.map(e => <button type="button" key={e} className="ep2-cell" onClick={() => pick(e)}><Em>{e}</Em></button>)}
             </div>
           </>}
         </div>
@@ -187,11 +188,11 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
       {ctx && <>
         <div className="ep2-ctx-ov" onClick={() => setCtx(null)} onContextMenu={e => { e.preventDefault(); setCtx(null) }} />
         <div className="ep2-ctx" style={{ left: Math.min(ctx.x, window.innerWidth - 230), top: Math.min(ctx.y, window.innerHeight - 110) }}>
-          <button onClick={async () => { if (user) await toggleFav(user.id, ctx.name); setCtx(null) }}>
+          <button type="button" onClick={async () => { if (user) await toggleFav(user.id, ctx.name); setCtx(null) }}>
             <Icon name="star" size={14} /> {favs.has(ctx.name) ? 'Убрать из избранного' : 'В избранное'}
           </button>
           {user && emojiOwner(ctx.name) === user.id && (
-            <button className="danger" onClick={async () => { setCtx(null); await removeCustom(ctx.name) }}>
+            <button type="button" className="danger" onClick={async () => { setCtx(null); await removeCustom(ctx.name) }}>
               <Icon name="trash" size={14} /> Удалить эмодзи
             </button>
           )}

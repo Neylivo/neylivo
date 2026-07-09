@@ -109,14 +109,14 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
   return (
     <div className="emoji-pop gif-pop" onClick={e => e.stopPropagation()}>
       <div className="gp2-tabs">
-        <button className={tab === 'gifs' ? 'on' : ''} onClick={() => setTab('gifs')}>Гифки</button>
-        <button className={tab === 'url' ? 'on' : ''} onClick={() => setTab('url')}>По ссылке</button>
-        <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Мои GIF</button>
-        <button onClick={() => onEmojiTab?.()}>Эмодзи</button>
-        <button className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
+        <button type="button" className={tab === 'gifs' ? 'on' : ''} onClick={() => setTab('gifs')}>Гифки</button>
+        <button type="button" className={tab === 'url' ? 'on' : ''} onClick={() => setTab('url')}>По ссылке</button>
+        <button type="button" className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Мои GIF</button>
+        <button type="button" onClick={() => onEmojiTab?.()}>Эмодзи</button>
+        <button type="button" className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       {tab === 'gifs' && <>
-        <div className="gp2-search"><input placeholder="Поиск гифок…" value={q} onChange={e => setQ(e.target.value)} autoFocus /></div>
+        <div className="gp2-search"><input placeholder="Поиск гифок…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} autoFocus /></div>
         <div className="emoji-scroll">
           {!TENOR_KEY
             ? <div className="ep2-hint">Поиск гифок пока не настроен. Добавь свою на вкладке «По ссылке» — вставится любая ссылка на .gif, Tenor или Giphy.</div>
@@ -129,12 +129,13 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
         </div>
       </>}
       {tab === 'url' && <div className="gp2-url">
-        <input placeholder="Вставь ссылку на гифку — хоть из Discord" value={urlIn} onChange={e => setUrlIn(e.target.value)} autoFocus />
+        <input placeholder="Вставь ссылку на гифку — хоть из Discord" value={urlIn} onChange={e => setUrlIn(e.target.value)}
+          onKeyDown={e => { if (e.key !== 'Enter') return; e.preventDefault(); if (urlIn.trim()) { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) } }} autoFocus />
         {urlIn.trim() && !broken.has(urlGif ?? urlIn.trim()) && <img className="gp2-preview" src={urlGif ?? urlIn.trim()} alt="предпросмотр" onError={() => markBroken(urlGif ?? urlIn.trim())} />}
         {urlIn.trim() && broken.has(urlGif ?? urlIn.trim()) && <div className="ep2-hint">Не удалось загрузить превью — проверь ссылку</div>}
         <div className="gp2-url-btns">
-          <button disabled={!urlIn.trim()} onClick={() => { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
-          <button disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
+          <button type="button" disabled={!urlIn.trim()} onClick={() => { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
+          <button type="button" disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
         </div>
       </div>}
       {tab === 'mine' && <div className="emoji-scroll">
