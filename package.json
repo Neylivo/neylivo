@@ -1,16 +1,17 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.153.0",
+  "version": "1.154.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "gen-changelog": "node scripts/gen-changelog.mjs",
+    "dev": "node scripts/gen-changelog.mjs && vite",
+    "build": "node scripts/gen-changelog.mjs && vite build",
     "typecheck": "tsc",
     "preview": "vite preview",
     "electron:start": "electron .",
-    "dist": "vite build && electron-builder --win"
+    "dist": "node scripts/gen-changelog.mjs && vite build && electron-builder --win"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
