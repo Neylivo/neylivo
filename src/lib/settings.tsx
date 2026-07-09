@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { setTime24 } from './ui'
 import { applyLang } from './i18n'
+import { applyAppIcon, DEFAULT_APP_ICON } from './appIcon'
 
 export interface CustomTheme {
   dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
@@ -42,6 +43,7 @@ export interface Settings {
   sendKey: 'enter' | 'ctrl'
   keyMusic: string
   keyHome: string
+  appIcon: string   // v1.158.0: логотип приложения — id из src/lib/appIcon.ts APP_ICONS
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
@@ -72,6 +74,7 @@ export const DEFAULTS: Settings = {
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
+  appIcon: DEFAULT_APP_ICON,
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
@@ -142,6 +145,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { apply(settings) }, [settings])
   // Язык интерфейса: применяем перевод при старте и при смене.
   useEffect(() => { applyLang(settings.lang) }, [settings.lang])
+  // v1.158.0: логотип приложения — favicon сразу, иконка окна/трея в Electron (асинхронно).
+  useEffect(() => { applyAppIcon(settings.appIcon) }, [settings.appIcon])
   // Автосмена темы: перепроверяем время раз в минуту.
   useEffect(() => {
     if (!settings.autoTheme) return

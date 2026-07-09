@@ -390,6 +390,27 @@ ipcMain.on('ponoi-badge', (_e, p) => {
   } catch {}
 })
 
+// ---- v1.158.0: смена логотипа приложения (Настройки -> Внешний вид) ----
+// Рендерер растеризует выбранный SVG в PNG на canvas и присылает dataURL + id;
+// main ставит его иконкой всех окон (панель задач) и трея, и запоминает id в
+// prefs.json, чтобы сплэш-экран при следующем запуске сразу открылся с ним же.
+ipcMain.handle('ponoi-set-icon', (_e, p) => {
+  try {
+    const dataUrl = p && p.dataUrl
+    const id = p && p.id
+    if (typeof dataUrl !== 'string') return { ok: false }
+    const img = nativeImage.createFromDataURL(dataUrl)
+    if (img.isEmpty()) return { ok: false }
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (w === overlayWin || w === gameToastWin || w === splash) continue
+      try { w.setIcon(img) } catch {}
+    }
+    try { tray?.setImage(img) } catch {}
+    if (id) { try { writePrefs({ ...readPrefs(), appIcon: id }) } catch {} }
+    return { ok: true }
+  } catch { return { ok: false } }
+})
+
 // ---- v1.89.0: режим (плейс) Roblox — как в Discord ----
 // Roblox пишет подробный лог в %LOCALAPPDATA%\Roblox\logs. При входе в плейс там
 // появляется строка «Joining game '<guid>' place <id> …» — из неё берём placeId,
@@ -930,7 +951,11 @@ function createSplash() {
       nodeIntegration: false,
     },
   })
-  splash.loadFile(path.join(__dirname, 'splash.html'))
+  // v1.158.0: сплэш показывает тот же логотип, что выбран в настройках — id
+  // сохранён в prefs.json при последней смене (см. 'ponoi-set-icon' ниже).
+  let iconId = 'classic'
+  try { iconId = readPrefs().appIcon || 'classic' } catch {}
+  splash.loadFile(path.join(__dirname, 'splash.html'), { query: { icon: iconId } })
   splashShownAt = Date.now()
   splash.on('closed', () => { splash = null })
 }

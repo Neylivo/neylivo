@@ -14,6 +14,7 @@ import { initCustomEmoji } from '../lib/emoji'
 import { initNotifications } from '../lib/notify'
 import { registerPush } from '../lib/push'
 import { Icon } from './icons'
+import { AppLogo } from './AppLogo'
 import { useSettings } from '../lib/settings'
 import { matchCombo } from '../lib/keybind'
 import { QuickSwitcher } from './QuickSwitcher'
@@ -331,6 +332,8 @@ export function Home() {
     <PresenceProvider username={username} avatarUrl={avatarUrl}>
     <div className="app">
       <nav className="servers">
+        <div className="srv-wrap srv-brand" title="Ponoi"><AppLogo size={28} /></div>
+        <div className="srv-sep" />
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
           <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
             title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>

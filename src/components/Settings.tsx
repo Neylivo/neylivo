@@ -13,6 +13,7 @@ import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
+import { APP_ICONS } from '../lib/appIcon'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -690,6 +691,17 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                         <span style={{ background: t.accent }} />
                       </span>
                       <span className="pqs-preset-nm">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pqs-sec-t">Логотип приложения</div>
+                <div className="pqs2-desc" style={{ marginTop: -6 }}>Меняется везде: в панели серверов, на экране загрузки{(window as any).ponoiDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
+                <div className="pqs-preset-grid">
+                  {APP_ICONS.map(ic => (
+                    <button key={ic.id} className={'pqs-preset' + (view.appIcon === ic.id ? ' on' : '')} onClick={() => setD('appIcon', ic.id)}>
+                      <span className="pqs-preset-sw logo-sw"><img src={ic.file} alt="" width={28} height={28} /></span>
+                      <span className="pqs-preset-nm">{ic.name}</span>
                     </button>
                   ))}
                 </div>

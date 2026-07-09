@@ -30,13 +30,13 @@
   }
 
   .logo {
-    font-size:44px; font-weight:800; letter-spacing:1px; position:relative; z-index:1;
-    text-shadow:0 0 14px rgba(99,102,241,.9), 0 0 40px rgba(99,102,241,.55);
+    width:64px; height:64px; position:relative; z-index:1; border-radius:16px;
+    filter:drop-shadow(0 0 14px rgba(99,102,241,.9)) drop-shadow(0 0 40px rgba(99,102,241,.55));
     animation: pulse 2.4s ease-in-out infinite;
   }
   @keyframes pulse {
-    0%,100% { text-shadow:0 0 14px rgba(99,102,241,.9), 0 0 40px rgba(99,102,241,.55) }
-    50%     { text-shadow:0 0 20px rgba(99,102,241,1), 0 0 60px rgba(99,102,241,.8) }
+    0%,100% { filter:drop-shadow(0 0 14px rgba(99,102,241,.9)) drop-shadow(0 0 40px rgba(99,102,241,.55)) }
+    50%     { filter:drop-shadow(0 0 20px rgba(99,102,241,1)) drop-shadow(0 0 60px rgba(99,102,241,.8)) }
   }
 
   .status {
@@ -60,10 +60,16 @@
 </style>
 </head>
 <body>
-  <div class="logo">ponoi</div>
+  <img class="logo" id="logo" src="./logos/logo-classic.svg" alt="Ponoi">
   <div class="status" id="status">Запуск</div>
   <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
 <script>
+  // v1.158.0: какой логотип выбрал пользователь в настройках — main-процесс
+  // передаёт id через query-параметр при loadFile(), сам сплэш ничего не решает.
+  try {
+    const iconId = new URLSearchParams(location.search).get('icon')
+    if (iconId) document.getElementById('logo').src = './logos/logo-' + iconId + '.svg'
+  } catch {}
   // Честный сплэш: никакого выдуманного прогресса и слова «Установка».
   // Полоса появляется только когда реально качается обновление.
   const status = document.getElementById('status')

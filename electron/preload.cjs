@@ -29,5 +29,8 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   gameOverlay: (p) => ipcRenderer.send('ponoi-game-overlay', p),
   // v1.100.0: красный кружок с числом непрочитанного на иконке в панели задач.
   setBadge: (dataUrl, count) => ipcRenderer.send('ponoi-badge', { dataUrl, count }),
+  // v1.158.0: смена логотипа приложения — иконка окна/трея сразу, plus id
+  // запоминается в prefs.json для сплэш-экрана при следующем запуске.
+  setAppIcon: (dataUrl, id) => ipcRenderer.invoke('ponoi-set-icon', { dataUrl, id }),
   onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
 })
