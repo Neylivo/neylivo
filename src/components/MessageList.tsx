@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
-import { timeShort, timeFull, dayLabel } from '../lib/ui'
+import { timeShort, timeFull, dayLabel, msgTime } from '../lib/ui'
 import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -263,14 +263,14 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         ? <>Никто не ответил на звонок.</>
                         : <>Вы пропустили звонок от <b>{m.author_name}</b>, который длился {fmtCallDur(dur)}.</>)}
                     </span>
-                    <span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
+                    <span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>
                   </div>
                 )
               })() : (
               <div className="sys-msg" title="Перейти к закреплённому сообщению" onClick={() => sys.targetId && jumpToMessage(sys.targetId)}>
                 <span className="sys-ic"><Icon name="pin" size={14} /></span>
                 <span><b>{m.author_name}</b> закрепил(а) сообщение{sys.preview ? <>: <span className="sys-prev">«{sys.preview}»</span></> : null}</span>
-                <span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
+                <span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>
               </div>
               )}
             </Fragment>
@@ -303,7 +303,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 {editing === m.id
                   ? <div className="msg-edit">
                       <textarea className="msg-edit-in" value={editText} autoFocus

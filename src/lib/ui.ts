@@ -20,5 +20,18 @@ export function dayLabel(iso: string) {
   const y = new Date(); y.setDate(today.getDate() - 1)
   if (d.toDateString() === today.toDateString()) return 'Сегодня'
   if (d.toDateString() === y.toDateString()) return 'Вчера'
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' }
+  if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('ru-RU', opts)
+}
+
+// Discord-style время сообщения: сегодня — просто время; иначе — короткая дата,
+// год добавляется, только если сообщение не из текущего года.
+export function msgTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return timeShort(iso)
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('ru-RU', opts)
 }
