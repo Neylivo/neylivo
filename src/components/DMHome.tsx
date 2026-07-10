@@ -488,7 +488,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
-        p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? msg : x)) })
+        p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
@@ -589,7 +589,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   // проигрывалась второй раз подряд («дёргается»). Переносим _localId со старого
   // временного сообщения на новое, чтобы ключ не менялся.
   function mergeIncoming(list: DMMessage[], msg: DMMessage): DMMessage[] {
-    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? msg : x)
+    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)
     if (msg.author === meId) {
       const ti = list.findIndex(x => (x as any)._tmp && x.content === msg.content)
       if (ti >= 0) { const c = list.slice(); c[ti] = { ...msg, _localId: (list[ti] as any)._localId ?? list[ti].id } as any; return c }

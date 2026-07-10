@@ -394,7 +394,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },
-        p => { const msg = p.new as Message; setMessages(m => m.map(x => x.id === msg.id ? msg : x)) })
+        p => { const msg = p.new as Message; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
@@ -683,7 +683,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // проигрывалась второй раз подряд («дёргается»). Переносим _localId со старого
   // временного сообщения на новое, чтобы ключ не менялся.
   function mergeIncoming(list: Message[], msg: Message): Message[] {
-    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? msg : x)
+    if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)
     if (msg.author === user?.id) {
       const ti = list.findIndex(x => (x as any)._tmp && x.content === msg.content)
       if (ti >= 0) { const c = list.slice(); c[ti] = { ...msg, _localId: (list[ti] as any)._localId ?? list[ti].id } as any; return c }
