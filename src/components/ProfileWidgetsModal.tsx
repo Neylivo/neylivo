@@ -72,7 +72,10 @@ export function ProfileWidgetsModal({ pp, covers, onAdd, onAddDirect, onRemove, 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal pwm" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        <div className="pwm-h">Ваши виджеты</div>
+        <div className="pwm-hrow">
+          <div className="pwm-h">Ваши виджеты</div>
+          <button className="pwm-addbtn" onClick={() => onAdd('favGames', 'multi')}><Icon name="plus" size={14} /> Добавить виджет</button>
+        </div>
 
         <WidgetSection title="Любимая игра" sub="Игра, которую вы отметите как основную, появится на доске профиля."
           games={pp.favGames[0] ? [pp.favGames[0]] : []} covers={covers} cap={1}

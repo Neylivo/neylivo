@@ -1848,12 +1848,13 @@ body.no-anim .member-typing i { animation:none; }
 .pc-skel { position:absolute; top:10px; left:12px; display:flex; flex-direction:column; gap:6px; z-index:1; }
 .pc-skel i { display:block; width:64px; height:7px; border-radius:4px; background:rgba(255,255,255,.1); }
 .pc-skel i:last-child { width:40px; }
-.pc-wmanage { display:flex; align-items:center; gap:6px; margin:16px auto 0; background:none; border:none; color:var(--mut); font-size:12.5px; cursor:pointer; padding:6px 10px; border-radius:6px; transition:background .12s ease, color .12s ease; }
-.pc-wmanage:hover { background:rgba(255,255,255,.06); color:#fff; }
 
 /* v1.169.0: «Ваши виджеты» — экран управления виджетами доски (модалка). */
 .pwm { width:480px; }
-.pwm-h { font-size:19px; font-weight:800; margin-bottom:16px; }
+.pwm-hrow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.pwm-h { font-size:19px; font-weight:800; }
+.pwm-addbtn { display:flex; align-items:center; gap:6px; background:var(--brand); border:none; color:#fff; font-size:13px; font-weight:600; padding:8px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; transition:filter .12s ease; }
+.pwm-addbtn:hover { filter:brightness(1.1); }
 .pwm-sect { padding:14px 0; border-top:1px solid rgba(255,255,255,.06); }
 .pwm-sect:first-of-type { border-top:none; padding-top:0; }
 .pwm-sect-h { display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:700; color:#fff; }

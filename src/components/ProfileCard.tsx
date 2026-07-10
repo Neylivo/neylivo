@@ -309,18 +309,17 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
               </>}
               <div className="pc-wgrid">
                 <WidgetTile label="Любимая игра" games={favs[0] ? [favs[0]] : []} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'single' })} />
+                  onClick={() => isMe && setWidgetsOpen(true)} />
                 <WidgetTile label="Мои любимые игры" games={favs.slice(1)} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'multi' })} />
+                  onClick={() => isMe && setWidgetsOpen(true)} />
                 <div className="pc-widget" onClick={() => setTab('wall')} title="Стена росписи">
                   <span className="pc-skel"><i /><i /></span>
                   <span className="pc-widget-plus"><Icon name="edit" size={16} /></span>
                   <span className="pc-widget-nm">Стена росписи</span>
                 </div>
                 <WidgetTile label="Хочу поиграть" games={wish} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setGamePicker({ field: 'wishGames', mode: 'multi' })} />
+                  onClick={() => isMe && setWidgetsOpen(true)} />
               </div>
-              {isMe && <button className="pc-wmanage" onClick={() => setWidgetsOpen(true)}><Icon name="gear" size={13} /> Управление виджетами</button>}
             </>}
             {tab === 'activity' && <>
               {curGame && <>
