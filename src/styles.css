@@ -2209,6 +2209,19 @@ body.no-anim .member-typing i { animation:none; }
 .sset-emojipop { position:absolute; top:64px; left:0; z-index:60; }
 .tag-cust-emoji { width:16px; height:16px; object-fit:contain; vertical-align:-3px; }
 .sset-info { display:flex; gap:10px; align-items:flex-start; background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); border-radius:8px; padding:12px 14px; font-size:13px; margin-top:16px; line-height:1.5; }
+/* v1.178.0: бейдж тега сервера рядом с ником — сообщения, список участников, мини-профиль. */
+.user-tag-badge { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; vertical-align:1px; white-space:nowrap; }
+.user-tag-badge img.tag-cust-emoji { width:12px; height:12px; vertical-align:-1px; }
+/* v1.178.0: «Использовать тег этого сервера» — модалка, открывается «Взять тег сервера». */
+.srvtag { width:400px; text-align:center; }
+.srvtag-h { font-size:19px; font-weight:800; margin-top:4px; }
+.srvtag-sub { color:var(--mut); font-size:14px; margin-top:6px; }
+.srvtag-row { display:flex; align-items:center; gap:10px; background:var(--bg3); border-radius:8px; padding:12px 14px; margin-top:20px; text-align:left; }
+.srvtag-av { width:40px; height:40px; border-radius:12px; background:var(--brand); color:#fff; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center; flex:none; }
+.srvtag-nm { flex:1; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.srvtag-btn { display:block; width:100%; margin-top:12px; padding:10px; border-radius:6px; font-weight:600; font-size:14px; cursor:pointer; border:none; }
+.srvtag-ghost { background:var(--bg3); color:var(--tx); }
+.srvtag-ghost:hover { filter:brightness(1.15); }
 .sset-beta { background:var(--brand); color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:8px; vertical-align:middle; margin-left:6px; text-transform:uppercase; }
 .sset-level { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--bg3); border-radius:8px; padding:14px 16px; margin-top:12px; }
 .sset-level .cset-link { background:none; border:none; font-size:14px; }

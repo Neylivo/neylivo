@@ -36,6 +36,10 @@ export interface ProfilePrefs {
   // v1.169.0: виджет доски профиля «Хочу поиграть» (как в Discord), хранится
   // точно так же, как favGames.
   wishGames: string[]
+  // v1.178.0: «Взять тег сервера» — id сервера, чей тег сейчас показывается
+  // рядом с ником (или null, если тег не взят). Тег/цвет/шрифт живут в
+  // servers.settings.tag того сервера — здесь только ссылка.
+  tagServerId: string | null
 }
 
 export interface Integration { label: string; url: string }
@@ -50,6 +54,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   msgFont: '', msgFontUrl: null,
   favGames: [],
   wishGames: [],
+  tagServerId: null,
 }
 
 
@@ -90,6 +95,7 @@ function fromRow(r: any): ProfilePrefs {
     msgFontUrl: r.msg_font_url ?? null,
     favGames: Array.isArray(r.fav_games) ? r.fav_games : [],
     wishGames: Array.isArray(r.wish_games) ? r.wish_games : [],
+    tagServerId: r.tag_server_id ?? null,
   }
 }
 
@@ -117,6 +123,7 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.msgFontUrl !== undefined) r.msg_font_url = p.msgFontUrl
   if (p.favGames !== undefined) r.fav_games = p.favGames
   if (p.wishGames !== undefined) r.wish_games = p.wishGames
+  if (p.tagServerId !== undefined) r.tag_server_id = p.tagServerId
   return r
 }
 
@@ -148,12 +155,14 @@ const COLS_FONT = COLS_PLATE + ', nick_font, nick_font_url'
 const COLS_MSG = COLS_FONT + ', msg_font, msg_font_url'
 const COLS_FAV = COLS_MSG + ', fav_games'
 const COLS_WIDGETS = COLS_FAV + ', wish_games'
+const COLS_TAG = COLS_WIDGETS + ', tag_server_id'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle())

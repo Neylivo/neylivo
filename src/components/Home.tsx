@@ -27,6 +27,9 @@ import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
+import { ServerTagModal } from './ServerTagModal'
+import { ProfileCard } from './ProfileCard'
+import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -56,6 +59,18 @@ export function Home() {
   const [folders, setFolders] = useState<SrvFolder[]>(loadFolders())
   const [folderFor, setFolderFor] = useState<Server | null>(null)
   const [notifFor, setNotifFor] = useState<Server | null>(null)
+  // v1.178.0: «Взять тег сервера» — модалка из правого клика по серверу.
+  const [tagServer, setTagServer] = useState<Server | null>(null)
+  const [myTagServerId, setMyTagServerId] = useState<string | null>(null)
+  const [editMyProfile, setEditMyProfile] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    const c = cachedProfile(user.id); if (c) setMyTagServerId(c.tagServerId)
+    fetchProfile(user.id).then(p => setMyTagServerId(p.tagServerId))
+    const h = (e: any) => { if (e.detail?.id === user.id) { const cc = cachedProfile(user.id); if (cc) setMyTagServerId(cc.tagServerId) } }
+    window.addEventListener('ponoi-profile', h)
+    return () => window.removeEventListener('ponoi-profile', h)
+  }, [user?.id])
   // Открытие настроек/уведомлений сервера из меню в ServerView (клик по имени сервера).
   useEffect(() => {
     const openSettings = (e: any) => setSettingsServer(e.detail)
@@ -342,7 +357,7 @@ export function Home() {
       toastOk(muted ? 'Уведомления включены: ' + server.name : 'Сервер заглушен: ' + server.name)
       return
     }
-    // tag — client-side nicety, no-op for now
+    if (k === 'tag') { setTagServer(server); return }
   }
 
   return (
@@ -454,6 +469,10 @@ export function Home() {
       onClose={() => setSettingsServer(null)}
       onChanged={() => refresh()}
       onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setLastServer(null); setView({ kind: 'dm' }); refresh() }} />}
+    {tagServer && <ServerTagModal server={tagServer} myTagServerId={myTagServerId}
+      onClose={() => setTagServer(null)} onEditProfile={() => setEditMyProfile(true)} />}
+    {editMyProfile && user && <ProfileCard userId={user.id} name={username} avatarUrl={avatarUrl} status="online"
+      initialTab="board" onClose={() => setEditMyProfile(false)} />}
     </PresenceProvider>
   )
 }

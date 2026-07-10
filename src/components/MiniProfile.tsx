@@ -13,6 +13,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { Settings } from './Settings'
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
+import { UserTagBadge } from './TagEmoji'
 import { gameIconOf } from '../lib/gameIcon'
 import type { Profile } from '../types'
 
@@ -200,7 +201,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>
         </div>
         <div className="mini-body">
-          <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
+          <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}<UserTagBadge userId={data.userId} /></div>
           <div className="mini-code">
             <span className="mini-uname">{uname || data.name}</span>
           </div>

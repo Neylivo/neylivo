@@ -27,6 +27,7 @@ function ruMembers(n: number): string {
 import { parseFwd } from '../lib/fwd'
 import { ForwardModal } from './ForwardModal'
 import { EmojiPicker } from './EmojiPicker'
+import { UserTagBadge } from './TagEmoji'
 
 export interface UiMessage {
   id: string
@@ -374,7 +375,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}<UserTagBadge userId={m.author} />{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 {fwd
                   ? <div className="msg-fwd">
                       <div className="msg-fwd-hdr"><Icon name="forward" size={13} /> Пересланное сообщение</div>

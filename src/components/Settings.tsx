@@ -790,7 +790,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs-sec-t">Шрифт и форма</div>
                 <label className="pqs-lbl">Шрифт интерфейса</label>
                 <div className="pqs-code-sub">Меняет все надписи приложения: настройки, меню, панели. Видно только тебе. Ник и текст сообщений в чате не меняет — за них отвечают «Шрифт ника» и «Шрифт сообщений» в «Профиле» (их видят все).</div>
-                <select className="pqs-in" value={view.fontFamily} onChange={e => { setD('fontFamily', e.target.value); if (settings.fontFamilyUrl) set('fontFamilyUrl', '') }}>
+                <select className="pqs-in" value={view.fontFamily} onChange={e => { set('fontFamily', e.target.value); if (settings.fontFamilyUrl) set('fontFamilyUrl', '') }}>
                   {FONTS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 <div className="pqs-iconrow" style={{ marginTop: 8 }}>

@@ -26,6 +26,7 @@ import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSo
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage, updateAttachment } from '../lib/reactions'
 import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
+import { UserTagBadge } from './TagEmoji'
 import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
@@ -982,7 +983,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} userId={m.user_id} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
-              <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ir = allRolesOf(m.user_id).find(r => r.icon_url); return ir ? <img className="role-badge" src={ir.icon_url!} alt="" title={ir.name} /> : null })()}
+              <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ir = allRolesOf(m.user_id).find(r => r.icon_url); return ir ? <img className="role-badge" src={ir.icon_url!} alt="" title={ir.name} /> : null })()}<UserTagBadge userId={m.user_id} />
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}

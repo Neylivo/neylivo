@@ -22,27 +22,12 @@ import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 import { EmojiPicker } from './EmojiPicker'
-import { Em } from '../lib/twemoji'
-import { loadCustom } from '../lib/emoji'
+import { TagEmoji, tagFontFamily } from './TagEmoji'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'community' | 'template'
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
 const TAG_ICONS = ['🍃', '🗡️', '💗', '🔥', '💧', '💀', '🌙', '⚡', '🔮', '🍄']
-// v1.175.0: значок тега — обычный эмодзи ИЛИ кастомный сервера (:имя:), как в реакциях/сообщениях.
-function TagEmoji({ e }: { e: string }) {
-  const mm = e.match(/^:([a-zA-Z0-9_]+):$/)
-  const url = mm ? loadCustom()[mm[1]] : undefined
-  if (url) return <img className="tag-cust-emoji" src={url} alt={e} draggable={false} />
-  return <Em>{e}</Em>
-}
-// Шрифт тега: свой файл (fontUrl, через chFontFamily — тот же @font-face-механизм,
-// что у шрифта названий каналов) или пресет CH_FONTS (тот же набор, что у шрифта ника).
-function tagFontFamily(tag?: { font?: string; fontUrl?: string }): string | undefined {
-  if (!tag) return undefined
-  if (tag.fontUrl) return chFontFamily(tag.fontUrl)
-  return tag.font || undefined
-}
 const VERIF_LEVELS: { t: string; d: string }[] = [
   { t: 'Отсутствует', d: 'Без ограничений' },
   { t: 'Низкий', d: 'Участники должны иметь подтверждённый email' },
@@ -178,6 +163,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     if (error) toastErr('Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются')
     else onChanged()
   }
+  // v1.178.0: тег сервера — раньше название/значок/цвет/шрифт-пресет копились в
+  // силе (up()) и терялись, если закрыть настройки без «Сохранить изменения»;
+  // сохранялся сразу только загруженный файл шрифта. Теперь весь тег — как файлы,
+  // сохраняется мгновенно при любом изменении.
+  function setTag(patch: any) { persistNow({ ...st, tag: { ...(st.tag ?? {}), ...patch } }) }
   async function saveAll() {
     const nm = name.trim() || server.name
     const { error } = await supabase.from('servers').update({ name: nm, settings: st } as any).eq('id', server.id)
@@ -301,7 +291,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div className="sset-swatches">
               {BANNER_COLORS.map(c => (
                 <div key={c || 'default'} className={'sset-sw' + ((st.banner ?? '') === c ? ' on' : '')}
-                  style={{ background: c || 'linear-gradient(160deg,#3a3d44,#17181c)' }} onClick={() => up('banner', c)} />
+                  style={{ background: c || 'linear-gradient(160deg,#3a3d44,#17181c)' }} onClick={() => persistNow({ ...st, banner: c })} />
               ))}
             </div>
             <div className="cset-div" />
@@ -325,7 +315,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Этим шрифтом пишутся названия всех каналов в списке слева. Отдельному каналу можно задать свой шрифт в его настройках («Обзор»).</div>
             <div className="pqs-font-grid">
               {CH_FONTS.map(f => (
-                <button key={f.id || 'sys'} className={'pqs-font-btn' + (!st.ch_font_url && (st.ch_font ?? '') === f.id ? ' on' : '')} onClick={() => { up('ch_font', f.id); if (st.ch_font_url) up('ch_font_url', null) }}>
+                <button key={f.id || 'sys'} className={'pqs-font-btn' + (!st.ch_font_url && (st.ch_font ?? '') === f.id ? ' on' : '')} onClick={() => persistNow({ ...st, ch_font: f.id, ch_font_url: null })}>
                   <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}># общий</span>
                   <small>{f.name}</small>
                 </button>
@@ -371,7 +361,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               {st.tag?.icon ? <TagEmoji e={st.tag.icon} /> : TAG_ICONS[1]} {(st.tag?.name ?? '') || 'WUMP'}
             </div>
             <input className="modal-in" style={{ width: 130, textTransform: 'uppercase' }} maxLength={4} placeholder="ТЕГ"
-              value={st.tag?.name ?? ''} onChange={e => up('tag', { ...(st.tag ?? {}), name: e.target.value.toUpperCase() })} />
+              value={st.tag?.name ?? ''} onChange={e => up('tag', { ...(st.tag ?? {}), name: e.target.value.toUpperCase() })}
+              onBlur={() => setTag({ name: st.tag?.name ?? '' })}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
             <span className="cset-hint" style={{ margin: 0 }}>Вы можете использовать максимум 4 символа, буквы алфавита и цифры.</span>
           </div>
           <div className="sset-info"><Icon name="shield" size={15} /> После обновления тега всем участникам сервера потребуется заново установить его у себя в профиле. Мы делаем это в целях предотвращения злоупотребления.</div>
@@ -379,23 +371,23 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Изменив только значок, вы не удалите тег сервера у участников. Кроме набора ниже, можно выбрать вообще любой эмодзи.</div>
           <div className="sset-tagico" style={{ position: 'relative' }}>
             {TAG_ICONS.map(ic => (
-              <button key={ic} className={(st.tag?.icon ?? TAG_ICONS[1]) === ic ? 'on' : ''} onClick={() => { up('tag', { ...(st.tag ?? {}), icon: ic }); setTagEmojiOpen(false) }}>{ic}</button>
+              <button key={ic} className={(st.tag?.icon ?? TAG_ICONS[1]) === ic ? 'on' : ''} onClick={() => { setTag({ icon: ic }); setTagEmojiOpen(false) }}>{ic}</button>
             ))}
             <button className={st.tag?.icon && !TAG_ICONS.includes(st.tag.icon) ? 'on' : ''} title="Выбрать любой эмодзи" onClick={() => setTagEmojiOpen(v => !v)}>
               {st.tag?.icon && !TAG_ICONS.includes(st.tag.icon) ? <TagEmoji e={st.tag.icon} /> : <Icon name="plus" size={20} />}
             </button>
             {tagEmojiOpen && <div className="sset-emojipop">
-              <EmojiPicker onPick={e => { up('tag', { ...(st.tag ?? {}), icon: e }); setTagEmojiOpen(false) }} onClose={() => setTagEmojiOpen(false)} />
+              <EmojiPicker onPick={e => { setTag({ icon: e }); setTagEmojiOpen(false) }} onClose={() => setTagEmojiOpen(false)} />
             </div>}
           </div>
           <label className="cset-lbl">Выберите цвет</label>
           <div className="sset-swatches">
             {ROLE_COLORS.map(c => (
               <div key={c} className={'sset-sw small' + ((st.tag?.color ?? '#5865f2') === c ? ' on' : '')} style={{ background: c }}
-                onClick={() => up('tag', { ...(st.tag ?? {}), color: c })} />
+                onClick={() => setTag({ color: c })} />
             ))}
             <label className={'sset-sw small custom' + (st.tag?.color && !ROLE_COLORS.includes(st.tag.color) ? ' on' : '')} title="Свой цвет">
-              <input type="color" value={st.tag?.color ?? '#5865f2'} onChange={e => up('tag', { ...(st.tag ?? {}), color: e.target.value })} />
+              <input type="color" value={st.tag?.color ?? '#5865f2'} onChange={e => setTag({ color: e.target.value })} />
               <Icon name="edit" size={14} />
             </label>
           </div>
@@ -404,7 +396,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="pqs-font-grid">
             {CH_FONTS.map(f => (
               <button key={f.id || 'sys'} className={'pqs-font-btn' + (!st.tag?.fontUrl && (st.tag?.font ?? '') === f.id ? ' on' : '')}
-                onClick={() => up('tag', { ...(st.tag ?? {}), font: f.id, fontUrl: null })}>
+                onClick={() => setTag({ font: f.id, fontUrl: null })}>
                 <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>{(st.tag?.name ?? '') || 'ТЕГ'}</span>
                 <small>{f.name}</small>
               </button>
@@ -414,8 +406,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               <small>{st.tag?.fontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
             </button>
           </div>
-          {st.tag?.fontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 8 }} onClick={() => persistNow({ ...st, tag: { ...(st.tag ?? {}), fontUrl: null } })}>Убрать свой шрифт</button>}
-          <input ref={tagFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={e => pickFile(e, url => persistNow({ ...st, tag: { ...(st.tag ?? {}), fontUrl: url } }))} />
+          {st.tag?.fontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 8 }} onClick={() => setTag({ fontUrl: null })}>Убрать свой шрифт</button>}
+          <input ref={tagFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={e => pickFile(e, url => setTag({ fontUrl: url }))} />
         </>}
 
         {tab === 'engage' && <>
@@ -709,11 +701,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div className="cset-h" style={{ marginBottom: 0 }}>Журнал аудита</div>
             <div>
               <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по пользователям</label>
-              <select className="modal-in" style={{ margin: 0 }}><option>Все пользователи</option>{members.map(m => <option key={m.user_id}>{m.member_name}</option>)}</select>
+              <select className="modal-in" style={{ margin: 0 }} disabled title="Журнал аудита пока не ведётся — фильтровать нечего"><option>Все пользователи</option>{members.map(m => <option key={m.user_id}>{m.member_name}</option>)}</select>
             </div>
             <div>
               <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по действиям</label>
-              <select className="modal-in" style={{ margin: 0 }}><option>Все действия</option><option>Обновление сервера</option><option>Создание канала</option><option>Удаление канала</option><option>Бан участника</option></select>
+              <select className="modal-in" style={{ margin: 0 }} disabled title="Журнал аудита пока не ведётся — фильтровать нечего"><option>Все действия</option><option>Обновление сервера</option><option>Создание канала</option><option>Удаление канала</option><option>Бан участника</option></select>
             </div>
           </div>
           <div className="sset-empty" style={{ paddingTop: 90 }}>📜<b>ЗАПИСЕЙ ПОКА НЕТ</b>Когда модераторы начнут модерировать, вы сможете промодерировать их модерацию здесь.</div>
@@ -760,7 +752,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                 <span>{c.d}</span>
                 <div className="sset-chips">{c.chips.map(ch => <span key={ch} className="sset-chip">{ch}</span>)}</div>
               </div>
-              <button className="modal-primary" onClick={() => { up('automod', { ...(st.automod ?? {}), [c.k]: !(st.automod ?? {})[c.k] }); toastOk((st.automod ?? {})[c.k] ? 'Фильтр выключен' : 'Фильтр включён') }}>{(st.automod ?? {})[c.k] ? 'Выключить' : c.btn}</button>
+              <button className="modal-primary" onClick={() => {
+                const on = !(st.automod ?? {})[c.k]
+                persistNow({ ...st, automod: { ...(st.automod ?? {}), [c.k]: on } })
+                toastOk(on ? 'Фильтр включён' : 'Фильтр выключен')
+              }}>{(st.automod ?? {})[c.k] ? 'Выключить' : c.btn}</button>
             </div>
           ))}
           <div className="cset-div" />
