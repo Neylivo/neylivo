@@ -70,3 +70,23 @@ export async function shareCurrentPack(hostId: string, serverIp: string, serverP
   await uploadMissingMods(manifest.mods, onProgress)
   return createPack(hostId, manifest, serverIp, serverPort)
 }
+
+// Прогресс шлют и prepareInstance (докачка модов — done/total/filename), и launch
+// (installer/libraries/assets/launch — см. electron/quicklaunch.cjs). Поля опциональны
+// в зависимости от того, какой этап их прислал.
+export interface QlProgress { stage?: 'installer' | 'libraries' | 'assets' | 'launch'; done?: number; total?: number; filename?: string }
+// Подписка на прогресс (main шлёт push-события во время prepareInstance/launch).
+export function onMcProgress(cb: (p: QlProgress) => void): void { desktop()?.onMcProgress(cb) }
+
+// У друга: докачивает недостающие моды пака (что уже есть — берёт готовым, не
+// перекачивает) в отдельную песочницу %APPDATA%\.minecraft\ponoi_instances\<packId>\.
+export async function prepareInstance(pack: QlPack): Promise<{ instanceDir: string }> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+  return desktop().mcPrepareInstance(pack, supabaseUrl)
+}
+
+// Резолвит библиотеки/ассеты/лоадер (ставит Forge/NeoForge при необходимости) и
+// запускает игру уже в песочнице instanceDir, с авто-входом на pack.serverIp:serverPort.
+export async function launchPack(pack: QlPack, instanceDir: string, username: string): Promise<{ pid: number }> {
+  return desktop().mcLaunch(pack, instanceDir, username)
+}

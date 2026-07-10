@@ -9,7 +9,7 @@ import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta } from '../lib/sysmsg'
-import { isQuicklaunchAvailable } from '../lib/quicklaunch'
+import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 import { buildMsgLink, type MsgLinkCtx } from '../lib/deepLink'
@@ -341,10 +341,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       <div className="ql-body">
                         <div className="ql-title">{ql.game} — {ql.mcVersion} ({ql.loader === 'neoforge' ? 'NeoForge' : 'Forge'})</div>
                         <div className="ql-sub">{ql.modCount} {modsWord(ql.modCount)} · {ql.totalMb} МБ докачки</div>
-                        <button className="inv2-join ql-btn" onClick={() => {
-                          if (!isQuicklaunchAvailable()) { toastErr('Игровой Экспресс работает только в приложении для компьютера'); return }
-                          toastOk('Скачивание и авто-вход ещё в разработке — скоро')
-                        }}>Скачать и войти</button>
+                        <QuickLaunchCard packId={sys.targetId} username={currentUserName || 'Player'} />
                       </div>
                     </div>
                   </div>

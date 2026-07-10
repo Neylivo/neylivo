@@ -40,4 +40,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   mcScanMods: () => ipcRenderer.invoke('ponoi-mc-scan-mods'),
   mcModExists: (supabaseUrl, sha1) => ipcRenderer.invoke('ponoi-mc-mod-exists', { supabaseUrl, sha1 }),
   mcUploadMod: args => ipcRenderer.invoke('ponoi-mc-upload-mod', args),
+  mcPrepareInstance: (pack, supabaseUrl) => ipcRenderer.invoke('ponoi-mc-prepare-instance', { pack, supabaseUrl }),
+  onMcProgress: (cb) => { ipcRenderer.removeAllListeners('ponoi-mc-progress'); ipcRenderer.on('ponoi-mc-progress', (_e, p) => cb(p)) },
+  mcLaunch: (pack, instDir, username) => ipcRenderer.invoke('ponoi-mc-launch', { pack, instDir, username }),
 })
