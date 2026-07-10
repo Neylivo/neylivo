@@ -19,9 +19,11 @@ const PALETTE = [
 ]
 const DEFAULT_COLOR = '#99aab5'
 
-export function RoleEditor({ server, roles, members, memberRoles, roleId, onSelectRole, onBack, onEveryone, onReload }: {
+export function RoleEditor({ server, roles, members, memberRoles, roleId, onSelectRole, onBack, onEveryone, onReload, isOwner, myTopPosition }: {
   server: Server; roles: ServerRole[]; members: any[]; memberRoles: Record<string, string[]>
   roleId: string; onSelectRole: (id: string) => void; onBack: () => void; onEveryone: () => void; onReload: () => Promise<void>
+  // v1.191.0: иерархия — нельзя редактировать/удалять роль не ниже своей старшей (как в Discord).
+  isOwner?: boolean; myTopPosition?: number
 }) {
   const { user } = useAuth()
   const [rtab, setRtab] = useState<'display' | 'perms' | 'links'>('display')
@@ -35,6 +37,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
   useEffect(() => { setNm(found?.name ?? ''); setShowAdd(false); setAddQ('') }, [roleId, found?.name])
   if (!found) return null
   const role = found
+  const canManage = !!isOwner || (myTopPosition ?? Infinity) < role.position
 
   // Роли участника: новая таблица member_roles, до миграции 25 — старое одиночное role_id.
   const rolesOf = (uid: string): string[] => {
@@ -123,10 +126,10 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
       <div className="redit-main">
         <div className="redit-head">
           <div className="redit-title">РЕДАКТИРОВАТЬ РОЛЬ — {role.name.toUpperCase()}</div>
-          <button className="redit-dots" title="Удалить роль" onClick={async () => {
+          {canManage && <button className="redit-dots" title="Удалить роль" onClick={async () => {
             if (!await confirmUi('Удалить роль «' + role.name + '»?', { okText: 'Удалить' })) return
             await deleteRole(role.id); await onReload(); onBack()
-          }}><Icon name="trash" size={15} /></button>
+          }}><Icon name="trash" size={15} /></button>}
           <div className="redit-manage" onClick={() => setShowMembers(v => !v)}>Управлять участниками ({withRole.length})</div>
         </div>
         <div className="redit-tabs">
@@ -135,12 +138,13 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
           <span className={rtab === 'links' ? 'on' : ''} onClick={() => setRtab('links')}>Ссылки</span>
         </div>
         {rtab === 'display' && <div className="redit-body">
+          {!canManage && <div className="cset-hint" style={{ marginBottom: 10 }}>Эта роль не ниже вашей старшей — редактирование недоступно.</div>}
           <label className="pqs-lbl">Название роли <i className="req">*</i></label>
-          <input className="modal-in" value={nm} onChange={e => setNm(e.target.value)} onBlur={saveName}
+          <input className="modal-in" value={nm} onChange={e => setNm(e.target.value)} onBlur={saveName} disabled={!canManage}
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
           <label className="pqs-lbl">Цвет роли <i className="req">*</i></label>
           <div className="cset-hint" style={{ marginTop: 0 }}>Для участников используется цвет высшей роли, которую они имеют.</div>
-          <div className="redit-colors">
+          <div className="redit-colors" style={!canManage ? { pointerEvents: 'none', opacity: .5 } : undefined}>
             <span className={'redit-sw big' + (role.color === DEFAULT_COLOR ? ' on' : '')} style={{ background: DEFAULT_COLOR }} title="По умолчанию"
               onClick={() => setColor(DEFAULT_COLOR)}>{role.color === DEFAULT_COLOR && <Icon name="check" size={18} />}</span>
             <label className="redit-sw big custom" title="Свой цвет">
@@ -156,8 +160,8 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
           <div className="cset-hint" style={{ marginTop: 0 }}>Загрузите изображение размером менее 1 МБ. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.</div>
           <div className="redit-iconrow">
             <span className="redit-iconprev">{role.icon_url ? <img src={role.icon_url} alt="" /> : '🖼️'}</span>
-            <button className="modal-primary" onClick={() => iconRef.current?.click()}>{busy ? 'Загрузка…' : 'Выберите изображение'}</button>
-            {role.icon_url && <button className="pqs2-btn ghost" onClick={async () => { await updateRole(role.id, { icon_url: null }); await onReload() }}>Убрать</button>}
+            <button className="modal-primary" disabled={!canManage} onClick={() => iconRef.current?.click()}>{busy ? 'Загрузка…' : 'Выберите изображение'}</button>
+            {role.icon_url && canManage && <button className="pqs2-btn ghost" onClick={async () => { await updateRole(role.id, { icon_url: null }); await onReload() }}>Убрать</button>}
             <input ref={iconRef} type="file" accept="image/*" hidden onChange={pickIcon} />
           </div>
           <div className="redit-preview">
@@ -178,7 +182,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
                   <div key={p.bit} className="cset-perm">
                     <div className="cset-perm-h">{p.label}
                       <label className="sset-rmanage" style={{ marginLeft: 'auto' }}>
-                        <input type="checkbox" checked={on} onChange={e => togglePerm(p.bit, e.target.checked)} /> Разрешить
+                        <input type="checkbox" checked={on} disabled={!canManage} onChange={e => togglePerm(p.bit, e.target.checked)} /> Разрешить
                       </label>
                     </div>
                     <div className="cset-hint">{p.hint}</div>

@@ -33,7 +33,7 @@ import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
-import { PERM, hasPerm, kickMember, banMember } from '../lib/permissions'
+import { PERM, hasPerm, kickMember, banMember, timeoutMember } from '../lib/permissions'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -121,6 +121,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
+  // v1.191.0: подменю выбора длительности тайм-аута в rolePop.
+  const [timeoutSub, setTimeoutSub] = useState(false)
+  useEffect(() => { setTimeoutSub(false) }, [rolePop?.userId])
   // v1.188.0: «+ Добавить роль» в мини-профиле — компактный поиск-попап (как в
   // Discord), отдельно от rolePop выше (тот — полное меню участника по правому клику).
   const [quickRolePop, setQuickRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
@@ -196,14 +199,25 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return mm ? topRoleOf(mm)?.color : undefined
   }
   // Битовая маска прав текущего пользователя (сумма прав всех его ролей) — v1.156.0.
-  const myPerms = rolesOfId(user?.id ?? '').reduce((m, id) => m | (roleById[id]?.permissions ?? 0), 0)
+  // v1.191.0: + server-wide base_permissions (эквивалент @everyone из Discord —
+  // CREATE_INVITE/MENTION_EVERYONE/ADD_REACTIONS/ATTACH_FILES по умолчанию у всех,
+  // см. supabase/49_role_perms2.sql) — иначе клиент решит, что участник без явной
+  // роли не может прикрепить файл, хотя сервер это разрешит.
+  const myPerms = rolesOfId(user?.id ?? '').reduce((m, id) => m | (roleById[id]?.permissions ?? 0), 0) | (server.base_permissions ?? 0)
   // Право на «Настройки сервера»: владелец или любая из административных ролей.
   const canManage = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_ROLES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+    || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG) || hasPerm(myPerms, PERM.MANAGE_EMOJI) || hasPerm(myPerms, PERM.MANAGE_EVENTS)
+    || hasPerm(myPerms, PERM.MANAGE_WEBHOOKS) || hasPerm(myPerms, PERM.MANAGE_AUTOMOD)
   const canManageChannels = isOwner || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
   const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
   const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
+  const canManageEvents = isOwner || hasPerm(myPerms, PERM.MANAGE_EVENTS) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+  const canCreateInvite = isOwner || hasPerm(myPerms, PERM.CREATE_INVITE)
+  const canAttachFiles = isOwner || hasPerm(myPerms, PERM.ATTACH_FILES)
+  const canAddReactions = isOwner || hasPerm(myPerms, PERM.ADD_REACTIONS)
   const canKick = isOwner || hasPerm(myPerms, PERM.KICK_MEMBERS)
   const canBan = isOwner || hasPerm(myPerms, PERM.BAN_MEMBERS)
+  const canTimeout = isOwner || hasPerm(myPerms, PERM.TIMEOUT_MEMBERS)
   // Позиция самой старшей роли участника — для иерархии (нельзя кикнуть/забанить ровню или старшего).
   function topPositionOfId(userId: string): number {
     let best = Infinity
@@ -629,6 +643,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // v1.68.0: вместо копирования кода — панель «Пригласить друзей» как в Discord.
   async function invite() {
     if (!user) return
+    if (!canCreateInvite) { toastErr('Нет права создавать приглашения'); return }
     setShowInvite(true)
   }
 
@@ -1084,9 +1099,31 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const outranks = isOwner || topPositionOfId(user?.id ?? '') < topPositionOfId(rolePop.userId)
             const showKick = canKick && !targetOwner && !targetSelf && outranks
             const showBan = canBan && !targetOwner && !targetSelf && outranks
-            if (!showKick && !showBan) return null
+            const showTimeout = canTimeout && !targetOwner && !targetSelf && outranks
+            const targetMember = members.find(m => m.user_id === rolePop.userId)
+            const untilRaw = targetMember?.timeout_until as string | undefined
+            const isTimedOut = !!untilRaw && new Date(untilRaw).getTime() > Date.now()
+            if (!showKick && !showBan && !showTimeout) return null
+            const doTimeout = async (ms: number | null) => {
+              try {
+                await timeoutMember(server.id, rolePop.userId, ms === null ? null : new Date(Date.now() + ms))
+                setTimeoutSub(false); setRolePop(null); await loadMembers()
+                toastOk(ms === null ? 'Тайм-аут снят' : 'Участник отправлен в тайм-аут')
+              } catch (e: any) { toastErr(e.message ?? String(e)) }
+            }
             return <>
               {canManageRoles && <div className="ctx-sep" />}
+              {showTimeout && !isTimedOut && <div className="ctx-item has-sub" onClick={e => { e.stopPropagation(); setTimeoutSub(v => !v) }}>
+                <span>Тайм-аут</span><Icon name="chevron-right" size={14} />
+                {timeoutSub && <div className="ctx-menu ctx-submenu" onClick={e => e.stopPropagation()}>
+                  <div className="ctx-item" onClick={() => doTimeout(15 * 60000)}><span>15 минут</span></div>
+                  <div className="ctx-item" onClick={() => doTimeout(3600000)}><span>1 час</span></div>
+                  <div className="ctx-item" onClick={() => doTimeout(8 * 3600000)}><span>8 часов</span></div>
+                  <div className="ctx-item" onClick={() => doTimeout(24 * 3600000)}><span>24 часа</span></div>
+                  <div className="ctx-item" onClick={() => doTimeout(7 * 24 * 3600000)}><span>7 дней</span></div>
+                </div>}
+              </div>}
+              {showTimeout && isTimedOut && <div className="ctx-item" onClick={() => doTimeout(null)}><span>Снять тайм-аут</span><Icon name="clock" size={14} /></div>}
               {showKick && <div className="ctx-item danger" onClick={async () => {
                 if (!await confirmUi('Кикнуть этого участника с сервера?', { okText: 'Кикнуть' })) return
                 try { await kickMember(server.id, rolePop.userId); setRolePop(null); await loadMembers(); toastOk('Участник кикнут') }
@@ -1129,7 +1166,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         onCreate={(nm, kd, pv, ann) => { const cat = showCreateCh.cat; setShowCreateCh(null); createChannel(nm, kd, pv, cat, ann) }} />}
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
-      {showEvents && <ServerEvents server={server} channels={channels} canCreate={canManageChannels} onClose={() => setShowEvents(false)} />}
+      {showEvents && <ServerEvents server={server} channels={channels} canCreate={canManageEvents} onClose={() => setShowEvents(false)} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
         {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
       {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}

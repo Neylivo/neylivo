@@ -99,9 +99,15 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     for (const id of rolesOfId(userId)) { const r = roles.find(x => x.id === id); if (r && r.position < best) best = r.position }
     return best
   }
-  const myPerms = permsOfId(uid)
+  // v1.191.0: + server-wide base_permissions, см. пояснение в ServerView.tsx.
+  const myPerms = permsOfId(uid) | (server.base_permissions ?? 0)
   const canKick = isOwner || hasPerm(myPerms, PERM.KICK_MEMBERS)
   const canBan = isOwner || hasPerm(myPerms, PERM.BAN_MEMBERS)
+  const canManageEmoji = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_EMOJI)
+  const canViewAudit = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG)
+  const canManageAutomod = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_AUTOMOD)
+  const canManageWebhooks = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_WEBHOOKS)
+  const canOwnerLevel = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER)   // разделы, которые новые точечные права не открывают (профиль, доступ, безопасность, участники, баны, приглашения, удаление)
   async function loadBans() {
     const list = await fetchBans(server.id)
     if (list.length === 0) { setBans([]); return }
@@ -248,12 +254,33 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   )
   const fmtD = (x: string) => new Date(x).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
   const online = members.filter(m => statusOf(m.user_id) !== 'offline').length
-  const NAV: { cat?: string; k?: Tab; t?: string }[] = [
-    { cat: 'Сервер ' + server.name }, { k: 'profile', t: 'Профиль сервера' }, { k: 'tag', t: 'Тег сервера' }, { k: 'engage', t: 'Вовлечённость' },
-    { cat: 'Реакции' }, { k: 'emoji', t: 'Эмодзи' }, { k: 'stickers', t: 'Стикеры' }, { k: 'sound', t: 'Звуковая панель' },
-    { cat: 'Люди' }, { k: 'members', t: 'Участники' }, { k: 'roles', t: 'Роли' }, { k: 'invites', t: 'Приглашения' }, { k: 'access', t: 'Доступ' },
-    { cat: 'Модерация' }, { k: 'security', t: 'Настройка безопасности' }, { k: 'audit', t: 'Журнал аудита' }, { k: 'bans', t: 'Баны' }, { k: 'automod', t: 'Автомод' },
+  const canManageRolesTab = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_ROLES)
+  // v1.191.0: точечные права (см. supabase/49_role_perms2.sql) открывают доступ
+  // к конкретным вкладкам без полного MANAGE_SERVER — раньше все вкладки были
+  // видны любому, кто вообще мог открыть настройки (эффективно = MANAGE_SERVER).
+  const NAV_RAW: { cat?: string; k?: Tab; t?: string; ok?: boolean }[] = [
+    { cat: 'Сервер ' + server.name }, { k: 'profile', t: 'Профиль сервера', ok: canOwnerLevel }, { k: 'tag', t: 'Тег сервера', ok: canOwnerLevel }, { k: 'engage', t: 'Вовлечённость', ok: canOwnerLevel },
+    { cat: 'Реакции' }, { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
+    { cat: 'Люди' }, { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
+    { cat: 'Модерация' }, { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
   ]
+  // Прячем категории, у которых после фильтра по правам не осталось ни одной вкладки.
+  const NAV = NAV_RAW.filter((n, i) => {
+    if (!n.cat) return n.ok
+    const next = NAV_RAW.slice(i + 1).findIndex(x => x.cat)
+    const rest = next === -1 ? NAV_RAW.slice(i + 1) : NAV_RAW.slice(i + 1, i + 1 + next)
+    return rest.some(x => x.ok)
+  })
+  // Точечное право может открыть настройки без MANAGE_SERVER (см. canManage в
+  // ServerView.tsx) — если текущая вкладка такому пользователю не видна (по
+  // умолчанию 'profile', доступна только владельцам настроек), переключаем на
+  // первую, которая реально есть в его NAV.
+  useEffect(() => {
+    if (NAV.some(n => n.k === tab)) return
+    const first = NAV.find(n => n.k)
+    if (first?.k) setTab(first.k)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, canOwnerLevel, canManageEmoji, canViewAudit, canManageAutomod, canManageRolesTab])
   const filtered = members.filter(m => !mq.trim() || (m.member_name ?? '').toLowerCase().includes(mq.trim().toLowerCase()))
   const vl = VERIF_LEVELS[st.verification ?? 0] ?? VERIF_LEVELS[0]
   const fl = FILTER_LEVELS[st.content_filter ?? 0] ?? FILTER_LEVELS[0]
@@ -603,6 +630,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         </>}
 
         {tab === 'roles' && rolesView === 'edit' && selRoleId && <RoleEditor server={server} roles={roles} members={members} memberRoles={memberRoles}
+          isOwner={isOwner} myTopPosition={topPositionOfId(uid)}
           roleId={selRoleId} onSelectRole={setSelRoleId} onBack={() => setRolesView('main')} onEveryone={() => setRolesView('everyone')} onReload={reloadRoles} />}
 
         {tab === 'roles' && rolesView === 'everyone' && <>
