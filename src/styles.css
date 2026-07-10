@@ -2188,6 +2188,8 @@ body.no-anim .member-typing i { animation:none; }
 .sset-sw:hover { transform:translateY(-2px); }
 .sset-sw.on { border-color:#fff; }
 .sset-sw.small { width:44px; height:44px; }
+.sset-sw.custom { position:relative; background:#fff; color:#4e5058; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.sset-sw.custom input { position:absolute; inset:0; opacity:0; cursor:pointer; }
 .sset-upbox { width:100%; max-width:420px; height:130px; margin-top:10px; border:1px dashed rgba(255,255,255,.22); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--mut); cursor:pointer; background-size:cover; background-position:center; }
 .sset-upbox:hover { border-color:var(--brand); color:var(--tx); }
 .sset-feats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
@@ -2199,9 +2201,12 @@ body.no-anim .member-typing i { animation:none; }
 .sset-tagchip { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:6px; font-weight:800; font-size:12px; }
 .sset-tagchip.big { padding:10px 16px; font-size:16px; border-radius:8px; }
 .sset-tagico { display:grid; grid-template-columns:repeat(5,56px); gap:8px; }
-.sset-tagico button { width:56px; height:56px; border-radius:8px; background:var(--bg3); border:2px solid transparent; font-size:24px; cursor:pointer; transition:transform .12s ease; }
+.sset-tagico button { width:56px; height:56px; border-radius:8px; background:var(--bg3); border:2px solid transparent; font-size:24px; cursor:pointer; transition:transform .12s ease; display:flex; align-items:center; justify-content:center; color:var(--tx); }
 .sset-tagico button:hover { transform:translateY(-2px); }
 .sset-tagico button.on { border-color:var(--brand); }
+.sset-tagico button img.tag-cust-emoji { width:22px; height:22px; object-fit:contain; }
+.sset-emojipop { position:absolute; top:64px; left:0; z-index:60; }
+.tag-cust-emoji { width:16px; height:16px; object-fit:contain; vertical-align:-3px; }
 .sset-info { display:flex; gap:10px; align-items:flex-start; background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); border-radius:8px; padding:12px 14px; font-size:13px; margin-top:16px; line-height:1.5; }
 .sset-beta { background:var(--brand); color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:8px; vertical-align:middle; margin-left:6px; text-transform:uppercase; }
 .sset-level { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--bg3); border-radius:8px; padding:14px 16px; margin-top:12px; }

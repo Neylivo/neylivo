@@ -21,11 +21,28 @@ import { RoleEditor } from './RoleEditor'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 import { CH_FONTS, chFontFamily } from '../lib/chStyle'
+import { EmojiPicker } from './EmojiPicker'
+import { Em } from '../lib/twemoji'
+import { loadCustom } from '../lib/emoji'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'community' | 'template'
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
 const TAG_ICONS = ['🍃', '🗡️', '💗', '🔥', '💧', '💀', '🌙', '⚡', '🔮', '🍄']
+// v1.175.0: значок тега — обычный эмодзи ИЛИ кастомный сервера (:имя:), как в реакциях/сообщениях.
+function TagEmoji({ e }: { e: string }) {
+  const mm = e.match(/^:([a-zA-Z0-9_]+):$/)
+  const url = mm ? loadCustom()[mm[1]] : undefined
+  if (url) return <img className="tag-cust-emoji" src={url} alt={e} draggable={false} />
+  return <Em>{e}</Em>
+}
+// Шрифт тега: свой файл (fontUrl, через chFontFamily — тот же @font-face-механизм,
+// что у шрифта названий каналов) или пресет CH_FONTS (тот же набор, что у шрифта ника).
+function tagFontFamily(tag?: { font?: string; fontUrl?: string }): string | undefined {
+  if (!tag) return undefined
+  if (tag.fontUrl) return chFontFamily(tag.fontUrl)
+  return tag.font || undefined
+}
 const VERIF_LEVELS: { t: string; d: string }[] = [
   { t: 'Отсутствует', d: 'Без ограничений' },
   { t: 'Низкий', d: 'Участники должны иметь подтверждённый email' },
@@ -72,6 +89,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const setDirty = (_d: boolean) => {}
   const [busy, setBusy] = useState(false)
   const chFontRef = useRef<HTMLInputElement>(null)   // v1.140.0: свой файл шрифта названий каналов
+  const tagFontRef = useRef<HTMLInputElement>(null)  // v1.175.0: свой файл шрифта тега сервера
+  const [tagEmojiOpen, setTagEmojiOpen] = useState(false)
   const [members, setMembers] = useState<any[]>([])
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
@@ -335,7 +354,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div className="sset-prev-banner" style={st.banner_url ? { background: `url(${st.banner_url}) center/cover` } : st.banner ? { background: st.banner } : undefined} />
             <div className="sset-prev-body">
               <div className="sset-prev-av" style={avatar ? { backgroundImage: `url(${avatar})` } : undefined}>{!avatar && initials}</div>
-              <div className="sset-prev-nm">{name || server.name}{st.tag?.name && <span className="sset-tagchip" style={{ background: (st.tag?.color ?? '#5865f2') + '33', color: st.tag?.color ?? '#5865f2', marginLeft: 6 }}>{st.tag?.icon} {st.tag?.name}</span>}</div>
+              <div className="sset-prev-nm">{name || server.name}{st.tag?.name && <span className="sset-tagchip" style={{ background: (st.tag?.color ?? '#5865f2') + '33', color: st.tag?.color ?? '#5865f2', marginLeft: 6, fontFamily: tagFontFamily(st.tag) }}>{st.tag?.icon && <TagEmoji e={st.tag.icon} />} {st.tag?.name}</span>}</div>
               <div className="sset-prev-meta"><span className="sset-dot on" /> {online} в сети <span className="sset-dot off" /> {members.length} {members.length === 1 ? 'участник' : 'участников'}</div>
               <div className="sset-prev-meta">Дата основания: {new Date(server.created_at).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}</div>
               {(st.description ?? '') && <div className="sset-prev-meta" style={{ marginTop: 8 }}>{st.description}</div>}
@@ -348,8 +367,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-hint" style={{ marginTop: -12 }}>Создайте тег, который будет отображаться рядом с именем участников вашего сервера (если они захотят, конечно)! Благодаря тегу сервера любой пользователь Ponoi сможет просматривать профиль вашего сервера — и даже подать заявку на вступление, если у вас включена эта опция. В Ponoi теги бесплатны для всех серверов.</div>
           <label className="cset-lbl">Выберите название</label>
           <div className="sset-tagname">
-            <div className="sset-tagchip big" style={{ background: (st.tag?.color ?? '#5865f2') + '33', color: st.tag?.color ?? '#5865f2' }}>
-              {st.tag?.icon ?? TAG_ICONS[1]} {(st.tag?.name ?? '') || 'WUMP'}
+            <div className="sset-tagchip big" style={{ background: (st.tag?.color ?? '#5865f2') + '33', color: st.tag?.color ?? '#5865f2', fontFamily: tagFontFamily(st.tag) }}>
+              {st.tag?.icon ? <TagEmoji e={st.tag.icon} /> : TAG_ICONS[1]} {(st.tag?.name ?? '') || 'WUMP'}
             </div>
             <input className="modal-in" style={{ width: 130, textTransform: 'uppercase' }} maxLength={4} placeholder="ТЕГ"
               value={st.tag?.name ?? ''} onChange={e => up('tag', { ...(st.tag ?? {}), name: e.target.value.toUpperCase() })} />
@@ -357,11 +376,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           </div>
           <div className="sset-info"><Icon name="shield" size={15} /> После обновления тега всем участникам сервера потребуется заново установить его у себя в профиле. Мы делаем это в целях предотвращения злоупотребления.</div>
           <label className="cset-lbl">Выберите значок</label>
-          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Изменив только значок, вы не удалите тег сервера у участников.</div>
-          <div className="sset-tagico">
+          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Изменив только значок, вы не удалите тег сервера у участников. Кроме набора ниже, можно выбрать вообще любой эмодзи.</div>
+          <div className="sset-tagico" style={{ position: 'relative' }}>
             {TAG_ICONS.map(ic => (
-              <button key={ic} className={(st.tag?.icon ?? TAG_ICONS[1]) === ic ? 'on' : ''} onClick={() => up('tag', { ...(st.tag ?? {}), icon: ic })}>{ic}</button>
+              <button key={ic} className={(st.tag?.icon ?? TAG_ICONS[1]) === ic ? 'on' : ''} onClick={() => { up('tag', { ...(st.tag ?? {}), icon: ic }); setTagEmojiOpen(false) }}>{ic}</button>
             ))}
+            <button className={st.tag?.icon && !TAG_ICONS.includes(st.tag.icon) ? 'on' : ''} title="Выбрать любой эмодзи" onClick={() => setTagEmojiOpen(v => !v)}>
+              {st.tag?.icon && !TAG_ICONS.includes(st.tag.icon) ? <TagEmoji e={st.tag.icon} /> : <Icon name="plus" size={20} />}
+            </button>
+            {tagEmojiOpen && <div className="sset-emojipop">
+              <EmojiPicker onPick={e => { up('tag', { ...(st.tag ?? {}), icon: e }); setTagEmojiOpen(false) }} onClose={() => setTagEmojiOpen(false)} />
+            </div>}
           </div>
           <label className="cset-lbl">Выберите цвет</label>
           <div className="sset-swatches">
@@ -369,7 +394,28 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               <div key={c} className={'sset-sw small' + ((st.tag?.color ?? '#5865f2') === c ? ' on' : '')} style={{ background: c }}
                 onClick={() => up('tag', { ...(st.tag ?? {}), color: c })} />
             ))}
+            <label className={'sset-sw small custom' + (st.tag?.color && !ROLE_COLORS.includes(st.tag.color) ? ' on' : '')} title="Свой цвет">
+              <input type="color" value={st.tag?.color ?? '#5865f2'} onChange={e => up('tag', { ...(st.tag ?? {}), color: e.target.value })} />
+              <Icon name="edit" size={14} />
+            </label>
           </div>
+          <label className="pqs-lbl">Выберите шрифт</label>
+          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 10 }}>Шрифт текста тега — виден всем, кто видит тег рядом с чьим-то ником.</div>
+          <div className="pqs-font-grid">
+            {CH_FONTS.map(f => (
+              <button key={f.id || 'sys'} className={'pqs-font-btn' + (!st.tag?.fontUrl && (st.tag?.font ?? '') === f.id ? ' on' : '')}
+                onClick={() => up('tag', { ...(st.tag ?? {}), font: f.id, fontUrl: null })}>
+                <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>{(st.tag?.name ?? '') || 'ТЕГ'}</span>
+                <small>{f.name}</small>
+              </button>
+            ))}
+            <button className={'pqs-font-btn' + (st.tag?.fontUrl ? ' on' : '')} onClick={() => tagFontRef.current?.click()}>
+              <span className="pqs-font-sample" style={st.tag?.fontUrl ? { fontFamily: tagFontFamily(st.tag) } : undefined}>{(st.tag?.name ?? '') || 'ТЕГ'}</span>
+              <small>{st.tag?.fontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+            </button>
+          </div>
+          {st.tag?.fontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 8 }} onClick={() => persistNow({ ...st, tag: { ...(st.tag ?? {}), fontUrl: null } })}>Убрать свой шрифт</button>}
+          <input ref={tagFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={e => pickFile(e, url => persistNow({ ...st, tag: { ...(st.tag ?? {}), fontUrl: url } }))} />
         </>}
 
         {tab === 'engage' && <>
