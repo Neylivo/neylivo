@@ -197,6 +197,9 @@ async function findCover(name) {
 }
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
+// ---- v1.180.0: «Игровой Экспресс» (QuickLaunch) — поделиться сборкой Minecraft ----
+require('./quicklaunch.cjs').registerQuicklaunch(ipcMain)
+
 // ---- v1.91.0: надёжное копирование (текст/картинки) через системный буфер ----
 // Браузерный Clipboard API в Electron может молча отказывать («document is not
 // focused», file://-происхождение) — main-процесс кладёт в буфер напрямую.

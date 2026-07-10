@@ -36,4 +36,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
   // v1.161.0: диплинк на сообщение (ponoi://msg/...), пришедший запуском .exe с URL.
   onDeepLink: (cb) => { ipcRenderer.removeAllListeners('ponoi-deep-link'); ipcRenderer.on('ponoi-deep-link', (_e, url) => cb(url)) },
+  // v1.180.0: «Игровой Экспресс» — скан папки mods текущей сборки Minecraft (версия/Forge/список модов с sha1).
+  mcScanMods: () => ipcRenderer.invoke('ponoi-mc-scan-mods'),
 })
