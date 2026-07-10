@@ -2786,7 +2786,7 @@ body.no-anim .member-typing i { animation:none; }
 .sys-call { cursor: default; }
 .sys-call:hover { background: transparent; }
 .sys-call .sys-ic { color:#3ba55d; }
-.sys-call.missed .sys-ic { color:#ed4245; }
+.sys-call.missed .sys-ic { color:#80848e; }
 .sys-call.missed b { color:#fff; }
 
 /* Панель управления звонком — группа-пилюля, как в Discord. */

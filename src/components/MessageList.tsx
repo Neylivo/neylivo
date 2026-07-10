@@ -398,9 +398,14 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 const mineCall = !!currentUser && m.author === currentUser
                 const st = sys.targetId
                 const dur = parseInt(sys.preview || '0', 10) || 0
+                // v1.197.0: иконки как в Discord — стрелка вверх-вправо, зелёная (звонок
+                // состоялся), стрелка вниз-вправо, серая (не удался) — для ОБЕИХ сторон
+                // пропущенного звонка одинаково, раньше серым видел только тот, кому не
+                // дозвонились, у самого звонящего иконка оставалась зелёной.
+                const icon = st === 'missed' ? 'phone-down' : st === 'ended' ? 'phone-up' : 'phone'
                 return (
-                  <div className={'sys-msg sys-call' + (st === 'missed' && !mineCall ? ' missed' : '')}>
-                    <span className="sys-ic"><Icon name={st === 'missed' ? 'phone-off' : 'phone'} size={14} /></span>
+                  <div className={'sys-msg sys-call' + (st === 'missed' ? ' missed' : '')}>
+                    <span className="sys-ic"><Icon name={icon} size={16} /></span>
                     <span>
                       {st === 'start' && <><b>{m.author_name}</b> начинает звонок.</>}
                       {st === 'ended' && <><b>{m.author_name}</b> начал(а) звонок продолжительностью {fmtCallDur(dur)}.</>}
