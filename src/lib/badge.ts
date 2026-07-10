@@ -62,6 +62,42 @@ function drawBadge(n: number): string {
   return c.toDataURL('image/png')
 }
 
+// v1.186.0: тот же кружок, что и на панели задач, но на иконке в трее — работает
+// и когда окно свёрнуто туда (у overlay-иконки таскбара в этот момент нет кнопки,
+// на которой рисовать, — кружок пропадал ровно тогда, когда нужнее всего).
+// Рисуем сами: берём текущую иконку приложения (свою — если сменили в настройках,
+// иначе бандловую /icon.png) и кладём поверх неё тот же красный кружок с числом.
+let trayBaseCache: { src: string; img: HTMLImageElement } | null = null
+async function loadTrayBase(): Promise<HTMLImageElement> {
+  const d = (window as any).ponoiDesktop
+  const src = (await d?.getTrayIconBase?.()) || '/icon.png'
+  if (trayBaseCache && trayBaseCache.src === src) return trayBaseCache.img
+  const img = new Image()
+  img.src = src
+  await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject })
+  trayBaseCache = { src, img }
+  return img
+}
+async function drawTrayIcon(n: number): Promise<string | null> {
+  try {
+    const base = await loadTrayBase()
+    const c = document.createElement('canvas')
+    c.width = 64; c.height = 64
+    const g = c.getContext('2d')!
+    g.drawImage(base, 0, 0, 64, 64)
+    if (n > 0) {
+      g.beginPath(); g.arc(48, 48, 16, 0, Math.PI * 2); g.fillStyle = '#f23f43'; g.fill()
+      g.strokeStyle = '#2b2d31'; g.lineWidth = 3; g.stroke()
+      g.fillStyle = '#fff'
+      g.font = n > 9 ? 'bold 15px Arial' : 'bold 18px Arial'
+      g.textAlign = 'center'; g.textBaseline = 'middle'
+      g.fillText(n > 9 ? '9+' : String(n), 48, 49)
+    }
+    return c.toDataURL('image/png')
+  } catch { return null }
+}
+let trayGen = 0
+
 function apply() {
   const n = total()
   // Заголовок вкладки (веб): «(3) Ponoi».
@@ -71,9 +107,13 @@ function apply() {
     const nav = navigator as any
     if (typeof nav.setAppBadge === 'function') { n > 0 ? nav.setAppBadge(n) : nav.clearAppBadge() }
   } catch {}
-  // Windows-десктоп: overlay-иконка на панели задач.
+  // Windows-десктоп: overlay-иконка на панели задач + иконка в трее (пока окно там).
   try {
     const d = (window as any).ponoiDesktop
     if (d?.setBadge) d.setBadge(n > 0 ? drawBadge(n) : null, n)
+    if (d?.setTrayIcon) {
+      const gen = ++trayGen
+      drawTrayIcon(n).then(url => { if (url && gen === trayGen) d.setTrayIcon(url) })
+    }
   } catch {}
 }

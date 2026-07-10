@@ -411,6 +411,29 @@ ipcMain.on('ponoi-badge', (_e, p) => {
   } catch {}
 })
 
+// v1.186.0: тот же кружок — но на иконке в системном трее. Когда окно свёрнуто
+// в трей (закрытие крестиком прячет окно туда, см. close-хендлер ниже), у
+// overlay-иконки таскбара просто нет кнопки, на которой рисовать — кружок
+// пропадал ровно тогда, когда он нужнее всего. Рендерер сам рисует иконку+кружок
+// на canvas и присылает готовый PNG — main только ставит его трею.
+ipcMain.handle('ponoi-get-tray-icon', () => {
+  try {
+    const p = readPrefs()
+    if (p.appIcon) {
+      const buf = require('fs').readFileSync(p.appIcon)
+      return 'data:image/png;base64,' + buf.toString('base64')
+    }
+  } catch {}
+  return null   // рендерер сам подставит бандловую /icon.png
+})
+ipcMain.on('ponoi-tray-badge', (_e, dataUrl) => {
+  try {
+    if (!tray || typeof dataUrl !== 'string') return
+    const img = nativeImage.createFromDataURL(dataUrl)
+    if (!img.isEmpty()) tray.setImage(img)
+  } catch {}
+})
+
 // ---- v1.160.0: свой логотип приложения (Настройки -> Внешний вид) ----
 // Рендерер растеризует загруженный файл в PNG на canvas и присылает dataURL;
 // main ставит его иконкой всех окон (панель задач) и трея, и сохраняет PNG на
