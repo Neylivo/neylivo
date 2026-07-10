@@ -21,6 +21,7 @@ import { useUserFonts } from '../lib/userFonts'
 import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer } from '../lib/servers'
 import { uploadWithProgress } from '../lib/storage'
+import { isBlockedWith } from '../lib/block'
 import { CallRoom, Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent, DisconnectReason } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
@@ -978,7 +979,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {canManage && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat .composer textarea') as HTMLTextAreaElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
           </div>}
-          <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
+          <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}

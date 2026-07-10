@@ -29,17 +29,25 @@ import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
 import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
-import { getDmRead, setDmRead } from '../lib/userPrefs'
+import { getDmRead, setDmRead, isDmPinned, isDmClosed, isDmMuted, isDmIgnored, friendNickOf, reopenDm, closeDm } from '../lib/userPrefs'
 import { useAvatarOf } from '../lib/avatars'
 import { uploadWithProgress } from '../lib/storage'
+import { DmCtxMenu } from './DmCtxMenu'
+import { isBlockedWith } from '../lib/block'
+import type { Server } from '../types'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
 
 interface Friend { id: string; name: string }
 
-export function DMHome({ username, handle, avatarUrl, onAvatar }:
-  { username: string; handle?: string; avatarUrl?: string | null; onAvatar?: (u: string) => void }) {
+// v1.187.0: помечает сообщения от игнорируемых — MessageList.tsx сворачивает такие в одну строку.
+function tagIgnored(list: DMMessage[]): DMMessage[] {
+  return list.map(m => ({ ...m, _ignoredAuthor: isDmIgnored(m.author) } as any))
+}
+
+export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
+  { username: string; handle?: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; servers?: Server[] }) {
   const { user } = useAuth()
   const meId = user!.id
   const [requests, setRequests] = useState<FriendRequest[]>([])
@@ -89,6 +97,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [codeOk, setCodeOk] = useState(false) // v1.53.0: зелёное/красное сообщение под полем, как в Discord
   const { statusOf, gameOf, deviceOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
+  // v1.187.0: правый клик по другу в списке ЛС — меню закреп/мьют/никнейм/блок/etc.
+  const [dmCtx, setDmCtx] = useState<{ friend: Friend; x: number; y: number } | null>(null)
+  // user_prefs (пин/мьют/никнейм/закрыто/игнор) не React-стейт — этот счётчик просто
+  // заставляет компонент перерисоваться, когда DmCtxMenu что-то в них поменял.
+  const [prefsTick, setPrefsTick] = useState(0)
+  // «Начать звонок» из контекстного меню (без захода в чат) — сперва открываем
+  // чат (threadId приходит асинхронно), затем звоним, как только он готов.
+  const pendingCallRef = useRef(false)
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string; avatarUrl?: string | null } | null>(null)
   // v1.177.0: редактирование сообщения — текст живёт в композере, как в Discord.
   const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null)
@@ -224,6 +240,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setConnectingThread(null); setConnectingPeer(null) }
   }
+
+  // v1.187.0: «Начать звонок» из контекстного меню друга — сперва открываем чат
+  // (threadId приходит асинхронно, из кэша или сети), звоним, как только он готов.
+  useEffect(() => {
+    if (pendingCallRef.current && threadId) { pendingCallRef.current = false; startCall() }
+    // eslint-disable-next-line
+  }, [threadId])
 
   // Кнопки панели/MeBar работают и когда CallRoom не на экране (другая вкладка/чат).
   const crShownRef = useRef(false)
@@ -406,7 +429,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     if (cachedTid) {
       setThreadId(cachedTid)
       const cached = getMsgs('dm_' + cachedTid)
-      if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(cached as DMMessage[]) }
+      if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
     }
     const t = await openThread(meId, f.id)
     if (!t) return
@@ -415,7 +438,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     // Загружаем последние 100 сообщений (раньше в длинных диалогах грузились самые старые 100).
     const { data } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
-    const list = ((data ?? []) as DMMessage[]).reverse()
+    const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
     hasMore.current = (data ?? []).length === 100
     // v1.69.0: ЛС всегда открывается в самом низу — на последних сообщениях (как в Discord).
     pendingScroll.current = 'bottom'
@@ -483,13 +506,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
         { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
         p => {
           const msg = p.new as DMMessage
-          setMessages(m => mergeIncoming(m, msg))
+          if (isDmClosed(msg.author)) reopenDm(msg.author)   // v1.187.0: написал — «Закрыть ЛС» снимается, как в Discord
+          setMessages(m => mergeIncoming(m, { ...msg, _ignoredAuthor: isDmIgnored(msg.author) } as any))
           setDmRead(threadId, Date.now())
-          if (msg.author !== meId && !parseSys(msg.content)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
+          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
-        p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)) })
+        p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId, _ignoredAuthor: isDmIgnored(msg.author) } as any : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [threadId])
@@ -537,7 +561,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
       const { data } = await supabase.from('dm_messages').select('*')
         .eq('thread_id', threadId).lt('created_at', oldest)
         .order('created_at', { ascending: false }).limit(50)
-      const older = ((data ?? []) as DMMessage[]).reverse()
+      const older = tagIgnored(((data ?? []) as DMMessage[]).reverse())
       hasMore.current = older.length === 50
       if (older.length) {
         prevHeight.current = el.scrollHeight
@@ -708,6 +732,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const callRoomShown = !!call && !!active && callThread === threadId
   useEffect(() => { crShownRef.current = callRoomShown }, [callRoomShown])
 
+  // v1.187.0: список ЛС в сайдбаре — «Закрыть ЛС» прячет, «Закрепить» поднимает
+  // наверх. Пересчитывается на каждый рендер; DmCtxMenu триггерит его через
+  // setPrefsTick после любого изменения в user_prefs (закреп/мьют/etc — не React-стейт).
+  const sidebarFriends = friends.filter(f => !isDmClosed(f.id))
+  const pinnedFriends = sidebarFriends.filter(f => isDmPinned(f.id))
+  const restFriends = sidebarFriends.filter(f => !isDmPinned(f.id))
+
   return (
     <>
       {call && !callRoomShown && <Sinks room={call} />}
@@ -724,10 +755,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           <button className="dm-sec-plus" title="Начать беседу" onClick={() => { setActive(null); setTab('all') }}><Icon name="plus" size={14} /></button>
         </div>
         <div className="ch-list">
-          {friends.map(f => (
-            <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}>
+          {[...pinnedFriends, ...restFriends].map(f => (
+            <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}
+              onContextMenu={e => { e.preventDefault(); setDmCtx({ friend: f, x: e.clientX, y: e.clientY }) }}>
               <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
-              <span className="me-nm">{f.name}
+              <span className="me-nm">{friendNickOf(f.id) ?? f.name}
+                {isDmPinned(f.id) && <Icon name="pin" size={12} />}
                 {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
               </span>
             </div>
@@ -777,7 +810,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
             onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
-            <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
+            <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
@@ -957,6 +990,20 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
       {active && fullProfileTab && <ProfileCard userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
         initialTab={fullProfileTab} onClose={() => setFullProfileTab(null)} />}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
+      {dmCtx && <DmCtxMenu friend={dmCtx.friend} x={dmCtx.x} y={dmCtx.y}
+        threadId={dmCtx.friend.id === active?.id ? threadId : null}
+        servers={servers ?? []} meId={meId} username={username}
+        onClose={() => setDmCtx(null)}
+        onChanged={() => setPrefsTick(v => v + 1)}
+        onProfile={() => setMini({ userId: dmCtx.friend.id, name: dmCtx.friend.name, avatarUrl: null, status: statusOf(dmCtx.friend.id), x: dmCtx.x, y: dmCtx.y })}
+        onStartCall={() => { pendingCallRef.current = true; openChat(dmCtx.friend) }}
+        onCloseDm={() => { closeDm(dmCtx.friend.id); if (active?.id === dmCtx.friend.id) { setActive(null); setThreadId(null) }; setPrefsTick(v => v + 1) }}
+        onRemoveFriend={() => removeFriend(dmCtx.friend)}
+        onBlocked={() => {
+          loadRequests()   // blockUser() уже снял friend_requests в обе стороны — перечитываем список
+          if (active?.id === dmCtx.friend.id) { setActive(null); setThreadId(null) }
+          toastOk(dmCtx.friend.name + ' заблокирован(а)')
+        }} />}
     </>
   )
 }

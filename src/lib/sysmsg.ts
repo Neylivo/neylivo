@@ -64,10 +64,17 @@ export function parseGameLinkMeta(preview: string): GameLinkMeta | null {
   return null
 }
 
-/** «несколько секунд» / «5 мин» / «1 ч 12 мин» — как пишет Discord. */
+function ruPlural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10, mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+  return many
+}
+/** «несколько секунд» / «минута» / «5 минут» / «1 час 12 минут» — как пишет Discord. */
 export function fmtCallDur(sec: number): string {
   if (sec < 60) return 'несколько секунд'
   const m = Math.round(sec / 60)
-  if (m < 60) return m + ' мин'
-  return Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин'
+  if (m < 60) return m + ' ' + ruPlural(m, 'минута', 'минуты', 'минут')
+  const h = Math.floor(m / 60), rem = m % 60
+  return h + ' ' + ruPlural(h, 'час', 'часа', 'часов') + (rem ? ' ' + rem + ' ' + ruPlural(rem, 'минута', 'минуты', 'минут') : '')
 }

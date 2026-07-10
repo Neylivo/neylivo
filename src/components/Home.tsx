@@ -22,6 +22,7 @@ import { FolderModal } from './FolderModal'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { bumpDm, bumpMention, clearBadgeKey } from '../lib/badge'
+import { isDmMuted } from '../lib/userPrefs'
 import { mentionsUser } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
@@ -207,6 +208,7 @@ export function Home() {
         if (!m.thread_id || m.author === user.id) return
         if (!dmThreadsRef.current.has(m.thread_id)) return
         if (parseSys(m.content ?? null)) return   // системные («начал звонок») не считаем
+        if (m.author && isDmMuted(m.author)) return   // v1.187.0: заглушенный в ЛС не зажигает кружок
         bumpDm(m.thread_id)
       })
       .subscribe()
@@ -421,7 +423,7 @@ export function Home() {
         // продолжает жить, неактивный экран просто скрывается.
         return <>
           <div style={{ display: bv.kind === 'dm' ? 'contents' : 'none' }}>
-            <DMHome username={username} handle={handle} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} />
+            <DMHome username={username} handle={handle} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} servers={servers} />
           </div>
           {srv && <div style={{ display: bv.kind === 'server' ? 'contents' : 'none' }}>
             <ServerView server={srv} username={username} avatarUrl={avatarUrl} onAvatar={setAvatarUrl} onLeft={() => { setLastServer(null); setView({ kind: 'dm' }); refresh() }} />

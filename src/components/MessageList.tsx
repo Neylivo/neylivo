@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
-import { timeShort, timeFull, dayLabel, msgTime } from '../lib/ui'
+import { timeShort, timeFull, dayLabel, msgTime, callTime } from '../lib/ui'
 import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -263,6 +263,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // v1.187.0: сообщения от игнорируемых (ЛС, см. DmCtxMenu.tsx) свёрнуты, пока не раскроют вручную.
+  const [revealedIgnored, setRevealedIgnored] = useState<Set<string>>(new Set())
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
   const [emojiAt, setEmojiAt] = useState<{ id: string; x: number; y: number } | null>(null)
@@ -294,6 +296,22 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     <>
       <StickyDatePill />
       {messages.map(m => {
+        // v1.187.0: сообщение от игнорируемого пользователя (ЛС) — свёрнуто, пока не раскроют.
+        if ((m as any)._ignoredAuthor && !revealedIgnored.has(m.id)) {
+          const iDay = new Date(m.created_at).toDateString()
+          const showIDay = iDay !== lastDay
+          lastDay = iDay
+          lastAuthor = ''
+          return (
+            <Fragment key={m._localId ?? m.id}>
+              {showIDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
+              <div className="sys-msg ignored-msg" onClick={() => setRevealedIgnored(s => new Set(s).add(m.id))}>
+                <span className="sys-ic"><Icon name="flag" size={14} /></span>
+                <span>Сообщение от игнорируемого пользователя — нажмите, чтобы показать</span>
+              </div>
+            </Fragment>
+          )
+        }
         // Системное сообщение («X закрепил сообщение») — компактная строка, как в Discord.
         const sys = parseSys(m.content)
         if (sys) {
@@ -376,12 +394,12 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     <span className="sys-ic"><Icon name={st === 'missed' ? 'phone-off' : 'phone'} size={14} /></span>
                     <span>
                       {st === 'start' && <><b>{m.author_name}</b> начинает звонок.</>}
-                      {st === 'ended' && <><b>{m.author_name}</b> начал(а) звонок — он длился {fmtCallDur(dur)}.</>}
+                      {st === 'ended' && <><b>{m.author_name}</b> начал(а) звонок продолжительностью {fmtCallDur(dur)}.</>}
                       {st === 'missed' && (mineCall
                         ? <>Никто не ответил на звонок.</>
                         : <>Вы пропустили звонок от <b>{m.author_name}</b>, который длился {fmtCallDur(dur)}.</>)}
                     </span>
-                    <span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>
+                    <span className="msg-time" title={timeFull(m.created_at)}>{callTime(m.created_at)}</span>
                   </div>
                 )
               })() : (

@@ -17,11 +17,18 @@ export interface UserPrefsRow {
   gif_favs: string[]
   mus_playlists: any[]
   account: Record<string, any>
+  // v1.187.0: контекстное меню друга в списке ЛС (закреп/мьют/никнейм/«закрыть ЛС»/игнор).
+  dm_pinned: string[]                // [friendId] — закреплённые вверху списка
+  dm_muted: Record<string, number>   // {friendId: expiryMs} — 0 = навсегда, иначе Date.now() до которого не звучит/не пушит
+  dm_closed: string[]                // [friendId] — «Закрыть ЛС», скрыт из списка, пока не напишет снова
+  dm_ignored: string[]               // [friendId] — сообщения свёрнуты только у тебя, дружба/переписка не трогаются
+  friend_nick: Record<string, string> // {friendId: nickname} — виден только тебе
 }
 
 const DEFAULTS: UserPrefsRow = {
   notes: {}, srv_folders: [], ch_muted: {}, srv_notif: {}, srv_privacy: {},
   ch_read: {}, dm_read: {}, gif_favs: [], mus_playlists: [], account: {},
+  dm_pinned: [], dm_muted: {}, dm_closed: [], dm_ignored: [], friend_nick: {},
 }
 
 let uid: string | null = null
@@ -67,4 +74,52 @@ export function setChRead(channelId: string, ms: number) {
 export function getDmRead(threadId: string): number { return row.dm_read[threadId] ?? 0 }
 export function setDmRead(threadId: string, ms: number) {
   patchUserPrefs({ dm_read: { ...row.dm_read, [threadId]: ms } })
+}
+
+// v1.187.0: закреп друга вверху списка ЛС (контекстное меню, «Закрепить»).
+export function isDmPinned(friendId: string): boolean { return row.dm_pinned.includes(friendId) }
+export function toggleDmPinned(friendId: string) {
+  const on = isDmPinned(friendId)
+  patchUserPrefs({ dm_pinned: on ? row.dm_pinned.filter(id => id !== friendId) : [...row.dm_pinned, friendId] })
+}
+
+// Мьют ЛС с длительностью: expiry === 0 значит «навсегда, пока не включат обратно».
+export function isDmMuted(friendId: string): boolean {
+  const exp = row.dm_muted[friendId]
+  return exp !== undefined && (exp === 0 || Date.now() < exp)
+}
+export function setDmMuted(friendId: string, expiryMs: number | null) {
+  const next = { ...row.dm_muted }
+  if (expiryMs === null) delete next[friendId]
+  else next[friendId] = expiryMs
+  patchUserPrefs({ dm_muted: next })
+}
+
+// «Закрыть ЛС» — прячет из списка, пока собеседник не напишет снова (reopenDm
+// вызывается автоматически на входящее сообщение, см. DMHome.tsx).
+export function isDmClosed(friendId: string): boolean { return row.dm_closed.includes(friendId) }
+export function closeDm(friendId: string) {
+  if (isDmClosed(friendId)) return
+  patchUserPrefs({ dm_closed: [...row.dm_closed, friendId] })
+}
+export function reopenDm(friendId: string) {
+  if (!isDmClosed(friendId)) return
+  patchUserPrefs({ dm_closed: row.dm_closed.filter(id => id !== friendId) })
+}
+
+// Игнор — лёгкая версия блокировки: сообщения свёрнуты только у тебя, собеседник
+// не в курсе, переписка технически продолжается (в отличие от src/lib/block.ts).
+export function isDmIgnored(friendId: string): boolean { return row.dm_ignored.includes(friendId) }
+export function toggleDmIgnored(friendId: string) {
+  const on = isDmIgnored(friendId)
+  patchUserPrefs({ dm_ignored: on ? row.dm_ignored.filter(id => id !== friendId) : [...row.dm_ignored, friendId] })
+}
+
+// Никнейм друга — виден только тебе, не трогает его настоящее имя в БД.
+export function friendNickOf(friendId: string): string | null { return row.friend_nick[friendId] ?? null }
+export function setFriendNick(friendId: string, nick: string | null) {
+  const next = { ...row.friend_nick }
+  if (nick && nick.trim()) next[friendId] = nick.trim()
+  else delete next[friendId]
+  patchUserPrefs({ friend_nick: next })
 }

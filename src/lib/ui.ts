@@ -14,6 +14,15 @@ export const timeShort = (iso: string) =>
 export const timeFull = (iso: string) =>
   new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: !_time24 })
 
+// v1.187.0: для записей о звонках в истории — всегда полная дата+время (в отличие
+// от msgTime, который прячет дату для «сегодня»): звонок — событие, к которому
+// возвращаются, отсутствие даты уводит в контекст текущего дня без нужды.
+export function callTime(iso: string): string {
+  const d = new Date(iso)
+  const dd = String(d.getDate()).padStart(2, '0'), mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}.${d.getFullYear()} ${timeShort(iso)}`
+}
+
 export function dayLabel(iso: string) {
   const d = new Date(iso)
   const today = new Date()

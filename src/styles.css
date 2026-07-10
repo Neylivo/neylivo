@@ -1987,6 +1987,23 @@ body.no-anim .member-typing i { animation:none; }
 .ctx-item { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:7px 8px; font-size:13.5px; font-weight:500; white-space:nowrap; }
 .ctx-item svg { flex:none; opacity:.9; }
 .ctx-sep { height:1px; background:rgba(255,255,255,.07); margin:4px 2px; }
+
+/* ===== v1.187.0: правый клик по другу в списке ЛС — подменю + инлайн-попапы ===== */
+.ctx-item.has-sub { position:relative; }
+.ctx-item.has-sub .ctx-submenu { position:absolute; left:100%; top:-6px; margin-left:4px; max-height:min(320px, 70vh); overflow-y:auto; }
+.ctx-item-empty { opacity:.55; cursor:default; }
+.ctx-item-empty:hover { background:transparent; }
+.ctx-item-stack { display:flex; flex-direction:column; gap:1px; }
+.ctx-item-stack small { font-weight:400; font-size:11px; opacity:.65; }
+.ctx-idbadge { flex:none; font-size:10px; font-weight:800; letter-spacing:.3px; color:var(--mut);
+  background:rgba(255,255,255,.08); border-radius:4px; padding:1px 5px; }
+.ctx-item:hover .ctx-idbadge { color:#fff; background:rgba(255,255,255,.22); }
+.ctx-inline { display:flex; flex-direction:column; gap:6px; padding:6px 8px 8px; }
+.ctx-inline textarea, .ctx-inline input { background:var(--bg1); border:1px solid rgba(255,255,255,.08);
+  border-radius:6px; color:var(--tx); font-size:13px; padding:7px 9px; resize:none; }
+.ctx-inline textarea { min-height:56px; font-family:inherit; }
+.ctx-inline button { align-self:flex-end; background:var(--brand); color:#fff; border-radius:6px;
+  font-size:12.5px; font-weight:600; padding:5px 12px; }
 .ctx-quick { justify-content:space-between; border-bottom:none; margin-bottom:2px; padding:4px 2px; }
 .ctx-quick button { flex:0 0 auto; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; background:var(--bg2); border-radius:10px; transition:transform .12s ease, background .12s ease; }
 .ctx-quick button:hover { background:var(--brand); transform:scale(1.08); }
