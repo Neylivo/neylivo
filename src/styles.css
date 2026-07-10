@@ -2035,7 +2035,7 @@ body.no-anim .member-typing i { animation:none; }
 .srv-title.clickable { cursor:pointer; user-select:none; gap:8px; }
 .srv-title.clickable:hover { background:rgba(255,255,255,.04); }
 .srv-title-nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.srv-menu { position:absolute; top:52px; left:8px; right:8px; background:#111420; border-radius:8px; padding:6px; z-index:60; box-shadow:0 8px 24px rgba(0,0,0,.55); animation:pop .12s ease both; }
+.srv-menu { position:absolute; top:52px; left:8px; right:8px; background:#111420; border-radius:8px; padding:6px; z-index:91; box-shadow:0 8px 24px rgba(0,0,0,.55); animation:pop .12s ease both; }
 .srv-mi { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-radius:5px; font-size:13.5px; color:var(--mut); cursor:pointer; }
 .srv-mi:hover { background:var(--brand); color:#fff; }
 .srv-msep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }
