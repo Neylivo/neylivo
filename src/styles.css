@@ -1533,6 +1533,14 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .role-item:hover .role-del { opacity:1; }
 .role-item .role-del:hover { color:#ed4245; }
 .role-empty { padding:6px 10px; color:var(--mut); font-size:13px; }
+/* v1.188.0: «+ Добавить роль» в мини-профиле — компактный поиск-попап, как в Discord. */
+.role-quickpop { min-width:220px; padding:8px; }
+.role-quick-in { width:100%; background:var(--bg1); border:1px solid rgba(255,255,255,.1); border-radius:6px;
+  color:var(--tx); font-size:13.5px; padding:8px 10px; margin-bottom:6px; }
+.role-quick-in:focus { border-color:var(--brand); outline:none; }
+.role-quick-list { max-height:240px; overflow-y:auto; }
+.role-quick-item { padding:7px 8px; border-radius:6px; cursor:pointer; }
+.role-quick-item .role-dot { width:10px; height:10px; }
 .mini-rolechip { margin-top:8px; display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:12px; background:rgba(255,255,255,.06); font-size:12px; font-weight:600; }
 .mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:13px; color:#dbdee1; }
 .member-act { display:block; font-weight:400; font-size:12px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

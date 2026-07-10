@@ -121,6 +121,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [rolePop, setRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
+  // v1.188.0: «+ Добавить роль» в мини-профиле — компактный поиск-попап (как в
+  // Discord), отдельно от rolePop выше (тот — полное меню участника по правому клику).
+  const [quickRolePop, setQuickRolePop] = useState<{ userId: string; x: number; y: number } | null>(null)
+  const [quickRoleQ, setQuickRoleQ] = useState('')
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -1098,7 +1102,24 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>
       </>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)}
-        onAddRole={(isOwner || canManageRoles || canKick || canBan) ? () => { const m = mini; setMini(null); setRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
+        onAddRole={(isOwner || canManageRoles || canKick || canBan) ? () => { const m = mini; setMini(null); setQuickRoleQ(''); setQuickRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
+      {quickRolePop && <>
+        <div className="ctx-overlay" onClick={() => setQuickRolePop(null)} onContextMenu={e => { e.preventDefault(); setQuickRolePop(null) }} />
+        <div className="ctx-menu role-quickpop" style={{ left: quickRolePop.x, top: quickRolePop.y }}>
+          <input className="role-quick-in" autoFocus placeholder="Роль" value={quickRoleQ} onChange={e => setQuickRoleQ(e.target.value)} />
+          <div className="role-quick-list">
+            {roles.filter(r => r.name.toLowerCase().includes(quickRoleQ.trim().toLowerCase())).map(r => {
+              const on = rolesOfId(quickRolePop.userId).includes(r.id)
+              return <div key={r.id} className={'role-item role-quick-item' + (on ? ' on' : '')}
+                onClick={async () => { await toggleMemberRole(server.id, quickRolePop.userId, r.id, !on); await loadRoles(); await loadMembers() }}>
+                <span className="role-dot" style={{ background: r.color }} />{r.name}
+                {on && <Icon name="check" size={13} />}
+              </div>
+            })}
+            {roles.length === 0 && <div className="role-empty">Ролей пока нет</div>}
+          </div>
+        </div>
+      </>}
       {showCreateCh && <CreateChannelModal initialKind={showCreateCh.kind} onClose={() => setShowCreateCh(null)}
         onCreate={(nm, kd, pv, ann) => { const cat = showCreateCh.cat; setShowCreateCh(null); createChannel(nm, kd, pv, cat, ann) }} />}
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
