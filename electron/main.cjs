@@ -120,7 +120,56 @@ function broadcastGame() {
   for (const w of BrowserWindow.getAllWindows()) {
     try { w.webContents.send('ponoi-game', curGame) } catch {}
   }
+  updateCallOverlay()
 }
+
+// ---- v1.196.0: оверлей поверх игры со списком собеседников звонка ----
+// Показывается, только когда ОДНОВРЕМЕННО: (а) сейчас идёт звонок и (б) детект
+// игры видит запущенную игру — ровно то же ограничение DWM на эксклюзивный
+// полноэкранный режим, что и у старых (сейчас отключённых) game-toast/overlay
+// окон (см. showGameToast/showGameOverlay выше). Список участников шлёт рендерер
+// (см. src/components/CallRoom.tsx, компонент Sinks — он смонтирован ровно
+// тогда, когда звонок идёт, но сам экран звонка не открыт, то есть возможно
+// как раз играют) через 'ponoi-call-overlay-participants'; позиция — фиксированный
+// якорь слева по центру экрана (реальные координаты окна игры Windows не отдаёт
+// без нативного API, поэтому как и у остальных оверлеев — угол/край экрана).
+let callOverlayWin = null
+let callParticipants = []
+function updateCallOverlay() {
+  try {
+    const shouldShow = !!curGame && callParticipants.length > 0
+    if (!shouldShow) {
+      if (callOverlayWin && !callOverlayWin.isDestroyed()) callOverlayWin.hide()
+      return
+    }
+    const { screen } = require('electron')
+    const wa = screen.getPrimaryDisplay().workArea
+    const w = 220, h = Math.min(wa.height - 40, 44 * callParticipants.length + 12)
+    const x = wa.x + 10, y = Math.round(wa.y + (wa.height - h) / 2)
+    if (!callOverlayWin || callOverlayWin.isDestroyed()) {
+      callOverlayWin = new BrowserWindow({
+        width: w, height: h, x, y,
+        frame: false, transparent: true, resizable: false, movable: false, skipTaskbar: true,
+        alwaysOnTop: true, focusable: false, show: false, hasShadow: false,
+        webPreferences: { sandbox: true, contextIsolation: true, preload: path.join(__dirname, 'call-overlay-preload.cjs') },
+      })
+      callOverlayWin.setIgnoreMouseEvents(true)
+      callOverlayWin.setAlwaysOnTop(true, 'screen-saver')
+      callOverlayWin.setMenuBarVisibility(false)
+      callOverlayWin.loadFile(path.join(__dirname, 'call-overlay.html'))
+    } else {
+      callOverlayWin.setBounds({ x, y, width: w, height: h })
+    }
+    const send = () => { try { callOverlayWin.webContents.send('ponoi-call-overlay-data', callParticipants) } catch {} }
+    if (callOverlayWin.webContents.isLoading()) callOverlayWin.webContents.once('did-finish-load', send)
+    else send()
+    if (!callOverlayWin.isVisible()) callOverlayWin.showInactive()
+  } catch {}
+}
+ipcMain.on('ponoi-call-overlay-participants', (_e, list) => {
+  callParticipants = Array.isArray(list) ? list : []
+  updateCallOverlay()
+})
 
 // v1.150.0: конец матча (сейчас только CS2 через GSI) — рендерер сам пишет
 // строку в Supabase (game_matches), у него уже есть авторизованный клиент;
@@ -377,14 +426,14 @@ function showGameOverlay(p) {
 ipcMain.on('ponoi-game-overlay', (_e, p) => showGameOverlay(p))
 ipcMain.on('ponoi-overlay-invite', (_e, p) => {
   for (const w of BrowserWindow.getAllWindows()) {
-    if (w === overlayWin || w === gameToastWin) continue
+    if (w === overlayWin || w === gameToastWin || w === callOverlayWin) continue
     try { w.webContents.send('ponoi-overlay-invite', p) } catch {}
   }
 })
 ipcMain.on('ponoi-overlay-open', () => {
   try { if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy() } catch {}
   for (const w of BrowserWindow.getAllWindows()) {
-    if (w === overlayWin || w === gameToastWin) continue
+    if (w === overlayWin || w === gameToastWin || w === callOverlayWin) continue
     try { w.show(); w.focus() } catch {}
     break
   }
@@ -399,7 +448,7 @@ ipcMain.on('ponoi-badge', (_e, p) => {
   try {
     const n = Math.max(0, Number(p && p.count) || 0)
     for (const w of BrowserWindow.getAllWindows()) {
-      if (w === overlayWin || w === gameToastWin || w === splash) continue
+      if (w === overlayWin || w === gameToastWin || w === splash || w === callOverlayWin) continue
       if (n > 0 && p && typeof p.dataUrl === 'string') {
         const img = nativeImage.createFromDataURL(p.dataUrl)
         if (!img.isEmpty()) {
@@ -456,7 +505,7 @@ ipcMain.handle('ponoi-set-icon', (_e, p) => {
       // Сброс к стандартной иконке.
       const def = defaultAppIcon()
       for (const w of BrowserWindow.getAllWindows()) {
-        if (w === overlayWin || w === gameToastWin || w === splash) continue
+        if (w === overlayWin || w === gameToastWin || w === splash || w === callOverlayWin) continue
         try { w.setIcon(def) } catch {}
       }
       try { tray?.setImage(def) } catch {}
@@ -467,7 +516,7 @@ ipcMain.handle('ponoi-set-icon', (_e, p) => {
     const img = nativeImage.createFromDataURL(dataUrl)
     if (img.isEmpty()) return { ok: false }
     for (const w of BrowserWindow.getAllWindows()) {
-      if (w === overlayWin || w === gameToastWin || w === splash) continue
+      if (w === overlayWin || w === gameToastWin || w === splash || w === callOverlayWin) continue
       try { w.setIcon(img) } catch {}
     }
     try { tray?.setImage(img) } catch {}
@@ -1206,7 +1255,7 @@ app.whenReady().then(() => {
       let updateReady = false
       const maybeSilentInstall = () => {
         if (!updateReady || quitting) return false
-        const wins = BrowserWindow.getAllWindows().filter(w => w !== splash && w !== overlayWin && w !== gameToastWin && !w.isDestroyed())
+        const wins = BrowserWindow.getAllWindows().filter(w => w !== splash && w !== overlayWin && w !== gameToastWin && w !== callOverlayWin && !w.isDestroyed())
         if (wins.some(w => w.isVisible())) return false
         if (wins.some(w => { try { return w.webContents.isCurrentlyAudible() } catch { return false } })) return false
         writePrefs({ ...readPrefs(), resumeHidden: true })

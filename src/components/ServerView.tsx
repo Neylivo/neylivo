@@ -70,7 +70,7 @@ function ChName({ c, srv }: { c: Channel; srv?: any }) {
   return <span className="ch-nm"><Icon name={icon} size={18} />{s.emo && <><span className="ch-emo">{s.emo}</span><span className="ch-vbar" /></>}<span className={'ch-txt' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{s.rest}</span></span>
 }
 
-function VoiceConn({ room, onSpeak, sinks }: { room: Room; onSpeak: (ids: string[]) => void; sinks: boolean }) {
+function VoiceConn({ room, onSpeak, sinks, meName }: { room: Room; onSpeak: (ids: string[]) => void; sinks: boolean; meName?: string }) {
   useEffect(() => {
     room.localParticipant.setMicrophoneEnabled(true).catch(() => {})
     fadeInCall()
@@ -89,7 +89,7 @@ function VoiceConn({ room, onSpeak, sinks }: { room: Room; onSpeak: (ids: string
   }, [room])
   // v1.130.0: когда открыта панель голосового канала, звук воспроизводит её
   // собственный <Sinks> — здесь глушим свой, чтобы не было двойного звука.
-  return sinks ? <Sinks room={room} /> : null
+  return sinks ? <Sinks room={room} meName={meName} /> : null
 }
 
 export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
@@ -983,7 +983,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           table: 'messages', channelIds: channels.map(c => c.id),
           channelName: id => channels.find(c => c.id === id)?.name ?? '?',
         }} />}
-        {voice && <VoiceConn room={voice.room} sinks={!voicePanel} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
+        {voice && <VoiceConn room={voice.room} sinks={!voicePanel} meName={username} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
         {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }}
           onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
         {connecting && !voice && voicePanel && <div className="c2-wrap c2-connecting">

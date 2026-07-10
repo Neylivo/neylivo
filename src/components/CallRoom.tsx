@@ -96,7 +96,7 @@ function AudioSink({ p }: { p: any }) {
   return null
 }
 
-export function Sinks({ room }: { room: Room }) {
+export function Sinks({ room, meName }: { room: Room; meName?: string }) {
   const [, bump] = useState(0)
   useEffect(() => {
     const re = () => bump(v => v + 1)
@@ -105,6 +105,39 @@ export function Sinks({ room }: { room: Room }) {
     return () => { room.off(RoomEvent.ParticipantConnected, re); room.off(RoomEvent.ParticipantDisconnected, re) }
   }, [room])
   const remotes: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
+
+  // v1.196.0: оверлей поверх игры со списком собеседников — Sinks смонтирован
+  // ровно тогда, когда звонок идёт, а сам экран звонка не открыт (то есть как
+  // раз может играть в игру), поэтому пуш сюда, не в CallRoom. Позиция/видимость
+  // оверлея решает main-процесс (нужна ещё активная игра, см. electron/main.cjs).
+  useEffect(() => {
+    const d = (window as any).ponoiDesktop
+    if (!d?.setCallOverlayParticipants) return
+    let raf = 0
+    const push = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const all = [room.localParticipant as any, ...remotes]
+        const list = all.map(p => ({
+          name: p === room.localParticipant ? (meName || p.name || p.identity || '?') : (p.name || p.identity || '?'),
+          speaking: !!p.isSpeaking,
+          micOn: p.isMicrophoneEnabled !== false,
+        }))
+        d.setCallOverlayParticipants(list)
+      })
+    }
+    push()
+    const evs = [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected, RoomEvent.ActiveSpeakersChanged,
+      RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished] as any[]
+    evs.forEach(e => room.on(e, push))
+    return () => {
+      evs.forEach(e => room.off(e, push))
+      cancelAnimationFrame(raf)
+      try { d.setCallOverlayParticipants([]) } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, meName, remotes.length])
+
   return <>{remotes.map(p => <AudioSink key={p.sid || p.identity} p={p} />)}</>
 }
 

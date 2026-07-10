@@ -51,4 +51,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   openExternal: (url) => ipcRenderer.send('ponoi-open-external', url),
   // v1.192.0: «Поделиться игрой» — Terraria (нет диплинк-протокола, запускаем сами).
   terrariaLaunch: (ip, port) => ipcRenderer.invoke('ponoi-terraria-launch', { ip, port }),
+  // v1.196.0: список собеседников звонка для оверлея поверх игры — main сам решит,
+  // показывать ли (нужно ещё, чтобы была активна игра), см. electron/main.cjs.
+  setCallOverlayParticipants: (list) => ipcRenderer.send('ponoi-call-overlay-participants', list),
 })

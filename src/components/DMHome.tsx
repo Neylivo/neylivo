@@ -749,7 +749,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
   return (
     <>
-      {call && !callRoomShown && <Sinks room={call} />}
+      {call && !callRoomShown && <Sinks room={call} meName={username} />}
       <aside className="dm-side">
         <div className="dm-top">
           <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>Найти или начать беседу</button>
