@@ -26,6 +26,15 @@ export function parseYouTubeId(u: string): string | null {
 }
 export function isYouTubeUrl(u: string) { return parseYouTubeId(u) !== null }
 
+const ANY_URL_RE = /https?:\/\/[^\s<>]+[^\s<>.,)!?;:'"]/g
+
+/** Первая ссылка на видео YouTube в тексте сообщения (для карточки-превью в чате). */
+export function findYouTubeLink(text?: string | null): string | null {
+  if (!text) return null
+  const matches = text.match(ANY_URL_RE)
+  return matches?.find(isYouTubeUrl) ?? null
+}
+
 /** Название/автор/обложка через YouTube oEmbed (без API-ключа). */
 export async function ytMeta(url: string): Promise<ScMeta | null> {
   if (cache[url]) return cache[url]

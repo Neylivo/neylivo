@@ -12,6 +12,9 @@ import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 import { buildMsgLink, type MsgLinkCtx } from '../lib/deepLink'
+import { findYouTubeLink, ytMeta } from '../music/sources'
+import type { ScMeta } from '../music/soundcloud'
+import { guardLink } from '../lib/linkguard'
 
 // v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
@@ -120,6 +123,30 @@ function GifEmbed({ url, meta }: { url: string; meta?: import('./Lightbox').Ligh
   if (src === undefined) return <div className="gif-embed-ph" />
   if (src === null) return null   // резолв не удался — текст-ссылка остаётся видимой
   return <Attachment url={src} type="image" meta={meta} />
+}
+
+// Ссылка на видео YouTube в тексте — показываем карточку-превью под сообщением (как в Discord):
+// красная полоса слева, лейбл «YouTube», канал, кликабельное название, превьюшка с кнопкой play.
+function YouTubeEmbed({ url }: { url: string }) {
+  const [meta, setMeta] = useState<ScMeta | null | undefined>(undefined)
+  useEffect(() => {
+    let on = true
+    ytMeta(url).then(m => { if (on) setMeta(m) })
+    return () => { on = false }
+  }, [url])
+  if (meta === undefined) return <div className="yt-embed-ph" />
+  if (meta === null) return null   // не удалось получить метаданные — текст-ссылка остаётся видимой
+  return (
+    <div className="yt-embed">
+      <div className="yt-embed-eyebrow">YouTube</div>
+      {meta.author && <div className="yt-embed-author">{meta.author}</div>}
+      <a className="yt-embed-title" href={url} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, url)}>{meta.title}</a>
+      {meta.art && <a className="yt-embed-thumb" href={url} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, url)}>
+        <img src={meta.art} alt="" draggable={false} />
+        <span className="yt-embed-play"><Icon name="play" size={22} /></span>
+      </a>}
+    </div>
+  )
 }
 
 // Сообщение состоит только из ссылки на гифку — прячем текст-ссылку, оставляем саму гифку (как в Discord).
@@ -381,6 +408,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   editable={m.author === currentUser} attachMeta={m.attach_meta}
                   onEditAttachment={onEditAttachment ? (i, patch) => onEditAttachment(m.id, i, patch) : undefined} />
                 {!m.attach_url && findGifLink(m.content) && <GifEmbed url={findGifLink(m.content)!} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
+                {!m.attach_url && !findGifLink(m.content) && findYouTubeLink(m.content) && <YouTubeEmbed url={findYouTubeLink(m.content)!} />}
                 <span className="tg-time" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {

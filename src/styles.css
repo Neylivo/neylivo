@@ -3355,6 +3355,20 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 /* Заглушка, пока страница Tenor/Giphy резолвится в прямой URL гифки */
 @keyframes gifPh { from { opacity: .45 } to { opacity: .9 } }
 .gif-embed-ph { width: 220px; height: 150px; margin-top: 4px; border-radius: 8px; background: rgba(255,255,255,.07); animation: gifPh .9s ease-in-out infinite alternate; }
+
+/* v1.169.0: карточка-превью ссылки на видео YouTube в чате — как embed в Discord */
+.yt-embed-ph { width: 300px; height: 168px; margin-top: 4px; border-radius: 4px; background: rgba(255,255,255,.06); border-left: 4px solid rgba(255,255,255,.12); animation: gifPh .9s ease-in-out infinite alternate; }
+.yt-embed { margin-top: 4px; max-width: 432px; padding: 8px 16px 16px; border-radius: 4px; background: #2b2d31; border-left: 4px solid #ff0000; }
+.yt-embed-eyebrow { font-size: 12px; font-weight: 400; color: #949ba4; margin-top: 8px; }
+.yt-embed-author { font-size: 15px; font-weight: 700; color: #f2f3f5; margin-top: 4px; }
+.yt-embed-title { display: block; font-size: 15px; font-weight: 700; color: #00a8fc; text-decoration: none; margin-top: 4px; }
+.yt-embed-title:hover { text-decoration: underline; }
+.yt-embed-thumb { position: relative; display: block; margin-top: 8px; border-radius: 4px; overflow: hidden; max-width: 400px; }
+.yt-embed-thumb img { display: block; width: 100%; height: auto; }
+.yt-embed-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; transition: background .12s ease; }
+.yt-embed-play::before { content: ''; position: absolute; width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,.6); transition: background .12s ease; }
+.yt-embed-play svg { position: relative; }
+.yt-embed-thumb:hover .yt-embed-play::before { background: rgba(0,0,0,.75); }
 /* Режим игры (плейс Roblox) — серой строкой под названием, как state в Discord */
 .mpg-mode { font-size: 12px; color: #b5bac1; margin-top: 1px; max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .act-mode { font-size: 13px; color: #b5bac1; margin-top: 1px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
