@@ -728,6 +728,22 @@ body { font-size: var(--font-px, 16px); }
 .gpick-row:hover { background:rgba(255,255,255,.06); }
 .gpick-row .act-cover-sm { width:40px; height:40px; }
 .modal-result:hover { background:rgba(255,255,255,.05); }
+/* v1.171.0: WidgetGamesModal — то же окно, что и GamePickerModal, но с множественным
+   выбором: строка подсвечена и с галочкой, если игра уже добавлена; чипы выбранных
+   сверху, клик по чипу или по подсвеченной строке — убирает игру. */
+.wgm { width:460px; }
+.wgm-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+.wgm-chip { display:flex; align-items:center; gap:6px; background:#2b2d31; border-radius:14px; padding:4px 8px 4px 4px; cursor:pointer; transition:background .12s ease; }
+.wgm-chip:hover { background:#3a3d44; }
+.wgm-chip img, .wgm-chip-ph { width:20px; height:20px; border-radius:50%; object-fit:cover; flex:none; }
+.wgm-chip-ph { display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); color:#b5bac1; }
+.wgm-chip-nm { font-size:12.5px; color:#dbdee1; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wgm-chip svg { color:var(--mut); flex:none; }
+.gpick-row.on { background:rgba(88,101,242,.14); }
+.gpick-row.on:hover { background:rgba(88,101,242,.22); }
+.gpick-row.disabled { opacity:.4; cursor:not-allowed; }
+.gpick-row.disabled:hover { background:none; }
+.gpick-check { margin-left:auto; flex:none; width:26px; height:26px; border-radius:50%; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; }
 .modal-tabs { display:flex; gap:8px; justify-content:center; margin:16px 0; }
 .modal-tab { background:var(--bg3); border:none; color:var(--tx); padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:14px; }
 .modal-tab.on { background:var(--brand); color:#fff; }
@@ -1832,14 +1848,6 @@ body.no-anim .member-typing i { animation:none; }
 .pc-skel { position:absolute; top:10px; left:12px; display:flex; flex-direction:column; gap:6px; z-index:1; }
 .pc-skel i { display:block; width:64px; height:7px; border-radius:4px; background:rgba(255,255,255,.1); }
 .pc-skel i:last-child { width:40px; }
-/* v1.169.0: широкая плитка «Хочу поиграть» — на всю ширину сетки, с рядом мини-обложек. */
-.pc-widget.wide { grid-column:1 / -1; height:88px; align-items:center; justify-content:flex-start; gap:12px; padding:12px 16px; }
-.pc-widget.wide .pc-widget-plus { position:relative; top:auto; left:auto; transform:none; flex:none; }
-.pc-widget.wide .pc-widget-nm { position:relative; }
-.pc-widget-stack { display:flex; align-items:center; margin-right:-6px; }
-.pc-widget-stack img, .pc-widget-stack-ph { width:52px; height:52px; border-radius:8px; object-fit:cover; margin-right:-14px; border:2px solid #15161c; background:#20222b; box-shadow:0 2px 8px rgba(0,0,0,.4); }
-.pc-widget-stack img.ph { opacity:.4; }
-.pc-widget-stack-ph { display:flex; align-items:center; justify-content:center; color:#b5bac1; }
 .pc-wmanage { display:flex; align-items:center; gap:6px; margin:16px auto 0; background:none; border:none; color:var(--mut); font-size:12.5px; cursor:pointer; padding:6px 10px; border-radius:6px; transition:background .12s ease, color .12s ease; }
 .pc-wmanage:hover { background:rgba(255,255,255,.06); color:#fff; }
 

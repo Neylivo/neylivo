@@ -7,11 +7,13 @@ import type { ProfilePrefs } from '../lib/profilePrefs'
 import type { WidgetField } from './ProfileCard'
 
 const RECO_DISMISS_KEY = 'ponoi_widget_reco_dismissed'
+const WIDGET_MAX = 8
 
 // v1.169.0: «Ваши виджеты» — экран управления виджетами доски профиля, как в
 // Discord (Настройки → Профиль → Виджеты): по секции на тип виджета, добавление
-// через тот же GamePickerModal (передаётся наружу через onAdd), удаление — крестиком
-// на чипе. «Рекомендовано для вас» — под «Текущими играми», как в примере.
+// открывает единое окошко «добавить/убрать до 8 игр» (WidgetGamesModal, передаётся
+// наружу через onAdd), удаление — крестиком прямо на чипе. «Рекомендовано для вас» —
+// под «Мои любимые игры», как в примере.
 function WidgetSection({ title, sub, games, covers, cap, onAdd, onRemove }:
   { title: string; sub?: string; games: string[]; covers: Record<string, string | null>; cap: number
     onAdd: () => void; onRemove: (g: string) => void }) {
@@ -76,29 +78,25 @@ export function ProfileWidgetsModal({ pp, covers, onAdd, onAddDirect, onRemove, 
           games={pp.favGames[0] ? [pp.favGames[0]] : []} covers={covers} cap={1}
           onAdd={() => onAdd('favGames', 'single')} onRemove={() => onRemove('favGames', pp.favGames[0])} />
 
-        <WidgetSection title="Мои любимые игры" sub="Добавьте до 5 игр, которые вам особенно нравятся."
-          games={pp.favGames.slice(1)} covers={covers} cap={5}
+        <WidgetSection title="Мои любимые игры" sub={`Добавьте до ${WIDGET_MAX} игр, которые вам особенно нравятся.`}
+          games={pp.favGames.slice(1)} covers={covers} cap={WIDGET_MAX}
           onAdd={() => onAdd('favGames', 'multi')} onRemove={g => onRemove('favGames', g)} />
-
-        <WidgetSection title="Текущие игры" sub="Добавьте до 5 игр. Этот виджет отобразится в профиле, когда вы добавите хотя бы одну игру."
-          games={pp.playGames} covers={covers} cap={5}
-          onAdd={() => onAdd('playGames', 'multi')} onRemove={g => onRemove('playGames', g)} />
 
         {!recoDismissed && <div className="pwm-reco">
           <div className="pwm-reco-h"><span>Рекомендованы для вас</span>
             <button className="pwm-reco-x" title="Скрыть" onClick={dismissReco}><Icon name="close" size={13} /></button>
           </div>
           <div className="pwm-reco-row">
-            {reco.filter(g => !pp.playGames.includes(g.name)).slice(0, 6).map(g => (
-              <div key={g.name} className="pwm-reco-item" title={'Добавить «' + g.name + '» в «Текущие игры»'} onClick={() => onAddDirect('playGames', g.name)}>
+            {reco.filter(g => !pp.favGames.includes(g.name)).slice(0, 6).map(g => (
+              <div key={g.name} className="pwm-reco-item" title={'Добавить «' + g.name + '» в «Мои любимые игры»'} onClick={() => onAddDirect('favGames', g.name)}>
                 {recoCovers[g.name] ? <img src={recoCovers[g.name]!} alt="" /> : <span className="pwm-reco-ph"><Icon name={gameIconOf(g.name)} size={18} /></span>}
               </div>
             ))}
           </div>
         </div>}
 
-        <WidgetSection title="Хочу поиграть" sub="Добавьте до 5 игр, в которые хотите сыграть — другие увидят это на вашей доске."
-          games={pp.wishGames} covers={covers} cap={5}
+        <WidgetSection title="Хочу поиграть" sub={`Добавьте до ${WIDGET_MAX} игр, в которые хотите сыграть — другие увидят это на вашей доске.`}
+          games={pp.wishGames} covers={covers} cap={WIDGET_MAX}
           onAdd={() => onAdd('wishGames', 'multi')} onRemove={g => onRemove('wishGames', g)} />
       </div>
     </div>

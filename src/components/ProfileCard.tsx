@@ -7,7 +7,7 @@ import { Status, usePresence } from '../lib/presence'
 import { fetchProfile, saveProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { ProfilePet } from './ProfilePet'
-import { recentActivity, popularGames, fetchGameCatalog, type RecentGame, type CatalogGame } from '../lib/activity'
+import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
 import { ClockElapsed } from './ActivityLabel'
 import { mutualFriends } from '../lib/friends'
@@ -25,6 +25,7 @@ import { WallDraw } from './WallDraw'
 import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
 import { GameStatsModal } from './GameStatsModal'
 import { ProfileWidgetsModal } from './ProfileWidgetsModal'
+import { WidgetGamesModal } from './WidgetGamesModal'
 
 function fmtMs(ms: number): string {
   const h = Math.floor(ms / 3600000)
@@ -67,19 +68,19 @@ function labelFromUrl(url: string): string {
 }
 
 export type ProfileTab = 'board' | 'activity' | 'wall' | 'servers' | 'friends'
-export type WidgetField = 'favGames' | 'wishGames' | 'playGames'
+export type WidgetField = 'favGames' | 'wishGames'
 
 // v1.169.0: карточка виджета доски — 1-в-1 как в Discord: арт игры фоном (затемнён
 // слева под подпись), скелетон-полоски сверху (место под статистику, для которой
 // у Ponoi нет источника — так же выглядят непривязанные виджеты и в самом Discord),
 // иконка-ссылка + название снизу. Пустая — «+» по центру и подпись.
-function WidgetTile({ label, games, covers, wide, isMe, onClick }:
-  { label: string; games: string[]; covers: Record<string, string | null>; wide?: boolean; isMe: boolean; onClick: () => void }) {
+function WidgetTile({ label, games, covers, isMe, onClick }:
+  { label: string; games: string[]; covers: Record<string, string | null>; isMe: boolean; onClick: () => void }) {
   const primary = games[0]
   const cover = primary ? covers[primary] : undefined
   const nm = games.length === 0 ? label : games.length === 1 ? games[0] : games[0] + '  +' + (games.length - 1)
   return (
-    <div className={'pc-widget' + (wide ? ' wide' : '') + (cover ? ' has-cover' : '')}
+    <div className={'pc-widget' + (cover ? ' has-cover' : '')}
       style={cover ? { backgroundImage: `linear-gradient(100deg, #1c1e26 30%, transparent 80%), url(${cover})` } : undefined}
       onClick={onClick} title={isMe ? label : undefined}>
       <span className="pc-skel"><i /><i /></span>
@@ -111,7 +112,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [connUrl, setConnUrl] = useState('')
   const favs = pp.favGames
   const wish = pp.wishGames
-  const playing = pp.playGames
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
   const [recent, setRecent] = useState<RecentGame[] | null>(null)
@@ -123,10 +123,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
-  const [gamePicker, setGamePicker] = useState<{ field: WidgetField; mode: 'single' | 'multi' } | null>(null)
+  const [gamePicker, setGamePicker] = useState<{ field: 'favGames'; mode: 'single' } | { field: WidgetField; mode: 'multi' } | null>(null)
   const [widgetCovers, setWidgetCovers] = useState<Record<string, string | null>>({})
   const [widgetsOpen, setWidgetsOpen] = useState(false)
-  const [wishSuggest, setWishSuggest] = useState<CatalogGame[]>([])
 
   useEffect(() => {
     let ok = true
@@ -138,26 +137,14 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     })
     return () => { ok = false }
   }, [userId])
-  // Обложки для виджетов доски («Любимая игра», «Мои любимые игры», «Хочу поиграть»,
-  // «Текущие игры») — тот же общий кэш обложек, что и у «Недавней активности».
+  // Обложки для виджетов доски («Любимая игра», «Мои любимые игры», «Хочу поиграть») —
+  // тот же общий кэш обложек, что и у «Недавней активности».
   useEffect(() => {
     let ok = true
-    for (const n of [...favs, ...wish, ...playing]) if (n) resolveCover(n).then(u => { if (ok) setWidgetCovers(c => ({ ...c, [n]: u })) })
+    for (const n of [...favs, ...wish]) if (n) resolveCover(n).then(u => { if (ok) setWidgetCovers(c => ({ ...c, [n]: u })) })
     return () => { ok = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [favs.join('|'), wish.join('|'), playing.join('|')])
-  // Плитка «Хочу поиграть», пока пустая, показывает 3 популярные на Ponoi игры
-  // приглушённым фоном — как подсказку, что туда можно добавить (как в Discord).
-  useEffect(() => {
-    if (wish.length > 0 || !isMe) return
-    let ok = true
-    fetchGameCatalog(undefined, 3).then(gs => {
-      if (!ok) return
-      setWishSuggest(gs)
-      for (const g of gs) resolveCover(g.name).then(u => { if (ok) setWidgetCovers(c => ({ ...c, [g.name]: u })) })
-    })
-    return () => { ok = false }
-  }, [wish.length, isMe])
+  }, [favs.join('|'), wish.join('|')])
   // «Недавняя активность» за 30 дней + метки «Популярное» + обложки из общего кэша.
   useEffect(() => {
     let ok = true
@@ -212,15 +199,19 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     if (v) notes[userId] = v; else delete notes[userId]
     patchUserPrefs({ notes })
   }
+  const WIDGET_MAX = 8   // v1.171.0: «Мои любимые игры» / «Хочу поиграть» — до 8 игр, как в Discord
   function saveWidgetField(field: WidgetField, next: string[]) {
     setPp(p => ({ ...p, [field]: next }))
     saveProfile(userId, { [field]: next } as Partial<ProfilePrefs>)
   }
   function removeWidgetGame(field: WidgetField, g: string) { saveWidgetField(field, pp[field].filter(x => x !== g)) }
-  function addWidgetGame(field: WidgetField, g: string) {
-    const cur = pp[field]
-    if (cur.includes(g)) return
-    saveWidgetField(field, [...cur, g].slice(0, field === 'favGames' ? 6 : 5))
+  // «Мои любимые игры» живёт в том же массиве, что и «Любимая игра» (favGames[0] — она,
+  // favGames[1:] — список), поэтому переключение элемента списка должно беречь [0].
+  function toggleMulti(field: WidgetField, g: string) {
+    const head = field === 'favGames' && pp.favGames[0] ? [pp.favGames[0]] : []
+    const rest = field === 'favGames' ? pp.favGames.slice(1) : pp[field]
+    const nextRest = rest.includes(g) ? rest.filter(x => x !== g) : (rest.length < WIDGET_MAX ? [...rest, g] : rest)
+    saveWidgetField(field, [...head, ...nextRest])
   }
   function addIntegration() {
     const raw = connUrl.trim()
@@ -234,15 +225,8 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     const next = pp.integrations.filter((_, idx) => idx !== i)
     setPp(p => ({ ...p, integrations: next })); saveProfile(userId, { integrations: next })
   }
-  function pickGame(g: string) {
-    if (!gamePicker) return
-    const { field, mode } = gamePicker
-    const cur = pp[field]
-    const cap = field === 'favGames' ? 6 : 5   // «Любимая игра» (1) + «Мои любимые игры» (5), «Хочу поиграть»/«Текущие игры» — до 5
-    const next = mode === 'single'
-      ? [g, ...cur.slice(1)]
-      : Array.from(new Set([...(cur.length ? cur : ['']), g].filter(Boolean))).slice(0, cap)
-    saveWidgetField(field, next)
+  function pickFav(g: string) {
+    saveWidgetField('favGames', [g, ...pp.favGames.slice(1)])
     setGamePicker(null)
   }
   async function removeDrawing(d: Drawing) {
@@ -319,7 +303,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
           </div>
           <div className="pc-rbody">
             {tab === 'board' && <>
-              {favs.length === 0 && wish.length === 0 && playing.length === 0 && <>
+              {favs.length === 0 && wish.length === 0 && <>
                 <div className="pc-board-h">Персонализируйте свой профиль с помощью виджетов</div>
                 <div className="pc-board-sub">Выберите виджет из библиотеки, чтобы рассказать больше о себе и своих интересах</div>
               </>}
@@ -328,25 +312,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'single' })} />
                 <WidgetTile label="Мои любимые игры" games={favs.slice(1)} covers={widgetCovers} isMe={isMe}
                   onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'multi' })} />
-                <WidgetTile label="Текущие игры" games={playing} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setGamePicker({ field: 'playGames', mode: 'multi' })} />
                 <div className="pc-widget" onClick={() => setTab('wall')} title="Стена росписи">
                   <span className="pc-skel"><i /><i /></span>
                   <span className="pc-widget-plus"><Icon name="edit" size={16} /></span>
                   <span className="pc-widget-nm">Стена росписи</span>
                 </div>
-                <div className="pc-widget wide"
-                  onClick={() => isMe && setGamePicker({ field: 'wishGames', mode: 'multi' })} title={isMe ? 'Хочу поиграть' : undefined}>
-                  <span className="pc-widget-stack">
-                    {(wish.length ? wish : wishSuggest.map(g => g.name)).slice(0, 3).map(n => (
-                      widgetCovers[n]
-                        ? <img key={n} src={widgetCovers[n]!} alt="" className={wish.length ? '' : 'ph'} />
-                        : <span key={n} className="pc-widget-stack-ph"><Icon name={gameIconOf(n)} size={16} /></span>
-                    ))}
-                  </span>
-                  <span className="pc-widget-plus"><Icon name="plus" size={16} /></span>
-                  <span className="pc-widget-nm">{wish.length > 0 && <Icon name="link" size={13} />}{wish.length === 0 ? 'Хочу поиграть' : wish.length === 1 ? wish[0] : wish[0] + '  +' + (wish.length - 1)}</span>
-                </div>
+                <WidgetTile label="Хочу поиграть" games={wish} covers={widgetCovers} isMe={isMe}
+                  onClick={() => isMe && setGamePicker({ field: 'wishGames', mode: 'multi' })} />
               </div>
               {isMe && <button className="pc-wmanage" onClick={() => setWidgetsOpen(true)}><Icon name="gear" size={13} /> Управление виджетами</button>}
             </>}
@@ -450,12 +422,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
         status={statusOf(friendProfile.id)} initialTab="activity" onClose={() => setFriendProfile(null)} />}
-      {gamePicker && <GamePickerModal title={
-          gamePicker.field === 'favGames' ? (gamePicker.mode === 'single' ? 'Любимая игра' : 'Добавить игру в любимые')
-          : gamePicker.field === 'wishGames' ? 'Добавить игру в «Хочу поиграть»' : 'Добавить игру в «Текущие игры»'
-        } onPick={pickGame} onClose={() => setGamePicker(null)} />}
+      {gamePicker?.mode === 'single' && <GamePickerModal title="Любимая игра" onPick={pickFav} onClose={() => setGamePicker(null)} />}
+      {gamePicker?.mode === 'multi' && <WidgetGamesModal
+        title={gamePicker.field === 'favGames' ? 'Мои любимые игры' : 'Хочу поиграть'}
+        games={gamePicker.field === 'favGames' ? favs.slice(1) : wish} max={WIDGET_MAX}
+        onToggle={g => toggleMulti(gamePicker.field, g)} onClose={() => setGamePicker(null)} />}
       {widgetsOpen && <ProfileWidgetsModal pp={pp} covers={widgetCovers}
-        onAdd={(field, mode) => setGamePicker({ field, mode })} onAddDirect={addWidgetGame}
+        onAdd={(field, mode) => setGamePicker({ field, mode } as typeof gamePicker)} onAddDirect={toggleMulti}
         onRemove={removeWidgetGame} onClose={() => setWidgetsOpen(false)} />}
     </div>
   )
