@@ -1823,13 +1823,51 @@ body.no-anim .member-typing i { animation:none; }
 .pc-widget { position:relative; height:104px; border-radius:10px; background:linear-gradient(140deg,#1c1e26,#15161c); border:1px solid rgba(255,255,255,.05); display:flex; align-items:flex-end; padding:12px; cursor:pointer; overflow:hidden; transition:transform .18s cubic-bezier(.34,1.56,.64,1), border-color .15s ease; }
 .pc-widget:hover { transform:translateY(-2px); border-color:rgba(255,255,255,.16); }
 .pc-widget-plus { position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; color:#fff; }
-.pc-widget-nm { position:relative; z-index:1; font-size:13.5px; font-weight:800; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+.pc-widget-nm { position:relative; z-index:1; font-size:13.5px; font-weight:800; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pc-widget-nm svg { flex:none; opacity:.85; }
 /* v1.162.0: обложка игры фоном виджета; без обложки — жанровый значок (тот же, что и в «Активности»). */
-.pc-widget.has-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.6), transparent 65%); }
+.pc-widget.has-cover { background-color:#1c1e26; background-repeat:no-repeat; background-size:auto, cover; background-position:0 0, right center; }
+.pc-widget.has-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.65), transparent 60%); }
 .pc-widget-ph { position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center; color:#b5bac1; }
-.pc-skel { position:absolute; top:10px; left:12px; display:flex; flex-direction:column; gap:6px; }
-.pc-skel i { display:block; width:64px; height:7px; border-radius:4px; background:rgba(255,255,255,.08); }
+.pc-skel { position:absolute; top:10px; left:12px; display:flex; flex-direction:column; gap:6px; z-index:1; }
+.pc-skel i { display:block; width:64px; height:7px; border-radius:4px; background:rgba(255,255,255,.1); }
 .pc-skel i:last-child { width:40px; }
+/* v1.169.0: широкая плитка «Хочу поиграть» — на всю ширину сетки, с рядом мини-обложек. */
+.pc-widget.wide { grid-column:1 / -1; height:88px; align-items:center; justify-content:flex-start; gap:12px; padding:12px 16px; }
+.pc-widget.wide .pc-widget-plus { position:relative; top:auto; left:auto; transform:none; flex:none; }
+.pc-widget.wide .pc-widget-nm { position:relative; }
+.pc-widget-stack { display:flex; align-items:center; margin-right:-6px; }
+.pc-widget-stack img, .pc-widget-stack-ph { width:52px; height:52px; border-radius:8px; object-fit:cover; margin-right:-14px; border:2px solid #15161c; background:#20222b; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+.pc-widget-stack img.ph { opacity:.4; }
+.pc-widget-stack-ph { display:flex; align-items:center; justify-content:center; color:#b5bac1; }
+.pc-wmanage { display:flex; align-items:center; gap:6px; margin:16px auto 0; background:none; border:none; color:var(--mut); font-size:12.5px; cursor:pointer; padding:6px 10px; border-radius:6px; transition:background .12s ease, color .12s ease; }
+.pc-wmanage:hover { background:rgba(255,255,255,.06); color:#fff; }
+
+/* v1.169.0: «Ваши виджеты» — экран управления виджетами доски (модалка). */
+.pwm { width:480px; }
+.pwm-h { font-size:19px; font-weight:800; margin-bottom:16px; }
+.pwm-sect { padding:14px 0; border-top:1px solid rgba(255,255,255,.06); }
+.pwm-sect:first-of-type { border-top:none; padding-top:0; }
+.pwm-sect-h { display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:700; color:#fff; }
+.pwm-sect-add { background:rgba(255,255,255,.08); border:none; color:#fff; width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .12s ease; }
+.pwm-sect-add:hover { background:var(--brand); }
+.pwm-sect-sub { color:var(--mut); font-size:12.5px; margin-top:6px; line-height:1.5; }
+.pwm-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.pwm-chip { position:relative; display:flex; align-items:center; gap:6px; background:#2b2d31; border-radius:6px; padding:5px 8px 5px 5px; max-width:180px; }
+.pwm-chip img, .pwm-chip-ph { width:24px; height:24px; border-radius:4px; object-fit:cover; flex:none; }
+.pwm-chip-ph { display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.08); color:#b5bac1; }
+.pwm-chip-nm { font-size:12.5px; color:#dbdee1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pwm-chip-x { background:none; border:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:2px; border-radius:50%; flex:none; }
+.pwm-chip-x:hover { color:#fff; background:rgba(255,255,255,.12); }
+.pwm-reco { padding:12px 0 4px; }
+.pwm-reco-h { display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:700; color:var(--mut); text-transform:uppercase; letter-spacing:.3px; }
+.pwm-reco-x { background:none; border:none; color:var(--mut); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:3px; border-radius:50%; }
+.pwm-reco-x:hover { color:#fff; background:rgba(255,255,255,.1); }
+.pwm-reco-row { display:flex; gap:8px; margin-top:10px; }
+.pwm-reco-item { width:42px; height:42px; border-radius:8px; overflow:hidden; cursor:pointer; transition:transform .12s ease; flex:none; }
+.pwm-reco-item:hover { transform:translateY(-2px); }
+.pwm-reco-item img { width:100%; height:100%; object-fit:cover; display:block; }
+.pwm-reco-ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#2b2d31; color:#b5bac1; }
 .pc-empty2 { color:var(--mut); text-align:center; margin-top:60px; display:flex; flex-direction:column; align-items:center; gap:8px; }
 .fp-editbtn { margin-top:8px; background:var(--brand); border:none; color:#fff; padding:7px 12px; border-radius:6px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:13px; }
 .fp-editbtn:hover { filter:brightness(1.1); }

@@ -33,6 +33,10 @@ export interface ProfilePrefs {
   // v1.161.0: любимые игры — раньше жили в localStorage (видны только на своём же
   // устройстве владельца), теперь в profiles, как остальные украшения профиля.
   favGames: string[]
+  // v1.169.0: ещё два виджета доски профиля — «Хочу поиграть» и «Текущие игры»
+  // (как в Discord), хранятся точно так же, как favGames.
+  wishGames: string[]
+  playGames: string[]
 }
 
 export interface Integration { label: string; url: string }
@@ -46,6 +50,8 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   nickFont: '', nickFontUrl: null,
   msgFont: '', msgFontUrl: null,
   favGames: [],
+  wishGames: [],
+  playGames: [],
 }
 
 
@@ -85,6 +91,8 @@ function fromRow(r: any): ProfilePrefs {
     msgFont: r.msg_font ?? '',
     msgFontUrl: r.msg_font_url ?? null,
     favGames: Array.isArray(r.fav_games) ? r.fav_games : [],
+    wishGames: Array.isArray(r.wish_games) ? r.wish_games : [],
+    playGames: Array.isArray(r.play_games) ? r.play_games : [],
   }
 }
 
@@ -111,6 +119,8 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.msgFont !== undefined) r.msg_font = p.msgFont || null
   if (p.msgFontUrl !== undefined) r.msg_font_url = p.msgFontUrl
   if (p.favGames !== undefined) r.fav_games = p.favGames
+  if (p.wishGames !== undefined) r.wish_games = p.wishGames
+  if (p.playGames !== undefined) r.play_games = p.playGames
   return r
 }
 
@@ -141,12 +151,14 @@ const COLS_PLATE = COLS_EXT + ', nameplate_url, nameplate_kind, nameplate_outlin
 const COLS_FONT = COLS_PLATE + ', nick_font, nick_font_url'
 const COLS_MSG = COLS_FONT + ', msg_font, msg_font_url'
 const COLS_FAV = COLS_MSG + ', fav_games'
+const COLS_WIDGETS = COLS_FAV + ', wish_games, play_games'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FONT).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_PLATE).eq('id', id).maybeSingle())
