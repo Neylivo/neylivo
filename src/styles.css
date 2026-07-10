@@ -96,7 +96,7 @@ body {
 /* v1.163.0: плавающая дата при скролле старой истории — см. StickyDatePill в MessageList.tsx */
 .sticky-date-pill { position:absolute; left:50%; transform:translateX(-50%); z-index:6; background:rgba(0,0,0,.6); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); color:#dfe7ee; font-size:12px; font-weight:700; padding:5px 14px; border-radius:999px; pointer-events:none; opacity:0; transition:opacity .25s ease; box-shadow:0 4px 14px rgba(0,0,0,.3); }
 .sticky-date-pill.show { opacity:1; }
-.msg { display:flex; gap:16px; padding:6px 12px; border-radius:6px; transition:background .1s ease; animation:msgIn .2s ease both; }
+.msg { display:flex; gap:16px; padding:6px 12px; border-radius:6px; transition:background .1s ease; animation:msgIn .22s var(--ease-out4, ease) both; }
 .msg:hover { background:rgba(0,0,0,.12); }
 .msg-av { width:40px; height:40px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; overflow:hidden; }
 .msg-av img { width:100%; height:100%; object-fit:cover; }
@@ -948,6 +948,7 @@ select.pqs-in { cursor: pointer; }
 .msg-reply-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
 .msg-edited { color: var(--mut); font-size: 10px; margin-left: 5px; }
 .reply-banner { display: flex; align-items: center; gap: 6px; padding: 6px 14px; margin: 0 16px; background: var(--c-panel); border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); font-size: 13px; color: var(--mut); }
+.reply-banner-av { flex: none; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; display: flex; }
 .reply-banner b { color: var(--tx); }
 .reply-banner span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reply-banner button { background: none; border: none; color: var(--mut); cursor: pointer; display: inline-flex; margin-left: auto; }

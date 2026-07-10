@@ -6,6 +6,7 @@ import { uploadWithProgress, isImage, isVideo } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
+import { Avatar } from './Avatar'
 import { Lightbox } from './Lightbox'
 import { CodeFileCard, isCodeFile } from './CodeFileCard'
 import { useSettings } from '../lib/settings'
@@ -64,7 +65,7 @@ function applySlash(t: string): string {
 
 export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
-    replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void;
+    replyingTo?: { author: string; preview: string; avatarUrl?: string | null } | null; onCancelReply?: () => void; onType?: () => void;
     mentionables?: string[]; draftKey?: string
     // v1.177.0: редактирование сообщения — как в Discord, текст загружается прямо
     // в строку набора вместо инлайн-текстареи внутри самого сообщения.
@@ -418,7 +419,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             <button type="button" title="Отменить (Esc)" onClick={() => onCancelEdit?.()}><Icon name="close" size={14} /></button>
           </div>
         : replyingTo && <div className="reply-banner">
-            <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
+            <Icon name="reply" size={14} />
+            <span className="reply-banner-av"><Avatar name={replyingTo.author} url={replyingTo.avatarUrl} size={16} /></span>
+            Ответ <b>{replyingTo.author}</b>
             <span>{replyingTo.preview}</span>
             <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
           </div>}

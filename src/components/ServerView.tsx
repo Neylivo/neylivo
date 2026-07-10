@@ -142,7 +142,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [chSettings, setChSettings] = useState<Channel | null>(null)
   const [editProfile, setEditProfile] = useState(false)
   const [hideMuted, setHideMuted] = useState(() => localStorage.getItem('ponoi_hide_muted') === '1')
-  const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
+  const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string; avatarUrl?: string | null } | null>(null)
   // v1.177.0: редактирование сообщения — текст живёт в композере, как в Discord.
   const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
@@ -677,11 +677,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   // v1.66.0: мгновенная отправка (как в Discord) — сообщение появляется в ленте
   // сразу, сеть догоняет в фоне; при ошибке черновик убирается с тостом.
+  // v1.179.0: замена временного сообщения настоящим (пришедшим по realtime раньше,
+  // чем ответ на сам insert) теряла _localId — React видел смену ключа (tmp-id -> id
+  // с сервера), размонтировал и заново монтировал узел, анимация появления
+  // проигрывалась второй раз подряд («дёргается»). Переносим _localId со старого
+  // временного сообщения на новое, чтобы ключ не менялся.
   function mergeIncoming(list: Message[], msg: Message): Message[] {
     if (list.some(x => x.id === msg.id)) return list.map(x => x.id === msg.id ? msg : x)
     if (msg.author === user?.id) {
       const ti = list.findIndex(x => (x as any)._tmp && x.content === msg.content)
-      if (ti >= 0) { const c = list.slice(); c[ti] = msg; return c }
+      if (ti >= 0) { const c = list.slice(); c[ti] = { ...msg, _localId: (list[ti] as any)._localId ?? list[ti].id } as any; return c }
     }
     return [...list, msg]
   }
@@ -947,7 +952,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
-            onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) }); setEditingMsg(null) }}
+            onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120), avatarUrl: m.author_avatar }); setEditingMsg(null) }}
             onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) setChRead(curChannelRef.current.id, new Date(m.created_at).getTime() - 1) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
@@ -960,7 +965,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <TypingIndicator typers={typers} />
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
-          replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
+          replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
       </main>
