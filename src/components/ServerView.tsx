@@ -21,7 +21,7 @@ import { useUserFonts } from '../lib/userFonts'
 import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer } from '../lib/servers'
 import { CallRoom, Sinks } from './CallRoom'
-import { joinRoom, Room, RoomEvent } from '../lib/livekit'
+import { joinRoom, Room, RoomEvent, DisconnectReason } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
 import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, editMessage, updateAttachment } from '../lib/reactions'
 import type { RxSummary, AttachPatch } from '../lib/reactions'
@@ -248,6 +248,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // При размонтировании выходим из голоса.
   // eslint-disable-next-line
   useEffect(() => () => { try { voiceRef.current?.room.disconnect() } catch {} }, [])
+
+  // v1.176.0: баг — «отключено» слушал только CallRoom (открытая панель звонка);
+  // если комната отваливалась сама (сеть, кик, закрытие сервера) со свёрнутой
+  // панелью, «подключён» так и оставался висеть — иконка под каналом не гасла.
+  // Теперь это ловится независимо от того, открыта ли панель звонка.
+  useEffect(() => {
+    if (!voice) return
+    const room = voice.room
+    const onDisc = (reason?: DisconnectReason) => {
+      if (reason === DisconnectReason.CLIENT_INITIATED) return   // сами вышли — leaveVoice() уже всё почистил
+      setVoice(null); setVoicePanel(false); setSpeaking({})
+      untrackVoice()
+    }
+    room.on(RoomEvent.Disconnected, onDisc)
+    return () => { room.off(RoomEvent.Disconnected, onDisc) }
+  }, [voice])
 
   async function loadMembers() { setMembers(await listMembers(server.id)) }
   async function loadRoles() { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
@@ -524,6 +540,25 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     loadChannels()
   }
 
+  // v1.176.0: untrack() ждёт круговой рейс до presence-канала прежде чем «sync»
+  // уберёт твой же бейдж из-под голосового канала — до этого момента твоя
+  // аватарка продолжала висеть под каналом, хотя ты уже вышел. Чистим свою
+  // запись из voiceUsers сразу же, не дожидаясь round-trip.
+  function untrackVoice() {
+    voicePresRef.current?.untrack()
+    if (!user) return
+    setVoiceUsers(prev => {
+      let changed = false
+      const next: typeof prev = {}
+      for (const k of Object.keys(prev)) {
+        const filtered = prev[k].filter(u => u.userId !== user.id)
+        if (filtered.length !== prev[k].length) changed = true
+        next[k] = filtered
+      }
+      return changed ? next : prev
+    })
+  }
+
   // Вход в голосовой канал (v1.30.0, как в Discord): никакого экрана звонка —
   // просто подключаемся, появляемся под каналом у всех и в панели над профилем.
   async function joinVoice(c: Channel) {
@@ -550,7 +585,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       if (joinSeq.current !== seq) return
       toastErr(e.message ?? String(e))
       setVoicePanel(false)
-      voicePresRef.current?.untrack()
+      untrackVoice()
     } finally {
       if (joinSeq.current === seq) setConnecting(null)
     }
@@ -563,7 +598,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setConnecting(null)
     setVoicePanel(false)
     setSpeaking({})
-    voicePresRef.current?.untrack()
+    untrackVoice()
   }
 
   async function toggleVMic() {
@@ -659,7 +694,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         return
       }
       const real = data as Message
-      setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? real : x))
+      setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
       sendPush(targets, username + ' \u2014 #' + chName, t || 'Вложение', '/')
     })
   }

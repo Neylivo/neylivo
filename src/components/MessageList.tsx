@@ -43,6 +43,10 @@ export interface UiMessage {
   reply_author?: string | null
   reply_preview?: string | null
   edited?: boolean
+  // v1.176.0: React-ключ, стабильный поверх смены id при подтверждении отправки
+  // (tmp-id -> настоящий id с сервера) — без него узел сообщения на секунду
+  // размонтировался и анимация появления проигрывалась второй раз.
+  _localId?: string
 }
 
 import { Em } from '../lib/twemoji'
@@ -307,7 +311,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           lastDay = sysDay
           lastAuthor = ''   // системная строка разрывает группировку сообщений
           return (
-            <Fragment key={m.id}>
+            <Fragment key={m._localId ?? m.id}>
               {showSysDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
               {sys.type === 'invite' ? (() => {
                 // v1.81.0: карточка-приглашение 1-в-1 как в Discord: баннер,
@@ -374,7 +378,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         const fwd = parseFwd(m.content)
         const uf: UserFonts = (settings.otherFonts || m.author === currentUser) ? fontsOf(m.author) : {}
         return (
-          <Fragment key={m.id}>
+          <Fragment key={m._localId ?? m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
             <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '')}

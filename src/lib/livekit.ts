@@ -1,4 +1,4 @@
-import { Room, RoomEvent, Track, DisconnectReason, LocalTrackPublication, LocalAudioTrack, VideoPresets } from 'livekit-client'
+import { Room, RoomEvent, Track, DisconnectReason, LocalTrackPublication, LocalAudioTrack, VideoPresets, createLocalAudioTrack } from 'livekit-client'
 import { supabase } from './supabase'
 
 // v1.71.0: AI-шумоподавление Krisp — то же, что использует Discord: отсекает
@@ -42,9 +42,16 @@ async function getToken(roomName: string, identity: string, name: string): Promi
   return out
 }
 
+// v1.176.0: раньше микрофон захватывался ТОЛЬКО после того, как комната уже
+// подключилась — токен, коннект и getUserMedia шли строго друг за другом, отсюда
+// секунды на ровном месте (диалог разрешения браузера и захват устройства
+// блокировали весь остальной путь). Теперь захват микрофона стартует СРАЗУ,
+// параллельно с получением токена и коннектом к LiveKit — как только комната
+// готова, уже захваченная дорожка публикуется напрямую (без повторного
+// getUserMedia, который делает setMicrophoneEnabled). Экономит секунды,
+// особенно на первом входе в звонок за сессию.
 export async function joinRoom(roomName: string, identity: string, name: string): Promise<Room> {
   const tokenKey = roomName + '|' + identity
-  let { token, url } = await getToken(roomName, identity, name)
   // v1.64.0: максимальное качество звонка — подавление эха/шума и автогромкость,
   // высокобитрейтный стерео-звук (RED + DTX), камера 1080p с simulcast.
   // v1.80.0: как в Discord — кодек VP9 (та же картинка при меньшем битрейте,
@@ -55,10 +62,14 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   // применяются сразу при входе в звонок.
   const savedMic = localStorage.getItem('ponoi_dev_mic') || undefined
   const savedCam = localStorage.getItem('ponoi_dev_cam') || undefined
+  const audioOpts = { deviceId: savedMic, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  // Не await — стартует параллельно с получением токена/коннектом ниже.
+  const micPromise = createLocalAudioTrack(audioOpts).catch(() => null)
+  let { token, url } = await getToken(roomName, identity, name)
   const room = new Room({
     adaptiveStream: { pixelDensity: 'screen' },
     dynacast: true,
-    audioCaptureDefaults: { deviceId: savedMic, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audioCaptureDefaults: audioOpts,
     videoCaptureDefaults: { deviceId: savedCam, resolution: VideoPresets.h1080.resolution },
     publishDefaults: {
       dtx: true,
@@ -80,18 +91,27 @@ export async function joinRoom(roomName: string, identity: string, name: string)
     ;({ token, url } = await getToken(roomName, identity, name))
     await room.connect(url, token)
   }
-  // v1.113.0: микрофон включается сразу при входе в звонок. Раньше это делал каждый
-  // экран сам, и любой сбой (занятое устройство, медленный ответ на разрешение)
-  // тихо оставлял микрофон выключенным. Теперь — до нескольких попыток с паузой.
-  // v1.152.0: пауза укорочена (500 -> 200мс), попыток больше (3 -> 4) — тот же
-  // запас надёжности, но заметно быстрее в типичном случае, когда устройство
-  // освобождается почти сразу.
-  for (let i = 0; i < 4; i++) {
-    try { await room.localParticipant.setMicrophoneEnabled(true); break }
-    catch { await new Promise(r => setTimeout(r, 200)) }
+  const micTrack = await micPromise
+  if (micTrack) {
+    try { await room.localParticipant.publishTrack(micTrack, { source: Track.Source.Microphone }) }
+    catch { micTrack.stop(); await enableMicWithRetry(room) }
+  } else {
+    // Параллельный захват не удался (устройство было занято/отказано) — пробуем
+    // ещё раз тем же путём, что и раньше: до нескольких попыток с паузой.
+    await enableMicWithRetry(room)
   }
   ;(room as any).__ponoiInit = true
   return room
+}
+
+// v1.152.0: пауза укорочена (500 -> 200мс), попыток больше (3 -> 4) — тот же
+// запас надёжности, но заметно быстрее в типичном случае, когда устройство
+// освобождается почти сразу.
+async function enableMicWithRetry(room: Room) {
+  for (let i = 0; i < 4; i++) {
+    try { await room.localParticipant.setMicrophoneEnabled(true); return }
+    catch { await new Promise(r => setTimeout(r, 200)) }
+  }
 }
 
 export { Room, RoomEvent, Track, DisconnectReason }
