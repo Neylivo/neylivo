@@ -121,19 +121,28 @@ async function modExists(supabaseUrl, sha1) {
 async function uploadMod({ supabaseUrl, anonKey, accessToken, sha1, filename }) {
   if (await modExists(supabaseUrl, sha1)) return { skipped: true }
   const filepath = path.join(mcRoot(), 'mods', filename)
+  const size = fs.statSync(filepath).size
   const stream = fs.createReadStream(filepath)
+  // content-length обязателен: без него Node-fetch льёт стрим как
+  // Transfer-Encoding: chunked, а Storage API Supabase на этом эндпоинте
+  // такие запросы отклоняет с HTTP 400 (в отличие от uploadWithProgress()
+  // в src/lib/storage.ts — там XHR шлёт File/Blob с уже известной длиной).
   const res = await fetch(supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/modfiles/' + sha1 + '.jar', {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + accessToken,
       apikey: anonKey,
       'content-type': 'application/java-archive',
+      'content-length': String(size),
       'x-upsert': 'true',
     },
     body: stream,
     duplex: 'half',
   })
-  if (!res.ok) throw new Error('upload failed: HTTP ' + res.status)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error('upload failed: HTTP ' + res.status + (body ? ' — ' + body.slice(0, 300) : ''))
+  }
   return { skipped: false }
 }
 
