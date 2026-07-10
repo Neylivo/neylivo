@@ -229,6 +229,9 @@ interface Props {
   nameOf?: (userId: string) => string | undefined
   // Цвет имени автора (цветные роли).
   colorOf?: (userId: string) => string | undefined
+  // v1.174.0: значок роли рядом с ником в сообщении — как в Discord, значок высшей
+  // роли автора среди тех его ролей, у которых значок вообще есть.
+  iconOf?: (userId: string) => string | undefined
   // «Отметить как непрочитанное» — ставит разделитель НОВОЕ на это сообщение.
   onMarkUnread?: (m: UiMessage) => void
   // Контекст (сервер+канал или ЛС) для «Скопировать ссылку на сообщение» — без него ссылка
@@ -236,7 +239,7 @@ interface Props {
   linkCtx?: MsgLinkCtx
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, onMarkUnread, linkCtx }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -386,7 +389,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 {editing === m.id
                   ? <div className="msg-edit">
                       <textarea className="msg-edit-in" value={editText} autoFocus

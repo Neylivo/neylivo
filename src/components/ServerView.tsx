@@ -176,9 +176,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   function allRolesOf(userId: string): ServerRole[] {
     return rolesOfId(userId).map(id => roleById[id]).filter(Boolean).sort((a, b) => a.position - b.position)
   }
-  // Значок высшей роли со значком (как в Discord: «видят значок высшей из них»).
-  function topIconOf(m: any): string | undefined {
-    return allRolesOf(m.user_id).find(r => r.icon_url)?.icon_url ?? undefined
+  // Значок высшей роли со значком (как в Discord: «видят значок высшей из них»,
+  // не обязательно той же роли, что даёт цвет ника — если у самой старшей роли
+  // значка нет, берём значок следующей по старшинству, у которой он есть).
+  function roleIconOf(userId: string): string | undefined {
+    return allRolesOf(userId).find(r => r.icon_url)?.icon_url ?? undefined
   }
   function roleColorOf(userId: string): string | undefined {
     const mm = members.find(z => z.user_id === userId)
@@ -884,7 +886,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           </div>}
           <MessageList messages={messages as any} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
-            nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf}
+            nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
@@ -921,7 +923,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={m.member_name} url={m.avatar_url} userId={m.user_id} size={32} status={statusOf(m.user_id)} mobile={deviceOf(m.user_id) === 'mobile'} />
-              <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ic = topIconOf(m); return ic ? <img className="role-badge" src={ic} alt="" title={rr?.name} /> : null })()}
+              <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ir = allRolesOf(m.user_id).find(r => r.icon_url); return ir ? <img className="role-badge" src={ir.icon_url!} alt="" title={ir.name} /> : null })()}
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
