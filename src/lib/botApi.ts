@@ -1,0 +1,80 @@
+// v1.193.0: платформа ботов — рендерер-обвязка вокруг Edge Functions
+// (supabase/functions/bot-*) и таблиц bot_apps/bot_commands.
+import { supabase } from './supabase'
+
+export interface BotApp {
+  id: string
+  owner_id: string
+  bot_user_id: string
+  name: string
+  avatar_url: string | null
+  webhook_url: string | null
+  created_at: string
+}
+export interface BotCommand { id: string; bot_app_id: string; name: string; description: string; options: { name: string; description: string; required?: boolean }[] }
+
+export async function myBots(): Promise<BotApp[]> {
+  const { data } = await supabase.from('bot_apps').select('id, owner_id, bot_user_id, name, avatar_url, webhook_url, created_at').order('created_at')
+  return (data ?? []) as BotApp[]
+}
+
+// Возвращает токен и секрет ОДИН раз — дальше они не читаются нигде (хранится только hash).
+export async function createBot(name: string): Promise<{ id: string; token: string; webhookSecret: string }> {
+  const { data, error } = await supabase.functions.invoke('bot-create', { body: { name } })
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+export async function setBotWebhook(botAppId: string, webhookUrl: string | null): Promise<void> {
+  const { error } = await supabase.from('bot_apps').update({ webhook_url: webhookUrl }).eq('id', botAppId)
+  if (error) throw error
+}
+
+export async function deleteBot(botAppId: string): Promise<void> {
+  const { error } = await supabase.from('bot_apps').delete().eq('id', botAppId)
+  if (error) throw error
+}
+
+export async function addBotToServer(botAppId: string, serverId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('bot-add-to-server', { body: { botAppId, serverId } })
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+}
+
+export async function removeBotFromServer(botUserId: string, serverId: string): Promise<void> {
+  const { error } = await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', botUserId)
+  if (error) throw error
+}
+
+export async function fetchBotCommands(botAppId: string): Promise<BotCommand[]> {
+  const { data } = await supabase.from('bot_commands').select('*').eq('bot_app_id', botAppId).order('name')
+  return (data ?? []) as BotCommand[]
+}
+export async function fetchServerBotCommands(serverId: string): Promise<(BotCommand & { botAppId: string })[]> {
+  // Команды всех ботов, реально состоящих в этом сервере (для автодополнения /команд в Composer).
+  const { data: bots } = await supabase.from('bot_apps').select('id, bot_user_id')
+  const { data: members } = await supabase.from('server_members').select('user_id').eq('server_id', serverId)
+  const memberIds = new Set((members ?? []).map((m: any) => m.user_id))
+  const serverBotIds = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id)).map((b: any) => b.id)
+  if (!serverBotIds.length) return []
+  const { data } = await supabase.from('bot_commands').select('*').in('bot_app_id', serverBotIds)
+  return ((data ?? []) as BotCommand[]).map(c => ({ ...c, botAppId: c.bot_app_id }))
+}
+export async function saveBotCommand(botAppId: string, cmd: { id?: string; name: string; description: string; options: BotCommand['options'] }): Promise<void> {
+  const row = { bot_app_id: botAppId, name: cmd.name.trim().toLowerCase(), description: cmd.description.trim(), options: cmd.options }
+  const { error } = cmd.id ? await supabase.from('bot_commands').update(row).eq('id', cmd.id) : await supabase.from('bot_commands').insert(row)
+  if (error) throw error
+}
+export async function deleteBotCommand(id: string): Promise<void> {
+  const { error } = await supabase.from('bot_commands').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Вызов слэш-команды бота — ждёт синхронный ответ (или ошибку/таймаут), сам
+// кладёт ответ бота в чат (см. supabase/functions/bot-interact).
+export async function invokeBotCommand(botAppId: string, channelId: string, command: string, args: Record<string, string>): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('bot-interact', { body: { botAppId, channelId, command, args } })
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+}

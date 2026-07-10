@@ -2247,6 +2247,23 @@ body.no-anim .member-typing i { animation:none; }
 /* v1.178.0: бейдж тега сервера рядом с ником — сообщения, список участников, мини-профиль. */
 .user-tag-badge { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; vertical-align:1px; white-space:nowrap; }
 .user-tag-badge img.tag-cust-emoji { width:12px; height:12px; vertical-align:-1px; }
+/* v1.193.0: бейдж «БОТ» рядом с ником — платформа ботов. */
+.bot-badge { display:inline-flex; align-items:center; margin-left:6px; padding:1px 6px; border-radius:4px;
+  font-size:10px; font-weight:800; letter-spacing:.3px; vertical-align:1px; white-space:nowrap;
+  background:var(--brand,#5865f2); color:#fff; }
+/* v1.193.0: «Мои приложения» (DevPortal) — карточки ботов + «Боты» на сервере. */
+.devp-secret { margin-top:8px; padding:8px 10px; background:var(--bg1); border-radius:6px; font-family:monospace;
+  font-size:13px; word-break:break-all; user-select:all; }
+.devp-card { background:var(--bg2); border-radius:8px; margin-bottom:8px; overflow:hidden; }
+.devp-card-h { display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; }
+.devp-card-h svg:last-child { margin-left:auto; transition:transform .15s ease; flex:none; }
+.devp-card-id { color:var(--mut); font-size:12px; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; }
+.devp-card-body { padding:0 14px 14px; }
+.devp-cmd { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:6px; font-size:13px; }
+.devp-cmd:hover { background:rgba(255,255,255,.04); }
+.devp-cmd .devp-cmd-x { margin-left:auto; opacity:0; cursor:pointer; color:var(--mut); }
+.devp-cmd:hover .devp-cmd-x { opacity:1; }
+.devp-cmd .devp-cmd-x:hover { color:#ed4245; }
 /* v1.178.0: «Использовать тег этого сервера» — модалка, открывается «Взять тег сервера». */
 .srvtag { width:400px; text-align:center; }
 .srvtag-h { font-size:19px; font-weight:800; margin-top:4px; }

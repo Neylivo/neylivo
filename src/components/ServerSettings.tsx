@@ -4,7 +4,9 @@
 //  • нет шкалы/счётчика бустов и страницы «Бонусы буста» — её бесплатные фичи
 //    (фоновый баннер сервера, фон приглашения) живут в «Профиле сервера»;
 //  • нет лимитов на эмодзи и стикеры (никаких уровней и слотов);
-//  • нет секции «Приложения» («Интеграция» и «Каталог приложений»).
+//  • нет каталога сторонних приложений (Discord App Directory) — вместо этого
+//    вкладка «Боты» (v1.193.0): добавить свой/чужой бот по ID приложения,
+//    см. src/components/DevPortal.tsx («Мои приложения» в настройках пользователя).
 // Все настройки лежат в servers.settings (jsonb, миграция 17_server_settings.sql).
 // Без миграции код гладко деградирует: имя сервера сохраняется, остальное — с подсказкой.
 import { useEffect, useRef, useState } from 'react'
@@ -18,13 +20,14 @@ import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRolePermission
 import { PERM, hasPerm, kickMember, banMember, unbanMember, fetchBans, type ServerBan } from '../lib/permissions'
 import { confirmUi } from '../lib/confirm'
 import { RoleEditor } from './RoleEditor'
+import { ServerBotsPanel } from './DevPortal'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 import { EmojiPicker } from './EmojiPicker'
 import { TagEmoji, tagFontFamily } from './TagEmoji'
 
-type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'community' | 'template'
+type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
 const TAG_ICONS = ['🍃', '🗡️', '💗', '🔥', '💧', '💀', '🌙', '⚡', '🔮', '🍄']
@@ -263,6 +266,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     { cat: 'Реакции' }, { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
     { cat: 'Люди' }, { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
     { cat: 'Модерация' }, { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
+    { cat: 'Интеграции' }, { k: 'bots', t: 'Боты', ok: canManageWebhooks },
   ]
   // Прячем категории, у которых после фильтра по правам не осталось ни одной вкладки.
   const NAV = NAV_RAW.filter((n, i) => {
@@ -795,6 +799,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <button className="cset-link" onClick={() => up('content_filter', ((st.content_filter ?? 0) + 1) % FILTER_LEVELS.length)}>Изменить</button>
           </div>
         </>}
+
+        {tab === 'bots' && <ServerBotsPanel serverId={server.id} memberIds={members.map(m => m.user_id)} />}
 
         {tab === 'community' && <>
           <div className="sset-chero">

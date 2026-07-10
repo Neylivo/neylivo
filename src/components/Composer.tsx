@@ -17,6 +17,7 @@ import { sysQuickLaunch, sysGameLink } from '../lib/sysmsg'
 import { robloxJoinUrl, steamConnectUrl } from '../lib/gameShare'
 import { ShareBuildModal } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
+import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 50000
@@ -69,7 +70,7 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -81,7 +82,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // в строку набора вместо инлайн-текстареи внутри самого сообщения.
     editingTarget?: { id: string; content: string } | null
     onSaveEdit?: (text: string) => void | Promise<void>
-    onCancelEdit?: () => void }) {
+    onCancelEdit?: () => void
+    // v1.193.0: слэш-команды ботов — только на серверах (в ЛС ботов нет), нужен
+    // channelId/serverId, чтобы найти команды ботов, реально стоящих на сервере.
+    serverId?: string; channelId?: string }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { gameOf } = usePresence()
@@ -247,6 +251,41 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     ? names.filter(n => n.toLowerCase().startsWith(mQ.toLowerCase())).slice(0, 8)
     : []
 
+  // v1.193.0: слэш-команды ботов — только в начале сообщения (как в Discord),
+  // список — команды ботов, реально стоящих на этом сервере (в ЛС нет serverId — нет команд).
+  const [botCmds, setBotCmds] = useState<(BotCommand & { botAppId: string })[]>([])
+  const [cmdIdx, setCmdIdx] = useState(0)
+  const [cmdBusy, setCmdBusy] = useState(false)
+  useEffect(() => {
+    if (!serverId) { setBotCmds([]); return }
+    let ok = true
+    fetchServerBotCommands(serverId).then(c => { if (ok) setBotCmds(c) })
+    return () => { ok = false }
+  }, [serverId])
+  const slashTyping = /^\/(\w*)$/.exec(text)
+  const cmdSugg = slashTyping ? botCmds.filter(c => c.name.startsWith(slashTyping[1].toLowerCase())).slice(0, 8) : []
+  function pickCommand(c: BotCommand & { botAppId: string }) {
+    setText('/' + c.name + ' ')
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+  // /имя аргумент1 аргумент2 — позиционно раскладывается по options команды.
+  async function runSlashCommand(cmdText: string): Promise<boolean> {
+    const m = /^\/(\w+)(?:\s+([\s\S]*))?$/.exec(cmdText.trim())
+    if (!m || !serverId || !channelId) return false
+    const cmd = botCmds.find(c => c.name === m[1].toLowerCase())
+    if (!cmd) return false
+    const parts = (m[2] ?? '').trim().split(/\s+/).filter(Boolean)
+    const args: Record<string, string> = {}
+    cmd.options.forEach((o, i) => { if (parts[i] !== undefined) args[o.name] = parts[i] })
+    setCmdBusy(true)
+    try {
+      await invokeBotCommand(cmd.botAppId, channelId, cmd.name, args)
+      setText(''); keepDraft('')
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setCmdBusy(false) }
+    return true
+  }
+
   function updateMention(v: string, caret: number | null) {
     const upto = v.slice(0, caret ?? v.length)
     const m = upto.match(MENTION_TAIL)
@@ -340,7 +379,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (busy || sendingRef.current) return   // v1.42.0: защита от двойной отправки
+    if (busy || sendingRef.current || cmdBusy) return   // v1.42.0: защита от двойной отправки
+    if (!isEditing && botCmds.length && /^\/\w+/.test(text.trim()) && await runSlashCommand(text)) return
     if (isEditing) {
       const t = text.trim()
       sendingRef.current = true
@@ -453,6 +493,17 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" className="voice-send" title="Отправить голосовое" onClick={() => stopRec(true)}><Icon name="send" size={16} /></button>
       </div>}
       <form className="composer" onSubmit={submit}>
+        {cmdSugg.length > 0 && <div className="mention-pop">
+          <div className="mention-h">Команды бота</div>
+          {cmdSugg.map((c, i) => (
+            <div key={c.id} className={'mention-it' + (i === cmdIdx ? ' on' : '')}
+              onMouseEnter={() => setCmdIdx(i)}
+              onMouseDown={e => { e.preventDefault(); pickCommand(c) }}>
+              <span className="mention-at">/</span>{c.name}
+              <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{c.description}</span>
+            </div>
+          ))}
+        </div>}
         {sugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Упомянуть</div>
           {sugg.map((n, i) => (
@@ -487,7 +538,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <input ref={fileRef} type="file" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={photoRef} type="file" accept="image/*" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
-        <textarea ref={inputRef} rows={1} placeholder={files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
+        <textarea ref={inputRef} rows={1} disabled={cmdBusy}
+          placeholder={cmdBusy ? 'Бот отвечает…' : files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
           onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
           onPaste={e => {
             const pf = Array.from(e.clipboardData?.files ?? [])
@@ -513,6 +565,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               if (k === 'i') { e.preventDefault(); wrapFormat('*'); return }
               if (k === 'e') { e.preventDefault(); wrapFormat('`'); return }
               if (e.shiftKey && k === 's') { e.preventDefault(); wrapFormat('||'); return }
+            }
+            if (cmdSugg.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIdx(i => (i + 1) % cmdSugg.length); return }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setCmdIdx(i => (i - 1 + cmdSugg.length) % cmdSugg.length); return }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickCommand(cmdSugg[Math.min(cmdIdx, cmdSugg.length - 1)]); return }
+              if (e.key === 'Escape') { e.preventDefault(); setText(''); return }
             }
             if (sugg.length > 0) {
               if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx(i => (i + 1) % sugg.length); return }

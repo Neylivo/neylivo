@@ -1015,6 +1015,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>
         <TypingIndicator typers={typers} />
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
+          serverId={server.id} channelId={curChannel.id}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}

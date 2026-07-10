@@ -15,6 +15,7 @@ import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getC
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
+import { DevPortal } from './DevPortal'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -39,6 +40,9 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'display', label: 'Дисплей', icon: 'expand' },
     { k: 'activity', label: 'Активность', icon: 'gamepad' },
     { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
+  ] },
+  { group: 'Разработчикам', items: [
+    { k: 'devportal', label: 'Мои приложения', icon: 'code' },
   ] },
 ]
 
@@ -953,6 +957,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={view.devmode} onChange={v => setD('devmode', v)} /></Row>
                 <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
               </>}
+              {cat === 'devportal' && <DevPortal />}
             </div>
           </div>
         </div>
