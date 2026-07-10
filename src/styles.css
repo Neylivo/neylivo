@@ -2576,9 +2576,10 @@ body.no-anim .member-typing i { animation:none; }
 .ph2-btns .pin-btn, .ph2-btns .call-start { margin-left:0; }
 
 /* ---- v1.32.0: мини-профиль 1-в-1 как в Discord ---- */
-/* Строка юзернейма: ник + компактные бейджи ролей в один ряд (как в Discord). */
 .mini2 .mini-code { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:2px; color:#dbdee1; font-size:14px; }
 .mini-uname { color:#dbdee1; }
+/* v1.173.0: все роли участника сразу — карточка-бейдж на роль, переносятся в несколько строк. */
+.mini-roles { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .mini2 .mini-rolechip { margin:0; display:inline-flex; align-items:center; gap:5px; padding:2px 7px 2px 5px; border-radius:6px; background:#2b2d31; border:1px solid rgba(255,255,255,.06); font-size:12px; font-weight:600; color:#dbdee1; line-height:1.4; }
 .mini2 .mini-rolechip .role-dot { width:10px; height:10px; border-radius:50%; flex:none; }
 /* «был(а) в сети…» для офлайна — тонкая приглушённая строка. */

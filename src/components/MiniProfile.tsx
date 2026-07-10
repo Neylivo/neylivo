@@ -44,9 +44,9 @@ export interface MiniProfileData {
   name: string
   avatarUrl?: string | null
   status: Status
-  role?: string
-  roleName?: string
-  roleColor?: string
+  // v1.173.0: все роли участника на сервере (не только высшая) — как в Discord,
+  // показываются одновременно, отсортированы по позиции (старшая первой).
+  roles?: { name: string; color?: string }[]
   activity?: Activity | null
   // Якорь позиционирования: 'member-list' — прилипает слева от списка участников,
   // 'me' — вырастает снизу над панелью пользователя; иначе свободно по x/y.
@@ -203,8 +203,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}</div>
           <div className="mini-code">
             <span className="mini-uname">{uname || data.name}</span>
-            {(data.roleName || data.role) && <span className="mini-rolechip"><span className="role-dot" style={{ background: data.roleColor ?? '#99aab5' }} />{data.roleName ?? 'Участник'}</span>}
           </div>
+          {data.roles && data.roles.length > 0 && <div className="mini-roles">
+            {data.roles.map(r => (
+              <span key={r.name} className="mini-rolechip"><span className="role-dot" style={{ background: r.color ?? '#99aab5' }} />{r.name}</span>
+            ))}
+          </div>}
           {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}

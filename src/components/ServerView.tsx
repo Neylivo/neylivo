@@ -171,10 +171,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     for (const id of rolesOfId(m.user_id)) { const r = roleById[id]; if (r && (!best || r.position < best.position)) best = r }
     return best
   }
+  // Все роли участника, отсортированы по позиции (старшая первой) — для мини-профиля,
+  // где (в отличие от цвета ника/значка) показываются одновременно все роли, как в Discord.
+  function allRolesOf(userId: string): ServerRole[] {
+    return rolesOfId(userId).map(id => roleById[id]).filter(Boolean).sort((a, b) => a.position - b.position)
+  }
   // Значок высшей роли со значком (как в Discord: «видят значок высшей из них»).
   function topIconOf(m: any): string | undefined {
-    const rs = rolesOfId(m.user_id).map(id => roleById[id]).filter(Boolean).sort((a, b) => a.position - b.position)
-    return rs.find(r => r.icon_url)?.icon_url ?? undefined
+    return allRolesOf(m.user_id).find(r => r.icon_url)?.icon_url ?? undefined
   }
   function roleColorOf(userId: string): string | undefined {
     const mm = members.find(z => z.user_id === userId)
@@ -885,8 +889,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
             onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) setChRead(curChannelRef.current.id, new Date(m.created_at).getTime() - 1) }}
-            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author); const rr = mm ? topRoleOf(mm) : undefined
-              setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), role: mm?.role, roleName: rr?.name, roleColor: rr?.color, activity: activityOf(m.author), x, y }) }} />
+            onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
+              setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), roles: allRolesOf(m.author).map(r => ({ name: r.name, color: r.color })), activity: activityOf(m.author), x, y }) }} />
           {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}
@@ -912,7 +916,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
-              role: m.role, roleName: rr?.name, roleColor: rr?.color, activity: act,
+              roles: allRolesOf(m.user_id).map(r => ({ name: r.name, color: r.color })), activity: act,
               anchor: 'member-list',
               x: Math.min(e.clientX, window.innerWidth - 260), y: e.clientY })}>
               {m.nameplate_url && <PlateBg url={m.nameplate_url} kind={m.nameplate_kind === 'video' ? 'video' : 'image'} />}
