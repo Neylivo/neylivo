@@ -153,7 +153,9 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
 
   const load = () => {
     if (!memberIds.length) { setInstalled([]); return }
-    supabase.from('bot_apps').select('id, bot_user_id, name').in('bot_user_id', memberIds)
+    // bot_apps_public — большинство ботов на сервере поставил не сам смотрящий,
+    // а обычная RLS на bot_apps пускает только владельца (см. миграцию 53).
+    supabase.from('bot_apps_public').select('id, bot_user_id, name').in('bot_user_id', memberIds)
       .then(({ data }) => setInstalled((data ?? []) as any[]))
   }
   useEffect(load, [memberIds.join(',')])

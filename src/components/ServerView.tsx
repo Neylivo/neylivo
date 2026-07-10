@@ -787,7 +787,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function react(id: string, emoji: string) {
     if (!user) return
     optimisticRx(id, emoji, user.id)
-    await toggleReaction('reactions', id, user.id, emoji)
+    try {
+      await toggleReaction('reactions', id, user.id, emoji)
+    } catch (err: any) {
+      optimisticRx(id, emoji, user.id) // откат — сервер отказал (например, тайм-аут/нет прав)
+      toastErr(err?.message ?? 'Не удалось поставить реакцию')
+      return
+    }
     loadRx(msgsRef.current.map(m => m.id))
   }
   async function pin(id: string, pinned: boolean) {
@@ -1002,7 +1008,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
-            onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
+            onReact={react} canReact={canAddReactions} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
             onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120), avatarUrl: m.author_avatar }); setEditingMsg(null) }}
             onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) setChRead(curChannelRef.current.id, new Date(m.created_at).getTime() - 1) }}
@@ -1016,6 +1022,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <TypingIndicator typers={typers} />
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
+          canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}

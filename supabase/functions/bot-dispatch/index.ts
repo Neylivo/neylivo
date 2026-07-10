@@ -4,7 +4,12 @@
 //          (дальше настроить в Supabase Dashboard -> Database -> Webhooks:
 //          триггер INSERT на таблице messages -> HTTP-запрос на URL этой функции.
 //          Это штатный механизм Supabase для «событие в БД -> вызов Edge Function»,
-//          отдельный pg_net-триггер вручную не нужен).
+//          отдельный pg_net-триггер вручную не нужен). В настройках вебхука —
+//          добавить HTTP-заголовок  X-Webhook-Secret: <тот же секрет, что в
+//          переменной окружения DB_WEBHOOK_SECRET этой функции> — без него функция
+//          вызывается ---no-verify-jwt, а значит без заголовка ЛЮБОЙ мог бы слать
+//          сюда поддельные {record:{...}} и заставить нас HMAC-подписать чужой
+//          контент настоящим webhook_secret бота.
 //
 // Payload вебхука-от-БД: { type: 'INSERT', table: 'messages', record: {...} }.
 // Слэш-команды (INTERACTION_CREATE) шлются не отсюда — см. src/lib/botApi.ts,
@@ -21,6 +26,12 @@ async function hmac(secret: string, body: string): Promise<string> {
 
 Deno.serve(async (req) => {
   try {
+    // Заголовок задаётся в настройках Database Webhook в Dashboard (см. коммент выше).
+    // Если секрет не настроен как переменная окружения — фейлимся закрыто (403), а не открыто.
+    const expected = Deno.env.get('DB_WEBHOOK_SECRET')
+    if (!expected || req.headers.get('X-Webhook-Secret') !== expected) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: cors })
+    }
     const payload = await req.json()
     if (payload.table !== 'messages' || payload.type !== 'INSERT') return new Response('ignored', { headers: cors })
     const msg = payload.record

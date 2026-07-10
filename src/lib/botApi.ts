@@ -13,6 +13,15 @@ export interface BotApp {
 }
 export interface BotCommand { id: string; bot_app_id: string; name: string; description: string; options: { name: string; description: string; required?: boolean }[] }
 
+// supabase-js бросает generic FunctionsHttpError («non-2xx status code») на ЛЮБОЙ
+// код ответа функции, а data при этом форсится в null — реальный текст ошибки
+// (json {error:...}, который шлют bot-create/bot-add-to-server/bot-interact) жив
+// только в ещё не прочитанном error.context (это тот самый Response).
+async function edgeErr(error: any): Promise<string> {
+  try { const body = await error?.context?.json?.(); if (body?.error) return String(body.error) } catch { /* не json — используем текст ниже */ }
+  return error?.message ?? String(error)
+}
+
 export async function myBots(): Promise<BotApp[]> {
   const { data } = await supabase.from('bot_apps').select('id, owner_id, bot_user_id, name, avatar_url, webhook_url, created_at').order('created_at')
   return (data ?? []) as BotApp[]
@@ -21,7 +30,7 @@ export async function myBots(): Promise<BotApp[]> {
 // Возвращает токен и секрет ОДИН раз — дальше они не читаются нигде (хранится только hash).
 export async function createBot(name: string): Promise<{ id: string; token: string; webhookSecret: string }> {
   const { data, error } = await supabase.functions.invoke('bot-create', { body: { name } })
-  if (error) throw error
+  if (error) throw new Error(await edgeErr(error))
   if (data?.error) throw new Error(data.error)
   return data
 }
@@ -38,7 +47,7 @@ export async function deleteBot(botAppId: string): Promise<void> {
 
 export async function addBotToServer(botAppId: string, serverId: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('bot-add-to-server', { body: { botAppId, serverId } })
-  if (error) throw error
+  if (error) throw new Error(await edgeErr(error))
   if (data?.error) throw new Error(data.error)
 }
 
@@ -53,7 +62,9 @@ export async function fetchBotCommands(botAppId: string): Promise<BotCommand[]> 
 }
 export async function fetchServerBotCommands(serverId: string): Promise<(BotCommand & { botAppId: string })[]> {
   // Команды всех ботов, реально состоящих в этом сервере (для автодополнения /команд в Composer).
-  const { data: bots } = await supabase.from('bot_apps').select('id, bot_user_id')
+  // bot_apps_public — потому что боты обычно чужие: RLS на bot_apps самой
+  // пускает только владельца (см. supabase/53_bot_apps_public.sql).
+  const { data: bots } = await supabase.from('bot_apps_public').select('id, bot_user_id')
   const { data: members } = await supabase.from('server_members').select('user_id').eq('server_id', serverId)
   const memberIds = new Set((members ?? []).map((m: any) => m.user_id))
   const serverBotIds = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id)).map((b: any) => b.id)
@@ -75,6 +86,6 @@ export async function deleteBotCommand(id: string): Promise<void> {
 // кладёт ответ бота в чат (см. supabase/functions/bot-interact).
 export async function invokeBotCommand(botAppId: string, channelId: string, command: string, args: Record<string, string>): Promise<void> {
   const { data, error } = await supabase.functions.invoke('bot-interact', { body: { botAppId, channelId, command, args } })
-  if (error) throw error
+  if (error) throw new Error(await edgeErr(error))
   if (data?.error) throw new Error(data.error)
 }

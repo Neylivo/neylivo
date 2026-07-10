@@ -117,7 +117,12 @@ export function Sinks({ room, meName }: { room: Room; meName?: string }) {
     const push = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
-        const all = [room.localParticipant as any, ...remotes]
+        // v1.198.0: читаем remoteParticipants заново на каждый вызов, а не из
+        // замыкания render-скоупа — иначе при выходе+входе участника в один тик
+        // (длина остаётся той же) этот эффект не пересоздаётся и push продолжает
+        // слать устаревший список, пока не случится следующее событие с другой длиной.
+        const live: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
+        const all = [room.localParticipant as any, ...live]
         const list = all.map(p => ({
           name: p === room.localParticipant ? (meName || p.name || p.identity || '?') : (p.name || p.identity || '?'),
           speaking: !!p.isSpeaking,
@@ -135,8 +140,7 @@ export function Sinks({ room, meName }: { room: Room; meName?: string }) {
       cancelAnimationFrame(raf)
       try { d.setCallOverlayParticipants([]) } catch {}
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room, meName, remotes.length])
+  }, [room, meName])
 
   return <>{remotes.map(p => <AudioSink key={p.sid || p.identity} p={p} />)}</>
 }
@@ -659,7 +663,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
 
   return (
     <div className={'c2-wrap' + (fs ? ' fs' : '') + (fs && idle ? ' idle' : '') + (flash ? ' sb-flash' : '') + (alone && peer ? ' ringing' : '')}>
-      <Sinks room={room} />
+      <Sinks room={room} meName={meName} />
       <div className="c2-top">
         <span className={'c2-status ' + (alone && peer ? 'connecting' : status)}><i />{statusLabel}</span>
         <span className="c2-cnt"><Icon name="users" size={14} /> {count}</span>

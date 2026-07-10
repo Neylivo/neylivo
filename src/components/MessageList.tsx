@@ -9,7 +9,7 @@ import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta } from '../lib/sysmsg'
-import { openGameLink, terrariaLaunch } from '../lib/gameShare'
+import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -231,6 +231,8 @@ interface Props {
   // Без этого пропа — как раньше, только автор (используется в ЛС, где ролей нет).
   canDelete?: (m: UiMessage) => boolean
   onReact?: (id: string, emoji: string) => void
+  // v1.198.0: право ADD_REACTIONS — undefined (ЛС) значит «можно», false прячет все кнопки добавления реакции.
+  canReact?: boolean
   onPin?: (id: string, pinned: boolean) => void
   onDelete?: (id: string) => void
   onReply?: (m: UiMessage) => void
@@ -260,7 +262,7 @@ interface Props {
   linkCtx?: MsgLinkCtx
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -374,10 +376,19 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 // на месте запускаем Terraria.exe через IPC (terrariaLaunch).
                 const gl = parseGameLinkMeta(sys.preview)
                 if (!gl) return null
+                // v1.198.0: содержимое сообщения — в принципе подделываемый JSON (RLS
+                // проверяет только права на запись, а не форму glink-payload), поэтому
+                // для cs2 НЕ доверяем сырому gl.url — пересобираем steam://connect сами
+                // из ip/port и проверяем, что это похоже на настоящий адрес сервера.
+                const HOST_RE = /^[A-Za-z0-9.\-]{1,255}$/
                 const join = async () => {
-                  if (gl.ip) {
+                  if (sys.targetId === 'terraria' && gl.ip) {
                     try { await terrariaLaunch(gl.ip, gl.port ?? 0) }
                     catch (err: any) { toastErr(err.message ?? String(err)) }
+                  } else if (sys.targetId === 'cs2') {
+                    const port = gl.port ?? 0
+                    if (!gl.ip || !HOST_RE.test(gl.ip) || port < 1 || port > 65535) { toastErr('Некорректный адрес сервера'); return }
+                    openGameLink(steamConnectUrl(gl.ip, port))
                   } else if (gl.url) openGameLink(gl.url)
                 }
                 return (
@@ -471,13 +482,14 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {rx.length > 0 && <div className="rx-bar">
                   {rx.map(r => {
                     const mine = currentUser ? r.users.includes(currentUser) : false
-                    return <button key={r.emoji} className={'rx' + (mine ? ' mine' : '')} onClick={() => onReact?.(m.id, r.emoji)}>
+                    return <button key={r.emoji} className={'rx' + (mine ? ' mine' : '')} disabled={canReact === false}
+                      onClick={() => canReact !== false && onReact?.(m.id, r.emoji)}>
                       <span><RxEmoji e={r.emoji} /></span><span className="rx-n">{r.count}</span>
                       <span className="rx-tip"><span className="rx-tip-e"><RxEmoji e={r.emoji} /></span>{rxWho(r.users, currentUser, nameOf, currentUserName)}</span>
                     </button>
                   })}
-                  <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>
-                  {pickFor === m.id && <div className="rx-quick">
+                  {canReact !== false && <button className="rx rx-add" title="Добавить реакцию" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="plus" size={14} /></button>}
+                  {canReact !== false && pickFor === m.id && <div className="rx-quick">
                     {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                   </div>}
                 </div>}
@@ -485,8 +497,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-tools">
                 {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
                 {currentUser && <button title="Переслать" onClick={() => setFwdFor(m)}><Icon name="forward" size={18} /></button>}
-                <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>
-                {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
+                {canReact !== false && <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>}
+                {canReact !== false && rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
                 {m.author === currentUser && onStartEdit && m.content && !fwd && <button title="Изменить" onClick={() => onStartEdit(m)}><Icon name="edit" size={18} /></button>}
@@ -509,10 +521,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         return <>
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
         <div className="ctx-menu" style={{ left: Math.min(menu.x, window.innerWidth - 250), top: Math.max(8, Math.min(menu.y, window.innerHeight - (img ? 560 : 440))) }}>
-          <div className="ctx-quick">
+          {canReact !== false && <div className="ctx-quick">
             {QUICK.slice(0, 4).map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
-          </div>
-          <div className="ctx-item" onClick={() => { setEmojiAt({ id: menu.id, x: menu.x, y: menu.y }); setMenu(null) }}><span>Добавить реакцию</span><Icon name="chevron-right" size={16} /></div>
+          </div>}
+          {canReact !== false && <div className="ctx-item" onClick={() => { setEmojiAt({ id: menu.id, x: menu.x, y: menu.y }); setMenu(null) }}><span>Добавить реакцию</span><Icon name="chevron-right" size={16} /></div>}
           <div className="ctx-sep" />
           {menuMsg.author === currentUser && onStartEdit && menuMsg.content && !fwdM ? item('Редактировать', 'edit', () => onStartEdit(menuMsg)) : null}
           {onReply ? item('Ответить', 'reply', () => onReply(menuMsg)) : null}

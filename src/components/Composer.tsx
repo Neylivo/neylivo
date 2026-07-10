@@ -70,7 +70,7 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -85,7 +85,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     onCancelEdit?: () => void
     // v1.193.0: слэш-команды ботов — только на серверах (в ЛС ботов нет), нужен
     // channelId/serverId, чтобы найти команды ботов, реально стоящих на сервере.
-    serverId?: string; channelId?: string }) {
+    serverId?: string; channelId?: string
+    // v1.198.0: права ATTACH_FILES/MENTION_EVERYONE — undefined (ЛС, где прав нет) значит «можно».
+    canAttachFiles?: boolean; canMentionEveryone?: boolean }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { gameOf } = usePresence()
@@ -401,6 +403,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (t && files.length === 0 && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
     if (t && hasSpamRun(t)) { toastErr('Слишком много одинаковых символов подряд'); return }
+    if (files.length && canAttachFiles === false) { toastErr('У вас нет прав на прикрепление файлов'); return }
+    if (t && canMentionEveryone === false && /@everyone(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @everyone'); return }
     sendingRef.current = true
     setBusy(true)
     try {
@@ -481,7 +485,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             if (!g?.placeId) return
             onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId) }))
           } else if (kind === 'cs2') {
-            onSend(sysGameLink('cs2', { game: 'Counter-Strike 2', label: ip + ':' + port, url: steamConnectUrl(ip, port) }))
+            // v1.198.0: ip/port тоже кладём в meta — принимающая сторона (MessageList)
+            // пересобирает steam://connect сама и проверяет форму адреса, а не доверяет
+            // сырому url из содержимого сообщения (которое можно подделать в обход этой формы).
+            onSend(sysGameLink('cs2', { game: 'Counter-Strike 2', label: ip + ':' + port, url: steamConnectUrl(ip, port), ip, port }))
           } else if (kind === 'terraria') {
             onSend(sysGameLink('terraria', { game: 'Terraria', label: ip + ':' + port, ip, port }))
           }
@@ -520,9 +527,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           {plusMenu && <>
             <div className="plus-overlay" onClick={() => setPlusMenu(false)} />
             <div className="plus-menu">
+              {canAttachFiles !== false && <>
               <button type="button" onClick={() => { setPlusMenu(false); photoRef.current?.click() }}><Icon name="image" size={17} /> Фото</button>
               <button type="button" onClick={() => { setPlusMenu(false); fileRef.current?.click() }}><Icon name="paperclip" size={17} /> Файл</button>
-              <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button>
+              <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button></>}
               <button type="button" onClick={() => { setPlusMenu(false); startRec() }}><Icon name="mic" size={17} /> Голосовое</button>
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Minecraft (Java)' &&
                 <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
@@ -596,7 +604,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
-          {!isEditing && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
+          {!isEditing && canAttachFiles !== false && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
           {!isEditing && <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
           {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}

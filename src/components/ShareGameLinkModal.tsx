@@ -18,6 +18,8 @@ export function ShareGameLinkModal({ game, label, onClose, onShared }: {
   const needsAddr = game !== 'roblox'
   const [ip, setIp] = useState('')
   const [port, setPort] = useState(DEFAULT_PORT[game] ?? '')
+  const portNum = parseInt(port, 10)
+  const portValid = !needsAddr || (Number.isFinite(portNum) && portNum > 0 && portNum <= 65535)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -38,7 +40,7 @@ export function ShareGameLinkModal({ game, label, onClose, onShared }: {
         </>}
         <div className="modal-foot">
           <button className="modal-ghost" onClick={onClose}>Отмена</button>
-          <button className="modal-primary" disabled={needsAddr && !ip.trim()} onClick={() => onShared(ip.trim(), parseInt(port, 10) || 0)}>Поделиться в чате</button>
+          <button className="modal-primary" disabled={(needsAddr && !ip.trim()) || !portValid} onClick={() => onShared(ip.trim(), portNum)}>Поделиться в чате</button>
         </div>
       </div>
     </div>
