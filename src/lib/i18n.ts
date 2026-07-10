@@ -412,7 +412,7 @@ const DICT_EN_FULL: Record<string, string> = {
   "Изменить значок сервера": "Change Server Icon",
   "Изменить местоимения": "Edit Pronouns",
   "Изменить никнейм": "Change Nickname",
-  "Изображение должно быть меньше 256 Кб": "Image must be smaller than 256 KB",
+  "Изображение должно быть меньше 1 МБ": "Image must be smaller than 1 MB",
   "Изображение скопировано": "Image copied",
   "Имя": "Name",
   "Имя :": "Name :",
@@ -1484,7 +1484,7 @@ Object.assign(DICT_EN, {
 
   // Role Editor & Permissions
   "Вампус": "Wumpus",
-  "Загрузите изображение размером менее 256 Кб. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.": "Upload an image under 256 KB. We recommend a resolution of at least 64x64 pixels. If members have multiple roles, they'll see the icon of the highest one.",
+  "Загрузите изображение размером менее 1 МБ. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.": "Upload an image under 1 MB. We recommend a resolution of at least 64x64 pixels. If members have multiple roles, they'll see the icon of the highest one.",
   "Право видеть/писать в конкретном канале, подключаться к голосовым каналам и т.д. настраивается в «Права по умолчанию» (@everyone) и действует на всех участников.": "The right to view/write in a specific channel, connect to voice channels, etc. is configured in \"Default Permissions\" (@everyone) and applies to all members.",
   "РЕДАКТИРОВАТЬ РОЛЬ —": "EDIT ROLE —",
   "Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor": "Apply the supabase/34_permissions.sql migration in the Supabase SQL Editor first",

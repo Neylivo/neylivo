@@ -29,14 +29,24 @@
     -webkit-mask-image:radial-gradient(ellipse at 50% 42%, #000 25%, transparent 72%);
   }
 
-  .logo {
-    width:64px; height:64px; position:relative; z-index:1; border-radius:16px;
-    filter:drop-shadow(0 0 14px rgba(99,102,241,.9)) drop-shadow(0 0 40px rgba(99,102,241,.55));
-    animation: pulse 2.4s ease-in-out infinite;
+  /* v1.190.0: мягкое сияние отдельным слоем позади иконки — раньше это был
+     drop-shadow прямо по силуэту лого, из-за которого пульс выглядел резким
+     двойным контуром. Теперь просто дышащий радиальный ореол под иконкой,
+     тон в тон с самим лого (тот же индиго, что сетка/полоса прогресса). */
+  .logo-wrap { position:relative; display:flex; align-items:center; justify-content:center; }
+  .halo {
+    position:absolute; z-index:0; width:210px; height:210px; border-radius:50%;
+    top:50%; left:50%;
+    background:radial-gradient(circle, rgba(99,102,241,.5) 0%, rgba(99,102,241,.16) 45%, transparent 72%);
+    animation: breathe 3.6s ease-in-out infinite;
   }
-  @keyframes pulse {
-    0%,100% { filter:drop-shadow(0 0 14px rgba(99,102,241,.9)) drop-shadow(0 0 40px rgba(99,102,241,.55)) }
-    50%     { filter:drop-shadow(0 0 20px rgba(99,102,241,1)) drop-shadow(0 0 60px rgba(99,102,241,.8)) }
+  @keyframes breathe {
+    0%,100% { opacity:.7; transform:translate(-50%,-50%) scale(1); }
+    50%     { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+  }
+  .logo {
+    width:76px; height:76px; position:relative; z-index:1; border-radius:50%;
+    filter:drop-shadow(0 6px 20px rgba(0,0,0,.35));
   }
 
   .status {
@@ -60,7 +70,10 @@
 </style>
 </head>
 <body>
-  <img class="logo" id="logo" src="./icon.png" alt="Ponoi">
+  <div class="logo-wrap">
+    <div class="halo"></div>
+    <img class="logo" id="logo" src="./icon.png" alt="Ponoi">
+  </div>
   <div class="status" id="status">Запуск</div>
   <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
 <script>

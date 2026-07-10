@@ -68,7 +68,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
   }
   const pickIcon = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f || !user) return
-    if (f.size > 256 * 1024) { e.target.value = ''; return toastErr('Изображение должно быть меньше 256 Кб') }
+    if (f.size > 1024 * 1024) { e.target.value = ''; return toastErr('Изображение должно быть меньше 1 МБ') }
     setBusy(true)
     try {
       const url = await uploadTo('avatars', user.id, f)
@@ -153,7 +153,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
             </span>
           </div>
           <label className="pqs-lbl">Значок роли</label>
-          <div className="cset-hint" style={{ marginTop: 0 }}>Загрузите изображение размером менее 256 Кб. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.</div>
+          <div className="cset-hint" style={{ marginTop: 0 }}>Загрузите изображение размером менее 1 МБ. Мы советуем использовать разрешение не менее 64 x 64 пикселя. Если у участников есть несколько ролей, они будут видеть значок высшей из них.</div>
           <div className="redit-iconrow">
             <span className="redit-iconprev">{role.icon_url ? <img src={role.icon_url} alt="" /> : '🖼️'}</span>
             <button className="modal-primary" onClick={() => iconRef.current?.click()}>{busy ? 'Загрузка…' : 'Выберите изображение'}</button>
