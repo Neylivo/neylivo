@@ -2463,6 +2463,11 @@ body.no-anim .member-typing i { animation:none; }
   border-radius:8px; padding:4px 8px; z-index:3; color:#b5bac1; }
 .c2-vol input { width:88px; accent-color:#6366f1; }
 .c2-vol span { font-size:11px; color:#949ba4; min-width:34px; text-align:right; }
+/* v1.183.0: та же громкость, но строкой внутри контекстного меню участника звонка. */
+.c2-pctx { width:230px; }
+.c2-pctx-vol { display:flex; align-items:center; gap:8px; padding:8px 10px; color:#b5bac1; cursor:default; }
+.c2-pctx-vol input { flex:1; accent-color:#6366f1; }
+.c2-pctx-vol span { font-size:12px; color:#949ba4; min-width:34px; text-align:right; }
 
 .c2-waiting { flex:none; text-align:center; color:#80848e; font-size:13px; padding-bottom:4px; }
 .dm-call-connecting { display:flex; align-items:center; gap:8px; margin:8px 16px; padding:10px 14px; border-radius:8px; background:rgba(88,101,242,.12); color:#5865f2; font-size:13px; font-weight:600; }

@@ -43,6 +43,17 @@ function setPeerVolume(identity: string, v: number) {
   gainReg.get(identity)?.forEach(g => { g.gain.value = v / 100 })
 }
 
+// v1.183.0: «Отключить видео» из меню участника — чисто у себя, для остальных
+// он продолжает транслировать камеру как ни в чём не бывало. Тот же реестр-паттерн,
+// что у громкости (gainReg) — Tile подписан и перерисовывается по toggleVideoHidden.
+const hiddenVideoReg = new Set<string>()
+const hiddenVideoListeners = new Set<() => void>()
+function isVideoHidden(identity: string): boolean { return hiddenVideoReg.has(identity) }
+function toggleVideoHidden(identity: string) {
+  if (hiddenVideoReg.has(identity)) hiddenVideoReg.delete(identity); else hiddenVideoReg.add(identity)
+  hiddenVideoListeners.forEach(l => l())
+}
+
 /** Невидимый приёмник звука участника: все его аудиодорожки идут через GainNode. */
 function AudioSink({ p }: { p: any }) {
   useEffect(() => {
@@ -111,6 +122,46 @@ function VolCtl({ identity }: { identity: string }) {
   )
 }
 
+// v1.183.0: правый клик по участнику звонка — меню как в Discord: профиль,
+// громкость (тот же ползунок, что и VolCtl, просто внутри меню), заглушить у
+// себя (не трогает его реальный микрофон — только твой гейн, как volume=0),
+// отключить видео у себя, копировать ID. Паттерн ctx-overlay/ctx-menu/ctx-item —
+// как везде в приложении (см. MessageList.tsx/ServerView.tsx контекстные меню).
+function PartCtxMenu({ identity, x, y, onClose, onProfile }:
+  { identity: string; x: number; y: number; onClose: () => void; onProfile?: () => void }) {
+  const [vol, setVol] = useState(() => getVol(identity))
+  const [hidden, setHidden] = useState(() => isVideoHidden(identity))
+  const muted = vol === 0
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+  return (
+    <>
+      <div className="ctx-overlay" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }} />
+      <div className="ctx-menu c2-pctx" style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 320) }}>
+        {onProfile && <div className="ctx-item" onClick={() => { onClose(); onProfile() }}><span>Профиль</span><Icon name="user" size={14} /></div>}
+        <div className="ctx-sep" />
+        <div className="c2-pctx-vol" onClick={e => e.stopPropagation()}>
+          <Icon name="volume" size={13} />
+          <input type="range" min={0} max={200} step={5} value={vol}
+            onChange={e => { const v = parseInt(e.target.value, 10); setVol(v); setPeerVolume(identity, v) }} />
+          <span>{vol}%</span>
+        </div>
+        <div className="ctx-item" onClick={() => { const nv = muted ? 100 : 0; setVol(nv); setPeerVolume(identity, nv) }}>
+          <span>{muted ? 'Включить звук' : 'Заглушить у себя'}</span><Icon name={muted ? 'volume' : 'mic-off'} size={14} />
+        </div>
+        <div className="ctx-item" onClick={() => { toggleVideoHidden(identity); setHidden(h => !h) }}>
+          <span>{hidden ? 'Показать видео' : 'Отключить видео'}</span><Icon name={hidden ? 'video' : 'video-off'} size={14} />
+        </div>
+        <div className="ctx-sep" />
+        <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(identity); onClose() }}><span>Копировать ID пользователя</span><Icon name="id-card" size={14} /></div>
+      </div>
+    </>
+  )
+}
+
 /** Живые флаги участника: говорит / микрофон включён. */
 function useSpeakMic(p: any) {
   const [speaking, setSpeaking] = useState(!!p.isSpeaking)
@@ -126,12 +177,14 @@ function useSpeakMic(p: any) {
   return { speaking, micOn }
 }
 
+type CtxOpener = (p: any, name: string, avatar: string | null | undefined, x: number, y: number) => void
+
 /** Кружочек участника — голосовой режим, когда никто не показывает видео. */
-function Bubble({ p, isLocal, avatar, meName }: { p: any; isLocal: boolean; avatar?: string | null; meName?: string }) {
+function Bubble({ p, isLocal, avatar, meName, onCtx }: { p: any; isLocal: boolean; avatar?: string | null; meName?: string; onCtx?: CtxOpener }) {
   const { speaking, micOn } = useSpeakMic(p)
   const name = isLocal ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?')
   return (
-    <div className="c2-bub">
+    <div className="c2-bub" onContextMenu={!isLocal && onCtx ? e => { e.preventDefault(); onCtx(p, String(name), avatar, e.clientX, e.clientY) } : undefined}>
       <div className={'c2-bub-av' + (speaking ? ' speaking' : '')}>
         <Avatar name={String(name)} url={avatar} size={84} />
         {!micOn && <span className="c2-bub-mute"><Icon name="mic-off" size={12} /></span>}
@@ -143,10 +196,16 @@ function Bubble({ p, isLocal, avatar, meName }: { p: any; isLocal: boolean; avat
 }
 
 /** Плитка участника — видео-режим: камера или аватар на тёмном фоне. */
-function Tile({ p, isLocal, avatar, color, small, meName }: { p: any; isLocal: boolean; avatar?: string | null; color?: string | null; small?: boolean; meName?: string }) {
+function Tile({ p, isLocal, avatar, color, small, meName, onCtx }: { p: any; isLocal: boolean; avatar?: string | null; color?: string | null; small?: boolean; meName?: string; onCtx?: CtxOpener }) {
   const vidRef = useRef<HTMLDivElement>(null)
   const [hasCam, setHasCam] = useState(false)
+  const [vidHidden, setVidHidden] = useState(() => isVideoHidden(p.identity))
   const { speaking, micOn } = useSpeakMic(p)
+  useEffect(() => {
+    const l = () => setVidHidden(isVideoHidden(p.identity))
+    hiddenVideoListeners.add(l)
+    return () => { hiddenVideoListeners.delete(l) }
+  }, [p.identity])
   useEffect(() => {
     const host = vidRef.current!
     let attached: HTMLElement[] = []
@@ -156,7 +215,9 @@ function Tile({ p, isLocal, avatar, color, small, meName }: { p: any; isLocal: b
       p.trackPublications.forEach((pub: any) => {
         const t = pub.track
         if (!t || t.kind !== 'video' || pub.source !== 'camera') return
-        const el = t.attach(); el.classList.add('c2-media'); host.appendChild(el); attached.push(el); cam = true
+        cam = true
+        if (isVideoHidden(p.identity)) return   // отключено у себя из меню — трек не рендерим
+        const el = t.attach(); el.classList.add('c2-media'); host.appendChild(el); attached.push(el)
       })
       setHasCam(cam)
     }
@@ -165,12 +226,14 @@ function Tile({ p, isLocal, avatar, color, small, meName }: { p: any; isLocal: b
       'trackPublished', 'trackUnpublished', 'localTrackPublished', 'localTrackUnpublished']
     evs.forEach(e => p.on(e, refresh))
     return () => { evs.forEach(e => p.off(e, refresh)); attached.forEach(e => e.remove()) }
-  }, [p])
+  }, [p, vidHidden])
   const name = isLocal ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?')
+  const showCam = hasCam && !vidHidden
   return (
-    <div className={'c2-tile' + (speaking ? ' speaking' : '') + (hasCam ? ' cam' : '') + (isLocal ? ' local' : '')} style={!hasCam && color ? { background: color } : undefined}>
+    <div className={'c2-tile' + (speaking ? ' speaking' : '') + (showCam ? ' cam' : '') + (isLocal ? ' local' : '')} style={!showCam && color ? { background: color } : undefined}
+      onContextMenu={!isLocal && onCtx ? e => { e.preventDefault(); onCtx(p, String(name), avatar, e.clientX, e.clientY) } : undefined}>
       <div className="c2-vid" ref={vidRef} />
-      {!hasCam && <div className="c2-tile-av"><Avatar name={String(name)} url={avatar} size={small ? 44 : 72} /></div>}
+      {!showCam && <div className="c2-tile-av"><Avatar name={String(name)} url={avatar} size={small ? 44 : 72} /></div>}
       {!isLocal && <VolCtl identity={p.identity} />}
       <div className="c2-cap">{!micOn && <Icon name="mic-off" size={11} />} {name}</div>
     </div>
@@ -197,7 +260,7 @@ function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () 
 }
 
 /** Сцена: кружочки в голосовом режиме, плитки + лента при видео/демке. */
-function Stage({ room, avatars, colors, meName, onMainDblClick }: { room: Room; avatars: Record<string, string | null>; colors: Record<string, string | null>; meName?: string; onMainDblClick?: () => void }) {
+function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room: Room; avatars: Record<string, string | null>; colors: Record<string, string | null>; meName?: string; onMainDblClick?: () => void; onCtx?: CtxOpener }) {
   const [, bump] = useState(0)
   const [focus, setFocus] = useState<string | null>(null)
   useEffect(() => {
@@ -227,7 +290,7 @@ function Stage({ room, avatars, colors, meName, onMainDblClick }: { room: Room; 
   // Голосовой режим: кружочки-аватарки по центру, как звонок в Discord.
   if (!shares.length && !anyCam) return (
     <div className="c2-bubbles">
-      {all.map(({ p, local }) => <Bubble key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} meName={meName} />)}
+      {all.map(({ p, local }) => <Bubble key={p.sid || p.identity} p={p} isLocal={local} avatar={av(p)} meName={meName} onCtx={onCtx} />)}
     </div>
   )
 
@@ -241,7 +304,7 @@ function Stage({ room, avatars, colors, meName, onMainDblClick }: { room: Room; 
   if (!mainShare && !focusedPart) return (
     <div className="c2-board">
       <div className="c2-grid">
-        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} /></div>)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} onCtx={onCtx} /></div>)}
       </div>
     </div>
   )
@@ -251,19 +314,24 @@ function Stage({ room, avatars, colors, meName, onMainDblClick }: { room: Room; 
       <div className="c2-main" onDoubleClick={onMainDblClick}>
         {mainShare
           ? <ShareTile key={mainShare.key} pub={mainShare.pub} who={mainShare.who} onClick={() => { if (focusedShare) setFocus(null) }} />
-          : <div className="c2-click" onClick={() => setFocus(null)}><Tile p={focusedPart!.p} isLocal={focusedPart!.local} avatar={av(focusedPart!.p)} color={col(focusedPart!.p)} meName={meName} /></div>}
+          : <div className="c2-click" onClick={() => setFocus(null)}><Tile p={focusedPart!.p} isLocal={focusedPart!.local} avatar={av(focusedPart!.p)} color={col(focusedPart!.p)} meName={meName} onCtx={onCtx} /></div>}
       </div>
       <div className="c2-strip">
         {shares.filter(s => s.key !== (mainShare && mainShare.key)).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
-        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} /></div>)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} onCtx={onCtx} /></div>)}
       </div>
     </div>
   )
 }
 
-export function CallRoom({ room, meId, meName, onLeave, peer }:
-  { room: Room; meId: string; meName: string; onLeave: () => void; peer?: { name: string; avatarUrl?: string | null } | null }) {
+export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
+  { room: Room; meId: string; meName: string; onLeave: () => void; peer?: { name: string; avatarUrl?: string | null } | null
+    // v1.183.0: правый клик по участнику — меню как в Discord (профиль/громкость/
+    // заглушить у себя/скрыть видео/копировать ID). Профиль открывает родитель
+    // (у него уже есть MiniProfile) — CallRoom только сообщает, кого открыть.
+    onProfile?: (userId: string, name: string, avatarUrl: string | null | undefined, x: number, y: number) => void }) {
   const { settings } = useSettings()
+  const [pctx, setPctx] = useState<{ p: any; name: string; avatar: string | null | undefined; x: number; y: number } | null>(null)
   const [mic, setMic] = useState(true)
   const [cam, setCam] = useState(false)
   const [screen, setScreen] = useState(false)
@@ -567,12 +635,15 @@ export function CallRoom({ room, meId, meName, onLeave, peer }:
           <button title={fs ? 'Свернуть' : 'На весь экран'} onClick={() => setFs(f => !f)}><Icon name={fs ? 'shrink' : 'expand'} size={16} /></button>
         </div>
       </div>
-      <Stage room={room} avatars={avatars} colors={colors} meName={meName} onMainDblClick={() => setFs(f => !f)} />
+      <Stage room={room} avatars={avatars} colors={colors} meName={meName} onMainDblClick={() => setFs(f => !f)}
+        onCtx={(p, name, avatar, x, y) => setPctx({ p, name, avatar, x, y })} />
       {alone && peer && <div className="c2-waiting">{'Ждём ответа — ' + peer.name + '…'}</div>}
       {audioBlocked && <button className="c2-audio-blocked" onClick={() => room.startAudio().catch(() => {})}>
         <Icon name="volume" size={14} /> Браузер заблокировал звук — нажми, чтобы включить
       </button>}
       {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
+      {pctx && <PartCtxMenu identity={pctx.p.identity} x={pctx.x} y={pctx.y} onClose={() => setPctx(null)}
+        onProfile={onProfile ? () => onProfile(pctx.p.identity, pctx.name, pctx.avatar, pctx.x, pctx.y) : undefined} />}
       <div className="c2-bar">
         <div className="c2-grp">
           <button className={'c2-btn' + (mic ? '' : ' lit')} onClick={toggleMic} title={mic ? 'Выключить микрофон' : 'Включить микрофон'}><Icon name={mic ? 'mic' : 'mic-off'} size={20} /></button>

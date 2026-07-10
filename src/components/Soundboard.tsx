@@ -13,10 +13,16 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
   const [busy, setBusy] = useState('')
   const [q, setQ] = useState('')
   const [playingId, setPlayingId] = useState<string | null>(null)
+  // v1.183.0: предпрослушивание у себя («▶») никак не останавливалось — новый клик
+  // на тот же звук просто перезапускал его сначала вместо стоп/тоггла, как уже
+  // работает у «Всем». Тот же playingId/stopRef паттерн, отдельное состояние —
+  // предпрослушивание и трансляция в канал независимы.
+  const [previewingId, setPreviewingId] = useState<string | null>(null)
   const [trim, setTrim] = useState<{ clip: Clip; buf: AudioBuffer; start: number; end: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const stopRef = useRef<(() => void) | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
+  const trimPreviewRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null)
 
   async function refresh() { setClips(await fetchClips()) }
 
@@ -29,7 +35,10 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
   }, [])
 
   // Закрыли панель во время предпрослушивания — не оставляем звук играть в фоне.
-  useEffect(() => () => { previewRef.current?.pause() }, [])
+  useEffect(() => () => {
+    previewRef.current?.pause()
+    if (trimPreviewRef.current) { trimPreviewRef.current.audio.pause(); URL.revokeObjectURL(trimPreviewRef.current.url) }
+  }, [])
 
   // Save the last 15 seconds of the ongoing call as a clip.
   async function saveMoment() {
@@ -59,9 +68,18 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
   }
 
   async function play(c: Clip) {
-    // play locally as a preview
+    // Клик по уже играющему превью — стоп (как «Всем»/blast ниже).
+    if (previewingId === c.id) {
+      previewRef.current?.pause(); previewRef.current = null
+      setPreviewingId(null)
+      return
+    }
     if (previewRef.current) { previewRef.current.pause(); previewRef.current = null }
-    const a = new Audio(c.url); previewRef.current = a; a.play().catch(() => {})
+    const a = new Audio(c.url)
+    a.onended = () => { setPreviewingId(id => id === c.id ? null : id); if (previewRef.current === a) previewRef.current = null }
+    previewRef.current = a
+    setPreviewingId(c.id)
+    try { await a.play() } catch { setPreviewingId(id => id === c.id ? null : id) }
   }
 
   async function blast(c: Clip) {
@@ -96,7 +114,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
       const file = new File([blob], name.replace(/[^\w]+/g, '_') + '.wav', { type: 'audio/wav' })
       const url = await uploadTo('attachments', meId, file)
       await addClip({ url, name, ownerId: meId, ownerName: meName, duration: Math.max(0, trim.end - trim.start) })
-      setTrim(null)
+      closeTrim()
       refresh()
     } catch (e: any) { toastErr(e.message ?? String(e)) }
     finally { setBusy('') }
@@ -104,8 +122,19 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
 
   function previewTrim() {
     if (!trim) return
+    // Раньше Audio() не сохранялся никуда — повторные клики копили несколько
+    // одновременно играющих, неостанавливаемых инстансов, плюс blob-URL утекали.
+    if (trimPreviewRef.current) { trimPreviewRef.current.audio.pause(); URL.revokeObjectURL(trimPreviewRef.current.url) }
     const blob = audioBufferToWav(trim.buf, trim.start, trim.end)
-    const a = new Audio(URL.createObjectURL(blob)); a.play().catch(() => {})
+    const url = URL.createObjectURL(blob)
+    const a = new Audio(url)
+    a.onended = () => { if (trimPreviewRef.current?.audio === a) { URL.revokeObjectURL(url); trimPreviewRef.current = null } }
+    trimPreviewRef.current = { audio: a, url }
+    a.play().catch(() => {})
+  }
+  function closeTrim() {
+    if (trimPreviewRef.current) { trimPreviewRef.current.audio.pause(); URL.revokeObjectURL(trimPreviewRef.current.url); trimPreviewRef.current = null }
+    setTrim(null)
   }
 
   const list = q ? clips.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : clips
@@ -135,7 +164,9 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
         {list.length === 0 && <div className="sb-empty">Пока нет сохранённых звуков. Сохрани момент из звонка или загрузи аудио — их увидят все.</div>}
         {list.map(c => (
           <div key={c.id} className={'sb-item' + (playingId === c.id ? ' playing' : '')}>
-            <button className="sb-play" title="Прослушать у себя" onClick={() => play(c)}><Icon name="play" size={15} /></button>
+            <button className="sb-play" title={previewingId === c.id ? 'Остановить' : 'Прослушать у себя'} onClick={() => play(c)}>
+              <Icon name={previewingId === c.id ? 'pause' : 'play'} size={15} />
+            </button>
             <div className="sb-meta">
               <div className="sb-name">{c.name}</div>
               <div className="sb-sub">{fmtDur(c.duration)} · {c.owner}</div>
@@ -149,7 +180,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
         ))}
       </div>
 
-      {trim && <div className="sb-trim-modal" onClick={() => setTrim(null)}>
+      {trim && <div className="sb-trim-modal" onClick={closeTrim}>
         <div className="sb-trim-inner" onClick={e => e.stopPropagation()}>
           <div className="sb-trim-h">Обрезать: {trim.clip.name}</div>
           <div className="sb-trim-row">
@@ -165,7 +196,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
           <div className="sb-trim-dur">Длительность: {fmtDur(Math.max(0, trim.end - trim.start))}</div>
           <div className="sb-trim-foot">
             <button className="sb-ghost" onClick={previewTrim}><Icon name="play" size={14} /> Прослушать</button>
-            <button className="sb-ghost" onClick={() => setTrim(null)}>Отмена</button>
+            <button className="sb-ghost" onClick={closeTrim}>Отмена</button>
             <button className="sb-primary" disabled={busy === 'savetrim'} onClick={saveTrim}>{busy === 'savetrim' ? 'Сохраняю…' : 'Сохранить обрезку'}</button>
           </div>
         </div>

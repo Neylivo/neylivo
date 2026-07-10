@@ -934,7 +934,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           channelName: id => channels.find(c => c.id === id)?.name ?? '?',
         }} />}
         {voice && <VoiceConn room={voice.room} sinks={!voicePanel} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
-        {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }} />}
+        {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }}
+          onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
         {connecting && !voice && voicePanel && <div className="c2-wrap c2-connecting">
           <div className="c2-bubbles"><div className="c2-bub"><div className="c2-bub-av birth"><Avatar name={username} url={avatarUrl} size={84} /></div><div className="c2-bub-nm">{username}</div></div></div>
           <div className="c2-waiting">Подключаемся…</div>

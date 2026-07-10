@@ -743,7 +743,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           </div>}
           {connectingThread === threadId && !(call && callThread === threadId) &&
             <div className="dm-call-connecting"><Icon name="phone" size={15} /> Соединение{connectingPeer ? ' с ' + connectingPeer.name : ''}…</div>}
-          {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)} />}
+          {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)}
+            onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
             <MessageList messages={messages as any} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
