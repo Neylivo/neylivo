@@ -56,6 +56,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
   useEffect(() => { setActiveDm(threadId); return () => setActiveDm(null) }, [threadId])
   const [messages, setMessages] = useState<DMMessage[]>([])
+  // v1.177.0: ↑ в пустом композере — редактировать своё последнее сообщение (как в Discord).
+  useEffect(() => {
+    const h = () => {
+      const mine = [...messages].reverse().find(m => m.author === meId && m.content)
+      if (mine) { setEditingMsg({ id: mine.id, content: mine.content ?? '' }); setReplyTarget(null) }
+    }
+    window.addEventListener('ponoi-edit-last', h)
+    return () => window.removeEventListener('ponoi-edit-last', h)
+  }, [messages, meId])
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgsBoxRef = useRef<HTMLDivElement>(null)
   const prevLen = useRef(0)
@@ -80,6 +89,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const { statusOf, gameOf, deviceOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
+  // v1.177.0: редактирование сообщения — текст живёт в композере, как в Discord.
+  const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null)
   const { typers, notifyTyping } = useTyping(threadId, username)
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
@@ -641,6 +652,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
     await editMessage('dm_messages', id, content)
   }
+  async function saveEditedMsg(text: string) {
+    if (!editingMsg) return
+    const id = editingMsg.id
+    const t = text.trim()
+    setEditingMsg(null)
+    if (t) await editMsg(id, t)
+    else await removeMsg(id)
+  }
   // v1.157.0: спойлер/название/описание одного вложения — карандаш на краю фото/текстового файла.
   async function editAttachment(messageId: string, index: number, patch: AttachPatch) {
     const msg = messages.find(m => m.id === messageId)
@@ -726,7 +745,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : active.name}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
-              onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
+              onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) }); setEditingMsg(null) }}
+              onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
               onMarkUnread={m => { setNewDividerId(m.id); if (threadId) setDmRead(threadId, new Date(m.created_at).getTime() - 1) }}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
             {!atBottom && <button className="jump-down" onClick={jumpDown}>
@@ -738,7 +758,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
           <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
             mentionables={[active.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
-            onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />
+            onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
+            editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />
         </> : <>
           <header className="chat-head pfr-head">
             <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button><span className="pfr-title"><Icon name="users" size={20} /> Друзья</span>

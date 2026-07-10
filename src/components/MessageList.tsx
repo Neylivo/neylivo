@@ -222,7 +222,12 @@ interface Props {
   onPin?: (id: string, pinned: boolean) => void
   onDelete?: (id: string) => void
   onReply?: (m: UiMessage) => void
-  onEdit?: (id: string, content: string) => void | Promise<void>
+  // v1.177.0: редактирование переехало в композер (как в Discord) — вместо
+  // сохранения текста MessageList просто сообщает родителю, что редактируем ЭТО
+  // сообщение; сам композер получает его текст и сохраняет через свой onSaveEdit.
+  onStartEdit?: (m: UiMessage) => void
+  // id сообщения, которое сейчас редактируется в композере — подсветить строку.
+  editingId?: string | null
   // v1.157.0: правка одного вложения (спойлер/название/описание) — index в
   // группе, склеенной через '\n' (см. AttachPatch в src/lib/reactions.ts).
   onEditAttachment?: (messageId: string, index: number, patch: { spoiler?: boolean; name?: string; desc?: string }) => void | Promise<void>
@@ -243,14 +248,12 @@ interface Props {
   linkCtx?: MsgLinkCtx
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onEdit, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [pickFor, setPickFor] = useState<string | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
-  const [editText, setEditText] = useState('')
   const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
   const [emojiAt, setEmojiAt] = useState<{ id: string; x: number; y: number } | null>(null)
   const [, setEmojiVer] = useState(0)
@@ -270,28 +273,6 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     window.addEventListener('ponoi-gif-resolved', h)
     return () => window.removeEventListener('ponoi-gif-resolved', h)
   }, [])
-
-  // ↑ в пустом композере — редактировать своё последнее сообщение (событие из Composer).
-  useEffect(() => {
-    const h = () => {
-      if (!onEdit) return
-      const mine = [...messages].reverse().find(m => m.author === currentUser && m.content)
-      if (mine) { setEditing(mine.id); setEditText(mine.content ?? '') }
-    }
-    window.addEventListener('ponoi-edit-last', h)
-    return () => window.removeEventListener('ponoi-edit-last', h)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, currentUser, onEdit])
-
-  // Начало редактирования сообщения закрывает панели эмодзи/GIF в композере.
-  useEffect(() => { if (editing) window.dispatchEvent(new Event('ponoi-close-pickers')) }, [editing])
-
-  async function saveEdit(id: string) {
-    const t = editText.trim()
-    if (t) await onEdit?.(id, t)
-    else onDelete?.(id) // стёр весь текст — предложить удалить сообщение (с подтверждением)
-    setEditing(null)
-  }
 
   let lastAuthor = ''
   let lastTs = 0
@@ -381,7 +362,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           <Fragment key={m._localId ?? m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '')}
+            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '')}
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
               <div className="msg-gutter">
                 {grouped
@@ -394,17 +375,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
                 {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
-                {editing === m.id
-                  ? <div className="msg-edit">
-                      <textarea className="msg-edit-in" value={editText} autoFocus
-                        onChange={e => setEditText(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Escape') { e.preventDefault(); setEditing(null) }
-                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m.id) }
-                        }} />
-                      <div className="msg-edit-hint">Esc — <button type="button" onClick={() => setEditing(null)}>отмена</button> • Enter — <button type="button" onClick={() => saveEdit(m.id)}>сохранить</button></div>
-                    </div>
-                  : fwd
+                {fwd
                   ? <div className="msg-fwd">
                       <div className="msg-fwd-hdr"><Icon name="forward" size={13} /> Пересланное сообщение</div>
                       {fwd.text && <div className="msg-txt">{renderContent(fwd.text)}</div>}
@@ -438,7 +409,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
-                {m.author === currentUser && onEdit && m.content && !fwd && <button title="Изменить" onClick={() => { setEditing(m.id); setEditText(m.content ?? '') }}><Icon name="edit" size={18} /></button>}
+                {m.author === currentUser && onStartEdit && m.content && !fwd && <button title="Изменить" onClick={() => onStartEdit(m)}><Icon name="edit" size={18} /></button>}
                 <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
@@ -463,7 +434,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           </div>
           <div className="ctx-item" onClick={() => { setEmojiAt({ id: menu.id, x: menu.x, y: menu.y }); setMenu(null) }}><span>Добавить реакцию</span><Icon name="chevron-right" size={16} /></div>
           <div className="ctx-sep" />
-          {menuMsg.author === currentUser && onEdit && menuMsg.content && !fwdM ? item('Редактировать', 'edit', () => { setEditing(menuMsg.id); setEditText(menuMsg.content ?? '') }) : null}
+          {menuMsg.author === currentUser && onStartEdit && menuMsg.content && !fwdM ? item('Редактировать', 'edit', () => onStartEdit(menuMsg)) : null}
           {onReply ? item('Ответить', 'reply', () => onReply(menuMsg)) : null}
           {currentUser ? item('Переслать', 'forward', () => setFwdFor(menuMsg)) : null}
           <div className="ctx-sep" />

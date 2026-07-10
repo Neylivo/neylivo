@@ -62,13 +62,20 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit }:
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
     replyingTo?: { author: string; preview: string } | null; onCancelReply?: () => void; onType?: () => void;
-    mentionables?: string[]; draftKey?: string }) {
+    mentionables?: string[]; draftKey?: string
+    // v1.177.0: редактирование сообщения — как в Discord, текст загружается прямо
+    // в строку набора вместо инлайн-текстареи внутри самого сообщения.
+    editingTarget?: { id: string; content: string } | null
+    onSaveEdit?: (text: string) => void | Promise<void>
+    onCancelEdit?: () => void }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const [text, setText] = useState('')
+  const isEditing = !!editingTarget
+  const preEditText = useRef<string | null>(null)
   // v1.70.0: несколько вложений в одном сообщении (как в Discord, до 10).
   const [files, setFiles] = useState<File[]>([])
   const [spoilers, setSpoilers] = useState<Record<number, boolean>>({})
@@ -125,16 +132,37 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
 
   // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
   useEffect(() => {
-    if (draftKey === undefined) return
+    if (draftKey === undefined || isEditing) return
     setText(localStorage.getItem('ponoi_draft_' + draftKey) ?? '')
     setMQ(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey])
   function keepDraft(v: string) {
-    if (draftKey === undefined) return
+    if (draftKey === undefined || isEditing) return   // во время редактирования текст поля — не черновик
     if (v) localStorage.setItem('ponoi_draft_' + draftKey, v)
     else localStorage.removeItem('ponoi_draft_' + draftKey)
   }
+
+  // v1.177.0: вход/выход из редактирования — подставляем текст сообщения в поле
+  // (сохранив прежний черновик набора) и возвращаем черновик обратно при отмене.
+  useEffect(() => {
+    if (editingTarget) {
+      if (preEditText.current === null) preEditText.current = text
+      setText(editingTarget.content)
+      setEmoji(false); setGif(false)
+      requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (!el) return
+        el.focus()
+        const l = editingTarget.content.length
+        el.setSelectionRange(l, l)
+      })
+    } else if (preEditText.current !== null) {
+      setText(preEditText.current)
+      preEditText.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingTarget?.id])
 
   // v1.163.0: многострочный композер — поле растёт вместе с текстом (Shift+Enter —
   // новая строка, как в Discord), CSS max-height/overflow-y ограничивают рост дальше.
@@ -302,6 +330,18 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (busy || sendingRef.current) return   // v1.42.0: защита от двойной отправки
+    if (isEditing) {
+      const t = text.trim()
+      sendingRef.current = true
+      setBusy(true)
+      try {
+        await onSaveEdit?.(t)
+        preEditText.current = null   // сохранили правку — черновик восстанавливать не нужно
+        setText('')
+      } catch (err: any) { toastErr(err.message ?? String(err)) }
+      finally { setBusy(false); sendingRef.current = false }
+      return
+    }
     const t = polish(applySlash(text.trim()))
     if ((!t && files.length === 0) || !user) return
     // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
@@ -372,11 +412,16 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         ))}
       </div>}
       {pvOpen && <Lightbox url={pvOpen} onClose={() => setPvOpen(null)} />}
-      {replyingTo && <div className="reply-banner">
-        <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
-        <span>{replyingTo.preview}</span>
-        <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
-      </div>}
+      {isEditing
+        ? <div className="reply-banner edit-banner">
+            <Icon name="edit" size={14} /> Редактирование сообщения
+            <button type="button" title="Отменить (Esc)" onClick={() => onCancelEdit?.()}><Icon name="close" size={14} /></button>
+          </div>
+        : replyingTo && <div className="reply-banner">
+            <Icon name="reply" size={14} /> Ответ <b>{replyingTo.author}</b>
+            <span>{replyingTo.preview}</span>
+            <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
+          </div>}
       {rec && <div className="voice-pill">
         <span className="voice-dot" />
         <b className="voice-time">{Math.floor(rec.t / 60)}:{String(rec.t % 60).padStart(2, '0')}</b>
@@ -395,7 +440,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             </div>
           ))}
         </div>}
-        <div className="plus-wrap">
+        <div className="plus-wrap" style={isEditing ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
           <button type="button" className="attach-btn" title="Прикрепить" onClick={() => setPlusMenu(v => !v)}><Icon name="plus-circle" size={20} /></button>
           {plusMenu && <>
             <div className="plus-overlay" onClick={() => setPlusMenu(false)} />
@@ -443,8 +488,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx]); return }
               if (e.key === 'Escape') { e.preventDefault(); setMQ(null); return }
             }
-            if (e.key === 'ArrowUp' && !text) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
-            if (e.key === 'Escape') { setEmoji(false); setGif(false); onCancelReply?.(); return }
+            if (e.key === 'ArrowUp' && !text && !isEditing) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
+            if (e.key === 'Escape') { setEmoji(false); setGif(false); if (isEditing) onCancelEdit?.(); else onCancelReply?.(); return }
             if (e.key === 'Enter') {
               const hasCtrl = e.ctrlKey || e.metaKey
               // v1.163.0: textarea больше не отправляет форму сама по Enter (как раньше
@@ -461,14 +506,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
-          <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>
+          {!isEditing && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
-          <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>
-          <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>
+          {!isEditing && <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
+          {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
           {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
         </div>
-        {!busy && <button type="submit" className="send-tg" title="Отправить"><Icon name="send" size={18} /></button>}
+        {!busy && <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>}
         {busy && <button type="submit" className="send-busy" disabled>…</button>}
       </form>
     </>

@@ -142,6 +142,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [editProfile, setEditProfile] = useState(false)
   const [hideMuted, setHideMuted] = useState(() => localStorage.getItem('ponoi_hide_muted') === '1')
   const [replyTarget, setReplyTarget] = useState<{ id: string; author: string; preview: string } | null>(null)
+  // v1.177.0: редактирование сообщения — текст живёт в композере, как в Discord.
+  const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null)
   const [newDividerId, setNewDividerId] = useState<string | null>(null)
   // Подсветка каналов с непрочитанными сообщениями (как в Discord).
   const [unreadCh, setUnreadCh] = useState<Record<string, boolean>>({})
@@ -248,6 +250,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // При размонтировании выходим из голоса.
   // eslint-disable-next-line
   useEffect(() => () => { try { voiceRef.current?.room.disconnect() } catch {} }, [])
+
+  // v1.177.0: ↑ в пустом композере — редактировать своё последнее сообщение (как в Discord).
+  useEffect(() => {
+    const h = () => {
+      const mine = [...messages].reverse().find(m => m.author === user?.id && m.content)
+      if (mine) { setEditingMsg({ id: mine.id, content: mine.content ?? '' }); setReplyTarget(null) }
+    }
+    window.addEventListener('ponoi-edit-last', h)
+    return () => window.removeEventListener('ponoi-edit-last', h)
+  }, [messages, user?.id])
 
   // v1.176.0: баг — «отключено» слушал только CallRoom (открытая панель звонка);
   // если комната отваливалась сама (сеть, кик, закрытие сервера) со свёрнутой
@@ -743,6 +755,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
     await editMessage('messages', id, content)
   }
+  // v1.177.0: сохранение правки из композера — пусто в поле, как и раньше,
+  // предлагает удалить сообщение (с подтверждением), а не оставляет его пустым.
+  async function saveEditedMsg(text: string) {
+    if (!editingMsg) return
+    const id = editingMsg.id
+    const t = text.trim()
+    setEditingMsg(null)
+    if (t) await editMsg(id, t)
+    else await removeMsg(id)
+  }
   // v1.157.0: спойлер/название/описание одного вложения — карандаш на краю фото/текстового файла.
   async function editAttachment(messageId: string, index: number, patch: AttachPatch) {
     const msg = messages.find(m => m.id === messageId)
@@ -924,7 +946,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
             onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
-            onReply={m => setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) })} onEdit={editMsg}
+            onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120) }); setEditingMsg(null) }}
+            onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
             onMarkUnread={m => { setNewDividerId(m.id); if (curChannelRef.current) setChRead(curChannelRef.current.id, new Date(m.created_at).getTime() - 1) }}
             onProfile={(m, x, y) => { const mm = members.find(z => z.user_id === m.author)
               setMini({ userId: m.author, name: m.author_name, avatarUrl: mm?.avatar_url ?? null, status: statusOf(m.author), roles: allRolesOf(m.author).map(r => ({ name: r.name, color: r.color })), activity: activityOf(m.author), x, y }) }} />
@@ -937,7 +960,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview } : null}
-          onCancelReply={() => setReplyTarget(null)} onType={notifyTyping} />}
+          onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
+          editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
       </main>
       {showMembers && <aside className="members">
         {(() => {
