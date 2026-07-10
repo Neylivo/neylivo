@@ -43,4 +43,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   mcPrepareInstance: (pack, supabaseUrl) => ipcRenderer.invoke('ponoi-mc-prepare-instance', { pack, supabaseUrl }),
   onMcProgress: (cb) => { ipcRenderer.removeAllListeners('ponoi-mc-progress'); ipcRenderer.on('ponoi-mc-progress', (_e, p) => cb(p)) },
   mcLaunch: (pack, instDir, username) => ipcRenderer.invoke('ponoi-mc-launch', { pack, instDir, username }),
+  // v1.184.0: «Поделиться игрой» — открыть join-ссылку (roblox://…) в системном обработчике.
+  openExternal: (url) => ipcRenderer.send('ponoi-open-external', url),
 })

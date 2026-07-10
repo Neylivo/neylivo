@@ -114,7 +114,7 @@ const GAMES = {
   'rainbowsix.exe': 'Rainbow Six Siege',
   'rainbowsix_dx11.exe': 'Rainbow Six Siege',
 }
-let curGame = null   // { name, since } | null
+let curGame = null   // { name, since, mode?, placeId?, jobId? } | null — placeId/jobId только для Roblox (v1.184.0)
 
 function broadcastGame() {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -472,8 +472,12 @@ async function robloxPlaceName(placeId) {
   return name
 }
 // Свежайший лог-файл Roblox и последнее событие в нём: если после последнего
-// входа в плейс не было выхода — игрок сейчас в этом плейсе.
-function robloxCurrentPlaceId() {
+// входа в плейс не было выхода — игрок сейчас в этом плейсе. Строка лога несёт
+// не только placeId, но и guid конкретного сервера (job id) — тот же guid, что
+// Roblox использует в собственных «join»-ссылках (?gameInstanceId=), поэтому
+// достаём и его: даёт возможность звать друга прямо в свой сервер, а не просто
+// в плейс наугад (см. robloxJoinLink() ниже, v1.184.0 — «Поделиться игрой»).
+function robloxCurrentSession() {
   try {
     const fsr = require('fs')
     const dir = path.join(process.env.LOCALAPPDATA || '', 'Roblox', 'logs')
@@ -492,13 +496,13 @@ function robloxCurrentPlaceId() {
     fsr.readSync(fd, buf, 0, len, size - len)
     fsr.closeSync(fd)
     const txt = buf.toString('utf8')
-    let joinAt = -1, placeId = null
-    const re = /[Jj]oining game '[^']*' place (\d+)/g
+    let joinAt = -1, placeId = null, jobId = null
+    const re = /[Jj]oining game '([^']+)' place (\d+)/g
     let m
-    while ((m = re.exec(txt))) { joinAt = m.index; placeId = m[1] }
+    while ((m = re.exec(txt))) { joinAt = m.index; jobId = m[1]; placeId = m[2] }
     const leaveAt = Math.max(txt.lastIndexOf('leaveUGCGameInternal'), txt.lastIndexOf('Client:Disconnect'))
     if (placeId == null || leaveAt > joinAt) return null
-    return placeId
+    return { placeId, jobId }
   } catch { return null }
 }
 // ---- v1.90.0: режимы/детали игр — расширяемая система ----
@@ -780,21 +784,27 @@ function deltaForceMode() {
 let modeBusy = false
 let lastPlaceId = null
 let robloxModeName = null
+let lastJobId = null
 async function scanGameMode() {
   if (process.platform !== 'win32' || modeBusy) return
   const g = curGame
-  if (!g) { lastPlaceId = null; robloxModeName = null; return }
+  if (!g) { lastPlaceId = null; robloxModeName = null; lastJobId = null; return }
   modeBusy = true
   try {
     let mode = null
+    let placeId = null, jobId = null
     if (g.name === 'Roblox') {
-      const pid = robloxCurrentPlaceId()
+      const sess = robloxCurrentSession()
+      const pid = sess ? sess.placeId : null
       if (pid !== lastPlaceId) {
         lastPlaceId = pid
         robloxModeName = pid ? await robloxPlaceName(pid) : null
         if (pid && !robloxModeName) lastPlaceId = null   // имя не узнали (сеть/API) — попробуем ещё раз
       }
       mode = robloxModeName
+      placeId = pid
+      jobId = sess ? sess.jobId : null
+      lastJobId = jobId
     } else if (g.name === 'Counter-Strike 2') { ensureGsiCfg('Counter-Strike 2', curGameExe); mode = cs2Mode() }
     else if (g.name === 'Dota 2') { ensureGsiCfg('Dota 2', curGameExe); mode = dotaMode() }
     else if (g.name === 'Dead by Daylight') mode = dbdMode()
@@ -804,8 +814,9 @@ async function scanGameMode() {
     else if (g.name === 'Minecraft (Java)') mode = mcJavaLogMode(g.since) || mcMode()
     else if (g.name === 'Minecraft') mode = mcMode()
     else mode = ueGenericMode()
-    if (curGame && curGame.name === g.name && (curGame.mode ?? null) !== (mode ?? null)) {
-      curGame = { ...curGame, mode }
+    if (curGame && curGame.name === g.name &&
+        ((curGame.mode ?? null) !== (mode ?? null) || (curGame.placeId ?? null) !== (placeId ?? null) || (curGame.jobId ?? null) !== (jobId ?? null))) {
+      curGame = { ...curGame, mode, ...(g.name === 'Roblox' ? { placeId, jobId } : {}) }
       broadcastGame()
     }
   } finally { modeBusy = false }
@@ -816,6 +827,15 @@ async function scanGameMode() {
 ipcMain.on('win-minimize', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.minimize() } catch {} })
 ipcMain.on('win-toggle-max', (e) => { try { const w = BrowserWindow.fromWebContents(e.sender); if (w) w.isMaximized() ? w.unmaximize() : w.maximize() } catch {} })
 ipcMain.on('win-close', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.close() } catch {} })
+
+// v1.184.0: «Поделиться игрой» — открыть внешнюю ссылку (roblox:// join-диплинк
+// и обычные http(s)) системным обработчиком, не в окне Electron. Схема — жёсткий
+// белый список: content отрисовывается из данных чата, лишний протокол сюда лучше не пускать.
+ipcMain.on('ponoi-open-external', (_e, url) => {
+  try {
+    if (typeof url === 'string' && /^(https?|roblox):\/\//i.test(url)) shell.openExternal(url)
+  } catch {}
+})
 
 // Строгий детект (v1.49.1): спрашиваем у Windows ТОЛЬКО процессы с настоящим
 // главным окном (MainWindowHandle ≠ 0 и непустой заголовок) через PowerShell —

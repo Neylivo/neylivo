@@ -24,7 +24,10 @@ export interface Activity { text: string; since: number }
 export interface Listening { title: string; author?: string; source?: string; pos: number; dur?: number; at: number }
 // Авто-активность «Играет в …»: десктоп присылает только старт/стоп ({ name, since }),
 // тикающий таймер каждый клиент досчитывает сам из разницы часов.
-export interface Game { name: string; since: number; cover?: string | null; mode?: string | null }   // mode — режим/плейс (v1.89.0, пока только Roblox)
+// mode — режим/плейс (v1.89.0, пока только Roblox); placeId/jobId — числовой id
+// плейса и guid конкретного сервера Roblox (v1.184.0, «Поделиться игрой» —
+// нужны для join-диплинка, см. src/lib/gameShare.ts).
+export interface Game { name: string; since: number; cover?: string | null; mode?: string | null; placeId?: string | null; jobId?: string | null }
 interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; device?: 'mobile' | 'desktop' }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
@@ -235,8 +238,11 @@ export function PresenceProvider({ username, avatarUrl, children }:
       }
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
         // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,
-        // не перезапуская игровую сессию и не трогая обложку.
-        if (g && gameRef.current && (g.mode ?? null) !== (gameRef.current.mode ?? null)) pub({ ...gameRef.current, mode: g.mode ?? null })
+        // не перезапуская игровую сессию и не трогая обложку. v1.184.0: заодно
+        // тащим placeId/jobId — они меняются вместе с/чаще, чем сам режим (смена сервера).
+        if (g && gameRef.current && ((g.mode ?? null) !== (gameRef.current.mode ?? null) ||
+            (g.placeId ?? null) !== (gameRef.current.placeId ?? null) || (g.jobId ?? null) !== (gameRef.current.jobId ?? null)))
+          pub({ ...gameRef.current, mode: g.mode ?? null, placeId: g.placeId ?? null, jobId: g.jobId ?? null })
         return
       }
       // История активностей (миграция 14): закрываем прошлую сессию, начинаем новую.

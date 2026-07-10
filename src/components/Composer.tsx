@@ -13,8 +13,10 @@ import { useSettings } from '../lib/settings'
 import type { AttachPatch } from '../lib/reactions'
 import { usePresence } from '../lib/presence'
 import { isQuicklaunchAvailable, type QlManifest } from '../lib/quicklaunch'
-import { sysQuickLaunch } from '../lib/sysmsg'
+import { sysQuickLaunch, sysGameLink } from '../lib/sysmsg'
+import { robloxJoinUrl } from '../lib/gameShare'
 import { ShareBuildModal } from './ShareBuildModal'
+import { ShareGameLinkModal } from './ShareGameLinkModal'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 50000
@@ -81,6 +83,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const { gameOf } = usePresence()
   const [text, setText] = useState('')
   const [shareBuild, setShareBuild] = useState(false)
+  const [shareRoblox, setShareRoblox] = useState(false)
   const isEditing = !!editingTarget
   const preEditText = useRef<string | null>(null)
   // v1.70.0: несколько вложений в одном сообщении (как в Discord, до 10).
@@ -437,6 +440,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           const totalMb = Math.round(manifest.mods.reduce((a, m) => a + m.size, 0) / 1024 / 1024)
           onSend(sysQuickLaunch(packId, { game: 'Minecraft', mcVersion: manifest.mcVersion, loader: manifest.loader, modCount: manifest.mods.length, totalMb }))
         }} />}
+      {shareRoblox && <ShareGameLinkModal label={gameOf(user?.id ?? '')?.mode ?? null} onClose={() => setShareRoblox(false)}
+        onShared={() => {
+          const g = gameOf(user?.id ?? '')
+          setShareRoblox(false)
+          if (!g?.placeId) return
+          onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId) }))
+        }} />}
       {rec && <div className="voice-pill">
         <span className="voice-dot" />
         <b className="voice-time">{Math.floor(rec.t / 60)}:{String(rec.t % 60).padStart(2, '0')}</b>
@@ -465,7 +475,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button>
               <button type="button" onClick={() => { setPlusMenu(false); startRec() }}><Icon name="mic" size={17} /> Голосовое</button>
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Minecraft (Java)' &&
-                <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться сборкой</button>}
+                <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
+              {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Roblox' && !!gameOf(user?.id ?? '')?.placeId &&
+                <button type="button" onClick={() => { setPlusMenu(false); setShareRoblox(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
             </div>
           </>}
         </div>

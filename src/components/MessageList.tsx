@@ -8,7 +8,8 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
-import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta } from '../lib/sysmsg'
+import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta } from '../lib/sysmsg'
+import { openGameLink } from '../lib/gameShare'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -342,6 +343,25 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         <div className="ql-title">{ql.game} — {ql.mcVersion} ({ql.loader === 'neoforge' ? 'NeoForge' : 'Forge'})</div>
                         <div className="ql-sub">{ql.modCount} {modsWord(ql.modCount)} · {ql.totalMb} МБ докачки</div>
                         <QuickLaunchCard packId={sys.targetId} username={currentUserName || 'Player'} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })() : sys.type === 'glink' ? (() => {
+                // v1.184.0: «Поделиться игрой» для игр без установки/скачивания
+                // (Roblox и т.п.) — просто join-ссылка, открывается системным
+                // обработчиком (см. src/lib/gameShare.ts).
+                const gl = parseGameLinkMeta(sys.preview)
+                if (!gl) return null
+                return (
+                  <div className="inv2-card ql-card">
+                    <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы поделились игрой' : m.author_name + ' зовёт тебя в игру!'}</div>
+                    <div className="inv2-box ql-box">
+                      <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
+                      <div className="ql-body">
+                        <div className="ql-title">{gl.game}</div>
+                        {gl.label && <div className="ql-sub">{gl.label}</div>}
+                        <button className="inv2-join ql-btn" onClick={() => openGameLink(gl.url)}>Присоединиться</button>
                       </div>
                     </div>
                   </div>
