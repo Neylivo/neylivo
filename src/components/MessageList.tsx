@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
-import { timeShort, timeFull, dayLabel, msgTime, callTime } from '../lib/ui'
+import { timeShort, timeFull, dayLabel, msgTime, callTime, fmtN, ruMembers } from '../lib/ui'
 import { renderMd, mentionsUser } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
@@ -18,14 +18,6 @@ import { findYouTubeLink, ytMeta } from '../music/sources'
 import type { ScMeta } from '../music/soundcloud'
 import { guardLink } from '../lib/linkguard'
 
-// v1.81.0: числа и склонения для карточки-приглашения (как в Discord)
-const fmtN = (n: number) => n.toLocaleString('ru-RU')
-function ruMembers(n: number): string {
-  const d = n % 100
-  if (d >= 11 && d <= 14) return 'участников'
-  const r = n % 10
-  return r === 1 ? 'участник' : r >= 2 && r <= 4 ? 'участника' : 'участников'
-}
 // v1.180.0: «1 мод / 2 мода / 5 модов» — для карточки «Игровой Экспресс».
 function modsWord(n: number): string {
   const d = n % 100

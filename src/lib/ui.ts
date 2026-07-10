@@ -34,6 +34,15 @@ export function dayLabel(iso: string) {
   return d.toLocaleDateString('ru-RU', opts)
 }
 
+// v1.81.0: числа и склонения для карточки-приглашения / превью сервера (как в Discord).
+export const fmtN = (n: number) => n.toLocaleString('ru-RU')
+export function ruMembers(n: number): string {
+  const d = n % 100
+  if (d >= 11 && d <= 14) return 'участников'
+  const r = n % 10
+  return r === 1 ? 'участник' : r >= 2 && r <= 4 ? 'участника' : 'участников'
+}
+
 // Discord-style время сообщения: сегодня — просто время; иначе — короткая дата
 // плюс время рядом (год добавляется, только если сообщение не из текущего года).
 export function msgTime(iso: string): string {

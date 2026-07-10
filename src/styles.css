@@ -2247,6 +2247,8 @@ body.no-anim .member-typing i { animation:none; }
 /* v1.178.0: бейдж тега сервера рядом с ником — сообщения, список участников, мини-профиль. */
 .user-tag-badge { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; vertical-align:1px; white-space:nowrap; }
 .user-tag-badge img.tag-cust-emoji { width:12px; height:12px; vertical-align:-1px; }
+.user-tag-badge.clickable { cursor:pointer; transition:filter .12s ease; }
+.user-tag-badge.clickable:hover { filter:brightness(1.25); }
 /* v1.193.0: бейдж «БОТ» рядом с ником — платформа ботов. */
 .bot-badge { display:inline-flex; align-items:center; margin-left:6px; padding:1px 6px; border-radius:4px;
   font-size:10px; font-weight:800; letter-spacing:.3px; vertical-align:1px; white-space:nowrap;
@@ -3289,6 +3291,13 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .inv2-desc { margin-top:10px; padding:10px 12px; background:rgba(0,0,0,.22); border-radius:8px; font-size:13.5px; line-height:1.35; color:var(--tx,#dbdee1); }
 .inv2-join { display:block; width:100%; margin-top:12px; background:var(--brand); color:#fff; border:none; border-radius:8px; padding:10px 0; font-weight:600; font-size:14px; cursor:pointer; transition:background .12s ease; }
 .inv2-join:hover { background:#1e8e4d; }
+.inv2-join:disabled { opacity:.6; cursor:default; }
+/* v1.195.0: клик по тегу сервера рядом с ником — превью сервера (та же .inv2-* карточка,
+   что и в приглашении, только без отступа inv2-card, чтобы влезала во весь .modal). */
+.srvtagprev { width:380px; padding:0; overflow:hidden; }
+.srvtagprev .modal-x { z-index:1; background:rgba(0,0,0,.5); border-radius:50%; }
+.srvtagprev .inv2-box { border-radius:12px; }
+.srvtagprev .modal-empty { padding:40px 16px; }
 /* v1.180.0: карточка «Игровой Экспресс» — компактнее приглашения на сервер, иконка+текст в ряд. */
 .ql-box { padding:14px 16px; display:flex; gap:12px; align-items:flex-start; }
 .ql-ico { flex:none; width:44px; height:44px; border-radius:10px; background:rgba(88,101,242,.18); color:var(--brand); display:flex; align-items:center; justify-content:center; }

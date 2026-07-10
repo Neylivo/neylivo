@@ -3,6 +3,7 @@ import { Em } from '../lib/twemoji'
 import { loadCustom } from '../lib/emoji'
 import { chFontFamily } from '../lib/chStyle'
 import { resolveUserTag, onTagChange, type ResolvedTag } from '../lib/userTag'
+import { ServerTagPreview } from './ServerTagPreview'
 
 // v1.178.0: вынесено из ServerSettings.tsx — теперь тег сервера рисуется не только
 // в настройках (превью), но и рядом с ником участника, который его носит.
@@ -39,8 +40,10 @@ export function TagChip({ tag, big }: { tag: ServerTag; big?: boolean }) {
 // v1.178.0: бейдж тега рядом с ником — самодостаточный, сам подгружает и кэширует
 // (см. src/lib/userTag.ts), поэтому не требует прокидывать проп через весь путь
 // компонентов, где показывается имя пользователя (сообщения, список участников...).
+// v1.195.0: клик открывает превью сервера, чей это тег («Вступить» — как в Discord).
 export function UserTagBadge({ userId }: { userId: string }) {
   const [tag, setTag] = useState<ResolvedTag | null>(null)
+  const [preview, setPreview] = useState(false)
   useEffect(() => {
     let ok = true
     const load = () => resolveUserTag(userId).then(t => { if (ok) setTag(t) })
@@ -50,9 +53,13 @@ export function UserTagBadge({ userId }: { userId: string }) {
   }, [userId])
   if (!tag) return null
   return (
-    <span className="user-tag-badge" title={tag.serverName}
-      style={{ background: (tag.color ?? '#5865f2') + '33', color: tag.color ?? '#5865f2', fontFamily: tagFontFamily(tag) }}>
-      {tag.icon && <TagEmoji e={tag.icon} />} {tag.name}
-    </span>
+    <>
+      <span className="user-tag-badge clickable" title={'Открыть сервер «' + tag.serverName + '»'}
+        style={{ background: (tag.color ?? '#5865f2') + '33', color: tag.color ?? '#5865f2', fontFamily: tagFontFamily(tag) }}
+        onClick={e => { e.stopPropagation(); setPreview(true) }}>
+        {tag.icon && <TagEmoji e={tag.icon} />} {tag.name}
+      </span>
+      {preview && <ServerTagPreview serverId={tag.serverId} tag={tag} onClose={() => setPreview(false)} />}
+    </>
   )
 }
