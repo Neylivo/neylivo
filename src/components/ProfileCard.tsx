@@ -24,7 +24,6 @@ import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } fro
 import { WallDraw } from './WallDraw'
 import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
 import { GameStatsModal } from './GameStatsModal'
-import { ProfileWidgetsModal } from './ProfileWidgetsModal'
 import { WidgetGamesModal } from './WidgetGamesModal'
 
 function fmtMs(ms: number): string {
@@ -125,7 +124,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
   const [gamePicker, setGamePicker] = useState<{ field: 'favGames'; mode: 'single' } | { field: WidgetField; mode: 'multi' } | null>(null)
   const [widgetCovers, setWidgetCovers] = useState<Record<string, string | null>>({})
-  const [widgetsOpen, setWidgetsOpen] = useState(false)
 
   useEffect(() => {
     let ok = true
@@ -204,7 +202,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     setPp(p => ({ ...p, [field]: next }))
     saveProfile(userId, { [field]: next } as Partial<ProfilePrefs>)
   }
-  function removeWidgetGame(field: WidgetField, g: string) { saveWidgetField(field, pp[field].filter(x => x !== g)) }
   // «Мои любимые игры» живёт в том же массиве, что и «Любимая игра» (favGames[0] — она,
   // favGames[1:] — список), поэтому переключение элемента списка должно беречь [0].
   function toggleMulti(field: WidgetField, g: string) {
@@ -303,22 +300,24 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
           </div>
           <div className="pc-rbody">
             {tab === 'board' && <>
-              {favs.length === 0 && wish.length === 0 && <>
+              {isMe && favs.length === 0 && wish.length === 0 && <>
                 <div className="pc-board-h">Персонализируйте свой профиль с помощью виджетов</div>
                 <div className="pc-board-sub">Выберите виджет из библиотеки, чтобы рассказать больше о себе и своих интересах</div>
               </>}
               <div className="pc-wgrid">
-                <WidgetTile label="Любимая игра" games={favs[0] ? [favs[0]] : []} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setWidgetsOpen(true)} />
-                <WidgetTile label="Мои любимые игры" games={favs.slice(1)} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setWidgetsOpen(true)} />
+                {/* v1.172.0: чужой профиль показывает только заполненные виджеты — как в
+                    Discord, пустые слоты с «+» видит только владелец. */}
+                {(isMe || favs[0]) && <WidgetTile label="Любимая игра" games={favs[0] ? [favs[0]] : []} covers={widgetCovers} isMe={isMe}
+                  onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'single' })} />}
+                {(isMe || favs.length > 1) && <WidgetTile label="Мои любимые игры" games={favs.slice(1)} covers={widgetCovers} isMe={isMe}
+                  onClick={() => isMe && setGamePicker({ field: 'favGames', mode: 'multi' })} />}
                 <div className="pc-widget" onClick={() => setTab('wall')} title="Стена росписи">
                   <span className="pc-skel"><i /><i /></span>
                   <span className="pc-widget-plus"><Icon name="edit" size={16} /></span>
                   <span className="pc-widget-nm">Стена росписи</span>
                 </div>
-                <WidgetTile label="Хочу поиграть" games={wish} covers={widgetCovers} isMe={isMe}
-                  onClick={() => isMe && setWidgetsOpen(true)} />
+                {(isMe || wish.length > 0) && <WidgetTile label="Хочу поиграть" games={wish} covers={widgetCovers} isMe={isMe}
+                  onClick={() => isMe && setGamePicker({ field: 'wishGames', mode: 'multi' })} />}
               </div>
             </>}
             {tab === 'activity' && <>
@@ -426,9 +425,6 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
         title={gamePicker.field === 'favGames' ? 'Мои любимые игры' : 'Хочу поиграть'}
         games={gamePicker.field === 'favGames' ? favs.slice(1) : wish} max={WIDGET_MAX}
         onToggle={g => toggleMulti(gamePicker.field, g)} onClose={() => setGamePicker(null)} />}
-      {widgetsOpen && <ProfileWidgetsModal pp={pp} covers={widgetCovers}
-        onAdd={(field, mode) => setGamePicker({ field, mode } as typeof gamePicker)} onAddDirect={toggleMulti}
-        onRemove={removeWidgetGame} onClose={() => setWidgetsOpen(false)} />}
     </div>
   )
 }
