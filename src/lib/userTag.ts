@@ -12,6 +12,28 @@ const listeners = new Set<() => void>()
 
 export function onTagChange(cb: () => void): () => void { listeners.add(cb); return () => listeners.delete(cb) }
 
+// v1.194.0: живая инвалидация у ВСЕХ, не только у того, кто сам поменял тег —
+// раньше кэш сбрасывался только вручную (invalidateUserTag/invalidateServerTag
+// из своего же клиента), у остальных бейдж не обновлялся без перезахода.
+// Требует supabase/51_realtime_sync.sql (profiles/servers в publication).
+let subscribed = false
+function ensureRealtime() {
+  if (subscribed) return
+  subscribed = true
+  try {
+    supabase.channel('usertag:sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, p => {
+        const row = p.new as any
+        if (row?.id && profileTagCache.has(row.id)) invalidateUserTag(row.id)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'servers' }, p => {
+        const row = p.new as any
+        if (row?.id && serverTagCache.has(row.id)) invalidateServerTag(row.id)
+      })
+      .subscribe()
+  } catch {}
+}
+
 // Своя карточка изменила тег — сбросить кэш и перерисовать все бейджи с ним.
 export function invalidateUserTag(userId: string) {
   profileTagCache.delete(userId)
@@ -24,6 +46,7 @@ export function invalidateServerTag(serverId: string) {
 }
 
 export async function resolveUserTag(userId: string): Promise<ResolvedTag | null> {
+  ensureRealtime()
   let serverId: string | null
   if (profileTagCache.has(userId)) {
     serverId = profileTagCache.get(userId)!

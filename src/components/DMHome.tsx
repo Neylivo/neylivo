@@ -102,6 +102,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // user_prefs (пин/мьют/никнейм/закрыто/игнор) не React-стейт — этот счётчик просто
   // заставляет компонент перерисоваться, когда DmCtxMenu что-то в них поменял.
   const [prefsTick, setPrefsTick] = useState(0)
+  // v1.194.0: то же самое, но правки прилетели с ДРУГОГО устройства (см. realtime
+  // в src/lib/userPrefs.ts) — без этого список ЛС не обновлялся бы сам, только
+  // после следующего клика/re-render по другой причине.
+  useEffect(() => {
+    const h = () => setPrefsTick(v => v + 1)
+    window.addEventListener('ponoi-uprefs', h)
+    return () => window.removeEventListener('ponoi-uprefs', h)
+  }, [])
   // «Начать звонок» из контекстного меню (без захода в чат) — сперва открываем
   // чат (threadId приходит асинхронно), затем звоним, как только он готов.
   const pendingCallRef = useRef(false)

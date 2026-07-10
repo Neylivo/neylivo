@@ -35,6 +35,7 @@ let uid: string | null = null
 let row: UserPrefsRow = { ...DEFAULTS }
 let loaded = false
 const LS_KEY = 'ponoi_uprefs'
+let realtimeCh: ReturnType<typeof supabase.channel> | null = null
 
 function mirror() { try { localStorage.setItem(LS_KEY, JSON.stringify(row)) } catch {} }
 
@@ -44,6 +45,7 @@ function mirror() { try { localStorage.setItem(LS_KEY, JSON.stringify(row)) } ca
 export function initUserPrefs(userId: string | null) {
   if (uid === userId && (loaded || !userId)) return
   uid = userId
+  if (realtimeCh) { supabase.removeChannel(realtimeCh); realtimeCh = null }
   if (!userId) { row = { ...DEFAULTS }; loaded = false; return }
   try { const raw = localStorage.getItem(LS_KEY); if (raw) row = { ...DEFAULTS, ...JSON.parse(raw) } } catch {}
   loaded = false
@@ -54,6 +56,16 @@ export function initUserPrefs(userId: string | null) {
     mirror()
     window.dispatchEvent(new Event('ponoi-uprefs'))
   })
+  // v1.194.0: правки на другом устройстве (телефон/десктоп/веб) появляются
+  // тут же, а не только при следующем логине — требует supabase/51_realtime_sync.sql.
+  realtimeCh = supabase.channel('uprefs:' + userId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_prefs', filter: 'user_id=eq.' + userId }, p => {
+      if (uid !== userId || !p.new) return
+      row = { ...DEFAULTS, ...(p.new as any) }
+      mirror()
+      window.dispatchEvent(new Event('ponoi-uprefs'))
+    })
+    .subscribe()
 }
 
 export function getUserPrefs(): UserPrefsRow { return row }
