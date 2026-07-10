@@ -948,9 +948,11 @@ select.pqs-in { cursor: pointer; }
 .msg-reply-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
 .msg-edited { color: var(--mut); font-size: 10px; margin-left: 5px; }
 .reply-banner { display: flex; align-items: center; gap: 6px; padding: 6px 14px; margin: 0 16px; background: var(--c-panel); border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); font-size: 13px; color: var(--mut); }
-.reply-banner-av { flex: none; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; display: flex; }
 .reply-banner b { color: var(--tx); }
 .reply-banner span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v1.179.2: перебивает .reply-banner span { flex:1 } выше — иначе аватар растягивался
+   на всю ширину баннера (сжатая до 16px картинка «резиновой лентой» на весь ряд). */
+.reply-banner .reply-banner-av { flex: none; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; display: flex; }
 .reply-banner button { background: none; border: none; color: var(--mut); cursor: pointer; display: inline-flex; margin-left: auto; }
 .reply-banner button:hover { color: var(--tx); }
 /* v1.177.0: правка сообщения теперь идёт в композере (как в Discord) — банер над
