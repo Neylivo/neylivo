@@ -8,7 +8,8 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
-import { parseSys, fmtCallDur, parseInviteMeta } from '../lib/sysmsg'
+import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta } from '../lib/sysmsg'
+import { isQuicklaunchAvailable } from '../lib/quicklaunch'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
 import { buildMsgLink, type MsgLinkCtx } from '../lib/deepLink'
@@ -23,6 +24,13 @@ function ruMembers(n: number): string {
   if (d >= 11 && d <= 14) return 'участников'
   const r = n % 10
   return r === 1 ? 'участник' : r >= 2 && r <= 4 ? 'участника' : 'участников'
+}
+// v1.180.0: «1 мод / 2 мода / 5 модов» — для карточки «Игровой Экспресс».
+function modsWord(n: number): string {
+  const d = n % 100
+  if (d >= 11 && d <= 14) return 'модов'
+  const r = n % 10
+  return r === 1 ? 'мод' : r >= 2 && r <= 4 ? 'мода' : 'модов'
 }
 import { parseFwd } from '../lib/fwd'
 import { ForwardModal } from './ForwardModal'
@@ -316,6 +324,27 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                         {founded && <div className="inv2-meta">Дата основания: {founded} г.</div>}
                         {inv.d && <div className="inv2-desc">{inv.d}</div>}
                         <button className="inv2-join" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-join-invite', { detail: sys.targetId }))}>Перейти на сервер</button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })() : sys.type === 'qlaunch' ? (() => {
+                // v1.180.0: карточка «Игровой Экспресс» — превью сборки, сам список
+                // модов/скачивание/запуск отдельно (см. src/lib/quicklaunch.ts).
+                const ql = parseQuickLaunchMeta(sys.preview)
+                if (!ql) return null
+                return (
+                  <div className="inv2-card ql-card">
+                    <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы поделились сборкой' : m.author_name + ' зовёт тебя в игру!'}</div>
+                    <div className="inv2-box ql-box">
+                      <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
+                      <div className="ql-body">
+                        <div className="ql-title">{ql.game} — {ql.mcVersion} ({ql.loader === 'neoforge' ? 'NeoForge' : 'Forge'})</div>
+                        <div className="ql-sub">{ql.modCount} {modsWord(ql.modCount)} · {ql.totalMb} МБ докачки</div>
+                        <button className="inv2-join ql-btn" onClick={() => {
+                          if (!isQuicklaunchAvailable()) { toastErr('Игровой Экспресс работает только в приложении для компьютера'); return }
+                          toastOk('Скачивание и авто-вход ещё в разработке — скоро')
+                        }}>Скачать и войти</button>
                       </div>
                     </div>
                   </div>

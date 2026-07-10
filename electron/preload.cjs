@@ -38,4 +38,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   onDeepLink: (cb) => { ipcRenderer.removeAllListeners('ponoi-deep-link'); ipcRenderer.on('ponoi-deep-link', (_e, url) => cb(url)) },
   // v1.180.0: «Игровой Экспресс» — скан папки mods текущей сборки Minecraft (версия/Forge/список модов с sha1).
   mcScanMods: () => ipcRenderer.invoke('ponoi-mc-scan-mods'),
+  mcModExists: (supabaseUrl, sha1) => ipcRenderer.invoke('ponoi-mc-mod-exists', { supabaseUrl, sha1 }),
+  mcUploadMod: args => ipcRenderer.invoke('ponoi-mc-upload-mod', args),
 })

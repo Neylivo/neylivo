@@ -11,6 +11,10 @@ import { Lightbox } from './Lightbox'
 import { CodeFileCard, isCodeFile } from './CodeFileCard'
 import { useSettings } from '../lib/settings'
 import type { AttachPatch } from '../lib/reactions'
+import { usePresence } from '../lib/presence'
+import { isQuicklaunchAvailable, type QlManifest } from '../lib/quicklaunch'
+import { sysQuickLaunch } from '../lib/sysmsg'
+import { ShareBuildModal } from './ShareBuildModal'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 50000
@@ -74,7 +78,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     onCancelEdit?: () => void }) {
   const { user } = useAuth()
   const { settings } = useSettings()
+  const { gameOf } = usePresence()
   const [text, setText] = useState('')
+  const [shareBuild, setShareBuild] = useState(false)
   const isEditing = !!editingTarget
   const preEditText = useRef<string | null>(null)
   // v1.70.0: несколько вложений в одном сообщении (как в Discord, до 10).
@@ -425,6 +431,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             <span>{replyingTo.preview}</span>
             <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
           </div>}
+      {shareBuild && user && <ShareBuildModal hostId={user.id} onClose={() => setShareBuild(false)}
+        onShared={(packId: string, manifest: QlManifest) => {
+          setShareBuild(false)
+          const totalMb = Math.round(manifest.mods.reduce((a, m) => a + m.size, 0) / 1024 / 1024)
+          onSend(sysQuickLaunch(packId, { game: 'Minecraft', mcVersion: manifest.mcVersion, loader: manifest.loader, modCount: manifest.mods.length, totalMb }))
+        }} />}
       {rec && <div className="voice-pill">
         <span className="voice-dot" />
         <b className="voice-time">{Math.floor(rec.t / 60)}:{String(rec.t % 60).padStart(2, '0')}</b>
@@ -452,6 +464,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               <button type="button" onClick={() => { setPlusMenu(false); fileRef.current?.click() }}><Icon name="paperclip" size={17} /> Файл</button>
               <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button>
               <button type="button" onClick={() => { setPlusMenu(false); startRec() }}><Icon name="mic" size={17} /> Голосовое</button>
+              {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Minecraft (Java)' &&
+                <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться сборкой</button>}
             </div>
           </>}
         </div>

@@ -40,6 +40,18 @@ export function parseInviteMeta(preview: string): { n: string } & InviteMeta {
   return { n: preview }
 }
 
+// v1.180.0: карточка «Игровой Экспресс» в чате — тот же приём, что у sysInvite:
+// лёгкое превью (для чего sha1-список модов НЕ нужен) прямо в сообщении, сам
+// манифест — по id в quicklaunch_packs (см. src/lib/quicklaunch.ts).
+export interface QlSysMeta { game: string; mcVersion: string; loader: string; modCount: number; totalMb: number }
+export function sysQuickLaunch(packId: string, meta: QlSysMeta): string {
+  return SYS + 'sys:qlaunch:' + packId + SYS + JSON.stringify(meta)
+}
+export function parseQuickLaunchMeta(preview: string): QlSysMeta | null {
+  try { const j = JSON.parse(preview); if (j && typeof j.game === 'string') return j } catch {}
+  return null
+}
+
 /** «несколько секунд» / «5 мин» / «1 ч 12 мин» — как пишет Discord. */
 export function fmtCallDur(sec: number): string {
   if (sec < 60) return 'несколько секунд'

@@ -104,8 +104,41 @@ async function scanMods() {
   return { mcVersion: loader.mcVersion, loader: loader.loader, loaderVersion: loader.loaderVersion, mods }
 }
 
-function registerQuicklaunch(ipcMain) {
-  ipcMain.handle('ponoi-mc-scan-mods', () => scanMods())
+// ---- Заливка недостающих модов в общий (контент-адресованный) bucket modfiles ----
+// Идёт из main-процесса напрямую (не через рендерер): файл читается потоком с
+// диска и льётся в Supabase Storage REST, без промежуточной загрузки байтов в
+// окно — моды бывают под сотню МБ, гонять их лишний раз через IPC незачем.
+// Тот же протокол заголовков, что uploadWithProgress() в src/lib/storage.ts.
+function publicUrl(supabaseUrl, sha1) {
+  return supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/public/modfiles/' + sha1 + '.jar'
+}
+async function modExists(supabaseUrl, sha1) {
+  try { const res = await fetch(publicUrl(supabaseUrl, sha1), { method: 'HEAD' }); return res.ok }
+  catch { return false }
+}
+async function uploadMod({ supabaseUrl, anonKey, accessToken, sha1, filename }) {
+  if (await modExists(supabaseUrl, sha1)) return { skipped: true }
+  const filepath = path.join(mcRoot(), 'mods', filename)
+  const stream = fs.createReadStream(filepath)
+  const res = await fetch(supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/modfiles/' + sha1 + '.jar', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + accessToken,
+      apikey: anonKey,
+      'content-type': 'application/java-archive',
+      'x-upsert': 'true',
+    },
+    body: stream,
+    duplex: 'half',
+  })
+  if (!res.ok) throw new Error('upload failed: HTTP ' + res.status)
+  return { skipped: false }
 }
 
-module.exports = { registerQuicklaunch, scanMods, mcRoot, sha1File, detectLoader }
+function registerQuicklaunch(ipcMain) {
+  ipcMain.handle('ponoi-mc-scan-mods', () => scanMods())
+  ipcMain.handle('ponoi-mc-mod-exists', (_e, { supabaseUrl, sha1 }) => modExists(supabaseUrl, sha1))
+  ipcMain.handle('ponoi-mc-upload-mod', (_e, args) => uploadMod(args))
+}
+
+module.exports = { registerQuicklaunch, scanMods, mcRoot, sha1File, detectLoader, modExists, uploadMod }

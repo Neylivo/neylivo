@@ -3235,6 +3235,13 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .inv2-desc { margin-top:10px; padding:10px 12px; background:rgba(0,0,0,.22); border-radius:8px; font-size:13.5px; line-height:1.35; color:var(--tx,#dbdee1); }
 .inv2-join { display:block; width:100%; margin-top:12px; background:var(--brand); color:#fff; border:none; border-radius:8px; padding:10px 0; font-weight:600; font-size:14px; cursor:pointer; transition:background .12s ease; }
 .inv2-join:hover { background:#1e8e4d; }
+/* v1.180.0: карточка «Игровой Экспресс» — компактнее приглашения на сервер, иконка+текст в ряд. */
+.ql-box { padding:14px 16px; display:flex; gap:12px; align-items:flex-start; }
+.ql-ico { flex:none; width:44px; height:44px; border-radius:10px; background:rgba(88,101,242,.18); color:var(--brand); display:flex; align-items:center; justify-content:center; }
+.ql-body { flex:1; min-width:0; }
+.ql-title { font-weight:800; font-size:14px; color:var(--tx,#f2f3f5); }
+.ql-sub { margin-top:3px; font-size:12.5px; color:var(--mut); }
+.ql-btn { margin-top:10px; }
 
 /* --- Шапка сервера: пилюля с названием; с баннером — высокая, без — 48px --- */
 .srv-title.clickable { justify-content:flex-start; gap:8px; }
