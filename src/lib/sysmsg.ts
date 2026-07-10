@@ -55,12 +55,15 @@ export function parseQuickLaunchMeta(preview: string): QlSysMeta | null {
 // v1.184.0: «Поделиться игрой» для игр без установочного пайплайна (Roblox и
 // т.п.) — просто join-ссылка, без скачивания/скана (в отличие от sysQuickLaunch
 // выше, который для Minecraft-сборок). Та же схема: targetId — тип игры, preview — JSON.
-export interface GameLinkMeta { game: string; label?: string | null; url: string }
+// v1.192.0: url — для игр с диплинк-протоколом (Roblox roblox://, CS2 steam://),
+// открывается через openGameLink(). ip/port — для Terraria: диплинка нет, кнопка
+// в карточке вызывает terrariaLaunch(ip, port) — реальный запуск процесса, не ссылку.
+export interface GameLinkMeta { game: string; label?: string | null; url?: string; ip?: string; port?: number }
 export function sysGameLink(game: string, meta: GameLinkMeta): string {
   return SYS + 'sys:glink:' + game + SYS + JSON.stringify(meta)
 }
 export function parseGameLinkMeta(preview: string): GameLinkMeta | null {
-  try { const j = JSON.parse(preview); if (j && typeof j.url === 'string') return j } catch {}
+  try { const j = JSON.parse(preview); if (j && (typeof j.url === 'string' || typeof j.ip === 'string')) return j } catch {}
   return null
 }
 

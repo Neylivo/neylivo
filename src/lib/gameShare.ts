@@ -18,3 +18,20 @@ export function openGameLink(url: string): void {
   if (d?.openExternal) d.openExternal(url)
   else window.location.href = url
 }
+
+// v1.192.0: CS2 (комьюнити-серверы, не матчмейкинг) — тот же диплинк, что и у
+// собственной кнопки «Подключиться» Steam, работает даже если игра не запущена
+// (Steam сам её стартует). GSI отдаёт только текущий счёт/карту, а не IP
+// сервера — адрес хосту приходится вводить вручную (см. ShareGameLinkModal.tsx).
+export function steamConnectUrl(ip: string, port: number): string {
+  return `steam://connect/${ip}:${port}`
+}
+
+// v1.192.0: Terraria — своего диплинк-протокола нет, поэтому находим Terraria.exe
+// на диске и запускаем сами (main-процесс, electron/terraria.cjs) с -connect/-port.
+export async function terrariaLaunch(ip: string, port: number): Promise<void> {
+  const d = (window as any).ponoiDesktop
+  if (!d?.terrariaLaunch) throw new Error('Запуск Terraria доступен только в приложении для компьютера')
+  const r = await d.terrariaLaunch(ip, port)
+  if (r && r.error) throw new Error(r.error)
+}

@@ -49,4 +49,6 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   mcLaunch: (pack, instDir, username) => ipcRenderer.invoke('ponoi-mc-launch', { pack, instDir, username }),
   // v1.184.0: «Поделиться игрой» — открыть join-ссылку (roblox://…) в системном обработчике.
   openExternal: (url) => ipcRenderer.send('ponoi-open-external', url),
+  // v1.192.0: «Поделиться игрой» — Terraria (нет диплинк-протокола, запускаем сами).
+  terrariaLaunch: (ip, port) => ipcRenderer.invoke('ponoi-terraria-launch', { ip, port }),
 })

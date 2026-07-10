@@ -199,6 +199,8 @@ ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
 // ---- v1.180.0: «Игровой Экспресс» (QuickLaunch) — поделиться сборкой Minecraft ----
 require('./quicklaunch.cjs').registerQuicklaunch(ipcMain)
+// ---- v1.192.0: «Поделиться игрой» — Terraria (находим Terraria.exe и запускаем с -connect) ----
+require('./terraria.cjs').registerTerraria(ipcMain)
 
 // ---- v1.91.0: надёжное копирование (текст/картинки) через системный буфер ----
 // Браузерный Clipboard API в Electron может молча отказывать («document is not
@@ -856,7 +858,7 @@ ipcMain.on('win-close', (e) => { try { BrowserWindow.fromWebContents(e.sender)?.
 // белый список: content отрисовывается из данных чата, лишний протокол сюда лучше не пускать.
 ipcMain.on('ponoi-open-external', (_e, url) => {
   try {
-    if (typeof url === 'string' && /^(https?|roblox):\/\//i.test(url)) shell.openExternal(url)
+    if (typeof url === 'string' && /^(https?|roblox|steam):\/\//i.test(url)) shell.openExternal(url)
   } catch {}
 })
 

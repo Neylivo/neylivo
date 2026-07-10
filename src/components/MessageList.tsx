@@ -9,7 +9,7 @@ import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta } from '../lib/sysmsg'
-import { openGameLink } from '../lib/gameShare'
+import { openGameLink, terrariaLaunch } from '../lib/gameShare'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -366,11 +366,18 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   </div>
                 )
               })() : sys.type === 'glink' ? (() => {
-                // v1.184.0: «Поделиться игрой» для игр без установки/скачивания
-                // (Roblox и т.п.) — просто join-ссылка, открывается системным
-                // обработчиком (см. src/lib/gameShare.ts).
+                // v1.184.0: «Поделиться игрой» для игр без установки/скачивания —
+                // v1.192.0: Roblox/CS2 просто открывают диплинк-ссылку (см.
+                // src/lib/gameShare.ts), Terraria своего протокола не имеет — жмём
+                // на месте запускаем Terraria.exe через IPC (terrariaLaunch).
                 const gl = parseGameLinkMeta(sys.preview)
                 if (!gl) return null
+                const join = async () => {
+                  if (gl.ip) {
+                    try { await terrariaLaunch(gl.ip, gl.port ?? 0) }
+                    catch (err: any) { toastErr(err.message ?? String(err)) }
+                  } else if (gl.url) openGameLink(gl.url)
+                }
                 return (
                   <div className="inv2-card ql-card">
                     <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы поделились игрой' : m.author_name + ' зовёт тебя в игру!'}</div>
@@ -379,7 +386,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       <div className="ql-body">
                         <div className="ql-title">{gl.game}</div>
                         {gl.label && <div className="ql-sub">{gl.label}</div>}
-                        <button className="inv2-join ql-btn" onClick={() => openGameLink(gl.url)}>Присоединиться</button>
+                        <button className="inv2-join ql-btn" onClick={join}>Присоединиться</button>
                       </div>
                     </div>
                   </div>

@@ -14,7 +14,7 @@ import type { AttachPatch } from '../lib/reactions'
 import { usePresence } from '../lib/presence'
 import { isQuicklaunchAvailable, type QlManifest } from '../lib/quicklaunch'
 import { sysQuickLaunch, sysGameLink } from '../lib/sysmsg'
-import { robloxJoinUrl } from '../lib/gameShare'
+import { robloxJoinUrl, steamConnectUrl } from '../lib/gameShare'
 import { ShareBuildModal } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 
@@ -87,7 +87,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const { gameOf } = usePresence()
   const [text, setText] = useState('')
   const [shareBuild, setShareBuild] = useState(false)
-  const [shareRoblox, setShareRoblox] = useState(false)
+  // v1.192.0: 'roblox' | 'cs2' | 'terraria' — какая игра сейчас в модалке «Поделиться игрой».
+  const [shareGameLink, setShareGameLink] = useState<'roblox' | 'cs2' | 'terraria' | false>(false)
   const isEditing = !!editingTarget
   const preEditText = useRef<string | null>(null)
   // v1.70.0: несколько вложений в одном сообщении (как в Discord, до 10).
@@ -431,12 +432,19 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           const totalMb = Math.round(manifest.mods.reduce((a, m) => a + m.size, 0) / 1024 / 1024)
           onSend(sysQuickLaunch(packId, { game: 'Minecraft', mcVersion: manifest.mcVersion, loader: manifest.loader, modCount: manifest.mods.length, totalMb }))
         }} />}
-      {shareRoblox && <ShareGameLinkModal label={gameOf(user?.id ?? '')?.mode ?? null} onClose={() => setShareRoblox(false)}
-        onShared={() => {
+      {shareGameLink && <ShareGameLinkModal game={shareGameLink} label={gameOf(user?.id ?? '')?.mode ?? null} onClose={() => setShareGameLink(false)}
+        onShared={(ip, port) => {
           const g = gameOf(user?.id ?? '')
-          setShareRoblox(false)
-          if (!g?.placeId) return
-          onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId) }))
+          const kind = shareGameLink
+          setShareGameLink(false)
+          if (kind === 'roblox') {
+            if (!g?.placeId) return
+            onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId) }))
+          } else if (kind === 'cs2') {
+            onSend(sysGameLink('cs2', { game: 'Counter-Strike 2', label: ip + ':' + port, url: steamConnectUrl(ip, port) }))
+          } else if (kind === 'terraria') {
+            onSend(sysGameLink('terraria', { game: 'Terraria', label: ip + ':' + port, ip, port }))
+          }
         }} />}
       {rec && <div className="voice-pill">
         <span className="voice-dot" />
@@ -468,7 +476,11 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Minecraft (Java)' &&
                 <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Roblox' && !!gameOf(user?.id ?? '')?.placeId &&
-                <button type="button" onClick={() => { setPlusMenu(false); setShareRoblox(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
+                <button type="button" onClick={() => { setPlusMenu(false); setShareGameLink('roblox') }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
+              {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Counter-Strike 2' &&
+                <button type="button" onClick={() => { setPlusMenu(false); setShareGameLink('cs2') }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
+              {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Terraria' &&
+                <button type="button" onClick={() => { setPlusMenu(false); setShareGameLink('terraria') }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
             </div>
           </>}
         </div>
