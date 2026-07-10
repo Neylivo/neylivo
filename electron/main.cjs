@@ -1,6 +1,13 @@
 const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage, clipboard } = require('electron')
 const path = require('path')
 
+// v1.199.0: без этого Windows не знает, что показанные через web Notification API
+// тосты принадлежат именно Ponoi — из-за несовпадения с AppUserModelID ярлыка
+// (который выставляет electron-builder/NSIS) уведомления могли всплывать под
+// чужой иконкой/именем и не всегда корректно снимались из Центра уведомлений.
+// appId из package.json -> build.appId, тот же, что и в ярлыке установщика.
+app.setAppUserModelId('com.ponoi.app')
+
 const isDev = !app.isPackaged
 
 // v1.155.0: подстраховка от полного краха приложения ("A JavaScript error

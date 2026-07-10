@@ -8,7 +8,7 @@ import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { Avatar } from './Avatar'
 import { usePresence } from '../lib/presence'
-import { notifyMessage, msgSound, uiChime } from '../lib/notify'
+import { notifyMessage, msgSound, uiChime, closeNotif } from '../lib/notify'
 import { notifModeOf } from '../lib/srvNotify'
 import { mentionsUser } from '../lib/md'
 import { sendPush } from '../lib/push'
@@ -408,7 +408,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const mentioned = !!msg.content && mentionsUser(msg.content, username)
             if (!loadChMuted()[curChannel.id] && (mode === 'all' || (mode === 'mentions' && mentioned))) {
               msgSound()
-              notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '')
+              notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '', (msg as any).author_avatar, 'ch:' + curChannel.id)
             }
           }
         })
@@ -417,6 +417,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => { const msg = p.new as Message; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId } as any : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
+  }, [curChannel])
+
+  // v1.199.0: вернулся в приложение — сразу убрать уведомление по этому каналу,
+  // не дожидаясь автозакрытия через 8 сек (см. src/lib/notify.ts).
+  useEffect(() => {
+    if (!curChannel) return
+    const onFocus = () => closeNotif('ch:' + curChannel.id)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [curChannel])
 
   useEffect(() => {

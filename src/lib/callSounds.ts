@@ -35,9 +35,12 @@ export function fadeInCall(sec = 1.4) {
 }
 
 /** Короткая мелодия из нот: [частота, длительность в сек][]. */
-function play(notes: [number, number][], type: OscillatorType = 'sine', vol = 0.14) {
+// v1.199.0: раньше vol тут игнорировал «Громкость динамика» (её учитывал только
+// свой загруженный файл через loopCustom) и базовые значения были слишком тихими.
+function play(notes: [number, number][], type: OscillatorType = 'sine', vol = 0.32) {
   try {
     const ctx = audioCtx()
+    const v = vol * (getSettings().spkVol / 100)
     let t = ctx.currentTime + 0.01
     for (const [freq, dur] of notes) {
       const o = ctx.createOscillator()
@@ -45,7 +48,7 @@ function play(notes: [number, number][], type: OscillatorType = 'sine', vol = 0.
       o.type = type
       o.frequency.value = freq
       g.gain.setValueAtTime(0.0001, t)
-      g.gain.exponentialRampToValueAtTime(vol, t + 0.02)
+      g.gain.exponentialRampToValueAtTime(v, t + 0.02)
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
       o.connect(g); g.connect(ctx.destination)
       o.start(t); o.stop(t + dur + 0.02)
@@ -59,9 +62,9 @@ export function sndJoin() { play([[392, 0.16], [523.25, 0.2]]) }
 /** Участник вышел: два нисходящих тона (C5 → G4). */
 export function sndLeave() { play([[523.25, 0.16], [392, 0.2]]) }
 /** Микрофон выключен: низкий тон (E4). */
-export function sndMute() { play([[329.63, 0.14]], 'sine', 0.12) }
+export function sndMute() { play([[329.63, 0.14]], 'sine', 0.28) }
 /** Микрофон включён: тон выше ровно на кварту (A4) — сбалансированная пара. */
-export function sndUnmute() { play([[440, 0.14]], 'sine', 0.12) }
+export function sndUnmute() { play([[440, 0.14]], 'sine', 0.28) }
 
 // Свой файл вместо встроенной мелодии — крутится в цикле, громкость как у
 // динамиков звонка (settings.spkVol).
@@ -81,7 +84,7 @@ export function startRingtone() {
   if (ringInt !== null || ringAudio) return
   const url = getUserPrefs().account.ringtoneUrl
   if (url) { ringAudio = loopCustom(url); return }
-  const one = () => play([[659.25, 0.16], [523.25, 0.16], [659.25, 0.16], [523.25, 0.16], [783.99, 0.34]], 'sine', 0.11)
+  const one = () => play([[659.25, 0.16], [523.25, 0.16], [659.25, 0.16], [523.25, 0.16], [783.99, 0.34]], 'sine', 0.34)
   one(); ringInt = window.setInterval(one, 2600)
 }
 export function stopRingtone() {
@@ -96,7 +99,7 @@ export function startRingback() {
   if (backInt !== null || backAudio) return
   const url = getUserPrefs().account.ringbackUrl
   if (url) { backAudio = loopCustom(url); return }
-  const one = () => play([[440, 0.8]], 'sine', 0.05)
+  const one = () => play([[440, 0.8]], 'sine', 0.16)
   one(); backInt = window.setInterval(one, 3000)
 }
 export function stopRingback() {

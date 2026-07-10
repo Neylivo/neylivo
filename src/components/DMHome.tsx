@@ -10,7 +10,7 @@ import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
-import { notifyMessage, msgSound } from '../lib/notify'
+import { notifyMessage, msgSound, closeNotif } from '../lib/notify'
 import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
@@ -517,13 +517,22 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
           if (isDmClosed(msg.author)) reopenDm(msg.author)   // v1.187.0: написал — «Закрыть ЛС» снимается, как в Discord
           setMessages(m => mergeIncoming(m, { ...msg, _ignoredAuthor: isDmIgnored(msg.author) } as any))
           setDmRead(threadId, Date.now())
-          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '') }
+          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '', activeAvatar, 'dm:' + threadId) }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
         p => { const msg = p.new as DMMessage; setMessages(m => m.map(x => x.id === msg.id ? { ...msg, _localId: (x as any)._localId, _ignoredAuthor: isDmIgnored(msg.author) } as any : x)) })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
+  }, [threadId])
+
+  // v1.199.0: вернулся в приложение — сразу убрать уведомление по этому чату,
+  // не дожидаясь автозакрытия через 8 сек (см. src/lib/notify.ts).
+  useEffect(() => {
+    if (!threadId) return
+    const onFocus = () => closeNotif('dm:' + threadId)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [threadId])
 
   useEffect(() => {
