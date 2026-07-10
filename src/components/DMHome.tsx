@@ -47,9 +47,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
   const [q, setQ] = useState('')
   const [results, setResults] = useState<Profile[]>([])
   const [active, setActive] = useState<Friend | null>(null)
-  // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord, открыта
-  // по умолчанию на десктопе (как «Показать участников» на сервере).
-  const [showProfile, setShowProfile] = useState(() => !IS_MOBILE)
+  // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord.
+  // По умолчанию закрыта (открывается кнопкой в шапке чата).
+  const [showProfile, setShowProfile] = useState(false)
   const [fullProfileTab, setFullProfileTab] = useState<ProfileTab | null>(null)
   const activeAvatar = useAvatarOf(active?.id)
   const [threadId, setThreadId] = useState<string | null>(null)
@@ -701,11 +701,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar }:
 
       <main className="chat">
         {active ? <>
-          <header className="chat-head"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>{!IS_MOBILE && '@ '}{active.name}
-            <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
-            <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
-            <button className={'pin-btn' + (showProfile ? ' on' : '')} title={showProfile ? 'Скрыть профиль' : 'Показать профиль'}
-              onClick={() => setShowProfile(v => !v)}><Icon name="user" size={18} /></button>
+          <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>{!IS_MOBILE && '@ '}{active.name}
+            <div className="ph2-btns">
+              <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
+              <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
+              <button className={'pin-btn' + (showProfile ? ' on' : '')} title={showProfile ? 'Скрыть профиль' : 'Показать профиль'}
+                onClick={() => setShowProfile(v => !v)}><Icon name="user" size={18} /></button>
+            </div>
           </header>
           {showPins && <div className="pins-panel">
             <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
