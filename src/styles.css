@@ -1131,6 +1131,13 @@ body.no-anim .cfm-overlay { animation:none; }
 .att-spoiler-file { display:block; }
 .att-spoiler-blur { filter:blur(6px); pointer-events:none; user-select:none; }
 .att-desc { margin-top:4px; font-size:12.5px; color:var(--mut); max-width:420px; }
+
+/* ===== v1.185.0: вложение уже отправлено, но ещё грузится в фоне (как в Discord) ===== */
+.att-upload-ov { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; background:rgba(0,0,0,.45); border-radius:8px; color:#fff; font-size:12px; font-weight:700; }
+.att-spin { width:22px; height:22px; border-radius:50%; border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin .8s linear infinite; }
+.msg-file.uploading { display:inline-flex; align-items:center; gap:8px; color:var(--mut); cursor:default; }
+.msg-file.uploading .att-spin { width:14px; height:14px; border-width:2px; border-color:rgba(148,155,164,.35); border-top-color:var(--mut); }
 .att-edit-ov { position:fixed; inset:0; z-index:210; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
 .att-edit-box { width:min(420px, 92vw); background:#313338; border-radius:12px; padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
 .att-edit-h { font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:10px; }

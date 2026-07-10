@@ -20,6 +20,7 @@ import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
 import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer } from '../lib/servers'
+import { uploadWithProgress } from '../lib/storage'
 import { CallRoom, Sinks } from './CallRoom'
 import { joinRoom, Room, RoomEvent, DisconnectReason } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
@@ -690,7 +691,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     }
     return [...list, msg]
   }
-  async function sendMsg(t: string, attach?: { url: string; type: string }) {
+  // v1.185.0: файлы — как в Discord: сообщение появляется в ленте сразу (с
+  // локальным blob-превью из Composer), заливка в Storage и запись в БД идут в
+  // фоне; до этого момента только визуальный спиннер на самом вложении, никакой
+  // блокирующей полосы над композером (см. Composer.submit()/Attachment).
+  async function sendMsg(t: string, attach?: { url: string; type: string }, files?: File[]) {
     if (!curChannel || !user) return
     const tmpId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
     const row = {
@@ -698,23 +703,48 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     }
-    setMessages(m => [...m, { ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true } as any])
+    const uploading = !!files?.length
+    setMessages(m => [...m, {
+      ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true,
+      ...(uploading ? { _uploading: true, _uploadNames: files!.map(f => f.name) } : {}),
+    } as any])
     setReplyTarget(null)
     // v1.88.0: после отправки всегда прыгаем вниз к своему сообщению.
     stickToBottom(1200)
     setUnseen(0); setAtBottom(true)
     const chName = curChannel.name
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
-    supabase.from('messages').insert(row).select().single().then(({ data, error }) => {
-      if (error || !data) {
-        setMessages(m => m.filter(x => x.id !== tmpId))
-        toastErr(error?.message ?? 'Не удалось отправить сообщение')
-        return
+
+    function finalize(finalRow: typeof row) {
+      supabase.from('messages').insert(finalRow).select().single().then(({ data, error }) => {
+        if (error || !data) {
+          setMessages(m => m.filter(x => x.id !== tmpId))
+          toastErr(error?.message ?? 'Не удалось отправить сообщение')
+          return
+        }
+        const real = data as Message
+        setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
+        sendPush(targets, username + ' — #' + chName, t || 'Вложение', '/')
+      })
+    }
+
+    if (!uploading) { finalize(row); return }
+    try {
+      const spoilerFlags = attach!.url.split('\n').map(u => u.includes('#spoiler'))
+      const realUrls: string[] = []
+      for (let i = 0; i < files!.length; i++) {
+        let url = await uploadWithProgress('attachments', user.id, files![i], p => {
+          setMessages(m => m.map(x => x.id === tmpId ? { ...x, _upProgress: (i + p) / files!.length } as any : x))
+        })
+        if (spoilerFlags[i]) url += '#spoiler'
+        realUrls.push(url)
       }
-      const real = data as Message
-      setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
-      sendPush(targets, username + ' \u2014 #' + chName, t || 'Вложение', '/')
-    })
+      attach!.url.split('\n').forEach(u => { const b = u.replace('#spoiler', ''); if (b.startsWith('blob:')) URL.revokeObjectURL(b) })
+      finalize({ ...row, attach_url: realUrls.join('\n') })
+    } catch (err: any) {
+      setMessages(m => m.filter(x => x.id !== tmpId))
+      toastErr(err.message ?? 'Не удалось загрузить файл')
+    }
   }
 
   async function loadRx(ids: string[]) {

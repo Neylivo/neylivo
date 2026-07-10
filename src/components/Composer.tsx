@@ -2,7 +2,7 @@ import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { uploadWithProgress, isImage, isVideo } from '../lib/storage'
+import { isImage, isVideo } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
@@ -70,7 +70,11 @@ function applySlash(t: string): string {
 }
 
 export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit }:
-  { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }) => Promise<void>;
+  // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
+  // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
+  // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
+  // ПОСЛЕ того, как сообщение появилось в ленте — без attach.files это как раньше.
+  { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }, files?: File[]) => Promise<void>;
     replyingTo?: { author: string; preview: string; avatarUrl?: string | null } | null; onCancelReply?: () => void; onType?: () => void;
     mentionables?: string[]; draftKey?: string
     // v1.177.0: редактирование сообщения — как в Discord, текст загружается прямо
@@ -101,8 +105,6 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const sendingRef = useRef(false)
   // Сообщение, которое не ушло из-за сбоя сети: текст остаётся в поле, баннер даёт повторить одной кнопкой.
   const [failed, setFailed] = useState(false)
-  // Прогресс загрузки файла (0..1) для полосы над композером; null — ничего не грузится.
-  const [upProg, setUpProg] = useState<number | null>(null)
   // Предпросмотр картинки до отправки (v1.28.0): миниатюра + спойлер/просмотр/убрать.
   const [previews, setPreviews] = useState<string[]>([])
   const [pvOpen, setPvOpen] = useState<string | null>(null)
@@ -316,12 +318,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         const blob = new Blob(chunks, { type: 'audio/webm' })
         if (blob.size < 500) return
         const f = new File([blob], 'voice_' + Date.now() + '.webm', { type: 'audio/webm' })
-        setBusy(true); setUpProg(0)
-        try {
-          const url = await uploadWithProgress('attachments', user.id, f, p => setUpProg(p))
-          await onSend('', { url, type: 'audio' })
-        } catch (err: any) { toastErr(err.message ?? String(err)) }
-        finally { setBusy(false); setUpProg(null) }
+        // v1.185.0: как и с файлами — сообщение появляется сразу (blob-превью
+        // играбелен локально), заливка в фоне (см. sendMsg).
+        try { await onSend('', { url: URL.createObjectURL(f), type: 'audio' }, [f]) }
+        catch (err: any) { toastErr(err.message ?? String(err)) }
       }
       mr.start()
       const timer = window.setInterval(() => setRec(r => r ? { t: r.t + 1 } : r), 1000)
@@ -364,27 +364,22 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     setBusy(true)
     try {
       let attach: { url: string; type: string } | undefined
+      const pendingFiles = files
       if (files.length) {
-        const urls: string[] = []
-        const types: string[] = []
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i]
-          setUpProg(files.length > 1 ? i / files.length : 0)
-          let url = await uploadWithProgress('attachments', user.id, f,
-            p => setUpProg(files.length > 1 ? (i + p) / files.length : p))
-          if (spoilers[i] && isImage(f)) url += '#spoiler'
-          urls.push(url)
-          types.push(isImage(f) ? 'image' : isVideo(f) ? 'video' : 'file')
-        }
-        // v1.70.0: группа вложений кодируется в одну строку через \n — без миграции БД.
+        // v1.185.0: не грузим на сервер до отправки (как раньше — с полосой над
+        // композером) — сообщение должно появиться в ленте мгновенно, локальный
+        // blob-превью тут же и заменяет собой ожидание сети; настоящая заливка
+        // идёт в фоне уже после того, как сообщение видно (см. sendMsg).
+        const urls = files.map((f, i) => { let u = URL.createObjectURL(f); if (spoilers[i] && isImage(f)) u += '#spoiler'; return u })
+        const types = files.map(f => isImage(f) ? 'image' : isVideo(f) ? 'video' : 'file')
         attach = { url: urls.join('\n'), type: types.join('\n') }
       }
-      await onSend(t, attach)
+      await onSend(t, attach, pendingFiles.length ? pendingFiles : undefined)
       lastSent.current = { t, at: Date.now() }
       setFailed(false)
       setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
-    finally { setBusy(false); setUpProg(null); sendingRef.current = false }
+    finally { setBusy(false); sendingRef.current = false }
   }
 
   return (
@@ -395,11 +390,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" onClick={e => { setFailed(false); submit(e as any) }}>Повторить</button>
         <button type="button" className="send-fail-x" title="Скрыть" onClick={() => setFailed(false)}>×</button>
       </div>}
-      {upProg !== null && <div className="up-progress">
-        <div className="up-progress-fill" style={{ width: Math.round(upProg * 100) + '%' }} />
-        <span className="up-progress-tx">Загрузка{files.length === 1 ? ' «' + files[0].name + '»' : files.length > 1 ? ' (файлов: ' + files.length + ')' : ''}… {Math.round(upProg * 100)}%</span>
-      </div>}
-      {files.length > 0 && upProg === null && <div className="att-row">
+      {files.length > 0 && <div className="att-row">
         {files.map((f, i) => isImage(f) && previews[i] ? (
           <div key={i} className="att-card">
             <div className="att-card-actions">
@@ -594,12 +585,17 @@ function AttachEditModal({ initial, onSave, onClose }: {
   )
 }
 
-export function Attachment({ url, type, meta, editable, attachMeta, attachIndex, onEditAttachment }: {
+export function Attachment({ url, type, meta, editable, attachMeta, attachIndex, onEditAttachment, uploading, progress, pendingNames }: {
   url?: string | null; type?: string | null; meta?: import('./Lightbox').LightboxMeta
   editable?: boolean
   attachMeta?: AttachMetaItem[] | null
   attachIndex?: number
   onEditAttachment?: (index: number, patch: AttachPatch) => void | Promise<void>
+  // v1.185.0: сообщение уже отправлено (как в Discord) — вложение ещё грузится
+  // на сервер в фоне, url/type пока локальный blob: (см. sendMsg в ServerView/DMHome).
+  uploading?: boolean
+  progress?: number
+  pendingNames?: string[]
 }) {
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
@@ -608,16 +604,16 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   const [editOpen, setEditOpen] = useState(false)
   const idx = attachIndex ?? 0
   const myMeta = attachMeta?.[idx] ?? null
-  const canEdit = !!editable && !!onEditAttachment
+  const canEdit = !!editable && !!onEditAttachment && !uploading
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
-    if (!url || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); return }
+    if (!url || uploading || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); return }
     let on = true
     fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
       .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) setSize(fmtSize(n)) })
       .catch(() => {})
     return () => { on = false }
-  }, [url, type])
+  }, [url, type, uploading])
   if (!url) return null
   // v1.70.0: группа вложений в одном сообщении — url/type склеены через \n.
   if (url.includes('\n')) {
@@ -626,12 +622,19 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     const imgCount = types.filter(t => t === 'image').length
     return <div className={'att-group' + (imgCount > 1 ? ' grid' : '')}>
       {urls.map((u, i) => <Attachment key={i} url={u} type={types[i] ?? type} meta={meta}
-        editable={editable} attachMeta={attachMeta} attachIndex={i} onEditAttachment={onEditAttachment} />)}
+        editable={editable} attachMeta={attachMeta} attachIndex={i} onEditAttachment={onEditAttachment}
+        uploading={uploading} progress={progress} pendingNames={pendingNames ? [pendingNames[i]] : undefined} />)}
     </div>
   }
   const clean = url.replace('#spoiler', '')
-  // Голосовое сообщение / аудио — встроенный плеер.
+  const upOverlay = uploading && <div className="att-upload-ov"><span className="att-spin" />{progress != null && <b>{Math.round(progress * 100)}%</b>}</div>
+  // Голосовое сообщение / аудио — встроенный плеер (blob: локально играбелен, пока грузится).
   if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
+  // v1.185.0: непонятно, что за файл будет на сервере (blob: без расширения) —
+  // пока грузится, единая лёгкая карточка вместо тяжёлого CodeFileCard/HEAD-запроса.
+  if (type === 'file' && uploading) return (
+    <div className="msg-file uploading"><span className="att-spin" /> {pendingNames?.[0] || 'Загрузка файла…'}</div>
+  )
   if (type === 'image') {
     if (failed) return (
       <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
@@ -651,7 +654,8 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     )
     return <>
       <div className="att-editwrap">
-        <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => setViewer(true)} onError={() => setFailed(true)} />
+        <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => !uploading && setViewer(true)} onError={() => setFailed(true)} />
+        {upOverlay}
         {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
         {editOpen && <AttachEditModal initial={{ spoiler: false, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
           onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
@@ -667,7 +671,7 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
         <Icon name="video" size={16} /> Не удалось загрузить видео
       </a>
     )
-    return <video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />
+    return <div className="att-editwrap"><video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />{upOverlay}</div>
   }
   // v1.83.0: txt и файлы с кодом — карточка с подсветкой, 1-в-1 как в Discord.
   if (isCodeFile(clean)) {

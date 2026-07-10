@@ -431,6 +431,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }}
                   editable={m.author === currentUser} attachMeta={m.attach_meta}
+                  uploading={(m as any)._uploading} progress={(m as any)._upProgress} pendingNames={(m as any)._uploadNames}
                   onEditAttachment={onEditAttachment ? (i, patch) => onEditAttachment(m.id, i, patch) : undefined} />
                 {!m.attach_url && findGifLink(m.content) && <GifEmbed url={findGifLink(m.content)!} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }} />}
                 {!m.attach_url && !findGifLink(m.content) && findYouTubeLink(m.content) && <YouTubeEmbed url={findYouTubeLink(m.content)!} />}
