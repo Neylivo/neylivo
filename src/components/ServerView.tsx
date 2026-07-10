@@ -1102,7 +1102,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>
       </>}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)}
-        onAddRole={(isOwner || canManageRoles || canKick || canBan) ? () => { const m = mini; setMini(null); setQuickRoleQ(''); setQuickRolePop({ userId: m.userId, x: Math.min(m.x, window.innerWidth - 240), y: Math.min(m.y, window.innerHeight - 320) }) } : undefined} />}
+        onAddRole={(isOwner || canManageRoles || canKick || canBan) ? (e) => {
+          // v1.189.0: мини-профиль больше не закрывается — попап с ролями открывается
+          // рядом с кнопкой, поверх него (как в Discord).
+          setQuickRoleQ('')
+          setQuickRolePop({ userId: mini!.userId, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) })
+        } : undefined} />}
       {quickRolePop && <>
         <div className="ctx-overlay" onClick={() => setQuickRolePop(null)} onContextMenu={e => { e.preventDefault(); setQuickRolePop(null) }} />
         <div className="ctx-menu role-quickpop" style={{ left: quickRolePop.x, top: quickRolePop.y }}>

@@ -57,7 +57,7 @@ export interface MiniProfileData {
 }
 
 export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar, onAddRole }:
-  { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void; onAddRole?: () => void }) {
+  { data: MiniProfileData; onClose: () => void; onMessage?: () => void; meControls?: boolean; onPickAvatar?: () => void; onAddRole?: (e: React.MouseEvent) => void }) {
   const { user } = useAuth()
   const isMe = user?.id === data.userId
   const [pp, setPp] = useState<ProfilePrefs>(() => cachedProfile(data.userId) ?? DEFAULT_PROFILE)   // v1.142.0: сразу из кэша, без мелькания
