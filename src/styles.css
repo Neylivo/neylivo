@@ -1866,6 +1866,23 @@ body.no-anim .member-typing i { animation:none; }
 .pc-more { width:36px; height:36px; border-radius:50%; border:none; background:rgba(255,255,255,.08); color:#dbdee1; cursor:pointer; font-weight:800; font-size:16px; }
 .pc-more:hover { background:rgba(255,255,255,.14); color:#fff; }
 .pc-about { margin-top:14px; color:#dbdee1; font-size:14px; white-space:pre-wrap; }
+/* v1.232.0: «Добавить в друзья»/«Сообщение»+«Друг»→«Удалить из друзей» — как в Discord. */
+.pc-btnrow { display:flex; align-items:center; gap:8px; margin-top:12px; }
+.pc-friendbtn, .pc-msgbtn { display:inline-flex; align-items:center; gap:8px; background:var(--brand); border:none;
+  color:#fff; font-weight:700; font-size:14px; padding:9px 16px; border-radius:6px; cursor:pointer; }
+.pc-friendbtn:hover:not(:disabled), .pc-msgbtn:hover { filter:brightness(1.1); }
+.pc-friendbtn:disabled { opacity:.7; cursor:default; }
+.pc-friendbtn.pending { background:rgba(255,255,255,.08); color:var(--mut); }
+.pc-friendbtn.pending:hover:not(:disabled) { background:rgba(237,66,69,.15); color:#ed4245; filter:none; }
+.pc-friendicwrap { position:relative; }
+.pc-friendic.on { background:rgba(88,101,242,.18); color:var(--brand); }
+.pc-friendic.on:hover { background:rgba(237,66,69,.18); color:#ed4245; }
+.pc-friendic-ov { position:fixed; inset:0; z-index:120; }
+.pc-friendic-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:121; background:var(--bg3);
+  border-radius:8px; padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.5); min-width:170px; }
+.pc-friendic-menu button { width:100%; text-align:left; background:none; border:none; padding:8px 10px;
+  border-radius:6px; cursor:pointer; font-size:14px; color:#ed4245; }
+.pc-friendic-menu button:hover { background:rgba(237,66,69,.15); }
 .pc-sec { margin-top:18px; }
 .pc-sech { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin-bottom:8px; }
 .pc-since { color:#dbdee1; font-size:14px; }
@@ -2736,6 +2753,9 @@ body.no-anim .member-typing i { animation:none; }
 .chat-head.ph2 { gap:8px; }
 .ph2-hash { color:#80848e; font-size:22px; font-weight:400; line-height:1; flex:none; }
 .ph2-name { font-weight:700; color:#f2f3f5; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* v1.232.0: ник/аватарка в шапке ЛС кликабельны — открывают полный профиль. */
+.ph2-who { display:inline-flex; align-items:center; gap:8px; cursor:pointer; border-radius:6px; padding:2px 6px 2px 2px; margin:-2px 0 -2px -6px; transition:background .12s ease; }
+.ph2-who:hover { background:rgba(255,255,255,.06); }
 .ph2-btns { margin-left:auto; display:flex; align-items:center; gap:4px; flex:none; }
 .ph2-btns .pin-btn, .ph2-btns .call-start { margin-left:0; }
 

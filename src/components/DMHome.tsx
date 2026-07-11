@@ -1035,7 +1035,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       <main className="chat">
         {(active || activeGroup) ? <>
           <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
-            {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : <>{!IS_MOBILE && '@ '}{active!.name}</>}
+            {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : (
+              // v1.232.0: клик по нику/аватарке в шапке ЛС открывает полный профиль
+              // (ProfileCard), как в Discord — раньше шапка была просто текстом.
+              <span className="ph2-name ph2-who" onClick={() => setFullProfileTab('board')} title="Открыть профиль">
+                <Avatar name={active!.name} url={activeAvatar} userId={active!.id} size={24} />
+                {!IS_MOBILE && '@ '}{active!.name}
+              </span>
+            )}
             <div className="ph2-btns">
               <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
               {/* v1.223.0: групповые звонки — не в этой версии, кнопка звонка есть только 1-в-1 */}

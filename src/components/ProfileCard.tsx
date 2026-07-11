@@ -10,7 +10,8 @@ import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
 import { ClockElapsed } from './ActivityLabel'
-import { mutualFriends } from '../lib/friends'
+import { mutualFriends, friendStatus, removeFriendship, sendRequest, respondRequest, type FriendStatus } from '../lib/friends'
+import { supabase } from '../lib/supabase'
 import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
@@ -18,7 +19,7 @@ import { gameIconOf } from '../lib/gameIcon'
 import { colorFor, initial } from '../lib/ui'
 import { confirmUi } from '../lib/confirm'
 import { GamePickerModal } from './GamePickerModal'
-import { toastErr } from '../lib/toast'
+import { toastErr, toastOk } from '../lib/toast'
 import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
 import { WallDraw } from './WallDraw'
@@ -124,6 +125,65 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
   const [gamePicker, setGamePicker] = useState<{ field: 'favGames'; mode: 'single' } | { field: WidgetField; mode: 'multi' } | null>(null)
   const [widgetCovers, setWidgetCovers] = useState<Record<string, string | null>>({})
+  // v1.232.0: «Добавить в друзья» / «Друг» → «Удалить из друзей» — как в Discord,
+  // прямо в полном профиле (раньше действие было только в контекстном меню ЛС).
+  const [fStatus, setFStatus] = useState<FriendStatus | null>(null)
+  const [fReqId, setFReqId] = useState<string | null>(null)
+  const [fBusy, setFBusy] = useState(false)
+  const [removeMenuOpen, setRemoveMenuOpen] = useState(false)
+  const [meName, setMeName] = useState('')
+
+  useEffect(() => {
+    if (isMe || !user) { setFStatus(null); return }
+    let ok = true
+    friendStatus(user.id, userId).then(r => { if (ok) { setFStatus(r.status); setFReqId(r.requestId) } })
+    return () => { ok = false }
+  }, [user?.id, userId, isMe])
+  useEffect(() => {
+    if (isMe || !user) return
+    let ok = true
+    supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle()
+      .then(({ data }) => { if (ok) setMeName((data as any)?.display_name || (data as any)?.username || '') })
+    return () => { ok = false }
+  }, [user?.id, isMe])
+  async function addFriend() {
+    if (!user || fBusy) return
+    setFBusy(true)
+    try {
+      if (fStatus === 'pending_in' && fReqId) {
+        const { error } = await respondRequest(fReqId, true)
+        if (error) throw error
+        setFStatus('friends')
+        toastOk(name + ' теперь у тебя в друзьях!')
+      } else {
+        const { error } = await sendRequest(user.id, meName || 'Я', { id: userId, username: name } as Profile)
+        if (error) throw error
+        setFStatus('pending_out')
+        toastOk('Заявка отправлена — ' + name)
+      }
+    } catch (e: any) { toastErr(e?.message ?? 'Не удалось отправить заявку') }
+    finally { setFBusy(false) }
+  }
+  async function cancelRequest() {
+    if (!user || fBusy) return
+    setFBusy(true)
+    try { await removeFriendship(user.id, userId); setFStatus('none') }
+    catch { toastErr('Не удалось отменить заявку') }
+    finally { setFBusy(false) }
+  }
+  async function removeFriendAction() {
+    if (!user || fBusy) return
+    setRemoveMenuOpen(false)
+    if (!await confirmUi('Удалить ' + name + ' из друзей?', { okText: 'Удалить' })) return
+    setFBusy(true)
+    try { await removeFriendship(user.id, userId); setFStatus('none'); toastOk(name + ' удалён(а) из друзей') }
+    catch { toastErr('Не удалось удалить из друзей') }
+    finally { setFBusy(false) }
+  }
+  function openDm() {
+    window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: { id: userId, name } }))
+    onClose()
+  }
 
   useEffect(() => {
     let ok = true
@@ -257,6 +317,30 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   ? <span className="pc-pron" onClick={() => isMe && setPronEdit(true)} title={isMe ? 'Изменить местоимения' : undefined}>{pron}</span>
                   : isMe && <button className="pc-pron-add" onClick={() => setPronEdit(true)}>Добавить местоимения</button>}
             </div>
+            {!isMe && <div className="pc-btnrow">
+              {fStatus === 'friends' ? <>
+                <button className="pc-msgbtn" onClick={openDm}><Icon name="message" size={16} /> Сообщение</button>
+                <div className="pc-friendicwrap">
+                  <button className="pc-more pc-friendic on" title="Друг" onClick={() => setRemoveMenuOpen(v => !v)}><Icon name="user-plus" size={16} /></button>
+                  {removeMenuOpen && <>
+                    <div className="pc-friendic-ov" onClick={() => setRemoveMenuOpen(false)} />
+                    <div className="pc-friendic-menu"><button className="danger" onClick={removeFriendAction}>Удалить из друзей</button></div>
+                  </>}
+                </div>
+              </> : fStatus === 'pending_out' ? (
+                <button className="pc-friendbtn pending" disabled={fBusy} onClick={cancelRequest} title="Отменить заявку">
+                  <Icon name="check" size={16} /> Заявка отправлена
+                </button>
+              ) : fStatus === 'pending_in' ? (
+                <button className="pc-friendbtn" disabled={fBusy} onClick={addFriend}>
+                  <Icon name="user-plus" size={16} /> {fBusy ? '…' : 'Принять заявку'}
+                </button>
+              ) : fStatus === 'none' ? (
+                <button className="pc-friendbtn" disabled={fBusy} onClick={addFriend}>
+                  <Icon name="user-plus" size={16} /> {fBusy ? '…' : 'Добавить в друзья'}
+                </button>
+              ) : null}
+            </div>}
             {pp.about && <div className="pc-about">{pp.about}</div>}
             {(pp.integrations.length > 0 || isMe) && <div className="pc-sec">
               <div className="pc-sech">Подключения</div>

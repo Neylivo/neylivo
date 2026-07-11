@@ -62,6 +62,31 @@ export async function respondRequest(id: string, accept: boolean) {
   return supabase.from('friend_requests').update({ status: accept ? 'accepted' : 'declined' }).eq('id', id)
 }
 
+export type FriendStatus = 'none' | 'pending_out' | 'pending_in' | 'friends'
+// v1.232.0: статус отношений с конкретным человеком — для кнопки «Добавить в
+// друзья»/«Друг» в полном профиле (см. ProfileCard.tsx). Берём ВСЕ строки между
+// парой (не .maybeSingle()) — обе стороны могли одновременно отправить заявку
+// друг другу до того, как кто-то ответил, тогда совпадающих строк будет две.
+export async function friendStatus(meId: string, otherId: string): Promise<{ status: FriendStatus; requestId: string | null }> {
+  const { data } = await supabase.from('friend_requests').select('id,from_user,to_user,status')
+    .or(`and(from_user.eq.${meId},to_user.eq.${otherId}),and(from_user.eq.${otherId},to_user.eq.${meId})`)
+  const rows = (data ?? []) as any[]
+  const accepted = rows.find(r => r.status === 'accepted')
+  if (accepted) return { status: 'friends', requestId: accepted.id }
+  const out = rows.find(r => r.status === 'pending' && r.from_user === meId)
+  if (out) return { status: 'pending_out', requestId: out.id }
+  const inc = rows.find(r => r.status === 'pending' && r.from_user === otherId)
+  if (inc) return { status: 'pending_in', requestId: inc.id }
+  return { status: 'none', requestId: null }
+}
+
+// Разрыв дружбы/отмена заявки — сносит запись(и) в обе стороны (то же, что
+// «Удалить из друзей» в DMHome.tsx, вынесено сюда для переиспользования).
+export async function removeFriendship(meId: string, otherId: string) {
+  return supabase.from('friend_requests').delete()
+    .or(`and(from_user.eq.${meId},to_user.eq.${otherId}),and(from_user.eq.${otherId},to_user.eq.${meId})`)
+}
+
 // Canonical (ordered) DM thread between two users; created on first open.
 // v1.227.0: раньше при ошибке (RLS/сеть) просто отдавала null — вызывающий код видел
 // только «не получилось», без единой зацепки, что именно сломалось. Логируем и

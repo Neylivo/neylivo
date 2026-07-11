@@ -97,6 +97,15 @@ export function Home() {
       window.removeEventListener('ponoi-open-server-notif', openNotif as any)
     }
   }, [])
+  // v1.232.0: «Сообщение» в полном профиле (ProfileCard, может быть открыт откуда
+  // угодно — с сервера, из мини-профиля) шлёт то же событие ponoi-open-dm, что и
+  // Ctrl+K/входящий звонок — DMHome (смонтирован постоянно) сам откроет диалог,
+  // но если сейчас открыт СЕРВЕР, экран ЛС ещё и нужно сделать видимым.
+  useEffect(() => {
+    const h = () => setView({ kind: 'dm' })
+    window.addEventListener('ponoi-open-dm', h)
+    return () => window.removeEventListener('ponoi-open-dm', h)
+  }, [])
   // Мобильная версия (v1.34.0): при старте открываем шторку навигации, как в Discord.
   useEffect(() => { if (IS_MOBILE) openMobNav() }, [])
   // v1.40.0: настройки сохранили ник/юзернейм — обновляем имя во всём приложении сразу, без перезагрузки.
