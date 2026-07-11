@@ -796,6 +796,55 @@ async function lolMode() {
   const head = champ ? 'В матче — ' + champ : 'В матче'
   return head + (mode ? ' · ' + mode : '')
 }
+// v1.237.0: VALORANT — официального GSI у Riot для неё нет (в отличие от Dota/CS2),
+// но у Riot Client (тот же процесс, что запускает и League) есть локальный API с
+// авторизацией через lockfile — этим механизмом пользуются практически все сторонние
+// Discord-rich-presence тулзы для VALORANT (задокументировано сообществом; официально
+// Riot этот API не документирует и не обязуется не менять). Показываем только
+// sessionLoopState (в лобби/подготовка/в матче) — карту, агента и счёт сознательно
+// не трогаем: это ID-справочники на десятки агентов/карт (UUID -> имя), которые
+// пришлось бы поддерживать вручную и рискнуть показать НЕВЕРНОЕ имя агента, если
+// список устареет, — это хуже, чем просто не показать деталей.
+function readRiotLockfile() {
+  try {
+    const fsr = require('fs')
+    const f = path.join(process.env.LOCALAPPDATA || '', 'Riot Games', 'Riot Client', 'Config', 'lockfile')
+    if (!fsr.existsSync(f)) return null
+    const parts = fsr.readFileSync(f, 'utf8').trim().split(':')   // name:pid:port:password:protocol
+    const port = parts[2], password = parts[3]
+    return (port && password) ? { port, password } : null
+  } catch { return null }
+}
+function httpJsonRiotLocal(u, password) {
+  return new Promise((resolve) => {
+    const https = require('https')
+    const auth = 'Basic ' + Buffer.from('riot:' + password).toString('base64')
+    const req = https.get(u, { rejectUnauthorized: false, headers: { Authorization: auth } }, (res) => {
+      let data = ''
+      res.on('data', (d) => { data += d })
+      res.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve(null) } })
+    })
+    req.on('error', () => resolve(null))
+    req.setTimeout(3000, () => { try { req.destroy() } catch {} resolve(null) })
+  })
+}
+const VAL_STATES = { MENUS: 'В лобби', PREGAME: 'Подготовка к матчу', INGAME: 'В матче' }
+async function valorantMode() {
+  const lf = readRiotLockfile()
+  if (!lf) return null
+  const base = 'https://127.0.0.1:' + lf.port
+  const ent = await httpJsonRiotLocal(base + '/entitlements/v1/token', lf.password)
+  const puuid = ent && ent.subject
+  if (!puuid) return null
+  const pres = await httpJsonRiotLocal(base + '/chat/v4/presences', lf.password)
+  const list = pres && Array.isArray(pres.presences) ? pres.presences : []
+  const me = list.find((p) => p.puuid === puuid && p.product === 'valorant')
+  if (!me || !me.private) return null
+  try {
+    const priv = JSON.parse(Buffer.from(me.private, 'base64').toString('utf8'))
+    return VAL_STATES[priv.sessionLoopState] || null
+  } catch { return null }
+}
 // Minecraft: режим берём из заголовка окна («… - Singleplayer» / «… - Multiplayer»).
 function mcMode() {
   const t = String(curGameTitle || '')
@@ -918,12 +967,13 @@ async function scanGameMode() {
       placeId = pid
       jobId = sess ? sess.jobId : null
       lastJobId = jobId
-    } else if (g.name === 'Counter-Strike 2') { ensureGsiCfg('Counter-Strike 2', curGameExe); mode = cs2Mode() }
+    } else if (g.name === 'Counter-Strike 2' || g.name === 'CS:GO') { ensureGsiCfg('Counter-Strike 2', curGameExe); mode = cs2Mode() }
     else if (g.name === 'Dota 2') { ensureGsiCfg('Dota 2', curGameExe); mode = dotaMode() }
     else if (g.name === 'Dead by Daylight') mode = dbdMode()
     else if (g.name === 'Fortnite') mode = fortniteMode()
     else if (g.name === 'Delta Force') mode = deltaForceMode()
     else if (g.name === 'League of Legends') mode = await lolMode()
+    else if (g.name === 'VALORANT') mode = await valorantMode()
     else if (g.name === 'Minecraft (Java)') mode = mcJavaLogMode(g.since) || mcMode()
     else if (g.name === 'Minecraft') mode = mcMode()
     else mode = ueGenericMode()
