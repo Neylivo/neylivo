@@ -48,3 +48,22 @@ export function useClampToViewport<T extends HTMLElement = HTMLDivElement>(x: nu
   }, [])
   return { ref, style: { left: pos.left, top: pos.top } as React.CSSProperties }
 }
+
+// v1.234.0: подменю (.ctx-item.has-sub .ctx-submenu) открывается вправо от
+// родительского пункта через чистый CSS (position:absolute; left:100%) — когда
+// родительское меню уже прижато useClampToViewport к правому краю экрана (самая
+// частая ситуация, при которой подменю вообще рискует не влезть), подменю
+// вылезает за край. ResizeObserver у родителя это не ловит: абсолютно
+// спозиционированный потомок не меняет собственный layout-box родителя. Меряем
+// подменю сразу после монтирования (условный рендер — значит, свежий mount
+// при каждом открытии) и, если оно вылезает вправо, разворачиваем его влево.
+export function useFlipSubmenu<T extends HTMLElement = HTMLDivElement>(margin = 8) {
+  const ref = useRef<T>(null)
+  const [flip, setFlip] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) { setFlip(false); return }
+    setFlip(el.getBoundingClientRect().right > window.innerWidth - margin)
+  }, [])
+  return { ref, style: (flip ? { left: 'auto', right: '100%', marginLeft: 0, marginRight: 4 } : {}) as React.CSSProperties }
+}

@@ -14,7 +14,7 @@ import { openThread } from '../lib/friends'
 import { sysInvite } from '../lib/sysmsg'
 import { supabase } from '../lib/supabase'
 import type { Server } from '../types'
-import { useClampToViewport } from '../lib/clampPos'
+import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 
 interface Friend { id: string; name: string }
 
@@ -104,6 +104,8 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   const muted = isDmMuted(friend.id)
   const ignored = isDmIgnored(friend.id)
   const clamp = useClampToViewport(x, y)
+  const inviteSub = useFlipSubmenu()
+  const muteSub = useFlipSubmenu()
 
   return (
     <>
@@ -131,7 +133,7 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
         <div className="ctx-sep" />
         <div className="ctx-item has-sub" onClick={() => setSub(s => s === 'invite' ? null : 'invite')}>
           <span>Пригласить на сервер</span><Icon name="chevron-right" size={14} />
-          {sub === 'invite' && <div className="ctx-menu ctx-submenu" onClick={e => e.stopPropagation()}>
+          {sub === 'invite' && <div className="ctx-menu ctx-submenu" ref={inviteSub.ref} style={inviteSub.style} onClick={e => e.stopPropagation()}>
             {servers.length === 0 && <div className="ctx-item ctx-item-empty">Нет серверов</div>}
             {servers.map(s => friendServerIds.has(s.id)
               ? <div key={s.id} className="ctx-item ctx-item-empty"><span>{s.name} — уже там</span></div>
@@ -145,7 +147,7 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
         {!muted ? (
           <div className="ctx-item has-sub" onClick={() => setSub(s => s === 'mute' ? null : 'mute')}>
             <span>Заглушить @{friend.name}</span><Icon name="chevron-right" size={14} />
-            {sub === 'mute' && <div className="ctx-menu ctx-submenu" onClick={e => e.stopPropagation()}>
+            {sub === 'mute' && <div className="ctx-menu ctx-submenu" ref={muteSub.ref} style={muteSub.style} onClick={e => e.stopPropagation()}>
               <div className="ctx-item" onClick={() => mute(Date.now() + 15 * 60000)}><span>15 минут</span></div>
               <div className="ctx-item" onClick={() => mute(Date.now() + 3600000)}><span>1 час</span></div>
               <div className="ctx-item" onClick={() => mute(Date.now() + 8 * 3600000)}><span>8 часов</span></div>

@@ -42,7 +42,7 @@ import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
 import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
 import { loadChMuted, setChMuted } from '../lib/chMute'
-import { useClampToViewport } from '../lib/clampPos'
+import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
@@ -152,6 +152,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // rolePop то с подменю тайм-аута, то без) — клампим по факту (см. src/lib/clampPos.ts).
   const rolePopClamp = useClampToViewport(rolePop?.x ?? 0, rolePop?.y ?? 0)
   const quickRolePopClamp = useClampToViewport(quickRolePop?.x ?? 0, quickRolePop?.y ?? 0)
+  const timeoutSubClamp = useFlipSubmenu()
   const chCtxClamp = useClampToViewport(chCtx?.x ?? 0, chCtx?.y ?? 0)
   const catCtxClamp = useClampToViewport(catCtx?.x ?? 0, catCtx?.y ?? 0)
   const [catOpenMap, setCatOpenMap] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('ponoi_cat_open') ?? '{}') } catch { return {} } })
@@ -1139,7 +1140,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               {canManageRoles && <div className="ctx-sep" />}
               {showTimeout && !isTimedOut && <div className="ctx-item has-sub" onClick={e => { e.stopPropagation(); setTimeoutSub(v => !v) }}>
                 <span>Тайм-аут</span><Icon name="chevron-right" size={14} />
-                {timeoutSub && <div className="ctx-menu ctx-submenu" onClick={e => e.stopPropagation()}>
+                {timeoutSub && <div className="ctx-menu ctx-submenu" ref={timeoutSubClamp.ref} style={timeoutSubClamp.style} onClick={e => e.stopPropagation()}>
                   <div className="ctx-item" onClick={() => doTimeout(15 * 60000)}><span>15 минут</span></div>
                   <div className="ctx-item" onClick={() => doTimeout(3600000)}><span>1 час</span></div>
                   <div className="ctx-item" onClick={() => doTimeout(8 * 3600000)}><span>8 часов</span></div>
