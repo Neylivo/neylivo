@@ -10,6 +10,8 @@ import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
 import { CHANGELOG } from './lib/changelog'
 import { openMsgLink } from './lib/deepLink'
+import { Capacitor } from '@capacitor/core'
+import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -18,6 +20,38 @@ declare const __APP_VERSION__: string
 // а нативные кнопки «свернуть/развернуть/закрыть» отдаёт Windows-overlay
 // (см. electron/main.cjs, titleBarOverlay). Вся полоска — drag-регион.
 const isDesktop = typeof window !== 'undefined' && !!(window as any).ponoiDesktop?.isDesktop
+// v1.213.0: настоящий APK (Capacitor-обёртка), не браузер/PWA — у той свой
+// путь обновления (см. apkUpdate.ts).
+const isApkNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+
+// v1.213.0: баннер «Доступно обновление» для APK — у десктопа авто-обновление
+// уже качает и ставит само (UpdateBanner ниже), у APK самое большее, что можно —
+// сверить версию и дать прямую ссылку на .apk с последнего GitHub Release;
+// установку (и её подтверждение) всё равно делает сама Android.
+function ApkUpdateBanner() {
+  const [upd, setUpd] = useState<ApkUpdate | null>(null)
+  useEffect(() => {
+    let alive = true
+    checkApkUpdate(__APP_VERSION__).then(u => {
+      if (!alive || !u) return
+      if (getDismissedApkVersion() === u.version) return
+      setUpd(u)
+    })
+    return () => { alive = false }
+  }, [])
+  if (!upd) return null
+  return (
+    <div className="upd-card">
+      <div className="upd-ico"><Icon name="download" size={18} /></div>
+      <div className="upd-tx">
+        <b>Доступно обновление — v{upd.version}</b>
+        <span>Скачай APK и установи поверх текущей версии</span>
+      </div>
+      <a className="upd-go" href={upd.url} target="_blank" rel="noopener noreferrer">Скачать</a>
+      <button className="upd-x" title="Скрыть" onClick={() => { dismissApkVersion(upd.version); setUpd(null) }}><Icon name="close" size={14} /></button>
+    </div>
+  )
+}
 
 // Карточка авто-обновления (v1.29.0): живой прогресс скачивания, по готовности —
 // кнопка «Перезапустить». Вместо системных немых уведомлений.
@@ -176,6 +210,7 @@ export default function App() {
     <EmojiCtxHost />
     {isDesktop && <Titlebar />}
     {isDesktop && <UpdateBanner />}
+    {isApkNative && <ApkUpdateBanner />}
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>

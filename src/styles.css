@@ -2587,7 +2587,8 @@ body.no-anim .member-typing i { animation:none; }
 .upd-bar i { display:block; height:100%; background:linear-gradient(90deg,#6366f1,#8b5cf6); border-radius:3px;
   transition:width .25s ease; }
 .upd-go { border:none; border-radius:8px; background:var(--brand); color:#fff; font-weight:700; font-size:13px;
-  padding:9px 14px; cursor:pointer; flex:none; transition:filter .15s ease, transform .12s ease; }
+  padding:9px 14px; cursor:pointer; flex:none; transition:filter .15s ease, transform .12s ease;
+  display:inline-block; text-decoration:none; text-align:center; }
 .upd-go:hover { filter:brightness(1.08); transform:translateY(-1px); }
 .upd-x { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
 .upd-x:hover { color:#dbdee1; }
@@ -3869,6 +3870,10 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .pc-x { top: calc(14px + env(safe-area-inset-top)); }
   .pc-banner { padding-top: env(safe-area-inset-top); }
   .pc-tabs { padding-left: 16px; padding-right: 16px; overflow-x: auto; }
+
+  /* 10. v1.213.0: баннер обновления APK — сверху во всю ширину (не в углу поверх
+     композера/навигации, как у десктопной карточки), с учётом выреза экрана. */
+  .upd-card { left: 10px; right: 10px; bottom: auto; top: calc(10px + env(safe-area-inset-top)); min-width: 0; max-width: none; }
 }
 
 @keyframes ctx-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
