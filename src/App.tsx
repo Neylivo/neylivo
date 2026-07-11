@@ -55,9 +55,13 @@ function ApkUpdateBanner() {
 
 // Карточка авто-обновления (v1.29.0): живой прогресс скачивания, по готовности —
 // кнопка «Перезапустить». Вместо системных немых уведомлений.
+// v1.222.0: карточку можно свернуть к краю экрана (стрелка сбоку) вместо полного
+// скрытия — если сейчас не до перезапуска, она «заползает в стену», оставляя
+// маленький хвостик-ползунок; клик по нему возвращает карточку обратно.
 function UpdateBanner() {
   const [u, setU] = useState<{ state: string; percent?: number; version?: string } | null>(null)
   const [hidden, setHidden] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {
     const d = (window as any).ponoiDesktop
     if (!d?.onUpdate) return
@@ -71,17 +75,23 @@ function UpdateBanner() {
   const pct = Math.max(0, Math.min(100, Math.round(u.percent ?? 0)))
   const ready = u.state === 'ready'
   return (
-    <div className={'upd-card' + (ready ? ' ready' : '')}>
-      <div className="upd-ico"><Icon name={ready ? 'rotate' : 'download'} size={18} /></div>
-      <div className="upd-tx">
-        <b>{ready ? 'Обновление готово' : 'Скачиваем обновление'}{u.version ? ' — v' + u.version : ''}</b>
-        {ready
-          ? <span>Перезапусти Ponoi, чтобы применить</span>
-          : <><span>{pct}%</span><div className="upd-bar"><i style={{ width: pct + '%' }} /></div></>}
+    <>
+      <div className={'upd-card' + (ready ? ' ready' : '') + (collapsed ? ' collapsed' : '')}>
+        <div className="upd-ico"><Icon name={ready ? 'rotate' : 'download'} size={18} /></div>
+        <div className="upd-tx">
+          <b>{ready ? 'Обновление готово' : 'Скачиваем обновление'}{u.version ? ' — v' + u.version : ''}</b>
+          {ready
+            ? <span>Перезапусти Ponoi, чтобы применить</span>
+            : <><span>{pct}%</span><div className="upd-bar"><i style={{ width: pct + '%' }} /></div></>}
+        </div>
+        {ready && <button className="upd-go" onClick={() => (window as any).ponoiDesktop?.applyUpdate?.()}>Перезапустить</button>}
+        <button className="upd-collapse" title="Свернуть к краю" onClick={() => setCollapsed(true)}><Icon name="chevron-right" size={14} /></button>
+        <button className="upd-x" title="Скрыть" onClick={() => setHidden(true)}><Icon name="close" size={14} /></button>
       </div>
-      {ready && <button className="upd-go" onClick={() => (window as any).ponoiDesktop?.applyUpdate?.()}>Перезапустить</button>}
-      <button className="upd-x" title="Скрыть" onClick={() => setHidden(true)}><Icon name="close" size={14} /></button>
-    </div>
+      <button className={'upd-handle' + (collapsed ? ' show' : '')} title="Обновление отложено — показать" onClick={() => setCollapsed(false)}>
+        <Icon name={ready ? 'rotate' : 'download'} size={16} />
+      </button>
+    </>
   )
 }
 

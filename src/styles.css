@@ -2593,7 +2593,19 @@ body.no-anim .member-typing i { animation:none; }
 /* --- Красивое авто-обновление (v1.29.0) --- */
 .upd-card { position:fixed; right:18px; bottom:18px; z-index:95; display:flex; align-items:center; gap:12px;
   padding:12px 14px; min-width:290px; max-width:360px; background:#111214; border:1px solid rgba(255,255,255,.08);
-  border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.55); animation:pop .2s ease both; overflow:hidden; }
+  border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.55); animation:pop .2s ease both; overflow:hidden;
+  transition:transform .28s cubic-bezier(.3,.8,.3,1), opacity .28s ease; }
+/* v1.222.0: свёрнутая карточка «заползает» за правый край, вместо неё торчит .upd-handle */
+.upd-card.collapsed { transform:translateX(calc(100% + 30px)); opacity:0; pointer-events:none; }
+.upd-collapse { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
+.upd-collapse:hover { color:#dbdee1; }
+.upd-handle { position:fixed; right:0; bottom:18px; z-index:95; width:26px; height:52px; flex:none;
+  border:1px solid rgba(255,255,255,.08); border-right:none; border-radius:12px 0 0 12px; background:#111214;
+  color:#8b8ff5; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  box-shadow:-6px 0 20px rgba(0,0,0,.4); transform:translateX(100%); opacity:0; pointer-events:none;
+  transition:transform .28s cubic-bezier(.3,.8,.3,1) .05s, opacity .28s ease .05s, background .15s ease; }
+.upd-handle.show { transform:translateX(0); opacity:1; pointer-events:auto; }
+.upd-handle:hover { background:#191a1e; color:#fff; }
 .upd-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
   background:linear-gradient(180deg,#6366f1,#8b5cf6); }
 .upd-card.ready::before { background:linear-gradient(180deg,var(--brand),color-mix(in srgb, var(--brand) 72%, #000)); }
