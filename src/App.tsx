@@ -12,6 +12,7 @@ import { CHANGELOG } from './lib/changelog'
 import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
 import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
+import { useClampToViewport } from './lib/clampPos'
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -189,11 +190,12 @@ function EmojiCtxHost() {
     window.addEventListener('ponoi-emoji-favs', h2)
     return () => { window.removeEventListener('ponoi-emoji-ctx', h as any); window.removeEventListener('ponoi-emoji-favs', h2) }
   }, [])
+  const clamp = useClampToViewport(ctx?.x ?? 0, ctx?.y ?? 0)
   if (!ctx || !user) return null
   const fav = loadFavs().has(ctx.name)
   return <>
     <div className="ep2-ctx-ov" onClick={() => setCtx(null)} onContextMenu={e => { e.preventDefault(); setCtx(null) }} />
-    <div className="ep2-ctx" style={{ left: Math.min(ctx.x, window.innerWidth - 230), top: Math.min(ctx.y, window.innerHeight - 110) }}>
+    <div className="ep2-ctx" ref={clamp.ref} style={clamp.style}>
       <button onClick={async () => { const added = await toggleFav(user.id, ctx.name); toastOk(added ? ':' + ctx.name + ': — в избранном, ищи в пикере под звёздочкой' : ':' + ctx.name + ': убран из избранного'); setCtx(null) }}>
         <Icon name="star" size={14} /> {fav ? 'Убрать из избранного' : 'В избранное'}
       </button>

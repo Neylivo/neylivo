@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { copyMedia, copyMediaLink, saveMedia } from '../lib/copyMedia'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
+import { useClampToViewport } from '../lib/clampPos'
 
 export interface LightboxMeta { name: string; avatar?: string | null; at?: string | null }
 
@@ -34,6 +35,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   // до ~92vw x 86vh с сохранением пропорций — 1-в-1 как просмотрщик Discord.
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const ctxClamp = useClampToViewport(ctx?.x ?? 0, ctx?.y ?? 0)
 
   function computeFit() {
     const img = imgRef.current
@@ -115,7 +117,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
       {ctx && <>
         <div className="lb-ctx-ov" onClick={e => { e.stopPropagation(); setCtx(null) }}
           onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx(null) }} />
-        <div className="lb-ctx" style={{ left: ctx.x, top: ctx.y }} onClick={e => e.stopPropagation()}
+        <div className="lb-ctx" ref={ctxClamp.ref} style={ctxClamp.style} onClick={e => e.stopPropagation()}
           onContextMenu={e => e.preventDefault()}>
           <button onClick={() => { setCtx(null); copyMedia(url) }}>Копировать изображение</button>
           <button onClick={() => { setCtx(null); saveMedia(url) }}>Сохранить изображение</button>

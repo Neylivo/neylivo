@@ -17,6 +17,7 @@ import { buildMsgLink, type MsgLinkCtx } from '../lib/deepLink'
 import { findYouTubeLink, ytMeta } from '../music/sources'
 import type { ScMeta } from '../music/soundcloud'
 import { guardLink } from '../lib/linkguard'
+import { useClampToViewport } from '../lib/clampPos'
 
 // v1.180.0: «1 мод / 2 мода / 5 модов» — для карточки «Игровой Экспресс».
 function modsWord(n: number): string {
@@ -295,6 +296,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   let lastDay = ''
 
   const menuMsg = menu ? messages.find(m => m.id === menu.id) : null
+  // v1.225.0: реальный размер панельки меняется от сообщения к сообщению (разное
+  // число пунктов меню) — клампим по факту, а не по прикидке (см. src/lib/clampPos.ts).
+  const menuClamp = useClampToViewport(menu?.x ?? 0, menu?.y ?? 0)
+  const emojiClamp = useClampToViewport(emojiAt?.x ?? 0, emojiAt?.y ?? 0)
 
   return (
     <>
@@ -520,7 +525,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         )
         return <>
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
-        <div className="ctx-menu" style={{ left: Math.min(menu.x, window.innerWidth - 250), top: Math.max(8, Math.min(menu.y, window.innerHeight - (img ? 560 : 440))) }}>
+        <div className="ctx-menu" ref={menuClamp.ref} style={menuClamp.style}>
           {canReact !== false && <div className="ctx-quick">
             {QUICK.slice(0, 4).map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
           </div>}
@@ -556,7 +561,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
 
       {emojiAt && <>
         <div className="ctx-overlay" onClick={() => setEmojiAt(null)} />
-        <div className="ctx-emoji-pop" style={{ left: Math.min(emojiAt.x, window.innerWidth - 380), top: Math.max(8, Math.min(emojiAt.y, window.innerHeight - 470)) }} onClick={e => e.stopPropagation()}>
+        <div className="ctx-emoji-pop" ref={emojiClamp.ref} style={emojiClamp.style} onClick={e => e.stopPropagation()}>
           <EmojiPicker onPick={e => { onReact?.(emojiAt.id, e); setEmojiAt(null) }} onClose={() => setEmojiAt(null)} />
         </div>
       </>}

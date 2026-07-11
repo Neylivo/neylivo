@@ -14,6 +14,7 @@ import { openThread } from '../lib/friends'
 import { sysInvite } from '../lib/sysmsg'
 import { supabase } from '../lib/supabase'
 import type { Server } from '../types'
+import { useClampToViewport } from '../lib/clampPos'
 
 interface Friend { id: string; name: string }
 
@@ -91,11 +92,12 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   const pinned = isDmPinned(friend.id)
   const muted = isDmMuted(friend.id)
   const ignored = isDmIgnored(friend.id)
+  const clamp = useClampToViewport(x, y)
 
   return (
     <>
       <div className="ctx-overlay" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }} />
-      <div className="ctx-menu" style={{ left: Math.min(x, window.innerWidth - 260), top: Math.min(y, window.innerHeight - 480) }}>
+      <div className="ctx-menu" ref={clamp.ref} style={clamp.style}>
         <div className="ctx-item" onClick={markRead}><span>Пометить как прочитанное</span><Icon name="check" size={14} /></div>
         <div className="ctx-sep" />
         <div className="ctx-item" onClick={pin}><span>{pinned ? 'Открепить' : 'Закрепить'}</span><Icon name="pin" size={14} /></div>

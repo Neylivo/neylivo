@@ -42,6 +42,7 @@ import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
 import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
 import { loadChMuted, setChMuted } from '../lib/chMute'
+import { useClampToViewport } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
@@ -147,6 +148,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [mutedCh, setMutedCh] = useState<Record<string, boolean>>(loadChMuted())
   const [chCtx, setChCtx] = useState<{ ch: Channel; x: number; y: number } | null>(null)
   const [catCtx, setCatCtx] = useState<{ cat: any; x: number; y: number } | null>(null)
+  // v1.225.0: реальный размер этих панелек зависит от прав/содержимого (например,
+  // rolePop то с подменю тайм-аута, то без) — клампим по факту (см. src/lib/clampPos.ts).
+  const rolePopClamp = useClampToViewport(rolePop?.x ?? 0, rolePop?.y ?? 0)
+  const quickRolePopClamp = useClampToViewport(quickRolePop?.x ?? 0, quickRolePop?.y ?? 0)
+  const chCtxClamp = useClampToViewport(chCtx?.x ?? 0, chCtx?.y ?? 0)
+  const catCtxClamp = useClampToViewport(catCtx?.x ?? 0, catCtx?.y ?? 0)
   const [catOpenMap, setCatOpenMap] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('ponoi_cat_open') ?? '{}') } catch { return {} } })
   const [chSettings, setChSettings] = useState<Channel | null>(null)
   const [editProfile, setEditProfile] = useState(false)
@@ -1088,7 +1095,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </aside>}
       {rolePop && <>
         <div className="ctx-overlay" onClick={() => setRolePop(null)} onContextMenu={e => { e.preventDefault(); setRolePop(null) }} />
-        <div className="ctx-menu role-pop" style={{ left: rolePop.x, top: rolePop.y }}>
+        <div className="ctx-menu role-pop" ref={rolePopClamp.ref} style={rolePopClamp.style}>
           {canManageRoles && <>
             <div className="role-pop-h">Роли участника</div>
             {roles.map(r => {
@@ -1164,7 +1171,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         } : undefined} />}
       {quickRolePop && <>
         <div className="ctx-overlay" onClick={() => setQuickRolePop(null)} onContextMenu={e => { e.preventDefault(); setQuickRolePop(null) }} />
-        <div className="ctx-menu role-quickpop" style={{ left: quickRolePop.x, top: quickRolePop.y }}>
+        <div className="ctx-menu role-quickpop" ref={quickRolePopClamp.ref} style={quickRolePopClamp.style}>
           <input className="role-quick-in" autoFocus placeholder="Роль" value={quickRoleQ} onChange={e => setQuickRoleQ(e.target.value)} />
           <div className="role-quick-list">
             {roles.filter(r => r.name.toLowerCase().includes(quickRoleQ.trim().toLowerCase())).map(r => {
@@ -1189,7 +1196,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}
       {chCtx && <>
         <div className="ctx-overlay" onClick={() => setChCtx(null)} onContextMenu={e => { e.preventDefault(); setChCtx(null) }} />
-        <div className="ctx-menu" style={{ left: chCtx.x, top: chCtx.y }} onClick={() => setChCtx(null)}>
+        <div className="ctx-menu" ref={chCtxClamp.ref} style={chCtxClamp.style} onClick={() => setChCtx(null)}>
           <div className="ctx-item" onClick={() => markChRead(chCtx.ch)}><Icon name="check" size={14} /> Пометить как прочитанное</div>
           <div className="ctx-item" onClick={invite}><Icon name="user-plus" size={14} /> Пригласить на сервер</div>
           <div className="ctx-item" onClick={() => toggleMuteCh(chCtx.ch.id)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell' : 'bell-off'} size={14} /> {mutedCh[chCtx.ch.id] ? 'Включить уведомления' : 'Заглушить канал'}</div>
@@ -1199,7 +1206,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       </>}
       {catCtx && <>
         <div className="ctx-overlay" onClick={() => setCatCtx(null)} onContextMenu={e => { e.preventDefault(); setCatCtx(null) }} />
-        <div className="ctx-menu" style={{ left: catCtx.x, top: catCtx.y }} onClick={() => setCatCtx(null)}>
+        <div className="ctx-menu" ref={catCtxClamp.ref} style={catCtxClamp.style} onClick={() => setCatCtx(null)}>
           <div className="ctx-item" onClick={() => setShowCreateCh({ kind: 'text', cat: catCtx.cat.id })}><Icon name="plus-circle" size={14} /> Создать канал</div>
           <div className="ctx-item" onClick={() => renameCategory(catCtx.cat)}><Icon name="edit" size={14} /> Переименовать</div>
           <div className="ctx-item danger" onClick={() => deleteCategory(catCtx.cat)}><Icon name="trash" size={14} /> Удалить категорию</div>

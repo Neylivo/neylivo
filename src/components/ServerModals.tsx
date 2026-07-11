@@ -7,6 +7,7 @@ import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } 
 import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { Icon } from './icons'
+import { useClampToViewport } from '../lib/clampPos'
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -253,13 +254,14 @@ const CTX_ITEMS = [
 
 export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
   { x: number; y: number; isOwner: boolean; muted?: boolean; onClose: () => void; onAction: (k: string) => void }) {
+  const clamp = useClampToViewport(x, y)
   useEffect(() => {
     const h = () => onClose()
     window.addEventListener('click', h)
     return () => window.removeEventListener('click', h)
   }, [onClose])
   return (
-    <div className="ctxmenu" style={{ left: x, top: y }} onClick={e => e.stopPropagation()}>
+    <div className="ctxmenu" ref={clamp.ref} style={clamp.style} onClick={e => e.stopPropagation()}>
       {CTX_ITEMS.filter(i => isOwner || (i.k !== 'delete' && i.k !== 'settings')).map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>

@@ -11,6 +11,7 @@ import { toastErr, toastOk } from '../lib/toast'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { Icon } from './icons'
 import { Em } from '../lib/twemoji'
+import { useClampToViewport } from '../lib/clampPos'
 
 // Пикер эмодзи в стиле Discord: поиск сверху, слева рейка категорий.
 // v1.88.0: ⭐ «Избранные» (любые кастом-эмодзи, в т.ч. чужие — правый клик),
@@ -25,6 +26,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   const [q, setQ] = useState('')
   const [cat, setCat] = useState(-1)
   const [ctx, setCtx] = useState<{ x: number; y: number; name: string } | null>(null)
+  const ctxClamp = useClampToViewport(ctx?.x ?? 0, ctx?.y ?? 0)
   const [selecting, setSelecting] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
@@ -187,7 +189,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
       </div>
       {ctx && <>
         <div className="ep2-ctx-ov" onClick={() => setCtx(null)} onContextMenu={e => { e.preventDefault(); setCtx(null) }} />
-        <div className="ep2-ctx" style={{ left: Math.min(ctx.x, window.innerWidth - 230), top: Math.min(ctx.y, window.innerHeight - 110) }}>
+        <div className="ep2-ctx" ref={ctxClamp.ref} style={ctxClamp.style}>
           <button type="button" onClick={async () => { if (user) await toggleFav(user.id, ctx.name); setCtx(null) }}>
             <Icon name="star" size={14} /> {favs.has(ctx.name) ? 'Убрать из избранного' : 'В избранное'}
           </button>

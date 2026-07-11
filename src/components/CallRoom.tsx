@@ -10,6 +10,7 @@ import { useSettings } from '../lib/settings'
 import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
 import { matchCombo } from '../lib/keybind'
+import { useClampToViewport } from '../lib/clampPos'
 import { Soundboard } from './Soundboard'
 import { audioCtx, master, fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'
 
@@ -190,6 +191,7 @@ function PartCtxMenu({ identity, x, y, onClose, onProfile }:
   const [vol, setVol] = useState(() => getVol(identity))
   const [hidden, setHidden] = useState(() => isVideoHidden(identity))
   const muted = vol === 0
+  const clamp = useClampToViewport(x, y)
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h)
@@ -198,7 +200,7 @@ function PartCtxMenu({ identity, x, y, onClose, onProfile }:
   return (
     <>
       <div className="ctx-overlay" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }} />
-      <div className="ctx-menu c2-pctx" style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 320) }}>
+      <div className="ctx-menu c2-pctx" ref={clamp.ref} style={clamp.style}>
         {onProfile && <div className="ctx-item" onClick={() => { onClose(); onProfile() }}><span>Профиль</span><Icon name="user" size={14} /></div>}
         <div className="ctx-sep" />
         <div className="c2-pctx-vol" onClick={e => e.stopPropagation()}>
