@@ -75,10 +75,16 @@ jobs:
           echo "VITE_TENOR_KEY=${{ secrets.VITE_TENOR_KEY }}" >> .env
           echo "VITE_STEAMGRIDDB_KEY=${{ secrets.VITE_STEAMGRIDDB_KEY }}" >> .env
 
-      - name: Build web bundle + sync into Android project
-        run: |
-          npm run build
-          npx cap sync android
+      # v1.207.0: раньше это был один run: со всеми командами — упало на этом шаге
+      # без доступных публично логов (GitHub Actions отдаёт полные логи только по
+      # авторизованному токену), поэтому не удалось понять, какая именно команда
+      # виновата. Разбито на отдельные именованные шаги — если снова упадёт,
+      # виновник виден по названию шага уже из бесплатного публичного API/страницы.
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Sync web bundle into Android project
+        run: npx cap sync android
 
       - name: Derive version name/code from package.json
         id: ver
