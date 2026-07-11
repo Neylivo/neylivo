@@ -122,6 +122,7 @@ const GAMES = {
   'rainbowsix_dx11.exe': 'Rainbow Six Siege',
 }
 let curGame = null   // { name, since, mode?, placeId?, jobId? } | null — placeId/jobId только для Roblox (v1.184.0)
+let curGameFocused = false   // v1.205.0: игра ещё и активное (сфокусированное) окно прямо сейчас — см. scanGames
 
 function broadcastGame() {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -142,16 +143,20 @@ function broadcastGame() {
 // без нативного API, поэтому как и у остальных оверлеев — угол/край экрана).
 let callOverlayWin = null
 let callParticipants = []
+// v1.205.0: раньше «сейчас играет» значило «процесс с окном виден», поэтому
+// оверлей не пропадал, если свернуть игру и уйти в браузер/другое окно — теперь
+// дополнительно требуем, чтобы игра была именно активным (сфокусированным)
+// окном (curGameFocused, обновляется в scanGames ниже).
 function updateCallOverlay() {
   try {
-    const shouldShow = !!curGame && callParticipants.length > 0
+    const shouldShow = !!curGame && curGameFocused && callParticipants.length > 0
     if (!shouldShow) {
       if (callOverlayWin && !callOverlayWin.isDestroyed()) callOverlayWin.hide()
       return
     }
     const { screen } = require('electron')
     const wa = screen.getPrimaryDisplay().workArea
-    const w = 220, h = Math.min(wa.height - 40, 44 * callParticipants.length + 12)
+    const w = 260, h = Math.min(wa.height - 40, 44 * callParticipants.length + 12)
     const x = wa.x + 10, y = Math.round(wa.y + (wa.height - h) / 2)
     if (!callOverlayWin || callOverlayWin.isDestroyed()) {
       callOverlayWin = new BrowserWindow({
@@ -939,7 +944,15 @@ for (const [exe, nm] of Object.entries(GAMES)) GAME_BY_PROC[exe.replace(/\.exe$/
 // 2) по расположению exe в папках игровых магазинов (Steam steamapps\common,
 //    Epic Games, GOG, XboxGames, Riot Games, itch, Roblox) — имя игры берём
 //    из папки игры. Лаунчеры и служебные процессы отсекает чёрный список.
-const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.Path + '|' + $_.MainWindowTitle }"
+// v1.205.0: строка "FG|<pid>" первой — pid процесса активного (сфокусированного)
+// окна Windows (GetForegroundWindow), нужна, чтобы игровой оверлей звонка гас,
+// когда игра свёрнута/не в фокусе, а не просто "процесс с окном ещё жив где-то
+// в фоне". У каждой строки процесса теперь есть Id — сверяем с FG.
+const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
+  "Add-Type -Name W -Namespace Ponoi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);'; " +
+  "$h=[Ponoi.W]::GetForegroundWindow(); $fpid=0; [void][Ponoi.W]::GetWindowThreadProcessId($h, [ref]$fpid); " +
+  "Write-Output ('FG|' + $fpid); " +
+  "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.Path + '|' + $_.MainWindowTitle + '|' + $_.Id }"
 const NOT_GAMES = new Set([
   'steam', 'steamwebhelper', 'epicgameslauncher', 'epicwebhelper', 'galaxyclient', 'gog galaxy',
   'riot client', 'riotclientservices', 'riotclientux', 'leagueclientux', 'battle.net', 'agent',
@@ -1051,26 +1064,41 @@ function scanGames() {
     if (err || !out) return
     // v1.85.0: собираем ВСЕХ кандидатов и берём самого надёжного (по приоритету),
     // а не первую попавшуюся строку — так случайные окна не путают игры.
+    // v1.205.0: первая строка вывода — "FG|<pid>" (см. PS_SCAN), дальше у каждой
+    // строки процесса добавился Id последним полем — сверяем его с fgPid, чтобы
+    // знать, активна ли игра ПРЯМО СЕЙЧАС, а не просто ещё жива где-то в фоне.
+    let fgPid = null
     let best = null
     for (const line of String(out).split('\n')) {
+      const l = line.trim()
+      if (!l) continue
+      if (l.startsWith('FG|')) { fgPid = l.slice(3).trim(); continue }
       const parts = line.split('|')
-      if (parts.length < 3) continue
+      if (parts.length < 4) continue
       const proc = parts[0].trim().toLowerCase()
       const exePath = parts[1].trim()
-      const title = parts.slice(2).join('|').trim()
+      const pid = parts[parts.length - 1].trim()
+      const title = parts.slice(2, parts.length - 1).join('|').trim()
       if (!title) continue
       const cand = detectGame(proc, exePath, title)
       if (!cand) continue
-      if (!best || cand.prio > best.prio) best = { ...cand, exe: exePath, title }
+      if (!best || cand.prio > best.prio) best = { ...cand, exe: exePath, title, pid }
       if (best.prio >= 100) break
     }
+    const focused = !!(best && fgPid && best.pid === fgPid)
     const found = best ? best.name : null
     if (found) {
-      if (curGame && curGame.name === found) { pendingGame = null; curGameTitle = best.title || curGameTitle; return }   // уже играет — обновляем заголовок окна
+      if (curGame && curGame.name === found) {
+        // уже играет — обновляем заголовок окна и фокус (не запуск/остановку оверлея с нуля)
+        pendingGame = null; curGameTitle = best.title || curGameTitle
+        if (curGameFocused !== focused) { curGameFocused = focused; updateCallOverlay() }
+        return
+      }
       if (pendingGame && pendingGame.name === found) {                        // подтверждено вторым сканом
         curGame = { name: found, since: pendingGame.at }
         curGameExe = pendingGame.exe || null
         curGameTitle = pendingGame.title || null
+        curGameFocused = focused
         pendingGame = null
         broadcastGame()
       } else {
@@ -1081,7 +1109,7 @@ function scanGames() {
     pendingGame = null
     curGameExe = null
     curGameTitle = null
-    if (curGame) { curGame = null; broadcastGame() }   // игра закрылась — гасим сразу
+    if (curGame) { curGame = null; curGameFocused = false; broadcastGame() }   // игра закрылась — гасим сразу
   })
 }
 

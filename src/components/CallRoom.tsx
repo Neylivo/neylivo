@@ -110,30 +110,51 @@ export function Sinks({ room, meName }: { room: Room; meName?: string }) {
   // ровно тогда, когда звонок идёт, а сам экран звонка не открыт (то есть как
   // раз может играть в игру), поэтому пуш сюда, не в CallRoom. Позиция/видимость
   // оверлея решает main-процесс (нужна ещё активная игра, см. electron/main.cjs).
+  // v1.205.0: видимость ещё и от того, что игра — активное (сфокусированное)
+  // окно, а не просто запущена в фоне (см. main.cjs, curGameFocused) — раньше
+  // оверлей не пропадал, если свернуть игру и уйти в браузер.
+  const avatarCache = useRef<Map<string, string | null>>(new Map())
   useEffect(() => {
     const d = (window as any).ponoiDesktop
     if (!d?.setCallOverlayParticipants) return
     let raf = 0
     const push = () => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(async () => {
         // v1.198.0: читаем remoteParticipants заново на каждый вызов, а не из
         // замыкания render-скоупа — иначе при выходе+входе участника в один тик
         // (длина остаётся той же) этот эффект не пересоздаётся и push продолжает
         // слать устаревший список, пока не случится следующее событие с другой длиной.
         const live: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
         const all = [room.localParticipant as any, ...live]
+        // v1.205.0: аватарки участников в оверлее (раньше — только буква ника).
+        // identity == auth.uid() (см. joinRoom() в src/lib/livekit.ts), кэш на всю
+        // жизнь Sinks — аватар не запрашивается заново на каждое событие звонка.
+        const missing = all.map(p => p.identity as string).filter(id => UUID_RE.test(id) && !avatarCache.current.has(id))
+        if (missing.length) {
+          const { data } = await supabase.from('profiles').select('id, avatar_url').in('id', missing)
+          for (const row of (data ?? []) as any[]) avatarCache.current.set(row.id, row.avatar_url ?? null)
+          for (const id of missing) if (!avatarCache.current.has(id)) avatarCache.current.set(id, null)
+        }
         const list = all.map(p => ({
           name: p === room.localParticipant ? (meName || p.name || p.identity || '?') : (p.name || p.identity || '?'),
           speaking: !!p.isSpeaking,
           micOn: p.isMicrophoneEnabled !== false,
+          screenSharing: !!p.isScreenShareEnabled,
+          avatarUrl: avatarCache.current.get(p.identity) || null,
         }))
         d.setCallOverlayParticipants(list)
       })
     }
     push()
+    // v1.205.0: TrackPublished/TrackUnpublished (не только Local-варианты) —
+    // раньше демонстрация экрана ЧУЖОГО участника не обновляла список в оверлее
+    // ни у кого, кроме самого включившего (у него срабатывал Local-вариант);
+    // остальные видели актуальный статус только случайно, если рядом сработало
+    // другое событие (например ActiveSpeakersChanged).
     const evs = [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected, RoomEvent.ActiveSpeakersChanged,
-      RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished] as any[]
+      RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.TrackPublished, RoomEvent.TrackUnpublished,
+      RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished] as any[]
     evs.forEach(e => room.on(e, push))
     return () => {
       evs.forEach(e => room.off(e, push))
