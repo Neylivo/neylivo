@@ -46,6 +46,11 @@ export interface ProfilePrefs {
   // v1.220.0: кому видна статистика игр (CS2/Dota) в профиле — своя активность
   // всегда видна владельцу, эта настройка касается только просмотра другими.
   gameStatsVisibility: 'all' | 'friends' | 'none'
+  // v1.230.0: приватность ЛС — как в Discord (не-друг может написать, но не
+  // позвонить по умолчанию), только гибче: звонки можно ограничить избранными
+  // (закреплёнными в списке ЛС) друзьями, а не только «друзья/все/никто».
+  dmMessagePrivacy: 'all' | 'friends' | 'none'
+  dmCallPrivacy: 'all' | 'friends' | 'favorites' | 'none'
 }
 
 export interface Integration { label: string; url: string }
@@ -63,6 +68,8 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   tagServerId: null,
   steamId: null,
   gameStatsVisibility: 'all',
+  dmMessagePrivacy: 'all',
+  dmCallPrivacy: 'friends',
 }
 
 
@@ -106,6 +113,8 @@ function fromRow(r: any): ProfilePrefs {
     tagServerId: r.tag_server_id ?? null,
     steamId: r.steam_id ?? null,
     gameStatsVisibility: (r.game_stats_visibility as any) ?? 'all',
+    dmMessagePrivacy: (r.dm_message_privacy as any) ?? 'all',
+    dmCallPrivacy: (r.dm_call_privacy as any) ?? 'friends',
   }
 }
 
@@ -136,6 +145,8 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.tagServerId !== undefined) r.tag_server_id = p.tagServerId
   if (p.steamId !== undefined) r.steam_id = p.steamId || null
   if (p.gameStatsVisibility !== undefined) r.game_stats_visibility = p.gameStatsVisibility
+  if (p.dmMessagePrivacy !== undefined) r.dm_message_privacy = p.dmMessagePrivacy
+  if (p.dmCallPrivacy !== undefined) r.dm_call_privacy = p.dmCallPrivacy
   return r
 }
 
@@ -169,12 +180,14 @@ const COLS_FAV = COLS_MSG + ', fav_games'
 const COLS_WIDGETS = COLS_FAV + ', wish_games'
 const COLS_TAG = COLS_WIDGETS + ', tag_server_id'
 const COLS_STATS = COLS_TAG + ', steam_id, game_stats_visibility'
+const COLS_DM_PRIVACY = COLS_STATS + ', dm_message_privacy, dm_call_privacy'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_STATS).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_DM_PRIVACY).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_STATS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle())

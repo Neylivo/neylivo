@@ -939,9 +939,26 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'privacy' && <>
                 <h2>Данные и конфиденциальность</h2>
-                <div className="pqs2-desc">Кто может писать тебе в личку и какие данные хранит приложение.</div>
-                <Row title="ЛС от всех пользователей"><Toggle on={view.dmAll} onChange={v => setD('dmAll', v)} /></Row>
-                <Row title="ЛС с участниками сервера"><Toggle on={view.dmMembers} onChange={v => setD('dmMembers', v)} /></Row>
+                <div className="pqs2-desc">Кто может писать тебе в личку и звонить, какие данные хранит приложение.</div>
+
+                <div className="pqs-sec-t">Сообщения</div>
+                <div className="pqs2-desc">Кто может первым написать тебе в личные сообщения.</div>
+                <div className="pqs-seg">
+                  {([['all', 'Все'], ['friends', 'Только друзья'], ['none', 'Никто']] as const).map(([v, label]) => (
+                    <button key={v} className={'pqs-seg-btn' + (prof.dmMessagePrivacy === v ? ' on' : '')}
+                      onClick={() => patchProf({ dmMessagePrivacy: v })}>{label}</button>
+                  ))}
+                </div>
+
+                <div className="pqs-sec-t">Звонки</div>
+                <div className="pqs2-desc">Кто может звонить тебе в личных сообщениях. «Избранные» — те, кого ты закрепил(а) в списке ЛС.</div>
+                <div className="pqs-seg">
+                  {([['all', 'Все'], ['friends', 'Только друзья'], ['favorites', 'Только избранные'], ['none', 'Никто']] as const).map(([v, label]) => (
+                    <button key={v} className={'pqs-seg-btn' + (prof.dmCallPrivacy === v ? ' on' : '')}
+                      onClick={() => patchProf({ dmCallPrivacy: v })}>{label}</button>
+                  ))}
+                </div>
+
                 <Row title="Сбор данных об использовании" desc="Помогает улучшить приложение"><Toggle on={view.dataCollect} onChange={v => setD('dataCollect', v)} /></Row>
               </>}
 

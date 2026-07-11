@@ -9,7 +9,7 @@ import { customNickFamily } from './profilePrefs'
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dmAll', 'dmMembers', 'dataCollect'] as const
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dataCollect'] as const
 type AccountKey = typeof ACCOUNT_KEYS[number]
 function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
@@ -41,8 +41,10 @@ export interface Settings {
   micVol: number
   spkVol: number
   lang: string
-  dmAll: boolean
-  dmMembers: boolean
+  // v1.230.0: dmAll/dmMembers жили тут, но никогда никак не проверялись — чисто
+  // декоративные тумблеры. Настоящая приватность ЛС/звонков переехала в
+  // ProfilePrefs (dmMessagePrivacy/dmCallPrivacy, публичные profiles.*), т.к.
+  // проверять её нужно и другим людям (RLS/Edge Function), не только владельцу.
   dataCollect: boolean
   devmode: boolean
   actOn: boolean
@@ -87,7 +89,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
-  micVol: 100, spkVol: 100, lang: 'ru', dmAll: true, dmMembers: true, dataCollect: true,
+  micVol: 100, spkVol: 100, lang: 'ru', dataCollect: true,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
@@ -111,9 +113,9 @@ function load(): Settings {
     if (raw) {
       const p = JSON.parse(raw)
       const s = { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
-      // v1.62.0: одноразовая миграция — ЛС и сбор данных включены по умолчанию
+      // v1.62.0: одноразовая миграция — сбор данных включён по умолчанию
       if (!localStorage.getItem('ponoi_mig_162')) {
-        s.dmAll = true; s.dmMembers = true; s.dataCollect = true
+        s.dataCollect = true
         localStorage.setItem('ponoi_mig_162', '1')
         localStorage.setItem('ponoi_settings', JSON.stringify(s))
       }

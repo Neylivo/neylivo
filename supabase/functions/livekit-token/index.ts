@@ -9,7 +9,7 @@
 //          реально состоит в сервере/DM-треде этой комнаты, и подставляем его
 //          РЕАЛЬНЫЙ auth.uid() как identity, а не то, что прислал клиент.)
 // Секреты: supabase secrets set LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... LIVEKIT_URL=wss://...
-import { AccessToken } from 'https://esm.sh/livekit-server-sdk@2.6.1'
+import { AccessToken, RoomServiceClient } from 'https://esm.sh/livekit-server-sdk@2.6.1'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const cors = {
@@ -19,6 +19,29 @@ const cors = {
 }
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+}
+
+// v1.230.0: разрешение звонить настраивается в Настройках (dm_call_privacy —
+// all/friends/favorites/none, favorites = звонящий закреплён в ЛС у цели). Не
+// используем RLS/can_call() отсюда — тут сервисный ключ без auth.uid(), поэтому
+// та же логика продублирована напрямую через admin-клиент.
+async function canCall(admin: ReturnType<typeof createClient>, callerId: string, calleeId: string): Promise<boolean> {
+  const { data: prof } = await admin.from('profiles').select('dm_call_privacy').eq('id', calleeId).maybeSingle()
+  const privacy = (prof as any)?.dm_call_privacy ?? 'friends'
+  if (privacy === 'all') return true
+  if (privacy === 'none') return false
+  const { data: fr } = await admin.from('friend_requests').select('id').eq('status', 'accepted')
+    .or(`and(from_user.eq.${callerId},to_user.eq.${calleeId}),and(from_user.eq.${calleeId},to_user.eq.${callerId})`)
+    .maybeSingle()
+  const isFriend = !!fr
+  if (privacy === 'friends') return isFriend
+  if (privacy === 'favorites') {
+    if (!isFriend) return false
+    const { data: up } = await admin.from('user_prefs').select('dm_pinned').eq('user_id', calleeId).maybeSingle()
+    const pinned: string[] = (up as any)?.dm_pinned ?? []
+    return pinned.includes(callerId)
+  }
+  return false
 }
 
 Deno.serve(async (req) => {
@@ -37,6 +60,10 @@ Deno.serve(async (req) => {
     // иначе можно было бы войти в звонок под чужим именем/id.
     const identity = user.id
 
+    const key = Deno.env.get('LIVEKIT_API_KEY')!
+    const secret = Deno.env.get('LIVEKIT_API_SECRET')!
+    const lkUrl = Deno.env.get('LIVEKIT_URL')!
+
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     let allowed = false
     if (room.startsWith('ch_')) {
@@ -49,14 +76,27 @@ Deno.serve(async (req) => {
       }
     } else if (room.startsWith('dm_')) {
       const threadId = room.slice(3)
-      const { data: thread } = await admin.from('dm_threads').select('user_a, user_b').eq('id', threadId).maybeSingle()
-      allowed = !!thread && (thread.user_a === identity || thread.user_b === identity)
+      const { data: thread } = await admin.from('dm_threads').select('user_a, user_b, is_group').eq('id', threadId).maybeSingle()
+      const isParticipant = !!thread && (thread.user_a === identity || thread.user_b === identity)
+      // v1.230.0: настройка «кто может звонить» (dm_call_privacy) применяется только
+      // к тому, кто НАЧИНАЕТ звонок, а не к тому, кто отвечает на уже идущий — иначе
+      // строгая настройка получателя мешала бы ему же самому принять свой звонок.
+      // Различаем по факту существования комнаты в LiveKit: до первого джойна её нет.
+      if (isParticipant && thread && !thread.is_group) {
+        const otherId = thread.user_a === identity ? thread.user_b : thread.user_a
+        let roomExists = false
+        try {
+          const svc = new RoomServiceClient(lkUrl, key, secret)
+          const rooms = await svc.listRooms([room])
+          roomExists = rooms.length > 0
+        } catch { /* LiveKit недоступен для проверки — не блокируем звонок из-за этого */ }
+        allowed = roomExists || await canCall(admin, identity, otherId)
+      } else {
+        allowed = isParticipant
+      }
     }
     if (!allowed) return json({ error: 'not authorized for this room' }, 403)
 
-    const key = Deno.env.get('LIVEKIT_API_KEY')!
-    const secret = Deno.env.get('LIVEKIT_API_SECRET')!
-    const lkUrl = Deno.env.get('LIVEKIT_URL')!
     const at = new AccessToken(key, secret, { identity, name: name ?? identity })
     at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true })
     const token = await at.toJwt()

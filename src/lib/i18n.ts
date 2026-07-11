@@ -45,7 +45,10 @@ const DICT_EN: Record<string, string> = {
   'Нажми клавиши…': 'Press keys…',
   // Дисплей / конфиденциальность / активность / дополнительно
   'Масштаб интерфейса': 'UI scale', 'Сбросить масштаб': 'Reset zoom',
-  'ЛС от всех пользователей': 'DMs from everyone', 'ЛС с участниками сервера': 'DMs from server members',
+  'Кто может писать тебе в личку и звонить, какие данные хранит приложение.': 'Who can message and call you, what data the app collects.',
+  'Кто может первым написать тебе в личные сообщения.': 'Who can message you first.',
+  'Кто может звонить тебе в личных сообщениях. «Избранные» — те, кого ты закрепил(а) в списке ЛС.': 'Who can call you. "Favorites" are people you pinned in your DM list.',
+  'Только друзья': 'Friends only', 'Только избранные': 'Favorites only', 'Никто': 'Nobody',
   'Сбор данных об использовании': 'Usage data collection', 'Своя активность': 'Custom activity',
   'Показывать пользовательский статус': 'Show custom status', 'Режим разработчика': 'Developer mode',
   'Очистить все данные': 'Clear all data',

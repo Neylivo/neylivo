@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, canMessage, canCallUser } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -230,6 +230,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
   async function startCall() {
     if (!threadId || !active || call) return
+    // v1.230.0: приватность звонков (Настройки -> Конфиденциальность) — проверяем
+    // заранее для понятной причины сразу, а не после попытки соединения; итоговое
+    // решение всё равно за Edge Function livekit-token (эта проверка — только UX).
+    if (!(await canCallUser(active.id))) {
+      toastErr(active.name + ' ограничил(а) круг тех, кто может звонить')
+      return
+    }
     setConnectingThread(threadId); setConnectingPeer(active)
     try {
       const room = await joinRoom('dm_' + threadId, meId, username)
@@ -260,7 +267,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       ringDeadlineRef.current = window.setTimeout(() => {
         if (ringingRef.current) { toastErr(ringingRef.current.name + ' не отвечает'); hangUp(true) }
       }, 32000)
-    } catch (e: any) { toastErr(e.message ?? String(e)) }
+    } catch (e: any) {
+      toastErr(String(e?.message ?? e).includes('not authorized')
+        ? (active?.name ?? 'Собеседник') + ' ограничил(а) круг тех, кто может звонить'
+        : (e.message ?? String(e)))
+    }
     finally { setConnectingThread(null); setConnectingPeer(null) }
   }
 
@@ -469,7 +480,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       // выглядело так, будто «переписка пересоздалась». Явный откат + тост об ошибке.
       // v1.227.0: показываем настоящий текст ошибки (не просто «попробуй ещё раз») —
       // без этого не было ни единой зацепки, что именно сломалось.
-      toastErr('Не удалось открыть диалог с ' + f.name + (openErr?.message ? ': ' + openErr.message : ' — попробуй ещё раз'))
+      // v1.230.0: RLS отклоняет создание НОВОГО диалога, если приватность сообщений
+      // этого человека (Настройки -> Конфиденциальность) не разрешает — отдельная,
+      // понятная фраза вместо сырого текста ошибки Postgres.
+      const denied = /row-level security|permission denied/i.test(String(openErr?.message ?? ''))
+      toastErr(denied
+        ? f.name + ' ограничил(а) круг тех, кто может писать первым — сообщение не отправить'
+        : 'Не удалось открыть диалог с ' + f.name + (openErr?.message ? ': ' + openErr.message : ' — попробуй ещё раз'))
       if (!cachedTid) { setActive(null); setThreadId(null); setMessages([]) }
       return
     }
@@ -840,7 +857,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       supabase.from('dm_messages').insert(finalRow).select().single().then(({ data, error }) => {
         if (error || !data) {
           setMessages(m => m.filter(x => x.id !== tmpId))
-          toastErr(error?.message ?? 'Не удалось отправить сообщение')
+          // v1.230.0: приватность сообщений могла ужесточиться уже ПОСЛЕ того, как
+          // диалог был открыт — тогда отправка в уже существующий тред тоже отклонится RLS.
+          const denied = /row-level security|permission denied/i.test(String(error?.message ?? ''))
+          toastErr(denied ? (peer ? peer.name + ' больше не принимает сообщения от тебя' : 'Сообщение не может быть отправлено')
+            : (error?.message ?? 'Не удалось отправить сообщение'))
           return
         }
         const real = data as DMMessage
