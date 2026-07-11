@@ -22,7 +22,7 @@ import { FolderModal } from './FolderModal'
 import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
-import { bumpDm, bumpMention, clearBadgeKey } from '../lib/badge'
+import { bumpDm, bumpMention, bumpSoft, clearBadgeKey } from '../lib/badge'
 import { isDmMuted } from '../lib/userPrefs'
 import { mentionsUser } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
@@ -175,9 +175,13 @@ export function Home() {
         const viewing = v.kind === 'server' && v.server.id === sid
         // v1.100.0: @упоминание меня — красный кружок на иконке приложения.
         // Работает даже на заглушенном сервере (как в Discord: mute прячет точку, но не пинги).
-        if (!viewing && (mentionsUser(msg.content ?? '', nameRef.current.username) || mentionsUser(msg.content ?? '', nameRef.current.handle))) bumpMention(sid)
+        const mentioned = mentionsUser(msg.content ?? '', nameRef.current.username) || mentionsUser(msg.content ?? '', nameRef.current.handle)
+        if (!viewing && mentioned) bumpMention(sid)
         if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
         if (viewing) return
+        // v1.203.0: сообщение без упоминания — тихая точка на иконке приложения (не
+        // число), тот же смысл, что и у unread-dot ниже в этой же колонке серверов.
+        if (!mentioned) bumpSoft('srv:' + sid)
         setUnread(prev => { const n = new Set(prev); n.add(sid); return n })
       })
       .subscribe()
@@ -209,7 +213,13 @@ export function Home() {
         if (!m.thread_id || m.author === user.id) return
         if (!dmThreadsRef.current.has(m.thread_id)) return
         if (parseSys(m.content ?? null)) return   // системные («начал звонок») не считаем
-        if (m.author && isDmMuted(m.author)) return   // v1.187.0: заглушенный в ЛС не зажигает кружок
+        if (m.author && isDmMuted(m.author)) {
+          // v1.187.0: заглушенный в ЛС не зажигает счётчик; v1.203.0: но тихая точка
+          // на иконке приложения (без числа) теперь всё же есть — видно, что что-то
+          // было, но это не всплывает числом/звуком/тостом.
+          bumpSoft('dm:' + m.thread_id)
+          return
+        }
         bumpDm(m.thread_id)
       })
       .subscribe()

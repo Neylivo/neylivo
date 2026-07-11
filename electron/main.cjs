@@ -456,11 +456,16 @@ ipcMain.on('ponoi-badge', (_e, p) => {
     const n = Math.max(0, Number(p && p.count) || 0)
     for (const w of BrowserWindow.getAllWindows()) {
       if (w === overlayWin || w === gameToastWin || w === splash || w === callOverlayWin) continue
-      if (n > 0 && p && typeof p.dataUrl === 'string') {
+      // v1.203.0: раньше иконка бралась ТОЛЬКО при n>0 — заглушенные ЛС/сообщения
+      // без упоминания (n остаётся 0, но рендерер прислал точку-без-числа, см.
+      // src/lib/badge.ts) вообще не показывали ничего. Теперь берём dataUrl, если он
+      // есть, независимо от n; мигание таскбара (flashFrame) — только для настоящего
+      // счётчика (n>0), тихая точка окно не дёргает.
+      if (p && typeof p.dataUrl === 'string') {
         const img = nativeImage.createFromDataURL(p.dataUrl)
         if (!img.isEmpty()) {
-          w.setOverlayIcon(img, 'Непрочитанных: ' + n)
-          if (!w.isFocused()) w.flashFrame(true)
+          w.setOverlayIcon(img, n > 0 ? ('Непрочитанных: ' + n) : 'Есть новое')
+          if (n > 0 && !w.isFocused()) w.flashFrame(true)
         }
       } else {
         w.setOverlayIcon(null, '')

@@ -4,8 +4,16 @@
 // («dm:<threadId>» / «srv:<serverId>») — кружок гаснет по мере прочтения источников.
 // Куда рисуем: Windows-десктоп — overlay-иконка на панели задач (через IPC в main-процесс),
 // PWA/веб — системный Badging API + число в заголовке вкладки «(3) Ponoi».
+//
+// v1.203.0: у заглушенных ЛС и обычных (не-упоминание) сообщений на сервере раньше
+// не было вообще никакого следа на иконке — только полноценный красный кружок с
+// числом (заглушенное ЛС) или его полное отсутствие (не-упоминание). Как в Discord —
+// добавлен второй уровень: простая белая точка без числа для «что-то было, но не
+// срочно», не увеличивающая счётчик. Идёт по отдельному набору ключей (softKeys) —
+// не участвует в total(), так что число в кружке/заголовке/PWA-бейдже от нею не растёт.
 
 const counts: Record<string, number> = {}
+const softKeys = new Set<string>()
 let activeDm: string | null = null
 
 /** Открытый сейчас диалог ЛС: его входящие кружок не увеличивают, а счётчик сбрасывается. */
@@ -27,10 +35,19 @@ export function bumpMention(serverId: string) {
   apply()
 }
 
-/** Источник прочитан (открыли диалог/сервер) — снимаем его вклад в кружок. */
+/** Тихая точка без числа: заглушенное ЛС или сообщение на сервере без упоминания меня. */
+export function bumpSoft(key: string) {
+  if (softKeys.has(key)) return
+  softKeys.add(key)
+  apply()
+}
+
+/** Источник прочитан (открыли диалог/сервер) — снимаем и число, и точку. */
 export function clearBadgeKey(key: string) {
-  if (!counts[key]) return
+  const had = !!counts[key] || softKeys.has(key)
+  if (!had) return
   delete counts[key]
+  softKeys.delete(key)
   apply()
 }
 
@@ -62,6 +79,16 @@ function drawBadge(n: number): string {
   return c.toDataURL('image/png')
 }
 
+// Простая белая точка без числа — «что-то было, но не срочно» (тот же смысл, что у
+// .unread-dot в левой колонке серверов, но на иконке приложения/трея).
+function drawDot(): string {
+  const c = document.createElement('canvas')
+  c.width = 32; c.height = 32
+  const g = c.getContext('2d')!
+  g.beginPath(); g.arc(16, 16, 10, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill()
+  return c.toDataURL('image/png')
+}
+
 // v1.186.0: тот же кружок, что и на панели задач, но на иконке в трее — работает
 // и когда окно свёрнуто туда (у overlay-иконки таскбара в этот момент нет кнопки,
 // на которой рисовать, — кружок пропадал ровно тогда, когда нужнее всего).
@@ -78,7 +105,7 @@ async function loadTrayBase(): Promise<HTMLImageElement> {
   trayBaseCache = { src, img }
   return img
 }
-async function drawTrayIcon(n: number): Promise<string | null> {
+async function drawTrayIcon(n: number, soft: boolean): Promise<string | null> {
   try {
     const base = await loadTrayBase()
     const c = document.createElement('canvas')
@@ -92,6 +119,9 @@ async function drawTrayIcon(n: number): Promise<string | null> {
       g.font = n > 9 ? 'bold 15px Arial' : 'bold 18px Arial'
       g.textAlign = 'center'; g.textBaseline = 'middle'
       g.fillText(n > 9 ? '9+' : String(n), 48, 49)
+    } else if (soft) {
+      g.beginPath(); g.arc(48, 48, 10, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill()
+      g.strokeStyle = '#2b2d31'; g.lineWidth = 3; g.stroke()
     }
     return c.toDataURL('image/png')
   } catch { return null }
@@ -100,20 +130,27 @@ let trayGen = 0
 
 function apply() {
   const n = total()
-  // Заголовок вкладки (веб): «(3) Ponoi».
+  const soft = !n && softKeys.size > 0
+  // Заголовок вкладки (веб): «(3) Ponoi». Тихая точка число не показывает.
   try { document.title = n > 0 ? '(' + (n > 99 ? '99+' : n) + ') Ponoi' : 'Ponoi' } catch {}
-  // Системный бейдж PWA (телефоны/установленный веб) — Badging API.
+  // Системный бейдж PWA (телефоны/установленный веб) — Badging API. Вызов без
+  // аргумента показывает просто точку без числа (часть спецификации Badging API) —
+  // ровно то, что нужно для «тихого» состояния.
   try {
     const nav = navigator as any
-    if (typeof nav.setAppBadge === 'function') { n > 0 ? nav.setAppBadge(n) : nav.clearAppBadge() }
+    if (typeof nav.setAppBadge === 'function') {
+      if (n > 0) nav.setAppBadge(n)
+      else if (soft) nav.setAppBadge()
+      else nav.clearAppBadge()
+    }
   } catch {}
   // Windows-десктоп: overlay-иконка на панели задач + иконка в трее (пока окно там).
   try {
     const d = (window as any).ponoiDesktop
-    if (d?.setBadge) d.setBadge(n > 0 ? drawBadge(n) : null, n)
+    if (d?.setBadge) d.setBadge(n > 0 ? drawBadge(n) : (soft ? drawDot() : null), n)
     if (d?.setTrayIcon) {
       const gen = ++trayGen
-      drawTrayIcon(n).then(url => { if (url && gen === trayGen) d.setTrayIcon(url) })
+      drawTrayIcon(n, soft).then(url => { if (url && gen === trayGen) d.setTrayIcon(url) })
     }
   } catch {}
 }
