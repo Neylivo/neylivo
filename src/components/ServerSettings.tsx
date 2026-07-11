@@ -261,20 +261,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   // v1.191.0: точечные права (см. supabase/49_role_perms2.sql) открывают доступ
   // к конкретным вкладкам без полного MANAGE_SERVER — раньше все вкладки были
   // видны любому, кто вообще мог открыть настройки (эффективно = MANAGE_SERVER).
-  const NAV_RAW: { cat?: string; k?: Tab; t?: string; ok?: boolean }[] = [
-    { cat: 'Сервер ' + server.name }, { k: 'profile', t: 'Профиль сервера', ok: canOwnerLevel }, { k: 'tag', t: 'Тег сервера', ok: canOwnerLevel }, { k: 'engage', t: 'Вовлечённость', ok: canOwnerLevel },
-    { cat: 'Реакции' }, { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
-    { cat: 'Люди' }, { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
-    { cat: 'Модерация' }, { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
-    { cat: 'Интеграции' }, { k: 'bots', t: 'Боты', ok: canManageWebhooks },
+  // v1.221.0: категории-заголовки убраны из сайдбара — визуально их было легко
+  // спутать с кнопками вкладок (тот же регистр строки, похожий отступ).
+  const NAV_RAW: { k: Tab; t: string; ok?: boolean }[] = [
+    { k: 'profile', t: 'Профиль сервера', ok: canOwnerLevel }, { k: 'tag', t: 'Тег сервера', ok: canOwnerLevel }, { k: 'engage', t: 'Вовлечённость', ok: canOwnerLevel },
+    { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
+    { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
+    { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
+    { k: 'bots', t: 'Боты', ok: canManageWebhooks },
   ]
-  // Прячем категории, у которых после фильтра по правам не осталось ни одной вкладки.
-  const NAV = NAV_RAW.filter((n, i) => {
-    if (!n.cat) return n.ok
-    const next = NAV_RAW.slice(i + 1).findIndex(x => x.cat)
-    const rest = next === -1 ? NAV_RAW.slice(i + 1) : NAV_RAW.slice(i + 1, i + 1 + next)
-    return rest.some(x => x.ok)
-  })
+  const NAV = NAV_RAW.filter(n => n.ok)
   // Точечное право может открыть настройки без MANAGE_SERVER (см. canManage в
   // ServerView.tsx) — если текущая вкладка такому пользователю не видна (по
   // умолчанию 'profile', доступна только владельцам настроек), переключаем на
@@ -293,9 +289,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     <div className="cset sset">
       <div className="cset-side">
         <nav className="cset-nav">
-          {NAV.map((n, i) => n.cat
-            ? <div key={i} className="cset-cat">{n.cat}</div>
-            : <div key={i} className={'cset-tab' + (tab === n.k ? ' on' : '')} onClick={() => { setTab(n.k!); setRolesView('main') }}>{n.t}</div>)}
+          {NAV.map(n => (
+            <div key={n.k} className={'cset-tab' + (tab === n.k ? ' on' : '')} onClick={() => { setTab(n.k); setRolesView('main') }}>{n.t}</div>
+          ))}
           <div className="cset-sep" />
           <div className={'cset-tab' + (tab === 'community' ? ' on' : '')} onClick={() => setTab('community')}>Включить сообщество</div>
           <div className="cset-sep" />
