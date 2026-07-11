@@ -55,9 +55,13 @@ jobs:
         with:
           fetch-depth: 0   # полная история — нужна scripts/gen-changelog.mjs для "Что нового"
 
+      # v1.209.0: реальная причина всех падений android-apk — @capacitor/cli@8.4.1
+      # требует Node >=22, а тут стоял Node 20 (windows-installer/pages используют
+      # 20 и им хватает — только Capacitor это требует). Локально не ловилось,
+      # т.к. на машине разработчика уже стоит Node 24.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - uses: actions/setup-java@v4
         with:
