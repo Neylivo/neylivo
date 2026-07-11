@@ -116,11 +116,21 @@ jobs:
       # named-value: 'secrets'") — GitHub Actions не разрешает secrets прямо в
       # if:/тернарнике env:. Проверяем наличие секрета через промежуточный шаг
       # (secrets доступны в env: обычного шага) и дальше сравниваем steps.*.outputs.
+      # v1.211.0: было `echo "present=$([ -n \"$KS\" ] ...)"` — те `\"` внутри
+      # $(...) не экранировали ничего полезного (YAML plain scalar не трогает
+      # бэкслеши), а буквально попадали в bash как ДВА символа `"` в самом
+      # тесте: `[ -n '""' ]` — непустая 2-символьная строка ВСЕГДА истинна,
+      # даже когда секрет реально пуст/не существует. Поэтому шаг ниже писал
+      # мусорный почти-пустой keystore.file, и Gradle падал на подписи APK
+      # ("Tag number over 30 is not supported" — это просто не keystore).
+      # Никакого хитрого экранирования не нужно — $(...) открывает свежий
+      # контекст кавычек, обычные "$KS" внутри него работают сами по себе.
       - name: Check for release keystore secret
         id: keystore
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "present=$([ -n \"$KS\" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ -n "$KS" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Restore release keystore (if configured)
         if: steps.keystore.outputs.present == 'true'
