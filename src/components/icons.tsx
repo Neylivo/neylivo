@@ -109,6 +109,8 @@ export function Icon({ name, size, className, style }: { name: string; size?: nu
     case 'flame': return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
     case 'rotate': return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
     case 'user': return <svg {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    case 'mail': return <svg {...p}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    case 'lock': return <svg {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
     // Значки жанров игр для строки активности (см. src/lib/gameIcon.ts).
     // v1.144.0: по просьбе пользователя значки жанров возвращены к прежнему тонкому line-стилю (v1.139.0)
     case 'rifle': return <svg {...p}><path d="M22 8l-7 2H3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1.7l.9-1.8h5.6L10 18h2.9l1.4-5.8h1.4a1 1 0 0 0 1-.8l.3-1.2 5-1.5z"/></svg>

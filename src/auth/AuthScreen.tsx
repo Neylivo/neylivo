@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import authBg from '../assets/auth-bg.png'
+import { Icon } from '../components/icons'
+import authBg from '../assets/auth-bg.jpg'
+import authMascot from '../assets/auth-mascot.png'
 
-// Экран входа/регистрации 1-в-1 как в Discord (v1.35.0):
-// тёмная карточка, КАПС-подписи полей, кнопка «Продолжить», фон — арт.
+// Экран входа/регистрации (v1.35.0, редизайн v1.214.0):
+// маскот Ponoi, свисающий с карточки, — фирменный арт вместо голого Discord-клона.
 // v1.37.0: вход по почте ИЛИ юзернейму — если в поле нет «@», ищем почту
 // по нику через RPC email_for_username (supabase/19_login_by_username.sql).
 // v1.41.0: подтверждение почты — 6-значным кодом из письма (verifyOtp), а не ссылкой.
@@ -153,26 +155,28 @@ export function AuthScreen() {
     setResendIn(30)
   }
 
-  // Экран «Проверь почту» — ввод 6-значного кода (как в Discord)
+  // Экран «Проверь почту» — ввод 6-значного кода
   if (verifyEmail) return (
-    <div className="auth" style={{ backgroundImage: `url(${authBg})` }}>
-      <form className="auth-card" onSubmit={submitCode}>
+    <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
+      <form className="auth2-card" onSubmit={submitCode}>
+        <img className="auth2-mascot" src={authMascot} alt="" />
         <h1>Проверь почту</h1>
-        <p className="auth-sub">Мы отправили 6-значный код на <b>{verifyEmail}</b></p>
-        <div className="auth-fields">
-          <label className="auth-lb"><span>Код подтверждения <i>*</i></span>
-            <input className="auth-code" inputMode="numeric" autoComplete="one-time-code" autoFocus
+        <p className="auth2-sub">Мы отправили 6-значный код на <b>{verifyEmail}</b></p>
+        <div className="auth2-fields">
+          <label className="auth2-field">
+            <Icon name="mail" size={18} />
+            <input className="auth2-code" inputMode="numeric" autoComplete="one-time-code" autoFocus
               placeholder="······" value={code}
               onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required />
           </label>
         </div>
-        {err && <div className="auth-err">{err}</div>}
-        <button className="auth-btn" disabled={busy || code.length !== 6} type="submit">{busy ? '…' : 'Подтвердить'}</button>
-        <div className="auth-toggle" onClick={resend} style={resendIn > 0 ? { opacity: .55, cursor: 'default' } : undefined}>
+        {err && <div className="auth2-err">{err}</div>}
+        <button className="auth2-btn" disabled={busy || code.length !== 6} type="submit">{busy ? '…' : 'Подтвердить'}</button>
+        <div className="auth2-toggle" onClick={resend} style={resendIn > 0 ? { opacity: .55, cursor: 'default' } : undefined}>
           {resendIn > 0 ? `Отправить код ещё раз (через ${resendIn} с)` : 'Отправить код ещё раз'}
         </div>
-        <div className="auth-toggle" onClick={() => { setVerifyEmail(null); setMode('login'); setErr(null) }}>
-          <span className="auth-mut">Ошибся почтой? </span>Назад
+        <div className="auth2-toggle" onClick={() => { setVerifyEmail(null); setMode('login'); setErr(null) }}>
+          Ошибся почтой? <span>Назад</span>
         </div>
       </form>
     </div>
@@ -180,29 +184,34 @@ export function AuthScreen() {
 
   const reg = mode === 'register'
   return (
-    <div className="auth" style={{ backgroundImage: `url(${authBg})` }}>
-      <form className="auth-card" onSubmit={submit}>
-        <h1>{reg ? 'Создать учетную запись' : 'С возвращением!'}</h1>
-        {!reg && <p className="auth-sub">Мы так рады видеть вас снова!</p>}
-        <div className="auth-fields">
-          <label className="auth-lb"><span>{reg ? <>Электронная почта <i>*</i></> : <>Электронная почта или юзернейм <i>*</i></>}</span>
-            <input type={reg ? 'email' : 'text'} value={login} onChange={e => setLogin(e.target.value)} required />
-          </label>
+    <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
+      <form className="auth2-card" onSubmit={submit}>
+        <img className="auth2-mascot" src={authMascot} alt="" />
+        <h1>{reg ? 'Создать аккаунт' : 'С возвращением'}</h1>
+        <p className="auth2-sub">{reg ? 'Присоединяйся к своему миру' : 'Рады видеть тебя снова'}</p>
+        <div className="auth2-fields">
           {reg && (
-            <label className="auth-lb"><span>Имя пользователя <i>*</i></span>
-              <input value={username} onChange={e => setUsername(e.target.value)} required />
+            <label className="auth2-field">
+              <Icon name="user" size={18} />
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Имя пользователя" required />
             </label>
           )}
-          <label className="auth-lb"><span>Пароль <i>*</i></span>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          <label className="auth2-field">
+            <Icon name="mail" size={18} />
+            <input type={reg ? 'email' : 'text'} value={login} onChange={e => setLogin(e.target.value)}
+              placeholder={reg ? 'Email' : 'Email или юзернейм'} required />
+          </label>
+          <label className="auth2-field">
+            <Icon name="lock" size={18} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль" required />
           </label>
         </div>
-        {err && <div className="auth-err">{err}</div>}
-        <button className="auth-btn" disabled={busy} type="submit">{busy ? '…' : reg ? 'Продолжить' : 'Вход'}</button>
-        <div className="auth-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
-          {reg ? 'Уже зарегистрированы?' : <><span className="auth-mut">Нужна учетная запись? </span>Зарегистрироваться</>}
+        {err && <div className="auth2-err">{err}</div>}
+        <button className="auth2-btn" disabled={busy} type="submit">{busy ? '…' : reg ? 'Зарегистрироваться' : 'Войти'}</button>
+        <div className="auth2-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
+          {reg ? 'Уже есть аккаунт? ' : 'Нужен аккаунт? '}<span>{reg ? 'Войти' : 'Зарегистрироваться'}</span>
         </div>
-        {reg && <div className="auth-legal">Регистрируясь, вы соглашаетесь с Условиями использования и Политикой конфиденциальности Ponoi.</div>}
+        {reg && <div className="auth2-legal">Регистрируясь, ты соглашаешься с Условиями использования и Политикой конфиденциальности Ponoi.</div>}
       </form>
     </div>
   )
