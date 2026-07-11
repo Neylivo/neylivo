@@ -49,6 +49,11 @@ body {
   padding:0 16px; height:48px; color:rgba(255,255,255,.55); transition:background .15s ease, box-shadow .15s ease; }
 .auth2-field:focus-within { background:rgba(0,0,0,.32); box-shadow:0 0 0 2px rgba(255,255,255,.25); color:rgba(255,255,255,.85); }
 .auth2-field input { flex:1; min-width:0; background:transparent; border:none; outline:none; color:#fff; font-size:15px; height:100%; }
+/* Глобальная рамка фокуса (button:focus-visible и т.д. ниже по файлу) — прямоугольная
+   с border-radius:6px, поверх круглой пилюли поля выглядела как «второй кубик»
+   поверх первого. Своя рамка на .auth2-field:focus-within уже даёт понятную
+   подсветку фокуса, эта здесь просто не нужна. */
+.auth2-field input:focus-visible { outline:none; border-radius:0; }
 .auth2-field input::placeholder { color:rgba(255,255,255,.55); }
 .auth2-code { text-align:center; font-size:20px; font-weight:800; letter-spacing:10px; font-family:'JetBrains Mono','Consolas',monospace; }
 .auth2-code::placeholder { letter-spacing:10px; }
