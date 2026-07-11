@@ -63,10 +63,14 @@ jobs:
         with:
           node-version: 22
 
+      # v1.210.0: capacitor-android компилируется с sourceCompatibility/
+      # targetCompatibility JavaVersion.VERSION_21 (генерируется самим Capacitor
+      # CLI в capacitor.build.gradle) — JDK 17 не может собрать под release 21
+      # ("invalid source release: 21"), нужен JDK 21+.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Install dependencies
         run: npm install
