@@ -39,6 +39,16 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   const [nickOpen, setNickOpen] = useState(false)
   const [noteVal, setNoteVal] = useState(() => getUserPrefs().notes[friend.id] ?? '')
   const [nickVal, setNickVal] = useState(() => friendNickOf(friend.id) ?? '')
+  // v1.226.0: «Пригласить на сервер» показывало ВСЕ мои серверы, включая те, где
+  // этот друг уже состоит — приглашение туда просто дублировало карточку без
+  // всякого смысла. Подтягиваем его членство в моих серверах и такие прячем.
+  const [friendServerIds, setFriendServerIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (servers.length === 0) return
+    supabase.from('server_members').select('server_id').eq('user_id', friend.id).in('server_id', servers.map(s => s.id))
+      .then(({ data }) => setFriendServerIds(new Set(((data ?? []) as any[]).map(r => r.server_id))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friend.id, servers.map(s => s.id).join(',')])
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -67,6 +77,7 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
     return t?.id ?? null
   }
   async function inviteToServer(serverId: string, serverName: string) {
+    if (friendServerIds.has(serverId)) return
     const r = await createInvite(serverId, meId)
     if ('error' in r || !r.code) { toastErr('Не удалось создать приглашение'); return }
     const tid = await resolveThreadId()
@@ -122,7 +133,9 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
           <span>Пригласить на сервер</span><Icon name="chevron-right" size={14} />
           {sub === 'invite' && <div className="ctx-menu ctx-submenu" onClick={e => e.stopPropagation()}>
             {servers.length === 0 && <div className="ctx-item ctx-item-empty">Нет серверов</div>}
-            {servers.map(s => <div key={s.id} className="ctx-item" onClick={() => inviteToServer(s.id, s.name)}><span>{s.name}</span></div>)}
+            {servers.map(s => friendServerIds.has(s.id)
+              ? <div key={s.id} className="ctx-item ctx-item-empty"><span>{s.name} — уже там</span></div>
+              : <div key={s.id} className="ctx-item" onClick={() => inviteToServer(s.id, s.name)}><span>{s.name}</span></div>)}
           </div>}
         </div>
         <div className="ctx-item" onClick={() => { onRemoveFriend(); onClose() }}><span>Удалить из друзей</span><Icon name="trash" size={14} /></div>

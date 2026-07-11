@@ -81,7 +81,7 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
   const link = code ? WEB_BASE + 'invite/' + code : ''
 
   async function inviteFriend(f: FriendRow) {
-    if (!code || sent[f.id] || busy[f.id]) return
+    if (!code || sent[f.id] || busy[f.id] || memberIds.includes(f.id)) return
     setBusy(b => ({ ...b, [f.id]: true }))
     try {
       const th = await openThread(meId, f.id)
@@ -132,18 +132,25 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
           <span className="inv-sic"><Icon name="search" size={16} /></span>
         </div>
         <div className="inv-list">
-          {list.map(f => (
-            <div key={f.id} className="inv-row">
-              <Avatar name={f.name} url={f.avatar ?? null} size={32} />
-              <div className="inv-names">
-                <span className="inv-nm">{f.name}</span>
-                {f.handle && <span className="inv-hd">{f.handle}</span>}
+          {list.map(f => {
+            const already = memberIds.includes(f.id)
+            return (
+              <div key={f.id} className="inv-row">
+                <Avatar name={f.name} url={f.avatar ?? null} size={32} />
+                <div className="inv-names">
+                  <span className="inv-nm">{f.name}</span>
+                  {f.handle && <span className="inv-hd">{f.handle}</span>}
+                </div>
+                {/* v1.226.0: друга, который уже на сервере, приглашать некуда и незачем —
+                    раньше кнопка была активна и просто заново слала карточку-приглашение. */}
+                {already
+                  ? <span className="inv-btn already">Уже на сервере</span>
+                  : <button className={'inv-btn' + (sent[f.id] ? ' sent' : '')} disabled={!!sent[f.id] || !!busy[f.id]} onClick={() => inviteFriend(f)}>
+                      {sent[f.id] ? 'Отправлено' : busy[f.id] ? '…' : 'Пригласить'}
+                    </button>}
               </div>
-              <button className={'inv-btn' + (sent[f.id] ? ' sent' : '')} disabled={!!sent[f.id] || !!busy[f.id]} onClick={() => inviteFriend(f)}>
-                {sent[f.id] ? 'Отправлено' : busy[f.id] ? '…' : 'Пригласить'}
-              </button>
-            </div>
-          ))}
+            )
+          })}
           {friends.length > 0 && list.length === 0 && <div className="modal-empty">Никого не нашлось</div>}
           {friends.length === 0 && <div className="modal-empty">У вас пока нет друзей — отправьте ссылку ниже</div>}
         </div>

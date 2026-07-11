@@ -4,7 +4,7 @@ import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
-import type { FriendRequest, DMMessage, Profile } from '../types'
+import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
 import { searchUsers, sendRequest, respondRequest, openThread, findByUsername } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
@@ -450,13 +450,24 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       const cached = getMsgs('dm_' + cachedTid)
       if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
     }
-    const t = await openThread(meId, f.id)
-    if (!t) return
+    let t: DMThread | null = null
+    try { t = await openThread(meId, f.id) } catch { t = null }
+    if (!t) {
+      // v1.226.0: раньше тут был молчаливый return — active уже указывал на f (шапка
+      // и композер показывали этого друга), а threadId оставался ПРЕЖНИМ (от того,
+      // что было открыто до этого, включая null) — сообщения либо улетали не в тот
+      // диалог, либо (без кэша) не отправлялись вовсе без единой ошибки, при этом
+      // выглядело так, будто «переписка пересоздалась». Явный откат + тост об ошибке.
+      toastErr('Не удалось открыть диалог с ' + f.name + ' — попробуй ещё раз')
+      if (!cachedTid) { setActive(null); setThreadId(null); setMessages([]) }
+      return
+    }
     rememberThreadId(f.id, t.id)
     setThreadId(t.id)
     // Загружаем последние 100 сообщений (раньше в длинных диалогах грузились самые старые 100).
-    const { data } = await supabase.from('dm_messages').select('*')
+    const { data, error } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
+    if (error) { toastErr('Не удалось загрузить сообщения — показаны последние сохранённые'); return }
     const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
     hasMore.current = (data ?? []).length === 100
     // v1.69.0: ЛС всегда открывается в самом низу — на последних сообщениях (как в Discord).
@@ -530,11 +541,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     closeMobNav()
     window.getSelection()?.removeAllRanges()
     setThreadId(g.id)
-    fetchGroupMembers(g.id).then(setGroupMembers)
+    fetchGroupMembers(g.id).then(setGroupMembers).catch(() => toastErr('Не удалось загрузить участников беседы'))
     const cached = getMsgs('dm_' + g.id)
     if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
-    const { data } = await supabase.from('dm_messages').select('*')
+    const { data, error } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', g.id).order('created_at', { ascending: false }).limit(100)
+    if (error) {
+      // v1.226.0: не затираем уже показанные (кэшированные) сообщения пустым списком
+      // из-за сетевой/RLS ошибки — иначе беседа выглядела бы «стёртой».
+      toastErr('Не удалось загрузить сообщения — показаны последние сохранённые')
+      return
+    }
     const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
     hasMore.current = (data ?? []).length === 100
     pendingScroll.current = 'bottom'
@@ -738,7 +755,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // фоне; до этого момента только визуальный спиннер на самом вложении, никакой
   // блокирующей полосы над композером (см. Composer.submit()/Attachment).
   async function sendMsg(t: string, attach?: { url: string; type: string }, files?: File[]) {
-    if (!threadId) return
+    // v1.226.0: раньше молча ничего не делал, если диалог не успел открыться
+    // (или открытие сорвалось) — сообщение просто пропадало без единого признака
+    // ошибки. Теперь явно говорим, что писать пока некуда.
+    if (!threadId) { toastErr('Диалог ещё не открыт — подожди немного или открой его заново'); return }
     const tmpId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
     const row = {
       thread_id: threadId, author: meId, author_name: username, content: t,
