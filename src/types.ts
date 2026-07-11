@@ -27,7 +27,9 @@ export interface FriendRequest {
   status: string
   created_at: string
 }
-export interface DMThread { id: string; user_a: string; user_b: string; created_at: string }
+// v1.223.0: is_group/name/owner_id — групповые беседы (3-10 человек, см.
+// src/lib/groupDm.ts). У обычной 1-в-1 беседы is_group=false и они пустые/null.
+export interface DMThread { id: string; user_a: string | null; user_b: string | null; created_at: string; is_group?: boolean; name?: string | null; owner_id?: string | null }
 export interface DMMessage {
   id: string
   thread_id: string

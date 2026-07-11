@@ -54,6 +54,14 @@ export function requestAvatar(userId: string) {
   if (timer == null) timer = window.setTimeout(flush, 50)
 }
 
+// v1.223.0: синхронное чтение кэша вне React (например, в обработчике realtime-
+// события для OS-уведомления) — групповые беседы не могут заранее знать заранее,
+// чья аватарка понадобится (в 1-в-1 это всегда была аватарка «активного друга»).
+export function avatarOf(userId: string): string | null | undefined {
+  requestAvatar(userId)
+  return cache[userId]
+}
+
 /** Актуальная аватарка пользователя: undefined — ещё грузится, null — нет аватарки. */
 export function useAvatarOf(userId?: string | null): string | null | undefined {
   const [, bump] = useState(0)

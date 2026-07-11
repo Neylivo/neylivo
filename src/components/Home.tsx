@@ -222,12 +222,22 @@ export function Home() {
   useEffect(() => {
     if (!user) return
     let alive = true
-    const load = () => { supabase.from('dm_threads').select('id')
-      .or('user_a.eq.' + user.id + ',user_b.eq.' + user.id)
-      .then(({ data }) => { if (alive) dmThreadsRef.current = new Set(((data ?? []) as any[]).map(t => t.id)) }) }
+    // v1.223.0: групповые беседы не имеют user_a/user_b (см. supabase/56_group_dm.sql) —
+    // без dm_participants их сообщения никогда не долетали бы до счётчика непрочитанного.
+    const load = () => { Promise.all([
+      supabase.from('dm_threads').select('id').or('user_a.eq.' + user.id + ',user_b.eq.' + user.id),
+      supabase.from('dm_participants').select('thread_id').eq('user_id', user.id),
+    ]).then(([a, b]) => {
+      if (!alive) return
+      const ids = new Set(((a.data ?? []) as any[]).map(t => t.id))
+      for (const p of (b.data ?? []) as any[]) ids.add(p.thread_id)
+      dmThreadsRef.current = ids
+    }) }
     load()
     const ch = supabase.channel('badge:dm')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_threads' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_participants', filter: 'user_id=eq.' + user.id }, () => load())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dm_participants', filter: 'user_id=eq.' + user.id }, () => load())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, p => {
         const m = p.new as { thread_id?: string; author?: string; content?: string | null }
         if (!m.thread_id || m.author === user.id) return

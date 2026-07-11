@@ -30,11 +30,14 @@ import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
 import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
 import { getDmRead, setDmRead, isDmPinned, isDmClosed, isDmMuted, isDmIgnored, friendNickOf, reopenDm, closeDm } from '../lib/userPrefs'
-import { useAvatarOf } from '../lib/avatars'
+import { useAvatarOf, avatarOf } from '../lib/avatars'
 import { uploadWithProgress } from '../lib/storage'
 import { DmCtxMenu } from './DmCtxMenu'
 import { isBlockedWith } from '../lib/block'
 import type { Server } from '../types'
+import { NewConversationModal } from './NewConversationModal'
+import { GroupMembersPanel } from './GroupMembersPanel'
+import { fetchGroupThreads, fetchGroupMembers, groupDisplayName, type GroupThread } from '../lib/groupDm'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
@@ -56,6 +59,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const [q, setQ] = useState('')
   const [results, setResults] = useState<Profile[]>([])
   const [active, setActive] = useState<Friend | null>(null)
+  // v1.223.0: групповые беседы (3-10 человек) — activeGroup и active взаимоисключающие
+  // (открыта либо обычная ЛС, либо группа). См. src/lib/groupDm.ts.
+  const [groups, setGroups] = useState<GroupThread[]>([])
+  const [activeGroup, setActiveGroup] = useState<GroupThread | null>(null)
+  const [groupMembers, setGroupMembers] = useState<Profile[]>([])
+  const [groupNameCache, setGroupNameCache] = useState<Record<string, string>>({})
+  const [newConvOpen, setNewConvOpen] = useState(false)
   // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord.
   // По умолчанию закрыта (открывается кнопкой в шапке чата).
   const [showProfile, setShowProfile] = useState(false)
@@ -428,6 +438,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   async function openChat(f: Friend) {
     try { localStorage.setItem('ponoi_last_dm_friend', JSON.stringify({ id: f.id, name: f.name })) } catch {}
     setActive(f)
+    setActiveGroup(null)
     closeMobNav()
     // Сброс случайного выделения текста при переключении диалога.
     window.getSelection()?.removeAllRanges()
@@ -456,6 +467,82 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const firstNew = lastRead ? list.find(m => m.author !== meId && new Date(m.created_at).getTime() > lastRead) : undefined
     setNewDividerId(firstNew?.id ?? null)
     setDmRead(t.id, Date.now())
+    loadRx(list.map(m => m.id))
+  }
+
+  // v1.223.0: список моих групповых бесед — начальная загрузка + realtime, когда
+  // МЕНЯ добавили в новую беседу или убрали/я вышел (dm_participants со своим user_id).
+  useEffect(() => {
+    let ok = true
+    fetchGroupThreads(meId).then(g => { if (ok) setGroups(g) })
+    return () => { ok = false }
+  }, [meId])
+  useEffect(() => {
+    const ch = supabase.channel('gdm-mine:' + meId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_participants', filter: 'user_id=eq.' + meId },
+        () => fetchGroupThreads(meId).then(setGroups))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dm_participants', filter: 'user_id=eq.' + meId },
+        () => fetchGroupThreads(meId).then(setGroups))
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [meId])
+  // Имена участников для подписи беседы в сайдбаре (может быть не-друг — не
+  // всегда есть в friends, поэтому отдельный батч-запрос профилей).
+  useEffect(() => {
+    const need = new Set<string>()
+    for (const g of groups) for (const id of g.memberIds) {
+      if (id !== meId && !friends.some(f => f.id === id) && !(id in groupNameCache)) need.add(id)
+    }
+    if (need.size === 0) return
+    supabase.from('profiles').select('id,username,display_name').in('id', [...need]).then(({ data }) => {
+      const add: Record<string, string> = {}
+      for (const r of (data ?? []) as any[]) add[r.id] = r.display_name || r.username
+      setGroupNameCache(c => ({ ...c, ...add }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups])
+  function friendNameOf(id: string): string {
+    return friends.find(f => f.id === id)?.name ?? groupNameCache[id] ?? '…'
+  }
+  function groupLabel(g: GroupThread): string {
+    if (g.name) return g.name
+    return groupDisplayName(g.memberIds.filter(id => id !== meId).map(friendNameOf))
+  }
+  // Realtime состава/названия ОТКРЫТОЙ группы — участники видят изменения друг
+  // друга сразу (добавили/убрали/переименовали), а не только после перезахода.
+  useEffect(() => {
+    if (!activeGroup) return
+    const tid = activeGroup.id
+    const ch = supabase.channel('gdm:' + tid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_participants', filter: 'thread_id=eq.' + tid },
+        () => { fetchGroupMembers(tid).then(setGroupMembers); fetchGroupThreads(meId).then(setGroups) })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: 'id=eq.' + tid },
+        p => { const row = p.new as any; setActiveGroup(g => (g && g.id === tid) ? { ...g, name: row.name ?? null, ownerId: row.owner_id ?? null } : g) })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroup?.id])
+
+  async function openGroupChat(g: GroupThread) {
+    setActive(null)
+    setActiveGroup(g)
+    setShowProfile(false)
+    closeMobNav()
+    window.getSelection()?.removeAllRanges()
+    setThreadId(g.id)
+    fetchGroupMembers(g.id).then(setGroupMembers)
+    const cached = getMsgs('dm_' + g.id)
+    if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
+    const { data } = await supabase.from('dm_messages').select('*')
+      .eq('thread_id', g.id).order('created_at', { ascending: false }).limit(100)
+    const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
+    hasMore.current = (data ?? []).length === 100
+    pendingScroll.current = 'bottom'
+    setMessages(list)
+    const lastRead = getDmRead(g.id)
+    const firstNew = lastRead ? list.find(m => m.author !== meId && new Date(m.created_at).getTime() > lastRead) : undefined
+    setNewDividerId(firstNew?.id ?? null)
+    setDmRead(g.id, Date.now())
     loadRx(list.map(m => m.id))
   }
 
@@ -514,10 +601,18 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
         p => {
           const msg = p.new as DMMessage
-          if (isDmClosed(msg.author)) reopenDm(msg.author)   // v1.187.0: написал — «Закрыть ЛС» снимается, как в Discord
+          // v1.187.0: написал в 1-в-1 — «Закрыть ЛС» снимается, как в Discord. Не для
+          // групп — иначе сообщение в беседе ошибочно «переоткрывало» бы чей-то не
+          // связанный с ней закрытый 1-в-1 диалог с тем же автором.
+          if (!activeGroup && isDmClosed(msg.author)) reopenDm(msg.author)
           setMessages(m => mergeIncoming(m, { ...msg, _ignoredAuthor: isDmIgnored(msg.author) } as any))
           setDmRead(threadId, Date.now())
-          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) { msgSound(); notifyMessage(msg.author_name, msg.content ?? '', activeAvatar, 'dm:' + threadId) }
+          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) {
+            msgSound()
+            // v1.223.0: в группе activeAvatar (аватар «активного друга») не подходит —
+            // сообщение может быть от любого из участников, берём его аватар из общего кэша.
+            notifyMessage(msg.author_name, msg.content ?? '', activeGroup ? avatarOf(msg.author) : activeAvatar, 'dm:' + threadId)
+          }
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
@@ -660,6 +755,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     stickToBottom(1200)
     setUnseen(0); setAtBottom(true)
     const peer = active
+    const groupRecipients = activeGroup ? activeGroup.memberIds.filter(id => id !== meId) : null
 
     function finalize(finalRow: typeof row) {
       supabase.from('dm_messages').insert(finalRow).select().single().then(({ data, error }) => {
@@ -671,6 +767,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         const real = data as DMMessage
         setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
         if (peer) sendPush([peer.id], username, t || 'Вложение', '/')
+        else if (groupRecipients?.length) sendPush(groupRecipients, username, t || 'Вложение', '/')
       })
     }
 
@@ -766,16 +863,16 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
             <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
               {IS_MOBILE && <Icon name="search" size={15} />}Найти или начать беседу
             </button>
-            {IS_MOBILE && <button className="dm-sec-plus dm-top-plus" title="Начать беседу" onClick={() => { setActive(null); setTab('all') }}><Icon name="plus" size={18} /></button>}
+            {IS_MOBILE && <button className="dm-sec-plus dm-top-plus" title="Новая беседа" onClick={() => setNewConvOpen(true)}><Icon name="plus" size={18} /></button>}
           </div>
         </div>
-        <div className={'dm-navitem' + (!active ? ' on' : '')} onClick={() => { setActive(null); closeMobNav() }}>
+        <div className={'dm-navitem' + (!active && !activeGroup ? ' on' : '')} onClick={() => { setActive(null); setActiveGroup(null); closeMobNav() }}>
           <span className="dm-nav-ic"><Icon name="users" size={20} /></span> Друзья
           {requests.length > 0 && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
         </div>
 
         <div className="dm-sec-t2"><span>Личные сообщения</span>
-          <button className="dm-sec-plus" title="Начать беседу" onClick={() => { setActive(null); setTab('all') }}><Icon name="plus" size={14} /></button>
+          <button className="dm-sec-plus" title="Новая беседа" onClick={() => setNewConvOpen(true)}><Icon name="plus" size={14} /></button>
         </div>
         <div className="ch-list">
           {[...pinnedFriends, ...restFriends].map(f => (
@@ -790,6 +887,22 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
           ))}
           {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Открой «Друзья» и добавь кого-нибудь.</div>}
         </div>
+        {groups.length > 0 && <>
+          <div className="dm-sec-t2"><span>Групповые беседы</span></div>
+          <div className="ch-list">
+            {groups.map(g => {
+              const others = g.memberIds.filter(id => id !== meId)
+              return (
+                <div key={g.id} className={'dm-item' + (activeGroup?.id === g.id ? ' on' : '')} onClick={() => openGroupChat(g)}>
+                  <span className="gdm-avstack">
+                    {others.slice(0, 2).map(id => <Avatar key={id} name={friendNameOf(id)} userId={id} size={others.length > 1 ? 22 : 32} />)}
+                  </span>
+                  <span className="me-nm">{groupLabel(g)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </>}
         {call && <div className="vp vp-dm">
           {cstate.screen && <div className="vp-screen"><span className="vp-screen-ic"><Icon name="screen-share" size={14} /></span><span className="vp-screen-t">Экран 1</span><button className="vp-btn danger" title="Остановить демонстрацию" onClick={() => tglCall('screen')}><Icon name="close" size={14} /></button></div>}
           <div className="vp-row">
@@ -810,13 +923,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       </aside>
 
       <main className="chat">
-        {active ? <>
-          <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>{!IS_MOBILE && '@ '}{active.name}
+        {(active || activeGroup) ? <>
+          <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
+            {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : <>{!IS_MOBILE && '@ '}{active!.name}</>}
             <div className="ph2-btns">
               <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
-              <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>
-              <button className={'pin-btn' + (showProfile ? ' on' : '')} title={showProfile ? 'Скрыть профиль' : 'Показать профиль'}
-                onClick={() => setShowProfile(v => !v)}><Icon name="user" size={18} /></button>
+              {/* v1.223.0: групповые звонки — не в этой версии, кнопка звонка есть только 1-в-1 */}
+              {!activeGroup && <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>}
+              <button className={'pin-btn' + (showProfile ? ' on' : '')} title={showProfile ? 'Скрыть панель' : (activeGroup ? 'Участники' : 'Показать профиль')}
+                onClick={() => setShowProfile(v => !v)}><Icon name={activeGroup ? 'users' : 'user'} size={18} /></button>
             </div>
           </header>
           {showPins && <div className="pins-panel">
@@ -827,28 +942,28 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 <button className="pin-un" title="Открепить" onClick={e => { e.stopPropagation(); pin(m.id, false) }}><Icon name="close" size={14} /></button></div>
             ))}
           </div>}
-          {connectingThread === threadId && !(call && callThread === threadId) &&
+          {!activeGroup && connectingThread === threadId && !(call && callThread === threadId) &&
             <div className="dm-call-connecting"><Icon name="phone" size={15} /> Соединение{connectingPeer ? ' с ' + connectingPeer.name : ''}…</div>}
-          {call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)}
+          {!activeGroup && call && callThread === threadId && <CallRoom room={call} meId={meId} meName={username} peer={ringingTo ? { name: ringingTo.name, avatarUrl: null } : null} onLeave={() => hangUp(true)}
             onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
             <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
-              nameOf={id => id === meId ? username : active.name}
+              nameOf={id => id === meId ? username : (activeGroup ? (groupMembers.find(p => p.id === id)?.display_name || groupMembers.find(p => p.id === id)?.username) : active!.name)}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
-              onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : activeAvatar }); setEditingMsg(null) }}
+              onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : activeAvatar) }); setEditingMsg(null) }}
               onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
               onMarkUnread={m => { setNewDividerId(m.id); if (threadId) setDmRead(threadId, new Date(m.created_at).getTime() - 1) }}
-              onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : null, status: statusOf(m.author), x, y })} />
+              onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : null), status: statusOf(m.author), x, y })} />
             {!atBottom && <button className="jump-down" onClick={jumpDown}>
             {unseen > 0 ? `Новых сообщений: ${unseen}` : 'К последним'} <Icon name="chevron-down" size={14} />
           </button>}
           <div ref={bottomRef} />
           </div>
           <TypingIndicator typers={typers} />
-          <Composer placeholder={'Написать @' + active.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
-            mentionables={[active.name, username]}
+          <Composer placeholder={activeGroup ? 'Написать в ' + groupLabel(activeGroup) : 'Написать @' + active!.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
+            mentionables={activeGroup ? [...groupMembers.map(m => m.display_name || m.username), username] : [active!.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
             onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
             editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />
@@ -1012,6 +1127,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         onExpand={tab => setFullProfileTab(tab ?? 'board')} />}
       {active && fullProfileTab && <ProfileCard userId={active.id} name={active.name} avatarUrl={activeAvatar} status={statusOf(active.id)}
         initialTab={fullProfileTab} onClose={() => setFullProfileTab(null)} />}
+      {activeGroup && showProfile && <GroupMembersPanel group={activeGroup} members={groupMembers} meId={meId} allFriends={friends}
+        onLeft={() => { setActiveGroup(null); setThreadId(null); setMessages([]); fetchGroupThreads(meId).then(setGroups) }} />}
+      {newConvOpen && <NewConversationModal friends={friends} onClose={() => setNewConvOpen(false)}
+        onOpenFriend={f => openChat(f)}
+        onGroupCreated={(tid, memberIds) => {
+          fetchGroupThreads(meId).then(setGroups)
+          openGroupChat({ id: tid, name: null, ownerId: meId, createdAt: new Date().toISOString(), memberIds: [...memberIds, meId] })
+        }} />}
       {mini && <MiniProfile data={mini} onClose={() => setMini(null)} />}
       {dmCtx && <DmCtxMenu friend={dmCtx.friend} x={dmCtx.x} y={dmCtx.y}
         threadId={dmCtx.friend.id === active?.id ? threadId : null}

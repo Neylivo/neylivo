@@ -1925,6 +1925,33 @@ body.no-anim .member-typing i { animation:none; }
 .dmp-full:hover { text-decoration:underline; }
 @media (max-width:1100px) { .dmp { display:none; } }
 
+/* v1.223.0: групповые беседы — панель участников (расширяет .dmp) */
+.gmp-head { display:flex; align-items:center; gap:10px; padding:20px 20px 8px; }
+.gmp-ic { width:44px; height:44px; border-radius:50%; background:rgba(88,101,242,.18); color:var(--brand); flex:none; display:flex; align-items:center; justify-content:center; }
+.gmp-nm { flex:1; min-width:0; font-size:16px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gmp-edit { border:none; background:none; color:var(--mut); cursor:pointer; padding:6px; border-radius:6px; flex:none; display:flex; }
+.gmp-edit:hover { color:#fff; background:rgba(255,255,255,.06); }
+.gmp-sec { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); padding:14px 20px 6px; }
+.gmp-list { display:flex; flex-direction:column; gap:1px; padding:0 10px; }
+.gmp-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:8px; }
+.gmp-row:hover { background:rgba(255,255,255,.04); }
+.gmp-row-nm { flex:1; min-width:0; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gmp-kick { border:none; background:none; color:var(--mut); cursor:pointer; padding:4px; display:flex; flex:none; border-radius:50%; }
+.gmp-kick:hover { color:#fff; background:rgba(237,66,69,.6); }
+.gmp-add, .gmp-leave { display:flex; align-items:center; gap:8px; margin:14px 20px 0; padding:9px 12px; border-radius:8px; border:none; cursor:pointer; font-size:14px; font-weight:600; text-align:left; }
+.gmp-add { background:rgba(255,255,255,.05); color:var(--tx); }
+.gmp-add:hover { background:rgba(255,255,255,.09); }
+.gmp-leave { background:none; color:#ed4245; margin-bottom:16px; }
+.gmp-leave:hover { background:rgba(237,66,69,.1); }
+.gmp-leave:disabled { opacity:.5; cursor:default; }
+
+/* Стопка из 1-2 аватарок для групповой беседы в сайдбаре ЛС */
+.gdm-avstack { display:flex; align-items:center; flex:none; width:32px; height:32px; position:relative; }
+.gdm-avstack > span { border:2px solid var(--bg2, #2b2d31); }
+.gdm-avstack > span:only-child { border:none; }
+.gdm-avstack > span:nth-child(2) { position:absolute; right:-6px; bottom:-6px; }
+.gdm-avstack > span:first-child:not(:only-child) { position:absolute; left:0; top:0; }
+
 
 /* ===== v1.15.0: дизайн-концепт анимаций v2 ===== */
 /* --- 🎧 Нижняя панель --- */
@@ -2021,6 +2048,7 @@ body.no-anim .member-typing i { animation:none; }
 .fwd-hash { color:var(--mut); display:flex; width:28px; justify-content:center; }
 .fwd-check { width:20px; height:20px; border-radius:50%; border:2px solid var(--mut); display:flex; align-items:center; justify-content:center; color:#fff; flex:none; }
 .fwd-row.on .fwd-check { background:var(--brand); border-color:var(--brand); }
+.fwd-row.disabled { opacity:.4; cursor:default; pointer-events:none; }
 .fwd-comment { margin-top:10px; }
 /* ===== v1.18.0: контекстное меню сообщений 1-в-1 как в Discord ===== */
 .ctx-menu { min-width:230px; padding:6px 8px; }
