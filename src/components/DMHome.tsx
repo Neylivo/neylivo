@@ -451,14 +451,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
     }
     let t: DMThread | null = null
-    try { t = await openThread(meId, f.id) } catch { t = null }
+    let openErr: any = null
+    try { t = await openThread(meId, f.id) } catch (e) { t = null; openErr = e }
     if (!t) {
       // v1.226.0: раньше тут был молчаливый return — active уже указывал на f (шапка
       // и композер показывали этого друга), а threadId оставался ПРЕЖНИМ (от того,
       // что было открыто до этого, включая null) — сообщения либо улетали не в тот
       // диалог, либо (без кэша) не отправлялись вовсе без единой ошибки, при этом
       // выглядело так, будто «переписка пересоздалась». Явный откат + тост об ошибке.
-      toastErr('Не удалось открыть диалог с ' + f.name + ' — попробуй ещё раз')
+      // v1.227.0: показываем настоящий текст ошибки (не просто «попробуй ещё раз») —
+      // без этого не было ни единой зацепки, что именно сломалось.
+      toastErr('Не удалось открыть диалог с ' + f.name + (openErr?.message ? ': ' + openErr.message : ' — попробуй ещё раз'))
       if (!cachedTid) { setActive(null); setThreadId(null); setMessages([]) }
       return
     }

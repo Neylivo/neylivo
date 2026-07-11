@@ -63,10 +63,15 @@ export async function respondRequest(id: string, accept: boolean) {
 }
 
 // Canonical (ordered) DM thread between two users; created on first open.
+// v1.227.0: раньше при ошибке (RLS/сеть) просто отдавала null — вызывающий код видел
+// только «не получилось», без единой зацепки, что именно сломалось. Логируем и
+// пробрасываем настоящую ошибку Supabase, чтобы её было видно в тосте/консоли.
 export async function openThread(meId: string, otherId: string): Promise<DMThread | null> {
   const [a, b] = [meId, otherId].sort()
   const found = await supabase.from('dm_threads').select('*').eq('user_a', a).eq('user_b', b).maybeSingle()
+  if (found.error) { console.error('[openThread] select failed:', found.error); throw found.error }
   if (found.data) return found.data as DMThread
   const ins = await supabase.from('dm_threads').insert({ user_a: a, user_b: b }).select().single()
+  if (ins.error) { console.error('[openThread] insert failed:', ins.error); throw ins.error }
   return (ins.data as DMThread) ?? null
 }
