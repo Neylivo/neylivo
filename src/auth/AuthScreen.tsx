@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
 import authBg from '../assets/auth-bg.jpg'
-import authMascot from '../assets/auth-mascot.png'
 
-// Экран входа/регистрации (v1.35.0, редизайн v1.214.0):
-// маскот Ponoi, свисающий с карточки, — фирменный арт вместо голого Discord-клона.
+// Экран входа/регистрации (v1.35.0, редизайн v1.214.0, фон обновлён v1.217.0):
+// фирменный арт вместо голого Discord-клона (маскот из v1.214.0 убран — новый
+// референс его больше не использует).
 // v1.37.0: вход по почте ИЛИ юзернейму — если в поле нет «@», ищем почту
 // по нику через RPC email_for_username (supabase/19_login_by_username.sql).
 // v1.41.0: подтверждение почты — 6-значным кодом из письма (verifyOtp), а не ссылкой.
@@ -159,7 +159,6 @@ export function AuthScreen() {
   if (verifyEmail) return (
     <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
       <form className="auth2-card" onSubmit={submitCode}>
-        <img className="auth2-mascot" src={authMascot} alt="" />
         <h1>Проверь почту</h1>
         <p className="auth2-sub">Мы отправили 6-значный код на <b>{verifyEmail}</b></p>
         <div className="auth2-fields">
@@ -186,7 +185,6 @@ export function AuthScreen() {
   return (
     <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
       <form className="auth2-card" onSubmit={submit}>
-        <img className="auth2-mascot" src={authMascot} alt="" />
         <h1>{reg ? 'Создать аккаунт' : 'С возвращением'}</h1>
         <p className="auth2-sub">{reg ? 'Присоединяйся к своему миру' : 'Рады видеть тебя снова'}</p>
         <div className="auth2-fields">

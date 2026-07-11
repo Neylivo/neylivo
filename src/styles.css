@@ -32,18 +32,16 @@ body {
 @keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 @keyframes pop { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
 
-/* auth (v1.214.0): маскот Ponoi свисает с карточки — фирменный арт вместо
-   голого Discord-клона (тот использовался до этой правки, экран входа теперь
-   единственное место, где Ponoi не косплеит Discord 1-в-1 нарочно). Фон и
-   вырезанный маскот — реальные ассеты (src/assets/auth-bg.jpg/auth-mascot.png). */
+/* auth (v1.214.0, фон/карточка обновлены v1.217.0): фирменный арт вместо
+   голого Discord-клона — экран входа единственное место, где Ponoi не
+   косплеит Discord 1-в-1 нарочно. Маскот из v1.214.0 убран (новый референс
+   без него, просто карточка на фоне). */
 .auth2 { position:relative; overflow:hidden; height:100%; display:flex; align-items:center; justify-content:center;
   background-color:#1a2a6c; background-size:cover; background-position:center; padding:24px; box-sizing:border-box; }
-.auth2-card { position:relative; z-index:1; width:380px; max-width:100%; padding:56px 28px 28px;
+.auth2-card { position:relative; z-index:1; width:380px; max-width:100%; padding:36px 28px 28px;
   border-radius:28px; background:linear-gradient(180deg, #4a54c4 0%, #3b45b8 55%, #363da8 100%);
   box-shadow:0 24px 60px rgba(10,14,60,.45); display:flex; flex-direction:column; align-items:center;
   animation:pop .25s ease both; }
-.auth2-mascot { position:absolute; top:-78px; left:50%; transform:translateX(-50%); width:230px; height:auto;
-  pointer-events:none; filter:drop-shadow(0 10px 14px rgba(0,0,0,.25)); }
 .auth2-card h1 { margin:0; text-align:center; font-size:24px; font-weight:800; color:#fff; }
 .auth2-sub { margin:6px 0 0; text-align:center; color:rgba(255,255,255,.72); font-size:14px; }
 .auth2-fields { display:flex; flex-direction:column; gap:12px; margin-top:24px; width:100%; box-sizing:border-box; }
@@ -67,8 +65,7 @@ body {
 .auth2-legal { margin-top:16px; color:rgba(255,255,255,.5); font-size:11.5px; line-height:1.4; text-align:center; }
 @media (max-width:768px) {
   .auth2 { padding:16px; }
-  .auth2-card { width:100%; padding:52px 20px 24px; }
-  .auth2-mascot { width:190px; top:-64px; }
+  .auth2-card { width:100%; padding:32px 20px 24px; }
 }
 
 /* app layout */
