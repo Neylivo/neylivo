@@ -19,6 +19,7 @@ import { matchCombo } from '../lib/keybind'
 import { QuickSwitcher } from './QuickSwitcher'
 import { HotkeysModal } from './HotkeysModal'
 import { FolderModal } from './FolderModal'
+import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { bumpDm, bumpMention, clearBadgeKey } from '../lib/badge'
@@ -367,20 +368,23 @@ export function Home() {
     <div className="app">
       <nav className="servers">
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
-          <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
-            title="Личные сообщения" onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>
+          <RailTip text="Личные сообщения">
+            <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
+              onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>
+          </RailTip>
         </div>
         <div className="srv-sep" />
         {(() => {
           const inFolder = new Set(folders.flatMap(f => f.servers))
           const srvBtn = (s: Server) => (
             <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '') + (notifModeOf(s.id) === 'mute' ? ' srv-muted' : '')}>
-              <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
-                style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
-                title={s.name}
-                onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
-                onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
-                {s.name.slice(0, 2).toUpperCase()}</button>
+              <RailTip text={s.name}>
+                <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
+                  style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
+                  onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
+                  onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
+                  {s.name.slice(0, 2).toUpperCase()}</button>
+              </RailTip>
               {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}
               {notifModeOf(s.id) === 'mute' && <span className="srv-mute-badge" title="Уведомления выключены">🔕</span>}
             </div>
@@ -393,15 +397,17 @@ export function Home() {
               return (
                 <div key={f.id} className={'srv-folder' + (f.open ? ' open' : '') + (activeIn ? ' active' : '')}
                   style={{ ['--fold' as any]: f.color }}>
-                  <button className="srv fold-head" title={f.name} onClick={() => toggleFolder(f.id)}>
-                    {f.open ? <Icon name="folder" size={20} /> : (
-                      <span className="fold-grid">
-                        {list.slice(0, 4).map(s => <span key={s.id} className="fold-mini"
-                          style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})` } : undefined}>
-                          {!s.avatar_url && s.name.slice(0, 1).toUpperCase()}</span>)}
-                      </span>
-                    )}
-                  </button>
+                  <RailTip text={f.name}>
+                    <button className="srv fold-head" onClick={() => toggleFolder(f.id)}>
+                      {f.open ? <Icon name="folder" size={20} /> : (
+                        <span className="fold-grid">
+                          {list.slice(0, 4).map(s => <span key={s.id} className="fold-mini"
+                            style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})` } : undefined}>
+                            {!s.avatar_url && s.name.slice(0, 1).toUpperCase()}</span>)}
+                        </span>
+                      )}
+                    </button>
+                  </RailTip>
                   {f.open && list.map(srvBtn)}
                 </div>
               )
@@ -409,11 +415,17 @@ export function Home() {
             {servers.filter(s => !inFolder.has(s.id)).map(srvBtn)}
           </>
         })()}
-        <button className="srv add" title="Создать сервер" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
-        <button className="srv join" title="Найти сервер" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
+        <RailTip text="Создать сервер">
+          <button className="srv add" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
+        </RailTip>
+        <RailTip text="Найти сервер">
+          <button className="srv join" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
+        </RailTip>
         <div className={'srv-wrap music-bottom' + (view.kind === 'music' ? ' on' : '')}>
-          <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-            title="Ponoi Music" onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
+          <RailTip text="Ponoi Music">
+            <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
+              onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
+          </RailTip>
         </div>
       </nav>
       <div className="mob-backdrop" onClick={closeMobNav} />

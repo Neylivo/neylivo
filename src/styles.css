@@ -76,6 +76,11 @@ body {
 .srv.join:hover { background:var(--brand); color:#fff; }
 .srv-sep { width:32px; height:2px; background:var(--bg2); border-radius:1px; margin:2px auto; }
 
+/* Discord-style rail tooltip — portaled to document.body, see RailTip.tsx */
+.rail-tooltip { position:fixed; transform:translateY(-50%); background:#111214; color:#fff; font-size:14px; font-weight:600; line-height:1.15; white-space:nowrap; padding:8px 12px; border-radius:5px; box-shadow:0 8px 16px rgba(0,0,0,.24); z-index:10000; pointer-events:none; animation:rail-tooltip-in .1s ease; }
+.rail-tooltip-arrow { position:absolute; left:-5px; top:50%; width:10px; height:10px; background:#111214; transform:translateY(-50%); clip-path:polygon(100% 0, 0 50%, 100% 100%); }
+@keyframes rail-tooltip-in { from { opacity:0; transform:translateY(-50%) translateX(-4px); } to { opacity:1; transform:translateY(-50%) translateX(0); } }
+
 .channels { width:240px; background:var(--bg2); display:flex; flex-direction:column; }
 .srv-title { padding:16px; font-weight:700; border-bottom:1px solid rgba(0,0,0,.2); box-shadow:0 1px 0 rgba(0,0,0,.2); display:flex; align-items:center; justify-content:space-between; }
 .ch-list { flex:1; overflow-y:auto; padding:8px; }

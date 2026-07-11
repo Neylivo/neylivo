@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.199.0",
+  "version": "1.200.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -14,21 +14,25 @@
     "dist": "node scripts/gen-changelog.mjs && vite build && electron-builder --win"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "livekit-client": "^2.18.7",
+    "@capacitor/android": "8.4.1",
+    "@capacitor/core": "8.4.1",
     "@livekit/krisp-noise-filter": "^0.4.3",
-    "electron-updater": "^6.3.9"
+    "@supabase/supabase-js": "^2.45.0",
+    "electron-updater": "^6.3.9",
+    "livekit-client": "^2.18.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "8.4.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.0",
     "electron": "^31.3.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
   },
   "build": {
     "appId": "com.ponoi.app",
