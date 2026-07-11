@@ -626,28 +626,36 @@ try {
 } catch {}
 // v1.165.0: добавлена подписка "player_match_stats" "1" — Valve присылает в ней
 // живые kills/deaths/assists/mvps/score, которых раньше не хватало для статистики CS2.
-const GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
+const CS2_GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
   ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
   '  "player_id" "1"', '  "player_state" "1"', '  "player_match_stats" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
+// v1.236.0: у Dota 2 GSI СВОИ имена полей подписки — "player"/"hero"/"abilities"/
+// "items" (официальный пример конфига Valve), а не "player_id"/"player_state"/
+// "player_match_stats" как у CS2. Раньше сюда клался БУКВАЛЬНО ТОТ ЖЕ файл, что и
+// для CS2 — раз ключи подписки для Dota были неправильные, скорее всего именно
+// поэтому d.player у неё до сих пор мог не приходить (или приходить не всегда).
+const DOTA_GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
+  ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
+  '  "player" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
 // Конфиг GSI подкладывается, когда игра запущена (путь берём из её exe).
 // Игра прочтёт его при СЛЕДУЮЩЕМ запуске — это ограничение самой Valve.
 // v1.165.0: перезаписываем файл, если его содержимое устарело (не совпадает с
-// текущим GSI_CFG) — иначе те, у кого конфиг уже стоял с прошлой версии, никогда
-// не получили бы новую подписку player_match_stats.
+// текущим конфигом) — иначе те, у кого конфиг уже стоял с прошлой версии, никогда
+// не получили бы новую подписку/поля.
 function ensureGsiCfg(game, exe) {
   try {
     if (!exe) return
     const fsr = require('fs')
     const root = exe.replace(/[\\/]game[\\/].*$/i, '')
-    const put = (f) => { if (!fsr.existsSync(f) || fsr.readFileSync(f, 'utf8') !== GSI_CFG) fsr.writeFileSync(f, GSI_CFG) }
+    const put = (f, cfg) => { if (!fsr.existsSync(f) || fsr.readFileSync(f, 'utf8') !== cfg) fsr.writeFileSync(f, cfg) }
     if (game === 'Counter-Strike 2') {
       const dir = path.join(root, 'game', 'csgo', 'cfg')
-      if (fsr.existsSync(dir)) put(path.join(dir, 'gamestate_integration_ponoi.cfg'))
+      if (fsr.existsSync(dir)) put(path.join(dir, 'gamestate_integration_ponoi.cfg'), CS2_GSI_CFG)
     } else if (game === 'Dota 2') {
       if (!fsr.existsSync(path.join(root, 'game', 'dota'))) return
       const dir = path.join(root, 'game', 'dota', 'cfg', 'gamestate_integration')
       try { fsr.mkdirSync(dir, { recursive: true }) } catch {}
-      put(path.join(dir, 'gamestate_integration_ponoi.cfg'))
+      put(path.join(dir, 'gamestate_integration_ponoi.cfg'), DOTA_GSI_CFG)
     }
   } catch {}
 }
@@ -711,6 +719,12 @@ function cs2Mode() {
 const DOTA_STATES = { DOTA_GAMERULES_STATE_HERO_SELECTION: 'Выбор героев', DOTA_GAMERULES_STATE_STRATEGY_TIME: 'Стадия стратегии',
   DOTA_GAMERULES_STATE_TEAM_SHOWCASE: 'Показ команд', DOTA_GAMERULES_STATE_WAIT_FOR_PLAYERS_TO_LOAD: 'Загрузка',
   DOTA_GAMERULES_STATE_PRE_GAME: 'Подготовка', DOTA_GAMERULES_STATE_GAME_IN_PROGRESS: 'В матче', DOTA_GAMERULES_STATE_POST_GAME: 'Конец матча' }
+// v1.236.0: режим лобби — DOTA_GameMode из protobuf-схемы Valve (числовой id в
+// map.game_mode). Указаны только распространённые режимы, которые реально видит
+// игрок в матчмейкинге; редкие/служебные (ивенты, обучение, боты и т.п.) остаются
+// без имени — просто не покажем режим, это не критично.
+const DOTA_MODES = { 1: 'Обычная игра', 2: 'Режим капитанов', 3: 'Случайный драфт', 4: 'Одиночный драфт',
+  5: 'Полный рандом', 18: 'Драфт способностей', 21: '1 на 1 на мид', 22: 'Рейтинговая игра', 23: 'Турбо', 24: 'Мутация' }
 function dotaMode() {
   if (!lastGsi || lastGsi.appid !== '570' || Date.now() - lastGsi.at > 60_000) return null
   const d = lastGsi.data
@@ -718,6 +732,8 @@ function dotaMode() {
   const st = stRaw ? (DOTA_STATES[stRaw] || null) : null
   const hero = (d.hero && d.hero.name)
     ? d.hero.name.replace(/^npc_dota_hero_/, '').replace(/_/g, ' ').replace(/(^|\s)[a-z]/g, (c) => c.toUpperCase()) : null
+  const modeNum = d.map && d.map.game_mode != null ? Number(d.map.game_mode) : null
+  const modeName = modeNum != null ? (DOTA_MODES[modeNum] || null) : null
   // v1.132.0: конец матча — «Победа/Поражение» по win_team из GSI и своей стороне.
   if (stRaw === 'DOTA_GAMERULES_STATE_POST_GAME') {
     const win = String((d.map && d.map.win_team) || '').toLowerCase()
@@ -727,8 +743,8 @@ function dotaMode() {
       return hero ? res + ' — ' + hero : res
     }
   }
-  if (st && hero) return st + ' — ' + hero
-  if (st) return st
+  if (st && hero) return st + ' — ' + hero + (modeName ? ' · ' + modeName : '')
+  if (st) return st + (modeName ? ' · ' + modeName : '')
   return null
 }
 // Dead by Daylight: официального API нет — читаем хвост лога игры.
@@ -865,6 +881,7 @@ function ueLogMode(logFile) {
 }
 function fortniteMode() {
   return ueLogMode(path.join(process.env.LOCALAPPDATA || '', 'FortniteGame', 'Saved', 'Logs', 'FortniteGame.log'))
+    || ueGenericMode()   // v1.236.0: страховка на случай, если Epic сменит структуру папки
 }
 function deltaForceMode() {
   // Какой именно лог пишет Delta Force — зависит от сборки; пробуем стандартные UE-пути
