@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Icon } from './icons'
 import { fetchMatches, computeStats, type GameMatch } from '../lib/gameMatches'
 import { fetchDotaStats, type DotaStats } from '../lib/opendota'
-import { getUserPrefs } from '../lib/userPrefs'
 
 const RESULT_LABEL: Record<string, string> = { win: 'Победа', loss: 'Поражение', draw: 'Ничья' }
 
@@ -13,8 +12,9 @@ function fmtDuration(sec: number): string {
 
 // v1.165.0: Dota 2 не идёт через локальный game_matches (GSI Valve не отдаёт MMR) —
 // статистика тянется напрямую из OpenDota по привязанному SteamID64 (Настройки -> Активность).
-function DotaStatsBody() {
-  const steamId = getUserPrefs().account.steamId as string | undefined
+// v1.220.0: steamId теперь публичный (profiles.steam_id, см. profilePrefs.ts) и передаётся
+// снаружи — так же можно посмотреть чужую статистику, не только свою.
+function DotaStatsBody({ steamId, isMe }: { steamId: string | null; isMe: boolean }) {
   const [stats, setStats] = useState<DotaStats | null | undefined>(undefined)
 
   useEffect(() => {
@@ -24,7 +24,9 @@ function DotaStatsBody() {
     return () => { ok = false }
   }, [steamId])
 
-  if (!steamId) return <div className="gstat-empty">Привяжи SteamID64 в Настройках → Активность, чтобы видеть статистику Dota 2 (медаль, MMR, последние матчи).</div>
+  if (!steamId) return <div className="gstat-empty">{isMe
+    ? 'Привяжи SteamID64 в Настройках → Активность, чтобы видеть статистику Dota 2 (медаль, MMR, последние матчи).'
+    : 'Игрок не привязал SteamID64 — статистика Dota 2 недоступна.'}</div>
   if (stats === undefined) return <div className="gstat-empty">Загрузка…</div>
   if (stats === null) return <div className="gstat-empty">Не удалось получить данные OpenDota — профиль Dota может быть скрыт настройками приватности, либо SteamID указан неверно.</div>
   return (
@@ -51,7 +53,7 @@ function DotaStatsBody() {
   )
 }
 
-function Cs2StatsBody({ userId, gameName }: { userId: string; gameName: string }) {
+function Cs2StatsBody({ userId, gameName, isMe }: { userId: string; gameName: string; isMe: boolean }) {
   const [matches, setMatches] = useState<GameMatch[] | null>(null)
 
   useEffect(() => {
@@ -63,7 +65,12 @@ function Cs2StatsBody({ userId, gameName }: { userId: string; gameName: string }
   const stats = matches ? computeStats(matches) : null
 
   if (matches === null) return <div className="gstat-empty">Загрузка…</div>
-  if (matches.length === 0) return <div className="gstat-empty">За последние 30 дней матчей не найдено — сыграй партию, и она появится здесь.</div>
+  // v1.220.0: пустой список — это либо правда «матчей не было», либо статистика
+  // скрыта настройками приватности игрока (RLS отдаёт пустой массив в обоих
+  // случаях, честно различить нечем — тот же компромисс уже был у Dota-статистики).
+  if (matches.length === 0) return <div className="gstat-empty">{isMe
+    ? 'За последние 30 дней матчей не найдено — сыграй партию, и она появится здесь.'
+    : 'За последние 30 дней матчей не найдено — либо их не было, либо статистика скрыта настройками приватности.'}</div>
   return (
     <>
       <div className="gstat-summary">
@@ -117,13 +124,14 @@ function Cs2StatsBody({ userId, gameName }: { userId: string; gameName: string }
 // Статистика за 30 дней по конкретной игре (v1.150.0) — открывается кликом по
 // текущей активности в профиле, когда игра поддерживает статистику (CS2 — GSI,
 // Dota 2 — OpenDota по привязанному SteamID, см. MATCH_TRACKED_GAMES).
-export function GameStatsModal({ userId, gameName, onClose }: { userId: string; gameName: string; onClose: () => void }) {
+export function GameStatsModal({ userId, gameName, steamId, isMe, onClose }:
+  { userId: string; gameName: string; steamId: string | null; isMe: boolean; onClose: () => void }) {
   return (
     <div className="gstat-backdrop" onClick={onClose}>
       <div className="gstat-card" onClick={e => e.stopPropagation()}>
         <button className="gstat-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="gstat-hdr"><Icon name="gamepad" size={18} /> {gameName} — статистика{gameName === 'Dota 2' ? '' : ' за 30 дней'}</div>
-        {gameName === 'Dota 2' ? <DotaStatsBody /> : <Cs2StatsBody userId={userId} gameName={gameName} />}
+        {gameName === 'Dota 2' ? <DotaStatsBody steamId={steamId} isMe={isMe} /> : <Cs2StatsBody userId={userId} gameName={gameName} isMe={isMe} />}
       </div>
     </div>
   )

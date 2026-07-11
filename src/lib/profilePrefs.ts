@@ -40,6 +40,12 @@ export interface ProfilePrefs {
   // рядом с ником (или null, если тег не взят). Тег/цвет/шрифт живут в
   // servers.settings.tag того сервера — здесь только ссылка.
   tagServerId: string | null
+  // v1.220.0: SteamID64 для статистики Dota 2 (OpenDota) — публичный, чтобы
+  // статистику мог посчитать не только владелец профиля (см. gameStatsVisibility).
+  steamId: string | null
+  // v1.220.0: кому видна статистика игр (CS2/Dota) в профиле — своя активность
+  // всегда видна владельцу, эта настройка касается только просмотра другими.
+  gameStatsVisibility: 'all' | 'friends' | 'none'
 }
 
 export interface Integration { label: string; url: string }
@@ -55,6 +61,8 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   favGames: [],
   wishGames: [],
   tagServerId: null,
+  steamId: null,
+  gameStatsVisibility: 'all',
 }
 
 
@@ -96,6 +104,8 @@ function fromRow(r: any): ProfilePrefs {
     favGames: Array.isArray(r.fav_games) ? r.fav_games : [],
     wishGames: Array.isArray(r.wish_games) ? r.wish_games : [],
     tagServerId: r.tag_server_id ?? null,
+    steamId: r.steam_id ?? null,
+    gameStatsVisibility: (r.game_stats_visibility as any) ?? 'all',
   }
 }
 
@@ -124,6 +134,8 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   if (p.favGames !== undefined) r.fav_games = p.favGames
   if (p.wishGames !== undefined) r.wish_games = p.wishGames
   if (p.tagServerId !== undefined) r.tag_server_id = p.tagServerId
+  if (p.steamId !== undefined) r.steam_id = p.steamId || null
+  if (p.gameStatsVisibility !== undefined) r.game_stats_visibility = p.gameStatsVisibility
   return r
 }
 
@@ -156,12 +168,14 @@ const COLS_MSG = COLS_FONT + ', msg_font, msg_font_url'
 const COLS_FAV = COLS_MSG + ', fav_games'
 const COLS_WIDGETS = COLS_FAV + ', wish_games'
 const COLS_TAG = COLS_WIDGETS + ', tag_server_id'
+const COLS_STATS = COLS_TAG + ', steam_id, game_stats_visibility'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_STATS).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_FAV).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_MSG).eq('id', id).maybeSingle())

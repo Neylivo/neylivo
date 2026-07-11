@@ -320,6 +320,11 @@ body.compact .msgs { gap:0; }
 .pqs-in:focus { border-color:var(--brand); }
 .pqs-save { margin-top:16px; background:var(--brand); border:none; color:#fff; padding:10px 18px; border-radius:6px; font-weight:600; cursor:pointer; }
 .pqs-save:hover { filter:brightness(1.1); }
+/* v1.220.0: сегментированный переключатель на 3 варианта (видимость статистики игр) */
+.pqs-seg { display:flex; background:var(--bg3); border-radius:8px; padding:3px; gap:3px; width:fit-content; }
+.pqs-seg-btn { background:none; border:none; color:var(--mut); padding:7px 14px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s ease, color .15s ease; }
+.pqs-seg-btn:hover { color:var(--tx); }
+.pqs-seg-btn.on { background:var(--brand); color:#fff; }
 .pqs-danger { margin-top:16px; background:var(--red); border:none; color:#fff; padding:10px 18px; border-radius:6px; font-weight:600; cursor:pointer; }
 .pqs-note { color:var(--mut); font-size:13px; margin-top:12px; }
 input[type=range] { accent-color:var(--brand); }

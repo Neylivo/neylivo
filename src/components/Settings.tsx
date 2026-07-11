@@ -168,14 +168,10 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const dirtyRef = useRef(false)
   const [petBusy, setPetBusy] = useState(false)
   const petRef = useRef<HTMLInputElement>(null)
-  // v1.165.0: SteamID64 — привязка нужна только для статистики Dota 2 (OpenDota),
-  // сохраняется сразу (не через черновик), как заметка/местоимения в профиле.
-  const [steamId, setSteamId] = useState(() => getUserPrefs().account.steamId || '')
-  function saveSteamId(v: string) {
-    const id = v.trim()
-    setSteamId(id)
-    patchUserPrefs({ account: { ...getUserPrefs().account, steamId: id } })
-  }
+  // v1.165.0: SteamID64 — привязка нужна только для статистики Dota 2 (OpenDota).
+  // v1.220.0: перенесён из приватного user_prefs в публичный profiles (prof.steamId) —
+  // иначе статистику Dota никто, кроме владельца, всё равно не смог бы посчитать.
+  function saveSteamId(v: string) { patchProf({ steamId: v.trim() || null }) }
   // v1.166.0: свои звуки — уведомление о сообщении, рингтон входящего, гудки
   // исходящего. Приватная account-настройка (см. src/lib/userPrefs.ts), синхронизируется
   // на все устройства. Пусто — играет встроенный тон/мелодия (src/lib/notify.ts, callSounds.ts).
@@ -956,9 +952,18 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 {view.actOn && <input className="pqs-in" value={view.actText} onChange={e => setD('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
                 <div className="pqs-sec-t">Статистика Dota 2</div>
                 <div className="pqs2-desc">Valve не отдаёт MMR через GSI — привяжи SteamID64, и статистика (MMR, последние матчи) подтянется из открытого API OpenDota.</div>
-                <input className="pqs-in" value={steamId} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}
+                <input className="pqs-in" value={prof.steamId ?? ''} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="76561198000000000" inputMode="numeric" />
                 <div className="pqs-code-sub">Свой SteamID64 можно найти на <a href="https://steamid.io" target="_blank" rel="noreferrer">steamid.io</a> — вставь ссылку на профиль Steam.</div>
+
+                <div className="pqs-sec-t">Кто видит статистику игр</div>
+                <div className="pqs2-desc">Статистика CS2 и Dota 2 в твоём профиле (винрейт, K/D, последние матчи) — тебе она видна всегда, эта настройка только про остальных.</div>
+                <div className="pqs-seg">
+                  {([['all', 'Все'], ['friends', 'Только друзья'], ['none', 'Никто']] as const).map(([v, label]) => (
+                    <button key={v} className={'pqs-seg-btn' + (prof.gameStatsVisibility === v ? ' on' : '')}
+                      onClick={() => patchProf({ gameStatsVisibility: v })}>{label}</button>
+                  ))}
+                </div>
               </>}
 
               {cat === 'advanced' && <>

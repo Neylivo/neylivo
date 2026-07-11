@@ -323,27 +323,34 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             {tab === 'activity' && <>
               {curGame && <>
                 <div className="fp-sect">Текущая активность</div>
-                {/* v1.150.0: клик по своей активности в GSI-отслеживаемой игре открывает статистику за 30 дней. */}
-                <div className={'act-card fp-cur' + (isMe && MATCH_TRACKED_GAMES.has(curGame.name) ? ' clickable' : '')}
-                  title={isMe && MATCH_TRACKED_GAMES.has(curGame.name) ? 'Статистика за 30 дней' : undefined}
-                  onClick={() => { if (isMe && MATCH_TRACKED_GAMES.has(curGame.name)) setStatsOpen(true) }}>
-                  <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
-                  <div className="act-row">
-                    {(curGame.cover ?? covers[curGame.name])
-                      ? <img className="act-cover act-cover-lg" src={(curGame.cover ?? covers[curGame.name])!} alt="" />
-                      : <span className="act-cover act-cover-lg act-cover-ph"><Icon name="gamepad" size={30} /></span>}
-                    <div className="act-info">
-                      <div className="act-name act-name-lg">{curGame.name}</div>
-                      {curGame.mode && <div className="act-mode">{curGame.mode}</div>}{/* v1.89.0: режим (плейс Roblox) */}
-                      <div className="act-meta">
-                        <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={curGame.since} /></span>
-                        {(recent?.find(r => r.name === curGame.name)?.streak ?? 1) > 1 && <span><Icon name="zap" size={13} /> x{recent!.find(r => r.name === curGame.name)!.streak} д. подряд</span>}
-                        {popular.has(curGame.name) && <span><Icon name="flame" size={13} /> Популярное</span>}
-                        {isMe && MATCH_TRACKED_GAMES.has(curGame.name) && <span><Icon name="list" size={13} /> Статистика</span>}
+                {/* v1.150.0: клик по активности в GSI-отслеживаемой игре открывает статистику за 30 дней.
+                    v1.220.0: раньше только у себя — теперь у всех, если владелец не скрыл статистику
+                    настройками приватности (см. profiles.game_stats_visibility в Настройках -> Активность). */}
+                {(() => {
+                  const statsAllowed = MATCH_TRACKED_GAMES.has(curGame.name) && (isMe || pp.gameStatsVisibility !== 'none')
+                  return (
+                    <div className={'act-card fp-cur' + (statsAllowed ? ' clickable' : '')}
+                      title={statsAllowed ? 'Статистика за 30 дней' : undefined}
+                      onClick={() => { if (statsAllowed) setStatsOpen(true) }}>
+                      <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
+                      <div className="act-row">
+                        {(curGame.cover ?? covers[curGame.name])
+                          ? <img className="act-cover act-cover-lg" src={(curGame.cover ?? covers[curGame.name])!} alt="" />
+                          : <span className="act-cover act-cover-lg act-cover-ph"><Icon name="gamepad" size={30} /></span>}
+                        <div className="act-info">
+                          <div className="act-name act-name-lg">{curGame.name}</div>
+                          {curGame.mode && <div className="act-mode">{curGame.mode}</div>}{/* v1.89.0: режим (плейс Roblox) */}
+                          <div className="act-meta">
+                            <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={curGame.since} /></span>
+                            {(recent?.find(r => r.name === curGame.name)?.streak ?? 1) > 1 && <span><Icon name="zap" size={13} /> x{recent!.find(r => r.name === curGame.name)!.streak} д. подряд</span>}
+                            {popular.has(curGame.name) && <span><Icon name="flame" size={13} /> Популярное</span>}
+                            {statsAllowed && <span><Icon name="list" size={13} /> Статистика</span>}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  )
+                })()}
               </>}
               <div className="fp-sect">Недавняя активность</div>
               {isMe && <div className="fp-note">Здесь появится ваша активность за последние 30 дней.</div>}
@@ -416,7 +423,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             throw new Error('wall save failed')
           }
         }} />}
-        {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} onClose={() => setStatsOpen(false)} />}
+        {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} steamId={pp.steamId} isMe={isMe} onClose={() => setStatsOpen(false)} />}
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
         status={statusOf(friendProfile.id)} initialTab="activity" onClose={() => setFriendProfile(null)} />}
