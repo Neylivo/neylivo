@@ -2621,8 +2621,13 @@ body.no-anim .member-typing i { animation:none; }
 /* --- Красивое авто-обновление (v1.29.0) --- */
 .upd-card { position:fixed; right:18px; bottom:18px; z-index:95; display:flex; align-items:center; gap:12px;
   padding:12px 14px; min-width:290px; max-width:360px; background:#111214; border:1px solid rgba(255,255,255,.08);
-  border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.55); animation:pop .2s ease both; overflow:hidden;
-  transition:transform .28s cubic-bezier(.3,.8,.3,1), opacity .28s ease; }
+  border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden;
+  animation:pop .2s ease; transition:transform .28s cubic-bezier(.3,.8,.3,1), opacity .28s ease; }
+/* v1.222.0/v1.224.0: fill-mode "both" на animation:pop держал transform/opacity
+   «занятыми» анимацией даже после её завершения (per spec — CSS animations
+   перекрывают transition на тех же свойствах, пока действует fill-forwards) —
+   .collapsed ниже никогда не мог визуально применить свой transform. Без "both"
+   после .2s свойства освобождаются обратно под управление transition. */
 /* v1.222.0: свёрнутая карточка «заползает» за правый край, вместо неё торчит .upd-handle */
 .upd-card.collapsed { transform:translateX(calc(100% + 30px)); opacity:0; pointer-events:none; }
 .upd-collapse { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
