@@ -83,8 +83,17 @@ jobs:
       - name: Build web bundle
         run: npm run build
 
+      # v1.208.0: настоящая причина падения этого шага — gradlew был закоммичен
+      # без Unix-флага исполняемости (100644 вместо 100755): собирался с Windows,
+      # где такого понятия нет, а `cap sync android` под капотом дёргает
+      # ./gradlew для Android-платформы. На Windows это молча работало (там
+      # используется gradlew.bat), здесь падало без объяснимой публично причины
+      # (полные логи GitHub отдаёт только по авторизованному токену). Флаг
+      # мода в git поправлен отдельным коммитом; chmod здесь — подстраховка.
       - name: Sync web bundle into Android project
-        run: npx cap sync android
+        run: |
+          chmod +x android/gradlew
+          npx cap sync android
 
       - name: Derive version name/code from package.json
         id: ver
