@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByUsername } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -64,8 +64,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const [groups, setGroups] = useState<GroupThread[]>([])
   const [activeGroup, setActiveGroup] = useState<GroupThread | null>(null)
   const [groupMembers, setGroupMembers] = useState<Profile[]>([])
-  const [groupNameCache, setGroupNameCache] = useState<Record<string, string>>({})
+  // Имена людей, которые не (уже не) в friends — участники групп + бывшие
+  // друзья, с которыми осталась переписка (см. dmPartnerIds ниже).
+  const [nameCache, setNameCache] = useState<Record<string, string>>({})
   const [newConvOpen, setNewConvOpen] = useState(false)
+  // v1.229.0: как в Discord — удаление из друзей не должно прятать диалог. Сайдбар
+  // ЛС строится по факту переписки (dm_threads), а не только по списку друзей.
+  const [dmPartnerIds, setDmPartnerIds] = useState<string[]>([])
   // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord.
   // По умолчанию закрыта (открывается кнопкой в шапке чата).
   const [showProfile, setShowProfile] = useState(false)
@@ -426,11 +431,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
 
   // v1.51.0: удаление из друзей из меню «⋯» (сносим заявку в обе стороны)
+  // v1.229.0: как в Discord — удаление из друзей НЕ закрывает открытый диалог и
+  // не трогает переписку (dm_threads/dm_messages не удаляются); раньше, если
+  // диалог с этим человеком был открыт, его закрывало обратно к списку друзей —
+  // убрано, лишнее и не соответствует Discord.
   async function removeFriend(f: Friend) {
     if (!await confirmUi('Удалить ' + f.name + ' из друзей?', { okText: 'Удалить' })) return
     await supabase.from('friend_requests').delete()
       .or(`and(from_user.eq.${meId},to_user.eq.${f.id}),and(from_user.eq.${f.id},to_user.eq.${meId})`)
-    if (active?.id === f.id) { setActive(null); setThreadId(null) }
     loadRequests()
     toastOk(f.name + ' удалён(а) из друзей')
   }
@@ -491,6 +499,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     fetchGroupThreads(meId).then(g => { if (ok) setGroups(g) })
     return () => { ok = false }
   }, [meId])
+  const groupsRef = useRef<GroupThread[]>([])
+  useEffect(() => { groupsRef.current = groups }, [groups])
   useEffect(() => {
     const ch = supabase.channel('gdm-mine:' + meId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_participants', filter: 'user_id=eq.' + meId },
@@ -500,24 +510,70 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [meId])
-  // Имена участников для подписи беседы в сайдбаре (может быть не-друг — не
-  // всегда есть в friends, поэтому отдельный батч-запрос профилей).
+  // Имена людей вне friends — участники групп и бывшие друзья, с которыми
+  // осталась переписка (dmPartnerIds) — отдельный батч-запрос профилей.
   useEffect(() => {
     const need = new Set<string>()
     for (const g of groups) for (const id of g.memberIds) {
-      if (id !== meId && !friends.some(f => f.id === id) && !(id in groupNameCache)) need.add(id)
+      if (id !== meId && !friends.some(f => f.id === id) && !(id in nameCache)) need.add(id)
+    }
+    for (const id of dmPartnerIds) {
+      if (!friends.some(f => f.id === id) && !(id in nameCache)) need.add(id)
     }
     if (need.size === 0) return
     supabase.from('profiles').select('id,username,display_name').in('id', [...need]).then(({ data }) => {
       const add: Record<string, string> = {}
       for (const r of (data ?? []) as any[]) add[r.id] = r.display_name || r.username
-      setGroupNameCache(c => ({ ...c, ...add }))
+      setNameCache(c => ({ ...c, ...add }))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups])
+  }, [groups, dmPartnerIds, friends])
   function friendNameOf(id: string): string {
-    return friends.find(f => f.id === id)?.name ?? groupNameCache[id] ?? '…'
+    return friends.find(f => f.id === id)?.name ?? nameCache[id] ?? '…'
   }
+
+  // v1.229.0: диалоги вне текущих друзей (были удалены из друзей, но переписка
+  // осталась) — как в Discord, id людей берём из факта переписки, не из friends.
+  useEffect(() => {
+    let ok = true
+    fetchDmPartnerIds(meId).then(ids => { if (ok) setDmPartnerIds(ids) })
+    return () => { ok = false }
+  }, [meId])
+  useEffect(() => {
+    const ch = supabase.channel('dm-partners:' + meId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_threads' },
+        () => fetchDmPartnerIds(meId).then(setDmPartnerIds))
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [meId])
+  // Список ЛС в сайдбаре: друзья + все, с кем есть переписка (даже бывшие
+  // друзья) — удаление из друзей у самого диалога ничего не прячет и не удаляет.
+  const dmPeople: Friend[] = (() => {
+    const byId = new Map<string, Friend>()
+    for (const f of friends) byId.set(f.id, f)
+    for (const id of dmPartnerIds) if (!byId.has(id)) byId.set(id, { id, name: friendNameOf(id) })
+    return [...byId.values()]
+  })()
+  // Реагирует на «закрытые» ЛС от людей, которые сейчас пишут — как в Discord:
+  // если написал тот, чей диалог был скрыт «крестиком», диалог сам возвращается
+  // в список со всей историей. Не привязано к тому, что открыто прямо сейчас
+  // (в отличие от per-thread подписки ниже, которая ловит это только пока сам
+  // диалог открыт) — иначе реопен работал бы только по счастливой случайности.
+  useEffect(() => {
+    const ch = supabase.channel('dm-reopen:' + meId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages' }, p => {
+        const msg = p.new as DMMessage
+        if (msg.author === meId || !isDmClosed(msg.author)) return
+        // Сообщение в ГРУППЕ от человека, чья 1-в-1 ЛС с ним закрыта, не должно
+        // реоткрывать ту несвязанную личную переписку — только настоящее сообщение
+        // 1-в-1 (совпадает id закрытого собеседника и thread_id их личного диалога).
+        if (groupsRef.current.some(g => g.id === msg.thread_id)) return
+        reopenDm(msg.author)
+        setPrefsTick(v => v + 1)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [meId])
   function groupLabel(g: GroupThread): string {
     if (g.name) return g.name
     return groupDisplayName(g.memberIds.filter(id => id !== meId).map(friendNameOf))
@@ -872,7 +928,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // v1.187.0: список ЛС в сайдбаре — «Закрыть ЛС» прячет, «Закрепить» поднимает
   // наверх. Пересчитывается на каждый рендер; DmCtxMenu триггерит его через
   // setPrefsTick после любого изменения в user_prefs (закреп/мьют/etc — не React-стейт).
-  const sidebarFriends = friends.filter(f => !isDmClosed(f.id))
+  // v1.229.0: источник — dmPeople (друзья + все, с кем есть переписка), не только
+  // friends, иначе удаление из друзей само прятало бы диалог, как баг.
+  const sidebarFriends = dmPeople.filter(f => !isDmClosed(f.id))
   const pinnedFriends = sidebarFriends.filter(f => isDmPinned(f.id))
   const restFriends = sidebarFriends.filter(f => !isDmPinned(f.id))
 
@@ -906,9 +964,17 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 {isDmPinned(f.id) && <Icon name="pin" size={12} />}
                 {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
               </span>
+              {/* v1.229.0: крестик на наведении — как в Discord, «Закрыть ЛС»: прячет
+                  из списка, ничего не удаляет, вернётся само, если собеседник напишет. */}
+              <button className="dm-item-x" title="Закрыть ЛС" onClick={e => {
+                e.stopPropagation()
+                closeDm(f.id)
+                if (active?.id === f.id) { setActive(null); setThreadId(null) }
+                setPrefsTick(v => v + 1)
+              }}><Icon name="close" size={14} /></button>
             </div>
           ))}
-          {friends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет друзей. Открой «Друзья» и добавь кого-нибудь.</div>}
+          {sidebarFriends.length === 0 && <div className="mut" style={{ padding: '6px 12px', fontSize: 13 }}>Пока нет диалогов. Открой «Друзья» и напиши кому-нибудь.</div>}
         </div>
         {groups.length > 0 && <>
           <div className="dm-sec-t2"><span>Групповые беседы</span></div>

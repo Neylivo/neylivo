@@ -75,3 +75,18 @@ export async function openThread(meId: string, otherId: string): Promise<DMThrea
   if (ins.error) { console.error('[openThread] insert failed:', ins.error); throw ins.error }
   return (ins.data as DMThread) ?? null
 }
+
+// v1.229.0: id всех, с кем есть личная переписка (1-в-1) — НЕЗАВИСИМО от того,
+// друзья ли ещё сейчас. Как в Discord: удаление из друзей не трогает диалог,
+// его история и сама возможность писать/читать остаются — сайдбар ЛС строится
+// по факту переписки, а не по списку друзей.
+export async function fetchDmPartnerIds(meId: string): Promise<string[]> {
+  const { data } = await supabase.from('dm_threads').select('user_a,user_b')
+    .or('user_a.eq.' + meId + ',user_b.eq.' + meId)
+  const ids = new Set<string>()
+  for (const t of (data ?? []) as any[]) {
+    const other = t.user_a === meId ? t.user_b : t.user_a
+    if (other) ids.add(other)
+  }
+  return [...ids]
+}
