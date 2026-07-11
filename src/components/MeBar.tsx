@@ -67,14 +67,18 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [miniOpen, setMiniOpen] = useState(false)   // свой мини-профиль над панелью (как в Discord)
   const meRef = useRef<HTMLDivElement>(null)   // v1.140.0: мерим панельку — мини-профиль открывается ровно над ней
+  // v1.212.0: на телефоне тап по своей панельке открывает ПОЛНОЭКРАННЫЙ профиль
+  // (ProfileCard) напрямую, как в мобильном Discord — маленький попап MiniProfile
+  // на тачскрине неудобен. Слушает Home.tsx (см. ponoi-open-my-profile).
+  const openMe = () => { if (IS_MOBILE) window.dispatchEvent(new CustomEvent('ponoi-open-my-profile')); else setMiniOpen(v => !v) }
   return (
     <div ref={meRef} className={'me' + (plate.outline ? ' plate-outline' : '')} style={plate.outline ? { ['--plate-oc' as any]: plate.outline } : undefined}>
       {plate.url && plate.kind !== 'none' && <PlateBg url={plate.url} kind={plate.kind} />}
-      <span className="me-lift" onClick={() => setMiniOpen(v => !v)} title="Мой профиль" style={{ cursor: 'pointer' }}>
+      <span className="me-lift" onClick={openMe} title="Мой профиль" style={{ cursor: 'pointer' }}>
         <AvatarWithStatus name={username} url={avatarUrl} size={32} status={myStatus} mobile={IS_MOBILE} />
       </span>
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
-      <span className="me-nm me-lift" onClick={() => setMiniOpen(v => !v)} style={{ cursor: 'pointer', fontFamily: nickFam }} title="Мой профиль">
+      <span className="me-nm me-lift" onClick={openMe} style={{ cursor: 'pointer', fontFamily: nickFam }} title="Мой профиль">
         {busy ? 'Загрузка…' : username}<br /><small className="mut">{(() => {
           // v1.125.0: игра в своей панельке — компактно, как в Discord: зелёный геймпад +
           // НАЗВАНИЕ ИГРЫ заглавными, без «Играет в», без режима и без таймера.

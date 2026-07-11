@@ -22,7 +22,7 @@ import { FolderModal } from './FolderModal'
 import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
-import { bumpDm, bumpMention, bumpSoft, clearBadgeKey } from '../lib/badge'
+import { bumpDm, bumpMention, bumpSoft, clearBadgeKey, useBadgeCount } from '../lib/badge'
 import { isDmMuted } from '../lib/userPrefs'
 import { mentionsUser } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
@@ -34,6 +34,19 @@ import { ProfileCard } from './ProfileCard'
 import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
+
+// v1.212.0: красный бейджик с числом упоминаний на иконке сервера в рейле —
+// как в мобильном Discord (на десктопе Discord вместо числа обходится белой
+// точкой .unread-dot, которая уже была; бейджик просто накладывается поверх
+// того же угла и виден на любом размере экрана). Считает те же bumpMention()-
+// события, что уже рисуют кружок на иконке приложения/трее (src/lib/badge.ts) —
+// заглушенный сервер точку прячет, но не этот бейджик (реальные упоминания
+// всё равно должны быть видны, см. комментарий у bumpMention чуть ниже).
+function SrvPingBadge({ serverId }: { serverId: string }) {
+  const n = useBadgeCount('srv:' + serverId)
+  if (!n) return null
+  return <span className="srv-ping-badge">{n > 99 ? '99+' : n}</span>
+}
 
 export function Home() {
   const { user } = useAuth()
@@ -95,6 +108,13 @@ export function Home() {
     }
     window.addEventListener('ponoi-profile-updated', h as any)
     return () => window.removeEventListener('ponoi-profile-updated', h as any)
+  }, [])
+  // v1.212.0: на телефоне MeBar шлёт это событие вместо открытия MiniProfile —
+  // сразу полноэкранный профиль (ProfileCard), см. MeBar.tsx.
+  useEffect(() => {
+    const h = () => setEditMyProfile(true)
+    window.addEventListener('ponoi-open-my-profile', h)
+    return () => window.removeEventListener('ponoi-open-my-profile', h)
   }, [])
   const [, setNotifVer] = useState(0) // ре-рендер при смене режима уведомлений
 
@@ -397,6 +417,7 @@ export function Home() {
               </RailTip>
               {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}
               {notifModeOf(s.id) === 'mute' && <span className="srv-mute-badge" title="Уведомления выключены">🔕</span>}
+              <SrvPingBadge serverId={s.id} />
             </div>
           )
           return <>

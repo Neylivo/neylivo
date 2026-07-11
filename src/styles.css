@@ -1476,6 +1476,13 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
   filter: grayscale(.2); background: var(--bg1, #1e1f22); border-radius: 50%; padding: 2px;
   pointer-events: none; z-index: 2; }
 
+/* --- Бейджик числа упоминаний на иконке сервера (как в мобильном Discord) --- */
+.srv-ping-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px;
+  padding: 0 4px; border-radius: 9px; background: #f23f43; color: #fff; font-size: 11px;
+  font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 0 3px var(--bg3, #1e1f22);
+  pointer-events: none; z-index: 3; animation: srv-ping-pop .22s var(--ease-spring, ease) both; }
+@keyframes srv-ping-pop { from { transform: scale(0); } to { transform: scale(1); } }
+
 
 /* --- Счётчик онлайна в шапке канала --- */
 .head-online { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px;
@@ -2757,12 +2764,30 @@ body.no-anim .member-typing i { animation:none; }
     border:none; border-radius:50%; background:#5288c1; color:#fff; cursor:pointer; }
   .send-busy { width:44px; height:44px; border-radius:50%; }
 
-  /* Список чатов — как главный экран Telegram: крупные аватарки и имена */
-  .dm-side { width:calc(100vw - 72px); max-width:none; background:#17212b; }
-  .channels { background:#17212b; }
+  /* Список чатов — на весь экран (не резиновые пузырьки чата ниже — тем
+     сознательно оставлен стиль Telegram, см. комментарий в начале блока) */
+  .dm-side { width:calc(100vw - 72px); max-width:none; }
   .dm-sec-t { color:#6d7f8f; }
   .dm-item { padding:8px 12px; margin:0 4px; gap:12px; border-radius:10px; }
   .dm-item .me-nm { font-size:16px; font-weight:600; }
+}
+
+/* ==== v1.212.0: список ЛС на телефоне — цвета и форма как в мобильном Discord.
+   Сам открытый чат (пузыри сообщений) сознательно остался в стиле Telegram
+   (см. v1.36.0 выше) — эта правка только про список бесед/поиск/шапку. ==== */
+@media (max-width:768px) {
+  .dm-side { background:var(--bg2, #2b2d31); }
+  .channels { background:var(--bg2, #2b2d31); }
+  .dm-top { height:auto; padding:calc(12px + env(safe-area-inset-top)) 12px 10px; flex-direction:column;
+    align-items:stretch; gap:10px; border-bottom:none; box-shadow:none; }
+  .dm-top-title { font-size:20px; font-weight:800; color:#fff; padding:0 4px; }
+  .dm-top-row { display:flex; align-items:center; gap:8px; }
+  .dm-findbtn { height:40px; border-radius:20px; text-align:left; padding:0 14px; display:flex; align-items:center; gap:8px; font-size:14px; }
+  .dm-top-plus { flex:none; width:40px; height:40px; border-radius:50%; background:var(--brand); color:#fff;
+    display:flex; align-items:center; justify-content:center; padding:0; }
+  .dm-top-plus:hover { color:#fff; filter:brightness(1.1); }
+  .dm-navitem { margin:2px 8px 0; padding:10px; font-size:16px; }
+  .dm-sec-t2 { padding:18px 14px 6px; }
 }
 
 /* ===== v1.40.0: ник + юзернейм в настройках и списках (1-в-1 как в Discord) ===== */
@@ -3800,13 +3825,50 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .members { padding-right: env(safe-area-inset-right); }
   .chat-head { padding-left: calc(10px + env(safe-area-inset-left)); padding-right: calc(10px + env(safe-area-inset-right)); }
 
-  /* 7. Настройки на телефоне: сайдбар и контент дышат свободнее */
-  .pqs2-side { width: min(78vw, 300px); }
+  /* 7. v1.212.0: настройки на телефоне — полноэкранный список разделов с
+     карточками-группами (как в мобильном Discord), а не сжатый в 78vw
+     сайдбар поверх контента. Управляется классами .mob-nav/.mob-content
+     на .pqs2 (см. Settings.tsx, mobNavOpen) — одна панель видна за раз. */
+  .pqs2-overlay { padding: 0; align-items: stretch; }
+  .pqs2 { width: 100%; height: 100%; max-width: none; border-radius: 0; animation: none; }
+  .pqs2-body { flex-direction: column; }
+  .pqs2.mob-nav .pqs2-main { display: none; }
+  .pqs2.mob-content .pqs2-side { display: none; }
+  .pqs2-side { width: 100%; background: transparent; padding: 12px 12px calc(24px + env(safe-area-inset-bottom)); }
+  .pqs2-head { padding-top: calc(env(safe-area-inset-top)); height: calc(52px + env(safe-area-inset-top)); }
+  .pqs2-back { display: none; width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent;
+    color: #dbdee1; align-items: center; justify-content: center; cursor: pointer; margin-right: 4px; flex: none; }
+  .pqs2.mob-content .pqs2-back { display: flex; }
+  .pqs2-me { background: #2b2d31; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .pqs2-me-av { width: 48px; height: 48px; }
+  .pqs2-search { background: #1e1f22; margin: 0 0 14px; height: 40px; border-radius: 10px; }
+  /* Разделы — единая карточка на группу, строки внутри разделены волосяными линиями */
+  .pqs2-nav { gap: 18px; }
+  .pqs2-nav > div { background: #2b2d31; border-radius: 12px; overflow: hidden; }
+  .pqs2-grp { padding: 12px 14px 6px; font-size: 12px; }
+  .pqs2-navsep { display: none; }
+  .pqs2-item { padding: 14px; font-size: 15.5px; border-radius: 0; gap: 14px;
+    border-bottom: 1px solid rgba(255,255,255,.06); }
+  .pqs2-nav > div > div:last-child > .pqs2-item { border-bottom: none; }
+  .pqs2-item.on { background: rgba(255,255,255,.06); }
+  .pqs2-item-ic { width: 26px; }
+  .pqs2-item-chev { margin-left: auto; opacity: .45; }
+  .pqs2-subs { background: rgba(0,0,0,.15); }
+  .pqs2-sub { padding-left: 50px; }
+  /* «Выйти» — прямой child .pqs2-nav (не в группе), своя карточка */
+  .pqs2-nav > .pqs2-item.danger { background: #2b2d31; border-radius: 12px; border-bottom: none; padding: 14px; }
   .pqs2-inner { padding: 20px 14px calc(96px + env(safe-area-inset-bottom)); }
-  .pqs2-head { padding-top: calc(env(safe-area-inset-top)); height: calc(48px + env(safe-area-inset-top)); }
 
   /* 8. Тосты не прилипают к самому краю и вырезу */
   .toast { margin-bottom: env(safe-area-inset-bottom); }
+
+  /* 9. v1.212.0: карточка профиля («Мой профиль») — на весь экран, как отдельный
+     мобильный экран в Discord, а не плавающее окно поверх остального интерфейса. */
+  .pc-backdrop { padding: 0; }
+  .pc-card { width: 100%; height: 100%; max-height: none; border-radius: 0; grid-template-columns: 1fr; }
+  .pc-x { top: calc(14px + env(safe-area-inset-top)); }
+  .pc-banner { padding-top: env(safe-area-inset-top); }
+  .pc-tabs { padding-left: 16px; padding-right: 16px; overflow-x: auto; }
 }
 
 @keyframes ctx-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }

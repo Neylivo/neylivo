@@ -16,6 +16,7 @@ import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
+import { IS_MOBILE } from '../lib/mobile'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -145,6 +146,11 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   }
   function setCustomD(patch: Partial<CustomTheme>) { setD('custom', { ...view.custom, ...patch }) }
   const [cat, setCat] = useState<string>('account')
+  // v1.212.0: на телефоне настройки — одна панель за раз (как в мобильном
+  // Discord), а не сжатый в 78vw сайдбар поверх контента. true — список
+  // разделов на весь экран; false — открытый раздел на весь экран со стрелкой
+  // назад. На десктопе не используется (там обе панели видны одновременно).
+  const [mobNavOpen, setMobNavOpen] = useState(true)
   const [navQ, setNavQ] = useState('')                        // поиск по разделам в сайдбаре
   const [name, setName] = useState(username)                 // ник (отображаемое имя) — свободный, может повторяться
   const [uname, setUname] = useState('')                      // юзернейм — уникальный, по нему добавляют в друзья
@@ -446,14 +452,17 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
   return (
     <div className="pqs2-overlay" onClick={tryClose}>
-      <div className="pqs2" onClick={e => e.stopPropagation()}>
+      <div className={'pqs2' + (IS_MOBILE ? (mobNavOpen ? ' mob-nav' : ' mob-content') : '')} onClick={e => e.stopPropagation()}>
         <div className="pqs2-head">
-          <div className="pqs2-head-t">{curLabel}</div>
+          {IS_MOBILE && !mobNavOpen && (
+            <button className="pqs2-back" onClick={() => setMobNavOpen(true)} title="Назад"><Icon name="chevron-left" size={20} /></button>
+          )}
+          <div className="pqs2-head-t">{IS_MOBILE && mobNavOpen ? 'Настройки' : curLabel}</div>
           <button className="pqs2-x" onClick={tryClose} title="Закрыть (Esc)"><Icon name="close" size={18} /></button>
         </div>
         <div className="pqs2-body">
           <div className="pqs2-side">
-            <div className="pqs2-me" onClick={() => setCat('profile')} title="Редактировать профиль">
+            <div className="pqs2-me" onClick={() => { setCat('profile'); setMobNavOpen(false) }} title="Редактировать профиль">
               <div className="pqs2-me-av" style={{ background: view.accent }}>
                 {avatarUrl ? <img src={avatarUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
               </div>
@@ -476,12 +485,13 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     {g.group && <div className="pqs2-grp">{g.group}</div>}
                     {items.map(i => (
                       <div key={i.k}>
-                        <button className={'pqs2-item' + (cat === i.k ? ' on' : '')} onClick={() => setCat(i.k)}>
+                        <button className={'pqs2-item' + (cat === i.k ? ' on' : '')} onClick={() => { setCat(i.k); setMobNavOpen(false) }}>
                           <span className="pqs2-item-ic"><Icon name={i.icon} size={16} /></span>{i.label}
+                          {IS_MOBILE && <Icon name="chevron-right" size={16} className="pqs2-item-chev" />}
                         </button>
                         {i.subs && cat === i.k && <div className="pqs2-subs">
                           {i.subs.map(s => (
-                            <button key={s.k} className="pqs2-sub" onClick={() => jumpTo(s.k)}>{s.label}</button>
+                            <button key={s.k} className="pqs2-sub" onClick={() => { jumpTo(s.k); setMobNavOpen(false) }}>{s.label}</button>
                           ))}
                         </div>}
                       </div>

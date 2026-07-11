@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 
 // v1.100.0: красный кружок с числом непрочитанного на иконке приложения — как в Discord.
 // Считаем новые ЛИЧНЫЕ сообщения и @упоминания на серверах. Счётчики по источникам
@@ -21,6 +22,24 @@
 const counts: Record<string, number> = {}
 const softKeys = new Set<string>()
 let activeDm: string | null = null
+
+// v1.212.0: раньше counts был чисто внутренним для трея/панели задач — теперь
+// красные бейджики с числом нужны и прямо в интерфейсе (иконки серверов, как в
+// мобильном Discord), так что счётчик по ключу должен быть читаем из React.
+const listeners = new Set<() => void>()
+export function subscribeBadges(fn: () => void): () => void { listeners.add(fn); return () => listeners.delete(fn) }
+/** Число непрочитанных (упоминаний) для ключа вида 'srv:<id>' / 'dm:<id>'. 0, если нет. */
+export function getBadgeCount(key: string): number { return counts[key] ?? 0 }
+
+/** Реактивный счётчик для рендера красного бейджика на иконке сервера/ЛС. */
+export function useBadgeCount(key: string): number {
+  const [n, setN] = useState(() => getBadgeCount(key))
+  useEffect(() => {
+    setN(getBadgeCount(key))
+    return subscribeBadges(() => setN(getBadgeCount(key)))
+  }, [key])
+  return n
+}
 
 /** Открытый сейчас диалог ЛС: его входящие кружок не увеличивают, а счётчик сбрасывается. */
 export function setActiveDm(threadId: string | null) {
@@ -215,4 +234,5 @@ function apply() {
       }
     }
   } catch {}
+  listeners.forEach(fn => { try { fn() } catch {} })
 }

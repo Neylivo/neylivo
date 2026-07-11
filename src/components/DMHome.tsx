@@ -761,7 +761,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       {call && !callRoomShown && <Sinks room={call} meName={username} />}
       <aside className="dm-side">
         <div className="dm-top">
-          <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>Найти или начать беседу</button>
+          {IS_MOBILE && <div className="dm-top-title">Сообщения</div>}
+          <div className="dm-top-row">
+            <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+              {IS_MOBILE && <Icon name="search" size={15} />}Найти или начать беседу
+            </button>
+            {IS_MOBILE && <button className="dm-sec-plus dm-top-plus" title="Начать беседу" onClick={() => { setActive(null); setTab('all') }}><Icon name="plus" size={18} /></button>}
+          </div>
         </div>
         <div className={'dm-navitem' + (!active ? ' on' : '')} onClick={() => { setActive(null); closeMobNav() }}>
           <span className="dm-nav-ic"><Icon name="users" size={20} /></span> Друзья

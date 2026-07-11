@@ -102,6 +102,7 @@ export function Icon({ name, size, className, style }: { name: string; size?: nu
     case 'forward': return <svg {...p}><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
     case 'edit': return <svg {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
     case 'chevron-right': return <svg {...p}><polyline points="9 18 15 12 9 6"/></svg>
+    case 'chevron-left': return <svg {...p}><polyline points="15 18 9 12 15 6"/></svg>
     case 'arrow-left': return <svg {...p}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
     case 'arrow-right': return <svg {...p}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     case 'zap': return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
