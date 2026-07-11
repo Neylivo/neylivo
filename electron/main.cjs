@@ -732,8 +732,10 @@ function dotaMode() {
   return null
 }
 // Dead by Daylight: официального API нет — читаем хвост лога игры.
-// Роль: внутренние имена DBD — Slasher (убийца) и Camper (выживший). Карта — последний
-// загруженный уровень. Если игра перестанет писать это в лог — просто не покажем ничего.
+// Роль: внутренние имена DBD исторически — Slasher (убийца) и Camper (выживший);
+// более новые сборки где-то могли перейти на публичные Killer/Survivor — матчим оба
+// варианта, лишний вариант не найдётся в логе и просто не даст совпадения. Карта —
+// последний загруженный уровень. Если игра перестанет писать это в лог — не покажем ничего.
 function dbdMode() {
   try {
     const fsr = require('fs')
@@ -747,8 +749,8 @@ function dbdMode() {
     fsr.closeSync(fd)
     const txt = buf.toString('utf8')
     let role = null
-    const rm = [...txt.matchAll(/(?:VE_|EPlayerRole::)(Slasher|Camper)/g)]
-    if (rm.length) role = rm[rm.length - 1][1] === 'Slasher' ? 'За убийцу' : 'За выжившего'
+    const rm = [...txt.matchAll(/(?:VE_|EPlayerRole::)(Slasher|Camper|Killer|Survivor)/g)]
+    if (rm.length) role = /Slasher|Killer/.test(rm[rm.length - 1][1]) ? 'За убийцу' : 'За выжившего'
     let map = null
     const mm = [...txt.matchAll(/[\\/]Game[\\/]Maps[\\/](?:[\w]+[\\/])*(?:Lvl_)?(\w{3,40}?)(?:_Procedural)?\.\w/g)]
     if (mm.length) {
@@ -865,12 +867,15 @@ function fortniteMode() {
   return ueLogMode(path.join(process.env.LOCALAPPDATA || '', 'FortniteGame', 'Saved', 'Logs', 'FortniteGame.log'))
 }
 function deltaForceMode() {
-  // Какой именно лог пишет Delta Force — зависит от сборки; пробуем стандартные UE-пути.
-  for (const nm of ['DeltaForce', 'DeltaForceClient', 'Game']) {
+  // Какой именно лог пишет Delta Force — зависит от сборки; пробуем стандартные UE-пути
+  // под несколькими вероятными именами проекта…
+  for (const nm of ['DeltaForce', 'DeltaForceClient', 'DeltaForceEngine', 'Client', 'Game']) {
     const mode = ueLogMode(path.join(process.env.LOCALAPPDATA || '', nm, 'Saved', 'Logs', nm + '.log'))
     if (mode) return mode
   }
-  return null
+  // …а если ни одно имя не угадали — как для любой другой Unreal-игры без спец-функции
+  // (ueGenericMode), вычисляем настоящее имя проекта из пути реально запущенного exe.
+  return ueGenericMode()
 }
 let modeBusy = false
 let lastPlaceId = null
