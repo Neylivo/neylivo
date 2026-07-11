@@ -21,19 +21,29 @@ export function useClampToViewport<T extends HTMLElement = HTMLDivElement>(x: nu
     const top = Math.max(margin, Math.min(y, window.innerHeight - r.height - margin))
     setPos(p => (p.left === left && p.top === top) ? p : { left, top })
   }
+  // clampNow закрывается над x/y — держим последнюю версию в ref, чтобы
+  // ResizeObserver ниже (подключается один раз, при монтировании) не звал
+  // «протухшую» версию с координатами, которые были актуальны только в момент
+  // самого первого рендера этого экземпляра компонента.
+  const clampNowRef = useRef(clampNow)
+  clampNowRef.current = clampNow
   useLayoutEffect(() => {
     clampNow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [x, y])
   // Некоторые панельки меняют высоту уже ПОСЛЕ открытия (раскрыли подменю,
   // догрузилась картинка) — без этого клампинг сработал бы только один раз,
-  // на исходный (обычно меньший) размер.
+  // на исходный (обычно меньший) размер. Плюс — ресайз/поворот самого окна
+  // (Electron, PWA на телефоне) при открытой панельке.
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => clampNow())
+    if (!el) return
+    const onResize = () => clampNowRef.current()
+    window.addEventListener('resize', onResize)
+    if (typeof ResizeObserver === 'undefined') return () => window.removeEventListener('resize', onResize)
+    const ro = new ResizeObserver(onResize)
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { window.removeEventListener('resize', onResize); ro.disconnect() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return { ref, style: { left: pos.left, top: pos.top } as React.CSSProperties }

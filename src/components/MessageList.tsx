@@ -458,7 +458,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
             <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '')}
-              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}>
+              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}>
               <div className="msg-gutter">
                 {grouped
                   ? <span className="msg-ts-hover" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
@@ -507,7 +507,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
                 {m.author === currentUser && onStartEdit && m.content && !fwd && <button title="Изменить" onClick={() => onStartEdit(m)}><Icon name="edit" size={18} /></button>}
-                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 300) }) }}><Icon name="more" size={18} /></button>
+                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
           </Fragment>

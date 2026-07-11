@@ -150,17 +150,25 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     if (!user || fBusy) return
     setFBusy(true)
     try {
-      if (fStatus === 'pending_in' && fReqId) {
-        const { error } = await respondRequest(fReqId, true)
+      // v1.233.0: fStatus/fReqId — снимок с момента открытия профиля; пока карточка
+      // была открыта, собеседник мог прислать встречную заявку или отменить свою.
+      // Перепроверяем перед самим действием (как уже делает precheck() в DMHome.tsx
+      // для этого же случая), а не действуем вслепую по устаревшему стейту.
+      const live = await friendStatus(user.id, userId)
+      if (live.status === 'friends') { setFStatus('friends'); toastOk('Вы уже друзья с ' + name); return }
+      if (live.status === 'pending_in' && live.requestId) {
+        const { data, error } = await respondRequest(live.requestId, true)
         if (error) throw error
+        if (!data || data.length === 0) { setFStatus('none'); toastErr('Заявка уже неактуальна'); return }
         setFStatus('friends')
         toastOk(name + ' теперь у тебя в друзьях!')
-      } else {
-        const { error } = await sendRequest(user.id, meName || 'Я', { id: userId, username: name } as Profile)
-        if (error) throw error
-        setFStatus('pending_out')
-        toastOk('Заявка отправлена — ' + name)
+        return
       }
+      if (live.status === 'pending_out') { setFStatus('pending_out'); setFReqId(live.requestId); return }
+      const { error } = await sendRequest(user.id, meName || 'Я', { id: userId, username: name } as Profile)
+      if (error) throw error
+      setFStatus('pending_out')
+      toastOk('Заявка отправлена — ' + name)
     } catch (e: any) { toastErr(e?.message ?? 'Не удалось отправить заявку') }
     finally { setFBusy(false) }
   }

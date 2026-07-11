@@ -59,7 +59,10 @@ export async function sendRequest(fromId: string, fromName: string, to: Profile)
 }
 
 export async function respondRequest(id: string, accept: boolean) {
-  return supabase.from('friend_requests').update({ status: accept ? 'accepted' : 'declined' }).eq('id', id)
+  // .select('id') — без него update() не сообщает, сколько строк реально
+  // изменилось: обновление несуществующей/уже неактуальной заявки (id устарел)
+  // молча "успевает" с пустым результатом вместо ошибки.
+  return supabase.from('friend_requests').update({ status: accept ? 'accepted' : 'declined' }).eq('id', id).select('id')
 }
 
 export type FriendStatus = 'none' | 'pending_out' | 'pending_in' | 'friends'
@@ -116,14 +119,11 @@ export async function fetchDmPartnerIds(meId: string): Promise<string[]> {
   return [...ids]
 }
 
-// v1.230.0: приватность ЛС/звонков (см. supabase/58_dm_privacy.sql) — предварительная
+// v1.230.0: приватность звонков (см. supabase/58_dm_privacy.sql) — предварительная
 // проверка на клиенте, чтобы сразу показать понятную причину, а не только словить
-// отказ RLS/Edge Function постфактум. Финальное решение всё равно за сервером.
-export async function canMessage(meId: string, targetId: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc('can_dm', { p_sender: meId, p_recipient: targetId })
-  if (error) return true   // не смогли проверить — не блокируем на клиенте, решит RLS
-  return !!data
-}
+// отказ Edge Function постфактум. Финальное решение всё равно за сервером.
+// (Аналог для сообщений, can_dm/canMessage, не заведён: openChat/sendMsg в
+// DMHome.tsx уже сами по факту распознают отказ RLS и показывают понятный текст.)
 export async function canCallUser(targetId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc('can_call', { p_target: targetId })
   if (error) return true   // не смогли проверить — не блокируем на клиенте, решит Edge Function

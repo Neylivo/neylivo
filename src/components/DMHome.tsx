@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, canMessage, canCallUser } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, canCallUser } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -602,7 +602,24 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const tid = activeGroup.id
     const ch = supabase.channel('gdm:' + tid)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_participants', filter: 'thread_id=eq.' + tid },
-        () => { fetchGroupMembers(tid).then(setGroupMembers); fetchGroupThreads(meId).then(setGroups) })
+        () => {
+          fetchGroupMembers(tid).then(members => {
+            setGroupMembers(members)
+            // v1.233.0: RLS уже не пускает нас в эту беседу (кикнули, или сам вышел
+            // с другого устройства) — раньше чат «тихо» ломался: список участников
+            // пустел, сообщения переставали приходить, а композер оставался активным
+            // и падал с общей ошибкой при отправке, без единого объяснения.
+            if (!members.some(p => p.id === meId)) {
+              toastErr('Вы больше не участник этой беседы')
+              setActiveGroup(null); setThreadId(null); setMessages([]); setGroupMembers([])
+              return
+            }
+            // Держим memberIds актуальными — иначе push-уведомления в sendMsg бьют по
+            // устаревшему снимку состава, снятому ещё при открытии чата (openGroupChat).
+            setActiveGroup(g => (g && g.id === tid) ? { ...g, memberIds: members.map(p => p.id) } : g)
+          })
+          fetchGroupThreads(meId).then(setGroups)
+        })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: 'id=eq.' + tid },
         p => { const row = p.new as any; setActiveGroup(g => (g && g.id === tid) ? { ...g, name: row.name ?? null, ownerId: row.owner_id ?? null } : g) })
       .subscribe()

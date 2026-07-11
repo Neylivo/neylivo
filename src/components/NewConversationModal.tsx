@@ -44,7 +44,10 @@ export function NewConversationModal({ friends, onClose, onOpenFriend, onGroupCr
       onGroupCreated(threadId, [...selected])
       onClose()
     } catch (e: any) {
-      toastErr(e?.message === 'group_dm_too_many_members' ? 'Слишком много участников' : 'Не удалось создать беседу')
+      toastErr(e?.message === 'group_dm_too_many_members' ? 'Слишком много участников'
+        : e?.message === 'blocked_member' ? 'Среди выбранных есть заблокировавшие друг друга — беседу с ними не создать'
+        : e?.message === 'not_friends' ? 'Добавить в беседу можно только друзей'
+        : 'Не удалось создать беседу')
     } finally {
       setBusy(false)
     }

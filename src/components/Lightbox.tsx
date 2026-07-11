@@ -70,7 +70,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   function onImgCtx(e: React.MouseEvent) {
     e.preventDefault(); e.stopPropagation()
     setMore(false)
-    setCtx({ x: Math.min(e.clientX, window.innerWidth - 246), y: Math.min(e.clientY, window.innerHeight - 172) })
+    setCtx({ x: e.clientX, y: e.clientY })
   }
 
   // Портал в document.body: просмотрщик всегда поверх всего приложения,

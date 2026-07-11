@@ -523,7 +523,7 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-row { display:flex; align-items:center; gap:12px; padding:10px 8px; border-top:1px solid rgba(255,255,255,.06); cursor:pointer; border-radius:8px; }
 .pfr-row:hover { background:rgba(255,255,255,.04); }
 .pfr-name { font-weight:600; color:var(--tx); }
-.pfr-status { color:var(--mut); font-size:13px; }
+.pfr-status { color:var(--mut); font-size:14px; }
 .pfr-msg { margin-left:auto; font-size:16px; opacity:.7; }
 .pfr-row:hover .pfr-msg { opacity:1; }
 .pfr-ok, .pfr-no { border:none; border-radius:50%; width:32px; height:32px; cursor:pointer; color:#fff; font-size:14px; }
@@ -641,7 +641,7 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-row{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:8px;cursor:pointer;border-top:1px solid rgba(255,255,255,.04);}
 .pfr-row:hover{background:rgba(255,255,255,.05);}
 .pfr-name{font-size:15px;font-weight:700;color:#f2f3f5;}
-.pfr-status{margin-left:12px;font-size:13px;color:#949ba4;}
+.pfr-status{margin-left:12px;font-size:14px;color:#949ba4;}
 .pfr-msg{margin-left:auto;font-size:16px;opacity:.6;}
 .pfr-row:hover .pfr-msg{opacity:1;}
 .pfr-empty{color:#949ba4;font-size:14px;padding:20px 8px;}
@@ -658,8 +658,8 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-right{width:340px;flex:none;border-left:1px solid rgba(255,255,255,.06);overflow-y:auto;padding:16px 18px;background:rgba(0,0,0,.12);}
 .pfr-right-h{font-size:20px;font-weight:800;color:#f2f3f5;margin-bottom:16px;}
 .pfr-actcard{background:var(--c-panel,#2b2d31);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
-.pfr-actnm{font-size:14px;font-weight:700;color:#f2f3f5;}
-.pfr-actsub{font-size:12px;color:#949ba4;margin-top:2px;}
+.pfr-actnm{font-size:15px;font-weight:700;color:#f2f3f5;}
+.pfr-actsub{font-size:13px;color:#949ba4;margin-top:2px;}
 .pfr-actempty{font-size:13px;color:#80848e;padding:8px 2px;}
 .me-ic{border:none;background:transparent;color:#b5bac1;font-size:15px;width:32px;height:32px;border-radius:6px;cursor:pointer;}
 .me-ic:hover{background:rgba(255,255,255,.06);color:#fff;}
@@ -1582,8 +1582,8 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .role-quick-item { padding:7px 8px; border-radius:6px; cursor:pointer; }
 .role-quick-item .role-dot { width:10px; height:10px; }
 .mini-rolechip { margin-top:8px; display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:12px; background:rgba(255,255,255,.06); font-size:12px; font-weight:600; }
-.mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:13px; color:#dbdee1; }
-.member-act { display:block; font-weight:400; font-size:12px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mini-activity { margin-top:8px; display:flex; align-items:center; gap:6px; font-size:14px; color:#dbdee1; }
+.member-act { display:block; font-weight:400; font-size:13px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .status-sep { height:1px; background:rgba(255,255,255,.08); margin:4px 6px; }
 
 /* Скрытый YouTube-плеер (музыка по ссылке YouTube) */
@@ -2107,19 +2107,19 @@ body.no-anim .member-typing i { animation:none; }
 .act-card { margin-top:8px; padding:10px; background:rgba(255,255,255,.05); border-radius:8px; }
 .act-card.clickable { cursor:pointer; transition:background .15s ease; }
 .act-card.clickable:hover { background:rgba(255,255,255,.09); }
-.act-head { font-size:11px; font-weight:700; color:var(--mut); margin-bottom:8px; }
+.act-head { font-size:12px; font-weight:700; color:var(--mut); margin-bottom:8px; }
 .act-row { display:flex; align-items:center; gap:12px; }
 .act-cover { width:60px; height:60px; border-radius:8px; object-fit:cover; flex:none; animation:cover-in .45s ease; }
 .act-cover-lg { width:80px; height:80px; border-radius:10px; }
 .act-cover-sm { width:52px; height:52px; }
 .act-cover-ph { display:flex; align-items:center; justify-content:center; background:#4e5058; color:#b5bac1; }
 .act-info { min-width:0; flex:1; }
-.act-name { font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.act-name-lg { font-size:16px; }
-.act-meta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:3px; font-size:12px; color:var(--mut); }
+.act-name { font-weight:700; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.act-name-lg { font-size:18px; }
+.act-meta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px; font-size:13px; color:var(--mut); }
 .act-meta span { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
 .act-time { color:#3ba55d; font-weight:600; }
-.fp-sect { font-size:12px; font-weight:700; color:var(--mut); margin:14px 0 8px; }
+.fp-sect { font-size:13px; font-weight:700; color:var(--mut); margin:14px 0 8px; }
 .fp-cur { margin-top:0; padding:14px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); }
 .fp-note { font-size:12.5px; color:var(--mut); margin:-2px 0 10px; }
 .fp-link { color:#00a8fc; cursor:pointer; }
@@ -3075,7 +3075,7 @@ body.no-anim .member-typing i { animation:none; }
 .fsm-empty span { font-size:13px; max-width:380px; line-height:1.45; }
 /* ===== v1.49.0: карточка «Играет в» в мини-профиле 1-в-1 как в Discord ===== */
 .mpg { margin-top:10px; padding:10px 12px 12px; background:rgba(255,255,255,.045); border-radius:8px; }
-.mpg-head { display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:700; color:#b5bac1; margin-bottom:8px; }
+.mpg-head { display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:700; color:#b5bac1; margin-bottom:8px; }
 .mpg-dots { width:24px; height:24px; border:none; border-radius:6px; background:transparent; color:#b5bac1;
   display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .12s, color .12s; }
 .mpg-dots:hover { background:rgba(255,255,255,.08); color:#fff; }
@@ -3083,8 +3083,8 @@ body.no-anim .member-typing i { animation:none; }
 .mpg-cover { width:60px; height:60px; border-radius:10px; object-fit:cover; flex:none; background:#4e5058; animation:cover-in .45s ease; }
 .mpg-ph { display:flex; align-items:center; justify-content:center; color:#b5bac1; }
 .mpg-info { min-width:0; display:flex; flex-direction:column; gap:3px; }
-.mpg-nm { font-weight:700; font-size:14.5px; color:#f2f3f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mpg-time { display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; color:#23a55a; }
+.mpg-nm { font-weight:700; font-size:16px; color:#f2f3f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mpg-time { display:flex; align-items:center; gap:5px; font-size:13.5px; font-weight:600; color:#23a55a; }
 .mpg-add { width:100%; margin-top:12px; height:32px; border:none; border-radius:8px; background:rgba(255,255,255,.09);
   color:#f2f3f5; font-size:14px; font-weight:500; cursor:pointer; transition:background .15s; }   /* v1.107.0: 32px/радиус 8px/шрифт 14px — замерено по Discord */
 .mpg-add:hover { background:rgba(255,255,255,.14); }
@@ -3607,8 +3607,8 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .yt-embed-play svg { position: relative; }
 .yt-embed-thumb:hover .yt-embed-play::before { background: rgba(0,0,0,.75); }
 /* Режим игры (плейс Roblox) — серой строкой под названием, как state в Discord */
-.mpg-mode { font-size: 12px; color: #b5bac1; margin-top: 1px; max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.act-mode { font-size: 13px; color: #b5bac1; margin-top: 1px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpg-mode { font-size: 13px; color: #b5bac1; margin-top: 2px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-mode { font-size: 14px; color: #b5bac1; margin-top: 2px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mag-mode { font-weight: 400; opacity: .85; }
 
 
@@ -3618,7 +3618,7 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .an-head { display: flex; align-items: center; gap: 12px; padding: 12px; }
 .an-tx { flex: 1; min-width: 0; }
 .an-nm { font-weight: 700; font-size: 16px; color: #f2f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.an-sub { font-size: 13px; color: #b5bac1; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-sub { font-size: 14px; color: #b5bac1; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .an-gico { width: 24px; height: 24px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .an-game { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #232428; }
 .an-gcover { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }

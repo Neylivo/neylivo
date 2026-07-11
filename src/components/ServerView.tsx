@@ -898,7 +898,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const catIds = new Set(cats.map((c: any) => c.id))
             const catOf = (c: Channel) => { const id = (c as any).settings?.category; return id && catIds.has(id) ? id : null }
             const visible = (c: Channel) => !hideMuted || !mutedCh[c.id] || curChannel?.id === c.id
-            const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 260) }) }
+            const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: e.clientX, y: e.clientY }) }
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
                 <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onDoubleClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
@@ -945,7 +945,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                 return <div key={cat.id}>
                   <div className="ch-sec clickable" title={open ? 'Свернуть категорию' : 'Развернуть категорию'}
                     onClick={() => toggleCat(cat.id)}
-                    onContextMenu={e => { if (!canManageChannels) return; e.preventDefault(); setCatCtx({ cat, x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 200) }) }}>
+                    onContextMenu={e => { if (!canManageChannels) return; e.preventDefault(); setCatCtx({ cat, x: e.clientX, y: e.clientY }) }}>
                     <span className="ch-sec-nm">{cat.private ? '🔒 ' : ''}{cat.name}</span><span className="ch-sec-line" /><span className={'ch-caret' + (open ? ' open' : '')}><Icon name="chevron-down" size={12} /></span>
                     {canManageChannels && <button className="ch-sec-add" title="Создать канал" onClick={e => { e.stopPropagation(); setShowCreateCh({ kind: 'text', cat: cat.id }) }}><Icon name="plus" size={14} /></button>}
                   </div>
@@ -1055,7 +1055,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             return (
             <div key={m.user_id} className={'member' + (m.nameplate_outline ? ' plate-outline' : '')}
               style={m.nameplate_outline ? { ['--plate-oc' as any]: m.nameplate_outline } : undefined}
-              onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}
+              onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: e.clientX, y: e.clientY }) }}
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
               roles: allRolesOf(m.user_id).map(r => ({ name: r.name, color: r.color })), activity: act,
@@ -1167,7 +1167,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           // v1.189.0: мини-профиль больше не закрывается — попап с ролями открывается
           // рядом с кнопкой, поверх него (как в Discord).
           setQuickRoleQ('')
-          setQuickRolePop({ userId: mini!.userId, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) })
+          setQuickRolePop({ userId: mini!.userId, x: e.clientX, y: e.clientY })
         } : undefined} />}
       {quickRolePop && <>
         <div className="ctx-overlay" onClick={() => setQuickRolePop(null)} onContextMenu={e => { e.preventDefault(); setQuickRolePop(null) }} />

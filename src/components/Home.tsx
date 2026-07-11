@@ -431,7 +431,7 @@ export function Home() {
                 <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
                   style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
                   onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
-                  onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 320) }) }}>
+                  onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: e.clientX, y: e.clientY }) }}>
                   {s.name.slice(0, 2).toUpperCase()}</button>
               </RailTip>
               {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}

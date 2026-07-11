@@ -26,6 +26,12 @@ function json(body: unknown, status = 200) {
 // используем RLS/can_call() отсюда — тут сервисный ключ без auth.uid(), поэтому
 // та же логика продублирована напрямую через admin-клиент.
 async function canCall(admin: ReturnType<typeof createClient>, callerId: string, calleeId: string): Promise<boolean> {
+  // v1.233.0: раньше блокировка проверялась только для сообщений (dm_insert) — если
+  // у цели dm_call_privacy='all', заблокированный ею человек всё равно мог позвонить.
+  const { data: blk } = await admin.from('blocked_users').select('blocker_id')
+    .or(`and(blocker_id.eq.${callerId},blocked_id.eq.${calleeId}),and(blocker_id.eq.${calleeId},blocked_id.eq.${callerId})`)
+    .maybeSingle()
+  if (blk) return false
   const { data: prof } = await admin.from('profiles').select('dm_call_privacy').eq('id', calleeId).maybeSingle()
   const privacy = (prof as any)?.dm_call_privacy ?? 'friends'
   if (privacy === 'all') return true
