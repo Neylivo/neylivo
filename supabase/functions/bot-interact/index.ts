@@ -22,6 +22,28 @@ async function hmac(secret: string, body: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+// See bot-dispatch/index.ts for why: webhook_url is attacker-controllable (any
+// user can create a bot) and this function fetches it server-side, then reflects
+// the response body back into chat — an unchecked internal/loopback URL here is
+// both SSRF and a way to exfiltrate the response into a public channel.
+function isSafeWebhookUrl(raw: string): boolean {
+  let u: URL
+  try { u = new URL(raw) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost')) return false
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = m.slice(1).map(Number)
+    if (a === 10 || a === 127 || a === 0) return false
+    if (a === 169 && b === 254) return false
+    if (a === 172 && b >= 16 && b <= 31) return false
+    if (a === 192 && b === 168) return false
+  }
+  if (host === '[::1]' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return false
+  return true
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -36,6 +58,7 @@ Deno.serve(async (req) => {
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const { data: app } = await admin.from('bot_apps').select('id, bot_user_id, name, webhook_url, webhook_secret').eq('id', botAppId).maybeSingle()
     if (!app || !app.webhook_url) return json({ error: 'bot has no webhook configured' }, 404)
+    if (!isSafeWebhookUrl(app.webhook_url)) return json({ error: 'bot webhook URL is not allowed' }, 400)
 
     const { data: channel } = await admin.from('channels').select('id, server_id').eq('id', channelId).maybeSingle()
     if (!channel) return json({ error: 'channel not found' }, 404)

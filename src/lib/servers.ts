@@ -39,18 +39,21 @@ export async function createInvite(serverId: string, meId: string) {
   return { code }
 }
 
-export async function joinByCode(code: string, meId: string, meName: string) {
+export async function joinByCode(code: string, _meId: string, meName: string) {
   const clean = code.trim().replace(/^.*\//, '')  // allow pasting a full link
-  const inv = await supabase.from('server_invites').select('*').eq('code', clean).maybeSingle()
-  if (!inv.data) return { error: { message: 'Приглашение не найдено' } }
-  // v1.161.0: «Приостановить приглашения» в настройках сервера раньше ничего не проверяло —
-  // ссылка продолжала пускать новых участников даже при включённой паузе.
-  const srv = await supabase.from('servers').select('settings').eq('id', inv.data.server_id).maybeSingle()
-  if ((srv.data as any)?.settings?.invites_paused) return { error: { message: 'Приглашения на этот сервер приостановлены' } }
-  const { error } = await supabase.from('server_members')
-    .insert({ server_id: inv.data.server_id, user_id: meId, member_name: meName, role: 'member' })
-  if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }
-  return { serverId: inv.data.server_id as string }
+  // v1.200.0: было прямое select server_invites (RLS пускал читать ЛЮБОЙ инвайт
+  // кому угодно) + прямой insert в server_members без проверки инвайта вообще —
+  // см. supabase/54_security_hardening.sql. Теперь всё — включая проверку паузы
+  // приглашений и бана — делает security-definer RPC на сервере.
+  const { data, error } = await supabase.rpc('redeem_invite', { p_code: clean, p_member_name: meName })
+  if (error) {
+    const msg = String(error.message || '')
+    if (msg.includes('invite_not_found')) return { error: { message: 'Приглашение не найдено' } }
+    if (msg.includes('invites_paused')) return { error: { message: 'Приглашения на этот сервер приостановлены' } }
+    if (msg.includes('banned')) return { error: { message: 'Вы забанены на этом сервере' } }
+    return { error }
+  }
+  return { serverId: data as string }
 }
 
 // Members with their profile avatar_url merged in (server_members has no avatar column).

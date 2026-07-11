@@ -17,9 +17,10 @@
    ```bash
    supabase secrets set LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... LIVEKIT_URL=wss://xxxx.livekit.cloud
    ```
-5. Задеплой функцию:
+5. Задеплой функцию (БЕЗ `--no-verify-jwt` — функция сама проверяет JWT и
+   членство в сервере/DM-треде запрашиваемой комнаты):
    ```bash
-   supabase functions deploy livekit-token --no-verify-jwt
+   supabase functions deploy livekit-token
    ```
 
 Клиент вызывает её через `supabase.functions.invoke('livekit-token', { body: { room, identity, name } })`.

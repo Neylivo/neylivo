@@ -24,6 +24,28 @@ async function hmac(secret: string, body: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+// bot_apps.webhook_url is set by whoever created the bot (any logged-in user, see
+// bot-create) — without this check they could point it at an internal/cloud-metadata
+// address and use the dispatch as an SSRF probe. Blocks scheme != https and the
+// common private/loopback/link-local ranges; doesn't defend against DNS rebinding.
+function isSafeWebhookUrl(raw: string): boolean {
+  let u: URL
+  try { u = new URL(raw) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost')) return false
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = m.slice(1).map(Number)
+    if (a === 10 || a === 127 || a === 0) return false
+    if (a === 169 && b === 254) return false
+    if (a === 172 && b >= 16 && b <= 31) return false
+    if (a === 192 && b === 168) return false
+  }
+  if (host === '[::1]' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return false
+  return true
+}
+
 Deno.serve(async (req) => {
   try {
     // Заголовок задаётся в настройках Database Webhook в Dashboard (см. коммент выше).
@@ -49,7 +71,7 @@ Deno.serve(async (req) => {
     const { data: members } = await admin.from('server_members').select('user_id').eq('server_id', channel.server_id)
     const memberIds = new Set((members ?? []).map((m: any) => m.user_id))
     const { data: bots } = await admin.from('bot_apps').select('id, bot_user_id, webhook_url, webhook_secret').not('webhook_url', 'is', null)
-    const targets = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id))
+    const targets = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id) && isSafeWebhookUrl(b.webhook_url))
 
     const body = JSON.stringify({ type: 'MESSAGE_CREATE', message: msg })
     await Promise.all(targets.map(async (b: any) => {

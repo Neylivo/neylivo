@@ -78,23 +78,40 @@ export function AuthScreen() {
         // v1.41.0: почта требует подтверждения (сессии ещё нет) — показываем экран ввода кода
         if (!data.session) { setPendingName(finalName); setVerifyEmail(email); setCode(''); setResendIn(30) }
       } else {
-        let email = login.trim()
-        if (!email.includes('@')) {
-          // Вход по юзернейму: находим почту по нику
-          const { data, error } = await supabase.rpc('email_for_username', { uname: email })
-          if (error) throw error
-          if (!data) throw new Error('Пользователь с таким юзернеймом не найден')
-          email = data as string
-        }
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) {
-          // Почта ещё не подтверждена — сразу открываем экран ввода кода
-          if (String(error.message || '').toLowerCase().includes('not confirmed')) {
-            await supabase.auth.resend({ type: 'signup', email }).catch(() => {})
-            setVerifyEmail(email); setCode(''); setResendIn(30)
-            throw new Error('Почта ещё не подтверждена — мы отправили новый код, введи его')
+        const login_ = login.trim()
+        if (!login_.includes('@')) {
+          // Вход по юзернейму: резолвим почту и логинимся одним шагом на сервере
+          // (Edge Function login-by-username) — почта никогда не попадает в браузер,
+          // см. supabase/functions/login-by-username/index.ts.
+          const { data, error } = await supabase.functions.invoke('login-by-username', {
+            body: { username: login_, password },
+          })
+          if (error || !data?.access_token) {
+            // supabase-js puts the Edge Function's JSON body behind error.context
+            // (a Response) on non-2xx, not in `data` — read it defensively.
+            let msg = String((data as any)?.error || '')
+            if (!msg) { try { msg = (await (error as any)?.context?.json())?.error ?? '' } catch { /* ignore */ } }
+            if (!msg) msg = String(error?.message || '')
+            if (msg.toLowerCase().includes('not confirmed')) {
+              throw new Error('Почта ещё не подтверждена — войди по почте (не по нику), чтобы получить новый код')
+            }
+            throw new Error('Неверная почта/юзернейм или пароль')
           }
-          throw error
+          const { error: setErr } = await supabase.auth.setSession({
+            access_token: data.access_token, refresh_token: data.refresh_token,
+          })
+          if (setErr) throw setErr
+        } else {
+          const { error } = await supabase.auth.signInWithPassword({ email: login_, password })
+          if (error) {
+            // Почта ещё не подтверждена — сразу открываем экран ввода кода
+            if (String(error.message || '').toLowerCase().includes('not confirmed')) {
+              await supabase.auth.resend({ type: 'signup', email: login_ }).catch(() => {})
+              setVerifyEmail(login_); setCode(''); setResendIn(30)
+              throw new Error('Почта ещё не подтверждена — мы отправили новый код, введи его')
+            }
+            throw error
+          }
         }
       }
     } catch (e: any) {
