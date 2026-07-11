@@ -83,3 +83,40 @@ git push --tags
 
 Проверить сборку без релиза: вкладка Actions → workflow «release» → Run workflow —
 готовый .exe будет в артефактах сборки.
+
+## Приложение для телефона (Android APK) 📱
+
+Тот же тег `vX.Y.Z` одновременно собирает и `Ponoi-Setup-<версия>.exe` (Windows),
+и `Ponoi-Setup-<версия>.apk` (Android) — обе сборки уходят в один и тот же
+GitHub Release. Play Маркета нет — APK ставится вручную («сайдлоад»), как и
+задумано (`.github/workflows/release.yml`, джоба `android-apk`).
+
+**Поставить на телефон:**
+1. Releases → скачать `Ponoi-Setup-<версия>.apk` на телефон.
+2. При установке Android спросит разрешение «Установка неизвестных приложений» —
+   разрешить для браузера/файлового менеджера, которым открываешь файл.
+3. Готово: Ponoi на телефоне — то же приложение, тот же Supabase-аккаунт,
+   звонки/камера/микрофон запрашиваются как обычно при первом звонке.
+
+**(Опционально) Свой ключ подписи — чтобы новые версии ставились ПОВЕРХ старой,
+без удаления приложения.** Без этого шага APK подписывается debug-ключом,
+который каждый CI-прогон генерирует заново — тогда для обновления придётся
+сначала удалить старую версию. Один раз собери постоянный keystore и добавь
+секреты в репозиторий (Settings → Secrets and variables → Actions):
+```bash
+keytool -genkeypair -v -keystore ponoi-release.keystore -alias ponoi \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 ponoi-release.keystore > ponoi-release.keystore.b64   # Linux/macOS
+# Windows (PowerShell): [Convert]::ToBase64String([IO.File]::ReadAllBytes("ponoi-release.keystore")) | Out-File ponoi-release.keystore.b64
+```
+Секреты:
+- `ANDROID_KEYSTORE_BASE64` — содержимое `ponoi-release.keystore.b64`
+- `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`ponoi` в примере выше), `ANDROID_KEY_PASSWORD`
+
+Храни `ponoi-release.keystore` в надёжном месте вне репозитория — потеряешь его,
+и все следующие версии придётся ставить поверх старой уже не получится
+(Android требует один и тот же ключ подписи на все версии одного приложения).
+
+Веб-версия (GitHub Pages) уже ставится на телефон и без APK — открой сайт в
+браузере телефона → «Добавить на главный экран» (PWA, см. ниже); APK — просто
+второй, более «настоящий» вариант того же самого.

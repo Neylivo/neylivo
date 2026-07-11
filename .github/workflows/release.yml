@@ -47,3 +47,77 @@ jobs:
         with:
           name: Ponoi-Setup
           path: release/*.exe
+
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # полная история — нужна scripts/gen-changelog.mjs для "Что нового"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create .env from secrets
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
+          echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY }}" >> .env
+          echo "VITE_TENOR_KEY=${{ secrets.VITE_TENOR_KEY }}" >> .env
+          echo "VITE_STEAMGRIDDB_KEY=${{ secrets.VITE_STEAMGRIDDB_KEY }}" >> .env
+
+      - name: Build web bundle + sync into Android project
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Derive version name/code from package.json
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          CODE=$((MAJOR * 1000000 + MINOR * 1000 + ${PATCH:-0}))
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Restore release keystore (if configured)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Build APK
+        working-directory: android
+        env:
+          PONOI_VERSION_NAME: ${{ steps.ver.outputs.name }}
+          PONOI_VERSION_CODE: ${{ steps.ver.outputs.code }}
+          ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'release.keystore' || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "Ponoi-Setup-${{ steps.ver.outputs.name }}.apk"
+
+      - name: Attach APK to GitHub Release (tag build)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Ponoi-Setup-*.apk
+
+      - name: Upload APK artifact (manual run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ponoi-Setup-apk
+          path: Ponoi-Setup-*.apk

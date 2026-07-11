@@ -2,3 +2,12 @@ node_modules
 dist
 .env
 .DS_Store
+
+# Android (Capacitor) build output — native project itself is committed
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/app/release.keystore
+android/captures
+*.apk

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ponoi</string>
+    <string name="title_activity_main">Ponoi</string>
+    <string name="package_name">com.ponoi.app</string>
+    <string name="custom_url_scheme">com.ponoi.app</string>
+</resources>
