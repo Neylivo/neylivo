@@ -3776,6 +3776,14 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .chlog-list li { font-size: 14px; color: var(--text-normal, #dbdee1); line-height: 1.45; }
 .pqs2-desc { font-size: 14px; color: var(--text-muted, #949ba4); line-height: 1.45; margin: -6px 0 14px; }
 
+/* v1.231.0: Ponoi сейчас в бета-тестировании — метка рядом с версией везде, где
+   та показывается (нижний правый угол, окно «Что нового»). Янтарный, чтобы не
+   путался с фирменным синим бейджем версии/«текущая». */
+.beta-tag { font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  color: #faa61a; border: 1px solid rgba(250,166,26,.5); background: rgba(250,166,26,.12);
+  padding: 1px 6px; border-radius: 999px; vertical-align: middle; }
+.chlog-title .beta-tag { margin-left: 6px; font-size: 11px; }
+
 
 /* ==== v1.119.0: дюжина приятных мелочей — микрополировка интерфейса ==== */
 

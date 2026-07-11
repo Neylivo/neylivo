@@ -153,8 +153,8 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
       <div className="chlog" onClick={e => e.stopPropagation()}>
         <div className="chlog-head">
           <div>
-            <div className="chlog-title">Что нового</div>
-            <div className="chlog-sub">История обновлений Ponoi</div>
+            <div className="chlog-title">Что нового <span className="beta-tag" title="Ponoi сейчас в бета-тестировании — возможны баги">БЕТА</span></div>
+            <div className="chlog-sub">История обновлений Ponoi — все версии пока бета</div>
           </div>
           <button className="chlog-x" title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
@@ -163,6 +163,7 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
             <div key={v.version} className="chlog-ver">
               <div className="chlog-ver-h">
                 <span className="chlog-badge">v{v.version}</span>
+                <span className="beta-tag">бета</span>
                 {v.version === __APP_VERSION__ && <span className="chlog-cur">текущая</span>}
                 <span className="chlog-date">{v.date}</span>
               </div>
@@ -226,8 +227,10 @@ export default function App() {
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>
-    {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу */}
-    <div className="app-ver" onClick={verClick} title="Три клика — что нового в Ponoi">v{__APP_VERSION__}</div>
+    {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу.
+        v1.231.0: Ponoi сейчас в бета-тестировании — метка БЕТА рядом с версией
+        везде, где она показывается (тут и в окне «Что нового»). */}
+    <div className="app-ver" onClick={verClick} title="Три клика — что нового в Ponoi">v{__APP_VERSION__} <span className="beta-tag">бета</span></div>
     {showLog && <ChangelogModal onClose={() => setShowLog(false)} />}
   </>
 }
