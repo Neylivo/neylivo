@@ -189,6 +189,16 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   useEffect(() => { activeRef.current = active }, [active])
   const threadIdRef = useRef<string | null>(null)
   useEffect(() => { threadIdRef.current = threadId }, [threadId])
+  // v1.265.0: блокировка/разблокировка (на этом или другом устройстве) фильтрует
+  // ленту через isBlockedWith() при каждом рендере, но сама по себе не triggers
+  // ре-рендер — уже показанное сообщение заблокированного оставалось видно до
+  // следующего несвязанного обновления state.
+  const [, setBlockVer] = useState(0)
+  useEffect(() => {
+    const h = () => setBlockVer(v => v + 1)
+    window.addEventListener('ponoi-blocked', h)
+    return () => window.removeEventListener('ponoi-blocked', h)
+  }, [])
   const callMsgRef = useRef<string | null>(null)
   const callStartRef = useRef(0)
   const answeredRef = useRef(false)

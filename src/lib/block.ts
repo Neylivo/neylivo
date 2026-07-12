@@ -32,16 +32,25 @@ export function watchBlocked(meId: string) {
 
 export function isBlockedWith(otherId: string): boolean { return blocked.has(otherId) }
 
-export async function blockUser(meId: string, otherId: string) {
-  await supabase.from('blocked_users').insert({ blocker_id: meId, blocked_id: otherId })
+// v1.265.0: раньше не проверяли результат — неудачная блокировка/разблокировка
+// (RLS, сеть) тихо обновляла только локальный Set, вызывающий код показывал
+// «заблокирован(а)»/«разблокирован(а)», хотя в базе ничего не изменилось;
+// realtime-эхо (watchBlocked выше) потом переписывает locale обратно, но пока
+// не переподключится — состояние на экране врёт.
+export async function blockUser(meId: string, otherId: string): Promise<boolean> {
+  const { error } = await supabase.from('blocked_users').insert({ blocker_id: meId, blocked_id: otherId })
+  if (error) return false
   await supabase.from('friend_requests').delete()
     .or(`and(from_user.eq.${meId},to_user.eq.${otherId}),and(from_user.eq.${otherId},to_user.eq.${meId})`)
   blocked.add(otherId)
+  return true
 }
 
-export async function unblockUser(meId: string, otherId: string) {
-  await supabase.from('blocked_users').delete().eq('blocker_id', meId).eq('blocked_id', otherId)
+export async function unblockUser(meId: string, otherId: string): Promise<boolean> {
+  const { data, error } = await supabase.from('blocked_users').delete().eq('blocker_id', meId).eq('blocked_id', otherId).select('blocker_id')
+  if (error || !data || data.length === 0) return false
   blocked.delete(otherId)
+  return true
 }
 
 // v1.246.0: список тех, кого заблокировал именно я (а не любая сторона блока, как

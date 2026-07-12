@@ -32,7 +32,7 @@ import { SearchPanel } from './SearchPanel'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
-import { PERM, hasPerm, kickMember, banMember, timeoutMember } from '../lib/permissions'
+import { PERM, hasPerm, kickMember, banMember, timeoutMember, setMemberNickname } from '../lib/permissions'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -261,6 +261,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG) || hasPerm(myPerms, PERM.MANAGE_EMOJI) || hasPerm(myPerms, PERM.MANAGE_EVENTS)
     || hasPerm(myPerms, PERM.MANAGE_WEBHOOKS) || hasPerm(myPerms, PERM.MANAGE_AUTOMOD)
   const canManageChannels = isOwner || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+  const canManageNicknames = isOwner || hasPerm(myPerms, PERM.MANAGE_NICKNAMES)
   const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
   const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
   const canManageEvents = isOwner || hasPerm(myPerms, PERM.MANAGE_EVENTS) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
@@ -957,6 +958,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     window.addEventListener('ponoi-notif', h)
     return () => window.removeEventListener('ponoi-notif', h)
   }, [])
+  // v1.265.0: блокировка/разблокировка (на этом или другом устройстве) фильтрует
+  // ленту через isBlockedWith() при каждом рендере, но сама по себе не triggers
+  // ре-рендер — уже показанное сообщение заблокированного оставалось видно до
+  // следующего несвязанного обновления state.
+  useEffect(() => {
+    const h = () => setNotifVer(v => v + 1)
+    window.addEventListener('ponoi-blocked', h)
+    return () => window.removeEventListener('ponoi-blocked', h)
+  }, [])
   const mutedCh: Record<string, boolean> = {}
   for (const c of channels) mutedCh[c.id] = chNotifModeOf(c.id, server.id) === 'mute'
 
@@ -1249,6 +1259,27 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               await loadMembers()
               toastOk(trimmed ? 'Ник на сервере изменён' : 'Ник на сервере сброшен до обычного')
             }}><Icon name="edit" size={14} /> Изменить ник на сервере</div>
+            <div className="ctx-sep" />
+          </>}
+          {rolePop.userId !== user?.id && canManageNicknames && <>
+            {/* v1.265.0: MANAGE_NICKNAMES — модератор/владелец меняет ник ДРУГОГО
+                участника (RPC set_member_nickname в обход RLS sm_update_self,
+                которая пускает менять только свою же строку). */}
+            <div className="ctx-item" onClick={async () => {
+              const targetId = rolePop.userId
+              setRolePop(null)
+              const target = members.find(m => m.user_id === targetId)
+              if (!target) return
+              const v = await promptUi('Ник участника «' + target.member_name + '» на этом сервере', { placeholder: target.member_name, initial: target.member_name, okText: 'Сохранить' })
+              if (v === null) return
+              const trimmed = v.trim()
+              if (!trimmed) return
+              try {
+                await setMemberNickname(server.id, targetId, trimmed, true)
+                await loadMembers()
+                toastOk('Ник участника изменён')
+              } catch (e: any) { toastErr(e.message ?? String(e)) }
+            }}><Icon name="edit" size={14} /> Изменить ник участника</div>
             <div className="ctx-sep" />
           </>}
           {canManageRoles && <>

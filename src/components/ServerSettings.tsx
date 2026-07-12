@@ -535,7 +535,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               <div key={em.id} className="sset-ecell">
                 <img src={em.url} alt={em.name} />
                 <div className="nm">:{em.name}:</div>
-                <button className="sset-edel" onClick={() => removeServerEmoji(em.id)}><Icon name="close" size={11} /></button>
+                <button className="sset-edel" onClick={() => removeServerEmoji(em.id).catch((err: any) => toastErr(err.message ?? String(err)))}><Icon name="close" size={11} /></button>
               </div>))}</div>}
         </>}
 
@@ -553,7 +553,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               <div key={em.id} className="sset-ecell">
                 <img src={em.url} alt={em.name} style={{ width: 72, height: 72 }} />
                 <div className="nm">{em.name}</div>
-                <button className="sset-edel" onClick={() => removeSticker(em.id)}><Icon name="close" size={11} /></button>
+                <button className="sset-edel" onClick={() => removeSticker(em.id).catch((err: any) => toastErr(err.message ?? String(err)))}><Icon name="close" size={11} /></button>
               </div>))}</div>}
         </>}
 

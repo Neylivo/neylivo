@@ -29,6 +29,9 @@ export const PERM = {
   // base_permissions — оповещение целой роли (а не одного участника) по умолчанию
   // недоступно никому, только явно выданная роль с этим правом может им пользоваться.
   MENTION_ROLES: 65536,
+  // v1.265.0: менять ник ДРУГОГО участника на сервере (своя правка — всегда без
+  // права, через прямой UPDATE, RLS sm_update_self в 64_server_nickname.sql).
+  MANAGE_NICKNAMES: 131072,
 } as const
 export type PermBit = typeof PERM[keyof typeof PERM]
 
@@ -48,6 +51,7 @@ export const PERM_GROUPS: { title: string; perms: { bit: PermBit; label: string;
     { bit: PERM.KICK_MEMBERS, label: 'Кикать участников', hint: 'Удалять участников с сервера — они смогут вернуться по новому приглашению' },
     { bit: PERM.BAN_MEMBERS, label: 'Банить участников', hint: 'Удалять участников с сервера без возможности вернуться' },
     { bit: PERM.TIMEOUT_MEMBERS, label: 'Отправлять в тайм-аут', hint: 'Временно запретить участнику писать и ставить реакции' },
+    { bit: PERM.MANAGE_NICKNAMES, label: 'Управление никами', hint: 'Менять ник других участников на этом сервере' },
     { bit: PERM.CREATE_INVITE, label: 'Создавать приглашения', hint: 'Генерировать код приглашения на сервер' },
   ] },
   { title: 'Права текстовых каналов', perms: [
@@ -76,6 +80,13 @@ export async function unbanMember(serverId: string, targetId: string): Promise<v
 // v1.191.0: тайм-аут — until=null снимает досрочно.
 export async function timeoutMember(serverId: string, targetId: string, until: Date | null): Promise<void> {
   const { error } = await supabase.rpc('timeout_member', { p_server: serverId, p_target: targetId, p_until: until ? until.toISOString() : null })
+  if (error) throw error
+}
+// v1.265.0: сменить ник ДРУГОГО участника (MANAGE_NICKNAMES) — своей строкой
+// server_members можно управлять и напрямую (RLS sm_update_self), эта функция —
+// только для чужих.
+export async function setMemberNickname(serverId: string, targetId: string, nickname: string, override: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_member_nickname', { p_server: serverId, p_target: targetId, p_nickname: nickname, p_override: override })
   if (error) throw error
 }
 

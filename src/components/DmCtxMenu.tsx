@@ -89,7 +89,8 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   function ignore() { toggleDmIgnored(friend.id); onChanged(); onClose() }
   async function block() {
     if (!await confirmUi('Заблокировать ' + friend.name + '? Дружба будет разорвана, переписка станет недоступна для обоих.', { okText: 'Заблокировать', danger: true })) return
-    await blockUser(meId, friend.id)
+    const ok = await blockUser(meId, friend.id)
+    if (!ok) { toastErr('Не удалось заблокировать — попробуй ещё раз'); return }
     onBlocked(); onClose()
   }
   function mute(ms: number | null) { setDmMuted(friend.id, ms); onChanged(); onClose() }

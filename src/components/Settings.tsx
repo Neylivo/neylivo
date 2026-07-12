@@ -240,7 +240,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   }, [user])
   async function doUnblock(e: BlockedEntry) {
     if (!user) return
-    await unblockUser(user.id, e.id)
+    const ok = await unblockUser(user.id, e.id)
+    if (!ok) { toastErr('Не удалось разблокировать — попробуй ещё раз'); return }
     setBlockedList(l => (l ?? []).filter(x => x.id !== e.id))
     toastOk(e.username + ' разблокирован(а)')
   }

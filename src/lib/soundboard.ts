@@ -29,14 +29,20 @@ export async function fetchClips(): Promise<Clip[]> {
   }))
 }
 
+// v1.265.0: обе функции раньше не проверяли ошибку — сохранение/удаление клипа
+// «успевало» молча, даже если insert/delete на самом деле не прошёл (RLS, сеть).
 export async function addClip(c: { url: string; name: string; ownerId: string; ownerName: string; duration: number }) {
-  return supabase.from('soundboard_clips')
+  const res = await supabase.from('soundboard_clips')
     .insert({ url: c.url, name: c.name, owner: c.ownerId, owner_name: c.ownerName, duration: Math.round(c.duration * 100) / 100 })
     .select().single()
+  if (res.error) throw new Error(res.error.message)
+  return res
 }
 
 export async function removeClip(id: string) {
-  return supabase.from('soundboard_clips').delete().eq('id', id)
+  const { data, error } = await supabase.from('soundboard_clips').delete().eq('id', id).select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('Не удалось удалить — нет прав')
 }
 
 // ---------- WAV encoding / decoding / trimming ----------

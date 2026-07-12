@@ -175,7 +175,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
               <Icon name={playingId === c.id ? 'pause' : 'volume'} size={15} /> {playingId === c.id ? 'Стоп' : 'Всем'}
             </button>
             <button className="sb-trim" title="Обрезать" onClick={() => openTrim(c)}><Icon name="scissors" size={15} /></button>
-            {c.ownerId === meId && <button className="sb-del" title="Удалить" onClick={async () => { await removeClip(c.id); refresh() }}><Icon name="trash" size={14} /></button>}
+            {c.ownerId === meId && <button className="sb-del" title="Удалить" onClick={async () => { try { await removeClip(c.id); refresh() } catch (e: any) { toastErr(e.message ?? String(e)) } }}><Icon name="trash" size={14} /></button>}
           </div>
         ))}
       </div>

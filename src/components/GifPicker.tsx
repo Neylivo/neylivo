@@ -6,6 +6,7 @@ import { Icon } from './icons'
 import { resolveGif, TENOR_KEY, TENOR_V2 } from '../lib/gifUrl'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { loadStickers, serverNameOf, type ServerSticker } from '../lib/serverEmoji'
+import { toastErr } from '../lib/toast'
 
 // GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
 // (общая коллекция + избранное), «Стикеры» (серверов, где я состою) и «Эмодзи»
@@ -148,7 +149,11 @@ export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
         {urlIn.trim() && broken.has(urlGif ?? urlIn.trim()) && <div className="ep2-hint">Не удалось загрузить превью — проверь ссылку</div>}
         <div className="gp2-url-btns">
           <button type="button" disabled={!urlIn.trim()} onClick={() => { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) }}>Отправить</button>
-          <button type="button" disabled={!urlIn.trim() || !user} onClick={async () => { await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id }); setUrlIn(''); refresh(); setTab('mine') }}>В «Мои GIF»</button>
+          <button type="button" disabled={!urlIn.trim() || !user} onClick={async () => {
+            const { error } = await supabase.from('gifs').insert({ url: urlGif ?? urlIn.trim(), owner: user!.id })
+            if (error) { toastErr(error.message); return }
+            setUrlIn(''); refresh(); setTab('mine')
+          }}>В «Мои GIF»</button>
         </div>
       </div>}
       {tab === 'mine' && <div className="emoji-scroll">

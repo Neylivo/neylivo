@@ -76,7 +76,9 @@ export async function addServerEmoji(serverId: string, name: string, url: string
   await refreshEmoji()
 }
 export async function removeServerEmoji(id: string): Promise<void> {
-  await supabase.from('server_emoji').delete().eq('id', id)
+  const { data, error } = await supabase.from('server_emoji').delete().eq('id', id).select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('Не удалось удалить — нет прав на управление эмодзи')
   await refreshEmoji()
 }
 
@@ -89,6 +91,8 @@ export async function addSticker(serverId: string, name: string, url: string, ui
   await refreshStickers()
 }
 export async function removeSticker(id: string): Promise<void> {
-  await supabase.from('stickers').delete().eq('id', id)
+  const { data, error } = await supabase.from('stickers').delete().eq('id', id).select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('Не удалось удалить — нет прав на управление стикерами')
   await refreshStickers()
 }
