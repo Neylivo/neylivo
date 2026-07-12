@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, timeFull, dayLabel, msgTime, callTime, fmtN, ruMembers } from '../lib/ui'
-import { renderMd, mentionsUser } from '../lib/md'
+import { renderMd, mentionsUser, mentionsRoleName } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
@@ -211,8 +211,8 @@ function isEmojiOnly(text: string): boolean {
 }
 
 // Рендер текста: мини-маркдаун Discord (жирный/курсив/код/цитаты/спойлеры/ссылки) + кастом-эмодзи.
-function renderContent(text: string) {
-  return renderMd(text)
+function renderContent(text: string, roleColors?: Record<string, string>) {
+  return renderMd(text, roleColors)
 }
 
 // «Вы, Вася и ещё 2» — подпись для тултипа реакции.
@@ -261,9 +261,15 @@ interface Props {
   // Контекст (сервер+канал или ЛС) для «Скопировать ссылку на сообщение» — без него ссылка
   // не может привести туда же, где было само сообщение.
   linkCtx?: MsgLinkCtx
+  // v1.239.0: цвета ролей сервера (имя роли в нижнем регистре -> цвет) — чтобы
+  // @Роль в тексте сообщения красилась как настоящая роль (см. src/lib/md.tsx).
+  roleColors?: Record<string, string>
+  // v1.239.0: мои роли на этом сервере — упоминание любой из них подсвечивает
+  // сообщение так же, как упоминание меня лично.
+  myRoleNames?: string[]
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx, roleColors, myRoleNames }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -450,7 +456,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         const grouped = settings.groupMessages && !isReply && !showDay && m.author === lastAuthor && (ts - lastTs) < 7 * 60 * 1000
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
-        const meMentioned = !!(currentUserName && m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName))
+        const meMentioned = !!(currentUserName && m.content && m.author !== currentUser
+          && (mentionsUser(m.content, currentUserName) || myRoleNames?.some(rn => mentionsRoleName(m.content!, rn))))
         const fwd = parseFwd(m.content)
         const uf: UserFonts = (settings.otherFonts || m.author === currentUser) ? fontsOf(m.author) : {}
         return (
@@ -473,10 +480,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {fwd
                   ? <div className="msg-fwd">
                       <div className="msg-fwd-hdr"><Icon name="forward" size={13} /> Пересланное сообщение</div>
-                      {fwd.text && <div className="msg-txt">{renderContent(fwd.text)}</div>}
+                      {fwd.text && <div className="msg-txt">{renderContent(fwd.text, roleColors)}</div>}
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
-                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }}
                   editable={m.author === currentUser} attachMeta={m.attach_meta}
                   uploading={(m as any)._uploading} progress={(m as any)._upProgress} pendingNames={(m as any)._uploadNames}

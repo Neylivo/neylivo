@@ -70,14 +70,18 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
   // ПОСЛЕ того, как сообщение появилось в ленте — без attach.files это как раньше.
   { placeholder: string; onSend: (text: string, attach?: { url: string; type: string }, files?: File[]) => Promise<void>;
     replyingTo?: { author: string; preview: string; avatarUrl?: string | null } | null; onCancelReply?: () => void; onType?: () => void;
-    mentionables?: string[]; draftKey?: string
+    mentionables?: string[]
+    // v1.239.0: роли сервера, доступные для @упоминания в автокомплите — только
+    // серверы (ЛС/группы ролей не имеют).
+    mentionableRoles?: { name: string; color: string }[]
+    draftKey?: string
     // v1.177.0: редактирование сообщения — как в Discord, текст загружается прямо
     // в строку набора вместо инлайн-текстареи внутри самого сообщения.
     editingTarget?: { id: string; content: string } | null
@@ -87,7 +91,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // channelId/serverId, чтобы найти команды ботов, реально стоящих на сервере.
     serverId?: string; channelId?: string
     // v1.198.0: права ATTACH_FILES/MENTION_EVERYONE — undefined (ЛС, где прав нет) значит «можно».
-    canAttachFiles?: boolean; canMentionEveryone?: boolean }) {
+    canAttachFiles?: boolean; canMentionEveryone?: boolean
+    // v1.239.0: MENTION_ROLES — недоступно по умолчанию (в отличие от MENTION_EVERYONE),
+    // undefined (ЛС) значит «можно» (там и ролей-то нет).
+    canMentionRoles?: boolean }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { gameOf } = usePresence()
@@ -247,10 +254,16 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     }
   }, [])
 
-  // Автодополнение @упоминаний: имена участников + @everyone.
-  const names = Array.from(new Set(['everyone', ...(mentionables ?? [])])).filter(Boolean)
+  // Автодополнение @упоминаний: @everyone + роли сервера + имена участников
+  // (v1.239.0: роли — отдельная категория, визуально отличаются цветом и подписью «роль»).
+  interface MentionSugg { name: string; kind: 'everyone' | 'role' | 'user'; color?: string }
+  const mentionSuggAll: MentionSugg[] = [
+    { name: 'everyone', kind: 'everyone' as const },
+    ...(mentionableRoles ?? []).map(r => ({ name: r.name, kind: 'role' as const, color: r.color })),
+    ...(mentionables ?? []).map(n => ({ name: n, kind: 'user' as const })),
+  ].filter(s => s.name)
   const sugg = mQ !== null
-    ? names.filter(n => n.toLowerCase().startsWith(mQ.toLowerCase())).slice(0, 8)
+    ? mentionSuggAll.filter(s => s.name.toLowerCase().startsWith(mQ.toLowerCase())).slice(0, 8)
     : []
 
   // v1.193.0: слэш-команды ботов — только в начале сообщения (как в Discord),
@@ -405,6 +418,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (t && hasSpamRun(t)) { toastErr('Слишком много одинаковых символов подряд'); return }
     if (files.length && canAttachFiles === false) { toastErr('У вас нет прав на прикрепление файлов'); return }
     if (t && canMentionEveryone === false && /@everyone(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @everyone'); return }
+    // v1.239.0: MENTION_ROLES — недоступно по умолчанию, проверяем только реальные
+    // имена ролей сервера (mentionableRoles), а не любой @текст — иначе заблокировали
+    // бы и обычные упоминания людей, чьё имя случайно совпало с чем-то в тексте.
+    if (t && canMentionRoles === false && mentionableRoles?.some(r => {
+      const esc = r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      try { return new RegExp('@' + esc + '(?![\\p{L}\\p{N}_])', 'iu').test(t) } catch { return false }
+    })) { toastErr('У вас нет прав на упоминание ролей'); return }
     sendingRef.current = true
     setBusy(true)
     try {
@@ -513,12 +533,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         </div>}
         {sugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Упомянуть</div>
-          {sugg.map((n, i) => (
-            <div key={n} className={'mention-it' + (i === mIdx ? ' on' : '')}
+          {sugg.map((s, i) => (
+            <div key={s.kind + ':' + s.name} className={'mention-it' + (i === mIdx ? ' on' : '')}
               onMouseEnter={() => setMIdx(i)}
-              onMouseDown={e => { e.preventDefault(); pickMention(n) }}>
-              <span className="mention-at">@</span>{n}
-              {n === 'everyone' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>все участники</span>}
+              onMouseDown={e => { e.preventDefault(); pickMention(s.name) }}>
+              <span className="mention-at" style={s.color ? { color: s.color } : undefined}>@</span>
+              <span style={s.color ? { color: s.color } : undefined}>{s.name}</span>
+              {s.kind === 'everyone' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>все участники</span>}
+              {s.kind === 'role' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>роль</span>}
             </div>
           ))}
         </div>}
@@ -583,7 +605,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             if (sugg.length > 0) {
               if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx(i => (i + 1) % sugg.length); return }
               if (e.key === 'ArrowUp') { e.preventDefault(); setMIdx(i => (i - 1 + sugg.length) % sugg.length); return }
-              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx]); return }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx].name); return }
               if (e.key === 'Escape') { e.preventDefault(); setMQ(null); return }
             }
             if (e.key === 'ArrowUp' && !text && !isEditing) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }

@@ -24,7 +24,7 @@ import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { bumpDm, bumpMention, bumpSoft, clearBadgeKey, useBadgeCount } from '../lib/badge'
 import { isDmMuted } from '../lib/userPrefs'
-import { mentionsUser } from '../lib/md'
+import { mentionsUser, mentionsRoleName } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
@@ -192,6 +192,34 @@ export function Home() {
         chMap.current = map
       })
   }, [servers])
+  // v1.239.0: мои роли на каждом сервере (имена) — чтобы упоминание роли (@Название),
+  // а не только меня лично, тоже зажигало красный кружок/пуш, как в Discord.
+  const myRoleNamesBySrv = useRef<Record<string, string[]>>({})
+  useEffect(() => {
+    if (!user || servers.length === 0) { myRoleNamesBySrv.current = {}; return }
+    let ok = true
+    const loadMyRoles = () => {
+      supabase.from('member_roles').select('server_id, role_id')
+        .eq('user_id', user.id).in('server_id', servers.map(s => s.id))
+        .then(async ({ data }) => {
+          const rows = (data ?? []) as { server_id: string; role_id: string }[]
+          if (!ok || rows.length === 0) { if (ok) myRoleNamesBySrv.current = {}; return }
+          const { data: rolesData } = await supabase.from('server_roles').select('id, name').in('id', rows.map(r => r.role_id))
+          if (!ok) return
+          const nameById: Record<string, string> = {}
+          for (const r of (rolesData ?? []) as { id: string; name: string }[]) nameById[r.id] = r.name
+          const map: Record<string, string[]> = {}
+          for (const r of rows) { const nm = nameById[r.role_id]; if (nm) (map[r.server_id] ??= []).push(nm) }
+          myRoleNamesBySrv.current = map
+        })
+    }
+    loadMyRoles()
+    const ch = supabase.channel('my-roles:' + user.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'member_roles', filter: 'user_id=eq.' + user.id }, loadMyRoles)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'member_roles', filter: 'user_id=eq.' + user.id }, loadMyRoles)
+      .subscribe()
+    return () => { ok = false; supabase.removeChannel(ch) }
+  }, [user, servers])
   useEffect(() => {
     if (!user) return
     const ch = supabase.channel('unread:messages')
@@ -204,7 +232,9 @@ export function Home() {
         const viewing = v.kind === 'server' && v.server.id === sid
         // v1.100.0: @упоминание меня — красный кружок на иконке приложения.
         // Работает даже на заглушенном сервере (как в Discord: mute прячет точку, но не пинги).
+        // v1.239.0: + упоминание любой из МОИХ ролей на этом сервере.
         const mentioned = mentionsUser(msg.content ?? '', nameRef.current.username) || mentionsUser(msg.content ?? '', nameRef.current.handle)
+          || (myRoleNamesBySrv.current[sid] ?? []).some(rn => mentionsRoleName(msg.content ?? '', rn))
         if (!viewing && mentioned) bumpMention(sid)
         if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
         if (viewing) return

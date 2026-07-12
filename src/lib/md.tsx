@@ -48,18 +48,18 @@ function firstMatch(text: string, pats: Pat[]) {
   return best
 }
 
-function inline(text: string, depth = 0): ReactNode[] {
+function inline(text: string, depth = 0, roleColors?: Record<string, string>): ReactNode[] {
   if (!text) return []
   if (depth > 6) return [text]
   const custom = loadCustom()
   const pats: Pat[] = [
     { re: /`([^`\n]+)`/, render: m => <code key={k()} className="md-code">{m[1]}</code> },
-    { re: /\|\|([\s\S]+?)\|\|/, render: (m, d) => <Spoiler key={k()}>{inline(m[1], d + 1)}</Spoiler> },
-    { re: /\*\*([\s\S]+?)\*\*/, render: (m, d) => <b key={k()}>{inline(m[1], d + 1)}</b> },
-    { re: /__([\s\S]+?)__/, render: (m, d) => <u key={k()}>{inline(m[1], d + 1)}</u> },
-    { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1)}</s> },
-    { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
-    { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1)}</i> },
+    { re: /\|\|([\s\S]+?)\|\|/, render: (m, d) => <Spoiler key={k()}>{inline(m[1], d + 1, roleColors)}</Spoiler> },
+    { re: /\*\*([\s\S]+?)\*\*/, render: (m, d) => <b key={k()}>{inline(m[1], d + 1, roleColors)}</b> },
+    { re: /__([\s\S]+?)__/, render: (m, d) => <u key={k()}>{inline(m[1], d + 1, roleColors)}</u> },
+    { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1, roleColors)}</s> },
+    { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1, roleColors)}</i> },
+    { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1, roleColors)}</i> },
     { re: PONOI_MSG_RE, render: m => <a key={k()} className="md-link" href="#" title="Перейти к сообщению" onClick={e => { e.preventDefault(); openMsgLink(m[0]) }}>{m[0]}</a> },
     { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])} title={m[0]}>{shortUrl(m[0])}</a> },
     { re: EMAIL_RE, render: m => <a key={k()} className="md-link" href={'mailto:' + m[0]}>{m[0]}</a> },
@@ -67,7 +67,12 @@ function inline(text: string, depth = 0): ReactNode[] {
     // v1.137.0: правый клик по кастом-эмодзи прямо в сообщении — меню «В избранное» (глобальный хост EmojiCtxHost в App.tsx).
     { re: /:([a-zA-Z0-9_]+):/, render: m => custom[m[1]] ? <img key={k()} className="inline-emoji" src={custom[m[1]]} alt={m[0]} title={m[0]} onContextMenu={e => { e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('ponoi-emoji-ctx', { detail: { name: m[1], x: e.clientX, y: e.clientY } })) }} /> : m[0] },
     { re: /#([0-9a-fA-F]{6})(?![0-9a-zA-Z])/, render: m => <span key={k()} className="md-hex"><i style={{ background: '#' + m[1] }} />#{m[1]}</span> },
-    { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => <span key={k()} className="md-mention">@{m[1]}</span> },
+    // v1.239.0: @Роль красится в цвет роли (roleColors — по нижнему регистру имени),
+    // если контекст рендера его передал (MessageList.tsx) — просто @имя иначе.
+    { re: /@([\p{L}\p{N}_.\-]{1,32})/u, render: m => {
+      const rc = roleColors?.[m[1].toLowerCase()]
+      return <span key={k()} className="md-mention" style={rc ? { color: rc, background: rc + '26' } : undefined}>@{m[1]}</span>
+    } },
   ]
   const out: ReactNode[] = []
   let rest = text
@@ -82,7 +87,7 @@ function inline(text: string, depth = 0): ReactNode[] {
 }
 
 // Текст без код-блоков: > цитаты, #/##/### заголовки, "* "/"- " маркированные списки.
-function blockText(text: string): ReactNode[] {
+function blockText(text: string, roleColors?: Record<string, string>): ReactNode[] {
   const out: ReactNode[] = []
   let quote: string[] = []
   let list: string[] = []
@@ -90,25 +95,25 @@ function blockText(text: string): ReactNode[] {
   const flushPlain = () => {
     if (plain.length) {
       const joined = plain.join('\n')
-      if (joined.trim()) out.push(<Fragment key={k()}>{inline(joined)}</Fragment>)
+      if (joined.trim()) out.push(<Fragment key={k()}>{inline(joined, 0, roleColors)}</Fragment>)
       plain = []
     }
   }
   const flushQuote = () => {
     if (quote.length) {
-      out.push(<div key={k()} className="md-quote">{inline(quote.join('\n'))}</div>)
+      out.push(<div key={k()} className="md-quote">{inline(quote.join('\n'), 0, roleColors)}</div>)
       quote = []
     }
   }
   const flushList = () => {
     if (list.length) {
-      out.push(<ul key={k()} className="md-list">{list.map(it => <li key={k()}>{inline(it)}</li>)}</ul>)
+      out.push(<ul key={k()} className="md-list">{list.map(it => <li key={k()}>{inline(it, 0, roleColors)}</li>)}</ul>)
       list = []
     }
   }
   for (const ln of text.split('\n')) {
     const h = ln.match(/^(#{1,3})\s+(\S.*)$/)
-    if (h) { flushPlain(); flushQuote(); flushList(); out.push(<div key={k()} className={'md-h' + h[1].length}>{inline(h[2])}</div>); continue }
+    if (h) { flushPlain(); flushQuote(); flushList(); out.push(<div key={k()} className={'md-h' + h[1].length}>{inline(h[2], 0, roleColors)}</div>); continue }
     if (/^>\s?/.test(ln)) { flushPlain(); flushList(); quote.push(ln.replace(/^>\s?/, '')); continue }
     if (/^[*-]\s+\S/.test(ln)) { flushPlain(); flushQuote(); list.push(ln.replace(/^[*-]\s+/, '')); continue }
     flushQuote(); flushList(); plain.push(ln)
@@ -117,8 +122,10 @@ function blockText(text: string): ReactNode[] {
   return out
 }
 
-/** Рендер текста сообщения в React-узлы (маркдаун + кастом-эмодзи). */
-export function renderMd(text: string): ReactNode[] {
+/** Рендер текста сообщения в React-узлы (маркдаун + кастом-эмодзи).
+ * roleColors — необязательная карта «имя роли в нижнем регистре -> цвет» (v1.239.0),
+ * чтобы @Роль в тексте красилась как настоящая роль, а не просто серым текстом. */
+export function renderMd(text: string, roleColors?: Record<string, string>): ReactNode[] {
   const out: ReactNode[] = []
   const chunks = String(text ?? '').split('```')
   for (let i = 0; i < chunks.length; i++) {
@@ -140,16 +147,27 @@ export function renderMd(text: string): ReactNode[] {
         )
       }
     } else if (chunks[i]) {
-      out.push(...blockText(chunks[i]))
+      out.push(...blockText(chunks[i], roleColors))
     }
   }
   return out
+}
+
+// @<name>, где name — целое слово (не часть более длинного имени/@everyone).
+function nameMentioned(text: string, name: string): boolean {
+  if (!text || !name) return false
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  try { return new RegExp('@' + esc + '(?![\\p{L}\\p{N}_])', 'iu').test(text) } catch { return false }
 }
 
 /** Есть ли в тексте упоминание конкретного пользователя (или @everyone). */
 export function mentionsUser(text: string, name: string): boolean {
   if (!text || !name) return false
   if (/@everyone(?![\p{L}\p{N}_])/u.test(text)) return true
-  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  try { return new RegExp('@' + esc + '(?![\\p{L}\\p{N}_])', 'iu').test(text) } catch { return false }
+  return nameMentioned(text, name)
+}
+
+/** Есть ли в тексте упоминание роли по имени (@Название роли), v1.239.0. */
+export function mentionsRoleName(text: string, roleName: string): boolean {
+  return nameMentioned(text, roleName)
 }

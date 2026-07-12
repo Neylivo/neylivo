@@ -24,6 +24,11 @@ export const PERM = {
   ATTACH_FILES: 8192,
   TIMEOUT_MEMBERS: 16384,
   MANAGE_AUTOMOD: 32768,
+  // v1.239.0: в отличие от MENTION_EVERYONE (входит в base_permissions — разрешено
+  // всем по умолчанию, можно только доп. выдать роли), MENTION_ROLES НЕ в
+  // base_permissions — оповещение целой роли (а не одного участника) по умолчанию
+  // недоступно никому, только явно выданная роль с этим правом может им пользоваться.
+  MENTION_ROLES: 65536,
 } as const
 export type PermBit = typeof PERM[keyof typeof PERM]
 
@@ -48,6 +53,7 @@ export const PERM_GROUPS: { title: string; perms: { bit: PermBit; label: string;
   { title: 'Права текстовых каналов', perms: [
     { bit: PERM.MANAGE_MESSAGES, label: 'Управление сообщениями', hint: 'Удалять и закреплять чужие сообщения' },
     { bit: PERM.MENTION_EVERYONE, label: 'Упоминание @everyone', hint: 'Упоминание реально оповещает всех участников' },
+    { bit: PERM.MENTION_ROLES, label: 'Упоминание ролей', hint: 'Упоминание любой роли (@Название) реально оповещает всех её участников — по умолчанию недоступно никому' },
     { bit: PERM.ADD_REACTIONS, label: 'Добавление реакций', hint: 'Ставить эмодзи-реакции на сообщения' },
     { bit: PERM.ATTACH_FILES, label: 'Прикрепление файлов', hint: 'Отправлять файлы и изображения' },
   ] },

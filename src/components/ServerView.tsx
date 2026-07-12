@@ -212,6 +212,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // см. supabase/49_role_perms2.sql) — иначе клиент решит, что участник без явной
   // роли не может прикрепить файл, хотя сервер это разрешит.
   const myPerms = rolesOfId(user?.id ?? '').reduce((m, id) => m | (roleById[id]?.permissions ?? 0), 0) | (server.base_permissions ?? 0)
+  // v1.239.0: упоминание ролей (@Название) — цвет для рендера (md.tsx) и список
+  // МОИХ ролей, чтобы сообщение с упоминанием одной из них подсвечивалось так же,
+  // как личное упоминание.
+  const roleColorMap: Record<string, string> = {}
+  for (const r of roles) roleColorMap[r.name.toLowerCase()] = r.color
+  const myRoleNameList = rolesOfId(user?.id ?? '').map(id => roleById[id]?.name).filter((n): n is string => !!n)
   // Право на «Настройки сервера»: владелец или любая из административных ролей.
   const canManage = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_ROLES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
     || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG) || hasPerm(myPerms, PERM.MANAGE_EMOJI) || hasPerm(myPerms, PERM.MANAGE_EVENTS)
@@ -1022,6 +1028,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat .composer textarea') as HTMLTextAreaElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
           </div>}
           <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
+            roleColors={roleColorMap} myRoleNames={myRoleNameList}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}
@@ -1040,7 +1047,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
+          canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
+          mentionableRoles={roles.map(r => ({ name: r.name, color: r.color }))}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
