@@ -145,6 +145,22 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     })
   }
   function setCustomD(patch: Partial<CustomTheme>) { setD('custom', { ...view.custom, ...patch }) }
+  // v1.245.0: тот же черновик-паттерн — для настроек профиля без файлов (приватность
+  // ЛС/звонков, видимость игровой статистики, Steam ID, вкл/выкл-размер-позиция
+  // питомца, обводка «кубика», выбор встроенного шрифта). Сама ЗАГРУЗКА файла
+  // (шрифт/фон/питомец) и тег сервера сознательно остаются мгновенными — см.
+  // patchProf() ниже и комментарий v1.178.0 в ServerSettings.tsx: с ними уже
+  // пробовали общий черновик и откатили, люди теряли загруженный файл, случайно
+  // закрыв настройки без «Сохранить».
+  const [profDraft, setProfDraft] = useState<Partial<ProfilePrefs>>({})
+  function setProfD<K extends keyof ProfilePrefs>(k: K, v: ProfilePrefs[K]) {
+    setProfDraft(d => {
+      const nd: Partial<ProfilePrefs> = { ...d, [k]: v }
+      if (JSON.stringify(v) === JSON.stringify(prof[k])) delete nd[k]
+      return nd
+    })
+  }
+  function setProfDPatch(patch: Partial<ProfilePrefs>) { for (const [k, v] of Object.entries(patch)) setProfD(k as keyof ProfilePrefs, v as any) }
   const [cat, setCat] = useState<string>('account')
   // v1.212.0: на телефоне настройки — одна панель за раз (как в мобильном
   // Discord), а не сжатый в 78vw сайдбар поверх контента. true — список
@@ -159,6 +175,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const [primary, setPrimary] = useState(DEFAULT_PROFILE.primary)
   const [accent, setAccent] = useState(DEFAULT_PROFILE.accent)
   const [prof, setProf] = useState<ProfilePrefs>(DEFAULT_PROFILE)
+  const profView: ProfilePrefs = { ...prof, ...profDraft }
   const [about, setAbout] = useState('')
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)      // идёт сохранение — кнопки заблокированы
@@ -171,7 +188,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   // v1.165.0: SteamID64 — привязка нужна только для статистики Dota 2 (OpenDota).
   // v1.220.0: перенесён из приватного user_prefs в публичный profiles (prof.steamId) —
   // иначе статистику Dota никто, кроме владельца, всё равно не смог бы посчитать.
-  function saveSteamId(v: string) { patchProf({ steamId: v.trim() || null }) }
+  function saveSteamId(v: string) { setProfD('steamId', v.trim() || null) }
   // v1.166.0: свои звуки — уведомление о сообщении, рингтон входящего, гудки
   // исходящего. Приватная account-настройка (см. src/lib/userPrefs.ts), синхронизируется
   // на все устройства. Пусто — играет встроенный тон/мелодия (src/lib/notify.ts, callSounds.ts).
@@ -234,13 +251,16 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
   // v1.57.0: перетаскивание питомца в режиме «Свободно» — позиция ОДНА для всех
   // мест показа профиля: тащишь на любом превью — меняется везде одинаково.
-  function moveFreePet(_card: 'mini' | 'big', pos: { x: number; y: number }, done: boolean) {
-    if (done) patchProf({ petPos: 'free', petFree: pos })
-    else setProf(p => ({ ...p, petFree: pos }))
+  function moveFreePet(_card: 'mini' | 'big', pos: { x: number; y: number }, _done: boolean) {
+    setProfDPatch({ petPos: 'free', petFree: pos })
   }
 
   async function patchProf(patch: Partial<ProfilePrefs>) {
     setProf(p => ({ ...p, ...patch }))
+    // v1.245.0: мгновенный коммит (файл/тег) главнее любого черновика по тем же
+    // полям — иначе после загрузки нового файла в интерфейсе ещё маячило бы старое
+    // отложенное значение поверх только что сохранённого.
+    setProfDraft(d => { const nd = { ...d }; for (const k of Object.keys(patch)) delete nd[k as keyof ProfilePrefs]; return nd })
     if (user) await saveProfile(user.id, patch)
   }
   // v1.95.0: аватар фото/видео (<=5 сек) и «кубик» (nameplate) прямо из настроек
@@ -365,9 +385,10 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     // eslint-disable-next-line
   }, [onClose])
 
-  const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about || primary !== orig.primary || accent !== orig.accent || Object.keys(draft).length > 0
+  const dirty = name !== orig.name || uname !== orig.uname || about !== orig.about || primary !== orig.primary || accent !== orig.accent
+    || Object.keys(draft).length > 0 || Object.keys(profDraft).length > 0
   dirtyRef.current = dirty
-  function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about); setPrimary(orig.primary); setAccent(orig.accent); setDraft({}) }
+  function resetAll() { setName(orig.name); setUname(orig.uname); setAbout(orig.about); setPrimary(orig.primary); setAccent(orig.accent); setDraft({}); setProfDraft({}) }
   function tryClose() {
     if (dirty) { setShake(true); window.setTimeout(() => setShake(false), 600); return }
     onClose()
@@ -408,7 +429,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       if (error) { toastErr(error.message ?? String(error)); return }
       localStorage.setItem('ponoi_username', newNick || newUname || username)
     }
-    await patchProf({ about, primary, accent })
+    await patchProf({ about, primary, accent, ...profDraft })
+    setProfDraft({})
     const finalUname = newUname || orig.uname
     const finalNick = newNick || finalUname
     setName(finalNick); setUname(finalUname)
@@ -579,7 +601,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                         : username.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="pqs-acc-names">
-                      <div className="pqs-acc-name" style={{ fontFamily: nickFontOf(prof) }}>{name || username}</div>
+                      <div className="pqs-acc-name" style={{ fontFamily: nickFontOf(profView) }}>{name || username}</div>
                       <div className="pqs-acc-uname">{uname}</div>
                     </div>
                     <button className="pqs2-btn primary" style={{ marginLeft: 'auto' }} onClick={() => avRef.current?.click()}>{avBusy ? 'Загрузка…' : 'Сменить аватар'}</button>
@@ -602,61 +624,61 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Шрифт ника</div>
-                  <div className="pqs-code-sub">Твой ник — своим шрифтом: в чате, списке участников, мини-профиле, полном профиле и панельке внизу слева. Выбери из набора или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2). Видно всем, сохраняется сразу.</div>
+                  <div className="pqs-code-sub">Твой ник — своим шрифтом: в чате, списке участников, мини-профиле, полном профиле и панельке внизу слева. Выбери из набора (сохраняется плашкой внизу) или загрузи свой файл шрифта (.ttf, .otf, .woff, .woff2) — файл сохраняется сразу. Видно всем.</div>
                   <div className="pqs-font-grid">
                     {FONTS.map(f => (
-                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.nickFontUrl && (prof.nickFont ?? '') === f.id ? ' on' : '')}
-                        onClick={() => patchProf({ nickFont: f.id, nickFontUrl: null })}>
+                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!profView.nickFontUrl && (profView.nickFont ?? '') === f.id ? ' on' : '')}
+                        onClick={() => setProfDPatch({ nickFont: f.id, nickFontUrl: null })}>
                         <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>{name || username}</span>
                         <small>{f.name}</small>
                       </button>
                     ))}
-                    <button className={'pqs-font-btn' + (prof.nickFontUrl ? ' on' : '')} onClick={() => fontRef.current?.click()}>
-                      <span className="pqs-font-sample" style={prof.nickFontUrl ? { fontFamily: nickFontOf(prof) } : undefined}>{fontBusy ? 'Загрузка…' : (name || username)}</span>
-                      <small>{prof.nickFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+                    <button className={'pqs-font-btn' + (profView.nickFontUrl ? ' on' : '')} onClick={() => fontRef.current?.click()}>
+                      <span className="pqs-font-sample" style={profView.nickFontUrl ? { fontFamily: nickFontOf(profView) } : undefined}>{fontBusy ? 'Загрузка…' : (name || username)}</span>
+                      <small>{profView.nickFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
-                  {settings.lang !== 'en' && prof.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
-                  {prof.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
+                  {settings.lang !== 'en' && profView.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
+                  {profView.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
                 </div>
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Шрифт сообщений</div>
-                  <div className="pqs-code-sub">Шрифт, которым пишутся твои сообщения в чате. Видно всем — но каждый может выключить чужие шрифты у себя («Внешний вид» → «Чужие шрифты в чате»). Сохраняется сразу.</div>
+                  <div className="pqs-code-sub">Шрифт, которым пишутся твои сообщения в чате. Видно всем — но каждый может выключить чужие шрифты у себя («Внешний вид» → «Чужие шрифты в чате»). Выбор из набора — плашкой внизу, свой файл — сразу.</div>
                   <div className="pqs-font-grid">
                     {FONTS.map(f => (
-                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!prof.msgFontUrl && (prof.msgFont ?? '') === f.id ? ' on' : '')}
-                        onClick={() => patchProf({ msgFont: f.id, msgFontUrl: null })}>
+                      <button key={f.id || 'sys'} className={'pqs-font-btn' + (!profView.msgFontUrl && (profView.msgFont ?? '') === f.id ? ' on' : '')}
+                        onClick={() => setProfDPatch({ msgFont: f.id, msgFontUrl: null })}>
                         <span className="pqs-font-sample" style={f.id ? { fontFamily: f.id } : undefined}>Привет! Hello 123</span>
                         <small>{f.name}</small>
                       </button>
                     ))}
-                    <button className={'pqs-font-btn' + (prof.msgFontUrl ? ' on' : '')} onClick={() => msgFontRef.current?.click()}>
-                      <span className="pqs-font-sample" style={prof.msgFontUrl ? { fontFamily: msgFontOf(prof) } : undefined}>{msgFontBusy ? 'Загрузка…' : 'Привет! Hello 123'}</span>
-                      <small>{prof.msgFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
+                    <button className={'pqs-font-btn' + (profView.msgFontUrl ? ' on' : '')} onClick={() => msgFontRef.current?.click()}>
+                      <span className="pqs-font-sample" style={profView.msgFontUrl ? { fontFamily: msgFontOf(profView) } : undefined}>{msgFontBusy ? 'Загрузка…' : 'Привет! Hello 123'}</span>
+                      <small>{profView.msgFontUrl ? 'Свой шрифт — заменить' : 'Загрузить свой (.ttf/.otf/.woff2)'}</small>
                     </button>
                   </div>
-                  {settings.lang !== 'en' && prof.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
-                  {prof.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
+                  {settings.lang !== 'en' && profView.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
+                  {profView.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
                   <input ref={msgFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickMsgFont} />
                 </div>
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Кубик профиля</div>
                   <div className="pqs-code-sub">Оформи «кубик» с ником и аватаркой (панель внизу слева и твоя строка в списке участников): фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Видно всем.</div>
-                  <div className={'plate-prev' + (prof.plateOutline ? ' plate-outline' : '')} style={prof.plateOutline ? { ['--plate-oc' as any]: prof.plateOutline } : undefined}>
-                    {prof.plateUrl && prof.plateKind !== 'none' && <PlateBg url={prof.plateUrl} kind={prof.plateKind} />}
+                  <div className={'plate-prev' + (profView.plateOutline ? ' plate-outline' : '')} style={profView.plateOutline ? { ['--plate-oc' as any]: profView.plateOutline } : undefined}>
+                    {profView.plateUrl && profView.plateKind !== 'none' && <PlateBg url={profView.plateUrl} kind={profView.plateKind} />}
                     <div className="pqs-acc-av" style={{ background: view.accent }}>
                       {avUrl ? (isVideoUrl(avUrl) ? <video src={avUrl} muted loop playsInline preload="metadata" /> : <img src={avUrl} alt="" />) : username.slice(0, 1).toUpperCase()}
                     </div>
-                    <span className="plate-prev-nm" style={{ fontFamily: nickFontOf(prof) }}>{name || username}</span>
+                    <span className="plate-prev-nm" style={{ fontFamily: nickFontOf(profView) }}>{name || username}</span>
                   </div>
                   <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <button className="pqs2-btn primary" onClick={() => plateRef.current?.click()}>{plateBusy ? 'Загрузка…' : (prof.plateUrl ? 'Заменить фон' : 'Фон: фото или видео')}</button>
-                    {prof.plateUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateUrl: null, plateKind: 'none' })}>Убрать фон</button>}
-                    <label className="pqs-ptheme"><input type="color" value={prof.plateOutline ?? '#5865f2'} onChange={e => patchProf({ plateOutline: e.target.value })} /> Обводка</label>
-                    {prof.plateOutline && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateOutline: null })}>Убрать обводку</button>}
+                    <button className="pqs2-btn primary" onClick={() => plateRef.current?.click()}>{plateBusy ? 'Загрузка…' : (profView.plateUrl ? 'Заменить фон' : 'Фон: фото или видео')}</button>
+                    {profView.plateUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateUrl: null, plateKind: 'none' })}>Убрать фон</button>}
+                    <label className="pqs-ptheme"><input type="color" value={profView.plateOutline ?? '#5865f2'} onChange={e => setProfD('plateOutline', e.target.value)} /> Обводка</label>
+                    {profView.plateOutline && <button className="pqs2-btn ghost" onClick={() => setProfD('plateOutline', null)}>Убрать обводку</button>}
                   </div>
                   <input ref={plateRef} type="file" accept="image/*,video/*" hidden onChange={pickPlate} />
                 </div>
@@ -667,34 +689,34 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       <div className="pqs-sec-t" style={{ margin: 0 }}>Питомец профиля</div>
                       <div className="pet2-sub">Маленький питомец живёт в углу твоей карточки профиля. Фото, GIF, видео или 3D-модель — ставить не обязательно.</div>
                     </div>
-                    <Toggle on={prof.petOn} onChange={v => patchProf({ petOn: v })} />
+                    <Toggle on={profView.petOn} onChange={v => setProfD('petOn', v)} />
                   </div>
-                  {prof.petOn && <div className="pet2-body">
+                  {profView.petOn && <div className="pet2-body">
                     <div className="pet2-pickrow">
                       <button className="pet2-thumb" title="Выбрать файл" onClick={() => petRef.current?.click()}>
-                        {prof.petUrl
-                          ? (prof.petKind === 'video' ? <video src={prof.petUrl} muted autoPlay loop /> : <img src={prof.petUrl} alt="" />)
+                        {profView.petUrl
+                          ? (profView.petKind === 'video' ? <video src={profView.petUrl} muted autoPlay loop /> : <img src={profView.petUrl} alt="" />)
                           : <span className="pet2-thumb-empty"><Icon name="paw" size={22} /><em>Выбрать</em></span>}
                       </button>
                       <div className="pet2-pickinfo">
                         <div className="pet2-pickbtns">
-                          <button className="pqs2-btn primary" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : (prof.petUrl ? 'Заменить файл' : 'Выбрать файл')}</button>
-                          {prof.petUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ petUrl: null, petKind: 'none' })}>Убрать</button>}
+                          <button className="pqs2-btn primary" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : (profView.petUrl ? 'Заменить файл' : 'Выбрать файл')}</button>
+                          {profView.petUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ petUrl: null, petKind: 'none' })}>Убрать</button>}
                         </div>
                         <div className="pet2-formats">PNG · JPG · WebP · GIF · видео MP4/WebM (короткое и зациклённое) · 3D-модель .glb/.gltf (можно вращать мышью)</div>
                       </div>
                       <input ref={petRef} type="file" accept="image/*,video/*,.glb,.gltf" hidden onChange={pickPet} />
                     </div>
-                    <Row title="Размер" desc={prof.petSize + ' px'}>
-                      <input type="range" min={80} max={260} value={prof.petSize} onChange={e => patchProf({ petSize: Number(e.target.value) })} />
+                    <Row title="Размер" desc={profView.petSize + ' px'}>
+                      <input type="range" min={80} max={260} value={profView.petSize} onChange={e => setProfD('petSize', Number(e.target.value))} />
                     </Row>
                     <div className="pqs-lbl">Позиция</div>
                     <div className="pqs-pet-pos">
                       {([['above','Над кнопкой'],['br','Снизу справа'],['bl','Снизу слева'],['tr','Сверху справа'],['tl','Сверху слева'],['free','Свободно (тащи мышкой)']] as const).map(([k,l]) => (
-                        <button key={k} className={'pqs-pet-posbtn' + (prof.petPos === k ? ' on' : '')} onClick={() => patchProf({ petPos: k })}>{l}</button>
+                        <button key={k} className={'pqs-pet-posbtn' + (profView.petPos === k ? ' on' : '')} onClick={() => setProfD('petPos', k)}>{l}</button>
                       ))}
                     </div>
-                    {prof.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца на любом превью — позиция одна для всех мест: и в мини-профиле, и в полном, при любом их размере и положении.</div>}
+                    {profView.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца на любом превью — позиция одна для всех мест: и в мини-профиле, и в полном, при любом их размере и положении. Сохраняется плашкой внизу.</div>}
                     <div className="pqs-lbl">Предпросмотр</div>
                     <div className="pet2-previews">
                       <div className="pet2-pv mini">
@@ -710,7 +732,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                           {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 80)}</p>}
                           <div className="pet2-pv-btn">Сообщение</div>
                         </div>
-                        <ProfilePet p={prof} scale={0.35} card="mini" bannerH={64} onFreeMove={moveFreePet} />
+                        <ProfilePet p={profView} scale={0.35} card="mini" bannerH={64} onFreeMove={moveFreePet} />
                       </div>
                       <div className="pet2-pv big">
                         <span className="pet2-pv-tag">Большой профиль</span>
@@ -725,7 +747,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                           {about.trim() && <p className="pet2-pv-about">{about.trim().slice(0, 140)}</p>}
                           <div className="pet2-pv-btn">Сообщение</div>
                         </div>
-                        <ProfilePet p={prof} scale={0.5} card="big" bannerH={88} onFreeMove={moveFreePet} />
+                        <ProfilePet p={profView} scale={0.5} card="big" bannerH={88} onFreeMove={moveFreePet} />
                       </div>
                     </div>
                   </div>}
@@ -945,8 +967,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs2-desc">Кто может первым написать тебе в личные сообщения.</div>
                 <div className="pqs-seg">
                   {([['all', 'Все'], ['friends', 'Только друзья'], ['none', 'Никто']] as const).map(([v, label]) => (
-                    <button key={v} className={'pqs-seg-btn' + (prof.dmMessagePrivacy === v ? ' on' : '')}
-                      onClick={() => patchProf({ dmMessagePrivacy: v })}>{label}</button>
+                    <button key={v} className={'pqs-seg-btn' + (profView.dmMessagePrivacy === v ? ' on' : '')}
+                      onClick={() => setProfD('dmMessagePrivacy', v)}>{label}</button>
                   ))}
                 </div>
 
@@ -954,8 +976,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs2-desc">Кто может звонить тебе в личных сообщениях. «Избранные» — те, кого ты закрепил(а) в списке ЛС.</div>
                 <div className="pqs-seg">
                   {([['all', 'Все'], ['friends', 'Только друзья'], ['favorites', 'Только избранные'], ['none', 'Никто']] as const).map(([v, label]) => (
-                    <button key={v} className={'pqs-seg-btn' + (prof.dmCallPrivacy === v ? ' on' : '')}
-                      onClick={() => patchProf({ dmCallPrivacy: v })}>{label}</button>
+                    <button key={v} className={'pqs-seg-btn' + (profView.dmCallPrivacy === v ? ' on' : '')}
+                      onClick={() => setProfD('dmCallPrivacy', v)}>{label}</button>
                   ))}
                 </div>
 
@@ -969,7 +991,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 {view.actOn && <input className="pqs-in" value={view.actText} onChange={e => setD('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
                 <div className="pqs-sec-t">Статистика Dota 2</div>
                 <div className="pqs2-desc">Valve не отдаёт MMR через GSI — привяжи SteamID64, и статистика (MMR, последние матчи) подтянется из открытого API OpenDota.</div>
-                <input className="pqs-in" value={prof.steamId ?? ''} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}
+                <input className="pqs-in" value={profView.steamId ?? ''} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="76561198000000000" inputMode="numeric" />
                 <div className="pqs-code-sub">Свой SteamID64 можно найти на <a href="https://steamid.io" target="_blank" rel="noreferrer">steamid.io</a> — вставь ссылку на профиль Steam.</div>
 
@@ -977,8 +999,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs2-desc">Статистика CS2 и Dota 2 в твоём профиле (винрейт, K/D, последние матчи) — тебе она видна всегда, эта настройка только про остальных.</div>
                 <div className="pqs-seg">
                   {([['all', 'Все'], ['friends', 'Только друзья'], ['none', 'Никто']] as const).map(([v, label]) => (
-                    <button key={v} className={'pqs-seg-btn' + (prof.gameStatsVisibility === v ? ' on' : '')}
-                      onClick={() => patchProf({ gameStatsVisibility: v })}>{label}</button>
+                    <button key={v} className={'pqs-seg-btn' + (profView.gameStatsVisibility === v ? ' on' : '')}
+                      onClick={() => setProfD('gameStatsVisibility', v)}>{label}</button>
                   ))}
                 </div>
               </>}
