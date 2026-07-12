@@ -57,7 +57,9 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
     try {
       if (f.type.startsWith('video')) f = await trimVideoTo5s(f)   // видео-аватар: не длиннее 5 сек
       const url = await uploadTo('avatars', user.id, f)
-      await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id)
+      const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id).select('id')
+      if (error) throw error
+      if (!data || data.length === 0) throw new Error('Не сохранилось — нет доступа к изменению профиля')
       onAvatar?.(url)
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }

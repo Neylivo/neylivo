@@ -36,8 +36,9 @@ export async function createBot(name: string): Promise<{ id: string; token: stri
 }
 
 export async function setBotWebhook(botAppId: string, webhookUrl: string | null): Promise<void> {
-  const { error } = await supabase.from('bot_apps').update({ webhook_url: webhookUrl }).eq('id', botAppId)
+  const { data, error } = await supabase.from('bot_apps').update({ webhook_url: webhookUrl }).eq('id', botAppId).select('id')
   if (error) throw error
+  if (!data || data.length === 0) throw new Error('Не сохранилось — нет прав на изменение бота')
 }
 
 export async function deleteBot(botAppId: string): Promise<void> {
@@ -74,8 +75,14 @@ export async function fetchServerBotCommands(serverId: string): Promise<(BotComm
 }
 export async function saveBotCommand(botAppId: string, cmd: { id?: string; name: string; description: string; options: BotCommand['options'] }): Promise<void> {
   const row = { bot_app_id: botAppId, name: cmd.name.trim().toLowerCase(), description: cmd.description.trim(), options: cmd.options }
-  const { error } = cmd.id ? await supabase.from('bot_commands').update(row).eq('id', cmd.id) : await supabase.from('bot_commands').insert(row)
-  if (error) throw error
+  if (cmd.id) {
+    const { data, error } = await supabase.from('bot_commands').update(row).eq('id', cmd.id).select('id')
+    if (error) throw error
+    if (!data || data.length === 0) throw new Error('Не сохранилось — нет прав на изменение команды')
+  } else {
+    const { error } = await supabase.from('bot_commands').insert(row)
+    if (error) throw error
+  }
 }
 export async function deleteBotCommand(id: string): Promise<void> {
   const { error } = await supabase.from('bot_commands').delete().eq('id', id)

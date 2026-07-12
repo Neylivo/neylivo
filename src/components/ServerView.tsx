@@ -445,6 +445,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
     const { data } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
+    // v1.260.0: пока запрос летал по сети, могли успеть кликнуть на другой канал —
+    // без этой проверки более медленный (первый) ответ прилетал последним и подменял
+    // ленту уже открытого другого канала на чужие сообщения.
+    if (curChannelRef.current?.id !== c.id) return
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
     const lastRead = getChRead(c.id)
@@ -898,7 +902,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
   async function pin(id: string, pinned: boolean) {
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
-    await setPin('messages', id, pinned)
+    const ok = await setPin('messages', id, pinned)
+    if (!ok) { setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned: !pinned } as any) : m))); toastErr('Не удалось изменить закреп — нет прав'); return }
     // Системное сообщение в ленте «X закрепил(а) сообщение» (как в Discord).
     if (pinned && user && curChannelRef.current) {
       const target = msgsRef.current.find(m => m.id === id)
@@ -914,8 +919,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     deleteMessage('messages', id)
   }
   async function editMsg(id: string, content: string) {
+    const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
-    await editMessage('messages', id, content)
+    const ok = await editMessage('messages', id, content)
+    if (!ok) { if (prev) setMessages(ms => ms.map(m => (m.id === id ? prev : m))); toastErr('Не удалось сохранить правку — нет прав'); }
   }
   // v1.177.0: сохранение правки из композера — пусто в поле, как и раньше,
   // предлагает удалить сообщение (с подтверждением), а не оставляет его пустым.
@@ -1221,8 +1228,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               if (v === null) return
               const trimmed = v.trim()
               const next = trimmed || username
-              const { error } = await supabase.from('server_members').update({ member_name: next, nickname_override: !!trimmed }).eq('server_id', server.id).eq('user_id', user!.id)
+              const { data, error } = await supabase.from('server_members').update({ member_name: next, nickname_override: !!trimmed }).eq('server_id', server.id).eq('user_id', user!.id).select('user_id')
               if (error) { toastErr(error.message); return }
+              if (!data || data.length === 0) { toastErr('Не сохранилось — нет прав на изменение ника'); return }
               await loadMembers()
               toastOk(trimmed ? 'Ник на сервере изменён' : 'Ник на сервере сброшен до обычного')
             }}><Icon name="edit" size={14} /> Изменить ник на сервере</div>

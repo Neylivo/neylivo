@@ -4,11 +4,38 @@ import { useEffect, useRef, useState } from 'react'
 import type { Server, Channel } from '../types'
 import { uploadTo } from '../lib/storage'
 import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } from '../lib/servers'
-import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
-import { chNotifModeOf, setChNotifMode } from '../lib/chNotify'
+import { notifModeOf, setNotifMode, muteUntilOf, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
+import { chOverrideOf, setChNotifMode, chMuteUntilOf } from '../lib/chNotify'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { Icon } from './icons'
 import { useClampToViewport } from '../lib/clampPos'
+
+// v1.260.0: длительность заглушения сервера/канала — как в Discord (флайаут при
+// «Заглушить»). ЛС (dm_muted) это уже умели, серверам/каналам не хватало.
+const MUTE_DURATIONS: { label: string; ms: number }[] = [
+  { label: '15 минут', ms: 15 * 60_000 },
+  { label: '1 час', ms: 60 * 60_000 },
+  { label: '3 часа', ms: 3 * 60 * 60_000 },
+  { label: '8 часов', ms: 8 * 60 * 60_000 },
+  { label: '24 часа', ms: 24 * 60 * 60_000 },
+]
+function fmtUntil(ms: number): string {
+  const d = new Date(ms)
+  const sameDay = d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return sameDay ? 'до ' + time : 'до ' + d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + time
+}
+function MuteDurationRow({ untilMs, onPick }: { untilMs: number | null; onPick: (ms: number | null) => void }) {
+  return (
+    <div className="notif-mutefor">
+      <div className="notif-mutefor-t">{untilMs ? 'Заглушено ' + fmtUntil(untilMs) : 'Заглушить на время'}</div>
+      <div className="notif-mutefor-chips">
+        {MUTE_DURATIONS.map(d => <button key={d.label} className="notif-chip" onClick={() => onPick(d.ms)}>{d.label}</button>)}
+        {untilMs && <button className="notif-chip" onClick={() => onPick(null)}>Насовсем</button>}
+      </div>
+    </div>
+  )
+}
 
 function Overlay({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -337,7 +364,11 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
 
 export function ServerNotifModal({ server, onClose }: { server: Server; onClose: () => void }) {
   const [mode, setMode] = useState<NotifMode>(notifModeOf(server.id))
-  function pick(m: NotifMode) { setMode(m); setNotifMode(server.id, m) }
+  const [until, setUntil] = useState<number | null>(muteUntilOf(server.id))
+  function pick(m: NotifMode, muteMs?: number | null) {
+    setMode(m); setUntil(m === 'mute' && muteMs ? Date.now() + muteMs : null)
+    setNotifMode(server.id, m, m === 'mute' && muteMs ? Date.now() + muteMs : undefined)
+  }
   const opts: { m: NotifMode; hint: string }[] = [
     { m: 'all', hint: 'уведомлять о каждом сообщении' },
     { m: 'mentions', hint: 'только когда тебя упомянули (@имя или @everyone)' },
@@ -360,6 +391,7 @@ export function ServerNotifModal({ server, onClose }: { server: Server; onClose:
           </label>
         ))}
       </div>
+      {mode === 'mute' && <MuteDurationRow untilMs={until} onPick={ms => pick('mute', ms)} />}
       <div className="modal-foot">
         <button className="modal-ghost" onClick={onClose}>Готово</button>
       </div>
@@ -370,11 +402,12 @@ export function ServerNotifModal({ server, onClose }: { server: Server; onClose:
 // v1.259.0: то же самое, но для одного канала — со своим состоянием «Как на сервере»
 // (наследует режим сервера, пока явно не переопределили только этот канал).
 export function ChannelNotifModal({ server, channel, onClose }: { server: Server; channel: Channel; onClose: () => void }) {
-  const [mode, setMode] = useState<NotifMode | 'default'>(() => {
-    const ov = getUserPrefs().ch_notif[channel.id] as NotifMode | undefined
-    return ov ?? (getUserPrefs().ch_muted[channel.id] ? 'mute' : 'default')
-  })
-  function pick(m: NotifMode | 'default') { setMode(m); setChNotifMode(channel.id, m) }
+  const [mode, setMode] = useState<NotifMode | 'default'>(() => chOverrideOf(channel.id) ?? 'default')
+  const [until, setUntil] = useState<number | null>(chMuteUntilOf(channel.id))
+  function pick(m: NotifMode | 'default', muteMs?: number | null) {
+    setMode(m); setUntil(m === 'mute' && muteMs ? Date.now() + muteMs : null)
+    setChNotifMode(channel.id, m, m === 'mute' && muteMs ? Date.now() + muteMs : undefined)
+  }
   const opts: { m: NotifMode | 'default'; label: string; hint: string }[] = [
     { m: 'default', label: 'Как на сервере', hint: 'сейчас — «' + NOTIF_LABEL[notifModeOf(server.id)].toLowerCase() + '»' },
     { m: 'all', label: NOTIF_LABEL.all, hint: 'уведомлять о каждом сообщении в этом канале' },
@@ -398,6 +431,7 @@ export function ChannelNotifModal({ server, channel, onClose }: { server: Server
           </label>
         ))}
       </div>
+      {mode === 'mute' && <MuteDurationRow untilMs={until} onPick={ms => pick('mute', ms)} />}
       <div className="modal-foot">
         <button className="modal-ghost" onClick={onClose}>Готово</button>
       </div>

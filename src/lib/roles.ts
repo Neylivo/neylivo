@@ -19,9 +19,19 @@ export async function createRole(serverId: string, name: string, color: string) 
   return supabase.from('server_roles').insert({ server_id: serverId, name, color })
 }
 
+// v1.260.0: во всех апдейтах ниже добавлен .select('id') + синтетическая ошибка
+// на 0 задетых строк — RLS без своей ошибки блокирует чужую/устаревшую роль молча
+// (data: [], error: null), и вызывающий код (RoleEditor.tsx) до этого репортил
+// «Роль переименована»/reload без ошибки, хотя в базе ничего не менялось.
+async function updateOne(table: string, id: string, patch: Record<string, any>) {
+  const { data, error } = await supabase.from(table).update(patch).eq('id', id).select('id')
+  if (!error && (!data || data.length === 0)) return { error: { message: 'Не сохранилось — нет прав на изменение' } as any }
+  return { error }
+}
+
 // Обновить роль (имя / цвет / значок / право «Управление сервером»).
 export async function updateRole(id: string, patch: { name?: string; color?: string; manage?: boolean; icon_url?: string | null }) {
-  return supabase.from('server_roles').update(patch).eq('id', id)
+  return updateOne('server_roles', id, patch)
 }
 
 export async function deleteRole(id: string) {
@@ -30,23 +40,20 @@ export async function deleteRole(id: string) {
 
 // Старое одиночное назначение (до миграции 25) — оставлено как фолбэк.
 export async function assignRole(serverId: string, userId: string, roleId: string | null) {
-  return supabase.from('server_members').update({ role_id: roleId }).eq('server_id', serverId).eq('user_id', userId)
-}
-
-// Флаг «Управление сервером»: роль даёт доступ к настройкам сервера (миграция 18_role_perms.sql).
-export async function setRoleManage(id: string, manage: boolean) {
-  return supabase.from('server_roles').update({ manage }).eq('id', id)
+  const { data, error } = await supabase.from('server_members').update({ role_id: roleId }).eq('server_id', serverId).eq('user_id', userId).select('user_id')
+  if (!error && (!data || data.length === 0)) return { error: { message: 'Не сохранилось — нет прав на изменение роли участника' } as any }
+  return { error }
 }
 
 // Битовая маска прав роли (миграция 34_permissions.sql, см. src/lib/permissions.ts).
 export async function setRolePermissions(id: string, permissions: number) {
-  return supabase.from('server_roles').update({ permissions }).eq('id', id)
+  return updateOne('server_roles', id, { permissions })
 }
 
 // Сохранить иерархию: позиции 0..n-1 в порядке массива (0 — самая высокая роль).
 export async function saveRoleOrder(roles: ServerRole[]) {
   for (let i = 0; i < roles.length; i++) {
-    const { error } = await supabase.from('server_roles').update({ position: i }).eq('id', roles[i].id)
+    const { error } = await updateOne('server_roles', roles[i].id, { position: i })
     if (error) return { error }
   }
   return { error: null }

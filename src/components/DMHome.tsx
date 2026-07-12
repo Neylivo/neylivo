@@ -182,6 +182,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const [connectingPeer, setConnectingPeer] = useState<Friend | null>(null)
   const activeRef = useRef<Friend | null>(null)
   useEffect(() => { activeRef.current = active }, [active])
+  const threadIdRef = useRef<string | null>(null)
+  useEffect(() => { threadIdRef.current = threadId }, [threadId])
   const callMsgRef = useRef<string | null>(null)
   const callStartRef = useRef(0)
   const answeredRef = useRef(false)
@@ -406,7 +408,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const rows = (data ?? []) as FriendRequest[]
     if (rows.some(r => r.status === 'accepted')) return 'Вы уже друзья с ' + (p.display_name || p.username)
     const incoming = rows.find(r => r.status === 'pending' && r.from_user === p.id)
-    if (incoming) { await respondRequest(incoming.id, true); loadRequests(); return 'ACCEPTED' }
+    if (incoming) {
+      const { data, error } = await respondRequest(incoming.id, true)
+      loadRequests()
+      if (error || !data || data.length === 0) return 'Не удалось принять заявку — попробуйте ещё раз'
+      return 'ACCEPTED'
+    }
     if (rows.some(r => r.status === 'pending' && r.from_user === meId)) return 'Заявка уже отправлена — ждём ответа'
     return null
   }
@@ -472,6 +479,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     let t: DMThread | null = null
     let openErr: any = null
     try { t = await openThread(meId, f.id) } catch (e) { t = null; openErr = e }
+    // v1.260.0: пока openThread летал по сети, могли успеть кликнуть на другого друга —
+    // без этой проверки более медленный (первый) ответ прилетал последним и подменял
+    // threadId уже открытого диалога на чужой (сообщения ушли бы не в тот диалог).
+    if (activeRef.current?.id !== f.id) return
     if (!t) {
       // v1.226.0: раньше тут был молчаливый return — active уже указывал на f (шапка
       // и композер показывали этого друга), а threadId оставался ПРЕЖНИМ (от того,
@@ -495,6 +506,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // Загружаем последние 100 сообщений (раньше в длинных диалогах грузились самые старые 100).
     const { data, error } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
+    if (activeRef.current?.id !== f.id) return
     if (error) { toastErr('Не удалось загрузить сообщения — показаны последние сохранённые'); return }
     const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
     hasMore.current = (data ?? []).length === 100
@@ -639,6 +651,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     if (cached?.length) { pendingScroll.current = 'bottom'; setMessages(tagIgnored(cached as DMMessage[])) }
     const { data, error } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', g.id).order('created_at', { ascending: false }).limit(100)
+    // v1.260.0: пока запрос летал по сети, могли успеть открыть другую беседу —
+    // без этой проверки более медленный ответ подменял уже открытую ленту чужой.
+    if (threadIdRef.current !== g.id) return
     if (error) {
       // v1.226.0: не затираем уже показанные (кэшированные) сообщения пустым списком
       // из-за сетевой/RLS ошибки — иначе беседа выглядела бы «стёртой».
@@ -931,7 +946,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
   async function pin(id: string, pinned: boolean) {
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
-    await setPin('dm_messages', id, pinned)
+    const ok = await setPin('dm_messages', id, pinned)
+    if (!ok) { setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned: !pinned } as any) : m))); toastErr('Не удалось изменить закреп') }
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
@@ -939,8 +955,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     deleteMessage('dm_messages', id)
   }
   async function editMsg(id: string, content: string) {
+    const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
-    await editMessage('dm_messages', id, content)
+    const ok = await editMessage('dm_messages', id, content)
+    if (!ok) { if (prev) setMessages(ms => ms.map(m => (m.id === id ? prev : m))); toastErr('Не удалось сохранить правку') }
   }
   async function saveEditedMsg(text: string) {
     if (!editingMsg) return
@@ -1168,8 +1186,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 <div key={r.id} className="pfr-row">
                   <Avatar name={r.from_name} userId={r.from_user} size={32} />
                   <span className="pfr-name">{r.from_name}</span>
-                  <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(loadRequests)}><Icon name="check" size={16} /></button>
-                  <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(loadRequests)}><Icon name="close" size={16} /></button>
+                  <button className="pfr-ok" title="Принять" onClick={() => respondRequest(r.id, true).then(({ data, error }) => { if (error || !data?.length) toastErr('Не удалось принять заявку'); loadRequests() })}><Icon name="check" size={16} /></button>
+                  <button className="pfr-no" title="Отклонить" onClick={() => respondRequest(r.id, false).then(({ data, error }) => { if (error || !data?.length) toastErr('Не удалось отклонить заявку'); loadRequests() })}><Icon name="close" size={16} /></button>
                 </div>
               ))}
               <div className="pfr-sec pfr-sec-out">Исходящие — {outgoing.length}</div>

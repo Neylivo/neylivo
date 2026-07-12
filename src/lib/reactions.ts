@@ -37,15 +37,20 @@ export function groupReactions(rows: Reaction[]): Record<string, RxSummary[]> {
 }
 
 export type PinTable = 'messages' | 'dm_messages'
-export async function setPin(table: PinTable, id: string, pinned: boolean) {
-  await supabase.from(table).update({ pinned }).eq('id', id)
+// v1.260.0: раньше не проверяли результат — RLS без ошибки может вернуть 0 задетых
+// строк (доступ пропал/сообщение чужое), и закреп/правка «сохранялись» только в
+// локальном optimistic-state, откатываясь при следующей перезагрузке ленты.
+export async function setPin(table: PinTable, id: string, pinned: boolean): Promise<boolean> {
+  const { data, error } = await supabase.from(table).update({ pinned }).eq('id', id).select('id')
+  return !error && !!data && data.length > 0
 }
 export async function deleteMessage(table: PinTable, id: string) {
   await supabase.from(table).delete().eq('id', id)
 }
 
-export async function editMessage(table: PinTable, id: string, content: string) {
-  await supabase.from(table).update({ content, edited: true }).eq('id', id)
+export async function editMessage(table: PinTable, id: string, content: string): Promise<boolean> {
+  const { data, error } = await supabase.from(table).update({ content, edited: true }).eq('id', id).select('id')
+  return !error && !!data && data.length > 0
 }
 
 // v1.157.0: правка одного вложения из группы (спойлер/название/описание) —
@@ -72,7 +77,8 @@ export async function updateAttachment(
   if (patch.desc !== undefined) { if (patch.desc.trim()) cur.desc = patch.desc.trim(); else delete cur.desc }
   metaArr[index] = (cur.name || cur.desc) ? cur : null
   const attach_url = urls.join('\n')
-  const { error } = await supabase.from(table).update({ attach_url, attach_meta: metaArr }).eq('id', msg.id)
+  const { data, error } = await supabase.from(table).update({ attach_url, attach_meta: metaArr }).eq('id', msg.id).select('id')
   if (error) throw error
+  if (!data || data.length === 0) throw new Error('Не сохранилось — нет прав на изменение сообщения')
   return { attach_url, attach_meta: metaArr }
 }

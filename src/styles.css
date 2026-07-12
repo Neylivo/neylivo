@@ -1372,6 +1372,11 @@ body.no-anim .msg-flash { animation:none; }
 .notif-body { display:flex; flex-direction:column; gap:2px; flex:1; }
 .notif-nm { font-size:14px; font-weight:600; }
 .notif-hint { font-size:12px; color:var(--mut, #949ba4); }
+.notif-mutefor { margin:4px 0 4px; padding:12px 14px; border-radius:10px; background:var(--bg3); }
+.notif-mutefor-t { font-size:12px; font-weight:700; color:var(--mut); text-transform:uppercase; letter-spacing:.3px; margin-bottom:8px; }
+.notif-mutefor-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.notif-chip { background:var(--bg2); border:1px solid transparent; border-radius:20px; padding:6px 12px; font-size:12px; font-weight:600; color:var(--tx); cursor:pointer; }
+.notif-chip:hover { border-color:var(--brand); }
 
 /* ===== Бейдж входящих заявок на кнопке «Друзья» ===== */
 .dm-friends-nav { position:relative; }

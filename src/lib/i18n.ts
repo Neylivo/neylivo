@@ -1197,6 +1197,7 @@ const DICT_EN_FULL: Record<string, string> = {
   "канал полностью заглушен — ни уведомлений, ни точки": "channel fully muted — no notifications, no dot",
   "Как на сервере": "Same as server",
   "Уведомления канала": "Channel notifications",
+  "Заглушить на время": "Mute for a while", "3 часа": "3 hours", "8 часов": "8 hours", "Насовсем": "Forever",
   "участник": "member",
   "участника": "members",
   "участников": "members",
