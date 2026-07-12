@@ -6,6 +6,7 @@ import { supabase } from './supabase'
 
 let mine: string | null = null
 const blocked = new Set<string>()   // id людей, с кем есть блок в любую сторону (я блокировал ИЛИ меня)
+let chan: ReturnType<typeof supabase.channel> | null = null
 
 export async function loadBlocked(meId: string) {
   mine = meId
@@ -13,6 +14,20 @@ export async function loadBlocked(meId: string) {
   const { data } = await supabase.from('blocked_users').select('blocker_id, blocked_id')
     .or(`blocker_id.eq.${meId},blocked_id.eq.${meId}`)
   for (const r of (data ?? []) as any[]) blocked.add(r.blocker_id === meId ? r.blocked_id : r.blocker_id)
+  window.dispatchEvent(new CustomEvent('ponoi-blocked'))
+}
+
+// v1.252.0: blocked_users не был в публикации realtime (supabase/63_more_realtime.sql) —
+// блокировка/разблокировка на одном устройстве не пряталась/не возвращалась в
+// переписке (isBlockedWith ниже, используется в фильтре MessageList) на другом,
+// пока не перезайдёшь. Два отдельных .on() — Supabase не умеет OR по колонкам
+// в одном filter, а блок бывает «я блокировал» ИЛИ «меня заблокировали».
+export function watchBlocked(meId: string) {
+  if (chan) { supabase.removeChannel(chan); chan = null }
+  chan = supabase.channel('blocked:' + meId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: 'blocker_id=eq.' + meId }, () => loadBlocked(meId))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: 'blocked_id=eq.' + meId }, () => loadBlocked(meId))
+    .subscribe()
 }
 
 export function isBlockedWith(otherId: string): boolean { return blocked.has(otherId) }

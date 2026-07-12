@@ -231,7 +231,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   // Discord. Раньше заблокировать можно было (ПКМ на друге), а посмотреть список
   // и разблокировать — нигде.
   const [blockedList, setBlockedList] = useState<BlockedEntry[] | null>(null)
-  useEffect(() => { if (user) listBlockedByMe(user.id).then(setBlockedList) }, [user])
+  useEffect(() => {
+    if (!user) return
+    listBlockedByMe(user.id).then(setBlockedList)
+    // v1.252.0: заблокировал/разблокировал с другого устройства — список тут тоже обновится.
+    const h = () => listBlockedByMe(user.id).then(setBlockedList)
+    window.addEventListener('ponoi-blocked', h)
+    return () => window.removeEventListener('ponoi-blocked', h)
+  }, [user])
   async function doUnblock(e: BlockedEntry) {
     if (!user) return
     await unblockUser(user.id, e.id)

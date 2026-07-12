@@ -170,8 +170,19 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     loadBans()
     supabase.from('channels').select('*').eq('server_id', server.id).order('name')
       .then(({ data }) => setChannels((data ?? []) as Channel[]))
-    supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
+    const loadInvites = () => supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
       .then(({ data }) => setInvites(data ?? []))
+    loadInvites()
+    // v1.252.0: server_bans/server_invites не были в публикации realtime (см.
+    // supabase/63_more_realtime.sql) — забанили/разбанили или создали/отозвали
+    // инвайт с другого устройства, а тут (открытые «Баны»/«Приглашения») список
+    // оставался старым, пока не переоткроешь настройки заново.
+    const ch = supabase.channel('sset-live:' + server.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_bans', filter: 'server_id=eq.' + server.id }, () => loadBans())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_invites', filter: 'server_id=eq.' + server.id }, () => loadInvites())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server.id])
 
   // Обычные правки копятся и сохраняются кнопкой в савбаре.
