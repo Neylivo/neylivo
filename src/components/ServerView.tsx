@@ -10,7 +10,7 @@ import { Avatar } from './Avatar'
 import { usePresence } from '../lib/presence'
 import { notifyMessage, msgSound, uiChime, closeNotif } from '../lib/notify'
 import { notifModeOf } from '../lib/srvNotify'
-import { mentionsUser } from '../lib/md'
+import { mentionsUser, mentionsRoleName } from '../lib/md'
 import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
@@ -419,7 +419,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           setChRead(curChannel.id, Date.now())
           if (msg.author !== user?.id && !parseSys(msg.content)) {
             const mode = notifModeOf(server.id)
-            const mentioned = !!msg.content && mentionsUser(msg.content, username)
+            // v1.242.0: звук/тост «только за упоминания» раньше не срабатывал на упоминание
+            // РОЛИ (только личное @ник) — рассинхрон с подсветкой сообщения и бейджем
+            // непрочитанного (Home.tsx/MessageList.tsx), которые роль уже учитывали (v1.239.0).
+            const mentioned = !!msg.content && (mentionsUser(msg.content, username) || myRoleNameList.some(rn => mentionsRoleName(msg.content!, rn)))
             if (!loadChMuted()[curChannel.id] && (mode === 'all' || (mode === 'mentions' && mentioned))) {
               msgSound()
               notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '', (msg as any).author_avatar, 'ch:' + curChannel.id)
