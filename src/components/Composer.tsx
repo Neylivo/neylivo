@@ -70,7 +70,17 @@ function applySlash(t: string): string {
   return rest ? rest + ' ' + rep : rep
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles }:
+// v1.248.0: медленный режим — метка вида '5с'/'10м'/'2ч' из ChannelSettings.tsx
+// (SLOW_OPTS) в секунды. 'Выкл'/пусто/незнакомый формат — 0 (выключено).
+function slowModeSeconds(label?: string): number {
+  if (!label || label === 'Выкл') return 0
+  const m = label.match(/^(\d+)(с|м|ч)$/)
+  if (!m) return 0
+  const n = Number(m[1])
+  return m[2] === 'с' ? n : m[2] === 'м' ? n * 60 : n * 3600
+}
+
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -94,7 +104,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     canAttachFiles?: boolean; canMentionEveryone?: boolean
     // v1.239.0: MENTION_ROLES — недоступно по умолчанию (в отличие от MENTION_EVERYONE),
     // undefined (ЛС) значит «можно» (там и ролей-то нет).
-    canMentionRoles?: boolean }) {
+    canMentionRoles?: boolean
+    // v1.248.0: медленный режим канала — метка из ChannelSettings.tsx (SLOW_OPTS:
+    // 'Выкл'/'5с'/.../'6ч'), undefined — как «Выкл» (ЛС, где медленного режима нет).
+    slowMode?: string }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { gameOf } = usePresence()
@@ -115,6 +128,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
+  // v1.248.0: медленный режим — время последней отправки НА КАЖДЫЙ канал отдельно
+  // (composer один на весь ServerView, переиспользуется при переключении каналов —
+  // общий таймер на всех каналах сразу перепутал бы кулдаун между ними).
+  const lastSendByChannel = useRef<Record<string, number>>({})
   // v1.42.0: синхронный замок от двойной отправки (второй Enter до того, как busy успеет выставиться)
   const sendingRef = useRef(false)
   // Сообщение, которое не ушло из-за сбоя сети: текст остаётся в поле, баннер даёт повторить одной кнопкой.
@@ -254,11 +271,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     }
   }, [])
 
-  // Автодополнение @упоминаний: @everyone + роли сервера + имена участников
-  // (v1.239.0: роли — отдельная категория, визуально отличаются цветом и подписью «роль»).
-  interface MentionSugg { name: string; kind: 'everyone' | 'role' | 'user'; color?: string }
+  // Автодополнение @упоминаний: @everyone/@here + роли сервера + имена участников
+  // (v1.239.0: роли — отдельная категория, визуально отличаются цветом и подписью «роль».
+  // v1.248.0: @here — как в Discord, оповещает только тех, кто сейчас в сети, а не всех;
+  // право то же самое, что у @everyone — canMentionEveryone).
+  interface MentionSugg { name: string; kind: 'everyone' | 'here' | 'role' | 'user'; color?: string }
   const mentionSuggAll: MentionSugg[] = [
     { name: 'everyone', kind: 'everyone' as const },
+    { name: 'here', kind: 'here' as const },
     ...(mentionableRoles ?? []).map(r => ({ name: r.name, kind: 'role' as const, color: r.color })),
     ...(mentionables ?? []).map(n => ({ name: n, kind: 'user' as const })),
   ].filter(s => s.name)
@@ -418,6 +438,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (t && hasSpamRun(t)) { toastErr('Слишком много одинаковых символов подряд'); return }
     if (files.length && canAttachFiles === false) { toastErr('У вас нет прав на прикрепление файлов'); return }
     if (t && canMentionEveryone === false && /@everyone(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @everyone'); return }
+    // v1.248.0: @here — то же право, что у @everyone (как в Discord).
+    if (t && canMentionEveryone === false && /@here(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @here'); return }
     // v1.239.0: MENTION_ROLES — недоступно по умолчанию, проверяем только реальные
     // имена ролей сервера (mentionableRoles), а не любой @текст — иначе заблокировали
     // бы и обычные упоминания людей, чьё имя случайно совпало с чем-то в тексте.
@@ -425,6 +447,15 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       const esc = r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       try { return new RegExp('@' + esc + '(?![\\p{L}\\p{N}_])', 'iu').test(t) } catch { return false }
     })) { toastErr('У вас нет прав на упоминание ролей'); return }
+    // v1.248.0: медленный режим канала — включается в ChannelSettings.tsx (SLOW_OPTS),
+    // раньше только сохранялся и нигде не применялся. Проверка на клиенте (без
+    // серверного лимита) — как и остальные проверки прав в этом файле.
+    if (channelId) {
+      const slowSec = slowModeSeconds(slowMode)
+      const lastAt = lastSendByChannel.current[channelId] ?? 0
+      const waitMs = slowSec * 1000 - (Date.now() - lastAt)
+      if (slowSec > 0 && waitMs > 0) { toastErr('Медленный режим — подожди ещё ' + Math.ceil(waitMs / 1000) + ' с'); return }
+    }
     sendingRef.current = true
     setBusy(true)
     try {
@@ -441,6 +472,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       }
       await onSend(t, attach, pendingFiles.length ? pendingFiles : undefined)
       lastSent.current = { t, at: Date.now() }
+      if (channelId) lastSendByChannel.current[channelId] = Date.now()
       setFailed(false)
       setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
@@ -540,6 +572,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               <span className="mention-at" style={s.color ? { color: s.color } : undefined}>@</span>
               <span style={s.color ? { color: s.color } : undefined}>{s.name}</span>
               {s.kind === 'everyone' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>все участники</span>}
+              {s.kind === 'here' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>кто сейчас в сети</span>}
               {s.kind === 'role' && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>роль</span>}
             </div>
           ))}

@@ -10,7 +10,7 @@ import { Avatar } from './Avatar'
 import { usePresence } from '../lib/presence'
 import { notifyMessage, msgSound, uiChime, closeNotif } from '../lib/notify'
 import { notifModeOf } from '../lib/srvNotify'
-import { mentionsUser, mentionsRoleName } from '../lib/md'
+import { mentionsUser, mentionsRoleName, mentionsHere } from '../lib/md'
 import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
@@ -68,7 +68,10 @@ function ChName({ c, srv }: { c: Channel; srv?: any }) {
   const icon = (c as any).kind === 'voice' ? 'volume' : ann ? 'megaphone' : 'hash'
   const s = splitEmoji(c.name)
   const cs = chNameStyle((c as any).settings, srv)
-  return <span className="ch-nm"><Icon name={icon} size={18} />{s.emo && <><span className="ch-emo">{s.emo}</span><span className="ch-vbar" /></>}<span className={'ch-txt' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{s.rest}</span></span>
+  // v1.248.0: раньше «Канал с возрастным ограничением» в ChannelSettings.tsx только
+  // сохранял галочку — нигде в списке каналов её не было видно вообще.
+  const nsfw = !!(c as any).settings?.nsfw
+  return <span className="ch-nm"><Icon name={icon} size={18} />{s.emo && <><span className="ch-emo">{s.emo}</span><span className="ch-vbar" /></>}<span className={'ch-txt' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{s.rest}</span>{nsfw && <span className="ch-nsfw" title="Канал с возрастным ограничением">18+</span>}</span>
 }
 
 function VoiceConn({ room, onSpeak, sinks, meName }: { room: Room; onSpeak: (ids: string[]) => void; sinks: boolean; meName?: string }) {
@@ -132,6 +135,17 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
   const [showPins, setShowPins] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  // v1.248.0: канал «с возрастным ограничением» (ChannelSettings.tsx, settings.nsfw)
+  // раньше только сохранял галочку и нигде её не использовал. Подтверждение —
+  // локальное (устройство), не аккаунт-синк — так же ведёт себя настоящий Discord.
+  const [nsfwOk, setNsfwOk] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('ponoi_nsfw_ok') || '[]')) } catch { return new Set() } })
+  function confirmNsfw(chId: string) {
+    setNsfwOk(s => {
+      const next = new Set(s); next.add(chId)
+      try { localStorage.setItem('ponoi_nsfw_ok', JSON.stringify(Array.from(next))) } catch {}
+      return next
+    })
+  }
   const [showMembers, setShowMembers] = useState(() => IS_MOBILE ? false : localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [voiceCatOpen, setVoiceCatOpen] = useState(() => localStorage.getItem('ponoi_cat_voice_open') !== '0')
@@ -219,15 +233,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   for (const r of roles) roleColorMap[r.name.toLowerCase()] = r.color
   const myRoleNameList = rolesOfId(user?.id ?? '').map(id => roleById[id]?.name).filter((n): n is string => !!n)
   // v1.243.0: для пуш-уведомлений (send-push) — кого реально упомянул текст: по
-  // нику (mentionsUser, включая @everyone — тогда все) и по ролям (mentionsRoleName +
-  // участники этой роли). Edge-функция не видит участников/роли сервера напрямую и
-  // личные user_prefs других людей ей доверять нельзя читать без этой информации —
-  // проще посчитать здесь один раз и передать список id, чем дублировать разбор
-  // текста на упоминания в Deno.
+  // нику, @everyone/@here и по ролям (участники этой роли). Edge-функция не видит
+  // участников/роли сервера напрямую и личные user_prefs других людей ей доверять
+  // нельзя читать без этой информации — проще посчитать здесь один раз и передать
+  // список id, чем дублировать разбор текста на упоминания в Deno.
+  // v1.248.0: @here — только реально СЕЙЧАС онлайн (statusOf), а не все подряд, как
+  // @everyone — иначе пуш на телефон получили бы и офлайн-участники, что и есть весь
+  // смысл разницы между @everyone и @here в Discord.
   function mentionedUserIds(text: string): string[] {
     if (!text) return []
     const ids = new Set<string>()
-    for (const m of members) { if (mentionsUser(text, m.member_name ?? '')) ids.add(m.user_id) }
+    if (/@everyone(?![\p{L}\p{N}_])/u.test(text)) {
+      for (const m of members) ids.add(m.user_id)
+    } else if (mentionsHere(text)) {
+      for (const m of members) { if (statusOf(m.user_id) !== 'offline') ids.add(m.user_id) }
+    }
+    for (const m of members) { if (mentionsRoleName(text, m.member_name ?? '')) ids.add(m.user_id) }
     for (const r of roles) {
       if (!mentionsRoleName(text, r.name)) continue
       for (const m of members) { if (rolesOfId(m.user_id).includes(r.id)) ids.add(m.user_id) }
@@ -1040,6 +1061,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="c2-bubbles"><div className="c2-bub"><div className="c2-bub-av birth"><Avatar name={username} url={avatarUrl} size={84} /></div><div className="c2-bub-nm">{username}</div></div></div>
           <div className="c2-waiting">Подключаемся…</div>
         </div>}
+        {curChannel && (curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id) ? (
+          <div className="msgs nsfw-gate">
+            <div className="nsfw-gate-box">
+              <div className="nsfw-gate-ico">🔞</div>
+              <div className="nsfw-gate-t">#{curChannel.name} — канал с возрастным ограничением</div>
+              <div className="nsfw-gate-d">Здесь может быть контент, не подходящий для всех — обычно из-за наготы, насилия или другого материала для взрослых. Показывать его, только если тебе есть 18 лет.</div>
+              <button className="pqs2-btn primary" onClick={() => confirmNsfw(curChannel.id)}>Мне есть 18 лет — показать канал</button>
+            </div>
+          </div>
+        ) : (
         <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}>
           {messages.length === 0 && curChannel && <div className="wlc">
             <div className="wlc-title">Добро пожаловать на сервер<br />{server.name}</div>
@@ -1064,13 +1095,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           </button>}
           <div ref={bottomRef} />
         </div>
+        )}
         <TypingIndicator typers={typers} />
-        {curChannel && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
+        {curChannel && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           mentionableRoles={roles.map(r => ({ name: r.name, color: r.color }))}
+          slowMode={(curChannel.settings as any)?.slow}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
