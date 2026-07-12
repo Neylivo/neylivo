@@ -229,8 +229,8 @@ export function Home() {
     if (!user) return
     const ch = supabase.channel('unread:messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => {
-        const msg = p.new as { channel_id?: string; author?: string; content?: string | null }
-        if (!msg.channel_id || msg.author === user.id) return
+        const msg = p.new as { channel_id?: string; author?: string; content?: string | null; thread_id?: string | null }
+        if (!msg.channel_id || msg.author === user.id || msg.thread_id) return
         const sid = chMap.current[msg.channel_id]
         if (!sid) return
         const v = viewRef.current

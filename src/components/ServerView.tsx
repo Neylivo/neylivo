@@ -35,6 +35,8 @@ import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole,
 import { PERM, hasPerm, kickMember, banMember, timeoutMember, setMemberNickname } from '../lib/permissions'
 import { logAudit } from '../lib/auditLog'
 import { countMentions, isSpamLike } from '../lib/automod'
+import { fetchThreads, createThread, type Thread } from '../lib/threads'
+import { ThreadPanel } from './ThreadPanel'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -159,6 +161,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showEvents, setShowEvents] = useState(false)
   const [showThreads, setShowThreads] = useState(false)
   const [thrQ, setThrQ] = useState('')
+  const [threads, setThreads] = useState<Thread[]>([])
+  const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [showAllCh, setShowAllCh] = useState(() => localStorage.getItem('ponoi_show_all_channels') === '1')
   const [showCreateCh, setShowCreateCh] = useState<null | { kind: 'text' | 'voice'; cat?: string }>(null)
   const [showPrivacy, setShowPrivacy] = useState(false)
@@ -415,7 +419,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function refreshUnread(list: Channel[]) {
     if (!list.length) return
     const { data } = await supabase.from('messages').select('channel_id, author, created_at')
-      .in('channel_id', list.map(c => c.id)).order('created_at', { ascending: false }).limit(200)
+      .in('channel_id', list.map(c => c.id)).is('thread_id', null).order('created_at', { ascending: false }).limit(200)
     const seen = new Set<string>()
     const un: Record<string, boolean> = {}
     for (const m of (data ?? []) as any[]) {
@@ -455,8 +459,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       setMessages(cachedList as Message[])
     }
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
+    // v1.268.0: .is('thread_id', null) — сообщения веток (ThreadPanel.tsx) лежат
+    // в этой же таблице, в основную ленту канала попадать не должны.
     const { data } = await supabase.from('messages').select('*')
-      .eq('channel_id', c.id).order('created_at', { ascending: false }).limit(100)
+      .eq('channel_id', c.id).is('thread_id', null).order('created_at', { ascending: false }).limit(100)
     // v1.260.0: пока запрос летал по сети, могли успеть кликнуть на другой канал —
     // без этой проверки более медленный (первый) ответ прилетал последним и подменял
     // ленту уже открытого другого канала на чужие сообщения.
@@ -508,6 +514,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         { event: 'INSERT', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },
         p => {
           const msg = p.new as Message
+          if (msg.thread_id) return   // v1.268.0: сообщения веток — не в основную ленту канала
           setMessages(m => mergeIncoming(m, msg))
           setChRead(curChannel.id, Date.now())
           if (msg.author !== user?.id && !parseSys(msg.content)) {
@@ -589,7 +596,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     try {
       const oldest = msgsRef.current[0].created_at
       const { data } = await supabase.from('messages').select('*')
-        .eq('channel_id', curChannel.id).lt('created_at', oldest)
+        .eq('channel_id', curChannel.id).is('thread_id', null).lt('created_at', oldest)
         .order('created_at', { ascending: false }).limit(50)
       const older = ((data ?? []) as Message[]).reverse()
       hasMore.current = older.length === 50
@@ -656,6 +663,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
         p => {
           const msg = p.new as Message
+          if (msg.thread_id) return   // v1.268.0: сообщения веток не считаются за непрочитанное в канале
           if (!ids.has(msg.channel_id) || msg.author === user?.id) return
           if (chNotifModeOf(msg.channel_id, server.id) === 'mute') return
           if (curChannelRef.current?.id === msg.channel_id) return
@@ -674,6 +682,19 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const ch = supabase.channel('rx:' + curChannel.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' },
         () => { window.clearTimeout(svRxDeb); svRxDeb = window.setTimeout(() => loadRx(msgsRef.current.map(m => m.id)), 250) })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [curChannel])
+
+  // v1.268.0: список веток канала + realtime (создали ветку с другого устройства —
+  // появляется тут же, без переоткрытия панели).
+  useEffect(() => {
+    setActiveThread(null)
+    if (!curChannel) { setThreads([]); return }
+    fetchThreads(curChannel.id).then(setThreads)
+    const ch = supabase.channel('threads:' + curChannel.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'threads', filter: 'channel_id=eq.' + curChannel.id },
+        () => fetchThreads(curChannel.id).then(setThreads))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
@@ -855,6 +876,19 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       if (ti >= 0) { const c = list.slice(); c[ti] = { ...msg, _localId: (list[ti] as any)._localId ?? list[ti].id } as any; return c }
     }
     return [...list, msg]
+  }
+  // v1.267.0: вынесено в функцию (не инлайн в JSX) — нужна и основному Composer'у
+  // канала, и Composer'у внутри открытой ветки (ThreadPanel.tsx).
+  function automodCheck(text: string): string | null {
+    if (isOwner || canManageChannels) return null
+    const am = srvSettings.automod ?? {}
+    if (am.custom) {
+      const hit = ((am.customWords ?? []) as string[]).find((w: string) => w && text.toLowerCase().includes(w.toLowerCase()))
+      if (hit) return 'Сообщение заблокировано автомодерацией сервера — запрещённое слово или фраза'
+    }
+    if (am.mentions && countMentions(text) > 5) return 'Сообщение заблокировано автомодерацией сервера — слишком много упоминаний'
+    if (am.spam && isSpamLike(text)) return 'Сообщение заблокировано автомодерацией сервера — похоже на спам'
+    return null
   }
   // v1.185.0: файлы — как в Discord: сообщение появляется в ленте сразу (с
   // локальным blob-превью из Composer), заливка в Storage и запись в БД идут в
@@ -1150,13 +1184,34 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="thr-top">
             <span className="thr-t"><Icon name="threads" size={16} /> Ветки</span>
             <input className="thr-in" placeholder="Поиск по названию ветки" value={thrQ} onChange={e => setThrQ(e.target.value)} />
-            <button className="thr-create" onClick={() => toastOk('Ветки скоро появятся')}>Создать</button>
+            <button className="thr-create" onClick={async () => {
+              if (!user || !curChannel) return
+              const nm = (await promptUi('Название ветки', { placeholder: 'например: обсуждение релиза', okText: 'Создать' }))?.trim()
+              if (!nm) return
+              try {
+                const t = await createThread(curChannel.id, server.id, nm, user.id, username)
+                setThreads(list => [t, ...list]); setActiveThread(t)
+              } catch (e: any) { toastErr(e.message ?? String(e)) }
+            }}>Создать</button>
           </div>
-          <div className="thr-empty">
-            <div className="thr-ic"><Icon name="threads" size={24} /></div>
-            <b>Нет веток.</b>
-            Не отвлекайтесь от беседы с помощью веток — временных текстовых каналов.
-          </div>
+          {(() => {
+            const list = threads.filter(t => !thrQ.trim() || t.name.toLowerCase().includes(thrQ.trim().toLowerCase()))
+            if (list.length === 0) return <div className="thr-empty">
+              <div className="thr-ic"><Icon name="threads" size={24} /></div>
+              <b>Нет веток.</b>
+              Не отвлекайтесь от беседы с помощью веток — временных текстовых каналов.
+            </div>
+            return <div className="thr-list">{list.map(t => (
+              <div key={t.id} className="thr-row" onClick={() => setActiveThread(t)}>
+                <Icon name="threads" size={16} />
+                <div className="thr-row-t"><b>{t.name}</b><span>{t.created_by_name} · {new Date(t.created_at).toLocaleDateString('ru-RU')}</span></div>
+              </div>
+            ))}</div>
+          })()}
+        </div>}
+        {activeThread && curChannel && <div className="thread-view-wrap">
+          <ThreadPanel server={server} channel={curChannel} thread={activeThread} user={user!} username={username}
+            onClose={() => setActiveThread(null)} canManageMessages={canManageMessages} canAttachFiles={canAttachFiles} automodCheck={automodCheck} />
         </div>}
         {showPins && <div className="pins-panel">
           <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
@@ -1222,16 +1277,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           mentionableRoles={roles.map(r => ({ name: r.name, color: r.color }))}
           slowMode={(curChannel.settings as any)?.slow}
-          automodCheck={(!isOwner && !canManageChannels) ? (text => {
-            const am = srvSettings.automod ?? {}
-            if (am.custom) {
-              const hit = ((am.customWords ?? []) as string[]).find((w: string) => w && text.toLowerCase().includes(w.toLowerCase()))
-              if (hit) return 'Сообщение заблокировано автомодерацией сервера — запрещённое слово или фраза'
-            }
-            if (am.mentions && countMentions(text) > 5) return 'Сообщение заблокировано автомодерацией сервера — слишком много упоминаний'
-            if (am.spam && isSpamLike(text)) return 'Сообщение заблокировано автомодерацией сервера — похоже на спам'
-            return null
-          }) : undefined}
+          automodCheck={automodCheck}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}

@@ -110,7 +110,7 @@ body {
 .me-out { background:none; border:none; color:var(--mut); cursor:pointer; font-size:16px; transition:color .15s ease; }
 .me-out:hover { color:var(--tx); }
 
-.chat { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
+.chat { position:relative; flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
 .chat-head { padding:16px; font-weight:700; border-bottom:1px solid rgba(0,0,0,.2); box-shadow:0 1px 0 rgba(0,0,0,.2); display:flex; align-items:center; }
 .msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:2px; position:relative; }
 /* v1.163.0: плавающая дата при скролле старой истории — см. StickyDatePill в MessageList.tsx */
@@ -2513,6 +2513,20 @@ body.no-anim .member-typing i { animation:none; }
 .thr-empty { text-align:center; padding:36px 20px 44px; color:var(--mut); font-size:13px; line-height:1.6; }
 .thr-empty b { display:block; color:var(--tx); font-size:15px; margin-bottom:6px; }
 .thr-ic { width:56px; height:56px; margin:0 auto 12px; border-radius:50%; background:var(--bg3); display:flex; align-items:center; justify-content:center; }
+.thr-list { max-height:min(60vh, 480px); overflow-y:auto; padding:6px; }
+.thr-row { display:flex; align-items:center; gap:10px; padding:10px; border-radius:8px; cursor:pointer; color:var(--brand); }
+.thr-row:hover { background:var(--bg3); }
+.thr-row-t { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.thr-row-t b { color:var(--tx); font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.thr-row-t span { color:var(--mut); font-size:11px; }
+
+/* v1.268.0: открытая ветка — своя лента + композер поверх основного канала */
+.thread-view-wrap { position:absolute; inset:0; z-index:44; background:var(--bg); display:flex; flex-direction:column; }
+.thread-view { display:flex; flex-direction:column; height:100%; }
+.thread-view-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.06); }
+.thread-view-t { display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; }
+.thread-view-sub { padding:0 16px 10px; color:var(--mut); font-size:12px; }
+.thread-view-msgs { flex:1; overflow-y:auto; min-height:0; }
 
 
 /* ===== v1.26.0: заглушение каналов, категории, настройки конфиденциальности ===== */

@@ -16,6 +16,8 @@ export interface Message {
   reply_author?: string | null
   reply_preview?: string | null
   edited?: boolean
+  edited_at?: string | null
+  thread_id?: string | null
 }
 
 export interface FriendRequest {

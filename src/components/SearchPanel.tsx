@@ -85,7 +85,9 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
       if (scope.table === 'messages') {
         const inId = p.inCh ? scope.channelIdByName?.(p.inCh) : null
         if (p.inCh && !inId) { setHits([]); return }   // указан канал, которого нет — честно «ничего не найдено», а не весь сервер
-        sel = inId ? sel.eq('channel_id', inId) : sel.in('channel_id', scope.channelIds ?? [])
+        // v1.268.0: сообщения веток (thread_id) не рендерятся в основной ленте канала —
+        // «Перейти к сообщению» (jumpToMessage) не нашёл бы там нужный DOM-узел.
+        sel = (inId ? sel.eq('channel_id', inId) : sel.in('channel_id', scope.channelIds ?? [])).is('thread_id', null)
       }
       else sel = sel.eq('thread_id', scope.dmId)   // dm_messages.thread_id, не dm_id — такой колонки не существует
       if (p.text) sel = sel.ilike('content', '%' + p.text + '%')
