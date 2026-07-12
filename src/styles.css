@@ -2449,7 +2449,7 @@ body.no-anim .member-typing i { animation:none; }
 .sset-empty b { display:block; letter-spacing:1px; margin:8px 0 4px; color:var(--tx); }
 
 /* Мероприятия */
-.sev-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.sev-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-right:34px; }
 .sev-head b { font-size:16px; flex:1; }
 .sev-steps { display:flex; gap:8px; margin-bottom:18px; }
 .sev-step { flex:1; }
