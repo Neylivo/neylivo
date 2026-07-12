@@ -721,6 +721,32 @@ body { font-size: var(--font-px, 16px); }
 .pqs-preset-sw > span { width:12px; height:12px; border-radius:3px; display:block; }
 .pqs-preset-nm { font-size:13px; font-weight:600; }
 @media (max-width: 900px) { .pqs-preset-grid { grid-template-columns:repeat(3, 1fr); } }
+
+/* Плотность сообщений (Уютно/Компактно) — карточки с наглядным превью, как в Discord */
+.pqs-density-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
+.pqs-density-card { background:var(--bg3); border:2px solid transparent; border-radius:10px; padding:14px; cursor:pointer; text-align:left; color:var(--tx); transition:border-color .12s ease; }
+.pqs-density-card:hover { border-color:var(--c-hover); }
+.pqs-density-card.on { border-color:var(--brand); }
+.pqs-density-prev { background:var(--bg2); border-radius:8px; padding:10px; margin-bottom:10px; }
+.pqs-density-row { display:flex; align-items:flex-start; gap:8px; }
+.pqs-density-row + .pqs-density-row { margin-top:10px; }
+.pqs-density-row.cmp { align-items:center; }
+.pqs-density-row.cmp + .pqs-density-row.cmp { margin-top:5px; }
+.pqs-density-av { width:16px; height:16px; border-radius:50%; background:var(--brand); flex:none; }
+.pqs-density-lines { flex:1; display:flex; flex-direction:column; gap:4px; }
+.pqs-density-line { height:6px; border-radius:3px; background:var(--mut); opacity:.5; }
+.pqs-density-line.short { width:55%; }
+.pqs-density-nm { font-size:13px; font-weight:700; margin-bottom:2px; }
+.pqs-density-desc { font-size:12px; color:var(--mut); }
+@media (max-width: 900px) { .pqs-density-grid { grid-template-columns:1fr; } }
+
+/* Быстрый выбор акцентного цвета — ряд кружков-свотчей */
+.pqs-accent-row { display:flex; flex-wrap:wrap; gap:10px; }
+.pqs-accent-sw { width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; box-shadow:inset 0 0 0 2px rgba(0,0,0,.15); transition:transform .12s ease, border-color .12s ease; }
+.pqs-accent-sw:hover { transform:scale(1.08); }
+.pqs-accent-sw.on { border-color:var(--tx); }
+.pqs-accent-custom { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.pqs-accent-custom input[type=color] { position:absolute; inset:-4px; width:calc(100% + 8px); height:calc(100% + 8px); opacity:0; cursor:pointer; }
 /* v1.160.0: свой логотип приложения — превью + загрузка (пресетов больше нет). */
 .pqs-iconrow { display:flex; align-items:center; gap:12px; }
 .pqs-iconprev { width:56px; height:56px; border-radius:12px; background:var(--bg2); display:flex; align-items:center; justify-content:center; flex:none; overflow:hidden; }

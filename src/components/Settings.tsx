@@ -40,7 +40,6 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'sounds', label: 'Звуки', icon: 'volume' },
     { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' },
     { k: 'language', label: 'Язык', icon: 'compass' },
-    { k: 'display', label: 'Дисплей', icon: 'expand' },
     { k: 'activity', label: 'Активность', icon: 'gamepad' },
     { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
   ] },
@@ -134,7 +133,7 @@ function ChatBgCard() {
 export function Settings({ username, avatarUrl, onClose, onAvatar }:
   { username: string; avatarUrl?: string | null; onClose: () => void; onAvatar?: (url: string) => void }) {
   const { user } = useAuth()
-  const { settings, set, themes } = useSettings()
+  const { settings, set, themes, accents } = useSettings()
   // v1.63.0: черновик настроек приложения — изменения (масштаб, шрифт, тема и т.д.)
   // применяются НЕ мгновенно, а только после кнопки «Сохранить изменения».
   const [draft, setDraft] = useState<Partial<AppSettings>>({})
@@ -848,6 +847,18 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   ))}
                 </div>
 
+                <div className="pqs-sec-t">Акцентный цвет</div>
+                <div className="pqs2-desc" style={{ marginTop: -6 }}>Цвет кнопок, ссылок и выделений — независимо от темы.</div>
+                <div className="pqs-accent-row">
+                  {accents.map(a => (
+                    <button key={a} className={'pqs-accent-sw' + (!view.custom.on && view.accent === a ? ' on' : '')} style={{ background: a }} title={a}
+                      onClick={() => { setD('accent', a); if (view.custom.on) setD('custom', { ...view.custom, on: false }) }} />
+                  ))}
+                  <label className="pqs-accent-sw pqs-accent-custom" style={{ background: view.accent }} title="Свой цвет">
+                    <input type="color" value={view.accent} onChange={e => { setD('accent', e.target.value); if (view.custom.on) setD('custom', { ...view.custom, on: false }) }} />
+                  </label>
+                </div>
+
                 <div className="pqs-sec-t">Логотип приложения</div>
                 <div className="pqs2-desc" style={{ marginTop: -6 }}>Свой логотип вместо стандартного — меняется везде: в панели серверов, на экране загрузки{(window as any).ponoiDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
                 <div className="pqs-iconrow">
@@ -861,8 +872,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Размер шрифта" desc={view.fontPx + 'px'}>
                   <input type="range" min={12} max={20} step={1} value={view.fontPx} onChange={e => setD('fontPx', Number(e.target.value))} />
                 </Row>
-                <Row title="Компактный режим" desc="Уменьшает отступы между сообщениями">
-                  <Toggle on={view.compact} onChange={v => setD('compact', v)} />
+                <Row title="Масштаб интерфейса" desc={view.zoom + '%'}>
+                  <input type="range" min={70} max={130} step={5} value={view.zoom} onChange={e => setD('zoom', Number(e.target.value))} />
                 </Row>
                 <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
                   <Toggle on={view.animations} onChange={v => setD('animations', v)} />
@@ -894,6 +905,32 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
               {cat === 'chat' && <>
                 <h2>Чат</h2>
                 <div className="pqs2-desc">Как выглядят и отправляются сообщения: формат времени, аватары, эмодзи и клавиша отправки.</div>
+                <div className="pqs-sec-t">Плотность сообщений</div>
+                <div className="pqs-density-grid">
+                  <button className={'pqs-density-card' + (!view.compact ? ' on' : '')} onClick={() => setD('compact', false)}>
+                    <div className="pqs-density-prev">
+                      <div className="pqs-density-row">
+                        <span className="pqs-density-av" />
+                        <span className="pqs-density-lines"><span className="pqs-density-line short" /><span className="pqs-density-line" /></span>
+                      </div>
+                      <div className="pqs-density-row">
+                        <span className="pqs-density-av" />
+                        <span className="pqs-density-lines"><span className="pqs-density-line short" /><span className="pqs-density-line" /></span>
+                      </div>
+                    </div>
+                    <div className="pqs-density-nm">Уютно</div>
+                    <div className="pqs-density-desc">Крупные аватары, больше воздуха между сообщениями</div>
+                  </button>
+                  <button className={'pqs-density-card' + (view.compact ? ' on' : '')} onClick={() => setD('compact', true)}>
+                    <div className="pqs-density-prev">
+                      <div className="pqs-density-row cmp"><span className="pqs-density-lines"><span className="pqs-density-line" /></span></div>
+                      <div className="pqs-density-row cmp"><span className="pqs-density-lines"><span className="pqs-density-line" /></span></div>
+                      <div className="pqs-density-row cmp"><span className="pqs-density-lines"><span className="pqs-density-line" /></span></div>
+                    </div>
+                    <div className="pqs-density-nm">Компактно</div>
+                    <div className="pqs-density-desc">Меньше отступов — больше сообщений на экране</div>
+                  </button>
+                </div>
                 <Row title="24-часовой формат времени" desc="Например, 14:30 вместо 2:30 PM">
                   <Toggle on={view.time24} onChange={v => setD('time24', v)} />
                 </Row>
@@ -1018,15 +1055,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     </button>
                   ))}
                 </div>
-              </>}
-
-              {cat === 'display' && <>
-                <h2>Дисплей</h2>
-                <div className="pqs2-desc">Масштаб интерфейса — сделай всё крупнее или мельче.</div>
-                <Row title="Масштаб интерфейса" desc={view.zoom + '%'}>
-                  <input type="range" min={70} max={130} step={5} value={view.zoom} onChange={e => setD('zoom', Number(e.target.value))} />
-                </Row>
-                <button className="pqs-save" onClick={() => setD('zoom', 100)}>Сбросить масштаб</button>
               </>}
 
               {cat === 'privacy' && <>

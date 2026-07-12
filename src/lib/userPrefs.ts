@@ -11,6 +11,7 @@ export interface UserPrefsRow {
   srv_folders: any[]
   ch_muted: Record<string, boolean>
   srv_notif: Record<string, string>
+  ch_notif: Record<string, string>   // v1.259.0: {channelId: 'all'|'mentions'|'mute'} — режим уведомлений отдельного канала, как srv_notif, но переопределяет его для одного канала
   srv_privacy: Record<string, { dm: boolean; activity: boolean }>
   ch_read: Record<string, number>
   dm_read: Record<string, number>
@@ -26,7 +27,7 @@ export interface UserPrefsRow {
 }
 
 const DEFAULTS: UserPrefsRow = {
-  notes: {}, srv_folders: [], ch_muted: {}, srv_notif: {}, srv_privacy: {},
+  notes: {}, srv_folders: [], ch_muted: {}, srv_notif: {}, ch_notif: {}, srv_privacy: {},
   ch_read: {}, dm_read: {}, gif_favs: [], mus_playlists: [], account: {},
   dm_pinned: [], dm_muted: {}, dm_closed: [], dm_ignored: [], friend_nick: {},
 }

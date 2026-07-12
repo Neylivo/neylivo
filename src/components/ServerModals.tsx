@@ -1,10 +1,11 @@
 import { toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
-import type { Server } from '../types'
+import type { Server, Channel } from '../types'
 import { uploadTo } from '../lib/storage'
 import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } from '../lib/servers'
 import { notifModeOf, setNotifMode, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
+import { chNotifModeOf, setChNotifMode } from '../lib/chNotify'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { Icon } from './icons'
 import { useClampToViewport } from '../lib/clampPos'
@@ -353,6 +354,44 @@ export function ServerNotifModal({ server, onClose }: { server: Server; onClose:
             <span className={'notif-radio' + (mode === o.m ? ' on' : '')} />
             <span className="notif-body">
               <span className="notif-nm">{NOTIF_LABEL[o.m]}</span>
+              <span className="notif-hint">{o.hint}</span>
+            </span>
+            {o.m === 'mute' && <Icon name="bell-off" size={16} />}
+          </label>
+        ))}
+      </div>
+      <div className="modal-foot">
+        <button className="modal-ghost" onClick={onClose}>Готово</button>
+      </div>
+    </Overlay>
+  )
+}
+
+// v1.259.0: то же самое, но для одного канала — со своим состоянием «Как на сервере»
+// (наследует режим сервера, пока явно не переопределили только этот канал).
+export function ChannelNotifModal({ server, channel, onClose }: { server: Server; channel: Channel; onClose: () => void }) {
+  const [mode, setMode] = useState<NotifMode | 'default'>(() => {
+    const ov = getUserPrefs().ch_notif[channel.id] as NotifMode | undefined
+    return ov ?? (getUserPrefs().ch_muted[channel.id] ? 'mute' : 'default')
+  })
+  function pick(m: NotifMode | 'default') { setMode(m); setChNotifMode(channel.id, m) }
+  const opts: { m: NotifMode | 'default'; label: string; hint: string }[] = [
+    { m: 'default', label: 'Как на сервере', hint: 'сейчас — «' + NOTIF_LABEL[notifModeOf(server.id)].toLowerCase() + '»' },
+    { m: 'all', label: NOTIF_LABEL.all, hint: 'уведомлять о каждом сообщении в этом канале' },
+    { m: 'mentions', label: NOTIF_LABEL.mentions, hint: 'только когда тебя упомянули (@имя или @роль)' },
+    { m: 'mute', label: NOTIF_LABEL.mute, hint: 'канал полностью заглушен — ни уведомлений, ни точки' },
+  ]
+  return (
+    <Overlay onClose={onClose}>
+      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+      <div className="modal-title">Уведомления — #{channel.name}</div>
+      <div className="modal-sub">Настройка действует только для тебя, на этом устройстве.</div>
+      <div className="notif-opts">
+        {opts.map(o => (
+          <label key={o.m} className={'notif-opt' + (mode === o.m ? ' on' : '')} onClick={() => pick(o.m)}>
+            <span className={'notif-radio' + (mode === o.m ? ' on' : '')} />
+            <span className="notif-body">
+              <span className="notif-nm">{o.label}</span>
               <span className="notif-hint">{o.hint}</span>
             </span>
             {o.m === 'mute' && <Icon name="bell-off" size={16} />}

@@ -9,7 +9,6 @@ import { AvatarWithStatus } from './AvatarWithStatus'
 import { Avatar } from './Avatar'
 import { usePresence } from '../lib/presence'
 import { notifyMessage, msgSound, uiChime, closeNotif } from '../lib/notify'
-import { notifModeOf } from '../lib/srvNotify'
 import { mentionsUser, mentionsRoleName, mentionsHere } from '../lib/md'
 import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
@@ -40,8 +39,9 @@ import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
 import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
-import { ServerPrivacyModal, CreateCategoryModal } from './ServerModals'
-import { loadChMuted, setChMuted } from '../lib/chMute'
+import { ServerPrivacyModal, CreateCategoryModal, ChannelNotifModal } from './ServerModals'
+import { chNotifModeOf } from '../lib/chNotify'
+import { notifModeOf } from '../lib/srvNotify'
 import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
 import { ServerEvents } from './ServerEvents'
@@ -159,7 +159,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [showInvite, setShowInvite] = useState(false)   // v1.68.0: панель «Пригласить друзей»
   const [showCreateCat, setShowCreateCat] = useState(false)
   const [srvSettings, setSrvSettings] = useState<any>((server as any).settings ?? {})
-  const [mutedCh, setMutedCh] = useState<Record<string, boolean>>(loadChMuted())
+  const [, setNotifVer] = useState(0)   // ре-рендер при смене режима уведомлений канала/сервера
+  const [notifForCh, setNotifForCh] = useState<Channel | null>(null)
   const [chCtx, setChCtx] = useState<{ ch: Channel; x: number; y: number } | null>(null)
   const [catCtx, setCatCtx] = useState<{ cat: any; x: number; y: number } | null>(null)
   // v1.225.0: реальный размер этих панелек зависит от прав/содержимого (например,
@@ -413,7 +414,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     for (const m of (data ?? []) as any[]) {
       if (seen.has(m.channel_id)) continue
       seen.add(m.channel_id)
-      if (loadChMuted()[m.channel_id]) continue
+      if (chNotifModeOf(m.channel_id, server.id) === 'mute') continue
       const lastRead = getChRead(m.channel_id)
       if (m.author !== user?.id && new Date(m.created_at).getTime() > lastRead) un[m.channel_id] = true
     }
@@ -494,12 +495,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           setMessages(m => mergeIncoming(m, msg))
           setChRead(curChannel.id, Date.now())
           if (msg.author !== user?.id && !parseSys(msg.content)) {
-            const mode = notifModeOf(server.id)
+            // v1.259.0: режим канала может переопределять режим сервера (chNotifModeOf) —
+            // раньше заглушение канала и режим all/mentions сервера проверялись отдельно,
+            // теперь канал с явным «Все сообщения» звучит, даже если сервер на «упоминаниях».
+            const mode = chNotifModeOf(curChannel.id, server.id)
             // v1.242.0: звук/тост «только за упоминания» раньше не срабатывал на упоминание
             // РОЛИ (только личное @ник) — рассинхрон с подсветкой сообщения и бейджем
             // непрочитанного (Home.tsx/MessageList.tsx), которые роль уже учитывали (v1.239.0).
             const mentioned = !!msg.content && (mentionsUser(msg.content, username) || myRoleNameList.some(rn => mentionsRoleName(msg.content!, rn)))
-            if (!loadChMuted()[curChannel.id] && (mode === 'all' || (mode === 'mentions' && mentioned))) {
+            if (mode === 'all' || (mode === 'mentions' && mentioned)) {
               msgSound()
               notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '', (msg as any).author_avatar, 'ch:' + curChannel.id)
             }
@@ -637,7 +641,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         p => {
           const msg = p.new as Message
           if (!ids.has(msg.channel_id) || msg.author === user?.id) return
-          if (loadChMuted()[msg.channel_id]) return
+          if (chNotifModeOf(msg.channel_id, server.id) === 'mute') return
           if (curChannelRef.current?.id === msg.channel_id) return
           setUnreadCh(u => u[msg.channel_id] ? u : { ...u, [msg.channel_id]: true })
         })
@@ -756,14 +760,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     onLeft()
   }
 
-  // Персональное заглушение канала (localStorage) — гасит звук/подсветку,
-  // а «Скрыть заглушённые каналы» убирает такие каналы из списка.
-  function toggleMuteCh(id: string) {
-    const next = !mutedCh[id]
-    setChMuted(id, next)
-    setMutedCh(loadChMuted())
-    toastOk(next ? 'Канал заглушен' : 'Уведомления канала включены')
-  }
   function markChRead(c: Channel) {
     setChRead(c.id, Date.now())
     setUnreadCh(u => { if (!u[c.id]) return u; const n = { ...u }; delete n[c.id]; return n })
@@ -941,6 +937,17 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
 
+  // v1.259.0: уведомления канала могут наследоваться от режима сервера (chNotifModeOf) —
+  // при переключении режима на этом или другом устройстве надо перерисовать список
+  // каналов/колокольчик, а не только тот компонент, где стоит сам переключатель.
+  useEffect(() => {
+    const h = () => setNotifVer(v => v + 1)
+    window.addEventListener('ponoi-notif', h)
+    return () => window.removeEventListener('ponoi-notif', h)
+  }, [])
+  const mutedCh: Record<string, boolean> = {}
+  for (const c of channels) mutedCh[c.id] = chNotifModeOf(c.id, server.id) === 'mute'
+
   return (
     <>
       <aside className="channels">
@@ -1067,7 +1074,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           {(() => { const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel); const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
-            <button className={'pin-btn' + (curChannel && mutedCh[curChannel.id] ? ' on' : '')} title={curChannel && mutedCh[curChannel.id] ? 'Включить уведомления канала' : 'Заглушить канал'} onClick={() => curChannel && toggleMuteCh(curChannel.id)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
+            <button className={'pin-btn' + (curChannel && chNotifModeOf(curChannel.id, server.id) !== notifModeOf(server.id) ? ' on' : '')} title="Уведомления канала" onClick={() => curChannel && setNotifForCh(curChannel)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
             <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
             <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
               onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}><Icon name="users" size={18} /></button>
@@ -1317,6 +1324,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
       {showEvents && <ServerEvents server={server} channels={channels} canCreate={canManageEvents} onClose={() => setShowEvents(false)} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
+      {notifForCh && <ChannelNotifModal server={server} channel={notifForCh} onClose={() => setNotifForCh(null)} />}
         {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
       {showCreateCat && <CreateCategoryModal onClose={() => setShowCreateCat(false)} onCreate={(nm, pv) => { setShowCreateCat(false); createCategory(nm, pv) }} />}
       {chCtx && <>
@@ -1324,7 +1332,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <div className="ctx-menu" ref={chCtxClamp.ref} style={chCtxClamp.style} onClick={() => setChCtx(null)}>
           <div className="ctx-item" onClick={() => markChRead(chCtx.ch)}><Icon name="check" size={14} /> Пометить как прочитанное</div>
           <div className="ctx-item" onClick={invite}><Icon name="user-plus" size={14} /> Пригласить на сервер</div>
-          <div className="ctx-item" onClick={() => toggleMuteCh(chCtx.ch.id)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell' : 'bell-off'} size={14} /> {mutedCh[chCtx.ch.id] ? 'Включить уведомления' : 'Заглушить канал'}</div>
+          <div className="ctx-item" onClick={() => setNotifForCh(chCtx.ch)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell-off' : 'bell'} size={14} /> Уведомления канала</div>
           {canManageChannels && <div className="ctx-item" onClick={() => setChSettings(chCtx.ch)}><Icon name="gear" size={14} /> Настройки канала</div>}
           <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(chCtx.ch.id); toastOk('ID канала скопирован') }}><Icon name="id-card" size={14} /> Копировать ID канала</div>
         </div>
