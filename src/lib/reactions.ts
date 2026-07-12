@@ -49,7 +49,15 @@ export async function deleteMessage(table: PinTable, id: string) {
 }
 
 export async function editMessage(table: PinTable, id: string, content: string): Promise<boolean> {
-  const { data, error } = await supabase.from(table).update({ content, edited: true }).eq('id', id).select('id')
+  // v1.263.0: edited_at — точное время правки, для подсказки при наведении на «(изменено)».
+  // Пока миграция supabase/66_edited_at.sql не применена, колонки нет — PostgREST
+  // вернёт ошибку на весь update (не проигнорирует поле молча), поэтому сначала
+  // пробуем с edited_at, а при ошибке именно по нему — откатываемся на старое поведение.
+  let res = await supabase.from(table).update({ content, edited: true, edited_at: new Date().toISOString() }).eq('id', id).select('id')
+  if (res.error && /edited_at/i.test(res.error.message ?? '')) {
+    res = await supabase.from(table).update({ content, edited: true }).eq('id', id).select('id')
+  }
+  const { data, error } = res
   return !error && !!data && data.length > 0
 }
 

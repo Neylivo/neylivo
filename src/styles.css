@@ -2787,6 +2787,11 @@ body.no-anim .member-typing i { animation:none; }
 .chat-head.ph2 { gap:8px; }
 .ph2-hash { color:#80848e; font-size:22px; font-weight:400; line-height:1; flex:none; }
 .ph2-name { font-weight:700; color:#f2f3f5; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* v1.263.0: тема канала в шапке (как в Discord) — имя канала не сжимается, тема
+   забирает оставшееся место и обрезается первой, если вместе не помещаются. */
+.ph2-name:has(+ .ph2-topic-sep) { flex:none; }
+.ph2-topic-sep { width:1px; height:20px; background:rgba(255,255,255,.14); flex:none; }
+.ph2-topic { color:var(--mut); font-weight:400; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1 1 auto; cursor:default; }
 /* v1.232.0: ник/аватарка в шапке ЛС кликабельны — открывают полный профиль. */
 .ph2-who { display:inline-flex; align-items:center; gap:8px; cursor:pointer; border-radius:6px; padding:2px 6px 2px 2px; margin:-2px 0 -2px -6px; transition:background .12s ease; }
 .ph2-who:hover { background:rgba(255,255,255,.06); }

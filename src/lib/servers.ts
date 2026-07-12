@@ -42,7 +42,13 @@ export async function updateServer(id: string, patch: { name?: string; avatar_ur
   return res
 }
 
+// v1.263.0: приглашения бессрочны (нет expires_at/max_uses) — раньше каждое
+// открытие панели «Пригласить» плодило новую вечную ссылку на server_invites.
+// Теперь сперва ищем уже существующую свою ссылку для этого сервера и переиспользуем её.
 export async function createInvite(serverId: string, meId: string) {
+  const { data: existing } = await supabase.from('server_invites').select('code')
+    .eq('server_id', serverId).eq('created_by', meId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (existing?.code) return { code: existing.code as string }
   const code = genCode()
   const { error } = await supabase.from('server_invites').insert({ code, server_id: serverId, created_by: meId })
   if (error) return { error }

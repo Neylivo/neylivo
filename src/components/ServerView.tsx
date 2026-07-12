@@ -1083,7 +1083,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
           <span className="ph2-hash">{((voice || connecting) && voicePanel) || (curChannel as any)?.kind === 'voice' ? <Icon name="volume" size={20} /> : '#'}</span>
-          {(() => { const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel); const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
+          {(() => {
+            const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel)
+            const cs = chNameStyle(hc?.settings, srvSettings)
+            return <>
+              <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span>
+              {hc?.topic && <><span className="ph2-topic-sep" /><span className="ph2-topic" title={hc.topic}>{hc.topic}</span></>}
+            </>
+          })()}
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
             <button className={'pin-btn' + (curChannel && chNotifModeOf(curChannel.id, server.id) !== notifModeOf(server.id) ? ' on' : '')} title="Уведомления канала" onClick={() => curChannel && setNotifForCh(curChannel)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
