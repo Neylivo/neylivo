@@ -3,7 +3,7 @@
 // Secrets: supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:you@example.com
 //          (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the platform)
 //
-// Body: { userIds: string[], title: string, body: string, url?: string }
+// Body: { userIds: string[], title: string, body: string, url?: string, ctx?: PushCtx }
 // Reads push_subscriptions for those users (service role — bypasses RLS), sends a
 // web-push to each, and prunes subscriptions that come back 404/410 (gone).
 //
@@ -13,6 +13,15 @@
 // and each target is dropped unless the caller actually shares context with them
 // (DM thread, accepted friendship, or a common server) — matching the three real
 // call sites (DM message, server invite, @mention) in src/lib/push.ts.
+//
+// v1.243.0: on top of that privacy check, drop targets who muted this exact source
+// (DM peer, or channel/whole server) or who set the server to "@mentions only" and
+// weren't actually mentioned. Those preferences live in user_prefs (RLS: readable
+// only by their own owner) — the CALLER'S browser has no way to read a target's
+// prefs, so this filtering can only happen here, with the service-role key.
+// ctx.mentionedUserIds is computed by the caller's client (it already has the
+// server's member/role list) — replicating that text-mention parsing here would
+// just be the same logic duplicated in two places and drifting out of sync.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'https://esm.sh/web-push@3.6.7'
 
@@ -25,10 +34,14 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }
 
+type PushCtx =
+  | { kind: 'dm' }
+  | { kind: 'channel'; serverId: string; channelId: string; mentionedUserIds: string[] }
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const { userIds, title, body, url } = await req.json()
+    const { userIds, title, body, url, ctx } = await req.json() as { userIds: unknown; title: unknown; body: unknown; url: unknown; ctx?: PushCtx }
     if (!Array.isArray(userIds) || !userIds.length) return json({ error: 'userIds required' }, 400)
 
     const supaUrl = Deno.env.get('SUPABASE_URL')!
@@ -60,8 +73,30 @@ Deno.serve(async (req) => {
     const sharedServerUsers = new Set(
       (smTheirsRes.data ?? []).filter((m: any) => myServers.has(m.server_id)).map((m: any) => m.user_id)
     )
-    const allowed = targets.filter((id) => dmPeers.has(id) || friends.has(id) || sharedServerUsers.has(id))
+    let allowed = targets.filter((id) => dmPeers.has(id) || friends.has(id) || sharedServerUsers.has(id))
     if (!allowed.length) return json({ sent: 0, pruned: 0 })
+
+    // v1.243.0: заглушки/режим уведомлений получателей — см. комментарий над Deno.serve.
+    if (ctx && (ctx.kind === 'dm' || ctx.kind === 'channel')) {
+      const { data: prefs } = await admin.from('user_prefs')
+        .select('user_id, ch_muted, srv_notif, dm_muted')
+        .in('user_id', allowed)
+      const prefsById = new Map((prefs ?? []).map((p: any) => [p.user_id, p]))
+      allowed = allowed.filter((id) => {
+        const p: any = prefsById.get(id)
+        if (!p) return true   // строки в user_prefs ещё нет — значит, все настройки по умолчанию ("всё")
+        if (ctx.kind === 'dm') {
+          const exp = p.dm_muted?.[user.id]
+          return !(exp !== undefined && (exp === 0 || Date.now() < exp))
+        }
+        if (p.ch_muted?.[ctx.channelId]) return false
+        const mode = p.srv_notif?.[ctx.serverId] ?? 'all'
+        if (mode === 'mute') return false
+        if (mode === 'mentions') return (ctx.mentionedUserIds ?? []).includes(id)
+        return true
+      })
+      if (!allowed.length) return json({ sent: 0, pruned: 0 })
+    }
 
     const pub = Deno.env.get('VAPID_PUBLIC_KEY')!
     const priv = Deno.env.get('VAPID_PRIVATE_KEY')!

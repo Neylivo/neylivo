@@ -59,12 +59,24 @@ export async function registerPush(userId: string): Promise<void> {
   }
 }
 
+// v1.243.0: ctx — контекст для фильтрации получателей НА СТОРОНЕ edge-функции по
+// ИХ ЛИЧНЫМ настройкам уведомлений (заглушка сервера/канала/ЛС, режим «только
+// упоминания»). Раньше пуш уходил вообще всем участникам сервера/собеседникам ЛС
+// без разбора — заглушённый сервер или ЛС всё равно слали настоящий пуш на телефон.
+// Личные настройки (user_prefs) видны только их владельцу (RLS) — клиент отправителя
+// прочитать их не может, поэтому фильтрация обязана происходить в send-push (service
+// role). mentionedUserIds клиент вычисляет сам (уже знает участников/роли сервера) —
+// дублировать разбор текста сообщения на упоминания в Deno не нужно.
+export type PushCtx =
+  | { kind: 'dm' }
+  | { kind: 'channel'; serverId: string; channelId: string; mentionedUserIds: string[] }
+
 // Ask the Edge Function to push to these users (fires even if their app is closed).
-export async function sendPush(userIds: string[], title: string, body: string, url = '/'): Promise<void> {
+export async function sendPush(userIds: string[], title: string, body: string, url = '/', ctx?: PushCtx): Promise<void> {
   try {
     const targets = Array.from(new Set(userIds.filter(Boolean)))
     if (!targets.length) return
-    await supabase.functions.invoke('send-push', { body: { userIds: targets, title, body, url } })
+    await supabase.functions.invoke('send-push', { body: { userIds: targets, title, body, url, ctx } })
   } catch (e) {
     console.warn('sendPush failed', e)
   }

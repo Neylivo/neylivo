@@ -883,7 +883,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         }
         const real = data as DMMessage
         setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
-        if (peer) sendPush([peer.id], username, t || 'Вложение', '/')
+        if (peer) sendPush([peer.id], username, t || 'Вложение', '/', { kind: 'dm' })
         else if (groupRecipients?.length) sendPush(groupRecipients, username, t || 'Вложение', '/')
       })
     }

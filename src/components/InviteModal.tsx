@@ -109,7 +109,7 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
       })
       if (error) throw error
       setSent(s => ({ ...s, [f.id]: true }))
-      sendPush([f.id], meName, 'Приглашение на сервер «' + server.name + '»', '/')
+      sendPush([f.id], meName, 'Приглашение на сервер «' + server.name + '»', '/', { kind: 'dm' })
     } catch (e: any) { toastErr(e?.message ?? 'Не удалось отправить приглашение') }
     finally { setBusy(b => ({ ...b, [f.id]: false })) }
   }

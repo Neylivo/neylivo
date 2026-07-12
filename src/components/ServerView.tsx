@@ -218,6 +218,22 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const roleColorMap: Record<string, string> = {}
   for (const r of roles) roleColorMap[r.name.toLowerCase()] = r.color
   const myRoleNameList = rolesOfId(user?.id ?? '').map(id => roleById[id]?.name).filter((n): n is string => !!n)
+  // v1.243.0: для пуш-уведомлений (send-push) — кого реально упомянул текст: по
+  // нику (mentionsUser, включая @everyone — тогда все) и по ролям (mentionsRoleName +
+  // участники этой роли). Edge-функция не видит участников/роли сервера напрямую и
+  // личные user_prefs других людей ей доверять нельзя читать без этой информации —
+  // проще посчитать здесь один раз и передать список id, чем дублировать разбор
+  // текста на упоминания в Deno.
+  function mentionedUserIds(text: string): string[] {
+    if (!text) return []
+    const ids = new Set<string>()
+    for (const m of members) { if (mentionsUser(text, m.member_name ?? '')) ids.add(m.user_id) }
+    for (const r of roles) {
+      if (!mentionsRoleName(text, r.name)) continue
+      for (const m of members) { if (rolesOfId(m.user_id).includes(r.id)) ids.add(m.user_id) }
+    }
+    return Array.from(ids)
+  }
   // Право на «Настройки сервера»: владелец или любая из административных ролей.
   const canManage = isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER) || hasPerm(myPerms, PERM.MANAGE_ROLES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
     || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG) || hasPerm(myPerms, PERM.MANAGE_EMOJI) || hasPerm(myPerms, PERM.MANAGE_EVENTS)
@@ -760,6 +776,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setUnseen(0); setAtBottom(true)
     const chName = curChannel.name
     const targets = members.map(m => m.user_id).filter(id => id !== user.id)
+    const chId = curChannel.id
+    const mentioned = mentionedUserIds(t)
 
     function finalize(finalRow: typeof row) {
       supabase.from('messages').insert(finalRow).select().single().then(({ data, error }) => {
@@ -770,7 +788,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         }
         const real = data as Message
         setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
-        sendPush(targets, username + ' — #' + chName, t || 'Вложение', '/')
+        sendPush(targets, username + ' — #' + chName, t || 'Вложение', '/', { kind: 'channel', serverId: server.id, channelId: chId, mentionedUserIds: mentioned })
       })
     }
 
