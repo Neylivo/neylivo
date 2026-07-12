@@ -167,6 +167,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   useEffect(() => { ringingRef.current = ringingTo }, [ringingTo])
   const callRef = useRef<Room | null>(null)
   useEffect(() => { callRef.current = call }, [call])
+  // v1.262.0: как joinSeq в ServerView.tsx — два быстрых клика «Позвонить» (или клик
+  // + почти одновременный accept входящего) оба проходили проверку `call === null`
+  // ДО того, как первый await joinRoom() успевал её обновить, и второй setCall(room)
+  // тихо перезаписывал первый Room без disconnect() — повисшее LiveKit-соединение.
+  const callSeq = useRef(0)
 
   // ---- v1.43.0: системное сообщение о звонке в ленте + состояние для панели. ----
   // Звонок живёт при навигации (как в Discord): CallRoom показан только в чате
@@ -220,6 +225,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
 
   function hangUp(sendCancel: boolean) {
+    callSeq.current++   // отменяем незавершённую попытку подключения, если она ещё в процессе
     endRing(sendCancel)
     try { callRef.current?.disconnect() } catch {}
     finishCallMsg()
@@ -232,6 +238,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
   async function startCall() {
     if (!threadId || !active || call) return
+    const seq = ++callSeq.current
     // v1.230.0: приватность звонков (Настройки -> Конфиденциальность) — проверяем
     // заранее для понятной причины сразу, а не после попытки соединения; итоговое
     // решение всё равно за Edge Function livekit-token (эта проверка — только UX).
@@ -239,9 +246,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       toastErr(active.name + ' ограничил(а) круг тех, кто может звонить')
       return
     }
+    if (callSeq.current !== seq) return   // уже отменили/начали другой звонок, пока ждали canCallUser
     setConnectingThread(threadId); setConnectingPeer(active)
     try {
       const room = await joinRoom('dm_' + threadId, meId, username)
+      if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
       setCall(room)
       setCallThread(threadId)
       setCallPeer(active)
@@ -274,7 +283,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         ? (active?.name ?? 'Собеседник') + ' ограничил(а) круг тех, кто может звонить'
         : (e.message ?? String(e)))
     }
-    finally { setConnectingThread(null); setConnectingPeer(null) }
+    finally { if (callSeq.current === seq) { setConnectingThread(null); setConnectingPeer(null) } }
   }
 
   // v1.187.0: «Начать звонок» из контекстного меню друга — сперва открываем чат
@@ -354,14 +363,16 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const h = async (e: Event) => {
       const tid = (e as CustomEvent).detail?.threadId
       if (!tid || callRef.current) return
+      const seq = ++callSeq.current
       setConnectingThread(tid); setConnectingPeer(activeRef.current)
       try {
         const room = await joinRoom('dm_' + tid, meId, username)
+        if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
         setCall(room)
         setCallThread(tid)
         setCallPeer(activeRef.current)
       } catch (err: any) { toastErr(err.message ?? String(err)) }
-      finally { setConnectingThread(null); setConnectingPeer(null) }
+      finally { if (callSeq.current === seq) { setConnectingThread(null); setConnectingPeer(null) } }
     }
     window.addEventListener('ponoi-join-call', h)
     return () => window.removeEventListener('ponoi-join-call', h)
@@ -462,6 +473,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
 
   async function openChat(f: Friend) {
+    // v1.262.0: ответ/редактирование не были привязаны к диалогу — см. тот же фикс
+    // в ServerView.tsx selectChannel.
+    if (activeRef.current?.id !== f.id) { setReplyTarget(null); setEditingMsg(null) }
     try { localStorage.setItem('ponoi_last_dm_friend', JSON.stringify({ id: f.id, name: f.name })) } catch {}
     setActive(f)
     setActiveGroup(null)
@@ -640,6 +654,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }, [activeGroup?.id])
 
   async function openGroupChat(g: GroupThread) {
+    if (threadIdRef.current !== g.id) { setReplyTarget(null); setEditingMsg(null) }
     setActive(null)
     setActiveGroup(g)
     setShowProfile(false)

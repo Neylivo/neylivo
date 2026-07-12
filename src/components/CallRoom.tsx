@@ -475,10 +475,14 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
     const onPLeave = () => { upd(); sndLeave() }
     room.on(RoomEvent.ParticipantConnected, onPJoin)
     room.on(RoomEvent.ParticipantDisconnected, onPLeave)
-    // Демку/камеру остановили из системного окна — кнопки не должны «залипнуть».
+    // Демку/камеру/микрофон остановили не через наши кнопки (системное окно,
+    // ОС отозвала разрешение, отключили устройство) — нижняя панель раньше не
+    // знала об этом для микрофона (только камера/демка), хотя плашка на своём
+    // тайле (useSpeakMic) уже честно показывала «заглушено» — кнопки расходились.
     const onLocalUnpub = (pub: any) => {
       if (pub?.source === 'screen_share') setScreen(false)
       if (pub?.source === 'camera') setCam(false)
+      if (pub?.source === 'microphone') setMic(false)
     }
     room.on(RoomEvent.LocalTrackUnpublished, onLocalUnpub)
     // v1.150.0: раньше окончательный обрыв связи (LiveKit исчерпал реконнекты,

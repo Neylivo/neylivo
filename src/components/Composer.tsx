@@ -174,10 +174,18 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const recRef = useRef<{ mr: MediaRecorder; chunks: Blob[]; timer: number; cancel: boolean } | null>(null)
 
   // Черновики: текст хранится отдельно для каждого канала/ЛС и переживает перезагрузку.
+  // v1.262.0: Composer — один и тот же инстанс на весь ServerView/DMHome, канал
+  // меняется только через draftKey. Раньше вложения/спойлеры/запись голосового не
+  // сбрасывались при смене канала — прикреплённый в канале A файл (или начатая
+  // запись) молча улетал(а) в канал B при отправке оттуда, без единого намёка,
+  // что вложение «переехало».
   useEffect(() => {
     if (draftKey === undefined || isEditing) return
     setText(localStorage.getItem('ponoi_draft_' + draftKey) ?? '')
     setMQ(null)
+    setFiles([])
+    setSpoilers({})
+    stopRec(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey])
   function keepDraft(v: string) {

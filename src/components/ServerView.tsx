@@ -422,6 +422,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
 
   async function selectChannel(c: Channel) {
+    // v1.262.0: ответ/редактирование не были привязаны к каналу — начал отвечать
+    // или редактировать сообщение в канале A, переключился в B, отправил: reply_to
+    // указывал на чужой канал, а «сохранить правку» с пустым текстом вообще удаляло
+    // сообщение НЕ в том канале, который сейчас открыт.
+    if (curChannelRef.current?.id !== c.id) { setReplyTarget(null); setEditingMsg(null) }
     setCurChannel(c); closeMobNav()
     setVoicePanel(false)   // v1.133.0: текстовый канал возвращает чат, голос остаётся подключён
     // Сброс случайного выделения текста при переключении канала.
@@ -1110,6 +1115,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {showSearch && <SearchPanel onClose={() => setShowSearch(false)} scope={{
           table: 'messages', channelIds: channels.map(c => c.id),
           channelName: id => channels.find(c => c.id === id)?.name ?? '?',
+          channelIdByName: nm => channels.find(c => c.name.toLowerCase() === nm.toLowerCase())?.id
+            ?? channels.find(c => c.name.toLowerCase().startsWith(nm.toLowerCase()))?.id ?? null,
         }} />}
         {voice && <VoiceConn room={voice.room} sinks={!voicePanel} meName={username} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
         {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }}
