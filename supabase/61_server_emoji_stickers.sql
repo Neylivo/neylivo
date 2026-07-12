@@ -55,5 +55,15 @@ create policy "stickers_delete" on stickers for delete to authenticated using (i
 -- просто новое значение attach_type ('sticker') вместо 'image'/'file'/'video'.
 -- Новых колонок в messages не нужно (04_storage.sql уже добавил attach_url/attach_type).
 
-alter publication supabase_realtime add table server_emoji;
-alter publication supabase_realtime add table stickers;
+-- v1.251.0: без охранного условия alter publication ... add table падает с
+-- "relation ... is already member of publication" при повторном прогоне
+-- миграции (db reset, повторный деплой и т.п.) — тот же приём, что и в
+-- 51_realtime_sync.sql, для новых таблиц применяем сразу, а не постфактум.
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'server_emoji') then
+    alter publication supabase_realtime add table server_emoji;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'stickers') then
+    alter publication supabase_realtime add table stickers;
+  end if;
+end $$;

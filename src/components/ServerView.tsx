@@ -283,6 +283,45 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     loadChannels(); loadMembers(); loadRoles(); setSrvSettings((server as any).settings ?? {}) /* eslint-disable-next-line */
   }, [server.id])
 
+  // v1.251.0: правки канала (медленный режим, NSFW, имя, тема и т.д. — ChannelSettings.tsx)
+  // раньше долетали только тому, кто сам их сохранил (onChanged={() => loadChannels()}) —
+  // требует supabase/62_channels_realtime.sql (без неё событий просто не будет, но и
+  // не сломается — тихо ничего не обновляет, как раньше). Мержим точечно в channels/
+  // curChannel, а не зовём loadChannels() целиком — та ещё и перепрыгивает на первый
+  // текстовый канал при каждом вызове, что здесь совсем не нужно.
+  useEffect(() => {
+    const ch = supabase.channel('channels-live:' + server.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channels', filter: 'server_id=eq.' + server.id }, p => {
+        if (p.eventType === 'DELETE') {
+          const oldId = (p.old as any)?.id
+          if (!oldId) return
+          setChannels(cs => cs.filter(c => c.id !== oldId))
+          return
+        }
+        const row = p.new as Channel
+        setChannels(cs => cs.some(c => c.id === row.id) ? cs.map(c => c.id === row.id ? row : c) : [...cs, row])
+        setCurChannel(cc => (cc && cc.id === row.id) ? row : cc)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [server.id])
+
+  // v1.251.0: настройки САМОГО сервера (категории, баннер, описание, уровень
+  // проверки, AFK-канал и т.д. — вкладка «Обзор» в ServerSettings.tsx) раньше
+  // жили только в srvSettings — локальной копии, взятой один раз при монтировании
+  // ([server.id], не [server]) и никогда не переслушиваемой. src/lib/userTag.ts
+  // уже подписан на UPDATE servers (миграция 51) — но только ради тега, эта копия
+  // была отдельной и оставалась в курсе, только если её сохранил ты сам
+  // (ServerSettings.tsx сам вызывает onChanged после своего же сохранения).
+  useEffect(() => {
+    const ch = supabase.channel('server-live:' + server.id)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'servers', filter: 'id=eq.' + server.id }, p => {
+        setSrvSettings((p.new as any)?.settings ?? {})
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [server.id])
+
   // Кто сейчас в голосовых каналах: realtime presence-канал сервера, видно всем.
   useEffect(() => {
     if (!user) return

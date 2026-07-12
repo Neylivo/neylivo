@@ -411,11 +411,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     if (busy) return
     setBusy(true)
     try {
-    // v1.63.0: отложенные настройки приложения применяются только здесь, по «Сохранить»
-    if (Object.keys(draft).length > 0) {
-      for (const [k, v] of Object.entries(draft)) set(k as any, v as any)
-      setDraft({})
-    }
     const newNick = name.trim()
     const newUname = uname.trim()
     if (newUname && newUname !== orig.uname) {
@@ -441,6 +436,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       const { error } = await supabase.from('profiles').update({ display_name: newNick || null }).eq('id', user!.id)
       if (error) { toastErr(error.message ?? String(error)); return }
       localStorage.setItem('ponoi_username', newNick || newUname || username)
+    }
+    // v1.63.0/v1.245.0: отложенные настройки (оформление + профиль без файлов)
+    // применяются только здесь, ПОСЛЕ всех проверок выше — если юзернейм занят
+    // или ник/юзернейм ещё нельзя менять, saveAccount вышел бы раньше (return),
+    // и черновики остались бы нетронутыми, а не сохранились бы частично.
+    if (Object.keys(draft).length > 0) {
+      for (const [k, v] of Object.entries(draft)) set(k as any, v as any)
+      setDraft({})
     }
     await patchProf({ about, primary, accent, ...profDraft })
     setProfDraft({})
