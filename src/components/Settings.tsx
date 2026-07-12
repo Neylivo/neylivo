@@ -301,7 +301,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     try {
       if (f.type.startsWith('video')) f = await trimVideoTo5s(f)   // видео-аватар: не длиннее 5 сек
       const url = await uploadTo('avatars', user.id, f)
-      await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id)
+      const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', user.id).select('id')
+      if (error) throw error
+      if (!data || data.length === 0) throw new Error('Не сохранилось — нет доступа к изменению профиля')
       setAvUrl(url); onAvatar?.(url)
       window.dispatchEvent(new CustomEvent('ponoi-profile', { detail: { id: user.id } }))
     } catch (err: any) { toastErr(err.message ?? String(err)) }
@@ -436,18 +438,20 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
       }
       const { data: taken } = await supabase.rpc('username_taken', { uname: newUname })
       if (taken) { toastErr('Этот юзернейм уже занят'); return }
-      const { error } = await supabase.from('profiles').update({ username: newUname }).eq('id', user!.id)
+      const { data: upd, error } = await supabase.from('profiles').update({ username: newUname }).eq('id', user!.id).select('id')
       if (error) {
         const m = String(error.message || '')
         toastErr(m.includes('username_change_too_soon') ? 'Юзернейм можно менять раз в 2 недели'
           : (m.includes('duplicate') || m.includes('unique')) ? 'Этот юзернейм уже занят' : m)
         return
       }
+      if (!upd || upd.length === 0) { toastErr('Не сохранилось — нет доступа к изменению профиля'); return }
       setNameChangedAt(new Date().toISOString())
     }
     if (newNick !== orig.name) {
-      const { error } = await supabase.from('profiles').update({ display_name: newNick || null }).eq('id', user!.id)
+      const { data: upd, error } = await supabase.from('profiles').update({ display_name: newNick || null }).eq('id', user!.id).select('id')
       if (error) { toastErr(error.message ?? String(error)); return }
+      if (!upd || upd.length === 0) { toastErr('Не сохранилось — нет доступа к изменению профиля'); return }
       localStorage.setItem('ponoi_username', newNick || newUname || username)
     }
     // v1.63.0/v1.245.0: отложенные настройки (оформление + профиль без файлов)

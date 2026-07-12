@@ -95,8 +95,9 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     if (!error && (!upd || upd.length === 0)) return toastErr('Не сохранилось: в базе нет права изменять каналы — примени миграцию supabase/29_channels_update_policy.sql')
     if (error) {
       // Скорее всего не применена миграция 16 — сохраняем хотя бы название.
-      const r2 = await supabase.from('channels').update({ name: nm }).eq('id', channel.id)
+      const r2 = await supabase.from('channels').update({ name: nm }).eq('id', channel.id).select('id')
       if (r2.error) return toastErr(r2.error.message)
+      if (!r2.data || r2.data.length === 0) return toastErr('Не сохранилось — нет прав на изменение канала')
       toastErr('Для темы и настроек примени миграцию supabase/16_channel_settings.sql')
     }
     setBase(snapAll())   // v1.128.0: сохранённое становится новой «базой»
