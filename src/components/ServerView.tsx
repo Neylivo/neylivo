@@ -950,10 +950,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const onChCtx = (c: Channel) => (e: React.MouseEvent) => { e.preventDefault(); setChCtx({ ch: c, x: e.clientX, y: e.clientY }) }
             const chRow = (c: Channel) => (c as any).kind === 'voice' ? (
               <div key={c.id}>
-                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : '')} onClick={() => joinVoice(c)} onDoubleClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
+                <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : curChannel?.id === c.id ? ' on' : '')} onClick={() => joinVoice(c)} onDoubleClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
                   <ChName c={c} srv={srvSettings} />
                   <span className="ch-acts">
-                    <button title="Открыть чат" onClick={e => { e.stopPropagation(); toastOk('Чат голосового канала скоро появится') }}><Icon name="message" size={14} /></button>
+                    {/* v1.249.0: чат голосового канала — тот же MessageList/Composer, что
+                        и у текстовых, просто с channelId голосового канала (сообщения не
+                        различают kind канала на уровне БД/RLS — это была чисто UI-заглушка).
+                        Открывает чат, НЕ подключая к самому звонку — как в Discord. */}
+                    <button title="Открыть чат" onClick={e => { e.stopPropagation(); selectChannel(c) }}><Icon name="message" size={14} /></button>
                     <button title="Пригласить на сервер" onClick={e => { e.stopPropagation(); invite() }}><Icon name="user-plus" size={14} /></button>
                     {canManageChannels && <button title="Настройки канала" onClick={e => { e.stopPropagation(); setChSettings(c) }}><Icon name="gear" size={14} /></button>}
                   </span>
@@ -1020,7 +1024,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
-          <span className="ph2-hash">{(voice || connecting) && voicePanel ? <Icon name="volume" size={20} /> : '#'}</span>
+          <span className="ph2-hash">{((voice || connecting) && voicePanel) || (curChannel as any)?.kind === 'voice' ? <Icon name="volume" size={20} /> : '#'}</span>
           {(() => { const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel); const cs = chNameStyle(hc?.settings, srvSettings); return <span className={'ph2-name' + (cs.grad ? ' ch-grad' : '') + (cs.anim ? ' ch-grad-anim' : '')} style={cs.style}>{hc?.name ?? '—'}</span> })()}
           <div className="ph2-btns">
             <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
