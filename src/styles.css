@@ -3244,6 +3244,42 @@ body.no-anim .member-typing i { animation:none; }
 .pet2-pv-about { font-size:12.5px; color:#dbdee1; margin:8px 0 0; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
 .pet2-pv-btn { margin-top:12px; background:#5865f2; color:#fff; border-radius:6px; text-align:center;
   font-size:13px; font-weight:600; padding:7px 0; pointer-events:none; user-select:none; }
+
+/* v1.247.0: реакция питомца профиля на клик — см. ProfilePet.tsx. Длительность
+   pet-burst (.65s) синхронизирована с BURST_ANIM_MS в коде — не менять раздельно. */
+.pet-react-bounce { animation: pet-react-bounce .55s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes pet-react-bounce {
+  0% { transform: scale(1) translateY(0); }
+  30% { transform: scale(1.08, .92) translateY(4px); }
+  55% { transform: scale(.94, 1.08) translateY(-14px); }
+  75% { transform: scale(1.04, .96) translateY(0); }
+  100% { transform: scale(1) translateY(0); }
+}
+.pet-react-spin { animation: pet-react-spin .5s ease both; }
+@keyframes pet-react-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.pet-react-pulse { animation: pet-react-pulse .5s ease both; }
+@keyframes pet-react-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.18); filter: brightness(1.15); }
+}
+.pet-burst-emoji {
+  position: absolute; left: 50%; top: 50%; font-size: 18px; line-height: 1;
+  transform: translate(-50%, -50%);
+  animation: pet-burst .65s ease-out both;
+  animation-delay: calc(var(--pb-i, 0) * 1ms);   /* перебивается инлайн animationDelay из JSX */
+}
+@keyframes pet-burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.4) rotate(0deg); }
+  60% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(1.15) rotate(20deg); }
+}
+body.no-anim .pet-react-bounce, body.no-anim .pet-react-spin, body.no-anim .pet-react-pulse,
+body.no-anim .pet-burst-emoji { animation: none; }
+
 /* ===== v1.53.0: вкладка «Добавить в друзья» 1-в-1 как в Discord ===== */
 .pfr-addfriend.on { background:transparent; color:#949cf7; }
 .pfr-addfriend.on:hover { filter:none; background:rgba(255,255,255,.06); }

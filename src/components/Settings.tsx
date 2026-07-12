@@ -730,6 +730,13 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       ))}
                     </div>
                     {profView.petPos === 'free' && <div className="pet2-freehint">Перетащи питомца на любом превью — позиция одна для всех мест: и в мини-профиле, и в полном, при любом их размере и положении. Сохраняется плашкой внизу.</div>}
+                    <div className="pqs-lbl">Реакция на клик</div>
+                    <div className="pet2-sub" style={{ marginBottom: 8 }}>Кликни по питомцу где угодно (в чате, профиле) — он отреагирует. Попробуй прямо в превью ниже.</div>
+                    <div className="pqs-pet-pos">
+                      {([['bounce','Прыжок'],['spin','Кручение'],['pulse','Пульс'],['burst','Эмодзи-всплеск'],['none','Не реагирует']] as const).map(([k,l]) => (
+                        <button key={k} className={'pqs-pet-posbtn' + (profView.petReaction === k ? ' on' : '')} onClick={() => setProfD('petReaction', k)}>{l}</button>
+                      ))}
+                    </div>
                     <div className="pqs-lbl">Предпросмотр</div>
                     <div className="pet2-previews">
                       <div className="pet2-pv mini">

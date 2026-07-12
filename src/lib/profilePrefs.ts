@@ -4,6 +4,8 @@ import { supabase } from './supabase'
 
 export type PetKind = 'image' | 'gif' | 'video' | 'model' | 'none'
 export type PetPos = 'above' | 'br' | 'bl' | 'tr' | 'tl' | 'free'
+// v1.247.0: реакция питомца на клик — короткая одноразовая анимация.
+export type PetReaction = 'bounce' | 'spin' | 'burst' | 'pulse' | 'none'
 
 export interface PetFree { x: number; y: number } // позиция в % от карточки (центр питомца)
 
@@ -17,6 +19,7 @@ export interface ProfilePrefs {
   petSize: number          // px
   petPos: PetPos
   petFree: PetFree // «Свободно»: одна позиция (в % карточки) — питомец в том же месте во всех местах показа профиля
+  petReaction: PetReaction   // v1.247.0: анимация по клику на питомца, 'none' — не реагирует
   pronouns: string         // местоимения (карточка профиля)
   integrations: Integration[]
   createdAt: string | null // profiles.created_at («В числе участников с»)
@@ -59,6 +62,7 @@ export const DEFAULT_PROFILE: ProfilePrefs = {
   primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
   petFree: { x: 80, y: 22 },
+  petReaction: 'bounce',
   pronouns: '', integrations: [], createdAt: null,
   plateUrl: null, plateKind: 'none', plateOutline: null,
   nickFont: '', nickFontUrl: null,
@@ -98,6 +102,7 @@ function fromRow(r: any): ProfilePrefs {
     petOn: !!r.pet_on,
     petSize: r.pet_size ?? DEFAULT_PROFILE.petSize,
     ...parsePetPos(r.pet_pos),
+    petReaction: (r.pet_reaction as PetReaction) ?? DEFAULT_PROFILE.petReaction,
     pronouns: r.pronouns ?? '',
     integrations: Array.isArray(r.integrations) ? r.integrations : [],
     createdAt: r.created_at ?? null,
@@ -131,6 +136,7 @@ function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
     r.pet_pos = full.petPos === 'free'
       ? `free|${full.petFree.x.toFixed(1)},${full.petFree.y.toFixed(1)}`
       : full.petPos
+  if (p.petReaction !== undefined) r.pet_reaction = p.petReaction
   if (p.pronouns !== undefined) r.pronouns = p.pronouns
   if (p.integrations !== undefined) r.integrations = p.integrations
   if (p.plateUrl !== undefined) r.nameplate_url = p.plateUrl
@@ -181,12 +187,14 @@ const COLS_WIDGETS = COLS_FAV + ', wish_games'
 const COLS_TAG = COLS_WIDGETS + ', tag_server_id'
 const COLS_STATS = COLS_TAG + ', steam_id, game_stats_visibility'
 const COLS_DM_PRIVACY = COLS_STATS + ', dm_message_privacy, dm_call_privacy'
+const COLS_PET_REACTION = COLS_DM_PRIVACY + ', pet_reaction'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_DM_PRIVACY).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_PET_REACTION).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_DM_PRIVACY).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_STATS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_WIDGETS).eq('id', id).maybeSingle())
