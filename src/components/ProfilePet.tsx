@@ -17,6 +17,14 @@ const BURST_TOTAL_MS = (BURST_EMOJI.length - 1) * BURST_DELAY_MS + BURST_ANIM_MS
 // - v1.247.0: клик по питомцу (вне режима перетаскивания в настройках) запускает
 //   короткую реакцию — прыжок/кручение/пульс/эмодзи-всплеск (petReaction, 'none' —
 //   не реагирует). Чисто декоративно, ничего никуда не сохраняет.
+// - v1.256.0: «Свободно» раньше считало x%/y% от ВСЕЙ карточки профиля — а высота
+//   карточки (MiniProfile.tsx/ProfileCard.tsx) меняется в зависимости от того,
+//   показана ли сейчас активность (игра/музыка/свой статус): эти блоки — обычные
+//   элементы в потоке, они РАСТЯГИВАЮТ карточку, а не лежат поверх неё. Тот же %
+//   от разной высоты — разное место на экране: то же самое место дрожало/съезжало,
+//   стоило появиться или исчезнуть строке активности. Теперь «Свободно» считается
+//   от ФИКСИРОВАННОЙ зоны шапки (баннер + немного под аватар, freeZoneH ниже) —
+//   она не зависит от того, что показано в карточке дальше вниз.
 export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }: {
   p: ProfilePrefs; scale?: number; card?: PetCard; bannerH?: number
   onFreeMove?: (card: PetCard, pos: PetFree, done: boolean) => void
@@ -45,6 +53,10 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
   const reaction = p.petReaction ?? 'bounce'
   const clickable = !draggable && reaction !== 'none'
   const animClass = reacting && reaction !== 'burst' ? ' pet-react-' + reaction : ''
+  // v1.256.0: высота зоны, от которой считаются проценты «Свободно» — банер плюс
+  // немного места под аватар (не вся карточка, см. комментарий выше). bannerH
+  // может не прийти (старые вызовы) — тогда разумная по умолчанию высота.
+  const freeZoneH = (bannerH ?? 100) + Math.round(size * 0.6)
 
   // v1.247.0: позиционирование (pos, включая translate(-50%,-50%) для «Свободно») —
   // на ВНЕШНЕЙ обёртке; сама реакция (scale/rotate и т.п.) — на ВНУТРЕННЕМ элементе.
@@ -100,7 +112,7 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
       }
     }
     return (
-      <div style={{ ...pos, width: size, height: size, zIndex: 7, cursor: 'grab', touchAction: 'none' }}
+      <div style={{ ...pos, width: size, height: size, zIndex: 7, cursor: 'grab', touchAction: 'none', pointerEvents: 'auto' }}
         title="Тащи, чтобы переставить питомца"
         onPointerDown={e => { dragging.current = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) }}
         onPointerMove={e => { if (!dragging.current) return; const np = calc(e); if (np) { lastPos.current = np; onFreeMove!(card, np, false) } }}
@@ -108,5 +120,15 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
     )
   })()
 
+  // v1.256.0: только «Свободно» заворачивается в свою зону стабильного размера —
+  // остальные позиции (углы/«сверху») как и раньше считаются от родителя, который
+  // даёт вызывающий компонент, их это не касается и ничего в их поведении не меняется.
+  if (p.petPos === 'free') {
+    return (
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: freeZoneH, pointerEvents: 'none' }}>
+        {media}{burst}{draggableLayer}
+      </div>
+    )
+  }
   return <>{media}{burst}{draggableLayer}</>
 }
