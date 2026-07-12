@@ -9,6 +9,7 @@ import { uploadTo } from '../lib/storage'
 import { isVideoUrl, trimVideoTo5s } from '../lib/videoAvatar'
 import { PlateBg } from './PlateBg'
 import { ProfilePet } from './ProfilePet'
+import { Avatar } from './Avatar'
 import { Icon } from './icons'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
@@ -17,6 +18,7 @@ import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appI
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { IS_MOBILE } from '../lib/mobile'
+import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
@@ -225,6 +227,17 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const [pw1, setPw1] = useState('')
   const [pw2, setPw2] = useState('')
   const [pwBusy, setPwBusy] = useState(false)
+  // v1.246.0: список заблокированных — «Данные и конфиденциальность» внизу, как в
+  // Discord. Раньше заблокировать можно было (ПКМ на друге), а посмотреть список
+  // и разблокировать — нигде.
+  const [blockedList, setBlockedList] = useState<BlockedEntry[] | null>(null)
+  useEffect(() => { if (user) listBlockedByMe(user.id).then(setBlockedList) }, [user])
+  async function doUnblock(e: BlockedEntry) {
+    if (!user) return
+    await unblockUser(user.id, e.id)
+    setBlockedList(l => (l ?? []).filter(x => x.id !== e.id))
+    toastOk(e.username + ' разблокирован(а)')
+  }
 
   useEffect(() => {
     if (!user) return
@@ -875,6 +888,15 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Звуки уведомлений"><Toggle on={view.notifSounds} onChange={v => setD('notifSounds', v)} /></Row>
                 <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={view.mentionsOnly} onChange={v => setD('mentionsOnly', v)} /></Row>
                 <Row title="Счётчик на иконке" desc="Показывать количество непрочитанных"><Toggle on={view.unreadBadge} onChange={v => setD('unreadBadge', v)} /></Row>
+
+                <div className="pqs-sec-t">Новые серверы</div>
+                <div className="pqs2-desc">Режим уведомлений, с которым открывается сервер, на котором ты ещё ничего не выбирал(а) вручную. Уже настроенные серверы это не трогает.</div>
+                <div className="pqs-seg">
+                  {([['all', 'Все сообщения'], ['mentions', 'Только @упоминания'], ['mute', 'Без уведомлений']] as const).map(([v, label]) => (
+                    <button key={v} className={'pqs-seg-btn' + (view.defaultServerNotif === v ? ' on' : '')}
+                      onClick={() => setD('defaultServerNotif', v)}>{label}</button>
+                  ))}
+                </div>
               </>}
 
               {cat === 'voice' && <>
@@ -887,6 +909,15 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   <input type="range" min={0} max={100} value={view.spkVol} onChange={e => setD('spkVol', Number(e.target.value))} />
                 </Row>
                 <div className="pqs-note">Выбор устройств и обработка голоса применяются при звонке (LiveKit).</div>
+
+                <div className="pqs-sec-t">Режим ввода</div>
+                <Row title="Голос по нажатию (push-to-talk)" desc="Микрофон говорит, только пока зажата клавиша — вместо обычного вкл/выкл">
+                  <Toggle on={view.pttMode} onChange={v => setD('pttMode', v)} />
+                </Row>
+                {view.pttMode && <Row title="Клавиша" desc="Зажми во время звонка, чтобы говорить">
+                  <KeyCapture value={view.keyPTT} onChange={v => setD('keyPTT', v)} />
+                </Row>}
+                {view.pttMode && !view.keyPTT && <div className="pqs-font-warn">⚠️ Клавиша не назначена — микрофон останется выключенным весь звонок.</div>}
               </>}
 
               {cat === 'sounds' && <>
@@ -982,6 +1013,20 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 </div>
 
                 <Row title="Сбор данных об использовании" desc="Помогает улучшить приложение"><Toggle on={view.dataCollect} onChange={v => setD('dataCollect', v)} /></Row>
+
+                <div className="pqs-sec-t">Заблокированные — {blockedList?.length ?? 0}</div>
+                <div className="pqs2-desc">Они не могут писать тебе, звонить и видеть твои сообщения — и наоборот. Разблокировать можно в любой момент.</div>
+                {blockedList === null && <div className="pqs-code-sub">Загрузка…</div>}
+                {blockedList?.length === 0 && <div className="pqs-code-sub">Список пуст.</div>}
+                {blockedList && blockedList.length > 0 && <div className="pqs-acc-card2" style={{ padding: 6 }}>
+                  {blockedList.map(e => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px' }}>
+                      <Avatar name={e.username} url={e.avatar_url} size={32} userId={e.id} />
+                      <span style={{ flex: 1, fontWeight: 600 }}>{e.username}</span>
+                      <button className="pqs2-btn ghost" onClick={() => doUnblock(e)}>Разблокировать</button>
+                    </div>
+                  ))}
+                </div>}
               </>}
 
               {cat === 'activity' && <>

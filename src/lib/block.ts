@@ -28,3 +28,15 @@ export async function unblockUser(meId: string, otherId: string) {
   await supabase.from('blocked_users').delete().eq('blocker_id', meId).eq('blocked_id', otherId)
   blocked.delete(otherId)
 }
+
+// v1.246.0: список тех, кого заблокировал именно я (а не любая сторона блока, как
+// в `blocked` выше) — для экрана «Заблокированные» в настройках. Разблокировать
+// раньше было нельзя вообще — обратной кнопки не было нигде в интерфейсе.
+export interface BlockedEntry { id: string; username: string; avatar_url: string | null }
+export async function listBlockedByMe(meId: string): Promise<BlockedEntry[]> {
+  const { data: rows } = await supabase.from('blocked_users').select('blocked_id').eq('blocker_id', meId)
+  const ids = (rows ?? []).map((r: any) => r.blocked_id)
+  if (!ids.length) return []
+  const { data: profs } = await supabase.from('profiles').select('id, username, avatar_url').in('id', ids)
+  return ((profs ?? []) as any[]).map(p => ({ id: p.id, username: p.username, avatar_url: p.avatar_url ?? null }))
+}

@@ -393,6 +393,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
   const { settings } = useSettings()
   const [pctx, setPctx] = useState<{ p: any; name: string; avatar: string | null | undefined; x: number; y: number } | null>(null)
   const [mic, setMic] = useState(true)
+  const pttHeldRef = useRef(false)   // v1.246.0: клавиша push-to-talk сейчас зажата — переживает ре-рендеры
   const [cam, setCam] = useState(false)
   const [screen, setScreen] = useState(false)
   const [deaf, setDeaf] = useState(false)
@@ -650,6 +651,51 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  })
+
+  // v1.246.0: push-to-talk — включили режим в настройках, сразу глушим микрофон
+  // (тишина, пока не зажата назначенная клавиша), только когда переключили сам режим,
+  // не на каждый ре-рендер — иначе ручное включение микрофона кнопкой тут же гасилось бы.
+  useEffect(() => {
+    if (!settings.pttMode || !mic) return
+    room.localParticipant.setMicrophoneEnabled(false).catch(() => {}); setMic(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.pttMode])
+
+  // Сами keydown/keyup — без deps (как соседний эффект выше), чтобы всегда читать
+  // свежие mic/deaf/settings.keyPTT из замыкания; pttHeldRef — не локальная
+  // переменная, а ref, потому что эффект переподписывается на каждый ре-рендер
+  // (частый в звонке — говорящие/участники), и обычная `let held` каждый раз
+  // обнулялась бы, а keyup от предыдущей подписки уже не находил бы её «зажатой».
+  useEffect(() => {
+    if (!settings.pttMode || !settings.keyPTT) return
+    const onDown = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return
+      if (pttHeldRef.current || deaf || !matchCombo(e, settings.keyPTT)) return
+      pttHeldRef.current = true; e.preventDefault()
+      room.localParticipant.setMicrophoneEnabled(true).catch(() => {}); setMic(true)
+    }
+    const onUp = (e: KeyboardEvent) => {
+      if (!pttHeldRef.current || !matchCombo(e, settings.keyPTT)) return
+      pttHeldRef.current = false; e.preventDefault()
+      room.localParticipant.setMicrophoneEnabled(false).catch(() => {}); setMic(false)
+    }
+    // Alt-tab/переключение окна пока клавиша зажата не пришлёт keyup — без этого
+    // микрофон остался бы включён на весь оставшийся звонок.
+    const onBlur = () => {
+      if (!pttHeldRef.current) return
+      pttHeldRef.current = false
+      room.localParticipant.setMicrophoneEnabled(false).catch(() => {}); setMic(false)
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', onBlur)
+    }
   })
 
   // v1.78.0: в полноэкранном режиме панель и шапка прячутся, если мышь замерла.

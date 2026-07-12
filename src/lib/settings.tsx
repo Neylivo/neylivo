@@ -9,7 +9,7 @@ import { customNickFamily } from './profilePrefs'
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dataCollect'] as const
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dataCollect', 'defaultServerNotif'] as const
 type AccountKey = typeof ACCOUNT_KEYS[number]
 function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
@@ -63,6 +63,15 @@ export interface Settings {
   keyMusic: string
   keyHome: string
   appIcon: string   // v1.160.0: свой логотип приложения — data URL загруженного файла, '' = стандартный
+  // v1.246.0: голос по нажатию (push-to-talk) — как в Discord. pttMode выключен по
+  // умолчанию (обычное вкл/выкл микрофона); keyPTT — клавиша, локальная настройка
+  // устройства (разная клавиатура/раскладка на разных устройствах), не синхронизируется.
+  pttMode: boolean
+  keyPTT: string
+  // v1.246.0: режим уведомлений по умолчанию для серверов, на которых явно ничего
+  // не выбирали (см. notifModeOf в src/lib/srvNotify.ts) — синхронная account-настройка,
+  // чтобы новый сервер сразу открывался с привычным режимом на любом устройстве.
+  defaultServerNotif: 'all' | 'mentions' | 'mute'
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
@@ -94,6 +103,8 @@ export const DEFAULTS: Settings = {
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,
+  pttMode: false, keyPTT: '',
+  defaultServerNotif: 'all',
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
