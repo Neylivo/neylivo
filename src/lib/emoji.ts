@@ -159,11 +159,16 @@ export function initCustomEmoji(uid?: string) {
   fetchCustomEmoji()
   fetchPacks()
   if (uid) fetchFavs(uid)
-  supabase.channel('custom_emoji_live')
+  const ch = supabase.channel('custom_emoji_live')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_emoji' }, () => { fetchCustomEmoji() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_packs' }, () => { fetchPacks() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_pack_items' }, () => { fetchPacks() })
-    .subscribe()
+  // v1.253.0: emoji_favs не был в publication realtime (см. supabase/64_more_realtime_2.sql) —
+  // избранное эмодзи (звёздочка) не обновлялось живьём между устройствами одного
+  // аккаунта. uid известен здесь только при первом вызове (см. Home.tsx) — но это
+  // и есть единственный раз, когда started ещё false и канал создаётся.
+  if (uid) ch.on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_favs', filter: 'user_id=eq.' + uid }, () => { fetchFavs(uid) })
+  ch.subscribe()
 }
 
 export async function addCustom(name: string, url: string, ownerId: string): Promise<CustomEmoji> {

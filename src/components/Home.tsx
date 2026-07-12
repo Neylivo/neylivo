@@ -303,7 +303,7 @@ export function Home() {
 
   useEffect(() => {
     if (!user) return
-    initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
+    initCustomEmoji(user.id)   // load + realtime-subscribe the shared custom-emoji cache
     initServerEmoji()   // v1.250.0: то же самое для эмодзи/стикеров серверов
     initNotifications() // ask once for desktop-notification permission
     registerPush(user.id) // subscribe to real web-push (works even when app closed)

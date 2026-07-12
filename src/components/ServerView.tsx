@@ -1162,7 +1162,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             return (
             <div key={m.user_id} className={'member' + (m.nameplate_outline ? ' plate-outline' : '')}
               style={m.nameplate_outline ? { ['--plate-oc' as any]: m.nameplate_outline } : undefined}
-              onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: e.clientX, y: e.clientY }) }}
+              onContextMenu={e => { if (!(isOwner || canManageRoles || canKick || canBan || m.user_id === user?.id)) return; e.preventDefault(); setRolePop({ userId: m.user_id, x: e.clientX, y: e.clientY }) }}
               onClick={e => setMini({
               userId: m.user_id, name: m.member_name, avatarUrl: m.avatar_url, status: statusOf(m.user_id),
               roles: allRolesOf(m.user_id).map(r => ({ name: r.name, color: r.color })), activity: act,
@@ -1203,6 +1203,24 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {rolePop && <>
         <div className="ctx-overlay" onClick={() => setRolePop(null)} onContextMenu={e => { e.preventDefault(); setRolePop(null) }} />
         <div className="ctx-menu role-pop" ref={rolePopClamp.ref} style={rolePopClamp.style}>
+          {rolePop.userId === user?.id && <>
+            {/* v1.253.0: свой ник на ЭТОМ сервере — раньше поменять было нельзя вообще
+                (member_name писался один раз при вступлении и никогда потом не обновлялся,
+                даже сменой обычного ника в настройках аккаунта). */}
+            <div className="ctx-item" onClick={async () => {
+              setRolePop(null)
+              const cur = members.find(m => m.user_id === user?.id)?.member_name ?? username
+              const v = await promptUi('Ник на этом сервере (пусто — как обычный ник)', { placeholder: username, initial: cur, okText: 'Сохранить' })
+              if (v === null) return
+              const trimmed = v.trim()
+              const next = trimmed || username
+              const { error } = await supabase.from('server_members').update({ member_name: next, nickname_override: !!trimmed }).eq('server_id', server.id).eq('user_id', user!.id)
+              if (error) { toastErr(error.message); return }
+              await loadMembers()
+              toastOk(trimmed ? 'Ник на сервере изменён' : 'Ник на сервере сброшен до обычного')
+            }}><Icon name="edit" size={14} /> Изменить ник на сервере</div>
+            <div className="ctx-sep" />
+          </>}
           {canManageRoles && <>
             <div className="role-pop-h">Роли участника</div>
             {roles.map(r => {

@@ -456,6 +456,16 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     setProfDraft({})
     const finalUname = newUname || orig.uname
     const finalNick = newNick || finalUname
+    // v1.253.0: ник на серверах (server_members.member_name) раньше писался один раз
+    // при вступлении и никогда не обновлялся при смене обычного ника — список
+    // участников и автодополнение @упоминаний годами показывали старое имя. Обновляем
+    // везде, КРОМЕ серверов, где явно выставлен свой ник для сервера (nickname_override,
+    // см. «Изменить ник на сервере» в ServerView.tsx) — его трогать не нужно.
+    if (finalNick !== orig.name && user) {
+      supabase.from('server_members').update({ member_name: finalNick })
+        .eq('user_id', user.id).eq('nickname_override', false)
+        .then(({ error }) => { if (error) console.warn('member_name sync failed', error.message) })
+    }
     setName(finalNick); setUname(finalUname)
     setOrig({ name: finalNick, uname: finalUname, about, primary, accent })
     window.dispatchEvent(new CustomEvent('ponoi-profile-updated', { detail: { nick: newNick || newUname || username, handle: newUname || orig.uname } }))
