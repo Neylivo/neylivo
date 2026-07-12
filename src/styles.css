@@ -175,6 +175,8 @@ body {
 .msg-att-broken { display:inline-flex; align-items:center; gap:8px; margin-top:6px; padding:10px 14px; border-radius:8px; background:var(--bg3); color:var(--mut); text-decoration:none; font-size:13px; }
 .msg-att-broken:hover { color:var(--tx); }
 .msg-att-video { background:#000; min-width:220px; min-height:124px; }
+/* v1.250.0: стикер в сообщении — крупный, без рамки/фона, как в Discord. */
+.msg-sticker { width:160px; height:160px; object-fit:contain; margin-top:6px; display:block; }
 
 /* music */
 .mus-full { flex:1; position:relative; display:flex; flex-direction:column; overflow:hidden; background:linear-gradient(160deg,#2b2d31,#1e1f22); }
@@ -420,6 +422,9 @@ input[type=range] { accent-color:var(--brand); }
 .gif-cell { position:relative; cursor:pointer; border-radius:8px; overflow:hidden; aspect-ratio:16/10; background:var(--bg3); }
 .gif-cell img { width:100%; height:100%; object-fit:cover; }
 .gif-cell:hover { outline:2px solid var(--brand); }
+/* v1.250.0: стикеры — квадратные, с прозрачностью, без обрезки (в отличие от GIF). */
+.sticker-cell { aspect-ratio:1/1; background:transparent; }
+.sticker-cell img { object-fit:contain; padding:6px; }
 
 
 /* ===== pass 6c: reactions, context menu, pins, inline emoji ===== */

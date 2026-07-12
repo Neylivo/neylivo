@@ -11,6 +11,7 @@ import { CreateServerModal, FindServerModal, JoinServerModal, ServerCtxMenu, Ser
 import { ServerSettings } from './ServerSettings'
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
+import { initServerEmoji, setMyServers } from '../lib/serverEmoji'
 import { initNotifications } from '../lib/notify'
 import { registerPush } from '../lib/push'
 import { Icon } from './icons'
@@ -192,6 +193,10 @@ export function Home() {
         chMap.current = map
       })
   }, [servers])
+  // v1.250.0: пак эмодзи/стикеров сервера доступен всем участникам автоматически —
+  // просто перечитываем его для АКТУАЛЬНОГО списка серверов пользователя, без
+  // отдельного шага «выдать доступ» при вступлении/выходе.
+  useEffect(() => { setMyServers(servers.map(s => ({ id: s.id, name: s.name }))) }, [servers])
   // v1.239.0: мои роли на каждом сервере (имена) — чтобы упоминание роли (@Название),
   // а не только меня лично, тоже зажигало красный кружок/пуш, как в Discord.
   const myRoleNamesBySrv = useRef<Record<string, string[]>>({})
@@ -299,6 +304,7 @@ export function Home() {
   useEffect(() => {
     if (!user) return
     initCustomEmoji()   // load + realtime-subscribe the shared custom-emoji cache
+    initServerEmoji()   // v1.250.0: то же самое для эмодзи/стикеров серверов
     initNotifications() // ask once for desktop-notification permission
     registerPush(user.id) // subscribe to real web-push (works even when app closed)
     // v1.39.0: ник (display_name) — отображаемое имя, показывается везде, если задан;

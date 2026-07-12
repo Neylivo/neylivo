@@ -5,12 +5,14 @@ import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
 import { resolveGif, TENOR_KEY, TENOR_V2 } from '../lib/gifUrl'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
+import { loadStickers, serverNameOf, type ServerSticker } from '../lib/serverEmoji'
 
 // GIF-пикер как в Discord: вкладки «Гифки» (поиск), «По ссылке», «Мои GIF»
-// (общая коллекция + избранное) и «Эмодзи» (переключает на пикер эмодзи).
+// (общая коллекция + избранное), «Стикеры» (серверов, где я состою) и «Эмодзи»
+// (переключает на пикер эмодзи).
 // Поиск и «популярные» работают через Tenor API v2 (нужен VITE_TENOR_KEY —
 // Tenor v1 отключён Google). Без ключа вкладка «Гифки» показывает подсказку,
-// но «По ссылке»/«Мои GIF» работают без него, ключ не требуется.
+// но «По ссылке»/«Мои GIF»/«Стикеры» работают без него, ключ не требуется.
 
 async function tenorGifs(path: string): Promise<string[]> {
   if (!TENOR_KEY) return []
@@ -26,10 +28,20 @@ interface Gif { id: string; url: string }
 // Избранные GIF: личный список, синхронизируется через user_prefs (миграция 39).
 function loadFavs(): string[] { return getUserPrefs().gif_favs }
 
-export function GifPicker({ onPick, onClose, onEmojiTab }:
-  { onPick: (url: string) => void; onClose: () => void; onEmojiTab?: () => void }) {
+export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
+  { onPick: (url: string) => void
+    // v1.250.0: стикер — отдельный колбэк (не onPick): отправляется как вложение
+    // attach_type='sticker' (см. Composer.tsx), а не как обычная картинка/GIF.
+    onPickSticker?: (url: string, name: string) => void
+    onClose: () => void; onEmojiTab?: () => void }) {
   const { user } = useAuth()
-  const [tab, setTab] = useState<'gifs' | 'url' | 'mine'>('gifs')
+  const [tab, setTab] = useState<'gifs' | 'url' | 'mine' | 'stickers'>('gifs')
+  const [stickers, setStickers] = useState<ServerSticker[]>(loadStickers())
+  useEffect(() => {
+    const h = () => setStickers([...loadStickers()])
+    window.addEventListener('ponoi-stickers', h)
+    return () => window.removeEventListener('ponoi-stickers', h)
+  }, [])
   const [q, setQ] = useState('')
   const [list, setList] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -112,6 +124,7 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
         <button type="button" className={tab === 'gifs' ? 'on' : ''} onClick={() => setTab('gifs')}>Гифки</button>
         <button type="button" className={tab === 'url' ? 'on' : ''} onClick={() => setTab('url')}>По ссылке</button>
         <button type="button" className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Мои GIF</button>
+        {stickers.length > 0 && <button type="button" className={tab === 'stickers' ? 'on' : ''} onClick={() => setTab('stickers')}>Стикеры</button>}
         <button type="button" onClick={() => onEmojiTab?.()}>Эмодзи</button>
         <button type="button" className="emoji-x" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
@@ -146,6 +159,19 @@ export function GifPicker({ onPick, onClose, onEmojiTab }:
         <div className="emoji-grp">Общие GIF</div>
         {mine.length === 0 && <div className="ep2-hint">Пока пусто — добавь GIF на вкладке «По ссылке».</div>}
         <div className="gif-grid">{mine.map(g => cell(g.url, g.id))}</div>
+      </div>}
+      {tab === 'stickers' && <div className="emoji-scroll">
+        {Object.entries(stickers.reduce((by, s) => { (by[s.server_id] ??= []).push(s); return by }, {} as Record<string, ServerSticker[]>))
+          .map(([sid, list]) => (
+            <div key={sid}>
+              <div className="emoji-grp">{serverNameOf(sid).toUpperCase()}</div>
+              <div className="gif-grid">{list.map(s => (
+                <div key={s.id} className="gif-cell sticker-cell" title={s.name} onClick={() => onPickSticker?.(s.url, s.name)}>
+                  <img src={s.url} alt={s.name} loading="lazy" />
+                </div>
+              ))}</div>
+            </div>
+          ))}
       </div>}
     </div>
   )

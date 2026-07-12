@@ -19,7 +19,13 @@ export type CustomEmoji = Record<string, string> // name -> url
 export type EmojiPack = { id: string; name: string; owner: string | null; items: string[] }
 
 // in-memory caches — kept in sync with the DB; seeded from local mirrors
-let cache: CustomEmoji = readMirror()
+let personalCache: CustomEmoji = readMirror()
+// v1.250.0: серверные эмодзи (src/lib/serverEmoji.ts) — держим отдельно от
+// personalCache и пересобираем merged `cache` при изменении ЛЮБОЙ из двух
+// частей: fetchCustomEmoji() раньше писал `cache = map` целиком и стирал бы
+// подмешанные серверные эмодзи при каждом realtime-обновлении личных.
+let serverExtra: CustomEmoji = {}
+let cache: CustomEmoji = personalCache
 let owners: Record<string, string | null> = {}
 let favs = new Set<string>(readFavsMirror())
 let packs: EmojiPack[] = []
@@ -38,8 +44,22 @@ function writeFavsMirror() {
   try { localStorage.setItem(FAVS_KEY, JSON.stringify(Array.from(favs))) } catch {}
 }
 
+function recomputeCache() {
+  cache = { ...personalCache, ...serverExtra }
+  writeMirror(cache)
+  window.dispatchEvent(new CustomEvent('ponoi-custom-emoji'))
+}
 // Synchronous reads used by the message renderer + picker.
 export function loadCustom(): CustomEmoji { return cache }
+// v1.250.0: серверные эмодзи (src/lib/serverEmoji.ts) подмешиваются в тот же кэш,
+// чтобы :имя: в тексте сообщений рендерилось одинаково для личных и серверных —
+// md.tsx знает только один плоский справочник «имя -> картинка», не два разных.
+// Вызывается с ПОЛНЫМ текущим набором серверных эмодзи (не патчем) — иначе
+// удалённый на сервере эмодзи продолжал бы резолвиться из старой подмеси.
+export function mergeIntoCache(extra: CustomEmoji) {
+  serverExtra = extra
+  recomputeCache()
+}
 export function emojiOwner(name: string): string | null { return owners[name] ?? null }
 export function loadFavs(): Set<string> { return favs }
 export function loadPacks(): EmojiPack[] { return packs }
@@ -64,11 +84,10 @@ export async function fetchCustomEmoji(): Promise<CustomEmoji> {
   const map: CustomEmoji = {}
   const own: Record<string, string | null> = {}
   for (const r of ((data ?? []) as any[])) { map[r.name] = r.url; own[r.name] = r.owner ?? null }
-  cache = map
+  personalCache = map
   owners = own
-  writeMirror(map)
-  window.dispatchEvent(new CustomEvent('ponoi-custom-emoji'))
-  return map
+  recomputeCache()
+  return cache
 }
 
 export async function fetchFavs(uid: string): Promise<Set<string>> {

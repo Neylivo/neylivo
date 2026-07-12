@@ -6,6 +6,7 @@ import {
   loadFavs, fetchFavs, toggleFav, addFavs,
   loadPacks, fetchPacks, createPack, deletePack,
 } from '../lib/emoji'
+import { loadServerEmoji, serverNameOf, type ServerEmoji } from '../lib/serverEmoji'
 import { uploadTo } from '../lib/storage'
 import { toastErr, toastOk } from '../lib/toast'
 import { promptUi, confirmUi } from '../lib/confirm'
@@ -23,6 +24,9 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
   const [custom, setCustom] = useState(loadCustom())
   const [favs, setFavs] = useState<Set<string>>(new Set(loadFavs()))
   const [packs, setPacks] = useState(loadPacks())
+  // v1.250.0: эмодзи серверов, где я состою — доступны автоматически, без
+  // отдельного шага (см. src/lib/serverEmoji.ts).
+  const [srvEmoji, setSrvEmoji] = useState<ServerEmoji[]>(loadServerEmoji())
   const [q, setQ] = useState('')
   const [cat, setCat] = useState(-1)
   const [ctx, setCtx] = useState<{ x: number; y: number; name: string } | null>(null)
@@ -40,15 +44,18 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
     const h1 = () => setCustom({ ...loadCustom() })
     const h2 = () => setFavs(new Set(loadFavs()))
     const h3 = () => setPacks([...loadPacks()])
+    const h4 = () => setSrvEmoji([...loadServerEmoji()])
     window.addEventListener('ponoi-custom-emoji', h1)
     window.addEventListener('ponoi-emoji-favs', h2)
     window.addEventListener('ponoi-emoji-packs', h3)
+    window.addEventListener('ponoi-server-emoji', h4)
     if (user) fetchFavs(user.id)
     fetchPacks()
     return () => {
       window.removeEventListener('ponoi-custom-emoji', h1)
       window.removeEventListener('ponoi-emoji-favs', h2)
       window.removeEventListener('ponoi-emoji-packs', h3)
+      window.removeEventListener('ponoi-server-emoji', h4)
     }
     // eslint-disable-next-line
   }, [user?.id])
@@ -139,6 +146,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
           <button type="button" className={cat === -2 ? 'on' : ''} title="Избранные" onClick={() => { setCat(-2); setQ('') }}><Icon name="star" size={18} /></button>
           <button type="button" className={cat === -1 ? 'on' : ''} title="Свои эмодзи" onClick={() => { setCat(-1); setQ('') }}><Icon name="smile" size={18} /></button>
           <button type="button" className={cat === -3 ? 'on' : ''} title="Паки эмодзи" onClick={() => { setCat(-3); setQ('') }}><Icon name="folder" size={18} /></button>
+          {srvEmoji.length > 0 && <button type="button" className={cat === -4 ? 'on' : ''} title="Эмодзи серверов" onClick={() => { setCat(-4); setQ('') }}><Icon name="hash" size={18} /></button>}
           {EMOJI_GROUPS.map((g, i) => (
             <button type="button" key={g.title} className={cat === i ? 'on' : ''} title={g.title} onClick={() => { setCat(i); setQ('') }}><Em>{g.emojis[0]}</Em></button>
           ))}
@@ -168,6 +176,16 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
             </>}
             {packs.map(packBlock)}
             {packs.length === 0 && !selecting && <div className="ep2-hint">Паков пока нет. Собери свой из своих и избранных эмодзи — его увидят все, и любой сможет добавить его в избранное.</div>}
+          </> : cat === -4 ? <>
+            {/* v1.250.0: эмодзи серверов, где я состою, — группами по серверу. */}
+            {Object.entries(srvEmoji.reduce((by, e) => { (by[e.server_id] ??= []).push(e); return by }, {} as Record<string, ServerEmoji[]>))
+              .map(([sid, list]) => (
+                <div key={sid}>
+                  <div className="emoji-grp">{serverNameOf(sid).toUpperCase()}</div>
+                  <div className="ep2-grid">{list.map(e => cell([e.name, e.url]))}</div>
+                </div>
+              ))}
+            {srvEmoji.length === 0 && <div className="ep2-hint">На серверах, где ты состоишь, пока нет своих эмодзи.</div>}
           </> : cat === -1 ? <>
             <div className="emoji-grp">СВОИ ЭМОДЗИ</div>
             <div className="ep2-grid">

@@ -367,6 +367,15 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     try { await onSend('', { url, type: 'image' }) } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setBusy(false) }
   }
+  // v1.250.0: стикер — как GIF, но attach_type='sticker' (см. MessageList.tsx/
+  // Composer.tsx Attachment — рендерится крупнее и без рамки вложения, как в Discord).
+  async function sendSticker(url: string, name: string) {
+    setGif(false)
+    if (!user) return
+    setBusy(true)
+    try { await onSend('', { url, type: 'sticker:' + name }) } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setBusy(false) }
+  }
 
   // Выбор папки (v1.70.0): файлы прикрепляются к сообщению группой (до 10),
   // можно добавить подпись и отправить всё одним сообщением.
@@ -664,7 +673,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           {!isEditing && <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
           {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
-          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
+          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
         </div>
         {!busy && <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>}
         {busy && <button type="submit" className="send-busy" disabled>…</button>}
@@ -761,6 +770,17 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   }
   const clean = url.replace('#spoiler', '')
   const upOverlay = uploading && <div className="att-upload-ov"><span className="att-spin" />{progress != null && <b>{Math.round(progress * 100)}%</b>}</div>
+  // v1.250.0: стикер — крупная картинка БЕЗ рамки/спойлера/лайтбокса вложения
+  // (как в Discord: attach_type хранится как 'sticker:<имя>' — второй колонки
+  // под название не заводили, имя нужно только для подписи при наведении).
+  if (type?.startsWith('sticker')) {
+    const name = type.slice('sticker:'.length) || 'стикер'
+    return failed ? (
+      <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
+        <Icon name="image" size={16} /> Не удалось загрузить стикер
+      </a>
+    ) : <img className="msg-sticker" src={clean} alt={name} title={name} loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
+  }
   // Голосовое сообщение / аудио — встроенный плеер (blob: локально играбелен, пока грузится).
   if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
   // v1.185.0: непонятно, что за файл будет на сервере (blob: без расширения) —

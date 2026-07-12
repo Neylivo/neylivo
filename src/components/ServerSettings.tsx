@@ -26,6 +26,7 @@ import { Icon } from './icons'
 import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 import { EmojiPicker } from './EmojiPicker'
 import { TagEmoji, tagFontFamily } from './TagEmoji'
+import { loadServerEmoji, loadStickers, addServerEmoji, addSticker, removeServerEmoji, removeSticker, type ServerEmoji, type ServerSticker } from '../lib/serverEmoji'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
 
@@ -144,6 +145,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const sndRef = useRef<HTMLInputElement>(null)
   const [avatar, setAvatar] = useState<string | null>(server.avatar_url ?? null)
   const initials = (server.name || 'S').slice(0, 2).toUpperCase()
+  // v1.250.0: настоящие эмодзи/стикеры сервера (supabase/61_server_emoji_stickers.sql) —
+  // раньше вкладки писали в servers.settings.emojis/.stickers, которые никто не читал.
+  const [srvEmojis, setSrvEmojis] = useState<ServerEmoji[]>(() => loadServerEmoji().filter(e => e.server_id === server.id))
+  const [srvStickers, setSrvStickers] = useState<ServerSticker[]>(() => loadStickers().filter(s => s.server_id === server.id))
+  useEffect(() => {
+    const onE = () => setSrvEmojis(loadServerEmoji().filter(e => e.server_id === server.id))
+    const onS = () => setSrvStickers(loadStickers().filter(s => s.server_id === server.id))
+    window.addEventListener('ponoi-server-emoji', onE)
+    window.addEventListener('ponoi-stickers', onS)
+    return () => { window.removeEventListener('ponoi-server-emoji', onE); window.removeEventListener('ponoi-stickers', onS) }
+  }, [server.id])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -480,34 +492,38 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'emoji' && <>
           <div className="cset-h">Эмодзи</div>
-          <div className="cset-hint" style={{ marginTop: -12 }}>Добавьте пользовательские эмодзи для всех на этом сервере. В Ponoi — без лимитов и подписок: любые эмодзи, в том числе анимированные, доступны всем.</div>
+          <div className="cset-hint" style={{ marginTop: -12 }}>Добавьте пользовательские эмодзи для всех на этом сервере — появляются автоматически у каждого участника, как только он вступает (в пикере эмодзи и в тексте через :имя:). В Ponoi — без лимитов и подписок: любые эмодзи, в том числе анимированные, доступны всем.</div>
           <button className="modal-primary" style={{ marginTop: 14 }} onClick={() => emojiRef.current?.click()}>{busy ? '…' : 'Загрузить эмодзи'}</button>
-          <input ref={emojiRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, (url, f) => persistNow({ ...st, emojis: [...(st.emojis ?? []), { name: cleanName(f), url }] }))} />
-          <div className="cset-hint" style={{ marginTop: 10 }}>Если вы хотите загрузить несколько эмодзи или пропустить редактирование, перетащите файлы на эту страницу. Эмодзи будут названы именем файла.</div>
+          <input ref={emojiRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, async (url, f) => {
+            try { await addServerEmoji(server.id, cleanName(f), url, uid) } catch (err: any) { toastErr(err.message ?? String(err)) }
+          })} />
+          <div className="cset-hint" style={{ marginTop: 10 }}>Эмодзи называются именем файла — переименовать можно, удалив и загрузив заново с другим именем.</div>
           <div className="cset-div" />
-          {(st.emojis ?? []).length === 0
+          {srvEmojis.length === 0
             ? <div className="sset-empty">🙂<b>ЭМОДЗИ НЕТ</b>Начните вечеринку, загрузив эмодзи</div>
-            : <div className="sset-egrid">{(st.emojis ?? []).map((em: any, i: number) => (
-              <div key={i} className="sset-ecell">
+            : <div className="sset-egrid">{srvEmojis.map(em => (
+              <div key={em.id} className="sset-ecell">
                 <img src={em.url} alt={em.name} />
                 <div className="nm">:{em.name}:</div>
-                <button className="sset-edel" onClick={() => persistNow({ ...st, emojis: (st.emojis ?? []).filter((_: any, j: number) => j !== i) })}><Icon name="close" size={11} /></button>
+                <button className="sset-edel" onClick={() => removeServerEmoji(em.id)}><Icon name="close" size={11} /></button>
               </div>))}</div>}
         </>}
 
         {tab === 'stickers' && <>
           <div className="cset-h">Стикеры</div>
-          <div className="cset-hint" style={{ marginTop: -12 }}>Загружайте стикеры, которые будут доступны всем участникам сервера. В Ponoi нет уровней и слотов — стикеров может быть сколько угодно, бесплатно.</div>
+          <div className="cset-hint" style={{ marginTop: -12 }}>Загружайте стикеры — появляются автоматически у каждого участника, как только он вступает (кнопка стикеров рядом с composer). В Ponoi нет уровней и слотов — стикеров может быть сколько угодно, бесплатно.</div>
           <button className="modal-primary" style={{ marginTop: 14 }} onClick={() => stkRef.current?.click()}>{busy ? '…' : 'Загрузить стикер'}</button>
-          <input ref={stkRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, (url, f) => persistNow({ ...st, stickers: [...(st.stickers ?? []), { name: cleanName(f), url }] }))} />
+          <input ref={stkRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, async (url, f) => {
+            try { await addSticker(server.id, cleanName(f), url, uid) } catch (err: any) { toastErr(err.message ?? String(err)) }
+          })} />
           <div className="cset-div" />
-          {(st.stickers ?? []).length === 0
+          {srvStickers.length === 0
             ? <div className="sset-empty">🎟️<b>СТИКЕРОВ НЕТ</b>Загрузите первый стикер, чтобы начать тусу</div>
-            : <div className="sset-egrid stk">{(st.stickers ?? []).map((em: any, i: number) => (
-              <div key={i} className="sset-ecell">
+            : <div className="sset-egrid stk">{srvStickers.map(em => (
+              <div key={em.id} className="sset-ecell">
                 <img src={em.url} alt={em.name} style={{ width: 72, height: 72 }} />
                 <div className="nm">{em.name}</div>
-                <button className="sset-edel" onClick={() => persistNow({ ...st, stickers: (st.stickers ?? []).filter((_: any, j: number) => j !== i) })}><Icon name="close" size={11} /></button>
+                <button className="sset-edel" onClick={() => removeSticker(em.id)}><Icon name="close" size={11} /></button>
               </div>))}</div>}
         </>}
 
