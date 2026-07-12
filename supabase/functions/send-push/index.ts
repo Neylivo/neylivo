@@ -76,6 +76,18 @@ Deno.serve(async (req) => {
     let allowed = targets.filter((id) => dmPeers.has(id) || friends.has(id) || sharedServerUsers.has(id))
     if (!allowed.length) return json({ sent: 0, pruned: 0 })
 
+    // v1.266.0: блок (src/lib/block.ts) рвёт переписку в обе стороны — но раньше
+    // никак не проверялся тут, поэтому уведомление всё равно доходило (например,
+    // от заблокированного человека — упоминание в общем сервере, куда блок вас
+    // обоих не выгоняет). Убираем любую пару, где есть блок в любую сторону.
+    const { data: blockRows } = await admin.from('blocked_users').select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`)
+    const blockedWith = new Set(
+      (blockRows ?? []).map((b: any) => (b.blocker_id === user.id ? b.blocked_id : b.blocker_id))
+    )
+    allowed = allowed.filter((id) => !blockedWith.has(id))
+    if (!allowed.length) return json({ sent: 0, pruned: 0 })
+
     // v1.243.0: заглушки/режим уведомлений получателей — см. комментарий над Deno.serve.
     if (ctx && (ctx.kind === 'dm' || ctx.kind === 'channel')) {
       const { data: prefs } = await admin.from('user_prefs')

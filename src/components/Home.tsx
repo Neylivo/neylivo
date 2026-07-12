@@ -24,7 +24,7 @@ import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
 import { bumpDm, bumpMention, bumpSoft, clearBadgeKey, useBadgeCount } from '../lib/badge'
-import { isDmMuted } from '../lib/userPrefs'
+import { isDmMuted, setChRead } from '../lib/userPrefs'
 import { mentionsUser, mentionsRoleName } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
@@ -453,7 +453,19 @@ export function Home() {
       setLastServer(null); setView({ kind: 'dm' }); refresh()
       return
     }
-    if (k === 'read') { clearUnread(server.id); toastOk('Отмечено прочитанным'); return }
+    if (k === 'read') {
+      // v1.266.0: раньше только гасил точку в сайдбаре (clearUnread) — сами
+      // каналы сервера свою «непрочитанность» (ch_read в userPrefs, см.
+      // refreshUnread в ServerView.tsx) не получали, поэтому при заходе на
+      // сервер список каналов слева всё равно показывал непрочитанное, а после
+      // перезапуска точка на сервере зажигалась заново.
+      clearUnread(server.id)
+      const { data } = await supabase.from('channels').select('id').eq('server_id', server.id)
+      const now = Date.now()
+      for (const c of (data ?? []) as { id: string }[]) setChRead(c.id, now)
+      toastOk('Отмечено прочитанным')
+      return
+    }
     if (k === 'notif') { setNotifFor(server); return }
     if (k === 'mute') {
       const muted = notifModeOf(server.id) === 'mute'

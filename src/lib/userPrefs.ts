@@ -71,11 +71,25 @@ export function initUserPrefs(userId: string | null) {
 
 export function getUserPrefs(): UserPrefsRow { return row }
 
+// v1.266.0: ошибка upsert раньше просто отбрасывалась (.then(() => {})) — на этом
+// устройстве всё выглядело сохранённым (row/localStorage обновились сразу), но
+// на сервере ничего не менялось, и другие устройства аккаунта эту правку никогда
+// не видели, без единого следа в консоли. Полноценная очередь ретраев — отдельная
+// большая задача; здесь — минимум: один повтор через 2с и явный след в консоли,
+// если не удалось и со второго раза (было тихо всегда).
 export function patchUserPrefs(patch: Partial<UserPrefsRow>) {
   row = { ...row, ...patch }
   mirror()
   if (!uid) return
-  supabase.from('user_prefs').upsert({ user_id: uid, ...patch, updated_at: new Date().toISOString() }).then(() => {})
+  const save = uid
+  supabase.from('user_prefs').upsert({ user_id: save, ...patch, updated_at: new Date().toISOString() }).then(({ error }) => {
+    if (!error) return
+    window.setTimeout(() => {
+      supabase.from('user_prefs').upsert({ user_id: save, ...patch, updated_at: new Date().toISOString() }).then(({ error: e2 }) => {
+        if (e2) console.error('patchUserPrefs: не удалось сохранить (повтор тоже не помог)', e2.message, patch)
+      })
+    }, 2000)
+  })
 }
 
 // Отметки «прочитано» для каналов/ЛС — раньше жили в localStorage (ponoi_lastread_*),

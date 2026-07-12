@@ -263,6 +263,13 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
         {tab === 'perms' && <>
           <div className="cset-h">Права канала</div>
           <div className="cset-hint" style={{ marginTop: -12, marginBottom: 14 }}>Используйте права, чтобы настроить возможности пользователей на этом канале.</div>
+          {/* v1.266.0: честно, как и «Журнал аудита»/автомод — эта вкладка сохраняет
+              выбор, но пока НИЧЕГО из него не проверяется ни на сервере, ни на
+              клиенте (нет выбора конкретных ролей/участников, только общий @everyone).
+              Раньше подписи обещали реальную приватность канала — ложно. */}
+          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+            ⚠️ Приватность отдельного канала пока не реализована технически — сохранённый здесь выбор (включая переключатель «Приватный канал» ниже) ни на что не влияет, канал остаётся видимым всем участникам сервера.
+          </div>
           <div className="cset-sync"><Icon name="repeat" size={16} /> Права синхронизированы с категорией «{isVoice ? 'Голосовые каналы' : 'Текстовые каналы'}»</div>
           <div className="cset-priv">
             <div><div className="cset-row-t">🔒 Приватный канал</div>

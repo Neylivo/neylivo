@@ -93,8 +93,10 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
   async function removeCommand(id: string) {
-    await deleteBotCommand(id)
-    setCommands(await fetchBotCommands(bot.id))
+    try {
+      await deleteBotCommand(id)
+      setCommands(await fetchBotCommands(bot.id))
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
   async function remove() {
     if (!await confirmUi('Удалить бота «' + bot.name + '»? Он будет убран со всех серверов, токен перестанет работать.', { okText: 'Удалить', danger: true })) return
