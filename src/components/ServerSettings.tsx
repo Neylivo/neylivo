@@ -27,6 +27,7 @@ import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 import { EmojiPicker } from './EmojiPicker'
 import { TagEmoji, tagFontFamily } from './TagEmoji'
 import { loadServerEmoji, loadStickers, addServerEmoji, addSticker, removeServerEmoji, removeSticker, type ServerEmoji, type ServerSticker } from '../lib/serverEmoji'
+import { fetchAuditLog, logAudit, AUDIT_ACTION_LABEL, type AuditEntry } from '../lib/auditLog'
 
 type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
 
@@ -53,10 +54,13 @@ const EVERYONE_PERMS: { k: string; t: string; d: string }[] = [
   { k: 'speak', t: 'Говорить', d: 'Позволяет участникам говорить в голосовых каналах.' },
 ]
 const AUTOMOD_CARDS: { k: string; ico: string; t: string; d: string; chips: string[]; btn: string }[] = [
-  { k: 'mentions', ico: '@', t: 'Блокировать упоминания спама', d: 'Блокировать сообщения с большим количеством упоминаний ролей и пользователей', chips: ['✕ блокировать сообщение', '# отправить оповещение', '👤 отстранить участника'], btn: 'Настройка' },
-  { k: 'spam', ico: '🙁', t: 'Блокировать контент, похожий на спам', d: 'Проверять сообщения, а также форумные ветки и публикации на наличие спама.', chips: ['✕ блокировать сообщение', '# отправить оповещение'], btn: 'Настройка' },
-  { k: 'badwords', ico: '≡', t: 'Блокировать стандартные недопустимые слова', d: 'Отмечать сообщения, содержащие нецензурную лексику и другие нежелательные слова.', chips: ['✕ блокировать сообщение', '# отправить оповещение'], btn: 'Настройка' },
-  { k: 'custom', ico: '☰+', t: 'Блокировать выбранные пользователем слова', d: 'Создать свой фильтр, чтобы запретить определённую лексику на вашем сервере.', chips: ['✕ блокировать сообщение', '# отправить оповещение', '👤 отстранить участника'], btn: 'Создать' },
+  { k: 'mentions', ico: '@', t: 'Блокировать упоминания спама', d: 'Блокировать сообщения с 5 и более разными упоминаниями участников/ролей разом', chips: ['✕ блокировать сообщение'], btn: 'Включить' },
+  { k: 'spam', ico: '🙁', t: 'Блокировать контент, похожий на спам', d: 'Длинные повторы одного символа или слова подряд (флуд, эмодзи-спам, капс-крик).', chips: ['✕ блокировать сообщение'], btn: 'Включить' },
+  // v1.267.0: «Стандартные недопустимые слова» — раньше отдельная (тоже нерабочая)
+  // карточка; вместо шитого в код списка нецензурной лексики (сомнительная затея —
+  // список либо неполный, либо оскорбительный сам по себе) даём владельцу сервера
+  // самому наполнить список — тот же механизм, что и «Свои слова» ниже.
+  { k: 'custom', ico: '☰+', t: 'Блокировать нецензурную лексику и свои слова', d: 'Список слов и фраз, которые нельзя писать на сервере — свой набор, без скрытого встроенного списка.', chips: ['✕ блокировать сообщение'], btn: 'Настроить' },
 ]
 
 export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
@@ -92,6 +96,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [bqDone, setBqDone] = useState<string | null>(null)  // v1.109.0: выполненный поиск по банам
   // v1.156.0: реальный список банов + кик/бан участников (миграция 34_permissions.sql).
   const [bans, setBans] = useState<(ServerBan & { name?: string; avatar_url?: string | null })[]>([])
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [auditQ, setAuditQ] = useState('')       // фильтр по пользователю (имя)
+  const [auditAction, setAuditAction] = useState('')  // фильтр по типу действия
   const isOwner = server.owner === uid
   const rolesOfId = (userId: string): string[] => {
     const multi = memberRoles[userId]
@@ -170,6 +177,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     fetchRoles(server.id).then(setRoles)
     fetchMemberRoles(server.id).then(setMemberRoles)
     loadBans()
+    const loadAudit = () => fetchAuditLog(server.id).then(setAuditLog)
+    loadAudit()
     supabase.from('channels').select('*').eq('server_id', server.id).order('name')
       .then(({ data }) => setChannels((data ?? []) as Channel[]))
     const loadInvites = () => supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
@@ -182,6 +191,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     const ch = supabase.channel('sset-live:' + server.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'server_bans', filter: 'server_id=eq.' + server.id }, () => loadBans())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'server_invites', filter: 'server_id=eq.' + server.id }, () => loadInvites())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log', filter: 'server_id=eq.' + server.id }, () => loadAudit())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -770,20 +780,41 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           </div>
         </>}
 
-        {tab === 'audit' && <>
-          <div className="sset-audhead">
-            <div className="cset-h" style={{ marginBottom: 0 }}>Журнал аудита</div>
-            <div>
-              <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по пользователям</label>
-              <select className="modal-in" style={{ margin: 0 }} disabled title="Журнал аудита пока не ведётся — фильтровать нечего"><option>Все пользователи</option>{members.map(m => <option key={m.user_id}>{m.member_name}</option>)}</select>
+        {tab === 'audit' && (() => {
+          // v1.267.0: раньше вкладка была честной заглушкой (фильтры недоступны,
+          // «ЗАПИСЕЙ ПОКА НЕТ» всегда) — теперь читает supabase/68_audit_log.sql,
+          // куда пишут kick_member/ban_member/unban_member/timeout_member и
+          // создание/удаление каналов и ролей.
+          const filtered = auditLog
+            .filter(e => !auditQ || e.actor_name.toLowerCase().includes(auditQ.toLowerCase()) || (e.target_name ?? '').toLowerCase().includes(auditQ.toLowerCase()))
+            .filter(e => !auditAction || e.action === auditAction)
+          const actions = [...new Set(auditLog.map(e => e.action))]
+          return <>
+            <div className="sset-audhead">
+              <div className="cset-h" style={{ marginBottom: 0 }}>Журнал аудита</div>
+              <div>
+                <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по пользователям</label>
+                <input className="modal-in" style={{ margin: 0 }} placeholder="Все пользователи" value={auditQ} onChange={e => setAuditQ(e.target.value)} />
+              </div>
+              <div>
+                <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по действиям</label>
+                <select className="modal-in" style={{ margin: 0 }} value={auditAction} onChange={e => setAuditAction(e.target.value)}>
+                  <option value="">Все действия</option>
+                  {actions.map(a => <option key={a} value={a}>{AUDIT_ACTION_LABEL[a] ?? a}</option>)}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="cset-lbl" style={{ margin: '0 0 4px' }}>Фильтр по действиям</label>
-              <select className="modal-in" style={{ margin: 0 }} disabled title="Журнал аудита пока не ведётся — фильтровать нечего"><option>Все действия</option><option>Обновление сервера</option><option>Создание канала</option><option>Удаление канала</option><option>Бан участника</option></select>
-            </div>
-          </div>
-          <div className="sset-empty" style={{ paddingTop: 90 }}>📜<b>ЗАПИСЕЙ ПОКА НЕТ</b>Когда модераторы начнут модерировать, вы сможете промодерировать их модерацию здесь.</div>
-        </>}
+            {filtered.length === 0
+              ? <div className="sset-empty" style={{ paddingTop: 90 }}>📜<b>ЗАПИСЕЙ ПОКА НЕТ</b>Когда модераторы начнут модерировать, вы сможете промодерировать их модерацию здесь.</div>
+              : <div className="sset-audlist">{filtered.map(e => (
+                  <div key={e.id} className="sset-audrow">
+                    <div className="sset-audrow-t"><b>{e.actor_name}</b> — {AUDIT_ACTION_LABEL[e.action] ?? e.action}{e.target_name ? ': ' + e.target_name : ''}</div>
+                    {e.detail && <div className="cset-hint" style={{ marginTop: 2 }}>{e.detail}</div>}
+                    <div className="cset-hint" style={{ marginTop: 2 }}>{new Date(e.created_at).toLocaleString('ru-RU')}</div>
+                  </div>
+                ))}</div>}
+          </>
+        })()}
 
         {tab === 'bans' && <>
           <div className="cset-h">Список банов сервера</div>
@@ -819,12 +850,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-hint" style={{ marginTop: -12 }}>Облегчите работу модераторам и наведите порядок на сервере! Настройте фильтры для модерирования контента и задайте текст автоматического оповещения, отправляемого при выявлении нарушений. Остальное Автомод сделает за вас.</div>
           <div className="cset-h" style={{ fontSize: 17, margin: '22px 0 12px' }}>Контент</div>
           {AUTOMOD_CARDS.map(c => {
-            // v1.264.0: честно, как и «Журнал аудита» — из четырёх фильтров реально
-            // проверяет сообщения только «свои слова» (простое точное совпадение,
-            // без учёта регистра). Спам/упоминания/нецензурная лексика требуют
-            // эвристик и словаря, которых пока нет — переключатель раньше делал вид,
-            // что фильтр работает, хотя ни на что не влиял.
-            const implemented = c.k === 'custom'
+            // v1.267.0: все три фильтра теперь реально проверяют сообщения при
+            // отправке (см. src/lib/automod.ts + ServerView.tsx/Composer.tsx) —
+            // раньше это была просто галочка, ни на что не влиявшая.
+            const isWordEditor = c.k === 'custom'
             const on = !!(st.automod ?? {})[c.k]
             return (
               <div key={c.k}>
@@ -834,19 +863,18 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     <b>{c.t}{on && <span className="sset-on">Вкл.</span>}</b>
                     <span>{c.d}</span>
                     <div className="sset-chips">{c.chips.map(ch => <span key={ch} className="sset-chip">{ch}</span>)}</div>
-                    {!implemented && <div className="cset-hint" style={{ marginTop: 6 }}>Пока не проверяет сообщения — в разработке.</div>}
-                    {implemented && !cwOpen && <div className="cset-hint" style={{ marginTop: 6 }}>Слов в списке: {(st.automod?.customWords ?? []).length}</div>}
+                    {isWordEditor && !cwOpen && <div className="cset-hint" style={{ marginTop: 6 }}>Слов в списке: {(st.automod?.customWords ?? []).length}</div>}
                   </div>
-                  {implemented
-                    ? <button className="modal-primary" onClick={() => { setCwText((st.automod?.customWords ?? []).join('\n')); setCwOpen(v => !v) }}>{cwOpen ? 'Скрыть' : c.btn}</button>
+                  {isWordEditor
+                    ? <button className="modal-primary" onClick={() => { setCwText((st.automod?.customWords ?? []).join('\n')); setCwOpen(v => !v) }}>{cwOpen ? 'Скрыть' : (on ? 'Изменить' : c.btn)}</button>
                     : <button className="modal-primary" onClick={() => {
                         const nv = !on
                         persistNow({ ...st, automod: { ...(st.automod ?? {}), [c.k]: nv } })
                         toastOk(nv ? 'Фильтр включён' : 'Фильтр выключен')
                       }}>{on ? 'Выключить' : c.btn}</button>}
                 </div>
-                {implemented && cwOpen && <div className="sset-cw">
-                  <div className="cset-hint">По одному слову или фразе на строку. Сообщение с точным совпадением (без учёта регистра) блокируется при отправке; владельца и модераторов с правом «Управление каналами» фильтр не касается.</div>
+                {isWordEditor && cwOpen && <div className="sset-cw">
+                  <div className="cset-hint">По одному слову или фразе на строку — сюда же можно вписать нецензурную лексику, которую хочешь запретить. Сообщение с точным совпадением (без учёта регистра) блокируется при отправке; владельца и модераторов с правом «Управление каналами» фильтр не касается.</div>
                   <textarea className="cset-topic" style={{ minHeight: 100 }} value={cwText} onChange={e => setCwText(e.target.value)} placeholder={'слово\nфраза целиком'} />
                   <div className="modal-foot" style={{ marginTop: 8 }}>
                     <button className="modal-primary" onClick={() => {

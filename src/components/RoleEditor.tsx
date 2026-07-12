@@ -5,6 +5,7 @@ import { uploadTo } from '../lib/storage'
 import { useAuth } from '../auth/AuthProvider'
 import { createRole, deleteRole, updateRole, toggleMemberRole, saveRoleOrder, setRolePermissions, type ServerRole } from '../lib/roles'
 import { PERM_GROUPS, hasPerm } from '../lib/permissions'
+import { logAudit } from '../lib/auditLog'
 import type { Server } from '../types'
 import { Icon } from './icons'
 
@@ -54,6 +55,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
     if (!v || v === role.name) { setNm(role.name); return }
     const { error } = await updateRole(role.id, { name: v })
     if (error) return toastErr(String(error.message ?? error))
+    logAudit(server.id, 'role_update', role.name + ' → ' + v)
     await onReload(); toastOk('Роль переименована')
   }
   const setColor = async (c: string) => {
@@ -105,6 +107,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
           <button className="redit-plus" title="Создать роль" onClick={async () => {
             const { error } = await createRole(server.id, 'новая роль', DEFAULT_COLOR)
             if (error) return toastErr(String(error.message ?? error))
+            logAudit(server.id, 'role_create', 'новая роль')
             await onReload()
           }}><Icon name="plus" size={14} /></button>
         </div>
@@ -128,7 +131,7 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
           <div className="redit-title">РЕДАКТИРОВАТЬ РОЛЬ — {role.name.toUpperCase()}</div>
           {canManage && <button className="redit-dots" title="Удалить роль" onClick={async () => {
             if (!await confirmUi('Удалить роль «' + role.name + '»?', { okText: 'Удалить' })) return
-            await deleteRole(role.id); await onReload(); onBack()
+            await deleteRole(role.id); logAudit(server.id, 'role_delete', role.name); await onReload(); onBack()
           }}><Icon name="trash" size={15} /></button>}
           <div className="redit-manage" onClick={() => setShowMembers(v => !v)}>Управлять участниками ({withRole.length})</div>
         </div>

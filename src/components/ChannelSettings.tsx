@@ -13,6 +13,8 @@ import { uploadTo } from '../lib/storage'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
 import { CH_FONTS, CH_COLOR_PRESETS, chNameStyle } from '../lib/chStyle'
+import { logAudit } from '../lib/auditLog'
+import { fetchRoles, type ServerRole } from '../lib/roles'
 
 const SLOW_OPTS = ['Выкл', '5с', '10с', '15с', '30с', '1м', '2м', '5м', '10м', '15м', '30м', '1ч', '2ч', '6ч']
 const HIDE_OPTS = ['1 час', '24 часа', '3 дней', '1 неделя']
@@ -46,6 +48,12 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [limit, setLimit] = useState<number>(s0.user_limit ?? 0)
   const [region, setRegion] = useState<string>(s0.region ?? 'Автоматически')
   const [priv, setPriv] = useState<boolean>(!!s0.private)
+  // v1.267.0: какие роли видят приватный канал (RLS can_view_channel, миграция
+  // supabase/69_channel_privacy.sql) — раньше переключателя «Приватный» без
+  // выбора ролей было физически некому давать доступ, кроме владельца/MANAGE_CHANNELS.
+  const [privRoles, setPrivRoles] = useState<string[]>(Array.isArray((channel as any).private_roles) ? (channel as any).private_roles : [])
+  const [roles, setRoles] = useState<ServerRole[]>([])
+  useEffect(() => { fetchRoles(server.id).then(setRoles) }, [server.id])
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
   const [paused, setPaused] = useState<boolean>(!!s0.invites_paused)
   // v1.138.0: шрифт и раскраска названия канала (см. src/lib/chStyle.ts)
@@ -57,8 +65,8 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   // v1.128.0: «несохранённые изменения» считаются сравнением с последними
   // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
   const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
-  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl })
-  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null }))
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, privRoles: [...privRoles].sort(), perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, privRoles: (Array.isArray((channel as any).private_roles) ? [...(channel as any).private_roles] : []).sort(), perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null }))
   const dirty = snapAll() !== base
   const setDirty = (_d: boolean) => {}
 
@@ -90,7 +98,14 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   async function save() {
     const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim }
     const nm = name.trim() || channel.name
-    const { data: upd, error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id).select('id')
+    let { data: upd, error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings, private_roles: privRoles } as any).eq('id', channel.id).select('id')
+    // v1.267.0: private_roles — отдельная колонка (миграция supabase/69_channel_privacy.sql,
+    // нужна RLS-политикам can_view_channel), пока не применена — колонки не существует.
+    if (error && /private_roles/i.test(error.message ?? '')) {
+      const r0 = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id).select('id')
+      upd = r0.data; error = r0.error
+      if (!error) toastErr('Выбор ролей для приватного канала не сохранён — примени миграцию supabase/69_channel_privacy.sql')
+    }
     // v1.140.0: без RLS-политики UPDATE база молча обновляет 0 строк — ловим это и подсказываем миграцию.
     if (!error && (!upd || upd.length === 0)) return toastErr('Не сохранилось: в базе нет права изменять каналы — примени миграцию supabase/29_channels_update_policy.sql')
     if (error) {
@@ -110,7 +125,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const b = JSON.parse(base)
     setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
     setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
-    setRegion(b.region); setPriv(b.priv); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null)
+    setRegion(b.region); setPriv(b.priv); setPrivRoles(b.privRoles ?? []); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null)
   }
 
   async function del() {
@@ -118,6 +133,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const { data: deld, error } = await supabase.from('channels').delete().eq('id', channel.id).select('id')
     if (error) return toastErr(error.message)
     if (!deld || deld.length === 0) return toastErr('Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql')
+    logAudit(server.id, 'channel_delete', (isVoice ? '🔊 ' : '#') + channel.name)
     toastOk('Канал удалён')
     onDeleted()
   }
@@ -263,21 +279,32 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
         {tab === 'perms' && <>
           <div className="cset-h">Права канала</div>
           <div className="cset-hint" style={{ marginTop: -12, marginBottom: 14 }}>Используйте права, чтобы настроить возможности пользователей на этом канале.</div>
-          {/* v1.266.0: честно, как и «Журнал аудита»/автомод — эта вкладка сохраняет
-              выбор, но пока НИЧЕГО из него не проверяется ни на сервере, ни на
-              клиенте (нет выбора конкретных ролей/участников, только общий @everyone).
-              Раньше подписи обещали реальную приватность канала — ложно. */}
-          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-            ⚠️ Приватность отдельного канала пока не реализована технически — сохранённый здесь выбор (включая переключатель «Приватный канал» ниже) ни на что не влияет, канал остаётся видимым всем участникам сервера.
-          </div>
+          {/* v1.267.0: приватность (переключатель + список ролей ниже) теперь
+              реально работает — RLS can_view_channel в supabase/69_channel_privacy.sql.
+              «Расширенные права» ниже (tri-state @everyone) по-прежнему только
+              сохраняются и ни на что не влияют — честно предупреждаем об этом. */}
           <div className="cset-sync"><Icon name="repeat" size={16} /> Права синхронизированы с категорией «{isVoice ? 'Голосовые каналы' : 'Текстовые каналы'}»</div>
           <div className="cset-priv">
             <div><div className="cset-row-t">🔒 Приватный канал</div>
-              <div className="cset-hint">Если сделать канал приватным, только выбранные вами участники и роли смогут просматривать его.</div></div>
+              <div className="cset-hint">Если сделать канал приватным, только выбранные вами роли (плюс владелец и модераторы с правом «Управление каналами») смогут его просматривать.</div></div>
             <button className={'tgl' + (priv ? ' on' : '')} onClick={() => { setPriv(!priv); setDirty(true) }} />
           </div>
+          {priv && <div className="cset-priv-roles">
+            <label className="cset-lbl">Кому виден канал</label>
+            {roles.length === 0 && <div className="cset-hint">На сервере нет ролей — канал увидят только владелец и модераторы с правом «Управление каналами».</div>}
+            {roles.map(r => (
+              <label key={r.id} className="cset-priv-role">
+                <input type="checkbox" checked={privRoles.includes(r.id)}
+                  onChange={e => { setPrivRoles(p => e.target.checked ? [...p, r.id] : p.filter(id => id !== r.id)); setDirty(true) }} />
+                <span className="role-dot" style={{ background: r.color }} /> {r.name}
+              </label>
+            ))}
+          </div>}
           <div className="cset-div" />
           <div className="cset-h" style={{ fontSize: 17 }}>Расширенные права</div>
+          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 14px' }}>
+            ⚠️ Права ниже (по конкретным действиям для @everyone) пока не реализованы технически — сохраняются, но ни на что не влияют. Настоящая приватность канала — переключатель выше.
+          </div>
           <div className="cset-cat" style={{ padding: '0 0 6px' }}>Роли/Участники</div>
           <div className="cset-role-chip">@everyone</div>
           <label className="cset-lbl">Основные права канала</label>

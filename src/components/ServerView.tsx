@@ -33,6 +33,8 @@ import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole, ROLE_COLORS, type ServerRole } from '../lib/roles'
 import { PERM, hasPerm, kickMember, banMember, timeoutMember, setMemberNickname } from '../lib/permissions'
+import { logAudit } from '../lib/auditLog'
+import { countMentions, isSpamLike } from '../lib/automod'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -60,6 +62,10 @@ const EMOJI_RE = /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictogr
 function splitEmoji(name: string): { emo: string | null; rest: string } {
   const m = name.match(EMOJI_RE)
   return m ? { emo: m[1], rest: m[2] } : { emo: null, rest: name }
+}
+// v1.267.0: подписи в точности как в ServerSettings.tsx (select «Время бездействия»).
+const AFK_TIMEOUT_MS: Record<string, number> = {
+  '1 минута': 60_000, '5 минут': 5 * 60_000, '15 минут': 15 * 60_000, '30 минут': 30 * 60_000, '1 час': 60 * 60_000,
 }
 // v1.138.0: шрифт названия (серверный ch_font или свой name_font) и раскраска
 // (name_colors: 1–4 цвета, name_anim — переливание) — см. src/lib/chStyle.ts.
@@ -685,6 +691,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       error = r2.error
     }
     if (error) return toastErr(error.message)
+    logAudit(server.id, 'channel_create', (kind === 'voice' ? '🔊 ' : '#') + name)
     uiChime() // мягкое звуковое подтверждение создания канала
     loadChannels()
   }
@@ -755,6 +762,36 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     const v = !vMic
     try { await voice.room.localParticipant.setMicrophoneEnabled(v); setVMic(v); v ? sndUnmute() : sndMute() } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
+
+  // v1.267.0: AFK-канал (Настройки сервера → «Обзор» → «Канал/время для
+  // бездействия») — раньше просто сохранялся и ничего не делал. Каждый клиент
+  // сам следит за своим бездействием (мышь/клавиатура) и, если бездействует
+  // дольше afk_timeout, сам себя переводит в afk_channel — как в Discord (это
+  // клиентское решение, а не серверное принуждение, ровно как у оригинала).
+  const lastActivityRef = useRef(Date.now())
+  useEffect(() => {
+    const bump = () => { lastActivityRef.current = Date.now() }
+    window.addEventListener('mousemove', bump)
+    window.addEventListener('keydown', bump)
+    window.addEventListener('mousedown', bump)
+    return () => {
+      window.removeEventListener('mousemove', bump)
+      window.removeEventListener('keydown', bump)
+      window.removeEventListener('mousedown', bump)
+    }
+  }, [])
+  useEffect(() => {
+    const afkMs = AFK_TIMEOUT_MS[srvSettings.afk_timeout as string]
+    const afkChId = srvSettings.afk_channel as string | undefined
+    if (!afkMs || !afkChId) return
+    const iv = window.setInterval(() => {
+      if (!voice || voice.ch.id === afkChId) return
+      if (Date.now() - lastActivityRef.current < afkMs) return
+      const afkCh = channels.find(c => c.id === afkChId)
+      if (afkCh) joinVoice(afkCh)
+    }, 15000)
+    return () => window.clearInterval(iv)
+  }, [srvSettings.afk_timeout, srvSettings.afk_channel, voice, channels])
 
   // v1.68.0: вместо копирования кода — панель «Пригласить друзей» как в Discord.
   async function invite() {
@@ -1185,7 +1222,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           mentionableRoles={roles.map(r => ({ name: r.name, color: r.color }))}
           slowMode={(curChannel.settings as any)?.slow}
-          blockedWords={srvSettings.automod?.custom && !isOwner && !canManageChannels ? (srvSettings.automod.customWords ?? []) : undefined}
+          automodCheck={(!isOwner && !canManageChannels) ? (text => {
+            const am = srvSettings.automod ?? {}
+            if (am.custom) {
+              const hit = ((am.customWords ?? []) as string[]).find((w: string) => w && text.toLowerCase().includes(w.toLowerCase()))
+              if (hit) return 'Сообщение заблокировано автомодерацией сервера — запрещённое слово или фраза'
+            }
+            if (am.mentions && countMentions(text) > 5) return 'Сообщение заблокировано автомодерацией сервера — слишком много упоминаний'
+            if (am.spam && isSpamLike(text)) return 'Сообщение заблокировано автомодерацией сервера — похоже на спам'
+            return null
+          }) : undefined}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
