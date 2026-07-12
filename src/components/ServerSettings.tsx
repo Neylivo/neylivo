@@ -80,6 +80,8 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const chFontRef = useRef<HTMLInputElement>(null)   // v1.140.0: свой файл шрифта названий каналов
   const tagFontRef = useRef<HTMLInputElement>(null)  // v1.175.0: свой файл шрифта тега сервера
   const [tagEmojiOpen, setTagEmojiOpen] = useState(false)
+  const [cwOpen, setCwOpen] = useState(false)   // v1.264.0: редактор списка своих запрещённых слов (автомод)
+  const [cwText, setCwText] = useState('')
   const [members, setMembers] = useState<any[]>([])
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
@@ -816,21 +818,48 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-h">Автомод</div>
           <div className="cset-hint" style={{ marginTop: -12 }}>Облегчите работу модераторам и наведите порядок на сервере! Настройте фильтры для модерирования контента и задайте текст автоматического оповещения, отправляемого при выявлении нарушений. Остальное Автомод сделает за вас.</div>
           <div className="cset-h" style={{ fontSize: 17, margin: '22px 0 12px' }}>Контент</div>
-          {AUTOMOD_CARDS.map(c => (
-            <div key={c.k} className="sset-am">
-              <span className="sset-am-ic">{c.ico}</span>
-              <div className="sset-am-t">
-                <b>{c.t}{(st.automod ?? {})[c.k] && <span className="sset-on">Вкл.</span>}</b>
-                <span>{c.d}</span>
-                <div className="sset-chips">{c.chips.map(ch => <span key={ch} className="sset-chip">{ch}</span>)}</div>
+          {AUTOMOD_CARDS.map(c => {
+            // v1.264.0: честно, как и «Журнал аудита» — из четырёх фильтров реально
+            // проверяет сообщения только «свои слова» (простое точное совпадение,
+            // без учёта регистра). Спам/упоминания/нецензурная лексика требуют
+            // эвристик и словаря, которых пока нет — переключатель раньше делал вид,
+            // что фильтр работает, хотя ни на что не влиял.
+            const implemented = c.k === 'custom'
+            const on = !!(st.automod ?? {})[c.k]
+            return (
+              <div key={c.k}>
+                <div className="sset-am">
+                  <span className="sset-am-ic">{c.ico}</span>
+                  <div className="sset-am-t">
+                    <b>{c.t}{on && <span className="sset-on">Вкл.</span>}</b>
+                    <span>{c.d}</span>
+                    <div className="sset-chips">{c.chips.map(ch => <span key={ch} className="sset-chip">{ch}</span>)}</div>
+                    {!implemented && <div className="cset-hint" style={{ marginTop: 6 }}>Пока не проверяет сообщения — в разработке.</div>}
+                    {implemented && !cwOpen && <div className="cset-hint" style={{ marginTop: 6 }}>Слов в списке: {(st.automod?.customWords ?? []).length}</div>}
+                  </div>
+                  {implemented
+                    ? <button className="modal-primary" onClick={() => { setCwText((st.automod?.customWords ?? []).join('\n')); setCwOpen(v => !v) }}>{cwOpen ? 'Скрыть' : c.btn}</button>
+                    : <button className="modal-primary" onClick={() => {
+                        const nv = !on
+                        persistNow({ ...st, automod: { ...(st.automod ?? {}), [c.k]: nv } })
+                        toastOk(nv ? 'Фильтр включён' : 'Фильтр выключен')
+                      }}>{on ? 'Выключить' : c.btn}</button>}
+                </div>
+                {implemented && cwOpen && <div className="sset-cw">
+                  <div className="cset-hint">По одному слову или фразе на строку. Сообщение с точным совпадением (без учёта регистра) блокируется при отправке; владельца и модераторов с правом «Управление каналами» фильтр не касается.</div>
+                  <textarea className="cset-topic" style={{ minHeight: 100 }} value={cwText} onChange={e => setCwText(e.target.value)} placeholder={'слово\nфраза целиком'} />
+                  <div className="modal-foot" style={{ marginTop: 8 }}>
+                    <button className="modal-primary" onClick={() => {
+                      const words = [...new Set(cwText.split('\n').map(w => w.trim()).filter(Boolean))]
+                      persistNow({ ...st, automod: { ...(st.automod ?? {}), custom: words.length > 0, customWords: words } })
+                      setCwOpen(false)
+                      toastOk(words.length ? 'Список сохранён — фильтр включён' : 'Список пуст — фильтр выключен')
+                    }}>Сохранить</button>
+                  </div>
+                </div>}
               </div>
-              <button className="modal-primary" onClick={() => {
-                const on = !(st.automod ?? {})[c.k]
-                persistNow({ ...st, automod: { ...(st.automod ?? {}), [c.k]: on } })
-                toastOk(on ? 'Фильтр включён' : 'Фильтр выключен')
-              }}>{(st.automod ?? {})[c.k] ? 'Выключить' : c.btn}</button>
-            </div>
-          ))}
+            )
+          })}
           <div className="cset-div" />
           <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Фильтры нежелательного контента</div>
           <div className="cset-hint" style={{ marginTop: 0 }}>Выберите, могут ли участники сервера делиться изображениями, отмеченными как контент откровенного характера. Эта настройка будет применяться на каналах, не имеющих возрастных ограничений.</div>

@@ -2457,6 +2457,7 @@ body.no-anim .member-typing i { animation:none; }
 .sset-on { background:#23a55a; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:8px; margin-left:8px; vertical-align:middle; }
 .sset-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .sset-chip { background:#1e1f22; border-radius:12px; padding:2px 8px; font-size:11px; color:var(--mut); }
+.sset-cw { background:var(--bg3); border-radius:10px; padding:14px 16px; margin:-4px 0 12px; }
 
 .sset-chero { text-align:center; padding:10px 40px 8px; }
 .sset-ccards { display:flex; gap:12px; margin-top:24px; }

@@ -1175,6 +1175,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           mentionables={members.map(m => m.member_name).filter(Boolean)}
           mentionableRoles={roles.map(r => ({ name: r.name, color: r.color }))}
           slowMode={(curChannel.settings as any)?.slow}
+          blockedWords={srvSettings.automod?.custom && !isOwner && !canManageChannels ? (srvSettings.automod.customWords ?? []) : undefined}
           replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
           onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}
           editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}

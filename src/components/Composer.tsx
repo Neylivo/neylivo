@@ -80,7 +80,7 @@ function slowModeSeconds(label?: string): number {
   return m[2] === 'с' ? n : m[2] === 'м' ? n * 60 : n * 3600
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode, blockedWords }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -107,7 +107,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     canMentionRoles?: boolean
     // v1.248.0: медленный режим канала — метка из ChannelSettings.tsx (SLOW_OPTS:
     // 'Выкл'/'5с'/.../'6ч'), undefined — как «Выкл» (ЛС, где медленного режима нет).
-    slowMode?: string }) {
+    slowMode?: string
+    // v1.264.0: автомод «свои слова» (ServerView.tsx уже отфильтровал по правам —
+    // владельцу/модератору сюда придёт пустой список) — проверяем ДО onSend, а не
+    // внутри него, иначе текст в поле уже стёрся бы (см. очистку ниже) раньше,
+    // чем стало известно, что отправка заблокирована.
+    blockedWords?: string[] }) {
   const { user } = useAuth()
   const { settings } = useSettings()
   const { gameOf } = usePresence()
@@ -454,6 +459,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
     if (t && hasSpamRun(t)) { toastErr('Слишком много одинаковых символов подряд'); return }
     if (files.length && canAttachFiles === false) { toastErr('У вас нет прав на прикрепление файлов'); return }
+    if (t && blockedWords?.length) {
+      const hit = blockedWords.find(w => w && t.toLowerCase().includes(w.toLowerCase()))
+      if (hit) { toastErr('Сообщение заблокировано автомодерацией сервера'); return }
+    }
     if (t && canMentionEveryone === false && /@everyone(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @everyone'); return }
     // v1.248.0: @here — то же право, что у @everyone (как в Discord).
     if (t && canMentionEveryone === false && /@here(?![\p{L}\p{N}_])/u.test(t)) { toastErr('У вас нет прав на упоминание @here'); return }
