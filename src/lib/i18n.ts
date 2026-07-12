@@ -809,6 +809,7 @@ const DICT_EN_FULL: Record<string, string> = {
   "Приглашение не найдено": "Invite not found",
   "Приглашения": "Invites",
   "Приглашения должны выглядеть так:": "Invites should look like this:",
+  "Придумай юзернейм": "Choose a username",
   "Прикрепить": "Attach",
   "Прикрепить файл": "Attach File",
   "Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются": "Apply the supabase/17_server_settings.sql migration — settings aren't being saved yet",

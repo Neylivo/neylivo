@@ -54,7 +54,12 @@ export function AuthScreen() {
     try {
       if (mode === 'register') {
         const email = login.trim()
-        const finalName = username.trim() || email.split('@')[0]
+        const finalName = username.trim()
+        // v1.253.0: юзернейм обязателен по-настоящему — раньше при пустом поле
+        // (HTML required можно обойти программной отправкой формы) тихо
+        // подставлялось начало почты до «@», и пользователь получал юзернейм,
+        // который сам не выбирал и не видел.
+        if (!finalName) throw new Error('Придумай юзернейм')
         // v1.38.0: ник должен быть свободен — если занят, подсказываем вариант
         const { data: taken } = await supabase.rpc('username_taken', { uname: finalName })
         if (taken) {
@@ -75,7 +80,10 @@ export function AuthScreen() {
         // пройти (подтверждение почты), «Вы» нигде не появится.
         localStorage.setItem('ponoi_username', finalName)
         if (data.user) {
-          await supabase.from('profiles').upsert({ id: data.user.id, username: finalName })
+          // v1.253.0: юзернейм при регистрации становится ещё и ником (display_name) —
+          // раньше ник оставался пустым до первого визита в настройки, и «Вы» на
+          // сервере/в чате видели просто юзернейм без отдельного отображаемого имени.
+          await supabase.from('profiles').upsert({ id: data.user.id, username: finalName, display_name: finalName })
         }
         // v1.41.0: почта требует подтверждения (сессии ещё нет) — показываем экран ввода кода
         if (!data.session) { setPendingName(finalName); setVerifyEmail(email); setCode(''); setResendIn(30) }
@@ -139,7 +147,7 @@ export function AuthScreen() {
       }
       // Сессия появилась — дозаписываем профиль (upsert при регистрации мог не пройти без сессии)
       if (data.user && pendingName) {
-        await supabase.from('profiles').upsert({ id: data.user.id, username: pendingName })
+        await supabase.from('profiles').upsert({ id: data.user.id, username: pendingName, display_name: pendingName })
       }
       // Дальше AuthProvider сам увидит сессию и откроет приложение
     } catch (e2: any) {
