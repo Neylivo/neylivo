@@ -581,17 +581,31 @@ function robloxCurrentSession() {
     if (!newest) return null
     const full = path.join(dir, newest)
     const size = fsr.statSync(full).size
-    const len = Math.min(size, 512 * 1024)   // хвоста в полмегабайта хватает с запасом
-    const buf = Buffer.alloc(len)
-    const fd = fsr.openSync(full, 'r')
-    fsr.readSync(fd, buf, 0, len, size - len)
-    fsr.closeSync(fd)
-    const txt = buf.toString('utf8')
-    let joinAt = -1, placeId = null, jobId = null
-    const re = /[Jj]oining game '([^']+)' place (\d+)/g
-    let m
-    while ((m = re.exec(txt))) { joinAt = m.index; jobId = m[1]; placeId = m[2] }
-    const leaveAt = Math.max(txt.lastIndexOf('leaveUGCGameInternal'), txt.lastIndexOf('Client:Disconnect'))
+    // v1.241.0: игры с плотным логом (RPG/тайкуны/симуляторы — легко пишут
+    // мегабайты в минуту) быстро выталкивают строку входа за пределы фиксированного
+    // хвоста в полмегабайта — «Поделиться игрой» пропадала уже через пару минут в
+    // таких режимах, хотя игрок оставался в той же игре. Расширяем окно чтения
+    // (х4 каждый раз), пока не найдём строку входа или не упрёмся в файл целиком
+    // (до разумного потолка в 32МБ) — для тихих логов путь остаётся дешёвым, т.к.
+    // они находятся уже на первом, маленьком окне.
+    const CAP = 32 * 1024 * 1024
+    let win = 512 * 1024
+    let joinAt = -1, placeId = null, jobId = null, leaveAt = -1
+    for (;;) {
+      const len = Math.min(size, win)
+      const buf = Buffer.alloc(len)
+      const fd = fsr.openSync(full, 'r')
+      fsr.readSync(fd, buf, 0, len, size - len)
+      fsr.closeSync(fd)
+      const txt = buf.toString('utf8')
+      joinAt = -1; placeId = null; jobId = null
+      const re = /[Jj]oining game '([^']+)' place (\d+)/g
+      let m
+      while ((m = re.exec(txt))) { joinAt = m.index; jobId = m[1]; placeId = m[2] }
+      leaveAt = Math.max(txt.lastIndexOf('leaveUGCGameInternal'), txt.lastIndexOf('Client:Disconnect'))
+      if (placeId != null || len >= size || win >= CAP) break
+      win *= 4
+    }
     if (placeId == null || leaveAt > joinAt) return null
     return { placeId, jobId }
   } catch { return null }
@@ -854,27 +868,51 @@ function mcMode() {
   return null
 }
 // v1.134.0: Minecraft (Java) — «На сервере <адрес>» или «Одиночная игра» по логу
-// лаунчера (%APPDATA%\.minecraft\logs\latest.log): вход на сервер — «Connecting to
-// <адрес>, <порт>», одиночный мир — «Starting integrated minecraft server», выход
-// из мира — «Stopping worker threads». Лог от прошлой сессии (mtime старше старта
-// игры) не считаем. Модпак-лаунчеры с другой папкой игры так не увидим — тогда
-// остаётся режим из заголовка окна (mcMode выше).
+// лаунчера: вход на сервер — «Connecting to <адрес>, <порт>», одиночный мир —
+// «Starting integrated minecraft server», выход из мира — «Stopping worker threads».
+function mcLogMode(txt) {
+  if (!txt) return null
+  let at = -1, mode = null
+  const cm = [...txt.matchAll(/Connecting to ([\w.-]+), \d+/g)]
+  if (cm.length) { const m = cm[cm.length - 1]; at = m.index; mode = 'На сервере ' + m[1] }
+  const sm = [...txt.matchAll(/Starting integrated minecraft server/g)]
+  if (sm.length && sm[sm.length - 1].index > at) { at = sm[sm.length - 1].index; mode = 'Одиночная игра' }
+  const stop = Math.max(txt.lastIndexOf('Stopping worker threads'), txt.lastIndexOf('Stopping singleplayer server'))
+  if (stop > at) return null
+  return mode
+}
+// Официальный лаунчер: %APPDATA%\.minecraft\logs\latest.log. Лог от прошлой сессии
+// (mtime старше старта игры) не считаем.
 function mcJavaLogMode(since) {
   try {
     const fsr = require('fs')
     const f = path.join(process.env.APPDATA || '', '.minecraft', 'logs', 'latest.log')
     if (!fsr.existsSync(f)) return null
     if (since && fsr.statSync(f).mtimeMs < since - 60_000) return null
-    const txt = readLogTail(f, 128 * 1024)
-    if (!txt) return null
-    let at = -1, mode = null
-    const cm = [...txt.matchAll(/Connecting to ([\w.-]+), \d+/g)]
-    if (cm.length) { const m = cm[cm.length - 1]; at = m.index; mode = 'На сервере ' + m[1] }
-    const sm = [...txt.matchAll(/Starting integrated minecraft server/g)]
-    if (sm.length && sm[sm.length - 1].index > at) { at = sm[sm.length - 1].index; mode = 'Одиночная игра' }
-    const stop = Math.max(txt.lastIndexOf('Stopping worker threads'), txt.lastIndexOf('Stopping singleplayer server'))
-    if (stop > at) return null
-    return mode
+    return mcLogMode(readLogTail(f, 128 * 1024))
+  } catch { return null }
+}
+// v1.241.0: PrismLauncher (и MultiMC-подобные лаунчеры) держат КАЖДЫЙ инстанс в
+// своей отдельной папке (instances\<Инстанс>\.minecraft\logs\latest.log), а не в
+// общей %APPDATA%\.minecraft — поэтому mcJavaLogMode выше их не видел (это и был
+// тот самый документированный пробел «модпак-лаунчеры с другой папкой игры»).
+// Перебираем все инстансы, берём тот, чей latest.log реально писался после старта
+// игры (since) — тем же способом, что и для официального лаунчера.
+function mcPrismLogMode(since) {
+  try {
+    const fsr = require('fs')
+    const instancesDir = path.join(process.env.APPDATA || '', 'PrismLauncher', 'instances')
+    if (!fsr.existsSync(instancesDir)) return null
+    let best = null, bestAt = 0
+    for (const inst of fsr.readdirSync(instancesDir)) {
+      const f = path.join(instancesDir, inst, '.minecraft', 'logs', 'latest.log')
+      try {
+        const at = fsr.statSync(f).mtimeMs
+        if (at > bestAt) { bestAt = at; best = f }
+      } catch {}
+    }
+    if (!best || (since && bestAt < since - 60_000)) return null
+    return mcLogMode(readLogTail(best, 128 * 1024))
   } catch { return null }
 }
 // v1.134.0: детали для ЛЮБОЙ Unreal-игры (а не только Fortnite/Delta Force) — по
@@ -974,7 +1012,7 @@ async function scanGameMode() {
     else if (g.name === 'Delta Force') mode = deltaForceMode()
     else if (g.name === 'League of Legends') mode = await lolMode()
     else if (g.name === 'VALORANT') mode = await valorantMode()
-    else if (g.name === 'Minecraft (Java)') mode = mcJavaLogMode(g.since) || mcMode()
+    else if (g.name === 'Minecraft (Java)') mode = mcJavaLogMode(g.since) || mcPrismLogMode(g.since) || mcMode()
     else if (g.name === 'Minecraft') mode = mcMode()
     else mode = ueGenericMode()
     if (curGame && curGame.name === g.name &&
