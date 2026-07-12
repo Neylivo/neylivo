@@ -276,12 +276,19 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   }
 
   async function patchProf(patch: Partial<ProfilePrefs>) {
+    if (!user) return
+    // v1.255.0: раньше локальное состояние обновлялось СРАЗУ, до ответа от базы —
+    // если saveProfile падал (миграция не применена, RLS, сеть), интерфейс всё
+    // равно показывал новое значение, а по факту ничего не сохранилось. Теперь
+    // ждём успеха и только тогда трогаем prof/profDraft; ошибка letит наверх
+    // вызывающему (try/catch с тостом — либо здесь в saveAccount, либо у самих
+    // кнопок загрузки файлов, которые уже оборачивают patchProf в try/catch).
+    await saveProfile(user.id, patch)
     setProf(p => ({ ...p, ...patch }))
     // v1.245.0: мгновенный коммит (файл/тег) главнее любого черновика по тем же
     // полям — иначе после загрузки нового файла в интерфейсе ещё маячило бы старое
     // отложенное значение поверх только что сохранённого.
     setProfDraft(d => { const nd = { ...d }; for (const k of Object.keys(patch)) delete nd[k as keyof ProfilePrefs]; return nd })
-    if (user) await saveProfile(user.id, patch)
   }
   // v1.95.0: аватар фото/видео (<=5 сек) и «кубик» (nameplate) прямо из настроек
   const avRef = useRef<HTMLInputElement>(null)
@@ -471,6 +478,11 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     window.dispatchEvent(new CustomEvent('ponoi-profile-updated', { detail: { nick: newNick || newUname || username, handle: newUname || orig.uname } }))
     toastOk('Изменения сохранены')
     setSaved(true); setTimeout(() => setSaved(false), 1500)
+    } catch (e: any) {
+      // v1.255.0: раньше тут не было catch вообще — если patchProf/saveProfile
+      // падал (например, миграция ещё не применена), ошибка улетала в никуда:
+      // ни тоста, ни отката busy — плашка «Сохранение…» просто зависала.
+      toastErr(e?.message ?? String(e))
     } finally { setBusy(false) }
   }
 
@@ -672,7 +684,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     </button>
                   </div>
                   {settings.lang !== 'en' && profView.nickFontUrl && nickCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский ник показывается обычным шрифтом. Латиница и цифры работают.</div>}
-                  {profView.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null })}>Убрать свой шрифт</button>}
+                  {profView.nickFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ nickFontUrl: null }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать свой шрифт</button>}
                   <input ref={fontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickFont} />
                 </div>
 
@@ -693,7 +705,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     </button>
                   </div>
                   {settings.lang !== 'en' && profView.msgFontUrl && msgCyr === false && <div className="pqs-font-warn">⚠️ В этом шрифте нет русских букв — русский текст показывается обычным шрифтом. Латиница и цифры работают.</div>}
-                  {profView.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null })}>Убрать свой шрифт</button>}
+                  {profView.msgFontUrl && <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => patchProf({ msgFontUrl: null }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать свой шрифт</button>}
                   <input ref={msgFontRef} type="file" accept=".ttf,.otf,.woff,.woff2" hidden onChange={pickMsgFont} />
                 </div>
 
@@ -709,7 +721,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   </div>
                   <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
                     <button className="pqs2-btn primary" onClick={() => plateRef.current?.click()}>{plateBusy ? 'Загрузка…' : (profView.plateUrl ? 'Заменить фон' : 'Фон: фото или видео')}</button>
-                    {profView.plateUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateUrl: null, plateKind: 'none' })}>Убрать фон</button>}
+                    {profView.plateUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ plateUrl: null, plateKind: 'none' }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать фон</button>}
                     <label className="pqs-ptheme"><input type="color" value={profView.plateOutline ?? '#5865f2'} onChange={e => setProfD('plateOutline', e.target.value)} /> Обводка</label>
                     {profView.plateOutline && <button className="pqs2-btn ghost" onClick={() => setProfD('plateOutline', null)}>Убрать обводку</button>}
                   </div>
@@ -734,7 +746,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                       <div className="pet2-pickinfo">
                         <div className="pet2-pickbtns">
                           <button className="pqs2-btn primary" onClick={() => petRef.current?.click()}>{petBusy ? 'Загрузка…' : (profView.petUrl ? 'Заменить файл' : 'Выбрать файл')}</button>
-                          {profView.petUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ petUrl: null, petKind: 'none' })}>Убрать</button>}
+                          {profView.petUrl && <button className="pqs2-btn ghost" onClick={() => patchProf({ petUrl: null, petKind: 'none' }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать</button>}
                         </div>
                         <div className="pet2-formats">PNG · JPG · WebP · GIF · видео MP4/WebM (короткое и зациклённое) · 3D-модель .glb/.gltf (можно вращать мышью)</div>
                       </div>

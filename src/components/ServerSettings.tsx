@@ -189,11 +189,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   function up(k: string, v: any) { setSt((s: any) => ({ ...s, [k]: v })); setDirty(true) }
   // Загрузки файлов и «мгновенные» действия сохраняются сразу.
   async function persistNow(next: any) {
+    // v1.255.0: раньше setSt/setBaseSt обновлялись ДО ответа от базы — тег/эмодзи/
+    // стикер выглядели сохранёнными в интерфейсе, даже если запись падала (не
+    // применена миграция, RLS). Теперь ждём подтверждения и только тогда
+    // фиксируем локально — иначе именно то, ради чего persistNow сделали
+    // мгновенным (не терять изменения, см. v1.178.0), тихо ломалось тем же способом.
+    const { data: upd, error } = await supabase.from('servers').update({ settings: next } as any).eq('id', server.id).select('id')
+    if (error) { toastErr('Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются'); return }
+    if (!upd || upd.length === 0) { toastErr('Не сохранилось — нет прав на изменение сервера'); return }
     setSt(next)
     setBaseSt(JSON.stringify(normSt(next)))   // v1.128.0: мгновенное сохранение — сразу в «базу»
-    const { error } = await supabase.from('servers').update({ settings: next } as any).eq('id', server.id)
-    if (error) toastErr('Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются')
-    else onChanged()
+    onChanged()
   }
   // v1.178.0: тег сервера — раньше название/значок/цвет/шрифт-пресет копились в
   // силе (up()) и терялись, если закрыть настройки без «Сохранить изменения»;
@@ -202,11 +208,18 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   function setTag(patch: any) { persistNow({ ...st, tag: { ...(st.tag ?? {}), ...patch } }) }
   async function saveAll() {
     const nm = name.trim() || server.name
-    const { error } = await supabase.from('servers').update({ name: nm, settings: st } as any).eq('id', server.id)
+    const { data: upd, error } = await supabase.from('servers').update({ name: nm, settings: st } as any).eq('id', server.id).select('id')
     if (error) {
-      const r2 = await supabase.from('servers').update({ name: nm }).eq('id', server.id)
+      const r2 = await supabase.from('servers').update({ name: nm }).eq('id', server.id).select('id')
       if (r2.error) return toastErr(r2.error.message)
+      if (!r2.data || r2.data.length === 0) return toastErr('Не сохранилось — нет прав на изменение сервера')
       toastErr('Имя сохранено. Для остальных настроек примени миграцию supabase/17_server_settings.sql')
+    } else if (!upd || upd.length === 0) {
+      // v1.255.0: RLS без совпадения строки молча обновляет 0 строк — error здесь
+      // остаётся null. Раньше это молча падало в toastOk('Изменения сохранены'),
+      // хотя фактически НИЧЕГО не сохранялось — тот же баг, что уже был пойман
+      // и починен в ChannelSettings.tsx (v1.140.0), просто не сюда же.
+      return toastErr('Не сохранилось — нет прав на изменение сервера (или устарела сессия)')
     } else toastOk('Изменения сохранены')
     setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(st))); onChanged()   // v1.128.0
   }
@@ -220,7 +233,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     finally { setBusy(false); e.target.value = '' }
   }
   async function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    await pickFile(e, async url => { setAvatar(url); await updateServer(server.id, { avatar_url: url }); onChanged() })
+    await pickFile(e, async url => {
+      const { error } = await updateServer(server.id, { avatar_url: url })
+      if (error) { toastErr(error.message ?? String(error)); return }
+      setAvatar(url); onChanged()
+    })
   }
   const cleanName = (f: File) => f.name.replace(/\.[^.]+$/, '').replace(/[^\wа-яё-]+/gi, '_').slice(0, 32) || 'file'
 

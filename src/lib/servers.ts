@@ -28,8 +28,18 @@ export async function createServer(name: string, meId: string, meName: string, a
 
 // Update shared server fields (name / avatar / accent). Stored on the servers row
 // so every member sees the same avatar & accent on any device.
+// v1.255.0: раньше отдавал сырой ответ Supabase как есть — RLS без совпадения
+// строки молча обновляет 0 строк (error остаётся null), и ServerView.tsx
+// (createCategory/deleteCategory/renameCategory, только `if (error)`) принимал
+// это за успех: категория «создавалась» в интерфейсе, но не сохранялась в базе.
+// Сохраняем ФОРМУ ответа ({data, error}) — вызывающие уже проверяют error —
+// просто синтезируем его на месте несовпавших 0 строк.
 export async function updateServer(id: string, patch: { name?: string; avatar_url?: string | null; accent?: string | null }) {
-  return supabase.from('servers').update(patch).eq('id', id)
+  const res = await supabase.from('servers').update(patch).eq('id', id).select('id')
+  if (!res.error && (!res.data || res.data.length === 0)) {
+    return { ...res, error: { message: 'Не сохранилось — нет прав на изменение сервера' } as any }
+  }
+  return res
 }
 
 export async function createInvite(serverId: string, meId: string) {

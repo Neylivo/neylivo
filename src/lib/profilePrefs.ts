@@ -210,11 +210,22 @@ export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   return p
 }
 
+// v1.255.0: раньше эта функция не проверяла ошибку И оптимистично обновляла
+// кэш/localStorage ДО того, как узнавала, прошла ли запись в базу — если запись
+// падала (не применена миграция, RLS, сеть), интерфейс всё равно показывал
+// «сохранено», а на деле ничего не сохранялось (при следующей загрузке профиля
+// возвращались старые значения). Теперь сверяем error и НЕ трогаем кэш, если
+// запись не прошла — кэш перестаёт врать, а вызывающий код (Settings.tsx и т.п.)
+// может показать тост с ошибкой вместо тишины.
 export async function saveProfile(id: string, patch: Partial<ProfilePrefs>): Promise<ProfilePrefs> {
   const next = { ...(cache[id] ?? DEFAULT_PROFILE), ...patch }
+  const { data: upd, error } = await supabase.from('profiles').update(toRow(patch, next)).eq('id', id).select('id')
+  if (error) throw new Error(error.message)
+  // RLS без совпадения строки молча обновляет 0 строк — error здесь остаётся null,
+  // это не ошибка сети/схемы, а «не сохранилось» без единого признака почему.
+  if (!upd || upd.length === 0) throw new Error('Не удалось сохранить — нет доступа к изменению профиля')
   cache[id] = next
   persistProfile(id, next)
-  await supabase.from('profiles').update(toRow(patch, next)).eq('id', id)
   window.dispatchEvent(new CustomEvent('ponoi-profile', { detail: { id } }))
   return next
 }
