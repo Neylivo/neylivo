@@ -402,6 +402,22 @@ export function Home() {
     }
   }
 
+  // v1.257.0: точечное обновление ОДНОГО сервера — не трогает навигацию (в отличие
+  // от refresh(selectId) выше, который специально переключает view на выбранный
+  // сервер — нужно для «только что вступил, перейди туда», но было бы неверно
+  // после простого сохранения настроек, если сейчас открыто что-то другое).
+  // Обновляет и список в сайдбаре (servers), и текущий открытый сервер (view.server),
+  // если это именно он — иначе именно эта строка (не сам refresh()) осталась бы
+  // устаревшей, и повторное открытие настроек показывало бы старый снимок,
+  // хотя сохранение уже прошло по-настоящему.
+  async function refreshOneServer(id: string) {
+    const { data } = await supabase.from('servers').select('*').eq('id', id).maybeSingle()
+    if (!data) return
+    const fresh = data as Server
+    setServers(list => list.map(s => (s.id === id ? fresh : s)))
+    setView(v => (v.kind === 'server' && v.server.id === id ? { kind: 'server', server: fresh } : v))
+  }
+
   // v1.68.0: клик «Присоединиться» на карточке-приглашении в ленте сообщений.
   useEffect(() => {
     const h = async (e: Event) => {
@@ -567,7 +583,7 @@ export function Home() {
     {ctx && <ServerCtxMenu x={ctx.x} y={ctx.y} isOwner={ctx.server.owner === user?.id} muted={notifModeOf(ctx.server.id) === 'mute'} onClose={() => setCtx(null)} onAction={k => onCtxAction(k, ctx.server)} />}
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
-      onChanged={() => refresh()}
+      onChanged={() => refreshOneServer(settingsServer.id)}
       onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setLastServer(null); setView({ kind: 'dm' }); refresh() }} />}
     {tagServer && <ServerTagModal server={tagServer} myTagServerId={myTagServerId}
       onClose={() => setTagServer(null)} onEditProfile={() => setEditMyProfile(true)} />}
