@@ -49,6 +49,10 @@
    (`supabase/functions/livekit-token`) и задай секреты LiveKit — см. `supabase/functions/README.md`.
    Без этого текст/сервера/DM работают, а кнопка звонка выдаёт ошибку.
 
+8.1. **(Опционально, для пуш-уведомлений)** Разверни Edge Function `send-push`
+   и задай VAPID-секреты — см. `supabase/functions/README.md`. Без этого
+   всё работает как обычно, просто нет уведомлений при закрытом приложении.
+
 9. Запусти:
    ```bash
    npm run dev

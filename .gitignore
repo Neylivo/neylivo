@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .DS_Store
+supabase/.temp
 
 # Android (Capacitor) build output — native project itself is committed
 android/app/build
