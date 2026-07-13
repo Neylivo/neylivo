@@ -173,9 +173,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   }, [onClose])
 
   useEffect(() => {
-    listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
-    fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e))
-    fetchMemberRoles(server.id).then(setMemberRoles).catch(e => console.error('[member_roles] load failed:', e))
+    const loadMembers = () => listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
+    const loadRoles = () => fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e))
+    const loadMemberRoles = () => fetchMemberRoles(server.id).then(setMemberRoles).catch(e => console.error('[member_roles] load failed:', e))
+    loadMembers(); loadRoles(); loadMemberRoles()
     loadBans()
     const loadAudit = () => fetchAuditLog(server.id).then(setAuditLog)
     loadAudit()
@@ -188,10 +189,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     // supabase/63_more_realtime.sql) — забанили/разбанили или создали/отозвали
     // инвайт с другого устройства, а тут (открытые «Баны»/«Приглашения») список
     // оставался старым, пока не переоткроешь настройки заново.
+    // v1.282.0: та же дыра была у server_members/server_roles/member_roles —
+    // вступление/кик/бан участника или изменение роли с другого устройства не
+    // отражались во вкладках «Участники»/«Роли», пока не переоткроешь настройки.
     const ch = supabase.channel('sset-live:' + server.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'server_bans', filter: 'server_id=eq.' + server.id }, () => loadBans())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'server_invites', filter: 'server_id=eq.' + server.id }, () => loadInvites())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log', filter: 'server_id=eq.' + server.id }, () => loadAudit())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_members', filter: 'server_id=eq.' + server.id }, () => loadMembers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_roles', filter: 'server_id=eq.' + server.id }, () => loadRoles())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_roles', filter: 'server_id=eq.' + server.id }, () => loadMemberRoles())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
     // eslint-disable-next-line react-hooks/exhaustive-deps

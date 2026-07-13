@@ -29,8 +29,20 @@ export function ServerEvents({ server, channels, canCreate, onClose }: { server:
   }, [onClose])
 
   useEffect(() => { load() /* eslint-disable-next-line */ }, [server.id])
+  // v1.282.0: server_events не было в публикации realtime вообще (см.
+  // supabase/73_more_realtime2.sql) — событие, созданное с другого устройства
+  // или другим участником, не появлялось здесь, пока не переоткроешь панель.
+  useEffect(() => {
+    const ch = supabase.channel('events-live:' + server.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_events', filter: 'server_id=eq.' + server.id }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server.id])
   async function load() {
-    const { data } = await supabase.from('server_events').select('*').eq('server_id', server.id).order('starts_at')
+    // Раньше error не проверялась — сбой сети читался как «мероприятий нет».
+    const { data, error } = await supabase.from('server_events').select('*').eq('server_id', server.id).order('starts_at')
+    if (error) { console.error('[server_events] load failed:', error); return }
     setEvents(data ?? [])
   }
 

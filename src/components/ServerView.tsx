@@ -318,6 +318,21 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => { supabase.removeChannel(ch) }
   }, [server.id])
 
+  // v1.282.0: server_members/server_roles/member_roles уже в публикации realtime
+  // (миграции 03/12/25), но здесь их никто не слушал — вступление/выход/кик/бан
+  // участника, создание/переименование/удаление роли и назначение роли ДРУГОМУ
+  // участнику не появлялись в списке справа и в цвете ников, пока не
+  // переоткроешь сервер заново. Тот же паттерн, что уже был для channels выше.
+  useEffect(() => {
+    const ch = supabase.channel('members-roles-live:' + server.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_members', filter: 'server_id=eq.' + server.id }, () => loadMembers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'server_roles', filter: 'server_id=eq.' + server.id }, () => loadRoles())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_roles', filter: 'server_id=eq.' + server.id }, () => loadRoles())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server.id])
+
   // v1.251.0: настройки САМОГО сервера (категории, баннер, описание, уровень
   // проверки, AFK-канал и т.д. — вкладка «Обзор» в ServerSettings.tsx) раньше
   // жили только в srvSettings — локальной копии, взятой один раз при монтировании
