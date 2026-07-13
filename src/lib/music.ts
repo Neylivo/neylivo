@@ -45,7 +45,10 @@ export async function addTrack(t: NewTrack) {
 }
 
 export async function removeTrackDb(id: string) {
-  return supabase.from('music_tracks').delete().eq('id', id)
+  // v1.274.0: .select('id') — без него вызывающая сторона (MusicPlayer.tsx) не
+  // может отличить «правда удалено» от «RLS молча отклонил» и убирала трек из
+  // локального списка в любом случае (он потом «сам возвращался» у всех).
+  return supabase.from('music_tracks').delete().eq('id', id).select('id')
 }
 
 /** Дозапись метаданных трека (v1.79.0): если чей-то клиент смог получить

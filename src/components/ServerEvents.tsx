@@ -54,7 +54,10 @@ export function ServerEvents({ server, channels, canCreate, onClose }: { server:
     load()
   }
   async function del(id: string) {
-    await supabase.from('server_events').delete().eq('id', id)
+    // v1.274.0: раньше событие убиралось из локального списка безусловно — при
+    // сбое сети/RLS оно молча возвращалось (у себя же) при следующей load().
+    const { data, error } = await supabase.from('server_events').delete().eq('id', id).select('id')
+    if (error || !data?.length) { toastErr('Не удалось удалить событие' + (error?.message ? ': ' + error.message : '')); return }
     setEvents(list => list.filter(e => e.id !== id))
   }
   const fmt = (x: string) => new Date(x).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })

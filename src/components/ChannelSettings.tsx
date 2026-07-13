@@ -53,7 +53,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   // выбора ролей было физически некому давать доступ, кроме владельца/MANAGE_CHANNELS.
   const [privRoles, setPrivRoles] = useState<string[]>(Array.isArray((channel as any).private_roles) ? (channel as any).private_roles : [])
   const [roles, setRoles] = useState<ServerRole[]>([])
-  useEffect(() => { fetchRoles(server.id).then(setRoles) }, [server.id])
+  useEffect(() => { fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e)) }, [server.id])
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
   const [paused, setPaused] = useState<boolean>(!!s0.invites_paused)
   // v1.138.0: шрифт и раскраска названия канала (см. src/lib/chStyle.ts)

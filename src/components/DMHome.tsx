@@ -237,7 +237,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     callMsgRef.current = null
     const sec = Math.max(1, Math.round((Date.now() - callStartRef.current) / 1000))
     const content = answeredRef.current ? sysCallEnded(sec) : sysCallMissed(sec)
-    supabase.from('dm_messages').update({ content }).eq('id', id).then(() => {})
+    // v1.274.0: фоновая правка «начинает звонок» -> «звонок длился/пропущен» —
+    // не то, ради чего стоит городить UI-обратную связь при сбое (не действие
+    // пользователя), но раньше результат вообще никак не проверялся.
+    supabase.from('dm_messages').update({ content }).eq('id', id).then(({ error }) => { if (error) console.error('[call msg] update failed:', error) })
   }
 
   function endRing(sendCancel: boolean) {
@@ -467,7 +470,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
   // v1.122.0: отмена своей исходящей заявки
   async function cancelOutgoing(r: FriendRequest) {
-    await supabase.from('friend_requests').delete().eq('id', r.id)
+    // v1.274.0: раньше результат не проверялся — при сбое loadRequests() всё
+    // равно показывал бы правду (заявка на месте), но без единого объяснения,
+    // почему «отмена» не подействовала.
+    const { data, error } = await supabase.from('friend_requests').delete().eq('id', r.id).select('id')
+    if (error || !data?.length) toastErr('Не удалось отменить заявку' + (error?.message ? ': ' + error.message : ''))
     loadRequests()
   }
 
@@ -557,7 +564,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const { data, error } = await supabase.from('dm_messages').select('*')
       .eq('thread_id', t.id).order('created_at', { ascending: false }).limit(100)
     if (activeRef.current?.id !== f.id) return
-    if (error) { toastErr('Не удалось загрузить сообщения — показаны последние сохранённые'); return }
+    if (error) { netFail(); toastErr('Не удалось загрузить сообщения — показаны последние сохранённые'); return }
+    netOk()
     const list = tagIgnored(((data ?? []) as DMMessage[]).reverse())
     hasMore.current = (data ?? []).length === 100
     // v1.69.0: ЛС всегда открывается в самом низу — на последних сообщениях (как в Discord).
@@ -849,9 +857,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     loadingOlder.current = true
     try {
       const oldest = msgsRef.current[0].created_at
-      const { data } = await supabase.from('dm_messages').select('*')
+      const { data, error } = await supabase.from('dm_messages').select('*')
         .eq('thread_id', threadId).lt('created_at', oldest)
         .order('created_at', { ascending: false }).limit(50)
+      // v1.274.0: сбой сети раньше молча читался как «старых сообщений больше нет»
+      // (hasMore=false навсегда) — теперь просто не трогаем hasMore, следующая
+      // прокрутка вверх честно попробует ещё раз.
+      if (error) { netFail(); console.error('[dm_messages] loadOlder failed:', error); return }
+      netOk()
       const older = tagIgnored(((data ?? []) as DMMessage[]).reverse())
       hasMore.current = older.length === 50
       if (older.length) {

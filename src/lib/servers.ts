@@ -79,7 +79,11 @@ export async function joinByCode(code: string, _meId: string, meName: string) {
 
 // Members with their profile avatar_url merged in (server_members has no avatar column).
 export async function listMembers(serverId: string) {
-  const { data } = await supabase.from('server_members').select('*').eq('server_id', serverId).order('joined_at')
+  // v1.274.0: раньше error игнорировалась — сбой сети выглядел как «на сервере
+  // ноль участников». Бросаем — вызывающая сторона (setMembers(await listMembers(...)))
+  // тогда просто не перезаписывает уже показанный список пустым при отказе сети.
+  const { data, error } = await supabase.from('server_members').select('*').eq('server_id', serverId).order('joined_at')
+  if (error) throw error
   const members = (data ?? []) as any[]
   if (members.length === 0) return members
   const ids = members.map(m => m.user_id)
@@ -127,9 +131,17 @@ export async function renameServer(id: string, name: string) {
 }
 
 export async function deleteServer(id: string) {
-  await supabase.from('channels').delete().eq('server_id', id)
-  await supabase.from('server_members').delete().eq('server_id', id)
-  await supabase.from('server_invites').delete().eq('server_id', id)
+  // v1.274.0: раньше три первых delete() не проверялись вообще (fire-and-forget),
+  // а результат последнего (servers) никто не читал у вызывающей стороны —
+  // отказ сети/RLS на любом шаге оставлял сервер в базе, но UI вёл себя так,
+  // будто удаление прошло (закрывал настройки, уводил на «Личные сообщения»).
+  const steps = await Promise.all([
+    supabase.from('channels').delete().eq('server_id', id),
+    supabase.from('server_members').delete().eq('server_id', id),
+    supabase.from('server_invites').delete().eq('server_id', id),
+  ])
+  const firstErr = steps.find(s => s.error)?.error
+  if (firstErr) return { error: firstErr }
   return supabase.from('servers').delete().eq('id', id)
 }
 

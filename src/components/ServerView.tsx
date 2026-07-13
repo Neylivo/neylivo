@@ -400,8 +400,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     return () => { room.off(RoomEvent.Disconnected, onDisc) }
   }, [voice])
 
-  async function loadMembers() { setMembers(await listMembers(server.id)) }
-  async function loadRoles() { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
+  // v1.274.0: listMembers/fetchRoles теперь бросают на сбое сети (не глотают error
+  // молча) — здесь просто ловим и логируем, чтобы не плодить unhandled rejection
+  // и не затирать уже показанный список участников/ролей пустым при отказе.
+  async function loadMembers() { try { setMembers(await listMembers(server.id)) } catch (e) { console.error('[members] load failed:', e) } }
+  async function loadRoles() {
+    try { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
+    catch (e) { console.error('[roles] load failed:', e) }
+  }
 
   async function loadChannels() {
     // v1.272.0: раньше ошибка сети (Supabase недоступен) не проверялась — список
@@ -468,12 +474,17 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // Загружаем последние 100 сообщений (раньше в длинных каналах грузились самые старые 100).
     // v1.268.0: .is('thread_id', null) — сообщения веток (ThreadPanel.tsx) лежат
     // в этой же таблице, в основную ленту канала попадать не должны.
-    const { data } = await supabase.from('messages').select('*')
+    const { data, error } = await supabase.from('messages').select('*')
       .eq('channel_id', c.id).is('thread_id', null).order('created_at', { ascending: false }).limit(100)
     // v1.260.0: пока запрос летал по сети, могли успеть кликнуть на другой канал —
     // без этой проверки более медленный (первый) ответ прилетал последним и подменял
     // ленту уже открытого другого канала на чужие сообщения.
     if (curChannelRef.current?.id !== c.id) return
+    // v1.274.0: при сбое сети раньше всё равно шли в setMessages([]) — стирали уже
+    // показанный кэш (cachedList чуть выше) реальной пустой лентой. Оставляем кэш
+    // как есть при сбое, а не притворяемся, что в канале никогда не было сообщений.
+    if (error) { netFail(); console.error('[messages] load failed:', error); return }
+    netOk()
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
     const lastRead = getChRead(c.id)
@@ -602,9 +613,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     loadingOlder.current = true
     try {
       const oldest = msgsRef.current[0].created_at
-      const { data } = await supabase.from('messages').select('*')
+      const { data, error } = await supabase.from('messages').select('*')
         .eq('channel_id', curChannel.id).is('thread_id', null).lt('created_at', oldest)
         .order('created_at', { ascending: false }).limit(50)
+      // v1.274.0: сбой сети раньше молча читался как «старых сообщений больше нет»
+      // (hasMore=false навсегда для этого канала) — теперь просто не трогаем
+      // hasMore, следующая прокрутка вверх honestly попробует ещё раз.
+      if (error) { netFail(); console.error('[messages] loadOlder failed:', error); return }
+      netOk()
       const older = ((data ?? []) as Message[]).reverse()
       hasMore.current = older.length === 50
       if (older.length) {
@@ -831,7 +847,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function leave() {
     if (!user || isOwner) return
     if (!await confirmUi('Покинуть сервер «' + server.name + '»?', { okText: 'Покинуть' })) return
-    await supabase.from('server_members').delete().eq('server_id', server.id).eq('user_id', user.id)
+    // v1.274.0: раньше onLeft() (уводит с сервера в интерфейсе) вызывался
+    // безусловно — сбой сети/RLS оставлял тебя реальным участником в базе,
+    // а сервер потом «сам возвращался» в сайдбар при следующей загрузке списка.
+    const { data, error } = await supabase.from('server_members').delete()
+      .eq('server_id', server.id).eq('user_id', user.id).select('user_id')
+    if (error || !data?.length) { toastErr('Не удалось покинуть сервер' + (error?.message ? ': ' + error.message : '')); return }
     onLeft()
   }
 

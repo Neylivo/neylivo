@@ -459,7 +459,8 @@ export function Home() {
     if (k === 'invite') { setInviteFor(server); return }
     if (k === 'delete') {
       if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
-      await deleteServer(server.id)
+      const { error } = await deleteServer(server.id)
+      if (error) { toastErr('Не удалось удалить сервер: ' + error.message); return }
       setLastServer(null); setView({ kind: 'dm' }); refresh()
       return
     }
@@ -605,7 +606,11 @@ export function Home() {
     {settingsServer && <ServerSettings server={settingsServer} uid={user?.id ?? ''}
       onClose={() => setSettingsServer(null)}
       onChanged={() => refreshOneServer(settingsServer.id)}
-      onDelete={async () => { await deleteServer(settingsServer.id); setSettingsServer(null); setLastServer(null); setView({ kind: 'dm' }); refresh() }} />}
+      onDelete={async () => {
+        const { error } = await deleteServer(settingsServer.id)
+        if (error) { toastErr('Не удалось удалить сервер: ' + error.message); return }
+        setSettingsServer(null); setLastServer(null); setView({ kind: 'dm' }); refresh()
+      }} />}
     {tagServer && <ServerTagModal server={tagServer} myTagServerId={myTagServerId}
       onClose={() => setTagServer(null)} onEditProfile={() => setEditMyProfile(true)} />}
     {editMyProfile && user && <ProfileCard userId={user.id} name={username} avatarUrl={avatarUrl} status="online"

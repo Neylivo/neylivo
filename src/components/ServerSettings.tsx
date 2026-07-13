@@ -173,9 +173,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   }, [onClose])
 
   useEffect(() => {
-    listMembers(server.id).then(setMembers)
-    fetchRoles(server.id).then(setRoles)
-    fetchMemberRoles(server.id).then(setMemberRoles)
+    listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
+    fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e))
+    fetchMemberRoles(server.id).then(setMemberRoles).catch(e => console.error('[member_roles] load failed:', e))
     loadBans()
     const loadAudit = () => fetchAuditLog(server.id).then(setAuditLog)
     loadAudit()
@@ -269,14 +269,24 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     const nm = newRole.trim(); if (!nm) return
     const { error } = await createRole(server.id, nm, newRoleColor)
     if (error) return toastErr(String(error.message ?? error).includes('server_roles') ? 'Сначала примени миграцию supabase/12_roles.sql' : String(error.message ?? error))
-    setNewRole(''); setRoles(await fetchRoles(server.id)); toastOk('Роль «' + nm + '» создана')
+    setNewRole('')
+    // v1.274.0: роль уже создана в базе к этому моменту — сбой ТОЛЬКО перечитки
+    // списка не должен выглядеть как «роль не создалась» (fetchRoles теперь бросает).
+    try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after create failed:', e) }
+    toastOk('Роль «' + nm + '» создана')
   }
 
   // v1.96.0: полный перезабор ролей/назначений после правок в редакторе ролей.
+  // v1.274.0: без try/catch отказ сети на любом из трёх запросов оставлял
+  // необработанный reject в консоли — сама функция и так безопасна (при отказе
+  // просто не доходит до соответствующего setX, старые данные остаются), лишь
+  // логируем, чтобы не путать с настоящим крашем.
   async function reloadRoles() {
-    setRoles(await fetchRoles(server.id))
-    setMemberRoles(await fetchMemberRoles(server.id))
-    setMembers(await listMembers(server.id))
+    try {
+      setRoles(await fetchRoles(server.id))
+      setMemberRoles(await fetchMemberRoles(server.id))
+      setMembers(await listMembers(server.id))
+    } catch (e) { console.error('[reloadRoles] failed:', e) }
   }
 
   // Перестановка ролей (иерархия): двигаем на шаг и сохраняем позиции 0..n-1.
@@ -668,12 +678,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     const next = v ? ((r.permissions ?? 0) | PERM.MANAGE_SERVER) : ((r.permissions ?? 0) & ~PERM.MANAGE_SERVER)
                     const { error } = await setRolePermissions(r.id, next)
                     if (error) return toastErr(String(error.message ?? error).includes('permissions') ? 'Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor' : String(error.message ?? error))
-                    setRoles(await fetchRoles(server.id))
+                    try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after permission change failed:', e) }
                   }} /> Управление сервером
                 </label>
                 <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{members.filter(m => (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).includes(r.id)).length} 👤</span>
                 <button className="sset-roledel" title="Редактировать роль" onClick={() => { setSelRoleId(r.id); setRolesView('edit') }}><Icon name="edit" size={14} /></button>
-                <button className="sset-roledel" title="Удалить роль" onClick={async () => { await deleteRole(r.id); setRoles(await fetchRoles(server.id)) }}><Icon name="trash" size={14} /></button>
+                <button className="sset-roledel" title="Удалить роль" onClick={async () => {
+                  const { error } = await deleteRole(r.id)
+                  if (error) { toastErr(error.message ?? String(error)); return }
+                  try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after delete failed:', e) }
+                }}><Icon name="trash" size={14} /></button>
               </div>
             ))}
           </div>}

@@ -11,7 +11,11 @@ export interface ServerRole { id: string; server_id: string; name: string; color
 export const ROLE_COLORS = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c', '#e67e22', '#00b0f4', '#99aab5']
 
 export async function fetchRoles(serverId: string): Promise<ServerRole[]> {
-  const { data } = await supabase.from('server_roles').select('*').eq('server_id', serverId).order('position').order('created_at')
+  // v1.274.0: раньше error игнорировалась — сбой сети выглядел как «на сервере
+  // нет ролей» (пустые права доступа к приватным каналам и т.п.). Бросаем —
+  // вызывающая сторона не перезаписывает уже показанное пустым списком.
+  const { data, error } = await supabase.from('server_roles').select('*').eq('server_id', serverId).order('position').order('created_at')
+  if (error) throw error
   return (data ?? []) as ServerRole[]
 }
 
@@ -35,7 +39,13 @@ export async function updateRole(id: string, patch: { name?: string; color?: str
 }
 
 export async function deleteRole(id: string) {
-  return supabase.from('server_roles').delete().eq('id', id)
+  // v1.274.0: как и updateOne выше — без .select('id') RLS блокирует удаление
+  // чужой/устаревшей роли молча (0 задетых строк, error: null), а вызывающая
+  // сторона (ServerSettings.tsx) видела «успех» и просто перечитывала список,
+  // где роль как ни в чём не бывало оставалась на месте.
+  const { data, error } = await supabase.from('server_roles').delete().eq('id', id).select('id')
+  if (!error && (!data || data.length === 0)) return { error: { message: 'Не удалено — нет прав на изменение' } as any }
+  return { error }
 }
 
 // Старое одиночное назначение (до миграции 25) — оставлено как фолбэк.
@@ -63,8 +73,12 @@ export async function saveRoleOrder(roles: ServerRole[]) {
 // До миграции 25 (нет таблицы member_roles) возвращает пусто, и интерфейс
 // откатывается на старое одиночное поле server_members.role_id.
 export async function fetchMemberRoles(serverId: string): Promise<Record<string, string[]>> {
+  // v1.274.0: сбой сети раньше молча читался как «ни у кого нет ролей» — на
+  // клиенте от member_roles зависят проверки прав (canManageChannels и т.п.),
+  // так что при отказе бросаем, а не тихо снимаем у всех права на время сбоя.
   const { data, error } = await supabase.from('member_roles').select('user_id, role_id').eq('server_id', serverId)
-  if (error || !data) return {}
+  if (error) throw error
+  if (!data) return {}
   const map: Record<string, string[]> = {}
   for (const r of data as any[]) (map[r.user_id] ??= []).push(r.role_id)
   return map

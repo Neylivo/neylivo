@@ -414,7 +414,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
 
   async function removeTrack(id: string) {
-    await removeTrackDb(id)
+    const { data, error } = await removeTrackDb(id)
+    if (error || !data?.length) { toastErr('Не удалось удалить трек' + (error?.message ? ': ' + error.message : '')); return }
     setTracks(t => t.filter(x => x.id !== id))
     setIdx(i => Math.max(0, Math.min(i, tracks.length - 2)))
   }
