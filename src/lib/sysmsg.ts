@@ -46,7 +46,7 @@ export function parseInviteMeta(preview: string): { n: string } & InviteMeta {
 // v1.285.0: cardBg/cardTitle/cardSubtitle — свободная кастомизация карточки
 // («свой фон/картинка/текст», см. ShareBuildModal) — необязательны, при
 // отсутствии карточка выглядит как раньше (game/mcVersion/loader/modCount/totalMb).
-export interface QlSysMeta { game: string; mcVersion: string; loader: string; modCount: number; totalMb: number; cardBg?: string; cardTitle?: string; cardSubtitle?: string }
+export interface QlSysMeta { game: string; mcVersion: string; loader: string | null; modCount: number; totalMb: number; cardBg?: string; cardTitle?: string; cardSubtitle?: string }
 export function sysQuickLaunch(packId: string, meta: QlSysMeta): string {
   return SYS + 'sys:qlaunch:' + packId + SYS + JSON.stringify(meta)
 }

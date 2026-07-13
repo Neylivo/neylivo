@@ -7,8 +7,8 @@ import { supabase } from './supabase'
 export interface QlMod { name: string; filename: string; sha1: string; size: number }
 export interface QlManifest {
   mcVersion: string
-  loader: string          // 'forge' | 'neoforge' | 'fabric'
-  loaderVersion: string
+  loader: string | null       // 'forge' | 'neoforge' | 'fabric' | null (чистый vanilla, без модов)
+  loaderVersion: string | null
   mods: QlMod[]
 }
 export interface QlPack extends QlManifest {

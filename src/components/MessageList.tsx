@@ -62,14 +62,14 @@ function QlaunchShareCard({ sys, createdAt, label, currentUserName }: { sys: Sys
   const ql = parseQuickLaunchMeta(sys.preview)
   if (!ql) return null
   if (expired) return <ShareEndedCard label={label} />
-  const loaderLabel = ql.loader === 'neoforge' ? 'NeoForge' : ql.loader === 'fabric' ? 'Fabric' : 'Forge'
+  const loaderLabel = ql.loader === 'neoforge' ? 'NeoForge' : ql.loader === 'fabric' ? 'Fabric' : ql.loader === 'forge' ? 'Forge' : null
   return (
     <div className="inv2-card ql-card">
       <div className="inv2-lb">{label}</div>
       <div className={'inv2-box ql-box' + (ql.cardBg ? ' has-custom-bg' : '')} style={ql.cardBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)), url(${ql.cardBg})` } : undefined}>
         <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
         <div className="ql-body">
-          <div className="ql-title">{ql.cardTitle || `${ql.game} — ${ql.mcVersion} (${loaderLabel})`}</div>
+          <div className="ql-title">{ql.cardTitle || `${ql.game} — ${ql.mcVersion}${loaderLabel ? ` (${loaderLabel})` : ''}`}</div>
           <div className="ql-sub">{ql.cardSubtitle || `${ql.modCount} ${modsWord(ql.modCount)} · ${ql.totalMb} МБ докачки`}</div>
           <QuickLaunchCard packId={sys.targetId} username={currentUserName || 'Player'} />
         </div>

@@ -485,6 +485,17 @@ async function ensureFabricInstalled(root, mcVersion, loaderVersion, versionId) 
 // Тихая установка через официальный installer.jar (--installClient <root>) — тот
 // же способ, каким ставят Forge/NeoForge сторонние лаунчеры без диалоговых окон.
 async function ensureLoaderInstalled(root, pack, javaExe, onProgress) {
+  // v1.285.0: часть сборок (в т.ч. инстансов Prism) — чистый vanilla без модового
+  // загрузчика вообще (см. readMmcPack() — там ни forge/neoforge/fabric не найден).
+  // Ставить нечего — только докачать сам vanilla version json, если его ещё нет
+  // у друга (у него своя чистая песочница, а не общий .minecraft).
+  if (!pack.loader) {
+    if (!readVersionJson(root, pack.mcVersion)) {
+      onProgress?.({ stage: 'installer' })
+      await fetchVanillaVersionJson(root, pack.mcVersion)
+    }
+    return pack.mcVersion
+  }
   const versionId = loaderVersionId(pack.loader, pack.mcVersion, pack.loaderVersion)
   if (readVersionJson(root, versionId)) return versionId
   onProgress?.({ stage: 'installer' })

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { uploadTo } from '../lib/storage'
 import { toastErr } from '../lib/toast'
@@ -27,15 +27,20 @@ export function ShareGameLinkModal({ game, label, hostId, onClose, onShared }: {
   const [cardSubtitle, setCardSubtitle] = useState('')
   const [cardBgFile, setCardBgFile] = useState<File | null>(null)
   const [cardBgPreview, setCardBgPreview] = useState<string | null>(null)
+  const cardBgPreviewRef = useRef<string | null>(null)
   const [busy, setBusy] = useState(false)
   const cardBgRef = useRef<HTMLInputElement>(null)
   const portNum = parseInt(port, 10)
   const portValid = !needsAddr || (Number.isFinite(portNum) && portNum > 0 && portNum <= 65535)
 
   function pickCardBg(f: File | null) {
+    if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current)
+    const url = f ? URL.createObjectURL(f) : null
+    cardBgPreviewRef.current = url
     setCardBgFile(f)
-    setCardBgPreview(f ? URL.createObjectURL(f) : null)
+    setCardBgPreview(url)
   }
+  useEffect(() => () => { if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current) }, [])
 
   async function share() {
     setBusy(true)

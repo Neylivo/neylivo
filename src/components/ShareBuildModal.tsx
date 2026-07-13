@@ -37,25 +37,36 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
   const [cardSubtitle, setCardSubtitle] = useState('')
   const [cardBgFile, setCardBgFile] = useState<File | null>(null)
   const [cardBgPreview, setCardBgPreview] = useState<string | null>(null)
+  const cardBgPreviewRef = useRef<string | null>(null)
   const cardBgRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let ok = true
-    listSources().then(list => { if (ok) setSources(list) })
+    // v1.285.1: source должен реально указывать на первый найденный источник, а не
+    // оставаться null (иначе скан всегда шёл по обычному .minecraft — даже когда в
+    // выпадающем списке уже показан как выбранный совсем другой инстанс Prism, а
+    // при единственном найденном источнике не-vanilla пикер вообще не появлялся и
+    // сборка Minecraft не находилась, хотя реально стоит через Prism Launcher).
+    listSources().then(list => { if (ok) { setSources(list); if (list.length) setSource(list[0]) } })
     return () => { ok = false }
   }, [])
 
+  // v1.285.1: ключ по имени инстанса, а не по ссылке на объект source — иначе
+  // повторный setSource() с эквивалентным значением (например, оба раза vanilla)
+  // всё равно считался бы новой зависимостью и гонял лишний скан модов (для
+  // сборки в сотни модов это реально заметная задержка, а не «синхронно»).
+  const srcKey = source?.prismInstance ?? ''
   useEffect(() => {
     let ok = true
     setManifest(null); setScanError(null)
-    const src = source?.prismInstance ? { prismInstance: source.prismInstance } : undefined
+    const src = srcKey ? { prismInstance: srcKey } : undefined
     scanLocalPack(src, { fast }).then(r => {
       if (!ok) return
       if ('error' in r) setScanError(r.error)
       else setManifest(r)
     })
     return () => { ok = false }
-  }, [source, fast])
+  }, [srcKey, fast])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
@@ -63,10 +74,17 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, busy])
 
+  // v1.285.1: revoke — ref, а не значение из замыкания эффекта: иначе на
+  // размонтировании отзывался бы устаревший (изначальный null) URL, а не
+  // актуальный выбранный файл — блобы копились бы в памяти до перезагрузки.
   function pickCardBg(f: File | null) {
+    if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current)
+    const url = f ? URL.createObjectURL(f) : null
+    cardBgPreviewRef.current = url
     setCardBgFile(f)
-    setCardBgPreview(f ? URL.createObjectURL(f) : null)
+    setCardBgPreview(url)
   }
+  useEffect(() => () => { if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current) }, [])
 
   const totalMb = manifest ? Math.round(manifest.mods.reduce((a, m) => a + m.size, 0) / 1024 / 1024) : 0
 
@@ -114,7 +132,7 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
         {manifest && <>
           <div className="sset-info" style={{ marginTop: 16 }}>
             <Icon name="gamepad" size={16} />
-            <span>{manifest.mcVersion} · {LOADER_LABEL[manifest.loader] ?? manifest.loader} {manifest.loaderVersion} · {fast ? 'без модов' : manifest.mods.length + ' модов · ' + totalMb + ' МБ'}</span>
+            <span>{manifest.mcVersion}{manifest.loader ? ` · ${LOADER_LABEL[manifest.loader] ?? manifest.loader} ${manifest.loaderVersion}` : ' · Vanilla'} · {fast ? 'без модов' : manifest.mods.length + ' модов · ' + totalMb + ' МБ'}</span>
           </div>
           <label className="modal-lbl">Адрес сервера</label>
           <div className="modal-inline">
@@ -123,7 +141,7 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
           </div>
 
           <label className="modal-lbl">Карточка в чате (необязательно)</label>
-          <input className="modal-in" placeholder={`${manifest.mcVersion} — ${LOADER_LABEL[manifest.loader] ?? manifest.loader}`} value={cardTitle} onChange={e => setCardTitle(e.target.value)} disabled={busy} />
+          <input className="modal-in" placeholder={`${manifest.mcVersion} — ${manifest.loader ? (LOADER_LABEL[manifest.loader] ?? manifest.loader) : 'Vanilla'}`} value={cardTitle} onChange={e => setCardTitle(e.target.value)} disabled={busy} />
           <input className="modal-in" style={{ marginTop: 8 }} placeholder="Подпись под заголовком" value={cardSubtitle} onChange={e => setCardSubtitle(e.target.value)} disabled={busy} />
           <div className="modal-inline" style={{ marginTop: 8, alignItems: 'center' }}>
             <button type="button" className="pqs2-btn ghost" onClick={() => cardBgRef.current?.click()} disabled={busy}>Фон карточки…</button>
