@@ -41,7 +41,11 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // v1.161.0: диплинк на сообщение (ponoi://msg/...), пришедший запуском .exe с URL.
   onDeepLink: (cb) => { ipcRenderer.removeAllListeners('ponoi-deep-link'); ipcRenderer.on('ponoi-deep-link', (_e, url) => cb(url)) },
   // v1.180.0: «Игровой Экспресс» — скан папки mods текущей сборки Minecraft (версия/Forge/список модов с sha1).
-  mcScanMods: () => ipcRenderer.invoke('ponoi-mc-scan-mods'),
+  // v1.285.0: source — undefined (обычный .minecraft) или { prismInstance: <имя> } — см.
+  // listPrismInstances() в electron/quicklaunch.cjs; opts.fast=true — «поделиться версией» без модов.
+  mcScanMods: (source, opts) => ipcRenderer.invoke('ponoi-mc-scan-mods', { source, opts }),
+  // v1.285.0: список источников для пикера (обычный лаунчер + инстансы Prism Launcher).
+  mcListSources: () => ipcRenderer.invoke('ponoi-mc-list-sources'),
   mcModExists: (supabaseUrl, sha1) => ipcRenderer.invoke('ponoi-mc-mod-exists', { supabaseUrl, sha1 }),
   mcUploadMod: args => ipcRenderer.invoke('ponoi-mc-upload-mod', args),
   mcPrepareInstance: (pack, supabaseUrl) => ipcRenderer.invoke('ponoi-mc-prepare-instance', { pack, supabaseUrl }),

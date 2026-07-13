@@ -798,6 +798,11 @@ body { font-size: var(--font-px, 16px); }
 .modal-ghost { background:none; border:none; color:var(--tx); font-weight:600; cursor:pointer; padding:10px 12px; }
 .modal-ghost:hover { text-decoration:underline; }
 .modal-danger { background:none; border:none; color:var(--red); font-weight:600; cursor:pointer; padding:10px 12px; margin-right:auto; }
+/* v1.285.0: тумблер «только версия» в «Поделиться сборкой». */
+.modal-check { display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--tx); cursor:pointer; user-select:none; }
+.modal-check input { width:16px; height:16px; accent-color:var(--brand); cursor:pointer; }
+/* v1.285.0: превью выбранного фона карточки «Поделиться игрой». */
+.ql-bg-thumb { display:inline-block; width:36px; height:36px; border-radius:6px; background-size:cover; background-position:center; flex:none; }
 .modal-danger:hover { text-decoration:underline; }
 .modal-results { min-height:60px; margin-top:12px; }
 .modal-empty { text-align:center; color:var(--mut); font-size:14px; padding:18px 0; }
@@ -3636,6 +3641,13 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .ql-progress { margin-top:8px; height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
 .ql-progress-fill { height:100%; background:var(--brand); transition:width .2s ease; }
 .ql-error { margin-top:8px; font-size:12px; color:#f23f43; line-height:1.4; }
+/* v1.285.0: свободная кастомизация карточки «Поделиться игрой» (свой фон) — тёмный
+   градиент под картинкой держит текст читаемым независимо от того, что залил автор. */
+.ql-box.has-custom-bg { background-size:cover; background-position:center; }
+.ql-box.has-custom-bg .ql-title, .ql-box.has-custom-bg .ql-sub { color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+.ql-box.has-custom-bg .ql-ico { background:rgba(0,0,0,.35); color:#fff; }
+/* v1.285.0: карточка «поделиться игрой» гаснет через час — не завлекаем в неактивную игру. */
+.ql-box.ql-ended { opacity:.65; }
 
 /* --- Шапка сервера: пилюля с названием; с баннером — высокая, без — 48px --- */
 .srv-title.clickable { justify-content:flex-start; gap:8px; }

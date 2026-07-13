@@ -8,7 +8,7 @@ import { fetchPack, prepareInstance, launchPack, onMcProgress, isQuicklaunchAvai
 type Stage = 'idle' | 'fetching' | 'installer' | 'mods' | 'libraries' | 'assets' | 'launching' | 'done' | 'error'
 
 const STAGE_LABEL: Record<Stage, string> = {
-  idle: 'Скачать и войти', fetching: 'Загружаю список модов…', installer: 'Устанавливаю Forge/NeoForge…',
+  idle: 'Скачать и войти', fetching: 'Загружаю список модов…', installer: 'Устанавливаю загрузчик модов…',
   mods: 'Докачиваю моды…', libraries: 'Докачиваю библиотеки игры…', assets: 'Докачиваю ресурсы…',
   launching: 'Запускаю игру…', done: 'Готово — заходи в игру!', error: 'Повторить',
 }

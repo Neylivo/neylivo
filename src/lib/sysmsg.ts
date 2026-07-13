@@ -43,7 +43,10 @@ export function parseInviteMeta(preview: string): { n: string } & InviteMeta {
 // v1.180.0: карточка «Игровой Экспресс» в чате — тот же приём, что у sysInvite:
 // лёгкое превью (для чего sha1-список модов НЕ нужен) прямо в сообщении, сам
 // манифест — по id в quicklaunch_packs (см. src/lib/quicklaunch.ts).
-export interface QlSysMeta { game: string; mcVersion: string; loader: string; modCount: number; totalMb: number }
+// v1.285.0: cardBg/cardTitle/cardSubtitle — свободная кастомизация карточки
+// («свой фон/картинка/текст», см. ShareBuildModal) — необязательны, при
+// отсутствии карточка выглядит как раньше (game/mcVersion/loader/modCount/totalMb).
+export interface QlSysMeta { game: string; mcVersion: string; loader: string; modCount: number; totalMb: number; cardBg?: string; cardTitle?: string; cardSubtitle?: string }
 export function sysQuickLaunch(packId: string, meta: QlSysMeta): string {
   return SYS + 'sys:qlaunch:' + packId + SYS + JSON.stringify(meta)
 }
@@ -58,7 +61,7 @@ export function parseQuickLaunchMeta(preview: string): QlSysMeta | null {
 // v1.192.0: url — для игр с диплинк-протоколом (Roblox roblox://, CS2 steam://),
 // открывается через openGameLink(). ip/port — для Terraria: диплинка нет, кнопка
 // в карточке вызывает terrariaLaunch(ip, port) — реальный запуск процесса, не ссылку.
-export interface GameLinkMeta { game: string; label?: string | null; url?: string; ip?: string; port?: number }
+export interface GameLinkMeta { game: string; label?: string | null; url?: string; ip?: string; port?: number; cardBg?: string; cardTitle?: string; cardSubtitle?: string }
 export function sysGameLink(game: string, meta: GameLinkMeta): string {
   return SYS + 'sys:glink:' + game + SYS + JSON.stringify(meta)
 }

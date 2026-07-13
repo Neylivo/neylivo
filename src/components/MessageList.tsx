@@ -8,7 +8,7 @@ import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
-import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta } from '../lib/sysmsg'
+import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta, type SysMsg } from '../lib/sysmsg'
 import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
@@ -27,6 +27,87 @@ function modsWord(n: number): string {
   return r === 1 ? 'мод' : r >= 2 && r <= 4 ? 'мода' : 'модов'
 }
 import { parseFwd } from '../lib/fwd'
+
+// v1.285.0: карточки «Поделиться игрой» (и qlaunch, и glink) гаснут через час
+// после отправки — чтобы старые ссылки не продолжали дёргать fetchPack()/сеть
+// у всех, кто листает историю, и не звали в давно закрытую игру.
+const SHARE_TTL_MS = 60 * 60 * 1000
+function useShareExpired(createdAt: string): boolean {
+  const [expired, setExpired] = useState(() => Date.now() - new Date(createdAt).getTime() > SHARE_TTL_MS)
+  useEffect(() => {
+    if (expired) return
+    const left = SHARE_TTL_MS - (Date.now() - new Date(createdAt).getTime())
+    const t = setTimeout(() => setExpired(true), Math.max(0, left))
+    return () => clearTimeout(t)
+  }, [createdAt, expired])
+  return expired
+}
+function ShareEndedCard({ label }: { label: string }) {
+  return (
+    <div className="inv2-card ql-card">
+      <div className="inv2-lb">{label}</div>
+      <div className="inv2-box ql-box ql-ended">
+        <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
+        <div className="ql-body">
+          <div className="ql-title">Игровой обмен завершён</div>
+          <div className="ql-sub">Ссылка на подключение больше не активна</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QlaunchShareCard({ sys, createdAt, label, currentUserName }: { sys: SysMsg; createdAt: string; label: string; currentUserName?: string | null }) {
+  const expired = useShareExpired(createdAt)
+  const ql = parseQuickLaunchMeta(sys.preview)
+  if (!ql) return null
+  if (expired) return <ShareEndedCard label={label} />
+  const loaderLabel = ql.loader === 'neoforge' ? 'NeoForge' : ql.loader === 'fabric' ? 'Fabric' : 'Forge'
+  return (
+    <div className="inv2-card ql-card">
+      <div className="inv2-lb">{label}</div>
+      <div className={'inv2-box ql-box' + (ql.cardBg ? ' has-custom-bg' : '')} style={ql.cardBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)), url(${ql.cardBg})` } : undefined}>
+        <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
+        <div className="ql-body">
+          <div className="ql-title">{ql.cardTitle || `${ql.game} — ${ql.mcVersion} (${loaderLabel})`}</div>
+          <div className="ql-sub">{ql.cardSubtitle || `${ql.modCount} ${modsWord(ql.modCount)} · ${ql.totalMb} МБ докачки`}</div>
+          <QuickLaunchCard packId={sys.targetId} username={currentUserName || 'Player'} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GlinkShareCard({ sys, createdAt, label }: { sys: SysMsg; createdAt: string; label: string }) {
+  const expired = useShareExpired(createdAt)
+  const gl = parseGameLinkMeta(sys.preview)
+  if (!gl) return null
+  if (expired) return <ShareEndedCard label={label} />
+  const HOST_RE = /^[A-Za-z0-9.\-]{1,255}$/
+  const join = async () => {
+    if (sys.targetId === 'terraria' && gl.ip) {
+      try { await terrariaLaunch(gl.ip, gl.port ?? 0) }
+      catch (err: any) { toastErr(err.message ?? String(err)) }
+    } else if (sys.targetId === 'cs2') {
+      const port = gl.port ?? 0
+      if (!gl.ip || !HOST_RE.test(gl.ip) || port < 1 || port > 65535) { toastErr('Некорректный адрес сервера'); return }
+      openGameLink(steamConnectUrl(gl.ip, port))
+    } else if (gl.url) openGameLink(gl.url)
+  }
+  return (
+    <div className="inv2-card ql-card">
+      <div className="inv2-lb">{label}</div>
+      <div className={'inv2-box ql-box' + (gl.cardBg ? ' has-custom-bg' : '')} style={gl.cardBg ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)), url(${gl.cardBg})` } : undefined}>
+        <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
+        <div className="ql-body">
+          <div className="ql-title">{gl.cardTitle || gl.game}</div>
+          {(gl.cardSubtitle || gl.label) && <div className="ql-sub">{gl.cardSubtitle || gl.label}</div>}
+          <button className="inv2-join ql-btn" onClick={join}>Присоединиться</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 import { ForwardModal } from './ForwardModal'
 import { EmojiPicker } from './EmojiPicker'
 import { UserTagBadge } from './TagEmoji'
@@ -362,60 +443,22 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     </div>
                   </div>
                 )
-              })() : sys.type === 'qlaunch' ? (() => {
+              })() : sys.type === 'qlaunch' ? (
                 // v1.180.0: карточка «Игровой Экспресс» — превью сборки, сам список
                 // модов/скачивание/запуск отдельно (см. src/lib/quicklaunch.ts).
-                const ql = parseQuickLaunchMeta(sys.preview)
-                if (!ql) return null
-                return (
-                  <div className="inv2-card ql-card">
-                    <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы поделились сборкой' : m.author_name + ' зовёт тебя в игру!'}</div>
-                    <div className="inv2-box ql-box">
-                      <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
-                      <div className="ql-body">
-                        <div className="ql-title">{ql.game} — {ql.mcVersion} ({ql.loader === 'neoforge' ? 'NeoForge' : 'Forge'})</div>
-                        <div className="ql-sub">{ql.modCount} {modsWord(ql.modCount)} · {ql.totalMb} МБ докачки</div>
-                        <QuickLaunchCard packId={sys.targetId} username={currentUserName || 'Player'} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })() : sys.type === 'glink' ? (() => {
+                // v1.285.0: гаснет через час — см. QlaunchShareCard/useShareExpired выше.
+                <QlaunchShareCard sys={sys} createdAt={m.created_at}
+                  label={currentUser && m.author === currentUser ? 'Вы поделились сборкой' : m.author_name + ' зовёт тебя в игру!'}
+                  currentUserName={currentUserName} />
+              ) : sys.type === 'glink' ? (
                 // v1.184.0: «Поделиться игрой» для игр без установки/скачивания —
                 // v1.192.0: Roblox/CS2 просто открывают диплинк-ссылку (см.
                 // src/lib/gameShare.ts), Terraria своего протокола не имеет — жмём
                 // на месте запускаем Terraria.exe через IPC (terrariaLaunch).
-                const gl = parseGameLinkMeta(sys.preview)
-                if (!gl) return null
-                // v1.198.0: содержимое сообщения — в принципе подделываемый JSON (RLS
-                // проверяет только права на запись, а не форму glink-payload), поэтому
-                // для cs2 НЕ доверяем сырому gl.url — пересобираем steam://connect сами
-                // из ip/port и проверяем, что это похоже на настоящий адрес сервера.
-                const HOST_RE = /^[A-Za-z0-9.\-]{1,255}$/
-                const join = async () => {
-                  if (sys.targetId === 'terraria' && gl.ip) {
-                    try { await terrariaLaunch(gl.ip, gl.port ?? 0) }
-                    catch (err: any) { toastErr(err.message ?? String(err)) }
-                  } else if (sys.targetId === 'cs2') {
-                    const port = gl.port ?? 0
-                    if (!gl.ip || !HOST_RE.test(gl.ip) || port < 1 || port > 65535) { toastErr('Некорректный адрес сервера'); return }
-                    openGameLink(steamConnectUrl(gl.ip, port))
-                  } else if (gl.url) openGameLink(gl.url)
-                }
-                return (
-                  <div className="inv2-card ql-card">
-                    <div className="inv2-lb">{currentUser && m.author === currentUser ? 'Вы поделились игрой' : m.author_name + ' зовёт тебя в игру!'}</div>
-                    <div className="inv2-box ql-box">
-                      <div className="ql-ico"><Icon name="gamepad" size={22} /></div>
-                      <div className="ql-body">
-                        <div className="ql-title">{gl.game}</div>
-                        {gl.label && <div className="ql-sub">{gl.label}</div>}
-                        <button className="inv2-join ql-btn" onClick={join}>Присоединиться</button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })() : sys.type === 'call' ? (() => {
+                // v1.285.0: гаснет через час — см. GlinkShareCard/useShareExpired выше.
+                <GlinkShareCard sys={sys} createdAt={m.created_at}
+                  label={currentUser && m.author === currentUser ? 'Вы поделились игрой' : m.author_name + ' зовёт тебя в игру!'} />
+              ) : sys.type === 'call' ? (() => {
                 // Системное сообщение о звонке — текст зависит от того, кто смотрит.
                 const mineCall = !!currentUser && m.author === currentUser
                 const st = sys.targetId

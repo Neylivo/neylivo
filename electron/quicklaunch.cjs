@@ -13,9 +13,64 @@ const crypto = require('crypto')
 const { pipeline } = require('stream/promises')
 const { Readable } = require('stream')
 
-function mcRoot() {
-  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
-  return path.join(appData, '.minecraft')
+function appDataDir() { return process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming') }
+function mcRoot() { return path.join(appDataDir(), '.minecraft') }
+
+// v1.285.0: Prism Launcher — совсем другая раскладка, чем у ванильного лаунчера.
+// У ПОРТИРОВАННОЙ версии Prism (в отличие от MultiMC-наследия) конфиг живёт в
+// %APPDATA%\PrismLauncher, каждая сборка — отдельная папка в instances/ со
+// своим mmc-pack.json (список компонентов: net.minecraft/net.minecraftforge/
+// net.neoforged/net.fabricmc.fabric-loader) и своей .minecraft/mods внутри —
+// не общая на весь Prism, как у ванильного лаунчера. Проверено на реальной
+// установке (см. план — те же instances, что видел в реальной папке).
+function prismRoot() { return path.join(appDataDir(), 'PrismLauncher') }
+
+function parseIni(text) {
+  const out = {}
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^([A-Za-z][A-Za-z0-9]*)=(.*)$/)
+    if (m) out[m[1]] = m[2]
+  }
+  return out
+}
+function readInstanceCfg(instDir) {
+  try { return parseIni(fs.readFileSync(path.join(instDir, 'instance.cfg'), 'utf8')) } catch { return {} }
+}
+// mmc-pack.json -> {mcVersion, loader, loaderVersion} в том же формате, что и
+// у ванильного detectLoader() ниже — дальше по пайплайну (заливка/докачка/
+// запуск) обе раскладки неразличимы, разница только тут, в опознании.
+function readMmcPack(instDir) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(instDir, 'mmc-pack.json'), 'utf8'))
+    const comps = j.components || []
+    const byUid = uid => comps.find(c => c.uid === uid)
+    const mc = byUid('net.minecraft')
+    if (!mc || !mc.version) return null
+    const neo = byUid('net.neoforged'), forge = byUid('net.minecraftforge'), fabric = byUid('net.fabricmc.fabric-loader')
+    if (neo) return { mcVersion: mc.version, loader: 'neoforge', loaderVersion: neo.version }
+    if (forge) return { mcVersion: mc.version, loader: 'forge', loaderVersion: forge.version }
+    if (fabric) return { mcVersion: mc.version, loader: 'fabric', loaderVersion: fabric.version }
+    return { mcVersion: mc.version, loader: null, loaderVersion: null }   // чистый ванилла-инстанс — модов не бывает, но версией поделиться можно
+  } catch { return null }
+}
+function listPrismInstances() {
+  const root = prismRoot()
+  const instRoot = path.join(root, 'instances')
+  if (!fs.existsSync(instRoot)) return []
+  const out = []
+  for (const d of fs.readdirSync(instRoot, { withFileTypes: true })) {
+    if (!d.isDirectory() || d.name.startsWith('.')) continue
+    const dir = path.join(instRoot, d.name)
+    const pack = readMmcPack(dir)
+    if (!pack) continue
+    const cfg = readInstanceCfg(dir)
+    out.push({
+      name: cfg.name || d.name, dir,
+      mcVersion: pack.mcVersion, loader: pack.loader, loaderVersion: pack.loaderVersion,
+      lastLaunch: Number(cfg.lastLaunchTime || 0),
+    })
+  }
+  return out.sort((a, b) => b.lastLaunch - a.lastLaunch)
 }
 
 // Хэш файла потоково — моды/библиотеки бывают десятки МБ, грузить целиком в память не нужно.
@@ -36,6 +91,10 @@ function sha1File(fp) {
 // inheritsFrom — так её достают все лаунчеры (включая официальный), поэтому
 // матчим по нему, а не по имени папки. Заодно это даром даёт поддержку NeoForge.
 const LOADER_ID_RE = /^(?:(\d+\.\d+(?:\.\d+)?)-)?(forge|neoforge)-(.+)$/
+// v1.285.0: Fabric публикует id версий в другом формате ("fabric-loader-0.16.9-1.21.1",
+// без версии Forge/NeoForge внутри пути) — mcVersion в этом случае всегда есть прямо
+// в id, отдельная ветка вместо попытки натянуть на LOADER_ID_RE.
+const FABRIC_ID_RE = /^fabric-loader-([^-]+)-(.+)$/
 
 function readVersionJson(root, id) {
   try { return JSON.parse(fs.readFileSync(path.join(root, 'versions', id, id + '.json'), 'utf8')) }
@@ -43,6 +102,8 @@ function readVersionJson(root, id) {
 }
 
 function loaderFromVersionId(root, id) {
+  const fm = String(id).match(FABRIC_ID_RE)
+  if (fm) return { mcVersion: fm[2], loader: 'fabric', loaderVersion: fm[1] }
   const m = String(id).match(LOADER_ID_RE)
   if (!m) return null
   const json = readVersionJson(root, id)
@@ -71,7 +132,7 @@ function detectLoader(root) {
     const versionsDir = path.join(root, 'versions')
     const dirs = fs.readdirSync(versionsDir, { withFileTypes: true }).filter(d => d.isDirectory())
     const candidates = dirs
-      .filter(d => LOADER_ID_RE.test(d.name))
+      .filter(d => LOADER_ID_RE.test(d.name) || FABRIC_ID_RE.test(d.name))
       .map(d => { let mtime = 0; try { mtime = fs.statSync(path.join(versionsDir, d.name)).mtimeMs } catch {}; return { id: d.name, mtime } })
       .sort((a, b) => b.mtime - a.mtime)
     for (const c of candidates) {
@@ -84,15 +145,26 @@ function detectLoader(root) {
 
 const MOD_EXT = '.jar'   // единственный разрешённый тип «мода» — см. пункт 6 плана (безопасность)
 
-// Черновик манифеста для карточки «Поделиться сборкой»: версия MC/лоадера хоста +
-// список модов с sha1 (докачка/дедуп на стороне друга и в Storage считается по хешу).
-async function scanMods() {
-  const root = mcRoot()
-  if (!fs.existsSync(root)) return { error: 'no-minecraft' }
-  const modsDir = path.join(root, 'mods')
-  if (!fs.existsSync(modsDir)) return { error: 'no-mods-folder' }
-  const loader = detectLoader(root)
-  if (!loader) return { error: 'no-loader' }
+// Игровая папка инстанса Prism называется по-разному в зависимости от того, как он
+// создан: у нативно созданных — "minecraft" (без точки), у импортированных из
+// готовых модпаков (например FTB) — как в оригинальном архиве, часто ".minecraft".
+// Смотрим, что реально есть на диске, вместо того чтобы жёстко зашивать одно имя.
+function prismGameDir(instDir) {
+  if (fs.existsSync(path.join(instDir, '.minecraft'))) return path.join(instDir, '.minecraft')
+  return path.join(instDir, 'minecraft')
+}
+
+// source: undefined/null — обычный .minecraft; { prismInstance: <name> } — конкретный
+// инстанс Prism Launcher (у каждого своя изолированная игровая папка, см. listPrismInstances()).
+function sourceRoot(source) {
+  if (source && source.prismInstance) {
+    const inst = listPrismInstances().find(i => i.name === source.prismInstance)
+    return inst ? prismGameDir(inst.dir) : null
+  }
+  return mcRoot()
+}
+
+async function scanModsDir(modsDir) {
   const files = fs.readdirSync(modsDir).filter(f => f.toLowerCase().endsWith(MOD_EXT))
   const mods = []
   for (const f of files) {
@@ -103,7 +175,47 @@ async function scanMods() {
     const sha1 = await sha1File(fp)
     mods.push({ name: f.replace(/\.jar$/i, ''), filename: f, sha1, size: st.size })
   }
+  return mods
+}
+
+// Черновик манифеста для карточки «Поделиться сборкой»: версия MC/лоадера хоста +
+// список модов с sha1 (докачка/дедуп на стороне друга и в Storage считается по хешу).
+// opts.fast=true — «поделиться версией»: без сканирования/докачки модов вообще
+// (сразу отдаём mods: [], чтобы друг просто ставил ту же версию/лоадер и коннектился).
+async function scanMods(source, opts) {
+  const root = sourceRoot(source)
+  if (!root || !fs.existsSync(root)) return { error: 'no-minecraft' }
+  let loader
+  if (source && source.prismInstance) {
+    const inst = listPrismInstances().find(i => i.name === source.prismInstance)
+    if (!inst || !inst.mcVersion) return { error: 'no-loader' }
+    loader = { mcVersion: inst.mcVersion, loader: inst.loader, loaderVersion: inst.loaderVersion }
+  } else {
+    loader = detectLoader(root)
+    if (!loader) return { error: 'no-loader' }
+  }
+  if (opts && opts.fast) {
+    return { mcVersion: loader.mcVersion, loader: loader.loader, loaderVersion: loader.loaderVersion, mods: [] }
+  }
+  const modsDir = path.join(root, 'mods')
+  if (!fs.existsSync(modsDir)) return { error: 'no-mods-folder' }
+  const mods = await scanModsDir(modsDir)
   return { mcVersion: loader.mcVersion, loader: loader.loader, loaderVersion: loader.loaderVersion, mods }
+}
+
+// Список источников для пикера в UI: обычный .minecraft (если найден) + все
+// инстансы Prism Launcher с распознанной версией MC (см. readMmcPack()).
+function listSources() {
+  const out = []
+  const vroot = mcRoot()
+  const vloader = fs.existsSync(vroot) ? detectLoader(vroot) : null
+  if (vloader) {
+    out.push({ id: 'vanilla', label: 'Minecraft (обычный лаунчер)', mcVersion: vloader.mcVersion, loader: vloader.loader, loaderVersion: vloader.loaderVersion })
+  }
+  for (const inst of listPrismInstances()) {
+    out.push({ id: 'prism:' + inst.name, label: inst.name, prismInstance: inst.name, mcVersion: inst.mcVersion, loader: inst.loader, loaderVersion: inst.loaderVersion })
+  }
+  return out
 }
 
 // ---- Заливка недостающих модов в общий (контент-адресованный) bucket modfiles ----
@@ -118,9 +230,10 @@ async function modExists(supabaseUrl, sha1) {
   try { const res = await fetch(publicUrl(supabaseUrl, sha1), { method: 'HEAD' }); return res.ok }
   catch { return false }
 }
-async function uploadMod({ supabaseUrl, anonKey, accessToken, sha1, filename }) {
+async function uploadMod({ supabaseUrl, anonKey, accessToken, sha1, filename, source }) {
   if (await modExists(supabaseUrl, sha1)) return { skipped: true }
-  const filepath = path.join(mcRoot(), 'mods', filename)
+  const root = sourceRoot(source) || mcRoot()
+  const filepath = path.join(root, 'mods', filename)
   const size = fs.statSync(filepath).size
   const stream = fs.createReadStream(filepath)
   // content-length обязателен: без него Node-fetch льёт стрим как
@@ -350,6 +463,7 @@ function findJava(root, component) {
 }
 
 function loaderVersionId(loader, mcVersion, loaderVersion) {
+  if (loader === 'fabric') return `fabric-loader-${loaderVersion}-${mcVersion}`
   return loader === 'neoforge' ? `neoforge-${loaderVersion}` : `${mcVersion}-forge-${loaderVersion}`
 }
 function installerUrl(loader, mcVersion, loaderVersion) {
@@ -357,12 +471,28 @@ function installerUrl(loader, mcVersion, loaderVersion) {
     ? `https://maven.neoforged.net/releases/net/neoforged/neoforge/${loaderVersion}/neoforge-${loaderVersion}-installer.jar`
     : `https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${loaderVersion}/forge-${mcVersion}-${loaderVersion}-installer.jar`
 }
+// Fabric Meta API отдаёт готовый version JSON (inheritsFrom: <mcVersion>) без
+// установщика — в отличие от Forge/NeoForge, никакой .jar тут выполнять не нужно.
+async function ensureFabricInstalled(root, mcVersion, loaderVersion, versionId) {
+  const url = `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}/${loaderVersion}/profile/json`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Не удалось получить профиль Fabric: HTTP ' + res.status)
+  const profile = await res.json()
+  const dest = path.join(root, 'versions', versionId, versionId + '.json')
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.writeFileSync(dest, JSON.stringify(profile))
+}
 // Тихая установка через официальный installer.jar (--installClient <root>) — тот
 // же способ, каким ставят Forge/NeoForge сторонние лаунчеры без диалоговых окон.
 async function ensureLoaderInstalled(root, pack, javaExe, onProgress) {
   const versionId = loaderVersionId(pack.loader, pack.mcVersion, pack.loaderVersion)
   if (readVersionJson(root, versionId)) return versionId
   onProgress?.({ stage: 'installer' })
+  if (pack.loader === 'fabric') {
+    await ensureFabricInstalled(root, pack.mcVersion, pack.loaderVersion, versionId)
+    if (!readVersionJson(root, versionId)) throw new Error('Установка Fabric завершилась, но версия не появилась')
+    return versionId
+  }
   const url = installerUrl(pack.loader, pack.mcVersion, pack.loaderVersion)
   const tmp = path.join(os.tmpdir(), 'ponoi-installer-' + Date.now() + '.jar')
   await downloadTo(url, tmp)
@@ -437,7 +567,8 @@ async function launch(pack, instDir, username, onProgress) {
 }
 
 function registerQuicklaunch(ipcMain) {
-  ipcMain.handle('ponoi-mc-scan-mods', () => scanMods())
+  ipcMain.handle('ponoi-mc-scan-mods', (_e, args) => scanMods(args && args.source, args && args.opts))
+  ipcMain.handle('ponoi-mc-list-sources', () => listSources())
   ipcMain.handle('ponoi-mc-mod-exists', (_e, { supabaseUrl, sha1 }) => modExists(supabaseUrl, sha1))
   ipcMain.handle('ponoi-mc-upload-mod', (_e, args) => uploadMod(args))
   ipcMain.handle('ponoi-mc-prepare-instance', (e, { pack, supabaseUrl }) =>
@@ -449,4 +580,5 @@ function registerQuicklaunch(ipcMain) {
 module.exports = {
   registerQuicklaunch, scanMods, mcRoot, sha1File, detectLoader, modExists, uploadMod,
   prepareInstance, instanceDir, findJava, resolveVersionJson, launch,
+  listSources, listPrismInstances, sourceRoot,
 }

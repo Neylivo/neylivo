@@ -15,7 +15,7 @@ import { usePresence } from '../lib/presence'
 import { isQuicklaunchAvailable, type QlManifest } from '../lib/quicklaunch'
 import { sysQuickLaunch, sysGameLink } from '../lib/sysmsg'
 import { robloxJoinUrl, steamConnectUrl } from '../lib/gameShare'
-import { ShareBuildModal } from './ShareBuildModal'
+import { ShareBuildModal, type ShareCardCustom } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
 
@@ -550,26 +550,26 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             <button type="button" title="Отменить" onClick={() => onCancelReply?.()}><Icon name="close" size={14} /></button>
           </div>}
       {shareBuild && user && <ShareBuildModal hostId={user.id} onClose={() => setShareBuild(false)}
-        onShared={(packId: string, manifest: QlManifest) => {
+        onShared={(packId: string, manifest: QlManifest, card: ShareCardCustom) => {
           setShareBuild(false)
           const totalMb = Math.round(manifest.mods.reduce((a, m) => a + m.size, 0) / 1024 / 1024)
-          onSend(sysQuickLaunch(packId, { game: 'Minecraft', mcVersion: manifest.mcVersion, loader: manifest.loader, modCount: manifest.mods.length, totalMb }))
+          onSend(sysQuickLaunch(packId, { game: 'Minecraft', mcVersion: manifest.mcVersion, loader: manifest.loader, modCount: manifest.mods.length, totalMb, ...card }))
         }} />}
-      {shareGameLink && <ShareGameLinkModal game={shareGameLink} label={gameOf(user?.id ?? '')?.mode ?? null} onClose={() => setShareGameLink(false)}
-        onShared={(ip, port) => {
+      {shareGameLink && user && <ShareGameLinkModal game={shareGameLink} label={gameOf(user?.id ?? '')?.mode ?? null} hostId={user.id} onClose={() => setShareGameLink(false)}
+        onShared={(ip, port, card) => {
           const g = gameOf(user?.id ?? '')
           const kind = shareGameLink
           setShareGameLink(false)
           if (kind === 'roblox') {
             if (!g?.placeId) return
-            onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId) }))
+            onSend(sysGameLink('roblox', { game: 'Roblox', label: g.mode ?? null, url: robloxJoinUrl(g.placeId, g.jobId), ...card }))
           } else if (kind === 'cs2') {
             // v1.198.0: ip/port тоже кладём в meta — принимающая сторона (MessageList)
             // пересобирает steam://connect сама и проверяет форму адреса, а не доверяет
             // сырому url из содержимого сообщения (которое можно подделать в обход этой формы).
-            onSend(sysGameLink('cs2', { game: 'Counter-Strike 2', label: ip + ':' + port, url: steamConnectUrl(ip, port), ip, port }))
+            onSend(sysGameLink('cs2', { game: 'Counter-Strike 2', label: ip + ':' + port, url: steamConnectUrl(ip, port), ip, port, ...card }))
           } else if (kind === 'terraria') {
-            onSend(sysGameLink('terraria', { game: 'Terraria', label: ip + ':' + port, ip, port }))
+            onSend(sysGameLink('terraria', { game: 'Terraria', label: ip + ':' + port, ip, port, ...card }))
           }
         }} />}
       {rec && <div className="voice-pill">

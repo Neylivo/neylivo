@@ -7,7 +7,7 @@ import { supabase } from './supabase'
 export interface QlMod { name: string; filename: string; sha1: string; size: number }
 export interface QlManifest {
   mcVersion: string
-  loader: string          // 'forge' | 'neoforge'
+  loader: string          // 'forge' | 'neoforge' | 'fabric'
   loaderVersion: string
   mods: QlMod[]
 }
@@ -18,14 +18,23 @@ export interface QlPack extends QlManifest {
   serverPort: number
   createdAt: string
 }
+// v1.285.0: undefined — обычный .minecraft; { prismInstance: <имя> } — конкретный
+// инстанс Prism Launcher (см. listPrismInstances() в electron/quicklaunch.cjs).
+export interface QlSource { id: string; label: string; prismInstance?: string; mcVersion: string; loader: string | null; loaderVersion: string | null }
 
 function desktop(): any { return (window as any).ponoiDesktop }
 export function isQuicklaunchAvailable(): boolean { return !!desktop()?.isDesktop }
 
+// Список источников сборки для пикера («обычный лаунчер» + все инстансы Prism Launcher).
+export async function listSources(): Promise<QlSource[]> {
+  return desktop()?.mcListSources ? desktop().mcListSources() : []
+}
+
 // Скан своей сборки — { error } если .minecraft/mods/лоадер не нашлись,
 // иначе { mcVersion, loader, loaderVersion, mods }. См. electron/quicklaunch.cjs.
-export async function scanLocalPack(): Promise<QlManifest | { error: string }> {
-  return desktop().mcScanMods()
+// source — см. QlSource; opts.fast=true — «поделиться версией» без скана/докачки модов.
+export async function scanLocalPack(source?: { prismInstance: string }, opts?: { fast?: boolean }): Promise<QlManifest | { error: string }> {
+  return desktop().mcScanMods(source, opts)
 }
 
 export async function createPack(hostId: string, manifest: QlManifest, serverIp: string, serverPort: number): Promise<string> {
@@ -51,14 +60,14 @@ export async function fetchPack(id: string): Promise<QlPack | null> {
 // Заливает недостающие моды хоста в общий bucket modfiles (main-процесс сам
 // пропускает те, что там уже есть — дедуп по sha1 общий на весь Ponoi, не
 // только на повторные шары одного и того же человека). onProgress — 0..1.
-export async function uploadMissingMods(mods: QlMod[], onProgress?: (p: number) => void): Promise<void> {
+export async function uploadMissingMods(mods: QlMod[], onProgress?: (p: number) => void, source?: { prismInstance: string }): Promise<void> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
   const { data: s } = await supabase.auth.getSession()
   const accessToken = s.session?.access_token ?? anonKey
   const d = desktop()
   for (let i = 0; i < mods.length; i++) {
-    await d.mcUploadMod({ supabaseUrl, anonKey, accessToken, sha1: mods[i].sha1, filename: mods[i].filename })
+    await d.mcUploadMod({ supabaseUrl, anonKey, accessToken, sha1: mods[i].sha1, filename: mods[i].filename, source })
     onProgress?.((i + 1) / mods.length)
   }
 }
