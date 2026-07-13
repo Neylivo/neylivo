@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ponoi-emergency-chat
+    runtime: node
+    plan: free
+    rootDir: emergency-server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ponoi-emergency-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+
+databases:
+  - name: ponoi-emergency-db
+    plan: free

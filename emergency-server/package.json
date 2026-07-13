@@ -1,0 +1,20 @@
+{
+  "name": "ponoi-emergency-server",
+  "version": "1.0.0",
+  "description": "Аварийный чат Ponoi — минимальный резервный сервер на случай долгого падения Supabase. Отдельная база, отдельные аккаунты, один общий чат. Не замена основному бэкенду.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0",
+    "ws": "^8.18.0"
+  }
+}
