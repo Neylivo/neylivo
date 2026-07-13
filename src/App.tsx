@@ -13,6 +13,7 @@ import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
 import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
 import { useClampToViewport } from './lib/clampPos'
+import { useNetDegraded } from './lib/netStatus'
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -94,6 +95,17 @@ function UpdateBanner() {
       </button>
     </>
   )
+}
+
+// v1.272.0: устойчивый клиент — когда несколько запросов подряд к Supabase
+// проваливаются (см. netStatus.ts), список серверов/друзей/каналов остаётся
+// последним известным (из кэша), а не тихо становится пустым — но пользователь
+// должен понимать ПОЧЕМУ ничего не обновляется, а не решить, что приложение
+// сломано. Тонкая полоска сверху, не блокирует работу с уже загруженным.
+function NetStatusBanner() {
+  const degraded = useNetDegraded()
+  if (!degraded) return null
+  return <div className="net-banner">Нет связи с сервером — показываю последнее сохранённое, часть действий пока не сработает</div>
 }
 
 // v1.56.0: своя шапка вместо нативной рамки Windows — стрелки назад/вперёд слева,
@@ -224,6 +236,7 @@ export default function App() {
     {isDesktop && <Titlebar />}
     {isDesktop && <UpdateBanner />}
     {isApkNative && <ApkUpdateBanner />}
+    <NetStatusBanner />
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>

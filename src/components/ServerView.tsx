@@ -1,4 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
+import { netOk, netFail } from '../lib/netStatus'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -403,7 +404,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function loadRoles() { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
 
   async function loadChannels() {
-    const { data } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
+    // v1.272.0: раньше ошибка сети (Supabase недоступен) не проверялась — список
+    // каналов тихо становился пустым, а текущий открытый канал/лента сообщений
+    // сбрасывались в null/[] (see !texts.length && !list.length branch below),
+    // хотя ты просто на секунду потерял связь. При сбое просто не трогаем
+    // уже показанное состояние.
+    const { data, error } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
+    if (error) { netFail(); console.error('[channels] load failed:', error); return }
+    netOk()
     const list = data ?? []
     setChannels(list)
     // Первым выбираем текстовый канал (голосовые не открываются как чат).

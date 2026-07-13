@@ -18,6 +18,16 @@ import authBg from '../assets/auth-bg.jpg'
 function authErrText(e: any): string {
   const raw = String(e?.message ?? e ?? '').trim()
   const low = raw.toLowerCase()
+  // v1.272.0: 522/523/524 (Cloudflare не достучался до сервера Supabase — база
+  // временно недоступна/перегружена) раньше попадали в самый общий фолбэк ниже —
+  // тот же текст, что и у любой другой непонятной ошибки. Отдельная, честная
+  // формулировка: дело не в логине/пароле, дело в бэкенде, и когда именно
+  // отпустит — не от пользователя зависит.
+  const status = e?.status ?? e?.context?.status
+  if (status === 522 || status === 523 || status === 524 || /\b52[234]\b/.test(raw) ||
+      low.includes('failed to fetch') || low.includes('networkerror') || low.includes('load failed') ||
+      (low.includes('unexpected token') && low.includes('<')))
+    return 'Сервер Ponoi сейчас недоступен (перегрузка/сбой базы данных). Это не связано с твоим аккаунтом — подожди немного и попробуй снова.'
   if (low.includes('error sending') || low.includes('confirmation email') || low.includes('smtp') ||
       low.includes('rate limit') || low.includes('over_email_send_rate'))
     return 'Не удалось отправить письмо с кодом — почтовый сервис Ponoi сейчас не настроен или исчерпал лимит. Сообщи владельцу, он подтвердит аккаунт вручную.'

@@ -33,6 +33,8 @@ import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { ServerTagModal } from './ServerTagModal'
 import { ProfileCard } from './ProfileCard'
 import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
+import { cacheGet, cacheSet } from '../lib/offlineCache'
+import { netOk, netFail } from '../lib/netStatus'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -56,7 +58,10 @@ export function Home() {
   const [username, setUsername] = useState(() => localStorage.getItem('ponoi_username') || '')
   const [handle, setHandle] = useState('')   // v1.40.0: настоящий юзернейм (уникальный) — для «Добавить в друзья»
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [servers, setServers] = useState<Server[]>([])
+  // v1.272.0: рисуем список серверов из локального кэша СРАЗУ (до первого
+  // сетевого ответа) — если Supabase сейчас недоступен, сайдбар не выглядит
+  // как «у тебя нет серверов», а показывает последний известный снимок.
+  const [servers, setServers] = useState<Server[]>(() => cacheGet<Server[]>('servers') ?? [])
   const [view, setView] = useState<View>({ kind: 'dm' })
   const [showCreate, setShowCreate] = useState(false)
   const [showFind, setShowFind] = useState(false)
@@ -392,8 +397,15 @@ export function Home() {
   }, [])
 
   async function refresh(selectId?: string) {
-    const list = await myServers()
+    // v1.272.0: сбой сети раньше добегал до setServers([]) через myServers()
+    // (та возвращала [] и при пустом аккаунте, и при отказе Supabase — теперь
+    // бросает исключение при отказе) — здесь при сбое просто НЕ трогаем
+    // уже показанный (из кэша или прошлого успешного ответа) список.
+    let list: Server[]
+    try { list = await myServers(); netOk() }
+    catch (e) { netFail(); console.error('[servers] load failed:', e); return }
     setServers(list)
+    cacheSet('servers', list)
     if (selectId) {
       const s = list.find(x => x.id === selectId)
       if (s) setView({ kind: 'server', server: s })

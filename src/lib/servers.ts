@@ -9,7 +9,12 @@ function genCode() {
 }
 
 export async function myServers(): Promise<Server[]> {
-  const { data } = await supabase.from('servers').select('*').order('created_at')
+  // v1.272.0: раньше error молча игнорировалась — сбой сети (Supabase недоступен)
+  // и «у тебя правда нет серверов» выглядели абсолютно одинаково: пустой список.
+  // Бросаем ошибку — вызывающая сторона (Home.tsx) отличает «правда пусто» от
+  // «не достучались» и во втором случае не затирает уже показанный кэш.
+  const { data, error } = await supabase.from('servers').select('*').order('created_at')
+  if (error) throw error
   return (data ?? []) as Server[]
 }
 

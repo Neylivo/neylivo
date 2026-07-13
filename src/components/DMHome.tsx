@@ -7,6 +7,8 @@ import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
 import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, fetchDmThreadMap, canCallUser } from '../lib/friends'
+import { cacheGet, cacheSet } from '../lib/offlineCache'
+import { netOk, netFail } from '../lib/netStatus'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -64,9 +66,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const { user } = useAuth()
   const meId = user!.id
   const { settings } = useSettings()
-  const [requests, setRequests] = useState<FriendRequest[]>([])
-  const [outgoing, setOutgoing] = useState<FriendRequest[]>([])
-  const [friends, setFriends] = useState<Friend[]>([])
+  // v1.272.0: рисуем из локального кэша сразу — если Supabase недоступен при
+  // старте, список друзей/заявок не выглядит как «пусто», а показывает
+  // последний известный снимок (см. cacheSet в loadRequests).
+  const [requests, setRequests] = useState<FriendRequest[]>(() => cacheGet<FriendRequest[]>('fr_requests') ?? [])
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>(() => cacheGet<FriendRequest[]>('fr_outgoing') ?? [])
+  const [friends, setFriends] = useState<Friend[]>(() => cacheGet<Friend[]>('fr_friends') ?? [])
   const [q, setQ] = useState('')
   const [results, setResults] = useState<Profile[]>([])
   const [active, setActive] = useState<Friend | null>(null)
@@ -418,14 +423,21 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }, [])
 
   async function loadRequests() {
-    const { data } = await supabase.from('friend_requests').select('*')
+    // v1.272.0: раньше ошибка сети игнорировалась (error не проверялась) — отказ
+    // Supabase выглядел неотличимо от «у тебя нет ни друзей, ни заявок»: все три
+    // списка тихо становились пустыми. Теперь при сбое просто не трогаем уже
+    // показанное (из кэша или прошлого успешного ответа).
+    const { data, error } = await supabase.from('friend_requests').select('*')
       .or('from_user.eq.' + meId + ',to_user.eq.' + meId)
+    if (error) { netFail(); console.error('[friend_requests] load failed:', error); return }
+    netOk()
     const all = (data ?? []) as FriendRequest[]
-    setRequests(all.filter(r => r.status === 'pending' && r.to_user === meId))
-    setOutgoing(all.filter(r => r.status === 'pending' && r.from_user === meId))
+    const req = all.filter(r => r.status === 'pending' && r.to_user === meId)
+    const out = all.filter(r => r.status === 'pending' && r.from_user === meId)
     const fr: Friend[] = all.filter(r => r.status === 'accepted').map(r =>
       r.from_user === meId ? { id: r.to_user, name: r.to_name } : { id: r.from_user, name: r.from_name })
-    setFriends(fr)
+    setRequests(req); setOutgoing(out); setFriends(fr)
+    cacheSet('fr_requests', req); cacheSet('fr_outgoing', out); cacheSet('fr_friends', fr)
   }
 
   // v1.73.0: при запуске приложения всегда открывается список «Друзья» —
