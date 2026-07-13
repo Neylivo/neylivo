@@ -1746,6 +1746,12 @@ body.no-anim .member-typing i { animation:none; }
 
 .composer.cstyle-compact { min-height:34px; padding:2px 6px 2px 4px; border-radius:6px; }
 .composer.cstyle-compact textarea { padding:7px 6px; font-size:14.5px; }
+
+/* v1.281.0: тот же «второй кубик», что уже чинили для .auth2-field выше —
+   глобальная прямоугольная рамка фокуса (button:focus-visible и т.д. ниже по
+   файлу) поверх капсулы поля ввода, у которой уже есть своя рамка через
+   :focus-within (все 5 стилей выше). Убираем внутреннюю — своей достаточно. */
+.composer textarea:focus-visible { outline:none; }
 .composer.cstyle-compact .attach-btn, .composer.cstyle-compact .ctool { width:30px; height:30px; min-width:28px; }
 .composer textarea { background:transparent; border-radius:0; padding:12px 8px; }
 .composer .attach-btn { background:transparent; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#b5bac1; border-radius:50%; padding:0; }
@@ -3273,6 +3279,7 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-search { display:flex; align-items:center; gap:8px; margin:10px 8px 12px; height:32px; padding:0 10px;
   background:#1e1f22; border-radius:8px; color:#80848e; }
 .pqs2-search input { flex:1; min-width:0; border:none; background:transparent; outline:none; color:#dbdee1; font-size:14px; }
+.pqs2-search input:focus-visible { outline:none; } /* v1.281.0: своя рамка на .pqs2-search:focus-within ниже по файлу, глобальная тут лишняя */
 .pqs2-search input::placeholder { color:#6d7178; }
 .pqs2-nav { display:flex; flex-direction:column; gap:1px; }
 .pqs2-grp { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#80848e; padding:8px 10px 4px; }
@@ -3453,6 +3460,7 @@ body.no-anim .pet-burst-emoji { animation: none; }
 .pfr-add2-inwrap.err { border-color:#f23f43; }
 .pfr-add2-inwrap input { flex:1; min-width:0; border:none; background:transparent; outline:none;
   color:#f2f3f5; font-size:15px; padding:8px 0; }
+.pfr-add2-inwrap input:focus-visible { outline:none; } /* v1.281.0: своя рамка на .pfr-add2-inwrap:focus-within выше, глобальная тут лишняя */
 .pfr-add2-inwrap input::placeholder { color:#6d7178; }
 .pfr-add2-send { flex:none; border:none; border-radius:6px; background:#5865f2; color:#fff; font-size:13.5px;
   font-weight:600; padding:9px 16px; cursor:pointer; transition:background .15s, opacity .15s; white-space:nowrap; }
