@@ -23,7 +23,7 @@ import { FolderModal } from './FolderModal'
 import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
 import { notifModeOf, setNotifMode } from '../lib/srvNotify'
-import { bumpDm, bumpMention, bumpSoft, clearBadgeKey, useBadgeCount } from '../lib/badge'
+import { bumpDm, bumpMention, bumpSoft, bumpUnread, clearBadgeKey, useBadgeCount } from '../lib/badge'
 import { isDmMuted, setChRead } from '../lib/userPrefs'
 import { mentionsUser, mentionsRoleName } from '../lib/md'
 import { parseSys } from '../lib/sysmsg'
@@ -36,13 +36,14 @@ import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
-// v1.212.0: красный бейджик с числом упоминаний на иконке сервера в рейле —
-// как в мобильном Discord (на десктопе Discord вместо числа обходится белой
-// точкой .unread-dot, которая уже была; бейджик просто накладывается поверх
-// того же угла и виден на любом размере экрана). Считает те же bumpMention()-
-// события, что уже рисуют кружок на иконке приложения/трее (src/lib/badge.ts) —
-// заглушенный сервер точку прячет, но не этот бейджик (реальные упоминания
-// всё равно должны быть видны, см. комментарий у bumpMention чуть ниже).
+// v1.212.0: красный бейджик с числом на иконке сервера в рейле — как в
+// мобильном Discord. Считает те же bumpMention()/bumpUnread()-события, что уже
+// рисуют кружок на иконке приложения/трее (src/lib/badge.ts) — заглушенный
+// сервер бейджик от обычных сообщений не получает (см. mute-проверку в
+// обработчике INSERT messages), но реальные упоминания всё равно видны.
+// v1.269.0: раньше число было только у упоминаний, а обычные непрочитанные —
+// отдельной белой точкой без числа; теперь и обычные сообщения дают то же
+// число на этом кружке (пользователь просил единый «кружок с количеством»).
 function SrvPingBadge({ serverId }: { serverId: string }) {
   const n = useBadgeCount('srv:' + serverId)
   if (!n) return null
@@ -130,7 +131,6 @@ export function Home() {
 
   // Непрочитанное на серверах: глобальная подписка на INSERT в messages.
   // Канал → сервер резолвим по заранее загруженной карте каналов.
-  const [unread, setUnread] = useState<Set<string>>(new Set())
   const chMap = useRef<Record<string, string>>({})
   const viewRef = useRef<View>(view)
   useEffect(() => { viewRef.current = view }, [view])
@@ -241,19 +241,17 @@ export function Home() {
         const mentioned = mentionsUser(msg.content ?? '', nameRef.current.username) || mentionsUser(msg.content ?? '', nameRef.current.handle)
           || (myRoleNamesBySrv.current[sid] ?? []).some(rn => mentionsRoleName(msg.content ?? '', rn))
         if (!viewing && mentioned) bumpMention(sid)
-        if (notifModeOf(sid) === 'mute') return // заглушенные сервера точку не зажигают
+        if (notifModeOf(sid) === 'mute') return // заглушенные сервера кружок не зажигают
         if (viewing) return
-        // v1.203.0: сообщение без упоминания — тихая точка на иконке приложения (не
-        // число), тот же смысл, что и у unread-dot ниже в этой же колонке серверов.
-        if (!mentioned) bumpSoft('srv:' + sid)
-        setUnread(prev => { const n = new Set(prev); n.add(sid); return n })
+        // v1.269.0: обычное сообщение без упоминания теперь тоже даёт кружок с
+        // числом (как у упоминаний) — раньше была только тихая точка без числа.
+        if (!mentioned) bumpUnread(sid)
       })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
     // eslint-disable-next-line
   }, [user])
   function clearUnread(id: string) {
-    setUnread(prev => { if (!prev.has(id)) return prev; const n = new Set(prev); n.delete(id); return n })
     clearBadgeKey('srv:' + id)   // v1.100.0: зашли на сервер — пинги с него сняты с кружка
   }
 
@@ -498,7 +496,6 @@ export function Home() {
                   onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: e.clientX, y: e.clientY }) }}>
                   {s.name.slice(0, 2).toUpperCase()}</button>
               </RailTip>
-              {unread.has(s.id) && notifModeOf(s.id) !== 'mute' && <span className="unread-dot" title="Есть новые сообщения" />}
               {notifModeOf(s.id) === 'mute' && <span className="srv-mute-badge" title="Уведомления выключены">🔕</span>}
               <SrvPingBadge serverId={s.id} />
             </div>

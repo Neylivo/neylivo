@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getSettings } from './settings'
 
 // v1.100.0: красный кружок с числом непрочитанного на иконке приложения — как в Discord.
 // Считаем новые ЛИЧНЫЕ сообщения и @упоминания на серверах. Счётчики по источникам
@@ -54,11 +55,21 @@ export function bumpDm(threadId: string) {
   apply()
 }
 
-/** @упоминание меня в сообщении на сервере. */
-export function bumpMention(serverId: string) {
+function bumpSrv(serverId: string) {
   counts['srv:' + serverId] = (counts['srv:' + serverId] ?? 0) + 1
   apply()
 }
+
+/** @упоминание меня в сообщении на сервере. */
+export function bumpMention(serverId: string) { bumpSrv(serverId) }
+
+// v1.269.0: обычное (без упоминания) сообщение раньше давало только белую точку
+// без числа (bumpSoft) — как в Discord для десктопа. Пользователь попросил такой
+// же кружок с числом, как у упоминаний, и для обычных непрочитанных тоже —
+// пишем в тот же counts['srv:<id>'], так что SrvPingBadge и итог на иконке
+// приложения/трее сами получают верное число без отдельной логики.
+/** Обычное сообщение на сервере (без упоминания), которое я ещё не видел. */
+export function bumpUnread(serverId: string) { bumpSrv(serverId) }
 
 /** Тихая точка без числа: заглушенное ЛС или сообщение на сервере без упоминания меня. */
 export function bumpSoft(key: string) {
@@ -192,8 +203,14 @@ async function playPop(n: number, soft: boolean) {
 
 let prevSignal = 0   // total() * 2 + (мягкая точка ? 1 : 0) — растёт при любом новом «событии»
 function apply() {
-  const n = total()
-  const soft = !n && softKeys.size > 0
+  // v1.269.0: настройка «Счётчик на иконке» (Настройки -> Уведомления) была
+  // заведена ещё в v1.100.0, но нигде не читалась — выключить её было нельзя.
+  // Скрывает ЧИСЛО именно на иконке приложения/трее/заголовке вкладки (не в
+  // самом интерфейсе — там SrvPingBadge/DmPingBadge всегда с числом): при
+  // выключенном тумблере вместо числа остаётся обычная тихая точка «есть новое».
+  const rawN = total()
+  const n = getSettings().unreadBadge ? rawN : 0
+  const soft = !n && (softKeys.size > 0 || rawN > 0)
   const signal = n * 2 + (soft ? 1 : 0)
   const grew = signal > prevSignal
   prevSignal = signal

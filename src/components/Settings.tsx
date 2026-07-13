@@ -969,6 +969,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Звуки уведомлений"><Toggle on={view.notifSounds} onChange={v => setD('notifSounds', v)} /></Row>
                 <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={view.mentionsOnly} onChange={v => setD('mentionsOnly', v)} /></Row>
                 <Row title="Счётчик на иконке" desc="Показывать количество непрочитанных"><Toggle on={view.unreadBadge} onChange={v => setD('unreadBadge', v)} /></Row>
+                <Row title="Кружок заявок в друзья" desc="Число ожидающих заявок рядом с кнопкой «Друзья» (без звука). Выключи, если заявок приходят сотни и кружок надоедает — сами заявки при этом никуда не денутся">
+                  <Toggle on={view.notifFriendRequests} onChange={v => setD('notifFriendRequests', v)} />
+                </Row>
 
                 <div className="pqs-sec-t">Новые серверы</div>
                 <div className="pqs2-desc">Режим уведомлений, с которым открывается сервер, на котором ты ещё ничего не выбирал(а) вручную. Уже настроенные серверы это не трогает.</div>

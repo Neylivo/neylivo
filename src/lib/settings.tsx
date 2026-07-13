@@ -9,7 +9,7 @@ import { customNickFamily } from './profilePrefs'
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'dataCollect', 'defaultServerNotif'] as const
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'dataCollect', 'defaultServerNotif'] as const
 type AccountKey = typeof ACCOUNT_KEYS[number]
 function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
@@ -38,6 +38,11 @@ export interface Settings {
   notifSounds: boolean
   mentionsOnly: boolean
   unreadBadge: boolean
+  // v1.269.0: кружок с числом заявок в друзья рядом с кнопкой «Друзья» — можно
+  // выключить отдельно от остальных уведомлений (тем, кому кидают сотни заявок,
+  // бесконечный кружок надоедает). Заявки/их приём/отклонение работают как обычно —
+  // тумблер только прячет сам индикатор.
+  notifFriendRequests: boolean
   micVol: number
   spkVol: number
   lang: string
@@ -97,7 +102,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
-  notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true,
+  notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, lang: 'ru', dataCollect: true,
   devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,

@@ -119,6 +119,20 @@ export async function fetchDmPartnerIds(meId: string): Promise<string[]> {
   return [...ids]
 }
 
+// v1.269.0: как fetchDmPartnerIds, но парой с id самого диалога — числовой
+// бейджик непрочитанного в сайдбаре (src/lib/badge.ts) ключуется по id
+// диалога ('dm:<id>'), а не по id собеседника.
+export async function fetchDmThreadMap(meId: string): Promise<Record<string, string>> {
+  const { data } = await supabase.from('dm_threads').select('id,user_a,user_b')
+    .or('user_a.eq.' + meId + ',user_b.eq.' + meId)
+  const map: Record<string, string> = {}
+  for (const t of (data ?? []) as any[]) {
+    const other = t.user_a === meId ? t.user_b : t.user_a
+    if (other) map[other] = t.id
+  }
+  return map
+}
+
 // v1.230.0: приватность звонков (см. supabase/58_dm_privacy.sql) — предварительная
 // проверка на клиенте, чтобы сразу показать понятную причину, а не только словить
 // отказ Edge Function постфактум. Финальное решение всё равно за сервером.

@@ -1346,8 +1346,6 @@ body.no-anim .msg-flash { animation:none; }
 
 /* ===== Индикатор непрочитанного на серверах ===== */
 .srv-wrap { position:relative; }
-.unread-dot { position:absolute; left:-4px; top:50%; transform:translateY(-50%);
-  width:8px; height:8px; border-radius:0 4px 4px 0; background:#fff; z-index:2; }
 
 /* ===== Drag-and-drop файлов в чат ===== */
 .drop-overlay { position:fixed; inset:0; z-index:140; background:rgba(0,0,0,.6);
@@ -1383,6 +1381,11 @@ body.no-anim .msg-flash { animation:none; }
 .dm-req-badge { margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:9px;
   background:#ed4245; color:#fff; font-size:11px; font-weight:700; display:inline-flex;
   align-items:center; justify-content:center; }
+
+/* v1.269.0: тот же кружок с числом, что .srv-ping-badge на иконке сервера, но
+   в строке списка ЛС (.dm-item — flex-ряд), а не поверх круглой иконки —
+   без absolute-позиционирования и «взрыва», просто прижат к правому краю. */
+.dm-ping-badge { position:static; flex:none; margin-left:4px; box-shadow:none; animation:none; }
 
 
 /* --- Разделитель «НОВОЕ» над первым непрочитанным сообщением (как в Discord) --- */

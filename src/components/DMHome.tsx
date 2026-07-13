@@ -1,11 +1,12 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { setActiveDm } from '../lib/badge'
+import { setActiveDm, useBadgeCount } from '../lib/badge'
 import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
+import { useSettings } from '../lib/settings'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, canCallUser } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, fetchDmThreadMap, canCallUser } from '../lib/friends'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
@@ -44,6 +45,15 @@ let dmRxDeb: number | undefined
 
 interface Friend { id: string; name: string }
 
+// v1.269.0: тот же кружок с числом, что и у серверов (SrvPingBadge в Home.tsx),
+// только для непрочитанного в ЛС/групповой беседе — раньше в сайдбаре не было
+// вообще никакого индикатора непрочитанных сообщений у друзей.
+function DmPingBadge({ threadId }: { threadId: string | null | undefined }) {
+  const n = useBadgeCount(threadId ? 'dm:' + threadId : '__none__')
+  if (!threadId || !n) return null
+  return <span className="srv-ping-badge dm-ping-badge">{n > 99 ? '99+' : n}</span>
+}
+
 // v1.187.0: помечает сообщения от игнорируемых — MessageList.tsx сворачивает такие в одну строку.
 function tagIgnored(list: DMMessage[]): DMMessage[] {
   return list.map(m => ({ ...m, _ignoredAuthor: isDmIgnored(m.author) } as any))
@@ -53,6 +63,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   { username: string; handle?: string; avatarUrl?: string | null; onAvatar?: (u: string) => void; servers?: Server[] }) {
   const { user } = useAuth()
   const meId = user!.id
+  const { settings } = useSettings()
   const [requests, setRequests] = useState<FriendRequest[]>([])
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([])
   const [friends, setFriends] = useState<Friend[]>([])
@@ -71,6 +82,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // v1.229.0: как в Discord — удаление из друзей не должно прятать диалог. Сайдбар
   // ЛС строится по факту переписки (dm_threads), а не только по списку друзей.
   const [dmPartnerIds, setDmPartnerIds] = useState<string[]>([])
+  // v1.269.0: id собеседника -> id диалога, для числового бейджика непрочитанного
+  // на каждом друге в сайдбаре (ключ badge.ts — 'dm:<id диалога>').
+  const [dmThreadMap, setDmThreadMap] = useState<Record<string, string>>({})
   // v1.168.0: панель профиля собеседника справа — 1-в-1 как в Discord.
   // По умолчанию закрыта (открывается кнопкой в шапке чата).
   const [showProfile, setShowProfile] = useState(false)
@@ -590,12 +604,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   useEffect(() => {
     let ok = true
     fetchDmPartnerIds(meId).then(ids => { if (ok) setDmPartnerIds(ids) })
+    fetchDmThreadMap(meId).then(m => { if (ok) setDmThreadMap(m) })
     return () => { ok = false }
   }, [meId])
   useEffect(() => {
     const ch = supabase.channel('dm-partners:' + meId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_threads' },
-        () => fetchDmPartnerIds(meId).then(setDmPartnerIds))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_threads' }, () => {
+        fetchDmPartnerIds(meId).then(setDmPartnerIds)
+        fetchDmThreadMap(meId).then(setDmThreadMap)
+      })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [meId])
@@ -1030,7 +1047,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         </div>
         <div className={'dm-navitem' + (!active && !activeGroup ? ' on' : '')} onClick={() => { setActive(null); setActiveGroup(null); closeMobNav() }}>
           <span className="dm-nav-ic"><Icon name="users" size={20} /></span> Друзья
-          {requests.length > 0 && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
+          {requests.length > 0 && settings.notifFriendRequests && <span className="dm-req-badge" title="Входящие заявки в друзья">{requests.length}</span>}
         </div>
 
         <div className="dm-sec-t2"><span>Личные сообщения</span>
@@ -1047,6 +1064,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               </span>
               {/* v1.229.0: крестик на наведении — как в Discord, «Закрыть ЛС»: прячет
                   из списка, ничего не удаляет, вернётся само, если собеседник напишет. */}
+              <DmPingBadge threadId={dmThreadMap[f.id] ?? getCachedThreadId(f.id)} />
               <button className="dm-item-x" title="Закрыть ЛС" onClick={e => {
                 e.stopPropagation()
                 closeDm(f.id)
@@ -1068,6 +1086,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                     {others.slice(0, 2).map(id => <Avatar key={id} name={friendNameOf(id)} userId={id} size={others.length > 1 ? 22 : 32} />)}
                   </span>
                   <span className="me-nm">{groupLabel(g)}</span>
+                  <DmPingBadge threadId={g.id} />
                 </div>
               )
             })}
