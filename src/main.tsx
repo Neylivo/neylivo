@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
 import { SettingsProvider } from './lib/settings'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles.css'
 import { initChatBg } from './lib/chatBg'
 
@@ -16,11 +17,13 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <SettingsProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </SettingsProvider>
+    <ErrorBoundary>
+      <SettingsProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </SettingsProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
 

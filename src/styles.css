@@ -2554,6 +2554,17 @@ body.no-anim .member-typing i { animation:none; }
    работу с уже загруженными (из кэша) данными, только предупреждает честно. */
 .net-banner { flex:none; padding:6px 14px; background:#573b0a; color:#ffd89b; font-size:12.5px;
   text-align:center; border-bottom:1px solid rgba(255,255,255,.08); }
+
+/* v1.273.0: экран краша React (ErrorBoundary) — вместо белой пустоты навсегда. */
+.crash-screen { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+  background:#1e1f22; }
+.crash-card { max-width:340px; text-align:center; padding:28px 24px; background:#2b2d31; border-radius:12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5); }
+.crash-title { font-size:18px; font-weight:700; color:#fff; margin-bottom:8px; }
+.crash-text { font-size:13.5px; color:#949ba4; margin-bottom:18px; line-height:1.45; }
+.crash-btn { border:none; border-radius:8px; padding:9px 18px; background:#5865f2; color:#fff;
+  font-size:14px; font-weight:600; cursor:pointer; }
+.crash-btn:hover { filter:brightness(1.1); }
 .titlebar { flex:none; height:32px; background:var(--c-dark,#1e1f22); display:flex; align-items:center;
   padding:0; -webkit-app-region:drag; user-select:none; position:relative; z-index:60; }
 .titlebar .tb-nav { display:flex; align-items:center; gap:2px; padding-left:8px; -webkit-app-region:no-drag; }
