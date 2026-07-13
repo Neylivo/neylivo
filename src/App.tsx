@@ -13,7 +13,13 @@ import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
 import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
 import { useClampToViewport } from './lib/clampPos'
-import { useNetDegraded } from './lib/netStatus'
+import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
+import { EmergencyChat } from './components/EmergencyChat'
+
+// v1.275.0: через сколько непрерывной деградации предлагать аварийный чат —
+// достаточно долго, чтобы не дёргать на секундный сбой, но не тянуть, если
+// основной сервер правда лежит.
+const EMERGENCY_SUGGEST_MS = 45_000
 
 // v1.59.0: версия приложения, подставляется Vite из package.json (см. vite.config.ts)
 declare const __APP_VERSION__: string
@@ -102,10 +108,17 @@ function UpdateBanner() {
 // последним известным (из кэша), а не тихо становится пустым — но пользователь
 // должен понимать ПОЧЕМУ ничего не обновляется, а не решить, что приложение
 // сломано. Тонкая полоска сверху, не блокирует работу с уже загруженным.
-function NetStatusBanner() {
+function NetStatusBanner({ onOpenEmergency }: { onOpenEmergency: () => void }) {
   const degraded = useNetDegraded()
+  const forMs = useNetDegradedForMs()
   if (!degraded) return null
-  return <div className="net-banner">Нет связи с сервером — показываю последнее сохранённое, часть действий пока не сработает</div>
+  const long = forMs >= EMERGENCY_SUGGEST_MS
+  return (
+    <div className="net-banner">
+      Нет связи с сервером — показываю последнее сохранённое, часть действий пока не сработает
+      {long && <button className="net-banner-ec" onClick={onOpenEmergency}>🚨 Открыть аварийный чат</button>}
+    </div>
+  )
 }
 
 // v1.56.0: своя шапка вместо нативной рамки Windows — стрелки назад/вперёд слева,
@@ -223,6 +236,10 @@ export default function App() {
   useEffect(() => { (window as any).ponoiDesktop?.onDeepLink?.((url: string) => openMsgLink(url)) }, [])
   // v1.116.0: три быстрых клика по версии — окно «Что нового»
   const [showLog, setShowLog] = useState(false)
+  // v1.275.0: доступен даже если сам основной вход/сессия не грузится (loading
+  // может зависнуть именно из-за той же недоступности Supabase) — поэтому
+  // рендерится вне {loading ? ... : ...} ниже, а не только внутри Home.
+  const [showEmergency, setShowEmergency] = useState(false)
   const verClicks = useRef<number[]>([])
   function verClick() {
     const now = Date.now()
@@ -236,10 +253,11 @@ export default function App() {
     {isDesktop && <Titlebar />}
     {isDesktop && <UpdateBanner />}
     {isApkNative && <ApkUpdateBanner />}
-    <NetStatusBanner />
+    <NetStatusBanner onOpenEmergency={() => setShowEmergency(true)} />
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>
+    {showEmergency && <EmergencyChat onClose={() => setShowEmergency(false)} />}
     {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу.
         v1.231.0: Ponoi сейчас в бета-тестировании — метка БЕТА рядом с версией
         везде, где она показывается (тут и в окне «Что нового»). */}
