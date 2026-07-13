@@ -1713,8 +1713,14 @@ body.no-anim .member-typing i { animation:none; }
 .ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }
 
 /* ===== Панель ввода 1-в-1 как в эталоне: единая тёмная капсула ===== */
-.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:3px 8px 3px 6px; gap:2px; min-height:44px; align-items:flex-end;
+.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:3px 8px 3px 6px; gap:2px; min-height:44px; align-items:center;
   transition:box-shadow .15s ease, border-color .15s ease, background .15s ease; }
+/* v1.280.0: было align-items:flex-end — при однострочном тексте textarea
+   (30px вертикальных отступов + строка ≈ 52px) выше кнопок-иконок (38px),
+   кнопки прижимались к самому низу капсулы, а сверху над ними повисал
+   пустой зазор ~14px — та самая «кривизна», на которую жаловались. Центр
+   выглядит ровно в обычном случае (одна строка) и не ломается при росте
+   textarea на несколько строк — кнопки просто центрируются по всей высоте. */
 /* v1.278.0: раньше это была ЕДИНСТВЕННАЯ раскраска — плоский чуть-светлее-фона
    прямоугольник без единой тени/глубины, отсюда «криво» (пользователь прав —
    плоская капсула без глубины на некоторых темах читается как обрезанный
