@@ -107,10 +107,20 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // Гигиена истории (v1.27.0): при входе закрываем свои «зависшие» игровые сессии
   // без ended_at (приложение убили во время игры) — иначе они бесконечно «тикают»
   // в статистике и выглядят как фейковая активность.
+  // v1.283.0: раньше закрывало ЛЮБУЮ открытую сессию без разбора — если игра в
+  // этот момент реально шла на ДРУГОМ твоём устройстве (десктоп играет, а ты
+  // зашёл в веб/на телефоне), эта живая сессия обрывалась чужим монтированием
+  // PresenceProvider, хотя игра продолжалась (presence на десктопе об этом не
+  // узнавал — рассинхрон между тем, что видно у друзей, и тем, что реально в
+  // базе). Трогаем только по-настоящему зависшие — старше 8 часов, тот же
+  // потолок длительности сессии, что уже используется в подсчёте статистики
+  // (weekStats/recentActivity в activity.ts) — короче реальная игра столько не
+  // длится непрерывно, а зависшая запись от убитого процесса — как раз то, что нужно почистить.
   useEffect(() => {
     if (!user) return
-    supabase.from('activity_sessions').update({ ended_at: new Date().toISOString() })
-      .eq('user_id', user.id).is('ended_at', null).then(() => {})
+    const cutoff = new Date(Date.now() - 8 * 3600000).toISOString()
+    supabase.from('activity_sessions').update({ ended_at: cutoff })
+      .eq('user_id', user.id).is('ended_at', null).lt('started_at', cutoff).then(() => {})
   }, [user?.id])
 
   useEffect(() => { propRef.current = { username, avatarUrl } }, [username, avatarUrl])

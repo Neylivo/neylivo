@@ -212,6 +212,14 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [favs.join('|'), wish.join('|')])
   // «Недавняя активность» за 30 дней + метки «Популярное» + обложки из общего кэша.
+  // v1.283.0: грузилось один раз при открытии профиля и больше никогда — начал
+  // человек играть или закончил, пока карточка открыта, цифры («наиграно», стрик,
+  // список игр) оставались как в момент открытия. activity_sessions не в
+  // realtime-публикации, но игру мы и так уже отслеживаем live через presence
+  // (curGame = gameOf(userId)) — тот же момент, когда meняется activity_sessions
+  // (см. onGame в presence.tsx: startSession/endSession идут ровно вместе с
+  // publish presence). Перечитываем статистику на каждый старт/стоп игры —
+  // без отдельной БД-подписки/миграции.
   useEffect(() => {
     let ok = true
     recentActivity(userId).then(ra => {
@@ -223,7 +231,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
       for (const n of names) resolveCover(n).then(u => { if (ok) setCovers(c => ({ ...c, [n]: u })) })
     })
     return () => { ok = false }
-  }, [userId])
+  }, [userId, curGame?.name])
   // v1.146.0: «Стена росписи» — общие рисунки на профиле (realtime).
   useEffect(() => {
     let ok = true
