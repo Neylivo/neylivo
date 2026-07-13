@@ -578,7 +578,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" className="voice-x" title="Отменить запись" onClick={() => stopRec(false)}><Icon name="close" size={16} /></button>
         <button type="button" className="voice-send" title="Отправить голосовое" onClick={() => stopRec(true)}><Icon name="send" size={16} /></button>
       </div>}
-      <form className="composer" onSubmit={submit}>
+      <form className={'composer cstyle-' + (settings.composerStyle || 'default')} onSubmit={submit}>
         {cmdSugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Команды бота</div>
           {cmdSugg.map((c, i) => (

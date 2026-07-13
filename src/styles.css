@@ -740,6 +740,22 @@ body { font-size: var(--font-px, 16px); }
 .pqs-density-desc { font-size:12px; color:var(--mut); }
 @media (max-width: 900px) { .pqs-density-grid { grid-template-columns:1fr; } }
 
+/* v1.278.0: стиль поля ввода — та же карточная сетка с живым превью, что и у
+   плотности сообщений выше, только превью — настоящий .composer с реальным
+   классом cstyle-*, а не нарисованный макет (стили один в один, что видит
+   пользователь в чате). */
+.pqs-cstyle-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+.pqs-cstyle-card { background:var(--bg3); border:2px solid transparent; border-radius:10px; padding:12px; cursor:pointer; text-align:left; color:var(--tx); transition:border-color .12s ease; }
+.pqs-cstyle-card:hover { border-color:var(--c-hover); }
+.pqs-cstyle-card.on { border-color:var(--brand); }
+.composer.pqs-cstyle-prev { margin:0 0 10px; padding:6px 8px; min-height:0; align-items:center; pointer-events:none; }
+.pqs-cstyle-plus { width:18px; height:18px; border-radius:50%; border:1.5px solid #b5bac1; flex:none; }
+.pqs-cstyle-txt { flex:1; font-size:12px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pqs-cstyle-ic { width:14px; height:14px; border-radius:3px; background:#b5bac1; opacity:.6; flex:none; }
+.pqs-cstyle-nm { font-size:13px; font-weight:700; margin-bottom:2px; }
+.pqs-cstyle-desc { font-size:12px; color:var(--mut); line-height:1.35; }
+@media (max-width: 900px) { .pqs-cstyle-grid { grid-template-columns:1fr 1fr; } }
+
 /* Быстрый выбор акцентного цвета — ряд кружков-свотчей */
 .pqs-accent-row { display:flex; flex-wrap:wrap; gap:10px; }
 .pqs-accent-sw { width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; box-shadow:inset 0 0 0 2px rgba(0,0,0,.15); transition:transform .12s ease, border-color .12s ease; }
@@ -1697,7 +1713,34 @@ body.no-anim .member-typing i { animation:none; }
 .ep2-hint { color:#949ba4; font-size:13.5px; padding:6px 12px 12px; line-height:1.45; }
 
 /* ===== Панель ввода 1-в-1 как в эталоне: единая тёмная капсула ===== */
-.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:3px 8px 3px 6px; gap:2px; min-height:44px; align-items:flex-end; }
+.composer { background:#383a40; border-radius:8px; margin:0 16px 24px; padding:3px 8px 3px 6px; gap:2px; min-height:44px; align-items:flex-end;
+  transition:box-shadow .15s ease, border-color .15s ease, background .15s ease; }
+/* v1.278.0: раньше это была ЕДИНСТВЕННАЯ раскраска — плоский чуть-светлее-фона
+   прямоугольник без единой тени/глубины, отсюда «криво» (пользователь прав —
+   плоская капсула без глубины на некоторых темах читается как обрезанный
+   угловатый блок). cstyle-default — тот же дух, но с мягкой тенью и лёгкой
+   подсветкой сверху, чтобы поле по-настоящему «лежало» на фоне, а не просто
+   торчало прямоугольником. Остальные — заготовленные альтернативные стили,
+   плюс акцентный цвет темы используется везде вместо жёстко зашитого — так
+   пресеты сами подстраиваются под выбранный в Настройках акцент.
+   Настройки -> Внешний вид -> «Стиль поля ввода». */
+.composer.cstyle-default { box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 8px rgba(0,0,0,.18); }
+.composer.cstyle-default:focus-within { box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 8px rgba(0,0,0,.18), 0 0 0 1px var(--c-accent, #5865f2); }
+
+.composer.cstyle-outline { background:transparent; border:1.5px solid rgba(255,255,255,.14); box-shadow:none; }
+.composer.cstyle-outline:focus-within { border-color:var(--c-accent, #5865f2); }
+
+.composer.cstyle-glass { background:rgba(56,58,64,.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 24px rgba(0,0,0,.25); }
+.composer.cstyle-glass:focus-within { border-color:rgba(255,255,255,.22); }
+
+.composer.cstyle-neon { background:#26272b; border:1px solid color-mix(in srgb, var(--c-accent, #5865f2) 55%, transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--c-accent, #5865f2) 25%, transparent), 0 0 18px -4px color-mix(in srgb, var(--c-accent, #5865f2) 70%, transparent); }
+.composer.cstyle-neon:focus-within { box-shadow:0 0 0 1.5px var(--c-accent, #5865f2), 0 0 26px -2px color-mix(in srgb, var(--c-accent, #5865f2) 85%, transparent); }
+
+.composer.cstyle-compact { min-height:34px; padding:2px 6px 2px 4px; border-radius:6px; }
+.composer.cstyle-compact textarea { padding:7px 6px; font-size:14.5px; }
+.composer.cstyle-compact .attach-btn, .composer.cstyle-compact .ctool { width:30px; height:30px; min-width:28px; }
 .composer textarea { background:transparent; border-radius:0; padding:12px 8px; }
 .composer .attach-btn { background:transparent; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#b5bac1; border-radius:50%; padding:0; }
 .composer .attach-btn:hover { background:transparent; color:#fff; }

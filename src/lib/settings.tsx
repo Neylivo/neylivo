@@ -77,6 +77,10 @@ export interface Settings {
   // не выбирали (см. notifModeOf в src/lib/srvNotify.ts) — синхронная account-настройка,
   // чтобы новый сервер сразу открывался с привычным режимом на любом устройстве.
   defaultServerNotif: 'all' | 'mentions' | 'mute'
+  // v1.278.0: стиль поля ввода сообщения — плоский флэт по умолчанию выглядел
+  // «криво»/бедно на некоторых темах (просто чуть светлее фона, без глубины).
+  // Готовые пресеты + доступ к «своему» через акцентный цвет (уже есть в теме).
+  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
 }
 
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
@@ -110,6 +114,7 @@ export const DEFAULTS: Settings = {
   appIcon: DEFAULT_APP_ICON,
   pttMode: false, keyPTT: '',
   defaultServerNotif: 'all',
+  composerStyle: 'default',
 }
 
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']

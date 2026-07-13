@@ -905,6 +905,28 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Отступ между сообщениями" desc={view.msgGap + 'px'}>
                   <input type="range" min={0} max={24} value={view.msgGap} onChange={e => setD('msgGap', Number(e.target.value))} />
                 </Row>
+
+                <div className="pqs-sec-t">Стиль поля ввода</div>
+                <div className="pqs2-desc" style={{ marginTop: -6 }}>Заготовленные стили панели, где пишешь сообщение. Цвет подстраивается под выбранный выше акцент.</div>
+                <div className="pqs-cstyle-grid">
+                  {([
+                    ['default', 'Обычный', 'Мягкая тень вместо плоского прямоугольника'],
+                    ['outline', 'Контур', 'Прозрачный фон, тонкая рамка'],
+                    ['glass', 'Стекло', 'Полупрозрачная размытая панель'],
+                    ['neon', 'Неон', 'Светящаяся рамка в цвет акцента'],
+                    ['compact', 'Компакт', 'Ниже и плотнее — больше места чату'],
+                  ] as const).map(([k, name, desc]) => (
+                    <button key={k} className={'pqs-cstyle-card' + (view.composerStyle === k ? ' on' : '')} onClick={() => setD('composerStyle', k)}>
+                      <div className={'composer cstyle-' + k + ' pqs-cstyle-prev'}>
+                        <span className="pqs-cstyle-plus" />
+                        <span className="pqs-cstyle-txt">Написать в #общий</span>
+                        <span className="pqs-cstyle-ic" />
+                      </div>
+                      <div className="pqs-cstyle-nm">{name}</div>
+                      <div className="pqs-cstyle-desc">{desc}</div>
+                    </button>
+                  ))}
+                </div>
               </>}
 
               {cat === 'chat' && <>
