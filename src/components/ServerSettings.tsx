@@ -337,8 +337,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   // ServerView.tsx) — если текущая вкладка такому пользователю не видна (по
   // умолчанию 'profile', доступна только владельцам настроек), переключаем на
   // первую, которая реально есть в его NAV.
+  // v1.279.0: 'community'/'template' — отдельные пункты меню под разделителем
+  // (не часть NAV_RAW/NAV, у них нет права-гейта) — эффект не знал о них и
+  // считал текущей вкладкой недоступной, откатывая обратно на первую NAV сразу
+  // же после клика. «Включить сообщество»/«Шаблон сервера» выглядели так,
+  // будто вообще ничего не делают.
+  const EXTRA_TABS = ['community', 'template']
   useEffect(() => {
-    if (NAV.some(n => n.k === tab)) return
+    if (NAV.some(n => n.k === tab) || EXTRA_TABS.includes(tab)) return
     const first = NAV.find(n => n.k)
     if (first?.k) setTab(first.k)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -914,6 +920,13 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         {tab === 'bots' && <ServerBotsPanel serverId={server.id} memberIds={members.map(m => m.user_id)} />}
 
         {tab === 'community' && <>
+          {/* v1.279.0: флаг «сообщество» просто сохраняется — «Аналитика сервера»,
+              «Путешествие по серверам», «новости» ниже ни на что не влияют
+              нигде в приложении. Честно, а не делаем вид, что это открывает
+              реальные инструменты. */}
+          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 14px' }}>
+            ⚠️ Технически это только переключатель — «Аналитика сервера», подача заявки в «Путешествие по серверам» и новости ниже пока не реализованы.
+          </div>
           <div className="sset-chero">
             <div style={{ fontSize: 54 }}>🏡</div>
             <div className="cset-h" style={{ marginBottom: 6 }}>Вы создаёте сообщество?</div>
@@ -933,6 +946,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         {tab === 'template' && <>
           <div className="cset-h">Шаблон сервера</div>
           <div className="cset-hint" style={{ marginTop: -12 }}>Шаблон сервера — это простой способ поделиться образцом вашего сервера и помочь другим пользователям быстро создать свой сервер. Щёлкнув по ссылке на ваш шаблон, другой пользователь создаст новый сервер с такими же каналами, ролями, правами и настройками, как и на вашем сервере.</div>
+          {/* v1.279.0: «Создать шаблон» ниже пока только сохраняет название/описание —
+              никакой реальной ссылки для клонирования сервера не создаётся. */}
+          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 14px' }}>
+            ⚠️ Пока не реализовано технически — сохраняются только название и описание, ссылка для клонирования сервера другим пользователем не создаётся.
+          </div>
           <div className="sset-tpl">
             <div><b>Шаблоны скопируют:</b><ul>
               <li><span className="sset-ok">✔</span> Каналы и темы каналов</li>
