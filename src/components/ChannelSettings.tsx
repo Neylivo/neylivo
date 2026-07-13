@@ -292,6 +292,14 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
           {priv && <div className="cset-priv-roles">
             <label className="cset-lbl">Кому виден канал</label>
             {roles.length === 0 && <div className="cset-hint">На сервере нет ролей — канал увидят только владелец и модераторы с правом «Управление каналами».</div>}
+            {roles.length > 0 && privRoles.length === 0 && (
+              // v1.270.0: приватный канал без единой отмеченной роли молча исчезал
+              // из списка у всех, кроме владельца/модераторов — ни здесь, ни в самом
+              // списке каналов не было ни намёка, что канал теперь фактически скрыт.
+              <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '8px 10px', margin: '2px 0 8px' }}>
+                ⚠️ Ни одна роль не отмечена — канал сейчас видят только владелец и модераторы с правом «Управление каналами». Остальные участники не увидят его в списке каналов.
+              </div>
+            )}
             {roles.map(r => (
               <label key={r.id} className="cset-priv-role">
                 <input type="checkbox" checked={privRoles.includes(r.id)}

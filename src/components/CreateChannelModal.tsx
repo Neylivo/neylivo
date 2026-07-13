@@ -48,7 +48,14 @@ export function CreateChannelModal({ initialKind, onClose, onCreate }: {
             onKeyDown={e => { if (e.key === 'Enter') submit() }} />
         </div>
         <div className="cch-priv"><span>🔒</span> Приватный канал<button className={'tgl' + (priv ? ' on' : '')} onClick={() => setPriv(!priv)} /></div>
-        <div className="cset-hint">Только выбранные участники и участники с выбранными ролями смогут просматривать этот канал.</div>
+        {priv
+          // v1.270.0: выбор ролей появляется только ПОСЛЕ создания (вкладка «Права
+          // доступа» в настройках канала) — без этой строки было неочевидно, что
+          // сразу после создания канал не увидит вообще никто из обычных участников.
+          ? <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '8px 10px' }}>
+              ⚠️ Сразу после создания канал увидят только владелец и модераторы с правом «Управление каналами». Чтобы открыть его конкретным ролям, зайди в настройки канала → «Права доступа» после создания.
+            </div>
+          : <div className="cset-hint">Только владелец, модераторы и роли, которых ты выберешь в настройках канала, смогут просматривать приватный канал.</div>}
         <div className="modal-foot">
           <button className="modal-ghost" onClick={onClose}>Отмена</button>
           <button className="modal-primary" disabled={!name.trim()} onClick={submit}>Создать канал</button>

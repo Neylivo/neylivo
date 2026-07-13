@@ -163,7 +163,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [thrQ, setThrQ] = useState('')
   const [threads, setThreads] = useState<Thread[]>([])
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
-  const [showAllCh, setShowAllCh] = useState(() => localStorage.getItem('ponoi_show_all_channels') === '1')
   const [showCreateCh, setShowCreateCh] = useState<null | { kind: 'text' | 'voice'; cat?: string }>(null)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [showInvite, setShowInvite] = useState(false)   // v1.68.0: панель «Пригласить друзей»
@@ -1062,7 +1061,6 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {canManageChannels && <div className="srv-mi" onClick={() => setShowCreateCat(true)}><span className="srv-mi-lb">Создать категорию</span> <Icon name="folder" size={16} /></div>}
             {canManageChannels && <div className="srv-mi" onClick={() => setShowEvents(true)}><span className="srv-mi-lb">Создать событие</span> <Icon name="calendar" size={16} /></div>}
             <div className="srv-msep" />
-            {!isOwner && <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}><span className="srv-mi-lb">Показать все каналы</span> <span className={'srv-mchk' + (showAllCh ? ' on' : '')}>{showAllCh && <Icon name="check" size={12} />}</span></div>}
             <div className="srv-mi" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-notif', { detail: server }))}><span className="srv-mi-lb">Параметры уведомлений</span> <Icon name="bell" size={16} /></div>
             <div className="srv-mi" onClick={() => setShowPrivacy(true)}><span className="srv-mi-lb">Настройки конфиденциальности</span> <Icon name="shield" size={16} /></div>
             <div className="srv-msep" />
@@ -1076,7 +1074,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <div className="ch-list">
           {(server as any).settings?.banner_url ? <>
             <div className="ch evt clickable" onClick={() => toastOk('Путеводитель по серверу скоро появится')}><Icon name="flag" size={16} /> Путеводитель по серверу</div>
-            <div className="ch evt clickable" onClick={() => { const nv = !showAllCh; setShowAllCh(nv); localStorage.setItem('ponoi_show_all_channels', nv ? '1' : '0') }}><Icon name="list" size={16} /> Каналы и роли</div>
+            {/* v1.270.0: раньше клик переключал showAllCh — состояние, которое нигде
+                не читалось и ни на что не влияло (мёртвый тумблер, скопированный из
+                Discord вместе с остальным меню в v1.25.0). Честная заглушка вместо
+                фальшивой видимости действия, как у «Путеводителя» строкой выше. */}
+            <div className="ch evt clickable" onClick={() => toastOk('Обзор каналов и ролей скоро появится')}><Icon name="list" size={16} /> Каналы и роли</div>
           </> : <>
             <div className="ch evt clickable" onClick={() => setShowEvents(true)}><Icon name="calendar" size={16} /> Мероприятия</div>
           </>}
