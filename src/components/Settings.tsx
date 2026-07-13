@@ -578,7 +578,12 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
               <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
               <button className="cset-save" onClick={saveAccount} disabled={busy}>{busy ? 'Сохранение…' : saved ? 'Сохранено ✓' : 'Сохранить изменения'}</button>
             </div>
-            <div className="pqs2-inner">
+            {/* v1.284.0: key={cat} — заставляет React пересоздавать узел при смене
+                раздела настроек, а не просто подменять детей на месте, поэтому
+                CSS-анимация .pqs2-inner (styles.css) заново проигрывается на
+                каждый клик по пункту меню слева — раньше содержимое вкладки
+                мгновенно телепортировалось без единого перехода. */}
+            <div className="pqs2-inner" key={cat}>
               {cat === 'account' && <>
                 <h2 id="pqs2-acc-info">Информация об учётной записи</h2>
                 <div className="pqs2-desc">Твои основные данные: ник, юзернейм и почта. Нажми «Изменить» рядом с полем, чтобы его поменять.</div>
