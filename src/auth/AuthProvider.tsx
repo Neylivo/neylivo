@@ -12,9 +12,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false) })
+    // v1.271.0: без .catch() отказ этого промиса (битый/просроченный refresh-токен
+    // в localStorage, сетевой сбой при попытке его обновить) навсегда оставлял
+    // loading=true — экран «Загрузка…» висел бесконечно без единой подсказки,
+    // что пошло не так, и без способа попасть на экран входа. Плюс таймаут: если
+    // запрос вообще не отвечает (обрыв сети без явного отказа — fetch у браузера
+    // может просто повиснуть), через 15с всё равно пускаем на экран входа, а не
+    // держим пользователя перед пустым экраном бесконечно.
+    let done = false
+    const finish = (s: Session | null) => { if (done) return; done = true; setSession(s); setLoading(false) }
+    supabase.auth.getSession()
+      .then(({ data }) => finish(data.session))
+      .catch(err => { console.error('[auth] getSession failed:', err); finish(null) })
+    const timeout = setTimeout(() => finish(null), 15000)
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => sub.subscription.unsubscribe()
+    return () => { clearTimeout(timeout); sub.subscription.unsubscribe() }
   }, [])
 
   // Приватные настройки (папки, мьюты, заметки, ...) грузятся с аккаунта при входе.
