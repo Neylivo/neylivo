@@ -32,6 +32,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- v1.308.0: установка обновления прямо из приложения, без ухода в браузер.
+         Систему это НЕ обходит: Android всё равно спросит подтверждение установки
+         и разовое разрешение «ставить из этого источника». -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Голосовые/видеозвонки (LiveKit) через WebView getUserMedia — см. MainActivity.onPermissionRequest -->
     <uses-permission android:name="android.permission.CAMERA" />

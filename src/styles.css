@@ -4537,3 +4537,6 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .auth2-or::before, .auth2-or::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.18); }
 .auth2-btn.ghost { background:transparent; border:1px solid rgba(255,255,255,.28); color:#fff; }
 .auth2-btn.ghost:hover:not(:disabled) { background:rgba(255,255,255,.08); }
+
+/* v1.308.0: процент скачивания обновления прямо в баннере */
+.upd-pct { font-weight:700; font-size:14px; color:var(--brand); min-width:44px; text-align:center; }

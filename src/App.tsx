@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
 import { Home } from './components/Home'
-import { Toasts, toastOk } from './lib/toast'
+import { Toasts, toastOk, toastErr } from './lib/toast'
 import { loadFavs, toggleFav } from './lib/emoji'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
 import { CHANGELOG } from './lib/changelog'
 import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
-import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
+import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, installApkInApp, type ApkUpdate } from './lib/apkUpdate'
 import { useClampToViewport } from './lib/clampPos'
 import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
 import { lazyNamed } from './lib/lazyScreen'
@@ -41,6 +41,7 @@ const isApkNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 
 // установку (и её подтверждение) всё равно делает сама Android.
 function ApkUpdateBanner() {
   const [upd, setUpd] = useState<ApkUpdate | null>(null)
+  const [pct, setPct] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
     checkApkUpdate(__APP_VERSION__).then(u => {
@@ -58,7 +59,20 @@ function ApkUpdateBanner() {
         <b>Доступно обновление — v{upd.version}</b>
         <span>Скачай APK и установи поверх текущей версии</span>
       </div>
-      <a className="upd-go" href={upd.url} target="_blank" rel="noopener noreferrer">Скачать</a>
+      {/* v1.308.0: ставим прямо в приложении. Если что-то пошло не так — тихо
+          откатываемся на прежнее поведение, обычную ссылку: хуже, чем было, не станет. */}
+      {pct === null
+        ? <button className="upd-go" onClick={async () => {
+            try {
+              setPct(0)
+              await installApkInApp(upd.url, setPct)
+            } catch (e: any) {
+              setPct(null)
+              toastErr(e?.message ?? 'Не удалось обновить — открываю страницу загрузки')
+              window.open(upd.url, '_blank', 'noopener')
+            }
+          }}>Обновить</button>
+        : <span className="upd-pct">{pct}%</span>}
       <button className="upd-x" title="Скрыть" onClick={() => { dismissApkVersion(upd.version); setUpd(null) }}><Icon name="close" size={14} /></button>
     </div>
   )
