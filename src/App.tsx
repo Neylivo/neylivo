@@ -15,6 +15,7 @@ import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpda
 import { useClampToViewport } from './lib/clampPos'
 import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
 import { EmergencyChat } from './components/EmergencyChat'
+import { startEnabledPlugins } from './lib/plugins/host'
 
 // v1.275.0: через сколько непрерывной деградации предлагать аварийный чат —
 // достаточно долго, чтобы не дёргать на секундный сбой, но не тянуть, если
@@ -234,6 +235,10 @@ export default function App() {
   // v1.161.0: диплинк ponoi://msg/... — приложение было открыто/поднято таким URL
   // (десктоп, см. electron/main.cjs). Разбираем и переходим к сообщению.
   useEffect(() => { (window as any).ponoiDesktop?.onDeepLink?.((url: string) => openMsgLink(url)) }, [])
+  // v1.286.0: поднимаем включённые плагины один раз при старте. Плагины ставятся на
+  // устройство, а не на аккаунт, поэтому сессия для этого не нужна — они работают и
+  // на экране входа (свои темы оформления, например).
+  useEffect(() => { void startEnabledPlugins() }, [])
   // v1.116.0: три быстрых клика по версии — окно «Что нового»
   const [showLog, setShowLog] = useState(false)
   // v1.275.0: доступен даже если сам основной вход/сессия не грузится (loading

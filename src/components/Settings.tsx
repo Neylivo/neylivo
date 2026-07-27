@@ -17,6 +17,7 @@ import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
+import { PluginsSettings } from './PluginsSettings'
 import { IS_MOBILE } from '../lib/mobile'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
@@ -42,6 +43,8 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'language', label: 'Язык', icon: 'compass' },
     { k: 'activity', label: 'Активность', icon: 'gamepad' },
     { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
+    // v1.286.0: плагины — расширения интерфейса, ставятся на это устройство.
+    { k: 'plugins', label: 'Плагины', icon: 'cube' },
   ] },
   { group: 'Разработчикам', items: [
     { k: 'devportal', label: 'Мои приложения', icon: 'code' },
@@ -1158,6 +1161,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Режим разработчика" desc="Показывать ID и отладочную информацию"><Toggle on={view.devmode} onChange={v => setD('devmode', v)} /></Row>
                 <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
               </>}
+              {cat === 'plugins' && <PluginsSettings />}
               {cat === 'devportal' && <DevPortal />}
             </div>
           </div>

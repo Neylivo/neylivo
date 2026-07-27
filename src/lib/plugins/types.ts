@@ -1,0 +1,70 @@
+// v1.286.0: система плагинов. Плагин — это один .ponoi-файл (обычный JS с шапкой
+// метаданных), который выполняется в Web Worker'е и общается с приложением только
+// через явно выданный API (см. sandbox.ts / api.ts).
+//
+// Почему Worker, а не просто eval в окне: сессия Supabase лежит в localStorage, а
+// Worker к localStorage/document.cookie/DOM доступа не имеет в принципе — это
+// ограничение самого браузера, а не наша проверка, которую можно обойти хитрым
+// кодом. Поэтому плагином, скачанным из чата, нельзя угнать аккаунт, даже если он
+// написан специально для этого.
+
+/** Что плагин просит разрешить. Показывается человеку при установке. */
+export type Permission =
+  | 'ui'              // свои кнопки и пункты меню
+  | 'css'             // свои стили
+  | 'commands'        // свои слэш-команды
+  | 'messages.read'   // видеть сообщения в открытом канале
+  | 'messages.write'  // отправлять сообщения от твоего имени
+  | 'storage'         // своё хранилище ключ-значение
+  | 'net'             // сеть, только на домены из @hosts
+  | 'settings'        // своя страница настроек
+  | 'notify'          // всплывающие уведомления
+
+export const ALL_PERMISSIONS: Permission[] = [
+  'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify',
+]
+
+/** Человеческое описание разрешения — ровно то, что читает человек перед установкой. */
+export const PERMISSION_LABEL: Record<Permission, string> = {
+  'ui': 'Добавлять кнопки и пункты меню',
+  'css': 'Менять оформление приложения',
+  'commands': 'Добавлять команды в чат',
+  'messages.read': 'Видеть сообщения в открытом канале',
+  'messages.write': 'Отправлять сообщения от твоего имени',
+  'storage': 'Хранить свои данные на этом устройстве',
+  'net': 'Обращаться в интернет (только к указанным сайтам)',
+  'settings': 'Своя страница настроек',
+  'notify': 'Показывать уведомления',
+}
+
+/**
+ * Разрешения, о которых стоит предупредить отдельно: остальные ничего о тебе не
+ * узнают и ничего от твоего имени не сделают, а эти — могут. На экране установки
+ * они подсвечиваются, чтобы «отправлять сообщения от твоего имени» не терялось в
+ * одном списке с «добавлять кнопки».
+ */
+export const SENSITIVE_PERMISSIONS: Permission[] = ['messages.read', 'messages.write', 'net']
+
+export interface PluginManifest {
+  id: string            // латиница/цифры/дефис, уникален — по нему хранится и обновляется
+  name: string
+  version: string       // semver-подобная строка, для сравнения при обновлении
+  author: string
+  description: string
+  permissions: Permission[]
+  hosts: string[]       // домены для 'net'; без 'net' игнорируется
+}
+
+export interface InstalledPlugin {
+  manifest: PluginManifest
+  code: string
+  enabled: boolean
+  installedAt: string   // ISO
+  /** Откуда приехал — для строки «от @ник» в списке. null = поставлен из файла. */
+  sourceUserId: string | null
+  /** Настройки самого плагина (то, что он пишет через ponoi.storage). */
+  storage: Record<string, unknown>
+}
+
+/** Ошибка разбора .ponoi-файла — текст показывается человеку как есть. */
+export class PluginParseError extends Error {}

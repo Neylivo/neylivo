@@ -4382,3 +4382,35 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .gstat-match-map, .gstat-match-mode { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gstat-match-kda { color:var(--mut); text-align:center; }
 .gstat-match-date { color:var(--mut); text-align:right; }
+
+/* v1.286.0: раздел «Плагины» в настройках (см. PluginsSettings.tsx) */
+.plug-card { border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:14px 16px; margin-top:12px; background:var(--bg2); }
+.plug-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.plug-name { font-weight:600; display:flex; align-items:center; gap:8px; min-width:0; }
+.plug-ver { color:var(--mut); font-size:12px; font-weight:400; }
+/* Точка состояния: включённый плагин может быть не запущен — например, упал при загрузке. */
+.plug-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.plug-dot.on { background:#3ba55d; }
+.plug-dot.off { background:#ed4245; }
+.plug-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.plug-sub { color:var(--mut); font-size:13px; margin-top:6px; }
+.plug-perms-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.plug-chip { font-size:11px; padding:3px 8px; border-radius:10px; background:rgba(255,255,255,.06); color:var(--mut); }
+.plug-chip.warn { background:rgba(250,166,26,.14); color:#faa61a; }
+.plug-err { margin-top:10px; display:flex; align-items:flex-start; gap:6px; font-size:13px; color:#ed4245; }
+.plug-settings { margin-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+.plug-settings .pqs-optrow { padding:12px 0; }
+/* Экран разрешений перед установкой */
+.plug-perm { display:flex; align-items:center; gap:8px; padding:7px 0; font-size:14px; }
+.plug-perm.warn { color:#faa61a; }
+.pqs2-btn.danger { color:#ed4245; }
+
+/* v1.286.0: карточка плагина в чате (см. PluginInstallCard.tsx) */
+.plug-msg-card { border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:12px 14px; background:var(--bg2); max-width:440px; }
+.plug-msg-card.bad { display:flex; align-items:center; gap:8px; color:#ed4245; font-size:13px; }
+.plug-msg-head { display:flex; align-items:flex-start; gap:10px; }
+.plug-msg-name { font-weight:600; min-width:0; }
+.plug-msg-author { font-weight:400; color:var(--mut); font-size:12px; margin-top:2px; }
+.plug-msg-desc { color:var(--mut); font-size:13px; margin-top:8px; }
+.plug-msg-foot { display:flex; gap:8px; margin-top:12px; }
+.plug-msg-foot .pqs2-btn { text-decoration:none; }

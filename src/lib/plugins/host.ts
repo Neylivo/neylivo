@@ -1,0 +1,134 @@
+import { PluginSandbox, type FnRef } from './sandbox'
+import { createDispatcher, type HostContext } from './api'
+import { clearPlugin } from './registry'
+import { loadPlugins, getPlugin, subscribePlugins } from './store'
+import type { InstalledPlugin } from './types'
+
+// v1.286.0: связывает всё вместе — поднимает песочницы включённых плагинов, роутит
+// вызовы в api.ts, раздаёт события и гасит сломавшихся. Один плагин не должен
+// ронять ни приложение, ни соседние плагины: любая его ошибка максимум выключает
+// его самого и записывается в pluginErrors, чтобы её было видно в настройках.
+
+interface Running {
+  sandbox: PluginSandbox
+  /** События, на которые плагин реально подписался, — чтобы не будить остальных. */
+  subs: Set<string>
+}
+
+const running = new Map<string, Running>()
+const errors = new Map<string, string>()
+
+const listeners = new Set<() => void>()
+export function subscribePluginState(fn: () => void): () => void {
+  listeners.add(fn)
+  return () => { listeners.delete(fn) }
+}
+function notify() { listeners.forEach(fn => { try { fn() } catch {} }) }
+
+export function pluginError(id: string): string | null { return errors.get(id) ?? null }
+export function isRunning(id: string): boolean { return running.has(id) }
+
+// Контекст подставляет приложение: он зависит от того, какой канал открыт сейчас,
+// поэтому живёт изменяемой ссылкой, а не копируется в каждый плагин при старте.
+let ctx: HostContext = {
+  sendMessage: async () => { throw new Error('Нет открытого канала') },
+  toast: () => {},
+}
+export function setHostContext(next: HostContext) { ctx = next }
+
+export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
+  await stopPlugin(plugin.manifest.id)
+  errors.delete(plugin.manifest.id)
+
+  const subs = new Set<string>()
+  // Диспетчер создаётся один раз, а не на каждый вызов: внутри него живут проверки
+  // разрешений, и пересобирать их на каждый чих незачем.
+  const dispatch = createDispatcher(plugin, {
+    sendMessage: text => ctx.sendMessage(text),
+    toast: text => ctx.toast(text),
+  }, ev => subs.add(ev))
+  const sandbox = new PluginSandbox({
+    onCall: dispatch,
+    // Ошибка ВО ВРЕМЯ работы (висячий промис, исключение в обработчике события) —
+    // не приговор: записываем, показываем в настройках, но плагин продолжает жить.
+    // Убиваем только за провал загрузки — там плагин заведомо не в рабочем состоянии.
+    onError: msg => {
+      errors.set(plugin.manifest.id, msg)
+      notify()
+    },
+  })
+  running.set(plugin.manifest.id, { sandbox, subs })
+
+  try {
+    await sandbox.start(plugin.code)
+    notify()
+  } catch (err: any) {
+    fail(plugin.manifest.id, err?.message ?? String(err))
+    throw err
+  }
+}
+
+function fail(id: string, message: string) {
+  errors.set(id, message)
+  const r = running.get(id)
+  if (r) { r.sandbox.kill(); running.delete(id) }
+  clearPlugin(id)
+  notify()
+}
+
+export async function stopPlugin(id: string): Promise<void> {
+  const r = running.get(id)
+  if (r) { r.sandbox.kill(); running.delete(id) }
+  clearPlugin(id)
+  notify()
+}
+
+/** Поднять все включённые плагины. Вызывается один раз при старте приложения. */
+export async function startEnabledPlugins(): Promise<void> {
+  for (const p of loadPlugins()) {
+    if (!p.enabled) continue
+    // Последовательно, а не Promise.all: у каждого свой таймаут на загрузку, и
+    // десяток одновременно стартующих воркеров на слабой машине только мешал бы
+    // друг другу. Плагинов единицы — разница неощутима.
+    try { await startPlugin(p) } catch { /* причина уже записана в errors, идём дальше */ }
+  }
+}
+
+/** Разослать событие тем плагинам, которые на него подписаны. */
+export function emitPluginEvent(name: string, data: unknown) {
+  for (const [, r] of running) {
+    if (r.subs.has(name)) r.sandbox.emit(name, data)
+  }
+}
+
+/**
+ * Событие конкретному плагину, минуя подписку. Нужно для его собственных настроек:
+ * человек трогает переключатель на странице ЭТОГО плагина — адресат очевиден, и
+ * требовать от плагина отдельной подписки на такое было бы лишней церемонией.
+ */
+export function emitToPlugin(pluginId: string, name: string, data: unknown) {
+  running.get(pluginId)?.sandbox.emit(name, data)
+}
+
+/** Вызвать обработчик плагина (клик по его кнопке, его слэш-команда). */
+export async function invokePlugin(pluginId: string, ref: FnRef, args: unknown[] = []): Promise<unknown> {
+  const r = running.get(pluginId)
+  if (!r) throw new Error('Плагин не запущен')
+  try {
+    return await r.sandbox.invoke(ref, args)
+  } catch (err: any) {
+    // Упавший обработчик — не повод убивать плагин целиком (в отличие от ошибки
+    // при загрузке): показываем причину и живём дальше.
+    ctx.toast(`Плагин «${getPlugin(pluginId)?.manifest.name ?? pluginId}»: ${err?.message ?? err}`)
+    throw err
+  }
+}
+
+// Список плагинов мог измениться в другой вкладке — держим запущенное в согласии
+// с сохранённым, иначе удалённый там плагин остался бы работать здесь.
+subscribePlugins(() => {
+  for (const id of [...running.keys()]) {
+    const p = getPlugin(id)
+    if (!p || !p.enabled) void stopPlugin(id)
+  }
+})

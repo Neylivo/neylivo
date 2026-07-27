@@ -10,6 +10,8 @@ import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta, type SysMsg } from '../lib/sysmsg'
 import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
+import { useMessageActions } from '../lib/plugins/registry'
+import { invokePlugin, emitPluginEvent } from '../lib/plugins/host'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -361,6 +363,26 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
   const [emojiAt, setEmojiAt] = useState<{ id: string; x: number; y: number } | null>(null)
   const [, setEmojiVer] = useState(0)
+  // v1.286.0: пункты меню сообщения, добавленные плагинами (см. lib/plugins/registry).
+  const pluginActions = useMessageActions()
+
+  // v1.286.0: событие 'message' для плагинов, подписавшихся с разрешением
+  // messages.read. Два фильтра сразу: id не должен быть уже виденным (перерисовки,
+  // подгрузка истории) И сообщение должно быть свежим — иначе при каждом
+  // переключении канала плагину прилетала бы вся его переписка как «новая».
+  const seenMsgIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    for (const m of messages) {
+      if (seenMsgIds.current.has(m.id)) continue
+      seenMsgIds.current.add(m.id)
+      const age = Date.now() - new Date(m.created_at).getTime()
+      if (age >= 0 && age < 30_000) {
+        emitPluginEvent('message', { id: m.id, author: m.author, content: m.content ?? '' })
+      }
+    }
+    // Множество виденного не должно расти бесконечно за долгую сессию.
+    if (seenMsgIds.current.size > 5000) seenMsgIds.current = new Set(messages.map(m => m.id))
+  }, [messages])
 
   // Re-render message bodies when the shared custom-emoji cache updates.
   useEffect(() => {
@@ -590,6 +612,16 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {onMarkUnread ? item('Отметить как непрочитанное', 'message', () => { onMarkUnread(menuMsg); toastOk('Отмечено как непрочитанное') }) : null}
           {item('Скопировать ссылку на сообщение', 'link', () => { copyText(linkCtx ? buildMsgLink(linkCtx, menuMsg.id) : 'ponoi://msg/' + menuMsg.id, 'Ссылка скопирована') })}
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
+          {/* v1.286.0: действия над сообщением от плагинов. Плагин получает только
+              id, автора и текст — ни вложений, ни служебных полей. */}
+          {pluginActions.length > 0 ? <div className="ctx-sep" /> : null}
+          {pluginActions.map(a => (
+            <Fragment key={a.pluginId + ':' + a.key}>
+              {item(a.label, a.icon, () => {
+                void invokePlugin(a.pluginId, a.onClick, [{ id: menuMsg.id, author: menuMsg.author, content: menuMsg.content ?? '' }])
+              })}
+            </Fragment>
+          ))}
           {img ? <>
             <div className="ctx-sep" />
             {isGif ? item('Скопировать гифку', 'image', () => { copyGif(img) })

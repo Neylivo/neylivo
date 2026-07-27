@@ -9,6 +9,7 @@ import { Icon } from './icons'
 import { Avatar } from './Avatar'
 import { Lightbox } from './Lightbox'
 import { CodeFileCard, isCodeFile } from './CodeFileCard'
+import { PluginInstallCard, isPluginFile } from './PluginInstallCard'
 import { useSettings } from '../lib/settings'
 import type { AttachPatch } from '../lib/reactions'
 import { usePresence } from '../lib/presence'
@@ -18,6 +19,9 @@ import { robloxJoinUrl, steamConnectUrl } from '../lib/gameShare'
 import { ShareBuildModal, type ShareCardCustom } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
+import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
+import { invokePlugin, setHostContext } from '../lib/plugins/host'
+import { toast } from '../lib/toast'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 const MAXLEN = 50000
@@ -311,8 +315,45 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     fetchServerBotCommands(serverId).then(c => { if (ok) setBotCmds(c) })
     return () => { ok = false }
   }, [serverId])
+  // v1.286.0: команды и кнопки плагинов. Живут рядом с командами ботов, но работают
+  // и в ЛС тоже: плагин стоит на устройстве, ему не нужен serverId.
+  const pluginCmds = useSlashCommands()
+  const pluginButtons = useComposerButtons()
+  // Плагину нужен способ отправить сообщение и показать уведомление, а «куда
+  // отправить» знает только открытый сейчас композер — поэтому контекст обновляется
+  // отсюда, а не задаётся один раз при старте приложения.
+  useEffect(() => {
+    setHostContext({
+      sendMessage: async text => { await onSend(text) },
+      toast: msg => toast(msg),
+    })
+  }, [onSend])
+
   const slashTyping = /^\/(\w*)$/.exec(text)
   const cmdSugg = slashTyping ? botCmds.filter(c => c.name.startsWith(slashTyping[1].toLowerCase())).slice(0, 8) : []
+  // Отдельная регулярка с \p{L}: имена команд плагинов могут быть на любом языке
+  // (/привет), а \w выше по строке понимает только латиницу.
+  const slashTypingUni = /^\/([\p{L}\p{N}_-]*)$/u.exec(text)
+  const pluginCmdSugg = slashTypingUni
+    ? pluginCmds.filter(c => c.name.startsWith(slashTypingUni[1].toLowerCase())).slice(0, 8)
+    : []
+
+  /** Команда плагина: /имя остаток-строки. Вернёт true, если команда нашлась и отработала. */
+  async function runPluginCommand(cmdText: string): Promise<boolean> {
+    const m = /^\/([\p{L}\p{N}_-]+)(?:\s+([\s\S]*))?$/u.exec(cmdText.trim())
+    if (!m) return false
+    const cmd = pluginCmds.find(c => c.name === m[1].toLowerCase())
+    if (!cmd) return false
+    setCmdBusy(true)
+    try {
+      // Аргументы отдаём одной строкой: плагин сам решает, как их разбирать, — в
+      // отличие от команд ботов, где раскладка по options задана заранее.
+      await invokePlugin(cmd.pluginId, cmd.handler, [(m[2] ?? '').trim()])
+      setText(''); keepDraft('')
+    } catch { /* причину уже показал invokePlugin */ }
+    finally { setCmdBusy(false) }
+    return true
+  }
   function pickCommand(c: BotCommand & { botAppId: string }) {
     setText('/' + c.name + ' ')
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -438,6 +479,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (busy || sendingRef.current || cmdBusy) return   // v1.42.0: защита от двойной отправки
+    // Команды плагинов проверяются первыми: они локальные и не ходят в сеть, а имя
+    // может совпасть с командой бота — приоритет у того, что стоит у тебя самого.
+    if (!isEditing && pluginCmds.length && /^\/[\p{L}\p{N}_-]+/u.test(text.trim()) && await runPluginCommand(text)) return
     if (!isEditing && botCmds.length && /^\/\w+/.test(text.trim()) && await runSlashCommand(text)) return
     if (isEditing) {
       const t = text.trim()
@@ -579,6 +623,18 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <button type="button" className="voice-send" title="Отправить голосовое" onClick={() => stopRec(true)}><Icon name="send" size={16} /></button>
       </div>}
       <form className={'composer cstyle-' + (settings.composerStyle || 'default')} onSubmit={submit}>
+        {/* v1.286.0: команды плагинов — отдельным списком над командами ботов, чтобы
+            было сразу видно, что это твоё локальное, а не с сервера. */}
+        {pluginCmdSugg.length > 0 && <div className="mention-pop">
+          <div className="mention-h">Команды плагинов</div>
+          {pluginCmdSugg.map(c => (
+            <div key={c.pluginId + ':' + c.name} className="mention-it"
+              onMouseDown={e => { e.preventDefault(); setText('/' + c.name + ' '); requestAnimationFrame(() => inputRef.current?.focus()) }}>
+              <span className="mention-at">/</span>{c.name}
+              <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{c.description}</span>
+            </div>
+          ))}
+        </div>}
         {cmdSugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Команды бота</div>
           {cmdSugg.map((c, i) => (
@@ -690,6 +746,15 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
           {!isEditing && <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
           {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
+          {/* v1.286.0: кнопки плагинов. Рисуются нашим же компонентом с нашей иконкой —
+              плагин задаёт только имя иконки и подсказку, поэтому подделать чужой
+              элемент интерфейса (например, поле ввода пароля) он не может. */}
+          {!isEditing && pluginButtons.map(b => (
+            <button key={b.pluginId + ':' + b.key} type="button" className="ctool" title={b.tooltip}
+              onClick={() => { void invokePlugin(b.pluginId, b.onClick, []) }}>
+              <Icon name={b.icon} size={20} />
+            </button>
+          ))}
           {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
           {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
         </div>
@@ -843,6 +908,12 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
       </a>
     )
     return <div className="att-editwrap"><video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />{upOverlay}</div>
+  }
+  // v1.286.0: .ponoi — карточка плагина с разрешениями и кнопкой установки.
+  // Проверяется раньше кода: файл плагина это тоже JS, и без этой ветки он показался
+  // бы просто подсвеченным исходником без единого намёка, что его можно поставить.
+  if (isPluginFile(clean)) {
+    return <div className="att-editwrap"><PluginInstallCard url={clean} sizeLabel={size} />{upOverlay}</div>
   }
   // v1.83.0: txt и файлы с кодом — карточка с подсветкой, 1-в-1 как в Discord.
   if (isCodeFile(clean)) {
