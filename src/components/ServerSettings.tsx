@@ -30,7 +30,18 @@ import { TagEmoji, tagFontFamily } from './TagEmoji'
 import { loadServerEmoji, loadStickers, addServerEmoji, addSticker, removeServerEmoji, removeSticker, type ServerEmoji, type ServerSticker } from '../lib/serverEmoji'
 import { fetchAuditLog, logAudit, AUDIT_ACTION_LABEL, type AuditEntry } from '../lib/auditLog'
 
-type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
+type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
+
+// v1.322.0: ступени вернулись работающими — их проверяет база
+// (server_verification_ok, supabase/83_verification_level.sql). Ступени
+// накопительные: каждая следующая добавляет требование к предыдущим.
+const VERIF_LEVELS: { t: string; d: string }[] = [
+  { t: 'Отсутствует', d: 'Писать может любой участник сервера.' },
+  { t: 'Низкий', d: 'Писать может только тот, кто подтвердил свою почту.' },
+  { t: 'Средний', d: 'Плюс к предыдущему: учётной записи должно быть больше 5 минут.' },
+  { t: 'Высокий', d: 'Плюс к предыдущему: на этом сервере нужно пробыть больше 10 минут.' },
+  { t: 'Наивысший', d: 'Плюс к предыдущему: нужен подтверждённый номер телефона. Вход по телефону в Ponoi пока не настроен, поэтому такого номера нет ни у кого — эта ступень закроет письмо всем, у кого нет роли.' },
+]
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
 const TAG_ICONS = ['🍃', '🗡️', '💗', '🔥', '💧', '💀', '🌙', '⚡', '🔮', '🍄']
@@ -257,7 +268,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       text: guideText.trim(),
       items: guideItems.filter(i => i.channelId).map(i => ({ channelId: i.channelId, desc: i.desc.trim() })),
     }
-    const stWithGuide = { ...st, guide: (guide.text || guide.items.length) ? guide : null }
+    // v1.322.0: метка времени последней правки правил. По ней база решает, чьё
+    // согласие ещё действует (server_rules_ok в 82_server_rules.sql): изменил
+    // список — согласие обнулилось у всех. Ставим её только когда правила
+    // действительно менялись, иначе любое сохранение настроек сервера сбрасывало
+    // бы согласие у всех участников на ровном месте.
+    const prev = JSON.parse(baseSt)
+    const rulesChanged = JSON.stringify(st.rules ?? []) !== JSON.stringify(prev.rules ?? [])
+      || !!st.rules_on !== !!prev.rules_on
+    const stRules = rulesChanged ? { ...st, rules_at: new Date().toISOString() } : st
+    const stWithGuide = { ...stRules, guide: (guide.text || guide.items.length) ? guide : null }
     let { data: upd, error } = await supabase.from('servers')
       .update({ name: nm, settings: stWithGuide, base_permissions: basePerms } as any).eq('id', server.id).select('id')
     // v1.321.0: base_permissions появляется в миграции 49. Пока её нет, колонки не
@@ -375,17 +395,13 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     { k: 'profile', t: 'Профиль сервера', ok: canOwnerLevel }, { k: 'tag', t: 'Тег сервера', ok: canOwnerLevel }, { k: 'engage', t: 'Вовлечённость', ok: canOwnerLevel },
     { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
     { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
-    // v1.321.0: вкладка «Настройка безопасности» убрана целиком. В ней было три
-    // настройки, и ни одна ничего не делала: «Уровень проверки» (участник якобы
-    // должен ему соответствовать, чтобы писать), «Фильтры нежелательного
-    // контента» (якобы проверка изображений) и «Разрешить исключение участников
-    // только администраторам». Все три сохранялись в settings и не читались нигде
-    // — ни в приложении, ни в базе. Здесь это опаснее, чем в других вкладках:
-    // владелец заходил в раздел с названием «безопасность», что-то там выставлял
-    // и уходил с уверенностью, что сервер защищён. Ровно за это в v1.290.0 убрали
-    // отсюда же тумблер двухфакторной аутентификации — остальное просто не
-    // проверили тогда. Вернуть, когда будет что проверять на самом деле.
-    { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
+    // v1.322.0: вкладка вернулась — «Уровень проверки» в ней теперь настоящий и
+    // проверяется базой (83_verification_level.sql). Двух других её настроек
+    // здесь пока нет: «Фильтр нежелательного контента» требует распознавания
+    // изображений, которого в проекте нет вовсе, а «Исключение неактивных
+    // участников» — самой такой чистки, которой тоже нет. Появятся вместе с тем,
+    // что они настраивают, а не раньше.
+    { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
     { k: 'bots', t: 'Боты', ok: canManageWebhooks },
   ]
   const NAV = NAV_RAW.filter(n => n.ok)
@@ -658,10 +674,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'members' && <>
           <div className="cset-h">Участники сервера</div>
-          {/* v1.321.0: убран переключатель «Показать участников в списке каналов».
-              Он сохранялся в settings.members_in_list, которое не читалось нигде —
-              список каналов о нём не знал вовсе. Тот же переключатель дублировался
-              во вкладке «Безопасность», убран и там. */}
+          {/* v1.322.0: переключатель заработал — раньше settings.members_in_list
+              сохранялся, а список каналов о нём не знал (см. ServerView.tsx,
+              ch-members-row). Второй его экземпляр стоял во вкладке «Настройка
+              безопасности» — там он был не к месту и не вернулся. */}
+          <div className="cset-row" style={{ marginTop: 0 }}>
+            <div><div className="cset-row-t">Показать участников в списке каналов</div>
+              <div className="cset-hint">В списке каналов появится пункт «Участники» со счётчиком тех, кто сейчас в сети. Открывает ту же панель участников, что и кнопка в шапке канала.</div></div>
+            <button className={'tgl' + (st.members_in_list ? ' on' : '')} onClick={() => up('members_in_list', !st.members_in_list)} />
+          </div>
+          <div className="cset-div" />
           <div className="sset-mtop">
             <b>Недавние участники</b>
             <input className="modal-in" style={{ width: 240, margin: 0 }} placeholder="Поиск по имени пользователя" value={mq} onChange={e => setMq(e.target.value)} />
@@ -832,8 +854,59 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             onClick={() => persistNow({ ...st, invites_paused: !st.invites_paused })}>
             {st.invites_paused ? 'Возобновить приглашения' : 'Приостановить приглашения'}
           </button>
+          <div className="cset-div" />
+          {/* v1.322.0: возрастное ограничение СЕРВЕРА заработало — заглушка при
+              входе, как у канала (ChannelSettings.tsx). Подтверждение помнится на
+              этом устройстве, как и у канала, и как в самом Discord. */}
+          {toggleRow('Сервер с возрастным ограничением', 'Прежде чем показать сервер, у человека спросят, есть ли ему 18. Подтверждение запоминается на его устройстве.', 'age_restricted')}
+          <div className="cset-div" />
+          {/* v1.322.0: правила заработали — без согласия нельзя писать, заводить
+              обсуждения и ставить реакции, и это проверяет база
+              (supabase/82_server_rules.sql), а не только экран с кнопкой. */}
+          {toggleRow('Правила сервера', 'Пока участник не согласится, он не сможет ни писать, ни заводить обсуждения, ни ставить реакции. Проверяется базой. Тебя как владельца правила не держат — иначе ты не смог бы их исправить.', 'rules_on')}
+          {st.rules_on && <>
+            <label className="cset-lbl">Правила</label>
+            {(st.rules ?? []).map((r: string, i: number) => (
+              <div key={i} className="sset-rule">{i + 1}. {r}
+                <button onClick={() => up('rules', (st.rules ?? []).filter((_: string, j: number) => j !== i))}><Icon name="close" size={13} /></button></div>
+            ))}
+            <div className="sset-ruleadd">
+              <input className="modal-in" style={{ margin: 0 }} placeholder="Введите правило и нажмите Enter" id="sset-rule-in"
+                onKeyDown={e => { if (e.key === 'Enter') { const el = e.target as HTMLInputElement; if (el.value.trim()) { up('rules', [...(st.rules ?? []), el.value.trim()]); el.value = '' } } }} />
+            </div>
+            {(st.rules ?? []).length === 0 && <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '8px 10px' }}>
+              ⚠️ Список пуст — соглашаться будет не с чем, а писать всё равно не дадут. Добавь хотя бы одно правило или выключи переключатель.
+            </div>}
+            <div className="cset-hint">Примерные правила: Будьте вежливы и уважительны · Не рассылайте спам и не занимайтесь самопродвижением · Не публикуйте непристойные материалы.</div>
+            <div className="cset-hint">Изменишь список — согласие обнулится у всех, и их спросят заново. Иначе можно было бы собрать согласие с пустых правил, а потом дописать в них что угодно.</div>
+          </>}
         </>}
 
+
+        {tab === 'security' && <>
+          <div className="cset-h">Настройка безопасности</div>
+          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Уровень проверки</div>
+          <div className="cset-hint" style={{ marginTop: 0 }}>
+            Кому можно писать на сервере. Проверяется базой, а не приложением: не подходящий
+            под ступень не отправит сообщение и в обход интерфейса. Условие не действует на
+            тебя как владельца и на всех, у кого есть хоть одна назначенная роль.
+          </div>
+          <div className="sset-level">
+            <div><b>{VERIF_LEVELS[st.verification ?? 0]?.t ?? VERIF_LEVELS[0].t}</b>
+              <div className="cset-hint" style={{ marginTop: 2 }}>{VERIF_LEVELS[st.verification ?? 0]?.d ?? VERIF_LEVELS[0].d}</div></div>
+            <button className="cset-link" onClick={() => up('verification', ((st.verification ?? 0) + 1) % VERIF_LEVELS.length)}>Изменить</button>
+          </div>
+          {(st.verification ?? 0) >= 4 && <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '8px 10px' }}>
+            ⚠️ Вход по телефону не настроен — подтверждённого номера нет ни у кого. На этой ступени писать сможешь только ты и те, кому выдана роль.
+          </div>}
+          {/* v1.290.0: тумблер «Требовать двухфакторную аутентификацию для модераторов»
+              убран. Он нигде не проверялся (строка mod_2fa встречалась во всём проекте
+              ровно один раз — здесь), колонки под него не было, а самой двухфакторной
+              аутентификации в приложении нет вообще. Владелец включал его и считал
+              модераторов защищёнными — то есть кнопка не просто не работала, а давала
+              ложную уверенность именно в вопросе безопасности. Вернуть вместе с
+              настоящей 2FA (Supabase умеет TOTP), см. IDEAS.md, пункт 10. */}
+        </>}
 
         {tab === 'audit' && (() => {
           // v1.267.0: раньше вкладка была честной заглушкой (фильтры недоступны,

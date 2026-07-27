@@ -8,7 +8,14 @@
 set check_function_bodies = off;
 
 create schema if not exists auth;
-create table auth.users (id uuid primary key);
+-- Колонки те же, что у настоящей auth.users в Supabase: их читает
+-- server_verification_ok (83_verification_level.sql).
+create table auth.users (
+  id uuid primary key,
+  created_at timestamptz not null default now(),
+  email_confirmed_at timestamptz,
+  phone_confirmed_at timestamptz
+);
 
 -- Заглушка auth.uid(): в тесте «кто сейчас» задаётся через set_config('test.uid', ...).
 create or replace function auth.uid() returns uuid
@@ -20,6 +27,8 @@ create table servers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   owner uuid not null references auth.users on delete cascade,
+  -- settings — из 17_server_settings.sql: там же живут правила сервера (82).
+  settings jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 -- base_permissions намеренно НЕ создаётся здесь: колонку со значением по
@@ -49,7 +58,9 @@ create table server_members (
   member_name text not null,
   role text,
   role_id uuid,
+  nickname_override boolean not null default false,
   timeout_until timestamptz,
+  joined_at timestamptz not null default now(),
   primary key (server_id, user_id)
 );
 create table server_roles (

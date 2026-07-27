@@ -184,3 +184,33 @@ export async function joinServerDirect(serverId: string, meId: string, meName: s
   if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }
   return { serverId }
 }
+
+// v1.322.0: правила сервера (supabase/82_server_rules.sql). Раньше переключатель
+// «Правила сервера» и сам их список нигде не читались — правила можно было
+// написать, но никто их не видел и ни с чем не соглашался.
+//
+// Согласие «протухает», когда владелец правит список: сравниваем время согласия
+// с settings.rules_at. Иначе можно было бы собрать согласие с пустых правил, а
+// потом дописать в них что угодно.
+export async function rulesAccepted(serverId: string, meId: string, srvSettings: any): Promise<boolean> {
+  if (!srvSettings?.rules_on) return true
+  const { data, error } = await supabase.from('server_members')
+    .select('rules_accepted_at').eq('server_id', serverId).eq('user_id', meId).maybeSingle()
+  // Колонки ещё нет (миграция не применена) — не запирать людей из-за этого.
+  if (error) return true
+  const at = (data as any)?.rules_accepted_at
+  if (!at) return false
+  const changedAt = srvSettings.rules_at ? Date.parse(srvSettings.rules_at) : 0
+  return Date.parse(at) >= changedAt
+}
+
+/** Согласиться с правилами. Время проставляет база, а не клиент (триггер в 82). */
+export async function acceptRules(serverId: string, meId: string): Promise<void> {
+  const { data, error } = await supabase.from('server_members')
+    .update({ rules_accepted_at: new Date().toISOString() })
+    .eq('server_id', serverId).eq('user_id', meId).select('server_id')
+  if (error) throw new Error(/rules_accepted_at|column/i.test(error.message)
+    ? 'Правила пока не включены — примени миграцию supabase/82_server_rules.sql'
+    : error.message)
+  if (!data || data.length === 0) throw new Error('Не удалось записать согласие')
+}

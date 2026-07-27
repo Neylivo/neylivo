@@ -19,7 +19,7 @@ import { GameLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
 import { chNameStyle } from '../lib/chStyle'
-import { listMembers, updateServer } from '../lib/servers'
+import { listMembers, updateServer, rulesAccepted, acceptRules } from '../lib/servers'
 import { uploadWithProgress } from '../lib/storage'
 import { isBlockedWith } from '../lib/block'
 import { lazyNamed } from '../lib/lazyScreen'
@@ -162,6 +162,24 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       return next
     })
   }
+  // v1.322.0: возрастное ограничение сервера — подтверждение на устройстве, как у
+  // канала выше. Ключ отдельный: согласие «мне 18» для одного сервера не должно
+  // молча открывать другой.
+  const [ageOkSrv, setAgeOkSrv] = useState(() => {
+    try { return (JSON.parse(localStorage.getItem('ponoi_srv_age_ok') || '[]') as string[]).includes(server.id) } catch { return false }
+  })
+  function confirmSrvAge() {
+    try {
+      const cur: string[] = JSON.parse(localStorage.getItem('ponoi_srv_age_ok') || '[]')
+      localStorage.setItem('ponoi_srv_age_ok', JSON.stringify([...new Set([...cur, server.id])]))
+    } catch {}
+    setAgeOkSrv(true)
+  }
+  // v1.322.0: правила сервера. null — ещё не знаем (не мигаем заглушкой, пока
+  // ответ не пришёл: иначе при каждом входе на сервер на миг показывались бы
+  // правила даже тем, кто давно согласился).
+  const [rulesOk, setRulesOk] = useState<boolean | null>(null)
+  const [rulesBusy, setRulesBusy] = useState(false)
   const [showMembers, setShowMembers] = useState(() => IS_MOBILE ? false : localStorage.getItem('ponoi_members_open') !== '0')
   const [catOpen, setCatOpen] = useState(() => localStorage.getItem('ponoi_cat_text_open') !== '0')
   const [voiceCatOpen, setVoiceCatOpen] = useState(() => localStorage.getItem('ponoi_cat_voice_open') !== '0')
@@ -1109,6 +1127,63 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const mutedCh: Record<string, boolean> = {}
   for (const c of channels) mutedCh[c.id] = chNotifModeOf(c.id, server.id) === 'mute'
 
+  // Владельца свои же правила не держат — иначе он не смог бы их исправить. То же
+  // самое отдельно проверяет и база (server_rules_ok).
+  useEffect(() => {
+    if (!user || isOwner) { setRulesOk(true); return }
+    let ok = true
+    rulesAccepted(server.id, user.id, (server as any).settings)
+      .then(v => { if (ok) setRulesOk(v) })
+      .catch(() => { if (ok) setRulesOk(true) })
+    return () => { ok = false }
+  }, [server.id, user?.id, isOwner, (server as any).settings?.rules_on, (server as any).settings?.rules_at])
+
+  async function acceptSrvRules() {
+    if (!user || rulesBusy) return
+    setRulesBusy(true)
+    try { await acceptRules(server.id, user.id); setRulesOk(true) }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
+    finally { setRulesBusy(false) }
+  }
+
+  // v1.322.0: возрастное ограничение СЕРВЕРА заработало. Раньше переключатель во
+  // вкладке «Доступ» только сохранялся. Подтверждение помнится на устройстве —
+  // как у канала выше (nsfwOk) и как в самом Discord.
+  const srvAge = !!(server as any).settings?.age_restricted
+  if (srvAge && !ageOkSrv) return (
+    <main className="chat srv-gate">
+      <div className="nsfw-gate-box">
+        <div className="nsfw-gate-ico">🔞</div>
+        <div className="nsfw-gate-t">{server.name} — сервер с возрастным ограничением</div>
+        <div className="nsfw-gate-d">Здесь может быть содержимое, подходящее не всем. Заходить, только если тебе есть 18 лет.</div>
+        <button className="pqs2-btn primary" onClick={confirmSrvAge}>Мне есть 18 лет — показать сервер</button>
+      </div>
+    </main>
+  )
+
+  // v1.322.0: правила сервера заработали. Пока не согласился — не пускаем дальше
+  // этого экрана, но настоящий запрет стоит в базе (server_rules_ok,
+  // supabase/82_server_rules.sql): экран останавливает невнимательного, база —
+  // того, кто шлёт запрос мимо приложения.
+  const srvRules: string[] = Array.isArray((server as any).settings?.rules) ? (server as any).settings.rules : []
+  if (rulesOk === false) return (
+    <main className="chat srv-gate">
+      <div className="nsfw-gate-box">
+        <div className="nsfw-gate-ico">📜</div>
+        <div className="nsfw-gate-t">Правила сервера {server.name}</div>
+        <div className="nsfw-gate-d">
+          {srvRules.length
+            ? 'Прежде чем писать здесь, согласись с правилами. Пока не согласишься, нельзя ни писать, ни заводить обсуждения, ни ставить реакции.'
+            : 'Владелец включил правила, но пока не написал ни одного. Писать здесь нельзя, пока он их не добавит или не выключит требование.'}
+        </div>
+        {srvRules.length > 0 && <ol className="srv-rules-list">{srvRules.map((r, i) => <li key={i}>{r}</li>)}</ol>}
+        {srvRules.length > 0 && <button className="pqs2-btn primary" disabled={rulesBusy} onClick={acceptSrvRules}>
+          {rulesBusy ? 'Записываем…' : 'Согласен с правилами'}
+        </button>}
+      </div>
+    </main>
+  )
+
   return (
     <>
       <aside className="channels">
@@ -1149,6 +1224,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           </> : <>
             <div className="ch evt clickable" onClick={() => setShowEvents(true)}><Icon name="calendar" size={16} /> Мероприятия</div>
           </>}
+          {/* v1.322.0: «Показать участников в списке каналов» заработало. Раньше
+              переключатель в настройках сервера только сохранялся, а список
+              каналов о нём не знал вовсе. Теперь это настоящий пункт: открывает
+              панель участников и показывает, сколько их сейчас в сети. */}
+          {srvSettings.members_in_list && <button className={'ch-members-row' + (showMembers ? ' on' : '')}
+            onClick={() => setShowMembers(v => { localStorage.setItem('ponoi_members_open', v ? '0' : '1'); return !v })}>
+            <Icon name="users" size={16} /> Участники
+            <b>{members.filter(m => statusOf(m.user_id) !== 'offline').length} из {members.length}</b>
+          </button>}
           <div className="ch-toprows-sep" />
           {(() => {
             const cats: any[] = srvSettings.categories ?? []

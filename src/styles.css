@@ -4659,3 +4659,22 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .forum-tag-emo { flex:none !important; width:64px; text-align:center; }
 .forum-tag-del { background:none; border:none; color:var(--mut); cursor:pointer; padding:6px; border-radius:var(--r-sm); display:flex; }
 .forum-tag-del:hover { background:rgba(237,66,69,.15); color:var(--red); }
+
+/* v1.322.0: заглушки уровня сервера — возрастная и «согласись с правилами». */
+.srv-gate { display:flex; align-items:center; justify-content:center; padding:24px; }
+.srv-rules-list { text-align:left; margin:14px 0 18px; padding-left:22px; display:flex; flex-direction:column; gap:7px;
+  color:var(--tx); font-size:14px; line-height:1.5; max-height:46vh; overflow-y:auto; }
+.srv-rules-list li { padding-right:6px; }
+/* Пункт «Участники» в списке каналов — включается в настройках сервера. */
+.ch-members-row { display:flex; align-items:center; gap:8px; width:100%; background:none; border:none; cursor:pointer;
+  color:var(--mut); font-size:15px; font-weight:500; padding:6px 8px; border-radius:var(--r-md); text-align:left; }
+.ch-members-row:hover { background:rgba(var(--ov, 255,255,255),.06); color:var(--tx); }
+.ch-members-row.on { background:rgba(var(--ov, 255,255,255),.1); color:var(--tx); }
+.ch-members-row b { margin-left:auto; font-weight:600; font-size:12px; opacity:.75; }
+/* v1.322.0: правила сервера вернулись работающими — стили из v1.320.0. */
+.sset-rule { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg3); border-radius:var(--r-md); padding:9px 12px; margin-bottom:6px; font-size:14px; }
+.sset-rule button { background:none; border:none; color:var(--mut); cursor:pointer; }
+.sset-rule button:hover { color:var(--red); }
+.sset-ruleadd { margin:8px 0; }
+.sset-level { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--bg3); border-radius:var(--r-md); padding:14px 16px; margin-top:12px; }
+.sset-level .cset-link { background:none; border:none; font-size:14px; }

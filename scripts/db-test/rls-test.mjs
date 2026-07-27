@@ -47,8 +47,18 @@ await db.exec(readFileSync(join(HERE, 'setup.sql'), 'utf8'))
 // в истории проекта.
 await db.exec(sql('49_role_perms2.sql'))
 await db.exec(sql('72_harden_permission_functions.sql'))
+// 64 заводит правило «участник правит только свою строку» и триггер-сторож —
+// 82 его расширяет, поэтому исходный нужен.
+await db.exec(sql('64_server_nickname.sql'))
 await db.exec(sql('70_threads.sql'))
 await db.exec(sql('78_channel_readonly.sql'))
+// ВАЖНО про поломки политик. Каждая новая миграция объявляет messages_insert
+// заново и целиком — так принято в этом проекте (78, 81, 82, 83). Значит поломка,
+// применённая только к одной миграции, окажется холостой: следующая перезапишет
+// политику целиком и вернёт запрет на место, а проверка радостно позеленеет.
+// Дважды за сессию так и вышло: сначала «locked» перестал ловиться с появлением
+// 82, потом «locked» и «rules» — с появлением 83.
+// Поэтому поломка применяется КО ВСЕМ миграциям, где встречается её текст.
 const SABOTAGE = {
   // Сторож перестаёт пропускать триггер счётчиков.
   bump: [/if coalesce\(current_setting\('ponoi\.thread_bump'[\s\S]*?end if;/, ''],
@@ -57,21 +67,36 @@ const SABOTAGE = {
            'using (is_member(server_id)) with check (is_member(server_id));'],
   // Сторож перестаёт защищать pinned/locked от автора.
   pin: [/if not public\.thread_is_moderator\(old\.server_id, auth\.uid\(\)\) then[\s\S]*?end if;\n  return new;/, 'return new;'],
-  // Запрет писать в закрытое обсуждение убираем.
-  locked: [/\n  and \(messages\.thread_id is null or public\.thread_can_post\(messages\.thread_id, auth\.uid\(\)\)\)/, ''],
   // Ветки приватного канала снова видны всем участникам сервера.
   privacy: [/using \(is_member\(server_id\) and public\.can_view_channel\(channel_id, auth\.uid\(\)\)\);/, 'using (is_member(server_id));'],
+  // Запрет писать в закрытое обсуждение форума.
+  locked: [/\n  and \(messages\.thread_id is null or public\.thread_can_post\(messages\.thread_id, auth\.uid\(\)\)\)/g, ''],
+  // Согласие с правилами перестаёт требоваться.
+  rules: [/\n    and public\.server_rules_ok\(c\.server_id, auth\.uid\(\)\)/g, ''],
+  // Дату согласия снова присылает клиент.
+  rulesdate: [/if new\.rules_accepted_at is distinct from old\.rules_accepted_at then\s*\n\s*new\.rules_accepted_at := now\(\);\s*\n\s*end if;/, ''],
+  // Уровень проверки перестаёт что-либо требовать.
+  verif: [/\n    and public\.server_verification_ok\(c\.server_id, auth\.uid\(\)\)/g, ''],
+  // Ступени перестают быть накопительными — «Высокий» больше не требует почты.
+  verifsteps: [/if v_level >= 1 and not coalesce\(v_email_ok, false\) then return false; end if;/, ''],
 }
-let sql81 = sql('81_forums.sql')
+const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql') }
 if (process.env.SABOTAGE) {
-  const s = SABOTAGE[process.env.SABOTAGE]
-  if (!s) { console.error('нет такой поломки: ' + process.env.SABOTAGE); process.exit(2) }
-  const next = sql81.replace(s[0], s[1])
-  if (next === sql81) { console.error('поломка ничего не заменила — текст миграции изменился'); process.exit(2) }
-  sql81 = next
-  console.log('СЛОМАНО НАРОЧНО: ' + process.env.SABOTAGE)
+  const name = process.env.SABOTAGE
+  const s = SABOTAGE[name]
+  if (!s) { console.error('нет такой поломки: ' + name); process.exit(2) }
+  const hit = []
+  for (const k of Object.keys(SRC)) {
+    const next = SRC[k].replace(s[0], s[1])
+    if (next !== SRC[k]) { SRC[k] = next; hit.push(k) }
+  }
+  if (hit.length === 0) { console.error('поломка ничего не заменила — текст миграции изменился'); process.exit(2) }
+  console.log('СЛОМАНО НАРОЧНО: ' + name + ' (миграции ' + hit.join(', ') + ')')
 }
-await db.exec(sql81)
+await db.exec(SRC[81])
+await db.exec(SRC[82])
+await db.exec(SRC[83])
+await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
                grant execute on all functions in schema public to authenticated;`)
@@ -99,7 +124,11 @@ async function as(uid, q, params = []) {
   await db.exec('set role authenticated')
   await db.query(`select set_config('test.uid', $1, false)`, [uid])
   try { return await db.query(q, params) }
-  finally { await db.exec('reset role') }
+  // Сбрасываем и роль, и «кто я»: иначе следующий запрос от лица администратора
+  // (прямой db.query, без as) выполнялся бы с чужим auth.uid() — и, например,
+  // триггер enforce_member_self_edit принимал бы правку служебных полей за
+  // самовольную правку участника и отклонял её.
+  finally { await db.exec(`reset role; select set_config('test.uid', '', false);`) }
 }
 
 // ── Счётчики ──────────────────────────────────────────────────────────────
@@ -237,6 +266,88 @@ await check('вернули право — приглашение создаёт
   await as(USER, `insert into server_invites (server_id, code, created_by) values ($1,'def',$2)`, [srv, USER])
   return true
 })
+
+// ── Правила сервера (82) ──────────────────────────────────────────────────
+// v1.322.0: раньше переключатель «Правила сервера» и сам их список нигде не
+// читались. Теперь без согласия нельзя ни писать, ни заводить обсуждения, ни
+// ставить реакции — проверяется здесь запросами мимо приложения.
+await db.query(`update servers set settings = jsonb_build_object(
+  'rules_on', true, 'rules', to_jsonb(array['Будьте вежливы']), 'rules_at', now()::text) where id=$1`, [srv])
+await db.query(`update server_members set rules_accepted_at = null where server_id=$1 and user_id=$2`, [srv, USER])
+
+await refused('без согласия с правилами писать нельзя', () => as(USER,
+  `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','привет')`, [forum, USER]))
+await refused('без согласия нельзя завести обсуждение', () => as(USER,
+  `insert into threads (channel_id, server_id, name, created_by, created_by_name) values ($1,$2,'тема',$3,'n')`,
+  [forum, srv, USER]))
+await refused('без согласия нельзя поставить реакцию', () => as(USER,
+  `insert into reactions (message_id, user_id, emoji) values ($1,$2,'👍')`, [msgForRx, USER]))
+await check('владельца собственные правила не запирают', async () => {
+  await as(OWNER, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','я владелец')`, [forum, OWNER])
+  return true
+})
+
+await as(USER, `update server_members set rules_accepted_at = now() where server_id=$1 and user_id=$2`, [srv, USER])
+await check('после согласия писать можно', async () => {
+  await as(USER, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','согласился')`, [forum, USER])
+  return true
+})
+
+await check('дату согласия ставит база, а не клиент', async () => {
+  await as(USER, `update server_members set rules_accepted_at = now() + interval '50 years' where server_id=$1 and user_id=$2`, [srv, USER])
+  const got = (await db.query(`select rules_accepted_at from server_members where server_id=$1 and user_id=$2`, [srv, USER])).rows[0]
+  return new Date(got.rules_accepted_at).getFullYear() < new Date().getFullYear() + 2
+})
+
+// Владелец переписал правила — согласие обнуляется само.
+await db.query(`update servers set settings = jsonb_set(settings, '{rules_at}', to_jsonb((now() + interval '1 minute')::text)) where id=$1`, [srv])
+await refused('изменённые правила требуют согласия заново', () => as(USER,
+  `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','а я и не читал')`, [forum, USER]))
+
+await db.query(`update servers set settings = jsonb_set(settings, '{rules_on}', 'false') where id=$1`, [srv])
+await check('выключенные правила никого не держат', async () => {
+  await as(USER, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','правил нет')`, [forum, USER])
+  return true
+})
+
+// ── Уровень проверки участников (83) ──────────────────────────────────────
+// v1.322.0: пять ступеней, которые раньше только сохранялись. Проверяем каждую
+// и то, что роль и владение сервером снимают ограничение.
+async function setLevel(n) {
+  await db.query(`update servers set settings = jsonb_set(coalesce(settings,'{}'::jsonb), '{verification}', to_jsonb($2::int)) where id=$1`, [srv, n])
+}
+async function write(uid, text) {
+  return as(uid, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n',$3)`, [forum, uid, text])
+}
+// OTHER: почта не подтверждена, учётка только что создана, роли нет.
+await db.query(`update auth.users set email_confirmed_at = null, created_at = now() where id=$1`, [OTHER])
+await db.query(`update server_members set joined_at = now() where server_id=$1 and user_id=$2`, [srv, OTHER])
+
+await setLevel(0)
+await check('ступень «Отсутствует» никого не держит', async () => { await write(OTHER, 'ноль'); return true })
+
+await setLevel(1)
+await refused('«Низкий» не пускает без подтверждённой почты', () => write(OTHER, 'низкий'))
+await db.query(`update auth.users set email_confirmed_at = now() where id=$1`, [OTHER])
+await check('с подтверждённой почтой «Низкий» пропускает', async () => { await write(OTHER, 'почта есть'); return true })
+
+await setLevel(2)
+await refused('«Средний» не пускает совсем свежую учётную запись', () => write(OTHER, 'средний'))
+await db.query(`update auth.users set created_at = now() - interval '1 hour' where id=$1`, [OTHER])
+await check('учётной записи час — «Средний» пропускает', async () => { await write(OTHER, 'я тут давно'); return true })
+
+await setLevel(3)
+await refused('«Высокий» не пускает только что вступившего', () => write(OTHER, 'высокий'))
+await db.query(`update server_members set joined_at = now() - interval '1 hour' where server_id=$1 and user_id=$2`, [srv, OTHER])
+await check('час на сервере — «Высокий» пропускает', async () => { await write(OTHER, 'освоился'); return true })
+
+await setLevel(4)
+await refused('«Наивысший» не пускает без подтверждённого телефона', () => write(OTHER, 'наивысший'))
+await check('владельца уровень проверки не касается', async () => { await write(OWNER, 'я владелец'); return true })
+await check('участника с ролью уровень проверки не касается', async () => { await write(MOD, 'у меня роль'); return true })
+await db.query(`update auth.users set phone_confirmed_at = now() where id=$1`, [OTHER])
+await check('с подтверждённым телефоном «Наивысший» пропускает', async () => { await write(OTHER, 'телефон есть'); return true })
+await setLevel(0)
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
