@@ -9,6 +9,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { createInvite } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
+import { listWebhooks, createWebhook, deleteWebhook, type Webhook } from '../lib/webhooks'
 import { uploadTo } from '../lib/storage'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
@@ -38,6 +39,11 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const isVoice = (channel as any).kind === 'voice'
   const s0: any = (channel as any).settings ?? {}
   const [tab, setTab] = useState<'overview' | 'perms' | 'invites' | 'integrations'>('overview')
+  // v1.319.0: вебхуки канала. Список грузится при открытии вкладки «Интеграции» —
+  // раньше там стояла заглушка «0 вебхуков» и кнопка с обещанием.
+  const [hooks, setHooks] = useState<Webhook[] | null>(null)
+  const [newUrl, setNewUrl] = useState<string | null>(null)
+  const [whBusy, setWhBusy] = useState(false)
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState<string>((channel as any).topic ?? '')
   const [slow, setSlow] = useState<string>(s0.slow ?? 'Выкл')
@@ -152,6 +158,11 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     await supabase.from('server_invites').delete().eq('id', id)
     setInvites(list => list.filter(i => i.id !== id))
   }
+
+  useEffect(() => {
+    if (tab !== 'integrations' || hooks !== null) return
+    listWebhooks(channel.id).then(setHooks).catch(() => setHooks([]))
+  }, [tab, channel.id, hooks])
 
   const tri = (k: string) => {
     const v: Tri = perms[k] ?? 'default'
@@ -338,9 +349,47 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
           <div className="cset-hint" style={{ marginTop: -12 }}>Персонализируйте свой сервер с помощью интеграций. Управляйте вебхуками и отслеживаемыми каналами, публикации с которых появляются на этом канале.</div>
           <div className="cset-int">
             <Icon name="zap" size={22} />
-            <div className="cset-int-t"><b>Вебхуки</b><span>0 вебхуков</span></div>
-            <button onClick={() => toastOk('Вебхуки скоро появятся')}>Создать вебхук</button>
+            <div className="cset-int-t"><b>Вебхуки</b><span>{hooks === null ? 'загружаю…' : hooks.length + ' шт.'}</span></div>
+            <button disabled={whBusy} onClick={async () => {
+              setWhBusy(true)
+              try {
+                const { url } = await createWebhook(server.id, channel.id, 'Вебхук ' + ((hooks?.length ?? 0) + 1))
+                // Показываем адрес сразу и один раз: токен в базе не хранится, и
+                // восстановить его потом нельзя — только создать новый вебхук.
+                setNewUrl(url)
+                setHooks(await listWebhooks(channel.id))
+              } catch (e: any) { toastErr(e.message) }
+              finally { setWhBusy(false) }
+            }}>{whBusy ? 'Создаю…' : 'Создать вебхук'}</button>
           </div>
+          {newUrl && <div className="wh-new">
+            <div className="cset-lbl" style={{ marginTop: 0 }}>Адрес вебхука — виден только сейчас</div>
+            <div className="wh-url">{newUrl}</div>
+            <div className="cset-hint">
+              Скопируй его: токен в базе не хранится, показать ещё раз будет нечем.
+              Стороннее приложение шлёт сюда POST с телом {'{'}"content": "текст"{'}'}.
+            </div>
+            <div className="guide-edit-row" style={{ marginTop: 8 }}>
+              <button className="pqs2-btn" onClick={() => { navigator.clipboard?.writeText(newUrl); toastOk('Адрес скопирован') }}>Копировать</button>
+              <button className="pqs2-btn ghost" onClick={() => setNewUrl(null)}>Скрыть</button>
+            </div>
+          </div>}
+          {hooks?.map(h => (
+            <div key={h.id} className="wh-row">
+              <Icon name="zap" size={16} />
+              <div className="wh-row-b">
+                <b>{h.name}</b>
+                <span className="cset-hint">
+                  {h.last_used_at ? 'последний раз: ' + new Date(h.last_used_at).toLocaleString('ru-RU') : 'ещё не использовался'}
+                </span>
+              </div>
+              <button className="pqs2-btn ghost danger" onClick={async () => {
+                if (!await confirmUi('Удалить вебхук «' + h.name + '»? Его адрес перестанет работать.', { okText: 'Удалить' })) return
+                try { await deleteWebhook(h.id); setHooks(await listWebhooks(channel.id)) }
+                catch (e: any) { toastErr(e.message) }
+              }}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
           <div className="cset-int">
             <Icon name="repeat" size={22} />
             <div className="cset-int-t"><b>Отслеживаемые каналы</b><span>0 каналов</span></div>

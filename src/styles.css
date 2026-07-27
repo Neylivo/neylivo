@@ -4620,3 +4620,12 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   background:rgba(var(--ov, 255,255,255),.08); padding:8px 14px; border-radius:var(--r-md); user-select:all; }
 .tpl-preview { margin-top:12px; padding:12px 14px; border-radius:var(--r-md);
   background:rgba(var(--ov, 255,255,255),.05); }
+
+/* v1.319.0: вебхуки канала */
+.wh-new { margin:10px 0 14px; padding:12px 14px; border-radius:var(--r-md);
+  background:rgba(var(--ov, 255,255,255),.05); border:1px solid rgba(250,166,26,.35); }
+.wh-url { font-family:ui-monospace,Consolas,monospace; font-size:12px; word-break:break-all;
+  background:rgba(var(--ov, 255,255,255),.07); padding:8px 10px; border-radius:var(--r-sm); margin:6px 0 8px; user-select:all; }
+.wh-row { display:flex; align-items:center; gap:10px; padding:10px 8px; border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); }
+.wh-row:last-child { border-bottom:none; }
+.wh-row-b { flex:1; min-width:0; display:flex; flex-direction:column; }
