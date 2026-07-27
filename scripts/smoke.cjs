@@ -28,7 +28,7 @@ const ignorable = (m) => IGNORE.some(re => re.test(m))
 
 // Куски, которых при старте быть НЕ должно: ради этого делались v1.288–v1.289,
 // и без проверки один неосторожный статический импорт вернёт всё назад незаметно.
-const MUST_BE_LAZY = ['livekit-client', 'Settings-', 'ServerSettings-', 'MusicPlayer-', 'CallRoom-', 'GameStatsModal-', 'WallDraw-', 'EmergencyChat-', 'DevPortal-', 'model-viewer-']
+const MUST_BE_LAZY = ['livekit-client', 'Settings-', 'ServerSettings-', 'MusicPlayer-', 'CallRoom-', 'GameStatsModal-', 'WallDraw-', 'EmergencyChat-', 'DevPortal-', 'model-viewer-', 'e2ee.worker-']
 
 const problems = []
 const assets = []

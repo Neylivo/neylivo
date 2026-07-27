@@ -99,7 +99,35 @@ async function getToken(roomName: string, identity: string, name: string): Promi
 // готова, уже захваченная дорожка публикуется напрямую (без повторного
 // getUserMedia, который делает setMicrophoneEnabled). Экономит секунды,
 // особенно на первом входе в звонок за сессию.
-export async function joinRoom(roomName: string, identity: string, name: string): Promise<Room> {
+/**
+ * v1.301.0: сквозное шифрование медиа звонка.
+ *
+ * Ключ сюда приходит уже готовым: его вырабатывает звонящий и доставляет
+ * собеседнику через обычную зашифрованную переписку — то есть по каналу, который
+ * сервер прочитать не может. Сам сервер LiveKit при этом продолжает пересылать
+ * пакеты, но их содержимое для него становится нечитаемым.
+ *
+ * Чего это НЕ скрывает, и об этом надо говорить прямо: сервер по-прежнему видит,
+ * кто и когда подключился к какой комнате и сколько длился звонок. Шифруется
+ * содержание, а не сам факт разговора.
+ */
+export interface E2eeOptions { key: string }
+
+async function buildE2ee(lk: typeof import('livekit-client'), opt: E2eeOptions) {
+  if (!lk.isE2EESupported()) throw new Error('Это устройство не поддерживает шифрование звонка')
+  const keyProvider = new lk.ExternalE2EEKeyProvider()
+  await keyProvider.setKey(opt.key)
+  // Воркер шифрования поставляется вместе с библиотекой. Путь именно такой:
+  // прямая ссылка на файл в dist не работает — пакет отдаёт наружу только
+  // объявленные точки входа, и сборка на ней падает.
+  const worker = new Worker(
+    new URL('livekit-client/e2ee-worker', import.meta.url),
+    { type: 'module' },
+  )
+  return { keyProvider, worker }
+}
+
+export async function joinRoom(roomName: string, identity: string, name: string, e2ee?: E2eeOptions): Promise<Room> {
   const tokenKey = roomName + '|' + identity
   // v1.64.0: максимальное качество звонка — подавление эха/шума и автогромкость,
   // высокобитрейтный стерео-звук (RED + DTX), камера 1080p с simulcast.
@@ -117,6 +145,7 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   const lkPromise2 = loadLivekit()
   const tokenPromise = getToken(roomName, identity, name)
   const { Room, VideoPresets, createLocalAudioTrack } = await lkPromise2
+  const e2eeOpts = e2ee ? await buildE2ee(await lkPromise2, e2ee) : null
   // Не await — стартует параллельно с получением токена/коннектом ниже.
   const micPromise = createLocalAudioTrack(audioOpts).catch(() => null)
   let { token, url } = await tokenPromise
@@ -134,7 +163,12 @@ export async function joinRoom(roomName: string, identity: string, name: string)
       videoEncoding: { maxBitrate: 8_000_000, maxFramerate: 30 },
       simulcast: true,
     },
+    ...(e2eeOpts ? { e2ee: e2eeOpts } : {}),
   })
+  if (e2eeOpts) {
+    // Включаем ДО подключения: иначе первые пакеты успели бы уйти незашифрованными.
+    await room.setE2EEEnabled(true)
+  }
   attachKrisp(room, await lkPromise2)
   try {
     await room.connect(url, token)
