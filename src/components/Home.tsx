@@ -117,6 +117,15 @@ export function Home() {
     window.addEventListener('ponoi-open-dm', h)
     return () => window.removeEventListener('ponoi-open-dm', h)
   }, [])
+  // v1.318.0: сервер, созданный по шаблону, появляется в списке сразу. Создаёт его
+  // серверная функция, а не этот экран, поэтому обычный путь обновления после
+  // createServer сюда не доходит — нужен отдельный сигнал.
+  useEffect(() => {
+    const h = () => { refresh() }
+    window.addEventListener('ponoi-servers-changed', h)
+    return () => window.removeEventListener('ponoi-servers-changed', h)
+  }, [])
+
   // Мобильная версия (v1.34.0): при старте открываем шторку навигации, как в Discord.
   useEffect(() => { if (IS_MOBILE) openMobNav() }, [])
   // v1.290.0: пока человек осматривается в чате, тихо готовим всё для звонка —

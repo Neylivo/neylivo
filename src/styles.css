@@ -4613,3 +4613,10 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .guide-edit-row { flex-wrap:wrap; }
   .guide-edit-row .cset-in { flex:1 1 100%; }
 }
+
+/* v1.318.0: шаблоны серверов */
+.tpl-code-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 10px; }
+.tpl-code { font-family:ui-monospace,Consolas,monospace; font-size:20px; font-weight:700; letter-spacing:3px;
+  background:rgba(var(--ov, 255,255,255),.08); padding:8px 14px; border-radius:var(--r-md); user-select:all; }
+.tpl-preview { margin-top:12px; padding:12px 14px; border-radius:var(--r-md);
+  background:rgba(var(--ov, 255,255,255),.05); }

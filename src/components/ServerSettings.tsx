@@ -17,6 +17,7 @@ import { uploadTo } from '../lib/storage'
 import { usePresence } from '../lib/presence'
 import { listMembers, createInvite, updateServer } from '../lib/servers'
 import { fetchRoles, fetchMemberRoles, createRole, deleteRole, setRolePermissions, saveRoleOrder, ROLE_COLORS, type ServerRole } from '../lib/roles'
+import { createTemplate, deleteTemplate, myTemplateFor } from '../lib/serverTemplates'
 import { PERM, hasPerm, kickMember, banMember, unbanMember, fetchBans, type ServerBan } from '../lib/permissions'
 import { confirmUi } from '../lib/confirm'
 import { RoleEditor } from './RoleEditor'
@@ -91,6 +92,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [invites, setInvites] = useState<any[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
+  // v1.318.0: код уже созданного шаблона этого сервера, если он есть.
+  const [tplCode, setTplCode] = useState<string | null>(null)
+  const [tplBusy, setTplBusy] = useState(false)
+  useEffect(() => {
+    let ok = true
+    myTemplateFor(server.id).then(t => { if (ok && t) setTplCode(t.code) }).catch(() => {})
+    return () => { ok = false }
+  }, [server.id])
   // v1.317.0: путеводитель по серверу — записка новичкам и отмеченные каналы.
   const [guideText, setGuideText] = useState<string>(s0.guide?.text ?? '')
   const [guideItems, setGuideItems] = useState<{ channelId: string; desc: string }[]>(
@@ -1003,11 +1012,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         {tab === 'template' && <>
           <div className="cset-h">Шаблон сервера</div>
           <div className="cset-hint" style={{ marginTop: -12 }}>Шаблон сервера — это простой способ поделиться образцом вашего сервера и помочь другим пользователям быстро создать свой сервер. Щёлкнув по ссылке на ваш шаблон, другой пользователь создаст новый сервер с такими же каналами, ролями, правами и настройками, как и на вашем сервере.</div>
-          {/* v1.279.0: «Создать шаблон» ниже пока только сохраняет название/описание —
-              никакой реальной ссылки для клонирования сервера не создаётся. */}
-          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 14px' }}>
-            ⚠️ Пока не реализовано технически — сохраняются только название и описание, ссылка для клонирования сервера другим пользователем не создаётся.
-          </div>
+
           <div className="sset-tpl">
             <div><b>Шаблоны скопируют:</b><ul>
               <li><span className="sset-ok">✔</span> Каналы и темы каналов</li>
@@ -1026,8 +1031,36 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <label className="cset-lbl">Описание шаблона</label>
           <textarea className="cset-topic" style={{ minHeight: 80 }} placeholder="Чем занимаются на этом сервере?"
             value={st.template?.desc ?? ''} onChange={e => up('template', { ...(st.template ?? {}), desc: e.target.value })} />
-          <button className="modal-primary" style={{ marginTop: 14 }} disabled={!(st.template?.name ?? '').trim()}
-            onClick={() => { persistNow({ ...st }); toastOk('Шаблон «' + st.template.name + '» создан') }}>Создать шаблон</button>
+          {/* v1.318.0: кнопка теперь и правда создаёт шаблон — снимок каналов и ролей
+              плюс код, по которому другой человек соберёт себе такой же сервер. */}
+          {tplCode
+            ? <div className="tpl-done">
+                <div className="cset-lbl" style={{ marginTop: 14 }}>Код шаблона</div>
+                <div className="tpl-code-row">
+                  <code className="tpl-code">{tplCode}</code>
+                  <button className="pqs2-btn ghost" onClick={() => { navigator.clipboard?.writeText(tplCode); toastOk('Код скопирован') }}>Копировать</button>
+                  <button className="pqs2-btn ghost danger" onClick={async () => {
+                    try { await deleteTemplate(tplCode); setTplCode(null); toastOk('Шаблон удалён') }
+                    catch (e: any) { toastErr(e.message) }
+                  }}>Удалить</button>
+                </div>
+                <div className="cset-hint">
+                  Передай этот код тому, кому хочешь отдать образец: при создании сервера
+                  он выберет «По шаблону» и введёт его. Скопируются каналы и роли —
+                  сообщения, участники и картинки не переносятся.
+                </div>
+              </div>
+            : <button className="modal-primary" style={{ marginTop: 14 }}
+                disabled={tplBusy || !(st.template?.name ?? '').trim()}
+                onClick={async () => {
+                  setTplBusy(true)
+                  try {
+                    const code = await createTemplate(server.id, st.template?.name ?? '', st.template?.desc ?? '', channels, roles)
+                    setTplCode(code)
+                    toastOk('Шаблон создан')
+                  } catch (e: any) { toastErr(e.message) }
+                  finally { setTplBusy(false) }
+                }}>{tplBusy ? 'Создаю…' : 'Создать шаблон'}</button>}
         </>}
 
         <div className={'cset-savebar' + (dirty ? '' : ' bye')}>

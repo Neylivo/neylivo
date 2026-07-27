@@ -3,6 +3,7 @@ import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Server, Channel } from '../types'
 import { uploadTo } from '../lib/storage'
+import { fetchTemplate, applyTemplate, type ServerTemplate } from '../lib/serverTemplates'
 import { updateServer, discoverServers, joinServerDirect, type DiscoverServer } from '../lib/servers'
 import { notifModeOf, setNotifMode, muteUntilOf, NOTIF_LABEL, type NotifMode } from '../lib/srvNotify'
 import { chOverrideOf, setChNotifMode, chMuteUntilOf } from '../lib/chNotify'
@@ -64,7 +65,12 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
   { uid: string; username?: string; onClose: () => void; onCreate: (name: string, avatarUrl: string | null) => void; onJoin?: () => void }) {
   // Трёхшаговая модалка как в Discord:
   // выбор шаблона → «Расскажите нам о вашем сервере» → персонализация (имя + значок).
-  const [step, setStep] = useState<'pick' | 'about' | 'custom'>('pick')
+  const [step, setStep] = useState<'pick' | 'about' | 'custom' | 'code'>('pick')
+  // v1.318.0: создание сервера по чужому шаблону — раньше «Начните с шаблона»
+  // подставляло только название, а структура не переносилась ниоткуда.
+  const [tplCode, setTplCode] = useState('')
+  const [tplFound, setTplFound] = useState<ServerTemplate | null>(null)
+  const [tplErr, setTplErr] = useState<string | null>(null)
   const [tplName, setTplName] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState<string | null>(null)
@@ -106,6 +112,11 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
               <span className="csrv-lbl">Свой шаблон</span>
               <span className="csrv-arr">›</span>
             </button>
+            <button className="csrv-row" onClick={() => { setStep('code'); setTplErr(null); setTplFound(null) }}>
+              <span className="csrv-ico">🧩</span>
+              <span className="csrv-lbl">По коду шаблона</span>
+              <span className="csrv-arr">›</span>
+            </button>
             <div className="csrv-sect">Начните с шаблона</div>
             {SRV_TEMPLATES.map(t => (
               <button key={t.label} className="csrv-row" onClick={() => chooseTpl(t.label)}>
@@ -142,6 +153,52 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
             <button className="modal-ghost" onClick={() => setStep('pick')}>Назад</button>
           </div>
         </>)}
+        {step === 'code' && (<>
+          <div className="csrv-head">
+            <div className="modal-title">Сервер по шаблону</div>
+            <div className="modal-sub">Введи код шаблона — соберём сервер с такими же каналами и ролями.</div>
+          </div>
+          <label className="modal-lbl">Код шаблона</label>
+          <input className="modal-in" autoFocus placeholder="Например: K7РM2XQD" value={tplCode}
+            style={{ textTransform: 'uppercase', letterSpacing: 1 }}
+            onChange={e => { setTplCode(e.target.value); setTplFound(null); setTplErr(null) }} />
+          {tplErr && <div className="auth2-err" style={{ marginTop: 10 }}>{tplErr}</div>}
+          {tplFound && <div className="tpl-preview">
+            <b>{tplFound.name}</b>
+            {tplFound.description && <div className="cset-hint">{tplFound.description}</div>}
+            <div className="cset-hint">
+              Каналов: {tplFound.snapshot?.channels?.length ?? 0} · ролей: {tplFound.snapshot?.roles?.length ?? 0}
+              {tplFound.uses > 0 && <> · использован {tplFound.uses} раз</>}
+            </div>
+          </div>}
+          <div className="modal-foot">
+            <button className="modal-ghost" onClick={() => setStep('pick')}>Назад</button>
+            {!tplFound
+              ? <button className="modal-primary" disabled={busy || tplCode.trim().length < 4} onClick={async () => {
+                  setBusy(true); setTplErr(null)
+                  try {
+                    const t = await fetchTemplate(tplCode)
+                    // Показываем, ЧТО получится, до создания: иначе человек узнаёт
+                    // содержимое шаблона уже после того, как сервер создан.
+                    if (!t) setTplErr('Шаблон с таким кодом не найден')
+                    else { setTplFound(t); if (!name.trim()) setName(t.name) }
+                  } catch (e: any) { setTplErr(e.message) }
+                  finally { setBusy(false) }
+                }}>{busy ? 'Ищу…' : 'Найти'}</button>
+              : <button className="modal-primary" disabled={busy} onClick={async () => {
+                  setBusy(true)
+                  try {
+                    await applyTemplate(tplCode, name || tplFound.name)
+                    onClose()
+                    // Список серверов обновляет вызывающая сторона тем же путём,
+                    // что и после обычного создания.
+                    window.dispatchEvent(new Event('ponoi-servers-changed'))
+                  } catch (e: any) { setTplErr(e.message) }
+                  finally { setBusy(false) }
+                }}>{busy ? 'Создаю…' : 'Создать сервер'}</button>}
+          </div>
+        </>)}
+
         {step === 'custom' && (<>
           <div className="csrv-head">
             <div className="modal-title">Персонализируйте свой сервер</div>
