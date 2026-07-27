@@ -277,6 +277,10 @@ const CTX_ITEMS = [
   { k: 'folder', label: 'Переместить в папку', icon: 'folder' },
   { k: 'copyid', label: 'Копировать ID сервера', icon: 'id-card' },
   { k: 'settings', label: 'Настройки сервера', icon: 'gear' },
+  // v1.314.0: как в Discord — владелец видит «Удалить сервер», остальные
+  // «Покинуть сервер». Раньше выйти можно было только через выпадающее меню
+  // внутри сервера, а по правому клику такого пункта не было вовсе.
+  { k: 'leave', label: 'Покинуть сервер', icon: 'signout', danger: true },
   { k: 'delete', label: 'Удалить сервер', icon: 'trash', danger: true },
 ] as const
 
@@ -290,7 +294,7 @@ export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
   }, [onClose])
   return (
     <div className="ctxmenu" ref={clamp.ref} style={clamp.style} onClick={e => e.stopPropagation()}>
-      {CTX_ITEMS.filter(i => isOwner || (i.k !== 'delete' && i.k !== 'settings')).map(i => (
+      {CTX_ITEMS.filter(i => isOwner ? i.k !== 'leave' : (i.k !== 'delete' && i.k !== 'settings')).map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>
           <span className="ctxmenu-ic"><Icon name={i.k === 'mute' && muted ? 'bell' : i.icon} size={16} /></span>{i.k === 'mute' ? (muted ? 'Включить уведомления' : 'Заглушить сервер') : i.label}

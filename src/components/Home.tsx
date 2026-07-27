@@ -38,6 +38,7 @@ import { ProfileCard } from './ProfileCard'
 import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
 import { cacheGet, cacheSet } from '../lib/offlineCache'
 import { netOk, netFail } from '../lib/netStatus'
+import { confirmUi } from '../lib/confirm'
 
 type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
 
@@ -468,6 +469,18 @@ export function Home() {
     if (k === 'folder') { setFolderFor(server); return }
     if (k === 'settings') { setSettingsServer(server); return }
     if (k === 'invite') { setInviteFor(server); return }
+    if (k === 'leave') {
+      // Владелец уйти не может — как в Discord: сначала передать права или удалить
+      // сервер. Это же правило теперь и на стороне базы (миграция 77), поэтому
+      // проверка здесь только ради понятного сообщения, а не как единственная защита.
+      if (server.owner === user.id) return toastErr('Нельзя покинуть свой сервер — передай права или удали его')
+      if (!await confirmUi('Покинуть сервер «' + server.name + '»?', { okText: 'Покинуть' })) return
+      const { data, error } = await supabase.from('server_members').delete()
+        .eq('server_id', server.id).eq('user_id', user.id).select('user_id')
+      if (error || !data?.length) { toastErr('Не удалось покинуть сервер' + (error?.message ? ': ' + error.message : '')); return }
+      setLastServer(null); setView({ kind: 'dm' }); refresh()
+      return
+    }
     if (k === 'delete') {
       if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
       const { error } = await deleteServer(server.id)
