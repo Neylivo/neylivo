@@ -9,6 +9,13 @@ const ok = (name: string, cond: boolean, extra = '') =>
   lines.push(`${cond ? 'OK  ' : 'ПРОВАЛ'} ${name}${extra ? ' — ' + extra : ''}`)
 const paint = () => { document.getElementById('out')!.textContent = lines.join('\n') }
 
+async function sameBytes(blob: Blob, expect: Uint8Array): Promise<boolean> {
+  const got = new Uint8Array(await blob.arrayBuffer())
+  if (got.length !== expect.length) return false
+  for (let i = 0; i < got.length; i++) if (got[i] !== expect[i]) return false
+  return true
+}
+
 async function mustThrow(name: string, fn: () => Promise<unknown>) {
   try { await fn(); ok(name, false, 'НЕ бросило исключение — это дыра') }
   catch { ok(name, true, 'отказ, как и должно') }
@@ -202,6 +209,41 @@ async function main() {
   const envLong = parseEnvelope(await sealMessage(longSecret, 'alice', 'alice-pc', alice.privateKey, recips))!
   ok('длинное сообщение с юникодом',
     await openMessage(envLong, 'bob-phone', bobDev1.privateKey, alicePub) === longSecret)
+
+  // --- 13. Вложения ----------------------------------------------------------
+  const { encryptFile, decryptFile, markEncrypted, isEncryptedUrl, stripEncMark, TooLargeToEncrypt, MAX_ENCRYPTABLE } = await import('./files')
+
+  const bytes = new Uint8Array(4096)
+  crypto.getRandomValues(bytes)
+  const original = new File([bytes], 'секрет.png', { type: 'image/png' })
+
+  const { blob, key } = await encryptFile(original)
+  ok('шифротекст не совпадает с исходником', blob.size !== 0 && !(await sameBytes(blob, bytes)))
+  ok('тип файла в хранилище обезличен', blob.type === 'application/octet-stream',
+    'иначе по типу видно, картинка это или документ')
+  ok('имя и настоящий тип уехали в ключ, а не в хранилище',
+    key.name === 'секрет.png' && key.type === 'image/png')
+
+  const back = await decryptFile(await blob.arrayBuffer(), key)
+  ok('файл расшифровывается байт в байт', await sameBytes(back, bytes))
+  ok('и получает обратно настоящий тип', back.type === 'image/png')
+
+  const wrongKey = { ...key }
+  const kb = unb64(wrongKey.k); kb[0] ^= 1; wrongKey.k = b64(kb)
+  const cipherBuf = await blob.arrayBuffer()
+  await mustThrow('чужой ключ файла', () => decryptFile(cipherBuf, wrongKey))
+
+  const tamperedBuf = new Uint8Array(await blob.arrayBuffer()); tamperedBuf[0] ^= 1
+  await mustThrow('подменённое вложение', () => decryptFile(tamperedBuf.buffer as ArrayBuffer, key))
+
+  ok('пометка в ссылке ставится и снимается',
+    isEncryptedUrl(markEncrypted('https://x/y')) && stripEncMark(markEncrypted('https://x/y')) === 'https://x/y')
+  ok('обычная ссылка не считается зашифрованной', !isEncryptedUrl('https://x/y'))
+
+  const huge = new File([new Uint8Array(10)], 'big.bin')
+  Object.defineProperty(huge, 'size', { value: MAX_ENCRYPTABLE + 1 })
+  try { await encryptFile(huge); ok('слишком большой файл отвергается', false, 'НЕ бросило') }
+  catch (e) { ok('слишком большой файл отвергается', e instanceof TooLargeToEncrypt, 'с понятной причиной') }
 
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
