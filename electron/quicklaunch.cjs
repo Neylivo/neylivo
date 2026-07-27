@@ -3,9 +3,9 @@
 // половина (файловая система, сеть, запуск процессов); рендерер видит только
 // узкие IPC-каналы через preload.cjs, как и остальной ponoiDesktop-бридж.
 //
-// v1: только Minecraft Java + Forge + offline-режим сервера (см. план в
-// C:\Users\nubas\.claude\plans\indexed-riding-quokka.md за полным разбором
-// упрощений и почему они необходимы для первой версии).
+// v1: только Minecraft Java + Forge + offline-режим сервера — остальные
+// загрузчики и онлайн-режим осознанно отложены, чтобы первая версия была
+// целиком проверяемой.
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
