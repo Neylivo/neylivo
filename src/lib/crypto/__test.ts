@@ -1,7 +1,7 @@
 import {
   generateIdentity, exportPublicKey, importPublicKey, deriveSharedKey,
   generateContentKey, encryptText, decryptText, wrapContentKey, unwrapContentKey,
-  fingerprint, b64, unb64,
+  fingerprint, b64, unb64, type IdentityKeyPair,
 } from './core'
 
 const lines: string[] = []
@@ -129,6 +129,75 @@ async function main() {
   const probe2 = await deriveSharedKey(id3.privateKey, bPub, 'ponoi/dm/v1')
   await mustThrow('старое сообщение новым ключом не читается', () => decryptText(probe2, sealed))
   ok('идентификатор устройства тоже сменился', deviceId() !== dev1)
+
+  // --- 12. Конверт сообщения: несколько устройств, чужие, подмена -------------
+  const { sealMessage, parseEnvelope, openMessage, isEncrypted, NotForThisDevice } = await import('./envelope')
+  type DK = import('./keys').DeviceKey
+
+  // Алиса с одного устройства пишет Бобу, у которого их два, и себе на второе.
+  const aliceDev2 = await generateIdentity()
+  const bobDev1 = bob
+  const bobDev2 = await generateIdentity()
+  const mk = async (userId: string, deviceId: string, kp: IdentityKeyPair): Promise<DK> => ({
+    userId, deviceId, publicKey: await importPublicKey(await exportPublicKey(kp.publicKey)), fingerprint: '',
+  })
+  const recips: DK[] = [
+    await mk('bob', 'bob-phone', bobDev1),
+    await mk('bob', 'bob-pc', bobDev2),
+    await mk('alice', 'alice-phone', aliceDev2),
+    await mk('alice', 'alice-pc', alice),      // своё же — должно быть пропущено
+  ]
+  const envStr = await sealMessage('секрет для двоих устройств', 'alice', 'alice-pc', alice.privateKey, recips)
+
+  ok('конверт помечен как зашифрованный', isEncrypted(envStr))
+  ok('обычный текст зашифрованным не считается', !isEncrypted('просто сообщение'))
+  ok('в конверте не видно исходного текста', !envStr.includes('секрет'))
+
+  const env = parseEnvelope(envStr)!
+  ok('конверт разбирается', !!env && env.su === 'alice' && env.sd === 'alice-pc')
+  ok('своё устройство в получатели не попало', !('alice-pc' in env.k))
+  ok('ключ упакован для трёх устройств', Object.keys(env.k).length === 3, Object.keys(env.k).join(', '))
+
+  const alicePub = await importPublicKey(await exportPublicKey(alice.publicKey))
+  ok('телефон Боба читает',
+    await openMessage(env, 'bob-phone', bobDev1.privateKey, alicePub) === 'секрет для двоих устройств')
+  ok('компьютер Боба читает',
+    await openMessage(env, 'bob-pc', bobDev2.privateKey, alicePub) === 'секрет для двоих устройств')
+  ok('второе устройство самой Алисы читает',
+    await openMessage(env, 'alice-phone', aliceDev2.privateKey, alicePub) === 'секрет для двоих устройств')
+
+  // Посторонний не читает, даже зная конверт целиком
+  await mustThrow('посторонний с чужим ключом', () =>
+    openMessage(env, 'bob-phone', eve.privateKey, alicePub))
+  // Устройства нет среди получателей
+  try {
+    await openMessage(env, 'неизвестное-устройство', bobDev1.privateKey, alicePub)
+    ok('устройство не в списке получателей', false, 'НЕ бросило')
+  } catch (e) {
+    ok('устройство не в списке получателей', e instanceof NotForThisDevice, 'отдельная ошибка, а не общий сбой')
+  }
+
+  // Подмена содержимого на сервере
+  const tamperedEnv = JSON.parse(JSON.stringify(env))
+  const tb = unb64(tamperedEnv.ct); tb[0] ^= 1; tamperedEnv.ct = b64(tb)
+  await mustThrow('подменённое содержимое конверта', () =>
+    openMessage(tamperedEnv, 'bob-phone', bobDev1.privateKey, alicePub))
+
+  // Подмена упакованного ключа
+  const tamperedKey = JSON.parse(JSON.stringify(env))
+  const tk = unb64(tamperedKey.k['bob-phone'].ct); tk[0] ^= 1; tamperedKey.k['bob-phone'].ct = b64(tk)
+  await mustThrow('подменённый упакованный ключ', () =>
+    openMessage(tamperedKey, 'bob-phone', bobDev1.privateKey, alicePub))
+
+  ok('мусор вместо конверта даёт null', parseEnvelope('⁣e2ee⁣не-база64!!!') === null)
+  ok('пустой список получателей отвергается', await (async () => {
+    try { await sealMessage('x', 'alice', 'alice-pc', alice.privateKey, []); return false } catch { return true }
+  })())
+
+  const longSecret = 'Тайна '.repeat(5000) + '🔒'
+  const envLong = parseEnvelope(await sealMessage(longSecret, 'alice', 'alice-pc', alice.privateKey, recips))!
+  ok('длинное сообщение с юникодом',
+    await openMessage(envLong, 'bob-phone', bobDev1.privateKey, alicePub) === longSecret)
 
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
