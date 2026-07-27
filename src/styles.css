@@ -202,7 +202,7 @@ body {
 .mus-li { padding:8px 12px; border-radius:var(--r-sm); color:var(--tx); cursor:pointer; background:rgba(0,0,0,.25); }
 .mus-li:hover { background:rgba(var(--ov, 255,255,255),.08); }
 .mus-li.on { background:var(--brand); color:#fff; }
-.ms-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:50; }
+.ms-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:var(--z-sheet, 50); }
 .ms-modal { background:var(--bg2); border-radius:var(--r-xl); padding:18px; width:420px; max-width:calc(100vw - 32px); max-height:86vh; overflow-y:auto; animation:pop .2s var(--ease-spring, ease) both; }
 .ms-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
 .ms-head button { background:none; border:none; color:var(--mut); font-size:16px; cursor:pointer; }
@@ -220,7 +220,7 @@ body {
 /* calls */
 .call-start { background:none; border:none; color:var(--mut); cursor:pointer; font-size:16px; margin-left:auto; transition:color .15s var(--ease-out4, ease); }
 .call-start:hover { color:var(--green); }
-.call-wrap { position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:80; display:flex; flex-direction:column; }
+.call-wrap { position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:var(--z-call, 80); display:flex; flex-direction:column; }
 .call-stage { flex:1; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:10px; padding:16px; overflow:auto; align-content:center; }
 .call-tile { position:relative; background:#000; border-radius:var(--r-xl); overflow:hidden; aspect-ratio:16/9; }
 .call-media { width:100%; height:100%; object-fit:cover; }
@@ -269,7 +269,7 @@ body {
 
 .me { position:relative; }
 .me .me-nm small { font-weight:400; font-size:11px; }
-.status-menu { position:absolute; bottom:56px; left:10px; background:var(--bg3); border-radius:var(--r-md); padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:60; min-width:160px; }
+.status-menu { position:absolute; bottom:56px; left:10px; background:var(--bg3); border-radius:var(--r-md); padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:var(--z-pop, 60); min-width:160px; }
 .status-opt { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:var(--r-sm); cursor:pointer; font-size:14px; }
 .status-opt:hover { background:rgba(var(--ov, 255,255,255),.06); }
 .status-opt .status-dot { width:10px; height:10px; }
@@ -278,8 +278,8 @@ body {
 .member:hover { background:rgba(var(--ov, 255,255,255),.04); }
 .member .me-nm { font-size:16px; }
 
-.mini-overlay { position:fixed; inset:0; z-index:70; }
-.mini { position:fixed; z-index:71; width:240px; background:var(--bg3); border-radius:var(--r-xl); overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s var(--ease-spring, ease) both; }
+.mini-overlay { position:fixed; inset:0; z-index:var(--z-mini-ov, 70); }
+.mini { position:fixed; z-index:var(--z-mini, 71); width:240px; background:var(--bg3); border-radius:var(--r-xl); overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s var(--ease-spring, ease) both; }
 .mini-banner { height:60px; background:linear-gradient(90deg,#5865f2,#eb459e); }
 .mini-av { position:relative; margin:-36px 0 0 16px; width:72px; }
 .mini-av .av-wrap, .mini-av > span { border:5px solid var(--bg3); border-radius:50%; }
@@ -303,7 +303,7 @@ body.compact .msgs { gap:0; }
 :root[data-theme='light'] { --bg:#ffffff; --bg2:#f2f3f5; --bg3:#e3e5e8; --tx:#2e3338; --mut:#5c5e66; --c-hover:#e3e5e8; --c-main:#f2f3f5; }
 :root[data-theme='midnight'] { --bg:#0b0b0e; --bg2:#111318; --bg3:#000000; --c-main:#050506; --c-hover:#1a1c22; }
 
-.pqs { position:fixed; inset:0; z-index:100; display:flex; background:var(--bg); animation:pop .12s var(--ease-spring, ease) both; }
+.pqs { position:fixed; inset:0; z-index:var(--z-fullscreen, 100); display:flex; background:var(--bg); animation:pop .12s var(--ease-spring, ease) both; }
 .pqs-sidebar { flex:1; background:var(--bg3); display:flex; justify-content:flex-end; }
 .pqs-side-inner { width:218px; padding:60px 8px 60px 0; overflow-y:auto; }
 .pqs-side-h { padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
@@ -401,7 +401,7 @@ input[type=range] { accent-color:var(--brand); }
 .composer-tools { position:relative; display:flex; gap:4px; }
 .ctool { background:var(--c-hover); border:none; color:var(--tx); border-radius:var(--r-md); height:44px; min-width:44px; padding:0 10px; font-size:15px; cursor:pointer; font-weight:700; transition:background .15s var(--ease-out4, ease); }
 .ctool:hover { background:#4e5058; }
-.pop-anchor { position:absolute; bottom:52px; right:0; z-index:60; }
+.pop-anchor { position:absolute; bottom:52px; right:0; z-index:var(--z-pop, 60); }
 .emoji-pop { width:340px; max-width:86vw; background:var(--bg2); border-radius:var(--r-xl); box-shadow:0 12px 40px rgba(0,0,0,.5); overflow:hidden; animation:pop .12s var(--ease-spring, ease) both; display:flex; flex-direction:column; }
 .emoji-tabs { display:flex; align-items:center; gap:4px; padding:8px; border-bottom:1px solid rgba(0,0,0,.2); }
 .emoji-tabs button { background:none; border:none; color:var(--mut); cursor:pointer; padding:6px 10px; border-radius:var(--r-sm); font-size:13px; }
@@ -439,13 +439,13 @@ input[type=range] { accent-color:var(--brand); }
 .rx-n { font-size:12px; color:var(--mut); font-weight:600; }
 .rx.mine .rx-n { color:#c9cdfb; }
 .rx-add { color:var(--mut); }
-.rx-quick { position:absolute; bottom:28px; left:0; display:flex; gap:2px; background:var(--bg2); border:1px solid rgba(0,0,0,.3); border-radius:var(--r-md); padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:40; }
+.rx-quick { position:absolute; bottom:28px; left:0; display:flex; gap:2px; background:var(--bg2); border:1px solid rgba(0,0,0,.3); border-radius:var(--r-md); padding:4px; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:var(--z-quickrx, 40); }
 .rx-quick button { background:none; border:none; font-size:20px; cursor:pointer; padding:3px; border-radius:var(--r-sm); }
 .rx-quick button:hover { background:rgba(var(--ov, 255,255,255),.08); }
 .tools-quick { top:34px; bottom:auto; right:0; left:auto; }
 
-.ctx-overlay { position:fixed; inset:0; z-index:90; }
-.ctx-menu { position:fixed; z-index:91; min-width:190px; background:var(--bg3); border-radius:var(--r-md); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .12s var(--ease-spring, ease) both; }
+.ctx-overlay { position:fixed; inset:0; z-index:var(--z-ctx-ov, 90); }
+.ctx-menu { position:fixed; z-index:var(--z-ctx, 91); min-width:190px; background:var(--bg3); border-radius:var(--r-md); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .12s var(--ease-spring, ease) both; }
 .ctx-quick { display:flex; gap:2px; padding:4px; border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); margin-bottom:4px; }
 .ctx-quick button { background:none; border:none; font-size:20px; cursor:pointer; padding:3px 4px; border-radius:var(--r-sm); flex:1; }
 .ctx-quick button:hover { background:rgba(var(--ov, 255,255,255),.08); }
@@ -467,14 +467,14 @@ input[type=range] { accent-color:var(--brand); }
 
 
 /* ===== pass 6d: floating pet ===== */
-.pet { position:fixed; bottom:8px; z-index:75; cursor:pointer; transition:left .05s linear; user-select:none; }
+.pet { position:fixed; bottom:8px; z-index:var(--z-pet, 75); cursor:pointer; transition:left .05s linear; user-select:none; }
 .pet-emoji { font-size:44px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.4)); animation:petbob .6s ease-in-out infinite; }
 @keyframes petbob { 50% { transform:translateY(-4px); } }
 .pet-bubble { position:absolute; bottom:48px; left:50%; transform:translateX(-50%); background:#fff; color:#222; padding:6px 10px; border-radius:var(--r-xl); font-size:13px; font-weight:600; white-space:nowrap; box-shadow:0 4px 12px rgba(0,0,0,.3); }
 .pet-bubble::after { content:''; position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
-.pet-off { position:fixed; bottom:8px; right:8px; z-index:75; background:var(--bg2); border:none; border-radius:50%; width:40px; height:40px; font-size:18px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.4); }
+.pet-off { position:fixed; bottom:8px; right:8px; z-index:var(--z-pet, 75); background:var(--bg2); border:none; border-radius:50%; width:40px; height:40px; font-size:18px; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.4); }
 .pet-off:hover { background:var(--c-hover); }
-.pet-menu-overlay { position:fixed; inset:0; z-index:96; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; }
+.pet-menu-overlay { position:fixed; inset:0; z-index:var(--z-petmenu, 96); background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; }
 .pet-menu { background:var(--bg2); border-radius:var(--r-xl); padding:18px; width:320px; max-width:calc(100vw - 32px); animation:pop .15s var(--ease-spring, ease) both; }
 .pet-menu-h { font-weight:700; margin-bottom:10px; }
 .pet-species { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:10px 0; }
@@ -772,7 +772,7 @@ body { font-size: var(--font-px, 16px); }
 
 
 /* ===== pass 15: server modals + context menu ===== */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:120; animation:pop .12s var(--ease-spring, ease) both; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal-ov, 120); animation:pop .12s var(--ease-spring, ease) both; }
 .modal { position:relative; background:var(--bg2); border-radius:var(--r-xl); width:440px; max-width:calc(100vw - 32px); max-height:calc(100vh - 64px); overflow-y:auto; padding:24px; box-shadow:0 16px 48px rgba(0,0,0,.5); }
 .modal-x { position:absolute; top:14px; right:14px; background:none; border:none; color:var(--mut); cursor:pointer; font-size:16px; width:28px; height:28px; border-radius:50%; }
 .modal-x:hover { color:var(--tx); background:rgba(var(--ov, 255,255,255),.06); }
@@ -835,7 +835,7 @@ body { font-size: var(--font-px, 16px); }
 .modal-tab.on { background:var(--brand); color:#fff; }
 .modal-sect { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin:16px 0 10px; }
 .modal-note { color:var(--mut); font-size:14px; padding:16px 0; line-height:1.5; }
-.ctxmenu { position:fixed; z-index:130; background:var(--bg2); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-md); padding:6px; min-width:230px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:pop .1s var(--ease-spring, ease) both; }
+.ctxmenu { position:fixed; z-index:var(--z-over-modal, 130); background:var(--bg2); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-md); padding:6px; min-width:230px; box-shadow:0 12px 32px rgba(0,0,0,.5); animation:pop .1s var(--ease-spring, ease) both; }
 .ctxmenu-item { display:flex; align-items:center; gap:12px; padding:9px 10px; border-radius:var(--r-sm); cursor:pointer; font-size:14px; font-weight:500; color:var(--tx); }
 .ctxmenu-item:hover { background:var(--brand); color:#fff; }
 .ctxmenu-item.danger { color:var(--red); }
@@ -864,7 +864,7 @@ body { font-size: var(--font-px, 16px); }
 
 /* ===== pass 17: Ponoi Music redesign (mus2-*) ===== */
 /* Музыка: по умолчанию панель у правого края (как в макете), .full — на весь экран */
-.mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:120; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
+.mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:var(--z-modal-ov, 120); display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
 .mus2.full { left:0; width:auto; border-left:none; box-shadow:none; }
 /* Узкая панель: очередь сверху, обложка ниже, всё компактнее */
 .mus2:not(.full) .mus2-body { flex-direction:column; }
@@ -942,11 +942,11 @@ body { font-size: var(--font-px, 16px); }
 .mus2-inpl, .mus2-tog { background:none; border:none; color:var(--mut); cursor:pointer; font-weight:600; font-size:13px; }
 .mus2-inpl:hover, .mus2-tog:hover { color:var(--tx); }
 .mus2-together-wrap { position:relative; }
-.mus2-tog-pop { position:absolute; bottom:120%; right:0; background:var(--bg2); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-lg); padding:8px; display:flex; flex-direction:column; gap:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); min-width:180px; z-index:20; }
+.mus2-tog-pop { position:absolute; bottom:120%; right:0; background:var(--bg2); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-lg); padding:8px; display:flex; flex-direction:column; gap:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); min-width:180px; z-index:var(--z-inline, 20); }
 .mus2-tog-pop button { background:var(--bg3); border:none; color:var(--tx); padding:9px; border-radius:var(--r-sm); cursor:pointer; font-weight:600; }
 .mus2-tog-pop button:hover { background:var(--mus-a,var(--brand)); color:#fff; }
 .mus2-tog-code { color:var(--mut); font-size:13px; padding:4px 2px; }
-.mus2-lib { position:fixed; inset:0; background:var(--bg); z-index:140; display:flex; }
+.mus2-lib { position:fixed; inset:0; background:var(--bg); z-index:var(--z-musiclib, 140); display:flex; }
 .mus2-lib-inner { flex:1; display:flex; flex-direction:column; }
 .mus2-lib-head { display:flex; align-items:center; gap:16px; padding:16px 24px; border-bottom:1px solid rgba(0,0,0,.2); }
 .mus2-lib-head b { color:transparent; background:linear-gradient(90deg,#8b5cf6,#5865f2); -webkit-background-clip:text; background-clip:text; white-space:nowrap; font-size:16px; }
@@ -970,7 +970,7 @@ body { font-size: var(--font-px, 16px); }
 
 .sb {
   position: absolute; right: 12px; bottom: 76px; width: 340px; max-height: 62%;
-  display: flex; flex-direction: column; z-index: 40;
+  display: flex; flex-direction: column; z-index:var(--z-quickrx, 40);
   background: var(--c-panel); border: 1px solid var(--c-active);
   border-radius:var(--r-xl); box-shadow: 0 12px 40px rgba(0,0,0,.5); overflow: hidden;
 }
@@ -1002,7 +1002,7 @@ body { font-size: var(--font-px, 16px); }
 .sb-blast { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius:var(--r-sm); border: none; background: var(--c-accent); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
 .sb-blast:hover { filter: brightness(1.08); }
 
-.sb-trim-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 60; }
+.sb-trim-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index:var(--z-pop, 60); }
 .sb-trim-inner { width: 360px; background: var(--c-panel); border-radius:var(--r-xl); padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 .sb-trim-h { font-weight: 700; color: var(--tx); margin-bottom: 12px; }
 .sb-trim-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
@@ -1022,6 +1022,53 @@ body { font-size: var(--font-px, 16px); }
 @keyframes sbrec { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
 /* ===== Гибкие настройки (flexible settings) ===== */
 :root { --radius: 8px; --msg-gap: 0px; }
+
+/* v1.297.0: лестница слоёв. Номера прежние — меняется только то, что они наконец
+   собраны в одном месте и у каждого есть имя. До этого в файле жило 42 разных
+   значения z-index, разбросанных по четырём тысячам строк, вплоть до 9998/9999/
+   10000 — верный признак того, что каждый следующий случай решался прибавлением
+   единицы к самому большому найденному.
+
+   Порядок снизу вверх: содержимое карточек -> всплывающие подсказки и панели ->
+   выезжающие шторки -> звонок -> контекстные меню -> полноэкранные настройки ->
+   модальные окна -> меню поверх модалок -> поиск -> подтверждения -> уведомления.
+
+   Две настоящие странности, которые видно только теперь и которые НЕ трогаю, чтобы
+   не менять поведение: .mus2 стоит на одном уровне с .modal-overlay (120), то есть
+   кто выше — решает порядок в разметке; а .mus-mini (130) всплывает поверх модалки. */
+:root {
+  --z-inline: 20;
+  --z-inline2: 30;
+  --z-inline3: 31;
+  --z-quickrx: 40;
+  --z-quickrx2: 44;
+  --z-sheet: 50;
+  --z-pop: 60;
+  --z-drawer: 61;
+  --z-drawer2: 62;
+  --z-mini-ov: 70;
+  --z-mini: 71;
+  --z-pet: 75;
+  --z-call: 80;
+  --z-call2: 81;
+  --z-call3: 82;
+  --z-ctx-ov: 90;
+  --z-ctx: 91;
+  --z-petmenu-ov: 95;
+  --z-petmenu: 96;
+  --z-fullscreen: 100;
+  --z-modal-ov: 120;
+  --z-modal: 121;
+  --z-over-modal: 130;
+  --z-over-modal2: 131;
+  --z-musiclib: 140;
+  --z-switcher-ov: 200;
+  --z-switcher: 201;
+  --z-attach-edit: 210;
+  --z-confirm: 390;
+  --z-toast: 400;
+}
+
 :root {
   /* v1.287.0: единая шкала скруглений. Всё в приложении считается ОТ настройки
      «скругление углов» (--radius), а не от разрозненных чисел: раньше настройка
@@ -1092,7 +1139,7 @@ body.chatbg-on .chat::after {
 
 /* ===== Ponoi Music: мини-плеер в углу + виниловая пластинка ===== */
 .mus2-hidden { display:none !important; }
-.mus-mini { position:fixed; right:14px; bottom:14px; z-index:130; display:flex; align-items:center; gap:10px;
+.mus-mini { position:fixed; right:14px; bottom:14px; z-index:var(--z-over-modal, 130); display:flex; align-items:center; gap:10px;
   background:var(--bg2); border:1px solid rgba(0,0,0,.35); border-radius:var(--r-2xl); padding:8px 10px;
   box-shadow:0 12px 32px rgba(0,0,0,.5); width:320px; }
 .mus-mini-art { width:40px; height:40px; border-radius:50%; overflow:hidden; flex:none; cursor:pointer;
@@ -1140,7 +1187,7 @@ body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none;
 .call-bar button.off:hover { background:#e3e3e3; }
 
 /* ===== Проход 6: тосты ===== */
-.toasts { position:fixed; right:16px; bottom:16px; z-index:400; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+.toasts { position:fixed; right:16px; bottom:16px; z-index:var(--z-toast, 400); display:flex; flex-direction:column; gap:8px; pointer-events:none; }
 .toast { pointer-events:auto; display:flex; align-items:center; gap:9px; max-width:360px; background:var(--bg2,#2b2d31);
   color:var(--tx,#dbdee1); border:1px solid rgba(0,0,0,.4); border-left:4px solid var(--brand,#5865f2);
   border-radius:var(--r-lg); padding:10px 14px; font-size:14px; box-shadow:0 12px 32px rgba(0,0,0,.5); cursor:pointer;
@@ -1153,7 +1200,7 @@ body.no-anim .mus2-vinyl.spin, body.no-anim .mus-mini-art.spin { animation:none;
 body.no-anim .toast { animation:none; }
 
 /* ===== Проход 6: модалки подтверждения ===== */
-.cfm-overlay { position:fixed; inset:0; z-index:390; background:rgba(0,0,0,.6); display:flex; align-items:center;
+.cfm-overlay { position:fixed; inset:0; z-index:var(--z-confirm, 390); background:rgba(0,0,0,.6); display:flex; align-items:center;
   justify-content:center; animation:toastIn .15s ease; }
 .cfm-box { background:var(--bg2,#2b2d31); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-xl); padding:22px;
   width:min(400px, calc(100vw - 40px)); box-shadow:0 16px 48px rgba(0,0,0,.55); }
@@ -1192,7 +1239,7 @@ body.no-anim .cfm-overlay { animation:none; }
 .msg.mention-hl { background:rgba(250,166,26,.08); box-shadow:inset 3px 0 0 var(--yellow,#faa61a); }
 .msg.mention-hl:hover { background:rgba(250,166,26,.12); }
 .composer { position:relative; }
-.mention-pop { position:absolute; left:12px; right:12px; bottom:calc(100% + 8px); z-index:60;
+.mention-pop { position:absolute; left:12px; right:12px; bottom:calc(100% + 8px); z-index:var(--z-pop, 60);
   background:var(--bg2,#2b2d31); border:1px solid rgba(0,0,0,.4); border-radius:var(--r-lg); padding:6px;
   box-shadow:0 -8px 28px rgba(0,0,0,.45); max-height:280px; overflow-y:auto; }
 .mention-h { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
@@ -1238,13 +1285,13 @@ body.no-anim .cfm-overlay { animation:none; }
 .att-spin { width:22px; height:22px; border-radius:50%; border:3px solid rgba(var(--ov, 255,255,255),.3); border-top-color:var(--tx-hi, #fff); animation:spin .8s linear infinite; }
 .msg-file.uploading { display:inline-flex; align-items:center; gap:8px; color:var(--mut); cursor:default; }
 .msg-file.uploading .att-spin { width:14px; height:14px; border-width:2px; border-color:rgba(148,155,164,.35); border-top-color:var(--mut); }
-.att-edit-ov { position:fixed; inset:0; z-index:210; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+.att-edit-ov { position:fixed; inset:0; z-index:var(--z-attach-edit, 210); background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
 .att-edit-box { width:min(420px, 92vw); background:var(--bg); border-radius:var(--r-xl); padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
 .att-edit-h { font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:10px; }
 .pin-btn.on { color:var(--brand,#5865f2); }
 
 /* ===== Ctrl+K панель быстрого перехода ===== */
-.qs-overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6); display:flex;
+.qs-overlay { position:fixed; inset:0; z-index:var(--z-switcher-ov, 200); background:rgba(0,0,0,.6); display:flex;
   align-items:flex-start; justify-content:center; padding-top:14vh; }
 .qs-box { width:min(560px, 92vw); background:var(--bg2,#2b2d31); border-radius:var(--r-xl);
   box-shadow:0 16px 48px rgba(0,0,0,.55); overflow:hidden; animation:qs-in .12s ease-out; }
@@ -1304,7 +1351,7 @@ body.no-anim .call-tile.speaking .call-ava { animation:none; box-shadow:0 0 0 3p
 .tile-vol svg { color:var(--tx); flex-shrink:0; }
 
 /* ===== Поиск сообщений ===== */
-.search-panel { position:absolute; top:48px; right:12px; width:min(440px, calc(100% - 24px)); z-index:40;
+.search-panel { position:absolute; top:48px; right:12px; width:min(440px, calc(100% - 24px)); z-index:var(--z-quickrx, 40);
   background:var(--c-panel,#2b2d31); border:1px solid rgba(0,0,0,.35); border-radius:var(--r-lg);
   box-shadow:0 10px 32px rgba(0,0,0,.45); overflow:hidden; }
 .search-head { display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); color:var(--mut,#949ba4); }
@@ -1385,7 +1432,7 @@ body.no-anim .msg-flash { animation:none; }
 .srv-wrap { position:relative; }
 
 /* ===== Drag-and-drop файлов в чат ===== */
-.drop-overlay { position:fixed; inset:0; z-index:140; background:rgba(0,0,0,.6);
+.drop-overlay { position:fixed; inset:0; z-index:var(--z-musiclib, 140); background:rgba(0,0,0,.6);
   display:flex; align-items:center; justify-content:center; pointer-events:none; }
 .drop-box { border:3px dashed var(--brand, #5865f2); border-radius:var(--r-2xl);
   background:color-mix(in srgb, var(--brand, #5865f2) 14%, var(--bg2, #2b2d31));
@@ -1441,7 +1488,7 @@ body.no-anim .msg-flash { animation:none; }
 
 
 /* --- Полноэкранный просмотр изображения: затемнение, закрытие кликом мимо/Escape --- */
-.lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.85);
+.lightbox { position: fixed; inset: 0; z-index:var(--z-switcher-ov, 200); background: rgba(0,0,0,.85);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   animation: lbfade .15s ease; cursor: zoom-out; }
 .lightbox img { max-width: 90vw; max-height: 84vh; border-radius:var(--r-sm);
@@ -1559,7 +1606,7 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
   transform: translateX(-50%); align-items: center; gap: 7px; white-space: nowrap;
   background: rgba(17, 18, 20, .96); border: 1px solid rgba(var(--ov, 255,255,255), .08);
   border-radius:var(--r-md); padding: 6px 10px; font-size: 12.5px; color: var(--tx);
-  pointer-events: none; z-index: 40; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+  pointer-events: none; z-index:var(--z-quickrx, 40); box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
   animation: rx-tip-in .12s ease; }
 .rx-tip-e { font-size: 17px; }
 .rx:hover .rx-tip { display: flex; }
@@ -1682,8 +1729,8 @@ body.no-anim .member-typing i { animation:none; }
 
 /* ➕ меню композера: Фото / Файл / Папка / Голосовое */
 .plus-wrap { position:relative; display:flex; }
-.plus-overlay { position:fixed; inset:0; z-index:30; }
-.plus-menu { position:absolute; bottom:42px; left:0; z-index:31; background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-lg); padding:6px; min-width:190px; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+.plus-overlay { position:fixed; inset:0; z-index:var(--z-inline2, 30); }
+.plus-menu { position:absolute; bottom:42px; left:0; z-index:var(--z-inline3, 31); background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-lg); padding:6px; min-width:190px; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column; }
 .plus-menu button { display:flex; align-items:center; gap:12px; background:none; border:0; color:var(--tx); padding:10px 12px; border-radius:var(--r-sm); cursor:pointer; font-size:14.5px; text-align:left; }
 .plus-menu button:hover { background:rgba(var(--ov, 255,255,255),.09); color:var(--tx-hi, #fff); }
 
@@ -1851,7 +1898,7 @@ body.no-anim .member-typing i { animation:none; }
 .mini2 .mini-name:hover { text-decoration:underline; }
 
 /* Фулл-профиль: большое модальное окно по центру */
-.fp-backdrop { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; animation: fp-fade .15s ease both; }
+.fp-backdrop { position:fixed; inset:0; z-index:var(--z-modal-ov, 120); background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; animation: fp-fade .15s ease both; }
 @keyframes fp-fade { from { opacity:0 } to { opacity:1 } }
 .fp-card { width:600px; max-width:94vw; max-height:86vh; overflow-y:auto; background:#18191c; border-radius:var(--r-xl); box-shadow:0 16px 60px rgba(0,0,0,.7); animation: fp-in .18s ease-out both; }
 @keyframes fp-in { from { opacity:0; transform:scale(.92) } to { opacity:1; transform:none } }
@@ -1956,7 +2003,7 @@ body.no-anim .member-typing i { animation:none; }
 
 /* ===== v1.14.0: карточка профиля 1-в-1 как в эталоне («Редактировать профиль») ===== */
 @keyframes pcFade { from { opacity:0; } to { opacity:1; } }
-.pc-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:210; display:flex; align-items:center; justify-content:center; animation:pcFade .12s ease both; }
+.pc-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:var(--z-attach-edit, 210); display:flex; align-items:center; justify-content:center; animation:pcFade .12s ease both; }
 .pc-card { position:relative; width:min(1040px, 94vw); height:min(760px, 92vh); background:#111214; border-radius:var(--r-2xl); display:grid; grid-template-columns:400px 1fr; overflow:hidden; animation:pop .15s var(--ease-spring, ease) both; box-shadow:0 24px 80px rgba(0,0,0,.6); }
 .pc-x { position:absolute; top:14px; right:14px; z-index:5; width:34px; height:34px; border-radius:50%; border:none; background:rgba(0,0,0,.45); color:var(--tx); cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .pc-x:hover { background:rgba(0,0,0,.7); color:#fff; }
@@ -1991,8 +2038,8 @@ body.no-anim .member-typing i { animation:none; }
 .pc-friendicwrap { position:relative; }
 .pc-friendic.on { background:rgba(88,101,242,.18); color:var(--brand); }
 .pc-friendic.on:hover { background:rgba(237,66,69,.18); color:var(--red); }
-.pc-friendic-ov { position:fixed; inset:0; z-index:120; }
-.pc-friendic-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:121; background:var(--bg3);
+.pc-friendic-ov { position:fixed; inset:0; z-index:var(--z-modal-ov, 120); }
+.pc-friendic-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:var(--z-modal, 121); background:var(--bg3);
   border-radius:var(--r-md); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.5); min-width:170px; }
 .pc-friendic-menu button { width:100%; text-align:left; background:none; border:none; padding:8px 10px;
   border-radius:var(--r-sm); cursor:pointer; font-size:14px; color:var(--red); }
@@ -2214,7 +2261,7 @@ body.no-anim .member-typing i { animation:none; }
 .ctx-quick { justify-content:space-between; border-bottom:none; margin-bottom:2px; padding:4px 2px; }
 .ctx-quick button { flex:0 0 auto; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; background:var(--bg2); border-radius:var(--r-lg); transition:transform .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease); }
 .ctx-quick button:hover { background:var(--brand); transform:scale(1.08); }
-.ctx-emoji-pop { position:fixed; z-index:95; animation:pop .12s var(--ease-spring, ease) both; }
+.ctx-emoji-pop { position:fixed; z-index:var(--z-petmenu-ov, 95); animation:pop .12s var(--ease-spring, ease) both; }
 
 
 /* ===== v1.19.0: карточки игровой активности в профилях (1-в-1 Discord) ===== */
@@ -2288,7 +2335,7 @@ body.no-anim .member-typing i { animation:none; }
 .channels { position:relative; }
 .srv-title.clickable { cursor:pointer; user-select:none; gap:8px; }
 .srv-title-nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.srv-menu { position:absolute; top:52px; left:8px; right:8px; background:#111420; border-radius:var(--r-md); padding:6px; z-index:91; box-shadow:0 8px 24px rgba(0,0,0,.55); animation:pop .12s var(--ease-spring, ease) both; }
+.srv-menu { position:absolute; top:52px; left:8px; right:8px; background:#111420; border-radius:var(--r-md); padding:6px; z-index:var(--z-ctx, 91); box-shadow:0 8px 24px rgba(0,0,0,.55); animation:pop .12s var(--ease-spring, ease) both; }
 .srv-mi { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-radius:var(--r-sm); font-size:13.5px; color:var(--mut); cursor:pointer; }
 .srv-mi:hover { background:var(--brand); color:#fff; }
 .srv-msep { height:1px; background:rgba(var(--ov, 255,255,255),.08); margin:4px 6px; }
@@ -2316,7 +2363,7 @@ body.no-anim .member-typing i { animation:none; }
 .wlc-ico { font-size:22px; }
 
 /* Полноэкранные настройки канала */
-.cset { position:fixed; inset:0; z-index:130; display:flex; background:var(--bg2); animation:pop .12s var(--ease-spring, ease) both; }
+.cset { position:fixed; inset:0; z-index:var(--z-over-modal, 130); display:flex; background:var(--bg2); animation:pop .12s var(--ease-spring, ease) both; }
 .cset-side { width:34%; min-width:230px; background:rgba(0,0,0,.25); display:flex; justify-content:flex-end; padding:60px 12px 20px; overflow-y:auto; }
 .cset-nav { width:200px; }
 .cset-cat { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); padding:6px 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -2327,7 +2374,7 @@ body.no-anim .member-typing i { animation:none; }
 .cset-sep { height:1px; background:rgba(var(--ov, 255,255,255),.08); margin:8px 10px; }
 .cset-main { flex:1; padding:60px 40px 100px; overflow-y:auto; position:relative; max-width:780px; }
 .cset-h { font-size:20px; font-weight:800; margin-bottom:18px; }
-.cset-esc { position:fixed; top:56px; right:40px; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--mut); background:none; border:none; cursor:pointer; font-size:12px; font-weight:700; z-index:131; }
+.cset-esc { position:fixed; top:56px; right:40px; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--mut); background:none; border:none; cursor:pointer; font-size:12px; font-weight:700; z-index:var(--z-over-modal2, 131); }
 .cset-esc-circle { width:36px; height:36px; border:2px solid var(--mut); border-radius:50%; display:flex; align-items:center; justify-content:center; }
 .cset-esc:hover { color:var(--tx); }
 .cset-esc:hover .cset-esc-circle { border-color:var(--tx); }
@@ -2373,7 +2420,7 @@ body.no-anim .member-typing i { animation:none; }
 .cset-int-t b { display:block; font-size:15px; }
 .cset-int-t span { color:var(--mut); font-size:12px; }
 .cset-int button { background:var(--brand); border:none; color:#fff; padding:8px 14px; border-radius:var(--r-xs); font-weight:600; cursor:pointer; }
-.cset-savebar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111420; border-radius:var(--r-md); padding:10px 12px 10px 16px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:140; transition:opacity .28s var(--ease-out4, ease), transform .28s var(--ease-out4, ease); }
+.cset-savebar { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; background:#111420; border-radius:var(--r-md); padding:10px 12px 10px 16px; display:flex; align-items:center; gap:16px; box-shadow:0 8px 24px rgba(0,0,0,.5); z-index:var(--z-musiclib, 140); transition:opacity .28s var(--ease-out4, ease), transform .28s var(--ease-out4, ease); }
 .cset-savebar span { font-size:14px; }
 .cset-save { background:var(--brand); border:none; color:#fff; padding:8px 16px; border-radius:var(--r-xs); font-weight:600; cursor:pointer; }
 .cset-reset { background:none; border:none; color:var(--tx); cursor:pointer; font-size:14px; }
@@ -2441,7 +2488,7 @@ body.no-anim .member-typing i { animation:none; }
 .sset-tagico button:hover { transform:translateY(-2px); }
 .sset-tagico button.on { border-color:var(--brand); }
 .sset-tagico button img.tag-cust-emoji { width:22px; height:22px; object-fit:contain; }
-.sset-emojipop { position:absolute; top:64px; left:0; z-index:60; }
+.sset-emojipop { position:absolute; top:64px; left:0; z-index:var(--z-pop, 60); }
 .tag-cust-emoji { width:16px; height:16px; object-fit:contain; vertical-align:-3px; }
 .sset-info { display:flex; gap:10px; align-items:flex-start; background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); border-radius:var(--r-md); padding:12px 14px; font-size:13px; margin-top:16px; line-height:1.5; }
 /* v1.178.0: бейдж тега сервера рядом с ником — сообщения, список участников, мини-профиль. */
@@ -2584,7 +2631,7 @@ body.no-anim .member-typing i { animation:none; }
 .sev-2col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 
 /* Ветки */
-.thr-panel { position:absolute; top:52px; right:12px; width:440px; max-width:calc(100vw - 24px); background:var(--bg2); border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-lg); box-shadow:0 12px 32px rgba(0,0,0,.5); z-index:40; animation:pop .12s var(--ease-spring, ease) both; }
+.thr-panel { position:absolute; top:52px; right:12px; width:440px; max-width:calc(100vw - 24px); background:var(--bg2); border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-lg); box-shadow:0 12px 32px rgba(0,0,0,.5); z-index:var(--z-quickrx, 40); animation:pop .12s var(--ease-spring, ease) both; }
 .thr-top { display:flex; gap:8px; align-items:center; padding:10px; border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); }
 .thr-top .thr-t { display:flex; align-items:center; gap:6px; font-weight:800; font-size:14px; margin-right:4px; }
 .thr-in { flex:1; background:var(--bg3); border:none; border-radius:var(--r-sm); padding:7px 10px; color:var(--tx); outline:none; font-size:13px; min-width:0; }
@@ -2600,7 +2647,7 @@ body.no-anim .member-typing i { animation:none; }
 .thr-row-t span { color:var(--mut); font-size:11px; }
 
 /* v1.268.0: открытая ветка — своя лента + композер поверх основного канала */
-.thread-view-wrap { position:absolute; inset:0; z-index:44; background:var(--bg); display:flex; flex-direction:column; }
+.thread-view-wrap { position:absolute; inset:0; z-index:var(--z-quickrx2, 44); background:var(--bg); display:flex; flex-direction:column; }
 .thread-view { display:flex; flex-direction:column; height:100%; }
 .thread-view-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); }
 .thread-view-t { display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; }
@@ -2672,7 +2719,7 @@ body.no-anim .member-typing i { animation:none; }
   font-size:14px; font-weight:600; cursor:pointer; }
 .crash-btn:hover { filter:brightness(1.1); }
 .titlebar { flex:none; height:32px; background:var(--c-dark,#1e1f22); display:flex; align-items:center;
-  padding:0; -webkit-app-region:drag; user-select:none; position:relative; z-index:60; }
+  padding:0; -webkit-app-region:drag; user-select:none; position:relative; z-index:var(--z-pop, 60); }
 .titlebar .tb-nav { display:flex; align-items:center; gap:2px; padding-left:8px; -webkit-app-region:no-drag; }
 .titlebar .tb-arrow { width:28px; height:24px; display:flex; align-items:center; justify-content:center;
   border:none; background:transparent; color:#b5bac1; border-radius:var(--r-xs); cursor:pointer; }
@@ -2723,7 +2770,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-wrap { position:relative; flex:none; display:flex; flex-direction:column; background:#000; height:290px;
   border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); }
 .c2-wrap:has(.c2-board) { height:48vh; min-height:400px; }
-.c2-wrap.fs { position:fixed; inset:0; z-index:80; height:auto; min-height:0; }
+.c2-wrap.fs { position:fixed; inset:0; z-index:var(--z-call, 80); height:auto; min-height:0; }
 .c2-top { flex:none; display:flex; align-items:center; gap:12px; padding:10px 14px 4px; }
 .c2-status { font-size:12.5px; font-weight:700; color:#b5bac1; display:inline-flex; align-items:center; gap:7px; }
 .c2-status i { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; }
@@ -2803,8 +2850,8 @@ body.no-anim .member-typing i { animation:none; }
 
 /* Меню качества демонстрации (до 4K / 60 FPS) */
 .c2-share-wrap { position:relative; }
-.c2-menu-ov { position:fixed; inset:0; z-index:81; }
-.c2-menu { position:absolute; bottom:64px; left:50%; transform:translateX(-50%); width:264px; z-index:82;
+.c2-menu-ov { position:fixed; inset:0; z-index:var(--z-call2, 81); }
+.c2-menu { position:absolute; bottom:64px; left:50%; transform:translateX(-50%); width:264px; z-index:var(--z-call3, 82);
   background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-xl); padding:12px;
   box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s var(--ease-spring, ease) both; }
 .c2-menu-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#80848e; margin:2px 0 8px; }
@@ -2822,7 +2869,7 @@ body.no-anim .member-typing i { animation:none; }
 @keyframes c2flash { from { opacity:1; } to { opacity:0; } }
 
 /* --- Красивое авто-обновление (v1.29.0) --- */
-.upd-card { position:fixed; right:18px; bottom:18px; z-index:95; display:flex; align-items:center; gap:12px;
+.upd-card { position:fixed; right:18px; bottom:18px; z-index:var(--z-petmenu-ov, 95); display:flex; align-items:center; gap:12px;
   padding:12px 14px; min-width:290px; max-width:360px; background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.08);
   border-radius:var(--r-xl); box-shadow:0 12px 40px rgba(0,0,0,.55); overflow:hidden;
   animation:pop .2s var(--ease-spring, ease); transition:transform .28s cubic-bezier(.3, .8, .3, 1), opacity .28s var(--ease-out4, ease); }
@@ -2835,7 +2882,7 @@ body.no-anim .member-typing i { animation:none; }
 .upd-card.collapsed { transform:translateX(calc(100% + 30px)); opacity:0; pointer-events:none; }
 .upd-collapse { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
 .upd-collapse:hover { color:var(--tx); }
-.upd-handle { position:fixed; right:0; bottom:18px; z-index:95; width:26px; height:52px; flex:none;
+.upd-handle { position:fixed; right:0; bottom:18px; z-index:var(--z-petmenu-ov, 95); width:26px; height:52px; flex:none;
   border:1px solid rgba(var(--ov, 255,255,255),.08); border-right:none; border-radius:var(--r-xl) 0 0 var(--r-xl); background:#111214;
   color:#8b8ff5; display:flex; align-items:center; justify-content:center; cursor:pointer;
   box-shadow:-6px 0 20px rgba(0,0,0,.4); transform:translateX(100%); opacity:0; pointer-events:none;
@@ -2882,7 +2929,7 @@ body.no-anim .member-typing i { animation:none; }
 .jump-down:hover { transform:translateY(-2px); }
 
 /* -- Входящий звонок: модалка по центру (как в Discord) -- */
-.ic-ov { position:fixed; inset:0; z-index:130; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.62); animation:lbfade .18s ease both; }
+.ic-ov { position:fixed; inset:0; z-index:var(--z-over-modal, 130); display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.62); animation:lbfade .18s ease both; }
 .ic-card { min-width:280px; background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.06); border-radius:var(--r-2xl); padding:30px 44px 26px; text-align:center; box-shadow:0 16px 60px rgba(0,0,0,.55); animation:icIn .32s cubic-bezier(.34,1.56,.64,1) both; }
 @keyframes icIn { from { opacity:0; transform:scale(.82) translateY(14px); } to { opacity:1; transform:none; } }
 .ic-av { position:relative; width:80px; height:80px; margin:0 auto 16px; animation:icShake 2.4s ease infinite; }
@@ -2973,13 +3020,13 @@ body.no-anim .member-typing i { animation:none; }
   .mob-burger { display:inline-flex; align-items:center; justify-content:center; background:none; border:0; color:var(--mut); padding:2px 10px 2px 2px; cursor:pointer; flex:none; }
   .mob-burger:active { color:var(--tx); }
   /* Шторка навигации: рейка серверов + каналы/ЛС, как свайп-панель в Discord */
-  .servers { position:fixed; left:0; top:0; bottom:0; z-index:61; transform:translateX(-110%); transition:transform .22s var(--ease-out4, ease); padding-top:calc(12px + env(safe-area-inset-top)); }
-  .channels, .dm-side { position:fixed; left:72px; top:0; bottom:0; z-index:61; width:calc(100vw - 112px); max-width:320px; transform:translateX(-150%); transition:transform .22s var(--ease-out4, ease); box-shadow:8px 0 24px rgba(0,0,0,.35); }
+  .servers { position:fixed; left:0; top:0; bottom:0; z-index:var(--z-drawer, 61); transform:translateX(-110%); transition:transform .22s var(--ease-out4, ease); padding-top:calc(12px + env(safe-area-inset-top)); }
+  .channels, .dm-side { position:fixed; left:72px; top:0; bottom:0; z-index:var(--z-drawer, 61); width:calc(100vw - 112px); max-width:320px; transform:translateX(-150%); transition:transform .22s var(--ease-out4, ease); box-shadow:8px 0 24px rgba(0,0,0,.35); }
   body.mob-nav-open .servers, body.mob-nav-open .channels, body.mob-nav-open .dm-side { transform:none; }
-  body.mob-nav-open .mob-backdrop { display:block; position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.55); }
+  body.mob-nav-open .mob-backdrop { display:block; position:fixed; inset:0; z-index:var(--z-pop, 60); background:rgba(0,0,0,.55); }
   .chat { width:100vw; min-width:100vw; }
   /* Участники — выезжающая панель справа */
-  .members { display:block; position:fixed; right:0; top:0; bottom:0; width:min(320px, 86vw); z-index:62; box-shadow:-8px 0 24px rgba(0,0,0,.45); }
+  .members { display:block; position:fixed; right:0; top:0; bottom:0; width:min(320px, 86vw); z-index:var(--z-drawer2, 62); box-shadow:-8px 0 24px rgba(0,0,0,.45); }
   /* Крупнее под палец + учёт вырезов экрана */
   .ch { padding:9px 8px; font-size:15px; }
   .dm-item { padding:9px 8px; }
@@ -3274,7 +3321,7 @@ body.no-anim .member-typing i { animation:none; }
 .mpg-add:hover { background:rgba(var(--ov, 255,255,255),.14); }
 .mpg-add:active { scale:.97; }
 /* ===== v1.50.0: настройки 1-в-1 как в новом Discord ===== */
-.pqs2-overlay { position:fixed; inset:0; z-index:140; background:rgba(0,0,0,.6); display:flex; justify-content:center; align-items:center;
+.pqs2-overlay { position:fixed; inset:0; z-index:var(--z-musiclib, 140); background:rgba(0,0,0,.6); display:flex; justify-content:center; align-items:center;
   animation:fade-in .15s ease both; }
 @keyframes fade-in { from { opacity:0 } to { opacity:1 } }
 /* v1.111.0: плавающее окно по центру экрана, как в Discord (было — простыня от низа). */
@@ -3383,7 +3430,7 @@ body.no-anim .member-typing i { animation:none; }
   display:flex; align-items:center; justify-content:center; cursor:pointer; transition:color .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease); }
 .pfr-row2:hover .pfr-cbtn { background:var(--bg3); }
 .pfr-cbtn:hover { color:#fff; }
-.pfr-rowmenu { position:absolute; right:0; top:42px; z-index:30; background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.06);
+.pfr-rowmenu { position:absolute; right:0; top:42px; z-index:var(--z-inline2, 30); background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.06);
   border-radius:var(--r-md); padding:6px; min-width:200px; box-shadow:0 8px 24px rgba(0,0,0,.5); display:flex; flex-direction:column;
   animation:pop .12s var(--ease-spring, ease) both; }
 .pfr-rowmenu button { text-align:left; border:none; background:none; color:var(--tx); font-size:14px; padding:8px 10px;
@@ -3523,7 +3570,7 @@ body.no-anim .pet-burst-emoji { animation: none; }
   opacity: .55;
   pointer-events: none;
   user-select: none;
-  z-index: 40;
+  z-index:var(--z-quickrx, 40);
 }
 
 /* ===== v1.61.0: список каналов в серверах 1-в-1 как в Discord (по скриншоту) ===== */
@@ -3810,8 +3857,8 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 
 
 /* ===== v1.88.0: эмодзи — избранные, паки, контекст-меню пикера ===== */
-.ep2-ctx-ov { position:fixed; inset:0; z-index:200; }
-.ep2-ctx { position:fixed; z-index:201; min-width:214px; background:var(--bg3,#1e1f22); border-radius:var(--r-md); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:menu-in .13s ease-out both; display:flex; flex-direction:column; gap:2px; }
+.ep2-ctx-ov { position:fixed; inset:0; z-index:var(--z-switcher-ov, 200); }
+.ep2-ctx { position:fixed; z-index:var(--z-switcher, 201); min-width:214px; background:var(--bg3,#1e1f22); border-radius:var(--r-md); padding:6px; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:menu-in .13s ease-out both; display:flex; flex-direction:column; gap:2px; }
 .ep2-ctx button { display:flex; align-items:center; gap:8px; background:none; border:0; color:var(--tx,#dbdee1); padding:8px 10px; border-radius:var(--r-sm); cursor:pointer; font-size:14px; text-align:left; }
 .ep2-ctx button:hover { background:var(--brand,#5865f2); color:#fff; }
 .ep2-ctx button.danger { color:var(--red,#ed4245); }
@@ -4352,7 +4399,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .wall-del { position:absolute; top:6px; right:6px; width:26px; height:26px; border:none; border-radius:var(--r-sm); background:rgba(0,0,0,.55); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease); }
 .wall-item:hover .wall-del { opacity:1; }
 .wall-del:hover { background:var(--red); }
-.wall-modal-bg { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+.wall-modal-bg { position:fixed; inset:0; z-index:var(--z-modal-ov, 120); background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
 .wall-modal { background:var(--bg); border-radius:var(--r-2xl); padding:18px; box-shadow:0 20px 60px rgba(0,0,0,.5); max-width:94vw; max-height:92vh; overflow-y:auto; }
 .wall-modal-h { font-size:16px; font-weight:800; color:#f2f3f5; margin-bottom:12px; }
 .wall-canvas { display:block; border-radius:var(--r-lg); background:var(--bg2); cursor:crosshair; touch-action:none; max-width:80vw; max-height:55vh; }
@@ -4371,7 +4418,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .wall-tbtn:disabled, .wall-cancel:disabled, .wall-save:disabled { opacity:.5; cursor:default; filter:none; }
 
 /* ===== v1.150.0: статистика онлайн-игры за 30 дней (клик по текущей активности) ===== */
-.gstat-backdrop { position:fixed; inset:0; z-index:130; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
+.gstat-backdrop { position:fixed; inset:0; z-index:var(--z-over-modal, 130); background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; }
 .gstat-card { width:520px; max-width:94vw; max-height:88vh; overflow-y:auto; background:var(--bg); border-radius:var(--r-2xl); padding:20px; box-shadow:0 20px 60px rgba(0,0,0,.5); position:relative; }
 .gstat-x { position:absolute; top:14px; right:14px; background:none; border:none; color:var(--mut); cursor:pointer; }
 .gstat-x:hover { color:#fff; }
@@ -4472,11 +4519,11 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 }
 
 /* v1.289.0: состояние ленивой загрузки экрана (см. lib/lazyScreen.tsx) */
-.lazy-wait { position:fixed; inset:0; z-index:130; display:flex; align-items:center; justify-content:center; gap:6px; background:rgba(0,0,0,.35); }
+.lazy-wait { position:fixed; inset:0; z-index:var(--z-over-modal, 130); display:flex; align-items:center; justify-content:center; gap:6px; background:rgba(0,0,0,.35); }
 .lazy-dot { width:8px; height:8px; border-radius:var(--r-pill); background:var(--tx); opacity:.35; animation:lazy-pulse 1s var(--ease-out4, ease) infinite; }
 .lazy-dot:nth-child(2) { animation-delay:.15s; }
 .lazy-dot:nth-child(3) { animation-delay:.3s; }
 @keyframes lazy-pulse { 0%,100% { opacity:.25; transform:translateY(0); } 50% { opacity:1; transform:translateY(-4px); } }
-.lazy-fail { position:fixed; inset:0; z-index:130; display:flex; flex-direction:column; align-items:center; justify-content:center;
+.lazy-fail { position:fixed; inset:0; z-index:var(--z-over-modal, 130); display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:12px; background:rgba(0,0,0,.55); color:var(--tx); font-size:14px; padding:24px; text-align:center; }
 .lazy-fail button { background:var(--brand); color:#fff; border:none; border-radius:var(--r-md); padding:10px 18px; font:inherit; font-weight:600; cursor:pointer; }
