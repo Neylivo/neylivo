@@ -32,6 +32,7 @@ import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
+import { preloadCallStack } from '../lib/livekit'
 import { ServerTagModal } from './ServerTagModal'
 import { ProfileCard } from './ProfileCard'
 import { fetchProfile, cachedProfile } from '../lib/profilePrefs'
@@ -117,6 +118,14 @@ export function Home() {
   }, [])
   // Мобильная версия (v1.34.0): при старте открываем шторку навигации, как в Discord.
   useEffect(() => { if (IS_MOBILE) openMobNav() }, [])
+  // v1.290.0: пока человек осматривается в чате, тихо готовим всё для звонка —
+  // библиотеку и шумодав. Иначе первый звонок за сессию начинался с паузы на
+  // скачивание 6.5 МБ именно тогда, когда человек торопится ответить. Ждём 4
+  // секунды, чтобы не соперничать за канал с загрузкой самих чатов и аватарок.
+  useEffect(() => {
+    const t = window.setTimeout(() => preloadCallStack(), 4000)
+    return () => window.clearTimeout(t)
+  }, [])
   // v1.40.0: настройки сохранили ник/юзернейм — обновляем имя во всём приложении сразу, без перезагрузки.
   useEffect(() => {
     const h = (e: any) => {

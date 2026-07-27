@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.289.0",
+  "version": "1.290.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -13,7 +13,8 @@
     "electron:start": "electron .",
     "dist": "node scripts/gen-changelog.mjs && vite build && electron-builder --win",
     "cap:sync": "npm run build && cap sync android",
-    "android:assets": "capacitor-assets generate --android --iconBackgroundColor #23272a --iconBackgroundColorDark #1e1f22 --splashBackgroundColor #23272a --splashBackgroundColorDark #1e1f22"
+    "android:assets": "capacitor-assets generate --android --iconBackgroundColor #23272a --iconBackgroundColorDark #1e1f22 --splashBackgroundColor #23272a --splashBackgroundColorDark #1e1f22",
+    "smoke": "npm run build && electron scripts/smoke.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",
