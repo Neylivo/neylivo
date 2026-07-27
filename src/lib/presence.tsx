@@ -42,11 +42,10 @@ interface PresenceCtx {
 const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, listeningOf: () => null, deviceOf: () => 'desktop' })
 
 // Читаем настройку напрямую: presence поднимается выше провайдера настроек, а
-// заводить ради двух флагов ещё один контекст — лишняя связанность.
+// заводить ради одного флага ещё один контекст — лишняя связанность.
 function prefFlag(key: string): boolean {
   try { return !!JSON.parse(localStorage.getItem('ponoi_settings') || '{}')[key] } catch { return false }
 }
-const hiddenActivity = () => prefFlag('hideActivity')
 const hiddenLastSeen = () => prefFlag('hideLastSeen')
 
 export function PresenceProvider({ username, avatarUrl, children }:
@@ -94,12 +93,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({
-        username, status: 'online', avatar_url: avatarUrl ?? null, device: DEVICE,
-        // v1.304.0: настройка «не рассылать активность» теперь ДЕЙСТВУЕТ. Раньше
-        // она жила только в интерфейсе, а игра и музыка уходили всем в любом случае.
-        ...(hiddenActivity() ? {} : { listening: lisRef.current, game: gameRef.current }),
-      })
+      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, device: DEVICE })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -262,10 +256,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({
-          username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, device: DEVICE,
-          ...(hiddenActivity() ? {} : { listening: lisRef.current, game: val }),
-        })
+        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, device: DEVICE })
       }
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
         // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,

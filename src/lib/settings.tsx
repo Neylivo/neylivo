@@ -9,7 +9,7 @@ import { customNickFamily } from './profilePrefs'
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'hideActivity', 'hideLastSeen', 'defaultServerNotif'] as const
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'hideLastSeen', 'defaultServerNotif'] as const
 type AccountKey = typeof ACCOUNT_KEYS[number]
 function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
@@ -56,9 +56,11 @@ export interface Settings {
   // настройки приватности, нигде. Для приложения, которое ничего о человеке не
   // собирает, такая кнопка — не просто мусор, а ложь в свою же сторону.
   //
-  // v1.304.0: эти две — настоящие. Раньше они тоже жили только в интерфейсе.
-  /** Не рассылать, во что играешь и что слушаешь. */
-  hideActivity: boolean
+  // v1.307.0: скрытие активности убрано. Что человек слушает и во что играет —
+  // социальная функция, и видна она только тем, кто и так видит его в приложении:
+  // сверх этого она об анонимности ничего не говорит. Прятать её отдельной
+  // настройкой значило бы разменивать заметную часть смысла приложения на защиту,
+  // которой в этом месте и не требовалось.
   /** Не отмечать «был в сети». */
   hideLastSeen: boolean
   // v1.295.0: сквозное шифрование личных сообщений. По умолчанию включено —
@@ -138,7 +140,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
-  micVol: 100, spkVol: 100, lang: 'ru', hideActivity: false, hideLastSeen: false,
+  micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
   e2ee: true, e2eeCalls: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',

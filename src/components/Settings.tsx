@@ -1153,7 +1153,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
                 {/* v1.304.0: вместо тумблера «Сбор данных об использовании», который был
                     включён по умолчанию, обещал сбор и нигде не проверялся, — правда. */}
-                <Row title="Не рассылать активность" desc="Другие не увидят, во что ты играешь и что слушаешь"><Toggle on={view.hideActivity} onChange={v => setD('hideActivity', v)} /></Row>
                 <Row title="Скрывать «был в сети»" desc="Время последнего появления не будет обновляться"><Toggle on={view.hideLastSeen} onChange={v => setD('hideLastSeen', v)} /></Row>
                 <div className="pqs2-desc" style={{ marginTop: 10 }}>
                   Приложение не собирает статистику использования и никуда её не отправляет — ни аналитики,
