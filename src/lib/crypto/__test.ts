@@ -245,6 +245,49 @@ async function main() {
   try { await encryptFile(huge); ok('слишком большой файл отвергается', false, 'НЕ бросило') }
   catch (e) { ok('слишком большой файл отвергается', e instanceof TooLargeToEncrypt, 'с понятной причиной') }
 
+  // --- 14. Снятие метаданных с изображений ----------------------------------
+  const { stripImageMetadata, needsStrip } = await import('../stripMeta')
+
+  // Собираем настоящий JPEG и вживляем в него сегмент EXIF с «координатами».
+  const cv = document.createElement('canvas')
+  cv.width = 64; cv.height = 48
+  const cx = cv.getContext('2d')!
+  cx.fillStyle = '#c0ffee'; cx.fillRect(0, 0, 64, 48)
+  const jpegBlob = await new Promise<Blob>(r => cv.toBlob(b => r(b!), 'image/jpeg', 0.9))
+  const plainJpeg = new Uint8Array(await jpegBlob.arrayBuffer())
+
+  const SECRET = 'GPS 55.7558 37.6173 IPHONE-OWNER'
+  const payload = new TextEncoder().encode('Exif\0\0' + SECRET)
+  const app1 = new Uint8Array(4 + payload.length)
+  app1[0] = 0xFF; app1[1] = 0xE1                       // маркер APP1
+  app1[2] = ((payload.length + 2) >> 8) & 0xFF; app1[3] = (payload.length + 2) & 0xFF
+  app1.set(payload, 4)
+  const withExif = new Uint8Array(2 + app1.length + (plainJpeg.length - 2))
+  withExif.set(plainJpeg.subarray(0, 2), 0)            // SOI
+  withExif.set(app1, 2)
+  withExif.set(plainJpeg.subarray(2), 2 + app1.length)
+
+  const dirty = new File([withExif], 'photo.jpg', { type: 'image/jpeg' })
+  const hasSecret = async (f: Blob) => new TextDecoder('latin1')
+    .decode(new Uint8Array(await f.arrayBuffer())).includes(SECRET)
+
+  ok('подопытный файл действительно содержит метаданные', await hasSecret(dirty),
+    'иначе проверка ниже ничего не значила бы')
+
+  const cleaned = await stripImageMetadata(dirty)
+  ok('очищенный файл получен', !!cleaned)
+  if (cleaned) {
+    ok('координат и модели в нём НЕТ', !(await hasSecret(cleaned)))
+    const bm = await createImageBitmap(cleaned)
+    ok('картинка не испорчена и размер прежний', bm.width === 64 && bm.height === 48,
+      bm.width + 'x' + bm.height)
+    bm.close()
+  }
+
+  ok('анимированный GIF не перекодируется', !needsStrip(new File([new Uint8Array(4)], 'a.gif', { type: 'image/gif' })),
+    'иначе от анимации остался бы один кадр')
+  ok('обычный файл не трогаем', !needsStrip(new File([new Uint8Array(4)], 'a.pdf', { type: 'application/pdf' })))
+
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
   lines.push(failed ? `ИТОГ: ПРОВАЛЕНО ПРОВЕРОК — ${failed}` : `ИТОГ: все ${lines.length - 2} проверок пройдены`)

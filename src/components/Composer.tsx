@@ -1,4 +1,5 @@
 import { toastErr } from '../lib/toast'
+import { stripAll } from '../lib/stripMeta'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -155,8 +156,16 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     return () => { urls.forEach(u => { if (u) URL.revokeObjectURL(u) }); setPvOpen(null) }
   }, [files])
   const MAXFILES = 10
-  function addFiles(fs: File[]) {
-    if (fs.length === 0) return
+  async function addFiles(fsRaw: File[]) {
+    if (fsRaw.length === 0) return
+    // v1.305.0: снимаем метаданные СРАЗУ при прикреплении, а не перед отправкой.
+    // Так очищенный файл идёт и в предпросмотр, и в шифрование, и в загрузку —
+    // одно место вместо трёх, и нет пути, по которому исходник с координатами
+    // проскользнул бы мимо очистки.
+    const { files: fs, failed } = await stripAll(fsRaw)
+    if (failed.length) {
+      toastErr('Не удалось очистить метаданные: ' + failed.join(', ') + '. Файл отправится как есть.')
+    }
     const tooBig = fs.filter(f => f.size > MAX_FILE_SIZE)
     if (tooBig.length) toastErr('Слишком большой файл (максимум 40 ГБ): ' + tooBig.map(f => f.name).join(', '))
     const ok = fs.filter(f => f.size <= MAX_FILE_SIZE)
