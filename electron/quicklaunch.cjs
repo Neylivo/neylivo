@@ -116,30 +116,51 @@ function loaderFromVersionId(root, id) {
 // в launcher_profiles.json (пишут и официальный лаунчер, и TLauncher/подобные —
 // формат общий). Фолбэк — самая недавно изменённая forge/neoforge-папка в versions/,
 // если профили не читаются.
+// v1.285.2: чистая vanilla-версия — у её json нет inheritsFrom (не наследуется от
+// другой версии, как делают Forge/Fabric) и есть собственный downloads.client.
+// Этого достаточно, чтобы отличить настоящую версию игры от папки лоадера, не
+// полагаясь на формат имени: у снапшотов и старых версий он бывает какой угодно.
+function vanillaFromVersionId(root, id) {
+  const json = readVersionJson(root, id)
+  if (!json || json.inheritsFrom) return null
+  if (!(json.downloads && json.downloads.client)) return null
+  return { mcVersion: String(json.id || id), loader: null, loaderVersion: null }
+}
+
 function detectLoader(root) {
+  // Кандидаты по убыванию «свежести»: сначала недавно запускавшиеся профили, потом
+  // недавно изменённые папки в versions/ (если профили не читаются).
+  const profileIds = []
   try {
     const raw = fs.readFileSync(path.join(root, 'launcher_profiles.json'), 'utf8')
     const j = JSON.parse(raw)
-    const profiles = Object.values(j.profiles || {})
+    Object.values(j.profiles || {})
       .filter(p => p && typeof p.lastVersionId === 'string')
       .sort((a, b) => new Date(b.lastUsed || 0) - new Date(a.lastUsed || 0))
-    for (const p of profiles) {
-      const found = loaderFromVersionId(root, p.lastVersionId)
-      if (found) return found
-    }
+      .forEach(p => profileIds.push(p.lastVersionId))
   } catch {}
+  const dirIds = []
   try {
     const versionsDir = path.join(root, 'versions')
-    const dirs = fs.readdirSync(versionsDir, { withFileTypes: true }).filter(d => d.isDirectory())
-    const candidates = dirs
-      .filter(d => LOADER_ID_RE.test(d.name) || FABRIC_ID_RE.test(d.name))
+    fs.readdirSync(versionsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
       .map(d => { let mtime = 0; try { mtime = fs.statSync(path.join(versionsDir, d.name)).mtimeMs } catch {}; return { id: d.name, mtime } })
       .sort((a, b) => b.mtime - a.mtime)
-    for (const c of candidates) {
-      const found = loaderFromVersionId(root, c.id)
-      if (found) return found
-    }
+      .forEach(c => dirIds.push(c.id))
   } catch {}
+
+  // Модовый лоадер приоритетнее: если человек играет в Forge-сборку, делиться надо
+  // ей, а не ванильной версией, которая тоже лежит в versions/ как зависимость.
+  for (const id of profileIds) { const f = loaderFromVersionId(root, id); if (f) return f }
+  for (const id of dirIds) {
+    if (!LOADER_ID_RE.test(id) && !FABRIC_ID_RE.test(id)) continue
+    const f = loaderFromVersionId(root, id); if (f) return f
+  }
+  // v1.285.2: фолбэк на чистую vanilla. Без него у человека с обычным лаунчером и
+  // без модов listSources() не показывал обычный лаунчер вообще, а scanMods()
+  // отвечал «Не удалось определить загрузчик» — хотя делиться там есть чем.
+  for (const id of profileIds) { const v = vanillaFromVersionId(root, id); if (v) return v }
+  for (const id of dirIds) { const v = vanillaFromVersionId(root, id); if (v) return v }
   return null
 }
 
@@ -197,9 +218,13 @@ async function scanMods(source, opts) {
   if (opts && opts.fast) {
     return { mcVersion: loader.mcVersion, loader: loader.loader, loaderVersion: loader.loaderVersion, mods: [] }
   }
+  // v1.285.2: отсутствие папки mods — больше не ошибка. Пока «поделиться» умело
+  // только модпаки, пустой mods честно означал «делиться нечем»; с v1.285.0 версия
+  // без модов — полноценный сценарий (чистая vanilla, «просто дай свой IP»), а у
+  // vanilla-инстанса Prism папки mods нет вообще, пока не поставишь загрузчик —
+  // из-за чего такая сборка не шарилась совсем, хотя ради неё всё и делалось.
   const modsDir = path.join(root, 'mods')
-  if (!fs.existsSync(modsDir)) return { error: 'no-mods-folder' }
-  const mods = await scanModsDir(modsDir)
+  const mods = fs.existsSync(modsDir) ? await scanModsDir(modsDir) : []
   return { mcVersion: loader.mcVersion, loader: loader.loader, loaderVersion: loader.loaderVersion, mods }
 }
 
@@ -491,7 +516,10 @@ async function ensureLoaderInstalled(root, pack, javaExe, onProgress) {
   // у друга (у него своя чистая песочница, а не общий .minecraft).
   if (!pack.loader) {
     if (!readVersionJson(root, pack.mcVersion)) {
-      onProgress?.({ stage: 'installer' })
+      // v1.285.2: не 'installer' — у vanilla-сборки никакой загрузчик не ставится,
+      // качается только описание версии, и подпись «Устанавливаю загрузчик модов…»
+      // прямо противоречила бы карточке, на которой написано «Vanilla».
+      onProgress?.({ stage: 'version' })
       await fetchVanillaVersionJson(root, pack.mcVersion)
     }
     return pack.mcVersion
@@ -565,7 +593,14 @@ async function launch(pack, instDir, username, onProgress) {
     user_type: 'legacy', version_type: 'release',
   }
   const jvmArgs = substArgs((merged.arguments && merged.arguments.jvm) || ['-Djava.library.path=${natives_directory}', '-cp', '${classpath}'], vars)
-  const gameArgs = substArgs(merged.arguments && merged.arguments.game, vars)
+  // v1.285.2: до 1.13 аргументы клиента лежат одной строкой в minecraftArguments,
+  // объекта arguments в json ещё нет. Раньше это маскировалось тем, что сюда
+  // доходили только сборки с Forge/Fabric (их json всегда современного формата и
+  // перекрывает родительский), а с чистой vanilla — например, инстансом 1.8.9 —
+  // gameArgs выходил пустым и клиент стартовал без --username/--gameDir/--assetsDir.
+  const gameArgs = merged.arguments && merged.arguments.game
+    ? substArgs(merged.arguments.game, vars)
+    : String(merged.minecraftArguments || '').split(/\s+/).filter(Boolean).map(a => applyVars(a, vars))
   // --server/--port — легаси-флаг прямого подключения, живой во всех версиях клиента
   // (в отличие от --quickPlayMultiplayer, который есть только с 1.20) — see план, допущение 1.
   const args = [...jvmArgs, merged.mainClass, ...gameArgs, '--server', pack.serverIp, '--port', String(pack.serverPort)]

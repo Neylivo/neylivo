@@ -5,10 +5,13 @@ import { fetchPack, prepareInstance, launchPack, onMcProgress, isQuicklaunchAvai
 // v1.180.0: кнопка «Скачать и войти» карточки «Игровой Экспресс» — докачивает
 // недостающие моды в песочницу и запускает игру уже подключённой к серверу
 // хоста (см. src/lib/quicklaunch.ts + electron/quicklaunch.cjs).
-type Stage = 'idle' | 'fetching' | 'installer' | 'mods' | 'libraries' | 'assets' | 'launching' | 'done' | 'error'
+type Stage = 'idle' | 'fetching' | 'installer' | 'version' | 'mods' | 'libraries' | 'assets' | 'launching' | 'done' | 'error'
 
 const STAGE_LABEL: Record<Stage, string> = {
   idle: 'Скачать и войти', fetching: 'Загружаю список модов…', installer: 'Устанавливаю загрузчик модов…',
+  // v1.285.2: у сборки без модового загрузчика ничего не «устанавливается» —
+  // качается только описание версии, отсюда отдельная подпись.
+  version: 'Загружаю версию игры…',
   mods: 'Докачиваю моды…', libraries: 'Докачиваю библиотеки игры…', assets: 'Докачиваю ресурсы…',
   launching: 'Запускаю игру…', done: 'Готово — заходи в игру!', error: 'Повторить',
 }

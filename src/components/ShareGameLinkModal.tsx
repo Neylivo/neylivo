@@ -39,6 +39,9 @@ export function ShareGameLinkModal({ game, label, hostId, onClose, onShared }: {
     cardBgPreviewRef.current = url
     setCardBgFile(f)
     setCardBgPreview(url)
+    // v1.285.2: тот же сброс value, что в ShareBuildModal — без него повторный
+    // выбор того же файла после «Убрать» не даёт события change.
+    if (cardBgRef.current) cardBgRef.current.value = ''
   }
   useEffect(() => () => { if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current) }, [])
 

@@ -83,7 +83,9 @@ export async function shareCurrentPack(hostId: string, serverIp: string, serverP
 // Прогресс шлют и prepareInstance (докачка модов — done/total/filename), и launch
 // (installer/libraries/assets/launch — см. electron/quicklaunch.cjs). Поля опциональны
 // в зависимости от того, какой этап их прислал.
-export interface QlProgress { stage?: 'installer' | 'libraries' | 'assets' | 'launch'; done?: number; total?: number; filename?: string }
+// v1.285.2: 'version' — докачка описания vanilla-версии у сборки без модового
+// загрузчика (ставить нечего, поэтому отдельная стадия, а не 'installer').
+export interface QlProgress { stage?: 'installer' | 'version' | 'libraries' | 'assets' | 'launch'; done?: number; total?: number; filename?: string }
 // Подписка на прогресс (main шлёт push-события во время prepareInstance/launch).
 export function onMcProgress(cb: (p: QlProgress) => void): void { desktop()?.onMcProgress(cb) }
 

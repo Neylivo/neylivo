@@ -4,10 +4,11 @@ import { toastErr } from '../lib/toast'
 import { scanLocalPack, uploadMissingMods, createPack, listSources, type QlManifest, type QlSource } from '../lib/quicklaunch'
 import { uploadTo } from '../lib/storage'
 
+// v1.285.2: 'no-mods-folder' убран — отсутствие папки mods больше не ошибка
+// (сборка без модов шарится как версия, см. scanMods в electron/quicklaunch.cjs).
 const SCAN_ERRORS: Record<string, string> = {
   'no-minecraft': 'Minecraft не найден — папка .minecraft отсутствует.',
-  'no-mods-folder': 'В сборке нет папки mods — делиться пока нечем.',
-  'no-loader': 'Не удалось определить загрузчик — запусти сборку хотя бы раз через лаунчер.',
+  'no-loader': 'Не удалось определить версию — запусти сборку хотя бы раз через лаунчер.',
 }
 const LOADER_LABEL: Record<string, string> = { neoforge: 'NeoForge', forge: 'Forge', fabric: 'Fabric' }
 
@@ -47,7 +48,13 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
     // выпадающем списке уже показан как выбранный совсем другой инстанс Prism, а
     // при единственном найденном источнике не-vanilla пикер вообще не появлялся и
     // сборка Minecraft не находилась, хотя реально стоит через Prism Launcher).
-    listSources().then(list => { if (ok) { setSources(list); if (list.length) setSource(list[0]) } })
+    // v1.285.2: .catch обязателен — listPrismInstances() в main-процессе читает
+    // диск (readdirSync по instances/ + instance.cfg на каждый), и на отказе в
+    // доступе IPC-промис реджектится, а не возвращает {error}. Без catch sources
+    // навсегда оставался null: пикер не появлялся, а модалка висела на «Сканирую».
+    listSources()
+      .then(list => { if (ok) { setSources(list); if (list.length) setSource(list[0]) } })
+      .catch(err => { if (ok) { setSources([]); setScanError(err?.message ?? String(err)) } })
     return () => { ok = false }
   }, [])
 
@@ -60,11 +67,17 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
     let ok = true
     setManifest(null); setScanError(null)
     const src = srcKey ? { prismInstance: srcKey } : undefined
-    scanLocalPack(src, { fast }).then(r => {
-      if (!ok) return
-      if ('error' in r) setScanError(r.error)
-      else setManifest(r)
-    })
+    // v1.285.2: .catch — scanModsDir() читает и хеширует каждый .jar без обёртки,
+    // и один залоченный антивирусом/самой игрой файл роняет весь IPC-вызов в
+    // reject. Раньше это оставляло модалку вечно на «Сканирую сборку…» без единого
+    // намёка на причину — выйти можно было только закрыв её.
+    scanLocalPack(src, { fast })
+      .then(r => {
+        if (!ok) return
+        if ('error' in r) setScanError(r.error)
+        else setManifest(r)
+      })
+      .catch(err => { if (ok) setScanError(err?.message ?? String(err)) })
     return () => { ok = false }
   }, [srcKey, fast])
 
@@ -83,6 +96,10 @@ export function ShareBuildModal({ hostId, onClose, onShared }: {
     cardBgPreviewRef.current = url
     setCardBgFile(f)
     setCardBgPreview(url)
+    // v1.285.2: сбросить value самого input — иначе выбор файла, «Убрать», а затем
+    // выбор ТОГО ЖЕ файла не порождает событие change (значение не изменилось), и
+    // кнопка «Фон карточки…» выглядит сломанной.
+    if (cardBgRef.current) cardBgRef.current.value = ''
   }
   useEffect(() => () => { if (cardBgPreviewRef.current) URL.revokeObjectURL(cardBgPreviewRef.current) }, [])
 
