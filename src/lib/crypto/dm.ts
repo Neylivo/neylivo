@@ -1,5 +1,6 @@
 import { myIdentity, deviceId, fetchDeviceKeys, type DeviceKey } from './keys'
 import { sealMessage, parseEnvelope, openMessage, isEncrypted, NotForThisDevice } from './envelope'
+import type { FileKey } from './files'
 
 // v1.295.0: связующий слой между криптографией и личными сообщениями.
 //
@@ -28,12 +29,34 @@ export function forgetCachedKeys(userId?: string) {
 
 export class NoRecipientKeys extends Error {}
 
+// v1.300.0: когда к сообщению приложены файлы, внутри конверта едет не голый текст,
+// а маленькая структура с текстом и ключами вложений. Отличается она по невидимой
+// метке в начале: без неё пришлось бы гадать, текст это или JSON, а сообщение
+// «{"t":...}», набранное человеком руками, разобралось бы как структура.
+const PAYLOAD_MARK = '⁢p1⁢'
+
+export interface DmPayload { text: string; files: FileKey[] }
+
+function packPayload(text: string, files: FileKey[]): string {
+  return files.length ? PAYLOAD_MARK + JSON.stringify({ t: text, f: files }) : text
+}
+
+function unpackPayload(raw: string): DmPayload {
+  if (!raw.startsWith(PAYLOAD_MARK)) return { text: raw, files: [] }
+  try {
+    const j = JSON.parse(raw.slice(PAYLOAD_MARK.length))
+    return { text: String(j.t ?? ''), files: Array.isArray(j.f) ? j.f : [] }
+  } catch {
+    return { text: raw, files: [] }
+  }
+}
+
 /**
  * Зашифровать текст для собеседника и всех своих устройств.
  * Бросает NoRecipientKeys, если шифровать не для кого — отправлять открытым
  * текстом «на всякий случай» нельзя.
  */
-export async function sealForPeer(text: string, myUserId: string, peerUserId: string): Promise<string> {
+export async function sealForPeer(text: string, myUserId: string, peerUserId: string, files: FileKey[] = []): Promise<string> {
   const [mine, theirs] = await Promise.all([keysOf(myUserId), keysOf(peerUserId)])
   if (theirs.length === 0) {
     throw new NoRecipientKeys('У собеседника пока нет ключа — он не заходил в приложение с этой версией')
@@ -42,7 +65,7 @@ export async function sealForPeer(text: string, myUserId: string, peerUserId: st
   // Свои устройства тоже в списке: иначе не прочитаешь собственную переписку
   // ни со второго устройства, ни с этого же после перезапуска.
   const recipients = [...theirs, ...mine]
-  return sealMessage(text, myUserId, deviceId(), id.privateKey, recipients)
+  return sealMessage(packPayload(text, files), myUserId, deviceId(), id.privateKey, recipients)
 }
 
 /** Что показать вместо текста, если расшифровать не вышло. */
@@ -53,10 +76,10 @@ export const UNREADABLE_BROKEN = '🔒 Не удалось расшифрова�
  * Прочитать входящее. Возвращает исходный текст, если это не зашифрованное
  * сообщение, — старая переписка и системные сообщения проходят насквозь.
  */
-export async function openIncoming(content: string, senderUserId: string): Promise<string> {
-  if (!isEncrypted(content)) return content
+export async function openIncoming(content: string, senderUserId: string): Promise<DmPayload> {
+  if (!isEncrypted(content)) return { text: content, files: [] }
   const env = parseEnvelope(content)
-  if (!env) return UNREADABLE_BROKEN
+  if (!env) return { text: UNREADABLE_BROKEN, files: [] }
   try {
     let keys = await keysOf(senderUserId)
     let senderKey = keys.find(k => k.deviceId === env.sd)
@@ -66,11 +89,11 @@ export async function openIncoming(content: string, senderUserId: string): Promi
       keys = await keysOf(senderUserId, true)
       senderKey = keys.find(k => k.deviceId === env.sd)
     }
-    if (!senderKey) return UNREADABLE_BROKEN
+    if (!senderKey) return { text: UNREADABLE_BROKEN, files: [] }
     const id = await myIdentity()
-    return await openMessage(env, deviceId(), id.privateKey, senderKey.publicKey)
+    return unpackPayload(await openMessage(env, deviceId(), id.privateKey, senderKey.publicKey))
   } catch (e) {
-    return e instanceof NotForThisDevice ? UNREADABLE_OTHER_DEVICE : UNREADABLE_BROKEN
+    return { text: e instanceof NotForThisDevice ? UNREADABLE_OTHER_DEVICE : UNREADABLE_BROKEN, files: [] }
   }
 }
 

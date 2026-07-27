@@ -36,6 +36,7 @@ import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { publishMyKey } from '../lib/crypto/keys'
 import { sealForPeer, openIncoming, NoRecipientKeys } from '../lib/crypto/dm'
 import { isEncrypted } from '../lib/crypto/envelope'
+import { encryptFile, decryptFile, markEncrypted, stripEncMark, TooLargeToEncrypt, type FileKey } from '../lib/crypto/files'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
@@ -119,14 +120,49 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // асинхронная, а лента рисуется синхронно. Готовый текст кладётся в отдельную
   // карту по id сообщения и подставляется в ленту ниже.
   const [plain, setPlain] = useState<Record<string, string>>({})
+  // v1.300.0: расшифрованные вложения. Ключи приезжают внутри самого сообщения,
+  // поэтому распаковываются здесь же — и сюда кладутся уже готовые к показу
+  // локальные ссылки. Так ни лента сообщений, ни компонент вложения ничего не знают
+  // о шифровании: им как и раньше приходит обычная ссылка.
+  const [attach, setAttach] = useState<Record<string, { url: string; type: string }>>({})
+  const blobUrls = useRef<string[]>([])
+  useEffect(() => () => { blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = [] }, [])
   useEffect(() => {
     let alive = true
     const todo = messages.filter(m => isEncrypted(m.content) && plain[m.id] === undefined)
     if (todo.length === 0) return
     ;(async () => {
-      const done: Record<string, string> = {}
-      for (const m of todo) done[m.id] = await openIncoming(m.content!, m.author)
-      if (alive && Object.keys(done).length) setPlain(p => ({ ...p, ...done }))
+      const doneText: Record<string, string> = {}
+      const doneAtt: Record<string, { url: string; type: string }> = {}
+      for (const m of todo) {
+        const payload = await openIncoming(m.content!, m.author)
+        doneText[m.id] = payload.text
+        // Вложения качаем и расшифровываем здесь же. Ошибку одного файла глотаем
+        // молча: остальная переписка от этого страдать не должна.
+        if (payload.files.length && m.attach_url) {
+          const urls: string[] = [], types: string[] = []
+          const parts = m.attach_url.split('\n')
+          for (let i = 0; i < parts.length; i++) {
+            const key = payload.files[i]
+            if (!key) { urls.push(parts[i]); types.push('file'); continue }
+            try {
+              const res = await fetch(stripEncMark(parts[i]))
+              const blob = await decryptFile(await res.arrayBuffer(), key)
+              const u = URL.createObjectURL(blob)
+              blobUrls.current.push(u)
+              urls.push(u)
+              // Настоящий тип известен только из ключа: в базе он намеренно обезличен.
+              types.push(key.type.startsWith('image/') ? 'image'
+                : key.type.startsWith('video/') ? 'video'
+                : key.type.startsWith('audio/') ? 'audio' : 'file')
+            } catch { urls.push(parts[i]); types.push('file') }
+          }
+          doneAtt[m.id] = { url: urls.join('\n'), type: types.join('\n') }
+        }
+      }
+      if (!alive) return
+      if (Object.keys(doneText).length) setPlain(p => ({ ...p, ...doneText }))
+      if (Object.keys(doneAtt).length) setAttach(a => ({ ...a, ...doneAtt }))
     })()
     return () => { alive = false }
   }, [messages, plain])
@@ -975,10 +1011,32 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // Если зашифровать не вышло — сообщение НЕ УХОДИТ. Тихо отправить открытым
     // текстом было бы худшим из возможных решений: человек продолжал бы считать
     // переписку закрытой, ничего не заметив.
-    let outgoing = t
-    if (settings.e2ee && active && !activeGroup && t) {
+    // v1.300.0: вложения шифруются тем же правилом, что и текст — либо всё, либо
+    // сообщение не уходит. Файлы шифруются ДО загрузки, каждый своим ключом, а
+    // ключи уезжают внутри самого сообщения.
+    const encFiles = !!(settings.e2ee && active && !activeGroup && files?.length)
+    let fileKeys: FileKey[] = []
+    let encBlobs: File[] = []
+    if (encFiles) {
       try {
-        outgoing = await sealForPeer(t, meId, active.id)
+        for (const f of files!) {
+          const { blob, key } = await encryptFile(f)
+          // Имя на сервере обезличиваем: настоящее уехало в ключ.
+          encBlobs.push(new File([blob], 'enc', { type: 'application/octet-stream' }))
+          fileKeys.push(key)
+        }
+      } catch (err: any) {
+        toastErr(err instanceof TooLargeToEncrypt
+          ? err.message + '. Отключи шифрование в настройках, если нужно отправить его как есть.'
+          : 'Не удалось зашифровать вложение — сообщение не отправлено')
+        return
+      }
+    }
+
+    let outgoing = t
+    if (settings.e2ee && active && !activeGroup && (t || fileKeys.length)) {
+      try {
+        outgoing = await sealForPeer(t, meId, active.id, fileKeys)
       } catch (err: any) {
         toastErr(err instanceof NoRecipientKeys
           ? `${active.name} ещё не заходил(а) с версией, поддерживающей шифрование — сообщение не отправлено. Можно отключить шифрование в настройках.`
@@ -1036,10 +1094,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       const spoilerFlags = attach!.url.split('\n').map(u => u.includes('#spoiler'))
       const realUrls: string[] = []
       for (let i = 0; i < files!.length; i++) {
-        let url = await uploadWithProgress('attachments', meId, files![i], p => {
+        // v1.300.0: при включённом шифровании на сервер уходит шифротекст под
+        // обезличенным именем, а не сам файл.
+        const toUpload = encFiles ? encBlobs[i] : files![i]
+        let url = await uploadWithProgress('attachments', meId, toUpload, p => {
           setMessages(m => m.map(x => x.id === tmpId ? { ...x, _upProgress: (i + p) / files!.length } as any : x))
         })
-        if (spoilerFlags[i]) url += '#spoiler'
+        if (encFiles) url = markEncrypted(url)
+        else if (spoilerFlags[i]) url += '#spoiler'
         realUrls.push(url)
       }
       attach!.url.split('\n').forEach(u => { const b = u.replace('#spoiler', ''); if (b.startsWith('blob:')) URL.revokeObjectURL(b) })
@@ -1234,7 +1296,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 .filter((m: any) => !isBlockedWith(m.author))
                 // Зашифрованное подменяем расшифрованным; пока расшифровка идёт —
                 // показываем замок, а не сырой шифротекст.
-                .map((m: any) => isEncrypted(m.content) ? { ...m, content: plain[m.id] ?? '🔒 Расшифровываю…', _enc: true } : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
+                .map((m: any) => isEncrypted(m.content)
+                  // Подставляем расшифрованные текст И вложения: ниже по ленте
+                  // ни один компонент про шифрование не знает — им приходит
+                  // обычное сообщение с обычными ссылками.
+                  ? { ...m, content: plain[m.id] ?? '🔒 Расшифровываю…', _enc: true,
+                      ...(attach[m.id] ? { attach_url: attach[m.id].url, attach_type: attach[m.id].type } : {}) }
+                  : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : (activeGroup ? (groupMembers.find(p => p.id === id)?.display_name || groupMembers.find(p => p.id === id)?.username) : active!.name)}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
