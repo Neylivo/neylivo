@@ -12,3 +12,4 @@ android/local.properties
 android/app/release.keystore
 android/captures
 *.apk
+dist-crypto-test/
