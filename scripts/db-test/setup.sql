@@ -97,6 +97,33 @@ create table server_bans (
   user_id uuid not null references auth.users on delete cascade,
   primary key (server_id, user_id)
 );
+
+-- Нужны миграции 80 (вебхуки) и 61 (эмодзи/стикеры) — их правила чинит 85.
+create table webhooks (
+  id uuid primary key default gen_random_uuid(),
+  channel_id uuid not null references channels on delete cascade,
+  server_id uuid not null references servers on delete cascade,
+  name text not null,
+  token_hash text not null,
+  created_by uuid not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz
+);
+create table server_emoji (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid not null references servers on delete cascade,
+  name text not null, url text not null,
+  created_by uuid references auth.users on delete set null
+);
+create table stickers (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid not null references servers on delete cascade,
+  name text not null, url text not null,
+  created_by uuid references auth.users on delete set null
+);
+alter table webhooks     enable row level security;
+alter table server_emoji enable row level security;
+alter table stickers     enable row level security;
 alter table reactions      enable row level security;
 alter table server_invites enable row level security;
 alter table server_bans    enable row level security;
@@ -154,6 +181,11 @@ returns boolean language sql security definer stable as $$
   end
 $$;
 
+-- Правила чтения из 61_server_emoji_stickers.sql (сама миграция в песочницу не
+-- грузится). Без политики SELECT строку не видно, а значит и DELETE её не найдёт —
+-- на этом тест сначала и споткнулся.
+create policy "server_emoji_read" on server_emoji for select using (is_member(server_id));
+create policy "stickers_read"     on stickers     for select using (is_member(server_id));
 create policy "servers_read"   on servers  for select using (true);
 create policy "channels_read"  on channels for select using (true);
 create policy "messages_read"  on messages for select using (true);

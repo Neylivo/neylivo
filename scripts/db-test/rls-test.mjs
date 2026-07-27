@@ -83,8 +83,14 @@ const SABOTAGE = {
   srvread: [/using \(\n  owner = auth\.uid\(\)\n  or is_member\(id\)\n  or coalesce\(\(settings ->> 'public'\)::boolean, false\)\n\)/, 'using (true)'],
   // Вступить можно и в непубличный сервер.
   joinpub: [/if not v_public then raise exception 'server_not_found'; end if;/, ''],
+  // Управление вебхуками снова выдано всем по умолчанию (лишний бит 512).
+  basebit: [/alter table public\.servers alter column base_permissions set default 15360;\s*\nupdate public\.servers set base_permissions = base_permissions & ~512\s*\n where \(base_permissions & 512\) <> 0;/, ''],
+  // Вебхуки снова проверяют бит тайм-аута вместо управления вебхуками.
+  whbit: [/& 512\) <> 0/g, '& 16384) <> 0'],
+  // Эмодзи и стикеры снова удаляет любой участник.
+  emoji: [/\s*and \(created_by = auth\.uid\(\) or public\.can_manage_emoji\(server_id, auth\.uid\(\)\)\)/g, ''],
 }
-const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql') }
+const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -101,6 +107,9 @@ await db.exec(SRC[81])
 await db.exec(SRC[82])
 await db.exec(SRC[83])
 await db.exec(SRC[84])
+// 80 и 61 в тесте не применяются целиком (в них есть лишнее для этой песочницы),
+// но их политики целиком переобъявляет 85 — проверяем именно итоговые.
+await db.exec(SRC[85])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -232,7 +241,8 @@ await check('автор удаляет своё обсуждение',
 // v1.321.0: экран «Права по умолчанию — @everyone» писал в settings.everyone_perms,
 // которое не читалось нигде. Настоящие права — эта колонка; здесь проверяется,
 // что выключенный бит действительно запрещает действие, а не только красит кнопку.
-const DEFAULT_BASE = 15872   // CREATE_INVITE|MENTION_EVERYONE|ADD_REACTIONS|ATTACH_FILES
+const DEFAULT_BASE = 15360   // CREATE_INVITE|MENTION_EVERYONE|ADD_REACTIONS|ATTACH_FILES
+// 15872 было раньше и включало лишний бит 512 (управление вебхуками) — см. 85.
 await check('по умолчанию у @everyone ровно четыре права', async () =>
   (await db.query('select base_permissions::int b from servers where id=$1', [srv])).rows[0].b === DEFAULT_BASE)
 
@@ -382,6 +392,36 @@ await refused('при приостановленных приглашениях 
 await db.query(`update servers set settings = settings - 'invites_paused' where id=$1`, [open])
 await db.query('insert into server_bans values ($1,$2)', [open, OTHER])
 await refused('забаненный в публичный сервер не войдёт', () => as(OTHER, `select join_public_server($1,'n')`, [open]))
+
+// ── Вебхуки и эмодзи: права проверялись не тем битом (85) ─────────────────
+// v1.326.0: 80_webhooks.sql проверял бит 16384 (тайм-аут) вместо 512
+// (управление вебхуками), а удаление эмодзи и стикеров не проверяло ничего,
+// кроме членства.
+const rTimeout = (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,16384) returning id', [srv, 'таймаут'])).rows[0].id
+const rHooks = (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,512) returning id', [srv, 'вебхуки'])).rows[0].id
+const rEmoji = (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,128) returning id', [srv, 'эмодзи'])).rows[0].id
+await db.query('insert into member_roles values ($1,$2,$3)', [srv, USER, rTimeout])
+await db.query('insert into member_roles values ($1,$2,$3)', [srv, OTHER, rHooks])
+
+const wh = (row, uid) => as(uid, `insert into webhooks (channel_id, server_id, name, token_hash, created_by) values ($1,$2,$3,'h',$4)`, row)
+await refused('право «тайм-аут» больше не даёт заводить вебхуки', () =>
+  wh([forum, srv, 'от таймаутчика', USER], USER))
+await check('право «управление вебхуками» вебхук заводит', async () => {
+  await wh([forum, srv, 'законный', OTHER], OTHER); return true
+})
+
+await db.query(`insert into server_emoji (server_id, name, url, created_by) values ($1,'pepe','u',$2)`, [srv, OWNER])
+// DELETE под запретом правила доступа не бросает ошибку — он просто не находит
+// строк. Поэтому здесь проверяем не отказ, а то, что строка на месте.
+await check('посторонний участник не удалит эмодзи сервера', async () => {
+  await as(USER, `delete from server_emoji where server_id=$1`, [srv])
+  return (await db.query('select 1 from server_emoji where server_id=$1', [srv])).rows.length === 1
+})
+await db.query('insert into member_roles values ($1,$2,$3)', [srv, USER, rEmoji])
+await check('с правом «управление эмодзи» удаление работает', async () => {
+  await as(USER, `delete from server_emoji where server_id=$1`, [srv])
+  return (await db.query('select 1 from server_emoji where server_id=$1', [srv])).rows.length === 0
+})
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
