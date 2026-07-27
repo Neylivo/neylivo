@@ -4678,3 +4678,13 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .sset-ruleadd { margin:8px 0; }
 .sset-level { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--bg3); border-radius:var(--r-md); padding:14px 16px; margin-top:12px; }
 .sset-level .cset-link { background:none; border:none; font-size:14px; }
+
+/* v1.328.0: начало канала — верх ленты больше не начинается из пустоты. */
+.ch-intro { padding:28px 20px 18px; display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+.ch-intro-ic { width:64px; height:64px; border-radius:50%; background:var(--bg3); color:var(--tx);
+  display:flex; align-items:center; justify-content:center; margin-bottom:4px; }
+.ch-intro-t { font-size:30px; font-weight:800; color:var(--tx); line-height:1.15; letter-spacing:-.02em; }
+.ch-intro-d { font-size:15px; color:var(--mut); line-height:1.5; max-width:640px; }
+.ch-intro-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; background:none; border:none;
+  color:var(--brand); font-size:14px; font-weight:600; cursor:pointer; padding:2px 0; }
+.ch-intro-btn:hover { text-decoration:underline; }

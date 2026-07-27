@@ -1458,6 +1458,28 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             {canManage && <button className="wlc-card" onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))}><span className="wlc-ico">🎨</span> Персонализируйте свой сервер с помощью значка <Icon name="chevron-right" size={16} /></button>}
             <button className="wlc-card" onClick={() => (document.querySelector('main.chat .composer textarea') as HTMLTextAreaElement | null)?.focus()}><span className="wlc-ico">📨</span> Отправьте первое сообщение <Icon name="chevron-right" size={16} /></button>
           </div>}
+          {/* v1.328.0: начало канала. Раньше верх ленты был просто пустотой: подсказка
+              показывалась ТОЛЬКО пока в канале ноль сообщений и рассказывала про
+              сервер, а не про канал. В Discord начало канала видно всегда, когда
+              долистал до самого верха, — оно и объясняет, куда ты попал, и не даёт
+              ленте начинаться из ниоткуда. Показываем, только когда старых
+              сообщений больше нет: иначе это была бы неправда. */}
+          {curChannel && messages.length > 0 && !hasMore.current && (
+            <div className="ch-intro">
+              <div className="ch-intro-ic">
+                <Icon name={(curChannel as any).kind === 'forum' ? 'threads' : (curChannel as any).settings?.announce ? 'megaphone' : 'hash'} size={34} />
+              </div>
+              <div className="ch-intro-t">Это начало канала #{curChannel.name}</div>
+              {(curChannel as any).topic
+                ? <div className="ch-intro-d">{(curChannel as any).topic}</div>
+                : <div className="ch-intro-d">Здесь появится всё, что тут напишут — с самого первого сообщения.</div>}
+              {canManageChannels && !(curChannel as any).topic && (
+                <button className="ch-intro-btn" onClick={() => setChSettings(curChannel)}>
+                  <Icon name="edit" size={14} /> Добавить тему канала
+                </button>
+              )}
+            </div>
+          )}
           <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             roleColors={roleColorMap} myRoleNames={myRoleNameList}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
