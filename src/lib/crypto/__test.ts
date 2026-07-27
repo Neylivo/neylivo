@@ -288,6 +288,29 @@ async function main() {
     'иначе от анимации остался бы один кадр')
   ok('обычный файл не трогаем', !needsStrip(new File([new Uint8Array(4)], 'a.pdf', { type: 'application/pdf' })))
 
+  const { UNREADABLE_BROKEN, UNREADABLE_OTHER_DEVICE } = await import('./dm')
+
+  // --- 15. Ключ звонка: та же дорога, что и у сообщения ----------------------
+  // Звонки целиком проверить нечем (нужны два человека и сервер), но МОЯ половина —
+  // выработка ключа, его запечатывание и распечатывание — проверяема, и именно в
+  // ней вероятнее всего ошибка. Библиотечная половина сверена по её исходникам.
+  const callKey = b64(crypto.getRandomValues(new Uint8Array(32)))
+  ok('ключ звонка нужной длины', unb64(callKey).length === 32, callKey.slice(0, 12) + '…')
+
+  const callEnv = parseEnvelope(await sealMessage(callKey, 'alice', 'alice-pc', alice.privateKey, recips))!
+  const gotKey = await openMessage(callEnv, 'bob-phone', bobDev1.privateKey, alicePub)
+  ok('собеседник получает ТОТ ЖЕ ключ звонка', gotKey === callKey)
+  ok('в конверте ключа звонка его самого не видно',
+    !JSON.stringify(callEnv).includes(callKey))
+
+  // Проверка защиты из DMHome: неудачную расшифровку отличаем по замку в начале.
+  // Ключ — base64, а в его алфавите замка нет, поэтому спутать нельзя.
+  ok('признак неудачи не совпадёт с настоящим ключом',
+    !callKey.startsWith('🔒') && UNREADABLE_BROKEN.startsWith('🔒') && UNREADABLE_OTHER_DEVICE.startsWith('🔒'))
+
+  await mustThrow('чужой не достанет ключ звонка', () =>
+    openMessage(callEnv, 'bob-phone', eve.privateKey, alicePub))
+
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
   lines.push(failed ? `ИТОГ: ПРОВАЛЕНО ПРОВЕРОК — ${failed}` : `ИТОГ: все ${lines.length - 2} проверок пройдены`)
