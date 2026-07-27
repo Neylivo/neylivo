@@ -2,6 +2,11 @@
 -- Определения хелперов скопированы дословно из репозитория, чтобы проверять
 -- настоящий код, а не его пересказ.
 
+-- can_view_channel ссылается на server_permissions, которую создаёт уже настоящая
+-- миграция 49 — она применяется следом. Без этого Postgres проверяет тело функции
+-- при создании и отказывается его принимать.
+set check_function_bodies = off;
+
 create schema if not exists auth;
 create table auth.users (id uuid primary key);
 
@@ -15,9 +20,10 @@ create table servers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   owner uuid not null references auth.users on delete cascade,
-  base_permissions bigint not null default 0,
   created_at timestamptz not null default now()
 );
+-- base_permissions намеренно НЕ создаётся здесь: колонку со значением по
+-- умолчанию добавляет настоящая миграция 49, и тест проверяет в том числе её.
 create table channels (
   id uuid primary key default gen_random_uuid(),
   server_id uuid not null references servers on delete cascade,
@@ -59,6 +65,23 @@ create table member_roles (
   role_id uuid not null references server_roles on delete cascade,
   primary key (server_id, user_id, role_id)
 );
+-- v1.321.0: нужны, чтобы проверить права @everyone (base_permissions) — реакции
+-- и приглашения охраняются политиками rx_insert/si_insert из миграции 49.
+create table reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references messages on delete cascade,
+  user_id uuid not null references auth.users on delete cascade,
+  emoji text not null
+);
+create table server_invites (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid not null references servers on delete cascade,
+  code text not null,
+  created_by uuid,
+  created_at timestamptz not null default now()
+);
+alter table reactions      enable row level security;
+alter table server_invites enable row level security;
 
 alter table servers        enable row level security;
 alter table channels       enable row level security;
@@ -73,14 +96,27 @@ language sql security definer stable as $$
   select exists (select 1 from server_members m where m.server_id = sid and m.user_id = auth.uid());
 $$;
 
--- 72_harden_permission_functions.sql, дословно
+-- 34_permissions.sql, дословно: 49 ссылается на эту функцию раньше, чем сама её
+-- переопределяет (в проекте 34 применена задолго до). Дальше её заменит 49
+-- (добавит base_permissions), а затем ужесточит 72 (security definer).
 create or replace function server_permissions(p_server uuid, p_user uuid)
-returns bigint language sql security definer set search_path = public stable as $$
+returns bigint language sql stable as $$
   select coalesce((select bit_or(sr.permissions) from member_roles mr join server_roles sr on sr.id = mr.role_id
                    where mr.server_id = p_server and mr.user_id = p_user), 0)
        | coalesce((select sr.permissions from server_members sm join server_roles sr on sr.id = sm.role_id
                    where sm.server_id = p_server and sm.user_id = p_user), 0)
-       | coalesce((select base_permissions from servers where id = p_server), 0)
+$$;
+
+-- top_role_position — 49 её использует, но не создаёт (она тоже из 34).
+create or replace function top_role_position(p_server uuid, p_user uuid)
+returns int language sql security definer set search_path = public stable as $$
+  select min(pos) from (
+    select sr.position as pos from member_roles mr join server_roles sr on sr.id = mr.role_id
+      where mr.server_id = p_server and mr.user_id = p_user
+    union all
+    select sr.position from server_members sm join server_roles sr on sr.id = sm.role_id
+      where sm.server_id = p_server and sm.user_id = p_user
+  ) t
 $$;
 
 -- 71_fix_channel_privacy_recursion.sql, дословно

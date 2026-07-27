@@ -30,29 +30,31 @@ import { TagEmoji, tagFontFamily } from './TagEmoji'
 import { loadServerEmoji, loadStickers, addServerEmoji, addSticker, removeServerEmoji, removeSticker, type ServerEmoji, type ServerSticker } from '../lib/serverEmoji'
 import { fetchAuditLog, logAudit, AUDIT_ACTION_LABEL, type AuditEntry } from '../lib/auditLog'
 
-type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'security' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
+type Tab = 'profile' | 'tag' | 'engage' | 'emoji' | 'stickers' | 'sound' | 'members' | 'roles' | 'invites' | 'access' | 'audit' | 'bans' | 'automod' | 'bots' | 'community' | 'template'
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
 const TAG_ICONS = ['🍃', '🗡️', '💗', '🔥', '💧', '💀', '🌙', '⚡', '🔮', '🍄']
-const VERIF_LEVELS: { t: string; d: string }[] = [
-  { t: 'Отсутствует', d: 'Без ограничений' },
-  { t: 'Низкий', d: 'Участники должны иметь подтверждённый email' },
-  { t: 'Средний', d: 'Участники должны быть зарегистрированы в Ponoi дольше 5 минут' },
-  { t: 'Высокий', d: 'Участники должны состоять на сервере дольше 10 минут' },
-  { t: 'Наивысший', d: 'Участники должны иметь подтверждённый номер телефона' },
-]
-const FILTER_LEVELS: { t: string; d: string }[] = [
-  { t: 'Не фильтровать', d: 'Сообщения не будут проверяться на наличие изображений откровенного характера.' },
-  { t: 'Проверять участников без ролей', d: 'Сообщения участников без ролей будут проверяться на наличие изображений откровенного характера.' },
-  { t: 'Проверять всех участников', d: 'Сообщения всех участников будут проверяться на наличие изображений откровенного характера.' },
-]
-const EVERYONE_PERMS: { k: string; t: string; d: string }[] = [
-  { k: 'view', t: 'Просмотр каналов', d: 'Позволяет участникам по умолчанию просматривать каналы (за исключением приватных).' },
-  { k: 'send', t: 'Отправлять сообщения', d: 'Позволяет участникам отправлять сообщения в текстовых каналах.' },
-  { k: 'invite', t: 'Создание приглашения', d: 'Позволяет участникам приглашать новых людей на этот сервер.' },
-  { k: 'nick', t: 'Изменить никнейм', d: 'Позволяет участникам менять свой никнейм на этом сервере.' },
-  { k: 'connect', t: 'Подключаться', d: 'Позволяет участникам подключаться к голосовым каналам.' },
-  { k: 'speak', t: 'Говорить', d: 'Позволяет участникам говорить в голосовых каналах.' },
+// v1.321.0: права @everyone стали настоящими. Раньше здесь было шесть
+// переключателей, которые складывались в settings.everyone_perms и не читались
+// НИГДЕ — ни в приложении, ни в базе. Тот же изъян, что у прав канала в v1.316.0,
+// только уровнем выше: владелец считал, что урезал права всем участникам, а не
+// менялось ровным счётом ничего.
+//
+// Настоящий эквивалент роли @everyone из Discord — servers.base_permissions
+// (миграция 49_role_perms2.sql): битовая маска, которую server_permissions()
+// прибавляет к правам ролей у КАЖДОГО участника. Она уже работает и уже
+// проверяется базой — не хватало только способа её изменить.
+//
+// Из прежних шести строк ни одна не соответствовала настоящему праву:
+// «Просмотр каналов» — это приватность канала (69), «Отправлять сообщения» —
+// канал только для чтения (78), свой никнейм участник меняет всегда (64), а
+// голосовых прав в системе прав нет вовсе. Вместо них — четыре бита, которые в
+// base_permissions действительно лежат.
+const BASE_PERMS: { bit: number; t: string; d: string }[] = [
+  { bit: 1024, t: 'Создавать приглашения', d: 'Приглашать новых людей на сервер. Проверяется базой: без этого права ссылка не создастся, даже если запрос послать мимо приложения.' },
+  { bit: 4096, t: 'Ставить реакции', d: 'Отмечать чужие сообщения эмодзи. Проверяется базой.' },
+  { bit: 8192, t: 'Прикреплять файлы', d: 'Отправлять картинки, видео и документы. Проверяется базой.' },
+  { bit: 2048, t: 'Упоминание @everyone', d: 'Оповещать всех участников сразу. Единственное из четырёх, что проверяет только приложение отправителя: список оповещаемых считает его устройство, поэтому изменённый клиент оповестит всех и без этого права.' },
 ]
 const AUTOMOD_CARDS: { k: string; ico: string; t: string; d: string; chips: string[]; btn: string }[] = [
   { k: 'mentions', ico: '@', t: 'Блокировать упоминания спама', d: 'Блокировать сообщения с 5 и более разными упоминаниями участников/ролей разом', chips: ['✕ блокировать сообщение'], btn: 'Включить' },
@@ -79,7 +81,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const normSt = (o: any) => { const r: any = {}; for (const k of Object.keys(o ?? {}).sort()) { const v = o[k]; if (v === undefined || v === null || v === false || v === '' || JSON.stringify(v) === JSON.stringify(SETTING_DEFAULTS[k])) continue; r[k] = v } return r }
   const [baseName, setBaseName] = useState(server.name)
   const [baseSt, setBaseSt] = useState(() => JSON.stringify(normSt(s0)))
-  const dirty = name !== baseName || JSON.stringify(normSt(st)) !== baseSt
+  // v1.321.0: права @everyone — отдельная колонка servers.base_permissions, а не
+  // settings: её читает server_permissions() в базе, и именно поэтому запрет
+  // держится и против запроса мимо приложения. 15872 — то же значение по
+  // умолчанию, что стоит в миграции 49_role_perms2.sql.
+  const DEFAULT_BASE_PERMS = 15872
+  const [basePerms, setBasePerms] = useState<number>(server.base_permissions ?? DEFAULT_BASE_PERMS)
+  const [baseBasePerms, setBaseBasePerms] = useState<number>(server.base_permissions ?? DEFAULT_BASE_PERMS)
+  const dirty = name !== baseName || JSON.stringify(normSt(st)) !== baseSt || basePerms !== baseBasePerms
   const setDirty = (_d: boolean) => {}
   const [busy, setBusy] = useState(false)
   const chFontRef = useRef<HTMLInputElement>(null)   // v1.140.0: свой файл шрифта названий каналов
@@ -249,8 +258,19 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       items: guideItems.filter(i => i.channelId).map(i => ({ channelId: i.channelId, desc: i.desc.trim() })),
     }
     const stWithGuide = { ...st, guide: (guide.text || guide.items.length) ? guide : null }
-    const { data: upd, error } = await supabase.from('servers').update({ name: nm, settings: stWithGuide } as any).eq('id', server.id).select('id')
+    let { data: upd, error } = await supabase.from('servers')
+      .update({ name: nm, settings: stWithGuide, base_permissions: basePerms } as any).eq('id', server.id).select('id')
+    // v1.321.0: base_permissions появляется в миграции 49. Пока её нет, колонки не
+    // существует и PostgREST отвергает ВЕСЬ запрос — без этой развилки перестали бы
+    // сохраняться и название с настройками, которые к правам отношения не имеют.
+    let permsSaved = !error
+    if (error && /base_permissions/i.test(error.message ?? '')) {
+      const r0 = await supabase.from('servers').update({ name: nm, settings: stWithGuide } as any).eq('id', server.id).select('id')
+      upd = r0.data; error = r0.error
+      if (!error) toastErr('Права @everyone не сохранены — примени миграцию supabase/49_role_perms2.sql')
+    }
     if (error) {
+      permsSaved = false
       const r2 = await supabase.from('servers').update({ name: nm }).eq('id', server.id).select('id')
       if (r2.error) return toastErr(r2.error.message)
       if (!r2.data || r2.data.length === 0) return toastErr('Не сохранилось — нет прав на изменение сервера')
@@ -265,9 +285,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     // v1.317.0: фиксируем именно то, что записали (вместе с путеводителем), а не
     // прежнее st — иначе кнопка «Сохранить» осталась бы активной после успешной
     // записи, как будто изменения не прошли.
-    setSt(stWithGuide); setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(stWithGuide))); onChanged()
+    setSt(stWithGuide); setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(stWithGuide)))
+    // Отмечаем права сохранёнными только если они действительно записались:
+    // иначе плашка «есть несохранённые» исчезла бы, а в базе осталось старое.
+    if (permsSaved) setBaseBasePerms(basePerms)
+    onChanged()
   }
-  function resetAll() { setName(baseName); setSt(JSON.parse(baseSt)) }   // v1.128.0: сброс к последним сохранённым
+  // v1.128.0: сброс к последним сохранённым
+  function resetAll() { setName(baseName); setSt(JSON.parse(baseSt)); setBasePerms(baseBasePerms) }
 
   async function pickFile(e: React.ChangeEvent<HTMLInputElement>, cb: (url: string, f: File) => void) {
     const f = e.target.files?.[0]; if (!f) return
@@ -332,17 +357,6 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     if (error) toastErr(String((error as any).message ?? error))
   }
 
-  const tri = (k: string) => {
-    const cur = (st.everyone_perms ?? {})[k] ?? 'default'
-    const set = (v: string) => up('everyone_perms', { ...(st.everyone_perms ?? {}), [k]: v })
-    return (
-      <div className="cset-tri">
-        <button className={'deny' + (cur === 'deny' ? ' on' : '')} title="Запретить" onClick={() => set('deny')}><Icon name="close" size={13} /></button>
-        <button className={'def' + (cur === 'default' ? ' on' : '')} title="По умолчанию" onClick={() => set('default')}>／</button>
-        <button className={'allow' + (cur === 'allow' ? ' on' : '')} title="Разрешить" onClick={() => set('allow')}><Icon name="check" size={13} /></button>
-      </div>
-    )
-  }
   const toggleRow = (t: string, d: string, k: string, dflt = false) => (
     <div className="cset-row">
       <div><div className="cset-row-t">{t}</div><div className="cset-hint">{d}</div></div>
@@ -361,7 +375,17 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     { k: 'profile', t: 'Профиль сервера', ok: canOwnerLevel }, { k: 'tag', t: 'Тег сервера', ok: canOwnerLevel }, { k: 'engage', t: 'Вовлечённость', ok: canOwnerLevel },
     { k: 'emoji', t: 'Эмодзи', ok: canManageEmoji }, { k: 'stickers', t: 'Стикеры', ok: canManageEmoji }, { k: 'sound', t: 'Звуковая панель', ok: canOwnerLevel },
     { k: 'members', t: 'Участники', ok: canOwnerLevel }, { k: 'roles', t: 'Роли', ok: canManageRolesTab }, { k: 'invites', t: 'Приглашения', ok: canOwnerLevel }, { k: 'access', t: 'Доступ', ok: canOwnerLevel },
-    { k: 'security', t: 'Настройка безопасности', ok: canOwnerLevel }, { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
+    // v1.321.0: вкладка «Настройка безопасности» убрана целиком. В ней было три
+    // настройки, и ни одна ничего не делала: «Уровень проверки» (участник якобы
+    // должен ему соответствовать, чтобы писать), «Фильтры нежелательного
+    // контента» (якобы проверка изображений) и «Разрешить исключение участников
+    // только администраторам». Все три сохранялись в settings и не читались нигде
+    // — ни в приложении, ни в базе. Здесь это опаснее, чем в других вкладках:
+    // владелец заходил в раздел с названием «безопасность», что-то там выставлял
+    // и уходил с уверенностью, что сервер защищён. Ровно за это в v1.290.0 убрали
+    // отсюда же тумблер двухфакторной аутентификации — остальное просто не
+    // проверили тогда. Вернуть, когда будет что проверять на самом деле.
+    { k: 'audit', t: 'Журнал аудита', ok: canViewAudit }, { k: 'bans', t: 'Баны', ok: canOwnerLevel }, { k: 'automod', t: 'Автомод', ok: canManageAutomod },
     { k: 'bots', t: 'Боты', ok: canManageWebhooks },
   ]
   const NAV = NAV_RAW.filter(n => n.ok)
@@ -382,8 +406,6 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, canOwnerLevel, canManageEmoji, canViewAudit, canManageAutomod, canManageRolesTab])
   const filtered = members.filter(m => !mq.trim() || (m.member_name ?? '').toLowerCase().includes(mq.trim().toLowerCase()))
-  const vl = VERIF_LEVELS[st.verification ?? 0] ?? VERIF_LEVELS[0]
-  const fl = FILTER_LEVELS[st.content_filter ?? 0] ?? FILTER_LEVELS[0]
 
   return createPortal(
     <div className="cset sset">
@@ -393,7 +415,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <div key={n.k} className={'cset-tab' + (tab === n.k ? ' on' : '')} onClick={() => { setTab(n.k); setRolesView('main') }}>{n.t}</div>
           ))}
           <div className="cset-sep" />
-          <div className={'cset-tab' + (tab === 'community' ? ' on' : '')} onClick={() => setTab('community')}>Включить сообщество</div>
+          {/* v1.321.0: было «Включить сообщество» — переключатель убран как
+              декоративный, и во вкладке осталось то, что в ней работает. */}
+          <div className={'cset-tab' + (tab === 'community' ? ' on' : '')} onClick={() => setTab('community')}>Путеводитель</div>
           <div className="cset-sep" />
           <div className={'cset-tab' + (tab === 'template' ? ' on' : '')} onClick={() => setTab('template')}>Шаблон сервера</div>
           <div className="cset-tab danger" onClick={() => { setDelName(''); setShowDelete(true) }}>Удалить сервер <Icon name="trash" size={15} /></div>
@@ -634,12 +658,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'members' && <>
           <div className="cset-h">Участники сервера</div>
-          <div className="cset-row" style={{ marginTop: 0 }}>
-            <div><div className="cset-row-t">Показать участников в списке каналов</div>
-              <div className="cset-hint">При включении этого параметра страницы участников будут показаны в списке каналов. Это позволит вам быстро посмотреть, кто недавно присоединился к вашему серверу, и принять решение в отношении пользователей, замеченных в подозрительной деятельности.</div></div>
-            <button className={'tgl' + (st.members_in_list ? ' on' : '')} onClick={() => up('members_in_list', !st.members_in_list)} />
-          </div>
-          <div className="cset-div" />
+          {/* v1.321.0: убран переключатель «Показать участников в списке каналов».
+              Он сохранялся в settings.members_in_list, которое не читалось нигде —
+              список каналов о нём не знал вовсе. Тот же переключатель дублировался
+              во вкладке «Безопасность», убран и там. */}
           <div className="sset-mtop">
             <b>Недавние участники</b>
             <input className="modal-in" style={{ width: 240, margin: 0 }} placeholder="Поиск по имени пользователя" value={mq} onChange={e => setMq(e.target.value)} />
@@ -744,12 +766,22 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         {tab === 'roles' && rolesView === 'everyone' && <>
           <div className="sset-back" onClick={() => setRolesView('main')}><Icon name="chevron-right" size={16} style={{ transform: 'rotate(180deg)' }} /> НАЗАД</div>
           <div className="cset-h">Права по умолчанию — @everyone</div>
-          {EVERYONE_PERMS.map(p => (
-            <div key={p.k} className="cset-perm">
-              <div className="cset-perm-h">{p.t} {tri(p.k)}</div>
-              <div className="cset-hint">{p.d}</div>
+          <div className="cset-hint" style={{ marginTop: -12, marginBottom: 14 }}>
+            Есть у каждого участника сервера без всякой роли. Роли эти права только
+            добавляют, отобрать ролью нельзя — выключай здесь.
+          </div>
+          {BASE_PERMS.map(p => (
+            <div key={p.bit} className="cset-row">
+              <div><div className="cset-row-t">{p.t}</div><div className="cset-hint">{p.d}</div></div>
+              <button className={'tgl' + ((basePerms & p.bit) !== 0 ? ' on' : '')}
+                onClick={() => setBasePerms(v => v ^ p.bit)} />
             </div>
           ))}
+          <div className="cset-hint" style={{ marginTop: 14 }}>
+            Владельца сервера эти переключатели не касаются — он может всё в любом случае.
+            Управление сервером, ролями, каналами и сообщениями сюда не входит намеренно:
+            такое выдают ролью конкретным людям, а не всем сразу.
+          </div>
         </>}
 
         {tab === 'invites' && <>
@@ -773,69 +805,35 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'access' && <>
           <div className="cset-h">Доступ</div>
-          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Как можно присоединиться к вашему серверу?</div>
-          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 14 }}>Вы можете оставить свой сервер приватным или открыть его, чтобы привлечь большую аудиторию.</div>
-          <div className="sset-accs">
-            {[
-              { k: 'invite', ico: '🔒', t: 'Только по приглашению', d: 'К вашему серверу можно сразу присоединиться по приглашению' },
-              { k: 'apply', ico: '✉️', t: 'По заявке', d: 'Чтобы присоединиться к серверу, нужно подать заявку на вступление и дождаться её одобрения' },
-              { k: 'public', ico: '🌐', t: 'Публичный', d: 'Любой может присоединиться к вашему серверу непосредственно через «Путешествие по серверам»' },
-            ].map(a => (
-              <div key={a.k} className={'sset-acc' + ((st.access ?? 'invite') === a.k ? ' on' : '')} onClick={() => up('access', a.k)}>
-                <div style={{ fontSize: 22 }}>{a.ico}</div><b>{a.t}</b><span>{a.d}</span>
-              </div>
-            ))}
+          {/* v1.321.0: было три способа вступления на выбор — «Только по
+              приглашению», «По заявке» и «Публичный». Работает ровно один, и
+              никогда не было иначе: попасть на сервер можно только по коду
+              приглашения (redeem_invite, миграция 54). Выбор «По заявке» создавал
+              самую вредную иллюзию — владелец считал, что теперь вступление
+              одобряет он, а по разосланной ссылке по-прежнему заходил кто угодно
+              и сразу. Заодно убраны «Сервер с возрастным ограничением» и «Правила
+              сервера» — оба обещали, что человека о чём-то спросят ПРЕЖДЕ чем
+              пустят, и оба не читались нигде. Возрастная заглушка на деле есть, но
+              у канала (ChannelSettings.tsx), и она настоящая. */}
+          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Как можно присоединиться к серверу</div>
+          <div className="cset-hint" style={{ marginTop: 0 }}>
+            Только по ссылке-приглашению — другого способа нет. Сервер не показывается
+            в поиске и не открывается по прямой ссылке: без действующего приглашения
+            попасть на него нельзя.
           </div>
           <div className="cset-div" />
-          {toggleRow('Сервер с возрастным ограничением', 'Для просмотра содержимого этого сервера пользователям необходимо подтвердить, что они достигли совершеннолетия.', 'age_restricted')}
-          <div className="cset-div" />
-          {toggleRow('Правила сервера', 'Прежде чем общаться на сервере и взаимодействовать с другими его участниками, необходимо согласиться с правилами сервера.', 'rules_on')}
-          {st.rules_on && <>
-            <label className="cset-lbl">Правила</label>
-            {(st.rules ?? []).map((r: string, i: number) => (
-              <div key={i} className="sset-rule">{i + 1}. {r}
-                <button onClick={() => up('rules', (st.rules ?? []).filter((_: string, j: number) => j !== i))}><Icon name="close" size={13} /></button></div>
-            ))}
-            <div className="sset-ruleadd">
-              <input className="modal-in" style={{ margin: 0 }} placeholder="Введите правило" id="sset-rule-in"
-                onKeyDown={e => { if (e.key === 'Enter') { const el = e.target as HTMLInputElement; if (el.value.trim()) { up('rules', [...(st.rules ?? []), el.value.trim()]); el.value = '' } } }} />
-            </div>
-            <div className="cset-hint">Примерные правила: Будьте вежливы и уважительны · Не рассылайте спам и не занимайтесь самопродвижением · Не публикуйте непристойные материалы, а также контент с ограничениями по возрасту.</div>
-          </>}
+          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Приостановить приглашения</div>
+          <div className="cset-hint" style={{ marginTop: 0 }}>
+            {st.invites_paused
+              ? 'Сейчас приглашения приостановлены: по уже разосланным ссылкам никто не войдёт, пока не возобновишь. Проверяется базой, а не приложением.'
+              : 'Все действующие ссылки перестанут пускать — разом, не отзывая каждую по отдельности. Проверяется базой, а не приложением: старая ссылка не сработает и в обход приложения.'}
+          </div>
+          <button className={'cset-pause' + (st.invites_paused ? ' off' : '')} style={{ marginTop: 10 }}
+            onClick={() => persistNow({ ...st, invites_paused: !st.invites_paused })}>
+            {st.invites_paused ? 'Возобновить приглашения' : 'Приостановить приглашения'}
+          </button>
         </>}
 
-        {tab === 'security' && <>
-          <div className="cset-h">Настройка безопасности</div>
-          <div className="cset-row" style={{ marginTop: 0 }}>
-            <div><div className="cset-row-t">Показать участников в списке каналов <span className="sset-beta">Бета</span></div>
-              <div className="cset-hint">При включении этого параметра страницы участников будут показаны в списке каналов. Это позволит вам быстро посмотреть, кто недавно присоединился к вашему серверу, и принять решение в отношении пользователей, замеченных в подозрительной деятельности.</div></div>
-            <button className={'tgl' + (st.members_in_list ? ' on' : '')} onClick={() => up('members_in_list', !st.members_in_list)} />
-          </div>
-          <div className="sset-info">В сообществах эта функция активируется автоматически.</div>
-          <div className="cset-div" />
-          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Уровень проверки</div>
-          <div className="cset-hint" style={{ marginTop: 0 }}>Участники сервера должны соответствовать указанным критериям, чтобы писать в текстовые каналы или отправлять личные сообщения. Данное условие не действует, если у участника есть назначенная роль.</div>
-          <div className="sset-level">
-            <div><b>{vl.t}</b><div className="cset-hint" style={{ marginTop: 2 }}>{vl.d}</div></div>
-            <button className="cset-link" onClick={() => up('verification', ((st.verification ?? 0) + 1) % VERIF_LEVELS.length)}>Изменить</button>
-          </div>
-          {/* v1.290.0: тумблер «Требовать двухфакторную аутентификацию для модераторов»
-              убран. Он нигде не проверялся (строка mod_2fa встречалась во всём проекте
-              ровно один раз — здесь), колонки под него не было, а самой двухфакторной
-              аутентификации в приложении нет вообще. Владелец включал его и считал
-              модераторов защищёнными — то есть кнопка не просто не работала, а давала
-              ложную уверенность именно в вопросе безопасности. Вернуть вместе с
-              настоящей 2FA (Supabase умеет TOTP), см. IDEAS.md, пункт 10. */}
-          <div className="cset-div" />
-          {toggleRow('Разрешить исключение участников только администраторам', 'Когда включена эта опция, исключать неактивных участников могут только администраторы и владелец сервера.', 'admin_prune')}
-          <div className="cset-div" />
-          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Фильтры нежелательного контента</div>
-          <div className="cset-hint" style={{ marginTop: 0 }}>Выберите, могут ли участники сервера делиться изображениями откровенного характера. Эта настройка будет применяться на каналах, не имеющих возрастных ограничений.</div>
-          <div className="sset-level">
-            <div><b>{fl.t}</b><div className="cset-hint" style={{ marginTop: 2 }}>{fl.d}</div></div>
-            <button className="cset-link" onClick={() => up('content_filter', ((st.content_filter ?? 0) + 1) % FILTER_LEVELS.length)}>Изменить</button>
-          </div>
-        </>}
 
         {tab === 'audit' && (() => {
           // v1.267.0: раньше вкладка была честной заглушкой (фильтры недоступны,
@@ -945,13 +943,12 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               </div>
             )
           })}
-          <div className="cset-div" />
-          <div className="cset-h" style={{ fontSize: 16, marginBottom: 4 }}>Фильтры нежелательного контента</div>
-          <div className="cset-hint" style={{ marginTop: 0 }}>Выберите, могут ли участники сервера делиться изображениями, отмеченными как контент откровенного характера. Эта настройка будет применяться на каналах, не имеющих возрастных ограничений.</div>
-          <div className="sset-level">
-            <div><b>{fl.t}</b><div className="cset-hint" style={{ marginTop: 2 }}>{fl.d}</div></div>
-            <button className="cset-link" onClick={() => up('content_filter', ((st.content_filter ?? 0) + 1) % FILTER_LEVELS.length)}>Изменить</button>
-          </div>
+          {/* v1.321.0: отсюда убран второй экземпляр «Фильтров нежелательного
+              контента» (первый стоял в «Настройке безопасности»). Он обещал
+              проверку изображений, которой нет: настоящая автомодерация — это
+              карточки выше, они работают по тексту сообщения. Рядом с ними
+              нерабочая настройка особенно вредна — выглядит частью того же
+              механизма. */}
         </>}
 
         {tab === 'bots' && <ServerBotsPanel serverId={server.id} memberIds={members.map(m => m.user_id)} />}
@@ -992,21 +989,15 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               <Icon name="plus" size={15} /> Добавить канал
             </button>
           )}
-          <div className="cset-div" />
-          <div className="sset-chero">
-            <div style={{ fontSize: 54 }}>🏡</div>
-            <div className="cset-h" style={{ marginBottom: 6 }}>Вы создаёте сообщество?</div>
-            <div className="cset-hint">Превратите сервер в сервер сообщества, чтобы получить доступ к дополнительным административным инструментам, которые помогут модерировать и развивать его.</div>
-            {st.community
-              ? <button className="modal-ghost" style={{ marginTop: 16 }} onClick={() => persistNow({ ...st, community: false })}>Отключить сообщество</button>
-              : <button className="modal-primary" style={{ marginTop: 16 }} onClick={() => { persistNow({ ...st, community: true, members_in_list: true }); toastOk('Сообщество включено!') }}>Включить сообщество</button>}
-            <div className="cset-hint" style={{ marginTop: 16 }}>Серверы сообщества — большие площадки, где могут собираться люди с общими интересами. Включив функцию «Сообщество», вы не сделаете сервер видимым в «Путешествии по серверам».</div>
-          </div>
-          <div className="sset-ccards">
-            <div className="sset-ccard"><span className="sset-cic" style={{ background: 'rgba(35,165,90,.2)', color: '#23a55a' }}>📈</span><b>Развивайте своё сообщество</b>Подайте заявку на включение в Путешествие по серверам, чтобы новые пользователи могли найти ваш сервер в Ponoi.</div>
-            <div className="sset-ccard"><span className="sset-cic" style={{ background: 'rgba(99,102,241,.2)', color: '#6366f1' }}>📊</span><b>Поддерживайте активность участников</b>Получите доступ к таким инструментам, как Аналитика сервера, которая помогает модерировать сервер и поддерживать на нём активность.</div>
-            <div className="sset-ccard"><span className="sset-cic" style={{ background: 'rgba(237,66,69,.2)', color: '#ed4245' }}>ℹ️</span><b>Следите за ситуацией</b>Получайте новости о новинках, созданных специально для сообществ Ponoi.</div>
-          </div>
+          {/* v1.321.0: убран блок «Вы создаёте сообщество?» и три карточки под ним.
+              Переключатель «Сообщество» записывал settings.community, которое во
+              всём проекте читалось ровно в одном месте — в подписи этой же кнопки,
+              то есть не делал ничего. Карточки обещали «Путешествие по серверам»
+              и «Аналитику сервера», которых нет, причём подпись под кнопкой сама
+              признавалась, что в «Путешествие» сервер так и не попадёт.
+              Аналитику решено не делать: она требует собирать, кто когда заходил и
+              сколько писал — ровно то, от чего в этом приложении избавлялись,
+              включая выброшенный тумблер «сбор данных» (v1.304.0). */}
         </>}
 
         {tab === 'template' && <>

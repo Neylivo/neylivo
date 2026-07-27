@@ -42,6 +42,11 @@ async function refused(name, fn) {
 const sql = f => readFileSync(REPO + f, 'utf8')
 
 await db.exec(readFileSync(join(HERE, 'setup.sql'), 'utf8'))
+// 49 заводит base_permissions (права @everyone) и политики, которые их требуют;
+// 72 потом помечает server_permissions как security definer. Порядок тот же, что
+// в истории проекта.
+await db.exec(sql('49_role_perms2.sql'))
+await db.exec(sql('72_harden_permission_functions.sql'))
 await db.exec(sql('70_threads.sql'))
 await db.exec(sql('78_channel_readonly.sql'))
 const SABOTAGE = {
@@ -188,6 +193,50 @@ await check('посторонний не удалит чужое обсужде�
 await as(USER, `delete from threads where id=$1`, [t2])
 await check('автор удаляет своё обсуждение',
   async () => (await db.query('select 1 from threads where id=$1', [t2])).rows.length === 0)
+
+// ── Права @everyone (servers.base_permissions) ────────────────────────────
+// v1.321.0: экран «Права по умолчанию — @everyone» писал в settings.everyone_perms,
+// которое не читалось нигде. Настоящие права — эта колонка; здесь проверяется,
+// что выключенный бит действительно запрещает действие, а не только красит кнопку.
+const DEFAULT_BASE = 15872   // CREATE_INVITE|MENTION_EVERYONE|ADD_REACTIONS|ATTACH_FILES
+await check('по умолчанию у @everyone ровно четыре права', async () =>
+  (await db.query('select base_permissions::int b from servers where id=$1', [srv])).rows[0].b === DEFAULT_BASE)
+
+const msgForRx = (await as(OWNER,
+  `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','на реакцию') returning id`,
+  [forum, OWNER])).rows[0].id
+
+async function setBase(bits) { await db.query('update servers set base_permissions=$2 where id=$1', [srv, bits]) }
+
+await check('с правом участник ставит реакцию', async () => {
+  await as(USER, `insert into reactions (message_id, user_id, emoji) values ($1,$2,'👍')`, [msgForRx, USER])
+  return true
+})
+await setBase(DEFAULT_BASE & ~4096)   // отобрали ADD_REACTIONS
+await refused('без права реакцию поставить нельзя', () => as(OTHER,
+  `insert into reactions (message_id, user_id, emoji) values ($1,$2,'👎')`, [msgForRx, OTHER]))
+await check('у владельца реакции работают и без права', async () => {
+  await as(OWNER, `insert into reactions (message_id, user_id, emoji) values ($1,$2,'🔥')`, [msgForRx, OWNER])
+  return true
+})
+
+await setBase(DEFAULT_BASE & ~8192)   // отобрали ATTACH_FILES
+await refused('без права вложение не отправить', () => as(USER,
+  `insert into messages (channel_id, author, author_name, content, attach_url) values ($1,$2,'n','вот файл','https://x/y.png')`,
+  [forum, USER]))
+await check('текст без вложения при этом отправляется', async () => {
+  await as(USER, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','просто текст')`, [forum, USER])
+  return true
+})
+
+await setBase(DEFAULT_BASE & ~1024)   // отобрали CREATE_INVITE
+await refused('без права приглашение не создать', () => as(USER,
+  `insert into server_invites (server_id, code, created_by) values ($1,'abc',$2)`, [srv, USER]))
+await setBase(DEFAULT_BASE)
+await check('вернули право — приглашение создаётся', async () => {
+  await as(USER, `insert into server_invites (server_id, code, created_by) values ($1,'def',$2)`, [srv, USER])
+  return true
+})
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
