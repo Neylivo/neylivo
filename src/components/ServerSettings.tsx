@@ -91,6 +91,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
   const [invites, setInvites] = useState<any[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
+  // v1.317.0: путеводитель по серверу — записка новичкам и отмеченные каналы.
+  const [guideText, setGuideText] = useState<string>(s0.guide?.text ?? '')
+  const [guideItems, setGuideItems] = useState<{ channelId: string; desc: string }[]>(
+    Array.isArray(s0.guide?.items) ? s0.guide.items : [])
   const [mq, setMq] = useState('')       // поиск по участникам
   const [bq, setBq] = useState('')       // поиск по банам
   const [bqDone, setBqDone] = useState<string | null>(null)  // v1.109.0: выполненный поиск по банам
@@ -227,7 +231,16 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   function setTag(patch: any) { persistNow({ ...st, tag: { ...(st.tag ?? {}), ...patch } }) }
   async function saveAll() {
     const nm = name.trim() || server.name
-    const { data: upd, error } = await supabase.from('servers').update({ name: nm, settings: st } as any).eq('id', server.id).select('id')
+    // v1.317.0: путеводитель живёт в отдельном состоянии (текст + список каналов),
+    // поэтому подмешиваем его в настройки прямо перед записью. Строки без
+    // выбранного канала выбрасываем: пустая строка в путеводителе новичку ничего
+    // не объясняет, а место занимает.
+    const guide = {
+      text: guideText.trim(),
+      items: guideItems.filter(i => i.channelId).map(i => ({ channelId: i.channelId, desc: i.desc.trim() })),
+    }
+    const stWithGuide = { ...st, guide: (guide.text || guide.items.length) ? guide : null }
+    const { data: upd, error } = await supabase.from('servers').update({ name: nm, settings: stWithGuide } as any).eq('id', server.id).select('id')
     if (error) {
       const r2 = await supabase.from('servers').update({ name: nm }).eq('id', server.id).select('id')
       if (r2.error) return toastErr(r2.error.message)
@@ -240,7 +253,10 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       // и починен в ChannelSettings.tsx (v1.140.0), просто не сюда же.
       return toastErr('Не сохранилось — нет прав на изменение сервера (или устарела сессия)')
     } else toastOk('Изменения сохранены')
-    setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(st))); onChanged()   // v1.128.0
+    // v1.317.0: фиксируем именно то, что записали (вместе с путеводителем), а не
+    // прежнее st — иначе кнопка «Сохранить» осталась бы активной после успешной
+    // записи, как будто изменения не прошли.
+    setSt(stWithGuide); setBaseName(nm); setName(nm); setBaseSt(JSON.stringify(normSt(stWithGuide))); onChanged()
   }
   function resetAll() { setName(baseName); setSt(JSON.parse(baseSt)) }   // v1.128.0: сброс к последним сохранённым
 
@@ -932,13 +948,42 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         {tab === 'bots' && <ServerBotsPanel serverId={server.id} memberIds={members.map(m => m.user_id)} />}
 
         {tab === 'community' && <>
-          {/* v1.279.0: флаг «сообщество» просто сохраняется — «Аналитика сервера»,
-              «Путешествие по серверам», «новости» ниже ни на что не влияют
-              нигде в приложении. Честно, а не делаем вид, что это открывает
-              реальные инструменты. */}
-          <div className="cset-hint" style={{ background: 'rgba(237,66,69,.12)', border: '1px solid rgba(237,66,69,.35)', borderRadius: 8, padding: '10px 12px', margin: '4px 0 14px' }}>
-            ⚠️ Технически это только переключатель — «Аналитика сервера», подача заявки в «Путешествие по серверам» и новости ниже пока не реализованы.
+          {/* v1.317.0: здесь же собирается путеводитель по серверу — то, что новичок
+              видит первым. Раньше вкладка целиком состояла из переключателя и
+              обещаний; теперь в ней есть одна настоящая вещь. */}
+          <div className="cset-h" style={{ fontSize: 17 }}>Путеводитель по серверу</div>
+          <div className="cset-hint" style={{ marginBottom: 10 }}>
+            Короткая записка новичкам и каналы, с которых стоит начать. Человек, впервые
+            попавший на сервер, видит список каналов и не понимает, куда писать, — это
+            и решается здесь. Открывается из меню сервера.
           </div>
+          <label className="cset-lbl">Записка новичкам</label>
+          <textarea className="cset-topic" style={{ minHeight: 76 }} maxLength={600}
+            placeholder="Например: привет! Правила в «правила», болтаем в «общем», по игре — в «катки»."
+            value={guideText} onChange={e => { setGuideText(e.target.value); setDirty(true) }} />
+          <label className="cset-lbl">С чего начать</label>
+          {guideItems.map((it, i) => (
+            <div key={i} className="guide-edit-row">
+              <select className="cset-in" value={it.channelId}
+                onChange={e => { const v = [...guideItems]; v[i] = { ...v[i], channelId: e.target.value }; setGuideItems(v); setDirty(true) }}>
+                <option value="">— выбери канал —</option>
+                {channels.filter(c => (c as any).kind !== 'category').map(c => (
+                  <option key={c.id} value={c.id}>{(c as any).kind === 'voice' ? '🔊 ' : '# '}{c.name}</option>
+                ))}
+              </select>
+              <input className="cset-in" maxLength={120} placeholder="зачем этот канал"
+                value={it.desc} onChange={e => { const v = [...guideItems]; v[i] = { ...v[i], desc: e.target.value }; setGuideItems(v); setDirty(true) }} />
+              <button className="pqs2-btn ghost danger" title="Убрать"
+                onClick={() => { setGuideItems(guideItems.filter((_, j) => j !== i)); setDirty(true) }}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
+          {guideItems.length < 8 && (
+            <button className="pqs2-btn ghost" style={{ marginTop: 8 }}
+              onClick={() => { setGuideItems([...guideItems, { channelId: '', desc: '' }]); setDirty(true) }}>
+              <Icon name="plus" size={15} /> Добавить канал
+            </button>
+          )}
+          <div className="cset-div" />
           <div className="sset-chero">
             <div style={{ fontSize: 54 }}>🏡</div>
             <div className="cset-h" style={{ marginBottom: 6 }}>Вы создаёте сообщество?</div>

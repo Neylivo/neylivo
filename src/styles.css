@@ -4594,3 +4594,22 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .ch-readonly { display:flex; align-items:center; justify-content:center; gap:8px; margin:0 16px 16px;
   padding:14px; border-radius:var(--r-md); background:rgba(var(--ov, 255,255,255),.04);
   color:var(--mut); font-size:14px; }
+
+/* v1.317.0: путеводитель по серверу */
+.guide-modal { width: 520px; }
+.guide-body { max-height: 56vh; overflow-y: auto; }
+.guide-text { white-space: pre-wrap; line-height: 1.5; margin: 14px 0 6px; }
+.guide-item { display:flex; align-items:center; gap:10px; padding:10px 8px; border-radius:var(--r-sm);
+  cursor:pointer; color:var(--mut); transition:background .12s var(--ease-out4, ease); }
+.guide-item:hover { background:rgba(var(--ov, 255,255,255),.06); }
+.guide-item-b { flex:1; min-width:0; }
+.guide-item-d { font-size:12px; color:var(--mut); margin-top:2px; }
+.guide-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:28px 12px; color:var(--mut); }
+.guide-empty-ico { opacity:.5; }
+.guide-edit-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.guide-edit-row .cset-in { flex:1; min-width:0; }
+@media (max-width: 768px) {
+  .guide-modal { width:100%; }
+  .guide-edit-row { flex-wrap:wrap; }
+  .guide-edit-row .cset-in { flex:1 1 100%; }
+}

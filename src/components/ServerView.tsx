@@ -53,6 +53,7 @@ import { notifModeOf } from '../lib/srvNotify'
 import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
 import { ChannelsRolesModal } from './ChannelsRolesModal'
+import { ServerGuideModal } from './ServerGuideModal'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
@@ -165,6 +166,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [srvMenu, setSrvMenu] = useState(false)
   const [showEvents, setShowEvents] = useState(false)
   const [showChannelsRoles, setShowChannelsRoles] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [showThreads, setShowThreads] = useState(false)
   const [thrQ, setThrQ] = useState('')
   const [threads, setThreads] = useState<Thread[]>([])
@@ -1130,7 +1132,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </>}
         <div className="ch-list">
           {(server as any).settings?.banner_url ? <>
-            <div className="ch evt clickable" onClick={() => toastOk('Путеводитель по серверу скоро появится')}><Icon name="flag" size={16} /> Путеводитель по серверу</div>
+            <div className="ch evt clickable" onClick={() => setShowGuide(true)}><Icon name="flag" size={16} /> Путеводитель по серверу</div>
             {/* v1.315.0: заглушка заменена настоящим экраном — устройство сервера
                 (каналы, роли и что каждая роль даёт) в одном месте, как в Discord. */}
             <div className="ch evt clickable" onClick={() => setShowChannelsRoles(true)}><Icon name="list" size={16} /> Каналы и роли</div>
@@ -1531,6 +1533,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {showChannelsRoles && <ChannelsRolesModal channels={channels} serverId={server.id}
         myPerms={myPerms} isOwner={isOwner} onClose={() => setShowChannelsRoles(false)}
         onOpenChannel={c => setCurChannel(c)} />}
+      {showGuide && <ServerGuideModal server={server} channels={channels}
+        canEdit={isOwner || hasPerm(myPerms, PERM.MANAGE_SERVER)}
+        onClose={() => setShowGuide(false)} onOpenChannel={c => setCurChannel(c)}
+        onOpenSettings={() => window.dispatchEvent(new CustomEvent('ponoi-open-server-settings', { detail: server }))} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
       {notifForCh && <ChannelNotifModal server={server} channel={notifForCh} onClose={() => setNotifForCh(null)} />}
         {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
