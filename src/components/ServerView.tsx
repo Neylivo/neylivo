@@ -22,7 +22,9 @@ import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer } from '../lib/servers'
 import { uploadWithProgress } from '../lib/storage'
 import { isBlockedWith } from '../lib/block'
-import { CallRoom, Sinks } from './CallRoom'
+import { lazyNamed } from '../lib/lazyScreen'
+const CallRoom = lazyNamed(() => import('./CallRoom'), 'CallRoom')
+const Sinks = lazyNamed(() => import('./CallRoom'), 'Sinks', null)   // невидимый аудио-узел — индикатор ни к чему
 import { joinRoom, RoomEvent, DisconnectReason } from '../lib/livekit'
 import type { Room } from '../lib/livekit'
 import { fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } from '../lib/callSounds'

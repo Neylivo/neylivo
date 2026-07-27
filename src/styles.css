@@ -4470,3 +4470,13 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   }
   .ch, .dm-navitem, .pqs2-item, .ctx-item { display: flex; align-items: center; }
 }
+
+/* v1.289.0: состояние ленивой загрузки экрана (см. lib/lazyScreen.tsx) */
+.lazy-wait { position:fixed; inset:0; z-index:130; display:flex; align-items:center; justify-content:center; gap:6px; background:rgba(0,0,0,.35); }
+.lazy-dot { width:8px; height:8px; border-radius:var(--r-pill); background:var(--tx); opacity:.35; animation:lazy-pulse 1s var(--ease-out4, ease) infinite; }
+.lazy-dot:nth-child(2) { animation-delay:.15s; }
+.lazy-dot:nth-child(3) { animation-delay:.3s; }
+@keyframes lazy-pulse { 0%,100% { opacity:.25; transform:translateY(0); } 50% { opacity:1; transform:translateY(-4px); } }
+.lazy-fail { position:fixed; inset:0; z-index:130; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:12px; background:rgba(0,0,0,.55); color:var(--tx); font-size:14px; padding:24px; text-align:center; }
+.lazy-fail button { background:var(--brand); color:#fff; border:none; border-radius:var(--r-md); padding:10px 18px; font:inherit; font-weight:600; cursor:pointer; }

@@ -14,7 +14,9 @@ import { Capacitor } from '@capacitor/core'
 import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, type ApkUpdate } from './lib/apkUpdate'
 import { useClampToViewport } from './lib/clampPos'
 import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
-import { EmergencyChat } from './components/EmergencyChat'
+import { lazyNamed } from './lib/lazyScreen'
+// Аварийный чат нужен в редкой ситуации «основной сервер лёг» — грузим тогда же.
+const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 import { startEnabledPlugins } from './lib/plugins/host'
 
 // v1.275.0: через сколько непрерывной деградации предлагать аварийный чат —

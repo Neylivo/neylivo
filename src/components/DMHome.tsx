@@ -17,7 +17,11 @@ import { notifyMessage, msgSound, closeNotif } from '../lib/notify'
 import { sendPush } from '../lib/push'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
-import { CallRoom, Sinks } from './CallRoom'
+import { lazyNamed } from '../lib/lazyScreen'
+// Панель звонка монтируется только когда звонок уже идёт — к этому моменту
+// livekit-client всё равно загружен (см. v1.288.0), лишнего ожидания нет.
+const CallRoom = lazyNamed(() => import('./CallRoom'), 'CallRoom')
+const Sinks = lazyNamed(() => import('./CallRoom'), 'Sinks', null)   // невидимый аудио-узел — индикатор ни к чему
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { ProfileCard, type ProfileTab } from './ProfileCard'
 import { DmProfilePanel } from './DmProfilePanel'

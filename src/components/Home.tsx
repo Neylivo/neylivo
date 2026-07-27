@@ -5,10 +5,12 @@ import { useAuth } from '../auth/AuthProvider'
 import type { Server } from '../types'
 import { ServerView } from './ServerView'
 import { DMHome } from './DMHome'
-import { MusicPlayer } from '../music/MusicPlayer'
+import { lazyNamed } from '../lib/lazyScreen'
+// Плеер и настройки сервера — отдельные экраны, до открытия не нужны.
+const MusicPlayer = lazyNamed(() => import('../music/MusicPlayer'), 'MusicPlayer')
 import { myServers, createServer as createSrv, joinByCode, deleteServer, updateServer } from '../lib/servers'
 import { CreateServerModal, FindServerModal, JoinServerModal, ServerCtxMenu, ServerNotifModal } from './ServerModals'
-import { ServerSettings } from './ServerSettings'
+const ServerSettings = lazyNamed(() => import('./ServerSettings'), 'ServerSettings')
 import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initServerEmoji, setMyServers } from '../lib/serverEmoji'

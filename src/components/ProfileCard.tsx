@@ -22,9 +22,10 @@ import { GamePickerModal } from './GamePickerModal'
 import { toastErr, toastOk } from '../lib/toast'
 import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
-import { WallDraw } from './WallDraw'
+import { lazyNamed } from '../lib/lazyScreen'
+const WallDraw = lazyNamed(() => import('./WallDraw'), 'WallDraw')
 import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
-import { GameStatsModal } from './GameStatsModal'
+const GameStatsModal = lazyNamed(() => import('./GameStatsModal'), 'GameStatsModal')
 import { WidgetGamesModal } from './WidgetGamesModal'
 
 function fmtMs(ms: number): string {

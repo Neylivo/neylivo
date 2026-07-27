@@ -10,7 +10,9 @@ import { fetchProfile, cachedProfile, nickFontOf } from '../lib/profilePrefs'
 import { trimVideoTo5s } from '../lib/videoAvatar'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { ActivityLabel } from './ActivityLabel'
-import { Settings } from './Settings'
+import { lazyNamed } from '../lib/lazyScreen'
+// v1.289.0: настройки (1200 строк) грузятся при первом открытии, а не при входе.
+const Settings = lazyNamed(() => import('./Settings'), 'Settings')
 import { MiniProfile } from './MiniProfile'
 import { Icon } from './icons'
 import { IS_MOBILE } from '../lib/mobile'
