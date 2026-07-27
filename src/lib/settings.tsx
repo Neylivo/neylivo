@@ -34,6 +34,12 @@ export interface Settings {
   zoom: number        // 70 .. 130 (%)
   animations: boolean
   autoTheme: boolean   // автосмена темы по времени суток (по умолчанию выключена)
+  // v1.309.0: следовать системной теме. Телефон и Windows уже знают, светло сейчас
+  // или темно, — и знают точнее, чем расписание «с 8 до 20»: у человека может быть
+  // ночная смена или тёмная тема круглосуточно. Идёт отдельным флагом, а не
+  // значением autoTheme, чтобы не ломать уже настроенное у тех, кто пользуется
+  // сменой по времени.
+  systemTheme: boolean
   notifSystem: boolean
   notifSounds: boolean
   mentionsOnly: boolean
@@ -138,7 +144,7 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 }
 
 export const DEFAULTS: Settings = {
-  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
+  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
   e2ee: true, e2eeCalls: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
@@ -189,7 +195,11 @@ function load(): Settings {
 function apply(s: Settings) {
   const root = document.documentElement
   // Автосмена темы: днём (8:00–20:00) — светлая, ночью — выбранная. По умолчанию выключена.
-  const day = s.autoTheme && (() => { const h = new Date().getHours(); return h >= 8 && h < 20 })()
+  // Системная настройка приоритетнее расписания: она отражает то, что человек
+  // выбрал сам, а расписание — лишь догадку о том, когда ему светло.
+  const sysLight = s.systemTheme && typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-color-scheme: light)').matches
+  const day = sysLight || (s.autoTheme && (() => { const h = new Date().getHours(); return h >= 8 && h < 20 })())
   const def = THEMES.find(t => t.key === (day ? 'light' : s.theme)) ?? THEMES[0]
   const c = s.custom
   const use = (c.on && !day)
@@ -243,6 +253,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { applyLang(settings.lang) }, [settings.lang])
   // v1.158.0: логотип приложения — favicon сразу, иконка окна/трея в Electron (асинхронно).
   useEffect(() => { applyAppIcon(settings.appIcon) }, [settings.appIcon])
+  // v1.309.0: система переключила тему — реагируем сразу, а не через минуту.
+  useEffect(() => {
+    if (!settings.systemTheme || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const h = () => setSettings(prev => ({ ...prev }))
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [settings.systemTheme])
   // Автосмена темы: перепроверяем время раз в минуту.
   useEffect(() => {
     if (!settings.autoTheme) return

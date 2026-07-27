@@ -922,7 +922,10 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <Row title="Анимации интерфейса" desc="Отключить для снижения нагрузки">
                   <Toggle on={view.animations} onChange={v => setD('animations', v)} />
                 </Row>
-                <Row title="Автосмена темы" desc="Днём (8:00–20:00) — светлая тема, ночью — выбранная. По умолчанию выключено">
+                <Row title="Как в системе" desc="Светлая или тёмная — как выбрано в настройках телефона или Windows. Меняется сразу вслед за системой">
+                  <Toggle on={view.systemTheme} onChange={v => setD('systemTheme', v)} />
+                </Row>
+                <Row title="Автосмена темы" desc="Днём (8:00–20:00) — светлая тема, ночью — выбранная. Уступает настройке «как в системе», если та включена">
                   <Toggle on={view.autoTheme} onChange={v => setD('autoTheme', v)} />
                 </Row>
 

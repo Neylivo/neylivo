@@ -87,30 +87,32 @@ public class ApkInstaller extends Plugin {
                         return;
                     }
                     long total = conn.getContentLength();
-                    InputStream in = conn.getInputStream();
-                    FileOutputStream fos = new FileOutputStream(out);
-                    byte[] buf = new byte[64 * 1024];
-                    long done = 0;
-                    int lastPct = -1;
-                    int n;
-                    while ((n = in.read(buf)) > 0) {
-                        fos.write(buf, 0, n);
-                        done += n;
-                        if (total > 0) {
-                            int pct = (int) (done * 100 / total);
-                            // Событие шлём только при смене процента: иначе на быстрой
-                            // сети мост между Java и интерфейсом захлебнулся бы.
-                            if (pct != lastPct) {
-                                lastPct = pct;
-                                JSObject ev = new JSObject();
-                                ev.put("percent", pct);
-                                notifyListeners("progress", ev);
+                    // try-with-resources: при обрыве сети посреди скачивания потоки
+                    // закроются сами. Без него открытый файл и сокет висели бы до
+                    // сборки мусора, а повторная попытка упиралась бы в занятый файл.
+                    try (InputStream in = conn.getInputStream();
+                         FileOutputStream fos = new FileOutputStream(out)) {
+                        byte[] buf = new byte[64 * 1024];
+                        long done = 0;
+                        int lastPct = -1;
+                        int n;
+                        while ((n = in.read(buf)) > 0) {
+                            fos.write(buf, 0, n);
+                            done += n;
+                            if (total > 0) {
+                                int pct = (int) (done * 100 / total);
+                                // Событие шлём только при смене процента: иначе на быстрой
+                                // сети мост между Java и интерфейсом захлебнулся бы.
+                                if (pct != lastPct) {
+                                    lastPct = pct;
+                                    JSObject ev = new JSObject();
+                                    ev.put("percent", pct);
+                                    notifyListeners("progress", ev);
+                                }
                             }
                         }
+                        fos.flush();
                     }
-                    fos.flush();
-                    fos.close();
-                    in.close();
 
                     Uri uri = FileProvider.getUriForFile(
                             getContext(), getContext().getPackageName() + ".fileprovider", out);
