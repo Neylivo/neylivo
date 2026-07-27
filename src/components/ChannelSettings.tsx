@@ -16,6 +16,7 @@ import { Icon } from './icons'
 import { CH_FONTS, CH_COLOR_PRESETS, chNameStyle } from '../lib/chStyle'
 import { logAudit } from '../lib/auditLog'
 import { fetchRoles, type ServerRole } from '../lib/roles'
+import { forumTagsOf, type ForumTag } from '../lib/threads'
 
 const SLOW_OPTS = ['Выкл', '5с', '10с', '15с', '30с', '1м', '2м', '5м', '10м', '15м', '30м', '1ч', '2ч', '6ч']
 const HIDE_OPTS = ['1 час', '24 часа', '3 дней', '1 неделя']
@@ -37,6 +38,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   server: Server; channel: Channel; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
   const { user } = useAuth()
   const isVoice = (channel as any).kind === 'voice'
+  const isForumCh = (channel as any).kind === 'forum'
   const s0: any = (channel as any).settings ?? {}
   const [tab, setTab] = useState<'overview' | 'perms' | 'invites' | 'integrations'>('overview')
   // v1.319.0: вебхуки канала. Список грузится при открытии вкладки «Интеграции» —
@@ -61,6 +63,11 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [roles, setRoles] = useState<ServerRole[]>([])
   useEffect(() => { fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e)) }, [server.id])
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
+  // v1.320.0: теги форума (см. ForumView.tsx). Живут в settings канала, а не
+  // отдельной таблицей: их десяток на канал, и меняет их тот же человек тем же
+  // сохранением, что и прочие настройки. У обсуждения хранятся только их id —
+  // поэтому id генерируется один раз и не меняется при переименовании тега.
+  const [forumTags, setForumTags] = useState<ForumTag[]>(forumTagsOf(channel))
   const [paused, setPaused] = useState<boolean>(!!s0.invites_paused)
   // v1.138.0: шрифт и раскраска названия канала (см. src/lib/chStyle.ts)
   const [nameFont, setNameFont] = useState<string>(s0.name_font ?? '')
@@ -71,8 +78,8 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   // v1.128.0: «несохранённые изменения» считаются сравнением с последними
   // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
   const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
-  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, privRoles: [...privRoles].sort(), perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl })
-  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, privRoles: (Array.isArray((channel as any).private_roles) ? [...(channel as any).private_roles] : []).sort(), perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null }))
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, privRoles: [...privRoles].sort(), perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl, forumTags })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, privRoles: (Array.isArray((channel as any).private_roles) ? [...(channel as any).private_roles] : []).sort(), perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null, forumTags: forumTagsOf(channel) }))
   const dirty = snapAll() !== base
   const setDirty = (_d: boolean) => {}
 
@@ -102,7 +109,10 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   }
 
   async function save() {
-    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim }
+    // Тег без названия — пустая кнопка в фильтре, которую не за что нажать:
+    // добавили строку и передумали. Такие выкидываем при сохранении.
+    const cleanTags = forumTags.map(t => ({ ...t, name: t.name.trim(), emoji: t.emoji?.trim() || undefined })).filter(t => t.name)
+    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim, forum_tags: cleanTags }
     const nm = name.trim() || channel.name
     let { data: upd, error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings, private_roles: privRoles } as any).eq('id', channel.id).select('id')
     // v1.267.0: private_roles — отдельная колонка (миграция supabase/69_channel_privacy.sql,
@@ -121,7 +131,11 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
       if (!r2.data || r2.data.length === 0) return toastErr('Не сохранилось — нет прав на изменение канала')
       toastErr('Для темы и настроек примени миграцию supabase/16_channel_settings.sql')
     }
-    setBase(snapAll())   // v1.128.0: сохранённое становится новой «базой»
+    setForumTags(cleanTags)
+    // v1.128.0: сохранённое становится новой «базой». Теги подставляем уже
+    // очищенными — snapAll() читает состояние, которое обновится только к
+    // следующей отрисовке, и плашка «есть несохранённые» осталась бы висеть.
+    setBase(JSON.stringify({ ...JSON.parse(snapAll()), forumTags: cleanTags }))
     toastOk('Изменения сохранены')
     onChanged()
   }
@@ -131,7 +145,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const b = JSON.parse(base)
     setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
     setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
-    setRegion(b.region); setPriv(b.priv); setPrivRoles(b.privRoles ?? []); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null)
+    setRegion(b.region); setPriv(b.priv); setPrivRoles(b.privRoles ?? []); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null); setForumTags(b.forumTags ?? [])
   }
 
   async function del() {
@@ -256,7 +270,29 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
             </div>
             <button className={'tgl' + (nsfw ? ' on' : '')} onClick={() => { setNsfw(!nsfw); setDirty(true) }} />
           </div>
-          {!isVoice && <>
+          {isForumCh && <>
+            <div className="cset-div" />
+            <label className="cset-lbl">Теги форума</label>
+            <div className="cset-hint" style={{ marginTop: -8 }}>Ими помечают обсуждения, чтобы список можно было отфильтровать. Тег можно переименовать — на уже помеченных обсуждениях он останется тем же. Удалённый тег с обсуждений просто исчезнет.</div>
+            <div className="forum-tag-edit">
+              {forumTags.map((t, i) => (
+                <div key={t.id} className="forum-tag-row">
+                  <input className="modal-in forum-tag-emo" maxLength={4} placeholder="🏷️" value={t.emoji ?? ''}
+                    onChange={e => setForumTags(list => list.map((x, j) => j === i ? { ...x, emoji: e.target.value } : x))} />
+                  <input className="modal-in" maxLength={24} placeholder="Название тега" value={t.name}
+                    onChange={e => setForumTags(list => list.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+                  <button className="forum-tag-del" title="Удалить тег"
+                    onClick={() => setForumTags(list => list.filter((_, j) => j !== i))}><Icon name="trash" size={15} /></button>
+                </div>
+              ))}
+              {forumTags.length === 0 && <div className="cset-hint">Тегов нет — обсуждения будут просто списком.</div>}
+              {forumTags.length < 20 && <button className="modal-ghost" style={{ alignSelf: 'flex-start' }}
+                onClick={() => setForumTags(list => [...list, { id: 'ft' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: '' }])}>
+                <Icon name="plus" size={14} /> Добавить тег
+              </button>}
+            </div>
+          </>}
+          {!isVoice && !isForumCh && <>
             <label className="cset-lbl">Скрыть после неактивности</label>
             <select className="modal-in" value={hide} onChange={e => { setHide(e.target.value); setDirty(true) }}>{HIDE_OPTS.map(o => <option key={o}>{o}</option>)}</select>
             <div className="cset-hint">Новые ветки перестанут отображаться в списке каналов после заданного периода неактивности.</div>

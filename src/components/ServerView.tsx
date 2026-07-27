@@ -39,8 +39,9 @@ import { fetchRoles, fetchMemberRoles, toggleMemberRole, createRole, deleteRole,
 import { PERM, hasPerm, kickMember, banMember, timeoutMember, setMemberNickname } from '../lib/permissions'
 import { logAudit } from '../lib/auditLog'
 import { countMentions, isSpamLike } from '../lib/automod'
-import { fetchThreads, createThread, type Thread } from '../lib/threads'
+import { fetchThreads, createThread, isForum, forumTagsOf, type Thread } from '../lib/threads'
 import { ThreadPanel } from './ThreadPanel'
+import { ForumView } from './ForumView'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
@@ -79,7 +80,8 @@ const AFK_TIMEOUT_MS: Record<string, number> = {
 // (name_colors: 1–4 цвета, name_anim — переливание) — см. src/lib/chStyle.ts.
 function ChName({ c, srv }: { c: Channel; srv?: any }) {
   const ann = !!(c as any).settings?.announce
-  const icon = (c as any).kind === 'voice' ? 'volume' : ann ? 'megaphone' : 'hash'
+  const kind = (c as any).kind
+  const icon = kind === 'voice' ? 'volume' : kind === 'forum' ? 'threads' : ann ? 'megaphone' : 'hash'
   const s = splitEmoji(c.name)
   const cs = chNameStyle((c as any).settings, srv)
   // v1.248.0: раньше «Канал с возрастным ограничением» в ChannelSettings.tsx только
@@ -750,9 +752,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         () => fetchThreads(curChannel.id).then(setThreads))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [curChannel])
+    // v1.320.0: зависимость по id, а не по объекту канала. Раньше любое
+    // перечитывание списка каналов (правка настроек, создание канала) давало
+    // новый объект и закрывало открытую ветку — с форумами это значило бы, что
+    // открытое обсуждение схлопывается, пока в нём пишешь.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curChannel?.id])
 
-  async function createChannel(name: string, kind: 'text' | 'voice', priv: boolean, cat?: string, announce?: boolean) {
+  async function createChannel(name: string, kind: 'text' | 'voice' | 'forum', priv: boolean, cat?: string, announce?: boolean) {
     // Сначала пробуем с новыми колонками (kind/settings из миграции 16), при ошибке — без них.
     const settings: any = {}
     if (priv) settings.private = true
@@ -762,6 +769,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (error) {
       const r2 = await supabase.from('channels').insert({ server_id: server.id, name })
       if (!r2.error && kind === 'voice') toastErr('Для голосовых каналов примени миграцию supabase/16_channel_settings.sql')
+      // v1.320.0: без kind форум неотличим от обычного канала — человек получил бы
+      // текстовый канал вместо форума и не понял бы, почему.
+      if (!r2.error && kind === 'forum') toastErr('Для форумов примени миграции supabase/16_channel_settings.sql и supabase/81_forums.sql — пока создан обычный текстовый канал')
       error = r2.error
     }
     if (error) return toastErr(error.message)
@@ -1222,7 +1232,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
           <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
-          <span className="ph2-hash">{((voice || connecting) && voicePanel) || (curChannel as any)?.kind === 'voice' ? <Icon name="volume" size={20} /> : '#'}</span>
+          <span className="ph2-hash">{((voice || connecting) && voicePanel) || (curChannel as any)?.kind === 'voice' ? <Icon name="volume" size={20} /> : isForum(curChannel) ? <Icon name="threads" size={20} /> : '#'}</span>
           {(() => {
             const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel)
             const cs = chNameStyle(hc?.settings, srvSettings)
@@ -1232,7 +1242,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             </>
           })()}
           <div className="ph2-btns">
-            <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>
+            {/* v1.320.0: в форуме кнопка «Ветки» не нужна — сам канал и есть список веток. */}
+            {!isForum(curChannel) && <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>}
             <button className={'pin-btn' + (curChannel && chNotifModeOf(curChannel.id, server.id) !== notifModeOf(server.id) ? ' on' : '')} title="Уведомления канала" onClick={() => curChannel && setNotifForCh(curChannel)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>
             <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => { setShowSearch(false); setShowPins(s => !s) }}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
             <button className={'pin-btn' + (showMembers ? ' on' : '')} title={showMembers ? 'Скрыть участников' : 'Показать участников'}
@@ -1270,7 +1281,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>}
         {activeThread && curChannel && <div className="thread-view-wrap">
           <ThreadPanel server={server} channel={curChannel} thread={activeThread} user={user!} username={username}
-            onClose={() => setActiveThread(null)} canManageMessages={canManageMessages} canAttachFiles={canAttachFiles} automodCheck={automodCheck} />
+            onClose={() => setActiveThread(null)} canManageMessages={canManageMessages} canAttachFiles={canAttachFiles} automodCheck={automodCheck}
+            canPost={canPostHere && (!activeThread.locked || isOwner || canManageMessages || canManageChannels)} />
         </div>}
         {showPins && <div className="pins-panel">
           <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
@@ -1293,7 +1305,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="c2-bubbles"><div className="c2-bub"><div className="c2-bub-av birth"><Avatar name={username} url={avatarUrl} size={84} /></div><div className="c2-bub-nm">{username}</div></div></div>
           <div className="c2-waiting">Подключаемся…</div>
         </div>}
-        {curChannel && (curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id) ? (
+        {/* v1.320.0: у форума нет общей ленты — вместо неё список обсуждений.
+            Возрастная заглушка проверяется раньше и здесь тоже, иначе названия
+            обсуждений показались бы до подтверждения возраста. */}
+        {curChannel && isForum(curChannel) && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) ? (
+          <ForumView server={server} channel={curChannel} user={user!} username={username}
+            tags={forumTagsOf(curChannel)} canPost={canPostHere} canModerate={isOwner || canManageMessages || canManageChannels}
+            canAttachFiles={canAttachFiles} automodCheck={automodCheck}
+            avatarOf={id => members.find(m => m.user_id === id)?.avatar_url}
+            onOpen={t => setActiveThread(t)} />
+        ) : curChannel && (curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id) ? (
           <div className="msgs nsfw-gate">
             <div className="nsfw-gate-box">
               <div className="nsfw-gate-ico">🔞</div>
@@ -1328,10 +1349,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div ref={bottomRef} />
         </div>
         )}
-        <TypingIndicator typers={typers} />
-        {curChannel && !canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
+        {!isForum(curChannel) && <TypingIndicator typers={typers} />}
+        {curChannel && !isForum(curChannel) && !canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
           <div className="ch-readonly"><Icon name="lock" size={15} /> В этом канале можно только читать</div>}
-        {curChannel && canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
+        {curChannel && isForum(curChannel) && !canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
+          <div className="ch-readonly"><Icon name="lock" size={15} /> В этом форуме можно только читать — заводить обсуждения нельзя</div>}
+        {curChannel && !isForum(curChannel) && canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}

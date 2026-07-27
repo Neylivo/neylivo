@@ -1,21 +1,21 @@
 // Модалка «Создать канал» — 1-в-1 как в Discord (v1.24.0; v1.81.0: тип «Объявления»).
-// Типы: Текст / Голос / Объявления / Форум (форум пока в разработке),
-// название с # и toggle «Приватный канал».
+// Типы: Текст / Голос / Объявления / Форум, название с # и toggle «Приватный канал».
+// v1.320.0: «Форум» перестал быть серой кнопкой с тостом «скоро появятся» —
+// см. ForumView.tsx и supabase/81_forums.sql.
 import { useState } from 'react'
-import { toastOk } from '../lib/toast'
 import { Icon } from './icons'
 
 export function CreateChannelModal({ initialKind, onClose, onCreate }: {
   initialKind: 'text' | 'voice'
   onClose: () => void
-  onCreate: (name: string, kind: 'text' | 'voice', priv: boolean, announce?: boolean) => void
+  onCreate: (name: string, kind: 'text' | 'voice' | 'forum', priv: boolean, announce?: boolean) => void
 }) {
-  const [type, setType] = useState<'text' | 'voice' | 'announce'>(initialKind)
+  const [type, setType] = useState<'text' | 'voice' | 'announce' | 'forum'>(initialKind)
   const [name, setName] = useState('')
   const [priv, setPriv] = useState(false)
   function submit() {
-    const kind: 'text' | 'voice' = type === 'voice' ? 'voice' : 'text'
-    const nm = kind === 'text' ? name.trim().toLowerCase().replace(/\s+/g, '-') : name.trim()
+    const kind: 'text' | 'voice' | 'forum' = type === 'voice' ? 'voice' : type === 'forum' ? 'forum' : 'text'
+    const nm = kind === 'voice' ? name.trim() : name.trim().toLowerCase().replace(/\s+/g, '-')
     if (nm) onCreate(nm, kind, priv, type === 'announce')
   }
   return (
@@ -37,13 +37,13 @@ export function CreateChannelModal({ initialKind, onClose, onCreate }: {
           <span className="dot" /><Icon name="megaphone" size={20} />
           <span className="cch-t"><b>Объявления</b><span>Важные новости для ваших участников</span></span>
         </button>
-        <button className="cch-type dis" onClick={() => toastOk('Форумы скоро появятся')}>
-          <span className="dot" /><Icon name="message" size={20} />
-          <span className="cch-t"><b>Форум</b><span>Создайте площадку для обсуждений</span></span>
+        <button className={'cch-type' + (type === 'forum' ? ' on' : '')} onClick={() => setType('forum')}>
+          <span className="dot" /><Icon name="threads" size={20} />
+          <span className="cch-t"><b>Форум</b><span>Вместо общей ленты — список обсуждений, у каждого своё название и своя переписка</span></span>
         </button>
         <label className="modal-lbl">Название канала</label>
         <div className="cch-name">
-          <Icon name={type === 'voice' ? 'volume' : type === 'announce' ? 'megaphone' : 'hash'} size={16} />
+          <Icon name={type === 'voice' ? 'volume' : type === 'announce' ? 'megaphone' : type === 'forum' ? 'threads' : 'hash'} size={16} />
           <input autoFocus placeholder="новый-канал" value={name} onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit() }} />
         </div>

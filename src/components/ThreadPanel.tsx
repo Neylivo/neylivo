@@ -15,13 +15,17 @@ import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 import { Icon } from './icons'
 
-export function ThreadPanel({ server, channel, thread, user, username, onClose, canManageMessages, canAttachFiles, automodCheck }: {
+export function ThreadPanel({ server, channel, thread, user, username, onClose, canManageMessages, canAttachFiles, automodCheck, canPost = true }: {
   server: Server; channel: Channel; thread: Thread
   user: { id: string }; username: string
   onClose: () => void
   canManageMessages: boolean
   canAttachFiles?: boolean
   automodCheck?: (text: string) => string | null
+  // v1.320.0: закрытое обсуждение форума (threads.locked) — писать могут только
+  // модераторы. Поле ввода прячется здесь, а сам запрет живёт в базе
+  // (thread_can_post в supabase/81_forums.sql): спрятанной кнопки мало.
+  canPost?: boolean
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [reactions, setReactions] = useState<Record<string, RxSummary[]>>({})
@@ -156,11 +160,12 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
           onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
           onEditAttachment={editAttachment} />
       </div>
-      <Composer placeholder={'Написать в ветке'} onSend={sendMsg} draftKey={'thread_' + thread.id}
+      {!canPost && <div className="ch-readonly"><Icon name="lock" size={15} /> Обсуждение закрыто — отвечать могут только модераторы</div>}
+      {canPost && <Composer placeholder={'Написать в ветке'} onSend={sendMsg} draftKey={'thread_' + thread.id}
         serverId={server.id} channelId={channel.id} canAttachFiles={canAttachFiles} automodCheck={automodCheck}
         replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
         onCancelReply={() => setReplyTarget(null)}
-        editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />
+        editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}
     </div>
   )
 }
