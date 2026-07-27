@@ -33,6 +33,9 @@ import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, e
 import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
+import { publishMyKey } from '../lib/crypto/keys'
+import { sealForPeer, openIncoming, NoRecipientKeys } from '../lib/crypto/dm'
+import { isEncrypted } from '../lib/crypto/envelope'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline } from './ActivityLabel'
@@ -104,6 +107,29 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
   useEffect(() => { setActiveDm(threadId); return () => setActiveDm(null) }, [threadId])
   const [messages, setMessages] = useState<DMMessage[]>([])
+  // v1.295.0: свой публичный ключ публикуется при каждом запуске — устройство
+  // должно быть видимо собеседникам, иначе им некуда шифровать. Ошибку не роняем
+  // наружу: без ключей переписка просто останется открытой, а приложение работает.
+  useEffect(() => {
+    if (!meId) return
+    publishMyKey(meId).catch(() => { /* нет сети или миграция не применена — переписка идёт как раньше */ })
+  }, [meId])
+
+  // Расшифровка входящих. Делается здесь, а не при отрисовке: расшифровка
+  // асинхронная, а лента рисуется синхронно. Готовый текст кладётся в отдельную
+  // карту по id сообщения и подставляется в ленту ниже.
+  const [plain, setPlain] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let alive = true
+    const todo = messages.filter(m => isEncrypted(m.content) && plain[m.id] === undefined)
+    if (todo.length === 0) return
+    ;(async () => {
+      const done: Record<string, string> = {}
+      for (const m of todo) done[m.id] = await openIncoming(m.content!, m.author)
+      if (alive && Object.keys(done).length) setPlain(p => ({ ...p, ...done }))
+    })()
+    return () => { alive = false }
+  }, [messages, plain])
   // v1.177.0: ↑ в пустом композере — редактировать своё последнее сообщение (как в Discord).
   useEffect(() => {
     const h = () => {
@@ -939,15 +965,39 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // (или открытие сорвалось) — сообщение просто пропадало без единого признака
     // ошибки. Теперь явно говорим, что писать пока некуда.
     if (!threadId) { toastErr('Диалог ещё не открыт — подожди немного или открой его заново'); return }
+
+    // v1.295.0: сквозное шифрование личной переписки один-на-один.
+    //
+    // Групповые диалоги пока идут как раньше: там нужны ключи всех участников и
+    // перешифровка при каждом изменении состава — отдельная задача, и делать её
+    // наполовину хуже, чем не делать.
+    //
+    // Если зашифровать не вышло — сообщение НЕ УХОДИТ. Тихо отправить открытым
+    // текстом было бы худшим из возможных решений: человек продолжал бы считать
+    // переписку закрытой, ничего не заметив.
+    let outgoing = t
+    if (settings.e2ee && active && !activeGroup && t) {
+      try {
+        outgoing = await sealForPeer(t, meId, active.id)
+      } catch (err: any) {
+        toastErr(err instanceof NoRecipientKeys
+          ? `${active.name} ещё не заходил(а) с версией, поддерживающей шифрование — сообщение не отправлено. Можно отключить шифрование в настройках.`
+          : 'Не удалось зашифровать сообщение — оно не отправлено: ' + (err?.message ?? err))
+        return
+      }
+    }
+
     const tmpId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
     const row = {
-      thread_id: threadId, author: meId, author_name: username, content: t,
+      thread_id: threadId, author: meId, author_name: username, content: outgoing,
       attach_url: attach?.url ?? null, attach_type: attach?.type ?? null,
       reply_to: replyTarget?.id ?? null, reply_author: replyTarget?.author ?? null, reply_preview: replyTarget?.preview ?? null,
     }
     const uploading = !!files?.length
     setMessages(m => [...m, {
-      ...row, id: tmpId, created_at: new Date().toISOString(), _tmp: true,
+      // В ленту кладём исходный текст: в базу ушёл конверт, но себе показывать
+      // шифротекст незачем — расшифровка своего же сообщения была бы лишней работой.
+      ...row, content: t, id: tmpId, created_at: new Date().toISOString(), _tmp: true,
       ...(uploading ? { _uploading: true, _uploadNames: files!.map(f => f.name) } : {}),
     } as any])
     setReplyTarget(null)
@@ -970,8 +1020,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         }
         const real = data as DMMessage
         setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
-        if (peer) sendPush([peer.id], username, t || 'Вложение', '/', { kind: 'dm' })
-        else if (groupRecipients?.length) sendPush(groupRecipients, username, t || 'Вложение', '/')
+        // v1.295.0: КРИТИЧНО — в push уходит текст сообщения, а push идёт через
+        // сервер. Для зашифрованной переписки это означало бы, что содержимое
+        // утекает ровно тому, от кого мы его прячем, и всё шифрование становится
+        // видимостью. Поэтому у зашифрованных сообщений в уведомление уходит только
+        // факт «пришло сообщение», без единого слова из него.
+        const pushBody = isEncrypted(outgoing) ? 'Новое сообщение' : (t || 'Вложение')
+        if (peer) sendPush([peer.id], username, pushBody, '/', { kind: 'dm' })
+        else if (groupRecipients?.length) sendPush(groupRecipients, username, pushBody, '/')
       })
     }
 
@@ -1174,11 +1230,19 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
             onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
-            <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
+            <MessageList messages={(messages as any)
+                .filter((m: any) => !isBlockedWith(m.author))
+                // Зашифрованное подменяем расшифрованным; пока расшифровка идёт —
+                // показываем замок, а не сырой шифротекст.
+                .map((m: any) => isEncrypted(m.content) ? { ...m, content: plain[m.id] ?? '🔒 Расшифровываю…', _enc: true } : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : (activeGroup ? (groupMembers.find(p => p.id === id)?.display_name || groupMembers.find(p => p.id === id)?.username) : active!.name)}
               canPin={() => true} onReact={react} onPin={pin} onDelete={removeMsg} onEditAttachment={editAttachment}
-              onReply={m => { setReplyTarget({ id: m.id, author: m.author_name, preview: (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : activeAvatar) }); setEditingMsg(null) }}
+              onReply={m => { setReplyTarget({ id: m.id, author: m.author_name,
+                // v1.295.0: reply_preview хранится в базе ОТКРЫТЫМ текстом. Для
+                // зашифрованного сообщения цитата вынесла бы его содержимое наружу
+                // в обход шифрования — поэтому вместо текста только пометка.
+                preview: (m as any)._enc ? '🔒 зашифрованное сообщение' : (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : activeAvatar) }); setEditingMsg(null) }}
               onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
               onMarkUnread={m => { setNewDividerId(m.id); if (threadId) setDmRead(threadId, new Date(m.created_at).getTime() - 1) }}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : null), status: statusOf(m.author), x, y })} />

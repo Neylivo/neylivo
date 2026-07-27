@@ -155,8 +155,7 @@ async function main() {
 
   const env = parseEnvelope(envStr)!
   ok('конверт разбирается', !!env && env.su === 'alice' && env.sd === 'alice-pc')
-  ok('своё устройство в получатели не попало', !('alice-pc' in env.k))
-  ok('ключ упакован для трёх устройств', Object.keys(env.k).length === 3, Object.keys(env.k).join(', '))
+  ok('ключ упакован для ВСЕХ четырёх устройств', Object.keys(env.k).length === 4, Object.keys(env.k).join(', '))
 
   const alicePub = await importPublicKey(await exportPublicKey(alice.publicKey))
   ok('телефон Боба читает',
@@ -165,6 +164,11 @@ async function main() {
     await openMessage(env, 'bob-pc', bobDev2.privateKey, alicePub) === 'секрет для двоих устройств')
   ok('второе устройство самой Алисы читает',
     await openMessage(env, 'alice-phone', aliceDev2.privateKey, alicePub) === 'секрет для двоих устройств')
+  // Самое коварное: отправитель перезапустил приложение и открыл свою же переписку.
+  // Текст нигде не хранится открытым, поэтому без упаковки для СВОЕГО устройства
+  // он увидел бы собственное сообщение нечитаемым.
+  ok('ОТПРАВИТЕЛЬ читает своё сообщение после перезапуска',
+    await openMessage(env, 'alice-pc', alice.privateKey, alicePub) === 'секрет для двоих устройств')
 
   // Посторонний не читает, даже зная конверт целиком
   await mustThrow('посторонний с чужим ключом', () =>

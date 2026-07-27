@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
+import { signOutAndForgetKeys } from '../lib/crypto/keys'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
@@ -279,7 +280,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               <div className="mini-subsep" />
               <button className="mini-subrow" onClick={() => { setSub(null); setAccSettings(true) }}>Управление учётными записями</button>
               {onPickAvatar && <button className="mini-subrow" onClick={() => { setSub(null); onPickAvatar() }}>Сменить аватар</button>}
-              <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => supabase.auth.signOut()}>Выйти из аккаунта</button>
+              <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => { void signOutAndForgetKeys() }}>Выйти из аккаунта</button>
             </div>}
           </>}
           {isMe && !meControls && <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>}

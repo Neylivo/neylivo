@@ -151,3 +151,15 @@ export async function forgetIdentity(): Promise<void> {
   })
   localStorage.removeItem(DEVICE_ID_KEY)
 }
+
+/**
+ * Выход из аккаунта. Отдельная функция, а не «не забыть вызвать forgetIdentity
+ * рядом с signOut»: мест выхода в приложении несколько, и в v1.293.0 забывание
+ * ключей уже оказалось написанным, но ни к одному из них не подключённым.
+ */
+export async function signOutAndForgetKeys(): Promise<void> {
+  // Сначала забываем ключи, потом выходим: если выход оборвётся на сети, ключи
+  // всё равно уже не достанутся следующему вошедшему на этом компьютере.
+  try { await forgetIdentity() } catch { /* хранилище недоступно — выйти всё равно надо */ }
+  await supabase.auth.signOut()
+}

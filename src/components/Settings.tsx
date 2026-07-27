@@ -18,6 +18,7 @@ import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appI
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
+import { myFingerprint, signOutAndForgetKeys } from '../lib/crypto/keys'
 import { IS_MOBILE } from '../lib/mobile'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
@@ -70,6 +71,32 @@ const FONTS = [
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return <button className={'pqs-toggle' + (on ? ' on' : '')} onClick={() => onChange(!on)}><span /></button>
 }
+// v1.295.0: сквозное шифрование личной переписки. Отдельным компонентом, потому
+// что отпечаток читается из хранилища ключей асинхронно.
+function E2eeSection() {
+  const { settings, set } = useSettings()
+  const [fp, setFp] = useState<string | null>(null)
+  useEffect(() => { myFingerprint().then(setFp).catch(() => setFp(null)) }, [])
+  return <>
+    <Row title="Шифровать личные сообщения"
+      desc="Содержимое переписки один-на-один становится нечитаемым для сервера. Групповые диалоги и серверные каналы пока шифрованием не защищены.">
+      <Toggle on={settings.e2ee} onChange={v => set('e2ee', v)} />
+    </Row>
+    <div className="pqs2-desc" style={{ marginTop: 10 }}>
+      Отпечаток ключа этого устройства. Продиктуй его собеседнику голосом или сверь при
+      встрече: совпали цифры — переписку никто не подменил по дороге. Это единственный
+      способ убедиться, что сервер не подставил свой ключ вместо ключа собеседника.
+    </div>
+    <div className="pqs-code-val" style={{ marginTop: 8, letterSpacing: 1 }}>
+      {fp ?? 'ключ ещё не создан'}
+    </div>
+    <div className="pqs2-desc" style={{ marginTop: 10 }}>
+      Шифрование не скрывает, <b>кто</b> с кем и <b>когда</b> переписывается — эти данные
+      нужны серверу для доставки. Скрывается только содержание.
+    </div>
+  </>
+}
+
 function Row({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className="pqs-optrow">
@@ -570,7 +597,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 )
               })}
               <div className="pqs2-navsep" />
-              <button className="pqs2-item danger" onClick={() => supabase.auth.signOut()}>
+              <button className="pqs2-item danger" onClick={() => { void signOutAndForgetKeys() }}>
                 <span className="pqs2-item-ic"><Icon name="signout" size={16} /></span>Выйти
               </button>
             </div>
@@ -1098,6 +1125,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
               {cat === 'privacy' && <>
                 <h2>Данные и конфиденциальность</h2>
                 <div className="pqs2-desc">Кто может писать тебе в личку и звонить, какие данные хранит приложение.</div>
+
+                <div className="pqs-sec-t">Сквозное шифрование</div>
+                <E2eeSection />
 
                 <div className="pqs-sec-t">Сообщения</div>
                 <div className="pqs2-desc">Кто может первым написать тебе в личные сообщения.</div>

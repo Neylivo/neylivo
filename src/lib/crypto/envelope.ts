@@ -66,15 +66,13 @@ export async function sealMessage(
 
   const k: Record<string, Sealed> = {}
   for (const r of recipients) {
-    // Своё же устройство пропускаем: ECDH с собственным публичным ключом не даст
-    // ничего полезного, а прочитать своё сообщение мы и так сможем через ключи
-    // других своих устройств.
-    if (r.deviceId === myDeviceId) continue
+    // Своё устройство тоже получает упаковку — и это принципиально. Сначала я его
+    // пропускал, рассуждая, что «своё сообщение и так своё»; но текст нигде не
+    // хранится в открытом виде, и после перезапуска приложения отправитель не смог
+    // бы прочитать собственную отправленную реплику. ECDH со своей же парой ключей
+    // математически корректен и даёт стабильный секрет, так что упаковываем как всем.
     const kek = await deriveSharedKey(myPrivate, r.publicKey, INFO)
     k[r.deviceId] = await wrapContentKey(kek, cek)
-  }
-  if (Object.keys(k).length === 0) {
-    throw new Error('Не для кого шифровать: единственное известное устройство — это текущее')
   }
 
   const env: Envelope = { v: 1, su: myUserId, sd: myDeviceId, iv: body.iv, ct: body.ct, k }
