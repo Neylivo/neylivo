@@ -58,6 +58,38 @@ export function AuthScreen() {
     return () => window.clearTimeout(t)
   }, [resendIn])
 
+  /**
+   * v1.306.0: регистрация без почты.
+   *
+   * Используется настоящий анонимный вход Supabase, а не подставной адрес: в
+   * auth.users не остаётся ни почты, ни телефона — только случайный
+   * идентификатор. Серверу о человеке неизвестно ничего, кроме выбранного ника.
+   *
+   * Цена честно написана рядом с кнопкой: восстанавливать такой аккаунт нечем.
+   */
+  async function anonSignUp() {
+    setErr(null)
+    const finalName = username.trim()
+    if (finalName.length < 3) { setErr('Придумай юзернейм — от 3 символов'); return }
+    setBusy(true)
+    try {
+      const { data: taken } = await supabase.rpc('username_taken', { uname: finalName })
+      if (taken) { setErr(`Юзернейм «${finalName}» уже занят`); return }
+      const { data, error } = await supabase.auth.signInAnonymously()
+      if (error) {
+        // Самая вероятная причина — анонимный вход не разрешён в настройках
+        // проекта. Пишем это прямо, иначе человек будет гадать над «Failed».
+        setErr('Вход без почты недоступен: администратору нужно включить анонимный вход в настройках Supabase (Authentication → Providers → Anonymous)')
+        return
+      }
+      if (!data.user) { setErr('Не удалось создать аккаунт — попробуй ещё раз'); return }
+      localStorage.setItem('ponoi_username', finalName)
+      await supabase.from('profiles').upsert({ id: data.user.id, username: finalName, display_name: finalName })
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally { setBusy(false) }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setErr(null); setBusy(true)
@@ -227,6 +259,20 @@ export function AuthScreen() {
         <div className="auth2-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
           {reg ? 'Уже есть аккаунт? ' : 'Нужен аккаунт? '}<span>{reg ? 'Войти' : 'Зарегистрироваться'}</span>
         </div>
+        {/* v1.306.0: вход без почты. Аккаунт создаётся настоящим анонимным
+            пользователем — подставного адреса не заводится, серверу неизвестно
+            вообще ничего, кроме выбранного ника. */}
+        {reg && <>
+          <div className="auth2-or">или</div>
+          <button type="button" className="auth2-btn ghost" disabled={busy} onClick={anonSignUp}>
+            {busy ? '…' : 'Войти без почты'}
+          </button>
+          <div className="auth2-legal">
+            Почта не понадобится, и восстановить такой аккаунт будет нечем: он живёт
+            только на этом устройстве. Потеряешь доступ — потеряешь и переписку.
+            Почту можно привязать позже в настройках, тогда появится и восстановление.
+          </div>
+        </>}
         {reg && <div className="auth2-legal">Регистрируясь, ты соглашаешься с Условиями использования и Политикой конфиденциальности Ponoi.</div>}
       </form>
     </div>
