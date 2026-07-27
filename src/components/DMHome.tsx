@@ -36,6 +36,7 @@ import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { publishMyKey } from '../lib/crypto/keys'
 import { sealForPeer, openIncoming, NoRecipientKeys } from '../lib/crypto/dm'
 import { isEncrypted } from '../lib/crypto/envelope'
+import { b64 } from '../lib/crypto/core'
 import { encryptFile, decryptFile, markEncrypted, stripEncMark, TooLargeToEncrypt, type FileKey } from '../lib/crypto/files'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
@@ -365,7 +366,21 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     if (callSeq.current !== seq) return   // уже отменили/начали другой звонок, пока ждали canCallUser
     setConnectingThread(threadId); setConnectingPeer(active)
     try {
-      const room = await joinRoom('dm_' + threadId, meId, username)
+      // v1.303.0: шифрование разговора. Ключ вырабатывается здесь и уезжает
+      // собеседнику запечатанным по той же схеме, что и сообщения, — то есть по
+      // каналу, который сервер прочитать не может. Если запечатать не удалось
+      // (у собеседника нет ключей, старая версия), звоним без шифрования: молча
+      // ОБОРВАТЬ звонок было бы хуже, чем незашифрованный разговор, о котором
+      // честно написано в настройках.
+      let callKey: string | null = null
+      let sealedKey: string | undefined
+      if (settings.e2eeCalls) {
+        try {
+          callKey = b64(crypto.getRandomValues(new Uint8Array(32)))
+          sealedKey = await sealForPeer(callKey, meId, active.id)
+        } catch { callKey = null; sealedKey = undefined; toastErr('Звонок пойдёт без шифрования — у собеседника нет ключа') }
+      }
+      const room = await joinRoom('dm_' + threadId, meId, username, callKey ? { key: callKey } : undefined)
       if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
       setCall(room)
       setCallThread(threadId)
@@ -382,7 +397,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       // Гудки + повторяем ring, чтобы собеседник точно увидел модалку.
       setRingingTo(active)
       startRingback()
-      const payload = { threadId, fromId: meId, fromName: username, fromAvatar: avatarUrl ?? null }
+      const payload = { threadId, fromId: meId, fromName: username, fromAvatar: avatarUrl ?? null, ek: sealedKey }
       const ch = supabase.channel('ring:' + active.id)
       ringChRef.current = ch
       ch.subscribe((st: string) => {
@@ -477,12 +492,21 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // Принятый входящий звонок: модалка уже открыла нужный ЛС, осталось подключиться.
   useEffect(() => {
     const h = async (e: Event) => {
-      const tid = (e as CustomEvent).detail?.threadId
+      const detail = (e as CustomEvent).detail || {}
+      const tid = detail.threadId
       if (!tid || callRef.current) return
       const seq = ++callSeq.current
       setConnectingThread(tid); setConnectingPeer(activeRef.current)
       try {
-        const room = await joinRoom('dm_' + tid, meId, username)
+        // v1.303.0: распечатываем ключ разговора. Не вышло — входим без
+        // шифрования: звонящий в этом случае тоже пошёл без него, иначе мы бы
+        // просто не услышали друг друга.
+        let callKey: string | null = null
+        if (detail.ek && detail.fromId) {
+          const opened = await openIncoming(detail.ek, detail.fromId)
+          if (opened.text && !opened.text.startsWith('🔒')) callKey = opened.text
+        }
+        const room = await joinRoom('dm_' + tid, meId, username, callKey ? { key: callKey } : undefined)
         if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
         setCall(room)
         setCallThread(tid)

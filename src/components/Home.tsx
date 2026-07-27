@@ -585,7 +585,9 @@ export function Home() {
       setView({ kind: 'dm' })
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('ponoi-open-dm', { detail: { id: r.fromId, name: r.fromName } }))
-        setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-join-call', { detail: { threadId: r.threadId } })), 300)
+        // v1.303.0: ключ шифрования звонка передаём дальше как есть — он запечатан
+        // для устройств получателя, и расшифровать его сможет только сама личка.
+        setTimeout(() => window.dispatchEvent(new CustomEvent('ponoi-join-call', { detail: { threadId: r.threadId, ek: r.ek, fromId: r.fromId } })), 300)
       }, 60)
     }} />}
     {hk && <HotkeysModal onClose={() => setHk(false)} />}

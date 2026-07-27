@@ -5,7 +5,13 @@ import { Icon } from './icons'
 import { startRingtone, stopRingtone } from '../lib/callSounds'
 import { setCallBadge } from '../lib/badge'
 
-export interface IncomingRing { threadId: string; fromId: string; fromName: string; fromAvatar?: string | null }
+export interface IncomingRing {
+  threadId: string; fromId: string; fromName: string; fromAvatar?: string | null
+  /** v1.303.0: ключ шифрования звонка, уже запечатанный для устройств получателя.
+   *  Едет через тот же сигнал вызова, что и остальное, но сервер видит только
+   *  шифротекст: распечатать его может лишь устройство, которому он адресован. */
+  ek?: string
+}
 
 // ---- v1.30.0: входящий звонок как в Discord — модалка по центру экрана. ----
 // Глобальный слушатель: сидит на личном realtime-канале ring:{meId} и ловит

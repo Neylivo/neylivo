@@ -54,6 +54,11 @@ export interface Settings {
   // v1.295.0: сквозное шифрование личных сообщений. По умолчанию включено —
   // защита, которую надо не забыть включить, защищает только тех, кто про неё знал.
   e2ee: boolean
+  // v1.303.0: шифрование самого разговора. По умолчанию ВЫКЛЮЧЕНО, в отличие от
+  // переписки: звонки — единственное, что я не мог проверить сам, и молча включать
+  // непроверенное в работающий механизм голоса неправильно. Включается вручную,
+  // и обе стороны должны быть на этой версии.
+  e2eeCalls: boolean
   devmode: boolean
   actOn: boolean
   actText: string
@@ -123,7 +128,7 @@ export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, lang: 'ru', dataCollect: true,
-  e2ee: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  e2ee: true, e2eeCalls: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,
