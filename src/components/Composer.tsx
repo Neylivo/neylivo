@@ -20,7 +20,7 @@ import { ShareBuildModal, type ShareCardCustom } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
-import { invokePlugin, setHostContext } from '../lib/plugins/host'
+import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -320,14 +320,30 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const pluginCmds = useSlashCommands()
   const pluginButtons = useComposerButtons()
   // Плагину нужен способ отправить сообщение и показать уведомление, а «куда
-  // отправить» знает только открытый сейчас композер — поэтому контекст обновляется
-  // отсюда, а не задаётся один раз при старте приложения.
+  // отправить» знает только открытое сейчас поле ввода.
+  //
+  // v1.293.0: полей ввода на экране до ТРЁХ одновременно — личка, канал сервера и
+  // открытая ветка смонтированы разом. Раньше каждое просто присваивало контекст на
+  // каждом своём рендере, и побеждало то, которое отрисовалось последним: плагин мог
+  // отправить сообщение в чат, которого человек даже не видит, причём непредсказуемо.
+  // Теперь право отвечать за отправку ЗАНИМАЮТ: пустое место занимает любой (чтобы
+  // плагин мог написать и до первого клика), а дальше право забирает то поле, в
+  // которое человек поставил курсор (onFocus у textarea ниже).
+  const ctxIdRef = useRef('composer-' + Math.random().toString(36).slice(2))
+  // onSend через ref, а не в зависимостях эффекта: родитель пересоздаёт эту функцию
+  // на каждом рендере, и эффект срабатывал бы вхолостую без конца.
+  const onSendRef = useRef(onSend)
+  onSendRef.current = onSend
+  const claimCtx = (force: boolean) => claimHostContext(ctxIdRef.current, {
+    sendMessage: async text => { await onSendRef.current(text) },
+    toast: msg => toast(msg),
+  }, force)
   useEffect(() => {
-    setHostContext({
-      sendMessage: async text => { await onSend(text) },
-      toast: msg => toast(msg),
-    })
-  }, [onSend])
+    const id = ctxIdRef.current
+    claimCtx(false)
+    return () => releaseHostContext(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const slashTyping = /^\/(\w*)$/.exec(text)
   const cmdSugg = slashTyping ? botCmds.filter(c => c.name.startsWith(slashTyping[1].toLowerCase())).slice(0, 8) : []
@@ -685,6 +701,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <input ref={photoRef} type="file" accept="image/*" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
         <textarea ref={inputRef} rows={1} disabled={cmdBusy}
+          // Курсор поставили сюда — значит человек работает с этим чатом, и
+          // сообщения плагинов должны уходить именно в него.
+          onFocus={() => claimCtx(true)}
           placeholder={cmdBusy ? 'Бот отвечает…' : files.length === 1 ? files[0].name : files.length > 1 ? 'Вложений: ' + files.length : placeholder} value={text}
           onChange={e => { const v = e.target.value; setText(v); keepDraft(v); if (v.trim()) onType?.(); if (emoji) setEmoji(false); if (gif) setGif(false); updateMention(v, e.target.selectionStart) }}
           onPaste={e => {

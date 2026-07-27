@@ -106,6 +106,30 @@ async function main() {
     }
   })
 
+  // --- 11. Ключи устройства: создание, сохранение, забывание -----------------
+  const { myIdentity, deviceId, forgetIdentity } = await import('./keys')
+
+  await forgetIdentity()               // начинаем с чистого листа
+  const dev1 = deviceId()
+  ok('идентификатор устройства выдан', /^[0-9a-f-]{36}$/i.test(dev1), dev1)
+  ok('и он постоянен', deviceId() === dev1)
+
+  const id1 = await myIdentity()
+  const id2 = await myIdentity()
+  ok('повторный вызов даёт ту же пару', id1.privateKey === id2.privateKey)
+  ok('приватный ключ устройства неизвлекаем', id1.privateKey.extractable === false)
+
+  // Проверяем главное свойство: забытые ключи не восстанавливаются, и переписка,
+  // зашифрованная для старого устройства, новым ключом не читается.
+  const probe = await deriveSharedKey(id1.privateKey, bPub, 'ponoi/dm/v1')
+  const sealed = await encryptText(probe, 'после перезапуска')
+  await forgetIdentity()
+  const id3 = await myIdentity()
+  ok('после забывания ключей выдаётся ДРУГАЯ пара', id3.privateKey !== id1.privateKey)
+  const probe2 = await deriveSharedKey(id3.privateKey, bPub, 'ponoi/dm/v1')
+  await mustThrow('старое сообщение новым ключом не читается', () => decryptText(probe2, sealed))
+  ok('идентификатор устройства тоже сменился', deviceId() !== dev1)
+
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
   lines.push(failed ? `ИТОГ: ПРОВАЛЕНО ПРОВЕРОК — ${failed}` : `ИТОГ: все ${lines.length - 2} проверок пройдены`)

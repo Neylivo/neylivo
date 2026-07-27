@@ -34,7 +34,31 @@ let ctx: HostContext = {
   sendMessage: async () => { throw new Error('Нет открытого канала') },
   toast: () => {},
 }
-export function setHostContext(next: HostContext) { ctx = next }
+
+// v1.293.0: у контекста есть ВЛАДЕЛЕЦ, и это важно.
+//
+// Полей ввода на экране одновременно до трёх: личка, канал сервера и открытая
+// ветка — все смонтированы разом. Раньше каждое из них просто присваивало контекст
+// на каждом своём рендере, и побеждало то, которое отрисовалось последним. То есть
+// плагин, отправляющий сообщение, мог написать не в тот чат, который человек видит
+// перед собой, — причём непредсказуемо, от рендера к рендеру.
+//
+// Теперь владельцем становится то поле ввода, с которым человек работает
+// последним (по фокусу), а на пустое место может встать любое — иначе до первого
+// клика по полю плагину было бы некуда писать.
+let ctxOwner: string | null = null
+
+export function claimHostContext(owner: string, next: HostContext, force: boolean) {
+  if (!force && ctxOwner !== null && ctxOwner !== owner) return
+  ctxOwner = owner
+  ctx = next
+}
+
+export function releaseHostContext(owner: string) {
+  if (ctxOwner !== owner) return
+  ctxOwner = null
+  ctx = { sendMessage: async () => { throw new Error('Нет открытого канала') }, toast: () => {} }
+}
 
 export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
   await stopPlugin(plugin.manifest.id)
