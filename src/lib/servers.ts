@@ -177,12 +177,24 @@ export async function discoverServers(q: string, meId: string): Promise<Discover
     .sort((a, b) => b.members - a.members)
 }
 
-// Вступление без кода приглашения — из «Путешествия по серверам».
-export async function joinServerDirect(serverId: string, meId: string, meName: string) {
-  const { error } = await supabase.from('server_members')
-    .insert({ server_id: serverId, user_id: meId, member_name: meName, role: 'member' })
-  if (error && error.code !== '23505' && !String(error.message).includes('duplicate')) return { error }
-  return { serverId }
+// Вступление без кода приглашения — из «Путешествия по серверам» и по тегу
+// сервера. v1.324.0: раньше это был прямой insert в server_members, который с
+// миграции 54 разрешён только владельцу при создании своего сервера — то есть
+// кнопка «Присоединиться» не работала вообще ни разу с v1.200.0, всегда упираясь
+// в отказ правила доступа. Теперь вступление идёт через серверную функцию
+// (supabase/84_public_servers.sql): она сама проверяет, что сервер публичный,
+// что приглашения не приостановлены и что ты не забанен.
+export async function joinServerDirect(serverId: string, _meId: string, meName: string) {
+  const { error } = await supabase.rpc('join_public_server', { p_server: serverId, p_member_name: meName })
+  if (!error) return { serverId }
+  const msg = String(error.message ?? '')
+  if (/join_public_server|does not exist|schema cache/i.test(msg)) {
+    return { error: { message: 'Вступление в публичные серверы пока не включено — примени миграцию supabase/84_public_servers.sql' } }
+  }
+  if (/server_not_found/.test(msg)) return { error: { message: 'Сервер не найден или закрыт для свободного входа — нужна ссылка-приглашение' } }
+  if (/invites_paused/.test(msg)) return { error: { message: 'Приглашения на этот сервер приостановлены' } }
+  if (/banned/.test(msg)) return { error: { message: 'Тебя забанили на этом сервере' } }
+  return { error }
 }
 
 // v1.322.0: правила сервера (supabase/82_server_rules.sql). Раньше переключатель

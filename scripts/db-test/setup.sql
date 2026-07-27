@@ -91,8 +91,15 @@ create table server_invites (
   created_by uuid,
   created_at timestamptz not null default now()
 );
+-- Нужна join_public_server (84): вступление проверяет бан.
+create table server_bans (
+  server_id uuid not null references servers on delete cascade,
+  user_id uuid not null references auth.users on delete cascade,
+  primary key (server_id, user_id)
+);
 alter table reactions      enable row level security;
 alter table server_invites enable row level security;
+alter table server_bans    enable row level security;
 
 alter table servers        enable row level security;
 alter table channels       enable row level security;

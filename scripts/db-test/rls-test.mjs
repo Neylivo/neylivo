@@ -79,8 +79,12 @@ const SABOTAGE = {
   verif: [/\n    and public\.server_verification_ok\(c\.server_id, auth\.uid\(\)\)/g, ''],
   // Ступени перестают быть накопительными — «Высокий» больше не требует почты.
   verifsteps: [/if v_level >= 1 and not coalesce\(v_email_ok, false\) then return false; end if;/, ''],
+  // Чужие серверы снова видны всем вошедшим (состояние до 84).
+  srvread: [/using \(\n  owner = auth\.uid\(\)\n  or is_member\(id\)\n  or coalesce\(\(settings ->> 'public'\)::boolean, false\)\n\)/, 'using (true)'],
+  // Вступить можно и в непубличный сервер.
+  joinpub: [/if not v_public then raise exception 'server_not_found'; end if;/, ''],
 }
-const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql') }
+const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -96,6 +100,7 @@ if (process.env.SABOTAGE) {
 await db.exec(SRC[81])
 await db.exec(SRC[82])
 await db.exec(SRC[83])
+await db.exec(SRC[84])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -348,6 +353,35 @@ await check('участника с ролью уровень проверки н
 await db.query(`update auth.users set phone_confirmed_at = now() where id=$1`, [OTHER])
 await check('с подтверждённым телефоном «Наивысший» пропускает', async () => { await write(OTHER, 'телефон есть'); return true })
 await setLevel(0)
+
+// ── Видимость серверов и вступление в публичные (84) ──────────────────────
+// v1.324.0: миграция 76 открыла чтение таблицы servers всем вошедшим, из-за чего
+// в «Путешествии по серверам» лежали чужие и служебные серверы. Проверяем, что
+// чужой закрытый сервер снова не читается, а публичный — читается и пускает.
+const stranger = '55555555-5555-5555-5555-555555555555'
+await db.query('insert into auth.users (id) values ($1)', [stranger])
+const closed = (await db.query('insert into servers (name, owner) values ($1,$2) returning id', ['Закрытый', OWNER])).rows[0].id
+const open = (await db.query(`insert into servers (name, owner, settings) values ($1,$2,'{"public":true}'::jsonb) returning id`, ['Открытый', OWNER])).rows[0].id
+
+await check('чужой закрытый сервер посторонний не видит', async () =>
+  (await as(stranger, 'select id from servers where id=$1', [closed])).rows.length === 0)
+await check('публичный сервер виден всем', async () =>
+  (await as(stranger, 'select id from servers where id=$1', [open])).rows.length === 1)
+await check('свой сервер владелец видит', async () =>
+  (await as(OWNER, 'select id from servers where id=$1', [closed])).rows.length === 1)
+await check('участник видит сервер, где состоит', async () =>
+  (await as(USER, 'select id from servers where id=$1', [srv])).rows.length === 1)
+
+await check('в публичный сервер можно войти без приглашения', async () => {
+  await as(stranger, `select join_public_server($1,'n')`, [open])
+  return (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [open, stranger])).rows.length === 1
+})
+await refused('в закрытый сервер так не войти', () => as(stranger, `select join_public_server($1,'n')`, [closed]))
+await db.query(`update servers set settings = settings || '{"invites_paused":true}'::jsonb where id=$1`, [open])
+await refused('при приостановленных приглашениях в публичный не войти', () => as(OTHER, `select join_public_server($1,'n')`, [open]))
+await db.query(`update servers set settings = settings - 'invites_paused' where id=$1`, [open])
+await db.query('insert into server_bans values ($1,$2)', [open, OTHER])
+await refused('забаненный в публичный сервер не войдёт', () => as(OTHER, `select join_public_server($1,'n')`, [open]))
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
