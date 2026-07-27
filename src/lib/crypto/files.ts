@@ -18,7 +18,12 @@ const IV_BYTES = 12
 export const MAX_ENCRYPTABLE = 100 * 1024 * 1024
 
 /** Ключ файла в переносимом виде — именно он кладётся в зашифрованное сообщение. */
-export interface FileKey { k: string; iv: string; name: string; type: string }
+export interface FileKey {
+  k: string; iv: string; name: string; type: string
+  /** Пометка «спойлер». Едет ВНУТРИ зашифрованного ключа, а не в ссылке: так
+   *  сервер не узнает даже того, что вложение было скрыто до нажатия. */
+  spoiler?: boolean
+}
 
 export class TooLargeToEncrypt extends Error {}
 
@@ -26,7 +31,7 @@ export class TooLargeToEncrypt extends Error {}
  * Зашифровать файл целиком. Возвращает шифротекст для загрузки и ключ, который
  * нужно доставить получателю внутри сообщения.
  */
-export async function encryptFile(file: File): Promise<{ blob: Blob; key: FileKey }> {
+export async function encryptFile(file: File, spoiler = false): Promise<{ blob: Blob; key: FileKey }> {
   if (file.size > MAX_ENCRYPTABLE) {
     throw new TooLargeToEncrypt(
       `Файл больше ${MAX_ENCRYPTABLE / 1024 / 1024} МБ — такой можно отправить только без шифрования`)
@@ -40,7 +45,7 @@ export async function encryptFile(file: File): Promise<{ blob: Blob; key: FileKe
     // Тип намеренно нейтральный: хранилище не должно знать, картинка это или
     // документ — по типу содержимого тоже можно многое понять о переписке.
     blob: new Blob([ct], { type: 'application/octet-stream' }),
-    key: { k: b64(raw), iv: b64(iv), name: file.name, type: file.type || 'application/octet-stream' },
+    key: { k: b64(raw), iv: b64(iv), name: file.name, type: file.type || 'application/octet-stream', ...(spoiler ? { spoiler: true } : {}) },
   }
 }
 

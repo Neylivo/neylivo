@@ -126,7 +126,18 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // о шифровании: им как и раньше приходит обычная ссылка.
   const [attach, setAttach] = useState<Record<string, { url: string; type: string }>>({})
   const blobUrls = useRef<string[]>([])
-  useEffect(() => () => { blobUrls.current.forEach(u => URL.revokeObjectURL(u)); blobUrls.current = [] }, [])
+  // Отзываем расшифрованные вложения при СМЕНЕ ДИАЛОГА, а не только при закрытии
+  // приложения: иначе за долгую сессию с десятком переписок все просмотренные
+  // картинки и видео так и остались бы висеть в памяти расшифрованными.
+  useEffect(() => () => {
+    blobUrls.current.forEach(u => URL.revokeObjectURL(u))
+    blobUrls.current = []
+    // Сбрасываем ОБА кэша вместе. Если очистить только вложения, то при возврате
+    // в диалог пересчёт не запустится: он смотрит на кэш текста, а тот остался
+    // заполненным — и вложения не расшифровались бы уже никогда.
+    setAttach({})
+    setPlain({})
+  }, [threadId])
   useEffect(() => {
     let alive = true
     const todo = messages.filter(m => isEncrypted(m.content) && plain[m.id] === undefined)
@@ -148,8 +159,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
             try {
               const res = await fetch(stripEncMark(parts[i]))
               const blob = await decryptFile(await res.arrayBuffer(), key)
-              const u = URL.createObjectURL(blob)
+              let u = URL.createObjectURL(blob)
               blobUrls.current.push(u)
+              // Возвращаем пометку спойлера, которая ехала внутри зашифрованного ключа.
+              if (key.spoiler) u += '#spoiler'
               urls.push(u)
               // Настоящий тип известен только из ключа: в базе он намеренно обезличен.
               types.push(key.type.startsWith('image/') ? 'image'
@@ -163,7 +176,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       if (!alive) return
       if (Object.keys(doneText).length) setPlain(p => ({ ...p, ...doneText }))
       if (Object.keys(doneAtt).length) setAttach(a => ({ ...a, ...doneAtt }))
-    })()
+    })().catch(() => {
+      // Страховка от необработанного отказа: openIncoming ловит свои ошибки сам,
+      // но неожиданный сбой здесь не должен всплывать наружу как «приложение
+      // сломалось» — переписка просто останется с замком вместо текста.
+    })
     return () => { alive = false }
   }, [messages, plain])
   // v1.177.0: ↑ в пустом композере — редактировать своё последнее сообщение (как в Discord).
@@ -1019,8 +1036,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     let encBlobs: File[] = []
     if (encFiles) {
       try {
-        for (const f of files!) {
-          const { blob, key } = await encryptFile(f)
+        // Пометка «спойлер» приходит сюда прямо в локальной ссылке предпросмотра.
+        const spoilerAt = (attach?.url ?? '').split('\n').map(u => u.includes('#spoiler'))
+        for (let i = 0; i < files!.length; i++) {
+          const f = files![i]
+          // Спойлер прячем внутрь зашифрованного ключа: раньше он приписывался к
+          // ссылке и при шифровании просто терялся — помеченное скрытым вложение
+          // показывалось сразу.
+          const { blob, key } = await encryptFile(f, spoilerAt[i] === true)
           // Имя на сервере обезличиваем: настоящее уехало в ключ.
           encBlobs.push(new File([blob], 'enc', { type: 'application/octet-stream' }))
           fileKeys.push(key)
