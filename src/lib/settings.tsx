@@ -89,6 +89,18 @@ export interface Settings {
 // 10 named theme presets. Each overrides the core design tokens; the app aliases
 // (--bg/--bg2/--bg3/--brand) derive from these automatically.
 export interface ThemeDef { key: string; name: string; dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string; tx: string; mut: string }
+
+// v1.296.0: светлая ли тема — по воспринимаемой яркости основного фона. Формула
+// стандартная (веса каналов под чувствительность глаза), порог 0.6 разделяет
+// светлые темы от тёмных с запасом: у самой светлой тёмной темы яркость ~0.22.
+function isLightColor(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return false
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+}
+
 export const THEMES: ThemeDef[] = [
   { key:'dark',     name:'Discord',  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', tx:'#dbdee1', mut:'#949ba4' },
   { key:'light',    name:'Светлая',  dark:'#e3e5e8', main:'#ebedef', panel:'#f2f3f5', content:'#ffffff', hover:'#e8eaed', active:'#e0e2e6', accent:'#5865f2', tx:'#313338', mut:'#5c5e66' },
@@ -175,6 +187,21 @@ function apply(s: Settings) {
   root.style.setProperty('--c-accent', (c.on && !day) ? c.accent : (day ? def.accent : (s.accent || use.accent)))
   root.style.setProperty('--tx', use.tx)
   root.style.setProperty('--mut', use.mut)
+  // v1.296.0: подложки наведения и выделения по всему приложению были жёстко
+  // белыми полупрозрачными (rgba(255,255,255,.08) и подобные — почти 300 мест).
+  // На тёмных темах это работает, а на светлой белое по белому попросту исчезает:
+  // активный канал и выделенные строки становились невидимыми. Здесь считаем,
+  // светлая тема или тёмная, и переворачиваем цвет подложки. На тёмных темах
+  // значение остаётся прежним (255,255,255), поэтому вид не меняется вообще.
+  const light = isLightColor(use.content)
+  root.style.setProperty('--ov', light ? '0,0,0' : '255,255,255')
+  // Усиленный текст (выделенный пункт, активная вкладка) был жёстко белым. На
+  // тёмных темах это остаётся белым и вид не меняется, на светлой становится
+  // почти чёрным — иначе подпись выделенного пункта сливалась бы с фоном.
+  root.style.setProperty('--tx-hi', light ? '#1a1a1c' : '#ffffff')
+  // Имя автора сообщения чуть мягче белого — на тёмных темах оставляем ровно
+  // прежний оттенок, иначе это было бы видимым изменением, а не починкой.
+  root.style.setProperty('--tx-name', light ? '#1a1a1c' : '#f2f3f5')
   root.setAttribute('data-theme', day ? 'light' : s.theme)
   root.style.setProperty('--font-scale', String(s.fontPx / 16))
   root.style.setProperty('--font-px', s.fontPx + 'px')
