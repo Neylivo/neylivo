@@ -1154,13 +1154,23 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       {showDelete && <div className="modal-overlay" style={{ zIndex: 140 }} onClick={() => setShowDelete(false)}>
         <div className="modal" onClick={e => e.stopPropagation()}>
           <button className="modal-x" onClick={() => setShowDelete(false)}><Icon name="close" size={18} /></button>
-          <div className="modal-title">Удалить '{server.name}'</div>
-          <div className="modal-sub">Вы уверены, что хотите удалить <b>{server.name}</b>? Это действие нельзя отменить.</div>
-          <label className="modal-lbl">Введите название сервера</label>
-          <input className="modal-in" autoFocus value={delName} onChange={e => setDelName(e.target.value)} />
+          <div className="modal-title">Удалить «{server.name}»</div>
+          <div className="modal-sub">
+            Вместе с сервером исчезнут все его каналы, вся переписка, роли и приглашения.
+            Восстановить это нельзя — резервной копии в приложении нет.
+          </div>
+          <label className="modal-lbl">Впиши название сервера, чтобы подтвердить</label>
+          <input className="modal-in" autoFocus placeholder={server.name} value={delName} onChange={e => setDelName(e.target.value)} />
           <div className="modal-foot">
             <button className="modal-ghost" onClick={() => setShowDelete(false)}>Отмена</button>
-            <button className="modal-danger solid" disabled={delName.trim() !== server.name} onClick={onDelete}>Удалить сервер</button>
+            {/* v1.325.0: второе подтверждение. Раньше сервер удалялся сразу по этой
+                кнопке, а из меню правого клика — вообще без вопросов. */}
+            <button className="modal-danger solid" disabled={delName.trim() !== server.name}
+              onClick={async () => {
+                if (!await confirmUi(`Последний раз: удалить «${server.name}» со всеми каналами и перепиской? Отменить будет нельзя.`,
+                  { okText: 'Да, удалить навсегда' })) return
+                onDelete()
+              }}>Удалить сервер</button>
           </div>
         </div>
       </div>}

@@ -338,7 +338,10 @@ const CTX_ITEMS = [
   // «Покинуть сервер». Раньше выйти можно было только через выпадающее меню
   // внутри сервера, а по правому клику такого пункта не было вовсе.
   { k: 'leave', label: 'Покинуть сервер', icon: 'signout', danger: true },
-  { k: 'delete', label: 'Удалить сервер', icon: 'trash', danger: true },
+  // v1.325.0: «Удалить сервер» убрано из меню правого клика. Пункт стоял вплотную
+  // к «Покинуть сервер» и срабатывал СРАЗУ, без единого вопроса, — одним промахом
+  // мыши владелец терял сервер вместе со всеми каналами и перепиской. Удаление
+  // теперь живёт только в настройках сервера и требует двух подтверждений подряд.
 ] as const
 
 export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
@@ -351,7 +354,7 @@ export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
   }, [onClose])
   return (
     <div className="ctxmenu" ref={clamp.ref} style={clamp.style} onClick={e => e.stopPropagation()}>
-      {CTX_ITEMS.filter(i => isOwner ? i.k !== 'leave' : (i.k !== 'delete' && i.k !== 'settings')).map(i => (
+      {CTX_ITEMS.filter(i => isOwner ? i.k !== 'leave' : i.k !== 'settings').map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>
           <span className="ctxmenu-ic"><Icon name={i.k === 'mute' && muted ? 'bell' : i.icon} size={16} /></span>{i.k === 'mute' ? (muted ? 'Включить уведомления' : 'Заглушить сервер') : i.label}
@@ -416,7 +419,9 @@ export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, 
       {tab === 'channels' && <div className="modal-note">Каналы создаются и удаляются на боковой панели сервера (＋ канал).</div>}
 
       <div className="modal-foot">
-        <button className="modal-danger" onClick={async () => { if (await confirmUi('Удалить сервер «' + server.name + '»? Это необратимо.', { okText: 'Удалить сервер' })) onDelete() }}>Удалить сервер</button>
+        {/* v1.325.0: удаление отсюда убрано — одно окно подтверждения слишком легко
+            проскочить. Оно осталось в «Настройках сервера», где нужно вписать
+            название сервера и подтвердить ещё раз. */}
         <button className="modal-ghost" onClick={onClose}>Закрыть</button>
       </div>
     </Overlay>

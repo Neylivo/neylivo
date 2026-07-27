@@ -491,10 +491,14 @@ export function Home() {
       return
     }
     if (k === 'delete') {
+      // v1.325.0: раньше сервер удалялся прямо отсюда — пункт меню правого клика
+      // срабатывал без единого вопроса, и промах мышью по соседнему «Покинуть
+      // сервер» стоил владельцу всего сервера. Пункт из меню убран, а этот путь
+      // оставлен и ведёт в настройки, где удаление требует вписать название и
+      // подтвердить ещё раз.
       if (server.owner !== user.id) return toastErr('Только владелец может удалить сервер')
-      const { error } = await deleteServer(server.id)
-      if (error) { toastErr('Не удалось удалить сервер: ' + error.message); return }
-      setLastServer(null); setView({ kind: 'dm' }); refresh()
+      setSettingsServer(server)
+      toastErr('Удаление сервера — в настройках, внизу списка слева')
       return
     }
     if (k === 'read') {
