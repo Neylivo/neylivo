@@ -41,6 +41,14 @@ interface PresenceCtx {
 }
 const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, listeningOf: () => null, deviceOf: () => 'desktop' })
 
+// Читаем настройку напрямую: presence поднимается выше провайдера настроек, а
+// заводить ради двух флагов ещё один контекст — лишняя связанность.
+function prefFlag(key: string): boolean {
+  try { return !!JSON.parse(localStorage.getItem('ponoi_settings') || '{}')[key] } catch { return false }
+}
+const hiddenActivity = () => prefFlag('hideActivity')
+const hiddenLastSeen = () => prefFlag('hideLastSeen')
+
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
   const { user } = useAuth()
@@ -86,7 +94,12 @@ export function PresenceProvider({ username, avatarUrl, children }:
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, device: DEVICE })
+      if (st === 'SUBSCRIBED') await ch.track({
+        username, status: 'online', avatar_url: avatarUrl ?? null, device: DEVICE,
+        // v1.304.0: настройка «не рассылать активность» теперь ДЕЙСТВУЕТ. Раньше
+        // она жила только в интерфейсе, а игра и музыка уходили всем в любом случае.
+        ...(hiddenActivity() ? {} : { listening: lisRef.current, game: gameRef.current }),
+      })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -97,7 +110,12 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // Если миграция 11 ещё не применена (колонки нет) — запрос тихо вернёт ошибку, ничего не ломается.
   useEffect(() => {
     if (!user) return
-    const beat = () => { supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {}) }
+    // v1.304.0: «скрывать был в сети» тоже стало настоящей настройкой — раньше
+    // отметка писалась каждую минуту независимо ни от чего, и выключить её было нельзя.
+    const beat = () => {
+      if (hiddenLastSeen()) return
+      supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {})
+    }
     beat()
     const t = window.setInterval(beat, 60_000)
     window.addEventListener('beforeunload', beat)
@@ -244,7 +262,10 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, device: DEVICE })
+        chanRef.current?.track({
+          username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, device: DEVICE,
+          ...(hiddenActivity() ? {} : { listening: lisRef.current, game: val }),
+        })
       }
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
         // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,

@@ -9,7 +9,7 @@ import { customNickFamily } from './profilePrefs'
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'dataCollect', 'defaultServerNotif'] as const
+const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'hideActivity', 'hideLastSeen', 'defaultServerNotif'] as const
 type AccountKey = typeof ACCOUNT_KEYS[number]
 function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
@@ -50,14 +50,25 @@ export interface Settings {
   // декоративные тумблеры. Настоящая приватность ЛС/звонков переехала в
   // ProfilePrefs (dmMessagePrivacy/dmCallPrivacy, публичные profiles.*), т.к.
   // проверять её нужно и другим людям (RLS/Edge Function), не только владельцу.
-  dataCollect: boolean
+  // v1.304.0: dataCollect убран. Тумблер «Сбор данных об использовании» был
+  // включён по умолчанию и обещал сбор, которого нет: ни аналитики, ни телеметрии
+  // в приложении не было никогда. Проверялся он, как и прежние декоративные
+  // настройки приватности, нигде. Для приложения, которое ничего о человеке не
+  // собирает, такая кнопка — не просто мусор, а ложь в свою же сторону.
+  //
+  // v1.304.0: эти две — настоящие. Раньше они тоже жили только в интерфейсе.
+  /** Не рассылать, во что играешь и что слушаешь. */
+  hideActivity: boolean
+  /** Не отмечать «был в сети». */
+  hideLastSeen: boolean
   // v1.295.0: сквозное шифрование личных сообщений. По умолчанию включено —
   // защита, которую надо не забыть включить, защищает только тех, кто про неё знал.
   e2ee: boolean
-  // v1.303.0: шифрование самого разговора. По умолчанию ВЫКЛЮЧЕНО, в отличие от
-  // переписки: звонки — единственное, что я не мог проверить сам, и молча включать
-  // непроверенное в работающий механизм голоса неправильно. Включается вручную,
-  // и обе стороны должны быть на этой версии.
+  // v1.304.0: шифрование самого разговора. По умолчанию ВКЛЮЧЕНО: защита, которую
+  // надо не забыть включить, защищает только тех, кто про неё знал.
+  // Побочный эффект перехода: если у собеседника версия старше v1.303.0, он не
+  // поймёт присланный ключ и не услышит звук — обеим сторонам нужно обновиться.
+  // Когда ключ передать не удалось вовсе, звонок честно идёт без шифрования.
   e2eeCalls: boolean
   devmode: boolean
   actOn: boolean
@@ -127,8 +138,8 @@ export const DEFAULT_CUSTOM: CustomTheme = {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
-  micVol: 100, spkVol: 100, lang: 'ru', dataCollect: true,
-  e2ee: true, e2eeCalls: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  micVol: 100, spkVol: 100, lang: 'ru', hideActivity: false, hideLastSeen: false,
+  e2ee: true, e2eeCalls: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,
@@ -156,7 +167,6 @@ function load(): Settings {
       const s = { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
       // v1.62.0: одноразовая миграция — сбор данных включён по умолчанию
       if (!localStorage.getItem('ponoi_mig_162')) {
-        s.dataCollect = true
         localStorage.setItem('ponoi_mig_162', '1')
         localStorage.setItem('ponoi_settings', JSON.stringify(s))
       }
