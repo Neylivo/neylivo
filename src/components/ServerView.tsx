@@ -52,6 +52,7 @@ import { chNotifModeOf } from '../lib/chNotify'
 import { notifModeOf } from '../lib/srvNotify'
 import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
+import { ChannelsRolesModal } from './ChannelsRolesModal'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
@@ -163,6 +164,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const [voiceCatOpen, setVoiceCatOpen] = useState(() => localStorage.getItem('ponoi_cat_voice_open') !== '0')
   const [srvMenu, setSrvMenu] = useState(false)
   const [showEvents, setShowEvents] = useState(false)
+  const [showChannelsRoles, setShowChannelsRoles] = useState(false)
   const [showThreads, setShowThreads] = useState(false)
   const [thrQ, setThrQ] = useState('')
   const [threads, setThreads] = useState<Thread[]>([])
@@ -1121,11 +1123,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         <div className="ch-list">
           {(server as any).settings?.banner_url ? <>
             <div className="ch evt clickable" onClick={() => toastOk('Путеводитель по серверу скоро появится')}><Icon name="flag" size={16} /> Путеводитель по серверу</div>
-            {/* v1.270.0: раньше клик переключал showAllCh — состояние, которое нигде
-                не читалось и ни на что не влияло (мёртвый тумблер, скопированный из
-                Discord вместе с остальным меню в v1.25.0). Честная заглушка вместо
-                фальшивой видимости действия, как у «Путеводителя» строкой выше. */}
-            <div className="ch evt clickable" onClick={() => toastOk('Обзор каналов и ролей скоро появится')}><Icon name="list" size={16} /> Каналы и роли</div>
+            {/* v1.315.0: заглушка заменена настоящим экраном — устройство сервера
+                (каналы, роли и что каждая роль даёт) в одном месте, как в Discord. */}
+            <div className="ch evt clickable" onClick={() => setShowChannelsRoles(true)}><Icon name="list" size={16} /> Каналы и роли</div>
           </> : <>
             <div className="ch evt clickable" onClick={() => setShowEvents(true)}><Icon name="calendar" size={16} /> Мероприятия</div>
           </>}
@@ -1518,6 +1518,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       {chSettings && <ChannelSettings server={server} channel={chSettings} onClose={() => setChSettings(null)}
         onChanged={() => loadChannels()} onDeleted={() => { setChSettings(null); loadChannels() }} />}
       {showEvents && <ServerEvents server={server} channels={channels} canCreate={canManageEvents} onClose={() => setShowEvents(false)} />}
+      {showChannelsRoles && <ChannelsRolesModal channels={channels} serverId={server.id}
+        myPerms={myPerms} isOwner={isOwner} onClose={() => setShowChannelsRoles(false)}
+        onOpenChannel={c => setCurChannel(c)} />}
       {showPrivacy && <ServerPrivacyModal server={server} onClose={() => setShowPrivacy(false)} />}
       {notifForCh && <ChannelNotifModal server={server} channel={notifForCh} onClose={() => setNotifForCh(null)} />}
         {showInvite && user && <InviteModal server={server} channelName={curChannel?.name} meId={user.id} meName={username} onClose={() => setShowInvite(false)} />}
