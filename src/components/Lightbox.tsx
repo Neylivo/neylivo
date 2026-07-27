@@ -4,6 +4,7 @@ import { copyMedia, copyMediaLink, saveMedia } from '../lib/copyMedia'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
 import { useClampToViewport } from '../lib/clampPos'
+import { openSafely } from '../lib/safeUrl'
 
 export interface LightboxMeta { name: string; avatar?: string | null; at?: string | null }
 
@@ -92,7 +93,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
       <div className="lb-tools" onClick={e => e.stopPropagation()}>
         <button title="Приблизить" onClick={() => setZoom(z => Math.min(4, +(z * 1.5).toFixed(3)))}><Icon name="zoom-in" size={18} /></button>
         <button title="Скачать" onClick={() => saveMedia(url)}><Icon name="download" size={18} /></button>
-        <button title="Открыть в браузере" onClick={() => window.open(url, '_blank')}><Icon name="external" size={18} /></button>
+        <button title="Открыть в браузере" onClick={() => openSafely(url)}><Icon name="external" size={18} /></button>
         <div className="lb-more-wrap">
           <button title="Ещё" onClick={() => setMore(v => !v)}><Icon name="dots" size={18} /></button>
           {more && <div className="lb-more">
@@ -123,7 +124,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
           <button onClick={() => { setCtx(null); saveMedia(url) }}>Сохранить изображение</button>
           <div className="lb-ctx-sep" />
           <button onClick={() => { setCtx(null); copyMediaLink(url) }}>Копировать ссылку на медиа</button>
-          <button onClick={() => { setCtx(null); window.open(url.replace('#spoiler', ''), '_blank') }}>Открыть ссылку на медиафайл</button>
+          <button onClick={() => { setCtx(null); openSafely(url.replace('#spoiler', '')) }}>Открыть ссылку на медиафайл</button>
         </div>
       </>}
     </div>,

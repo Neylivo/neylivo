@@ -1,4 +1,5 @@
 import { toastErr } from '../lib/toast'
+import { isSafeUrl, openSafely } from '../lib/safeUrl'
 import { stripAll } from '../lib/stripMeta'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -868,6 +869,11 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     return () => { on = false }
   }, [url, type, uploading])
   if (!url) return null
+  // v1.312.0: адрес вложения задаёт отправитель. Небезопасную схему (javascript: и
+  // подобные) не показываем и не открываем вовсе — см. src/lib/safeUrl.ts.
+  if (url.split('\n').some(u => !isSafeUrl(u))) {
+    return <span className="msg-att-broken"><Icon name="shield" size={16} /> Вложение с недопустимым адресом заблокировано</span>
+  }
   // v1.70.0: группа вложений в одном сообщении — url/type склеены через \n.
   if (url.includes('\n')) {
     const urls = url.split('\n')

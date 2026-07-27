@@ -3,6 +3,7 @@ import { highlight } from '../lib/hl'
 import { copyMediaLink, saveMedia } from '../lib/copyMedia'
 import { toastOk, toastErr } from '../lib/toast'
 import { Icon } from './icons'
+import { openSafely } from '../lib/safeUrl'
 
 // v1.83.0: текстовые/кодовые вложения (.txt, .js, .html, .py, …) рендерятся
 // 1-в-1 как в Discord: карточка с превью кода (подсветка синтаксиса из
@@ -107,7 +108,7 @@ export function CodeFileCard({ url, sizeLabel, nameOverride }: { url: string; si
               <button disabled={text === null} onClick={() => { setMore(false); copyText() }}>Скопировать текст</button>
               <button onClick={() => { setMore(false); saveMedia(url) }}>Скачать</button>
               <button onClick={() => { setMore(false); copyMediaLink(url) }}>Копировать ссылку на файл</button>
-              <button onClick={() => { setMore(false); window.open(url, '_blank') }}>Открыть в браузере</button>
+              <button onClick={() => { setMore(false); openSafely(url) }}>Открыть в браузере</button>
             </div>
           </>}
         </span>
@@ -131,7 +132,7 @@ export function CodeFileCard({ url, sizeLabel, nameOverride }: { url: string; si
         <div className="cfc-full-head">
           <span className="cfc-nm">{name}</span>
           <span className="cfc-acts">
-            <button title="Открыть в браузере" onClick={() => window.open(url, '_blank')}><Icon name="external" size={16} /></button>
+            <button title="Открыть в браузере" onClick={() => openSafely(url)}><Icon name="external" size={16} /></button>
             <button title="Закрыть (Esc)" onClick={() => setWebPreview(false)}><Icon name="close" size={16} /></button>
           </span>
         </div>

@@ -5,6 +5,7 @@ import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
 import { Home } from './components/Home'
 import { Toasts, toastOk, toastErr } from './lib/toast'
+import { openSafely } from './lib/safeUrl'
 import { loadFavs, toggleFav } from './lib/emoji'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
@@ -69,7 +70,7 @@ function ApkUpdateBanner() {
             } catch (e: any) {
               setPct(null)
               toastErr(e?.message ?? 'Не удалось обновить — открываю страницу загрузки')
-              window.open(upd.url, '_blank', 'noopener')
+              openSafely(upd.url)
             }
           }}>Обновить</button>
         : <span className="upd-pct">{pct}%</span>}

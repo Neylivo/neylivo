@@ -311,6 +311,33 @@ async function main() {
   await mustThrow('чужой не достанет ключ звонка', () =>
     openMessage(callEnv, 'bob-phone', eve.privateKey, alicePub))
 
+  // --- 16. Проверка адресов из сообщений -------------------------------------
+  const { isSafeUrl } = await import('../safeUrl')
+
+  // Опасные схемы. javascript: особенно: браузер блокирует его в <a href>, но
+  // window.open ВЫПОЛНЯЕТ — проверено в этой среде, — и выполняет в окне того же
+  // происхождения, то есть с доступом к токену сессии в localStorage.
+  for (const bad of [
+    'javascript:alert(1)',
+    'JavaScript:alert(1)',
+    '  javascript:alert(1)',
+    'jAvAsCrIpT:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'vbscript:msgbox(1)',
+    'file:///C:/Windows/System32/config/SAM',
+  ]) {
+    ok('отклонён опасный адрес: ' + bad.slice(0, 34), !isSafeUrl(bad))
+  }
+  for (const good of [
+    'https://example.com/a.png',
+    'http://example.com/a.png',
+    'blob:file:///1234-5678',
+    '/local/asset.png',
+  ]) {
+    ok('пропущен обычный адрес: ' + good.slice(0, 34), isSafeUrl(good))
+  }
+  ok('пустой адрес отклонён', !isSafeUrl('') && !isSafeUrl(null) && !isSafeUrl(undefined))
+
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
   lines.push(failed ? `ИТОГ: ПРОВАЛЕНО ПРОВЕРОК — ${failed}` : `ИТОГ: все ${lines.length - 2} проверок пройдены`)

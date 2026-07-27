@@ -147,6 +147,7 @@ export interface UiMessage {
 
 import { Em } from '../lib/twemoji'
 import { loadCustom } from '../lib/emoji'
+import { openSafely } from '../lib/safeUrl'
 
 // v1.129.0: эмодзи реакции — кастомные (:имя:) рендерятся картинкой из общего
 // стора, юникодные — как обычно через Twemoji. Список сообщений уже
@@ -629,7 +630,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {item(isGif ? 'Сохранить гифку' : 'Сохранить изображение', 'download', () => { saveMedia(img) })}
             <div className="ctx-sep" />
             {item(isGif ? 'Копировать ссылку на гифку' : 'Копировать ссылку на изображение', 'link', () => { copyText(img, 'Ссылка скопирована') })}
-            {item(isGif ? 'Открыть ссылку на гифку' : 'Открыть ссылку на изображение', 'external', () => { window.open(img, '_blank') })}
+            {item(isGif ? 'Открыть ссылку на гифку' : 'Открыть ссылку на изображение', 'external', () => { openSafely(img) })}
           </> : null}
           {(canDelete ? canDelete(menuMsg) : menuMsg.author === currentUser) ? <>
             <div className="ctx-sep" />
