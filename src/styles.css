@@ -4688,3 +4688,6 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .ch-intro-btn { display:inline-flex; align-items:center; gap:6px; margin-top:6px; background:none; border:none;
   color:var(--brand); font-size:14px; font-weight:600; cursor:pointer; padding:2px 0; }
 .ch-intro-btn:hover { text-decoration:underline; }
+/* v1.329.0: частые реакции в панели наведения над сообщением. */
+.msg-tools-emo { font-size:17px; line-height:1; padding:3px 4px !important; }
+.msg-tools-emo img { width:17px; height:17px; vertical-align:-3px; }

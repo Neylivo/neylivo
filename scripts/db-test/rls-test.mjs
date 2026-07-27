@@ -89,8 +89,12 @@ const SABOTAGE = {
   whbit: [/& 512\) <> 0/g, '& 16384) <> 0'],
   // Эмодзи и стикеры снова удаляет любой участник.
   emoji: [/\s*and \(created_by = auth\.uid\(\) or public\.can_manage_emoji\(server_id, auth\.uid\(\)\)\)/g, ''],
+  // Строчка о вступлении перестаёт писаться.
+  joinmsg: [/if v_new then perform public\.post_join_message\(.*?\); end if;/g, ''],
+  // Приватный канал снова годится под системные сообщения.
+  joinpriv: [/and not coalesce\(\(c\.settings ->> 'private'\)::boolean, false\)/, ''],
 }
-const SRC = { 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -109,7 +113,9 @@ await db.exec(SRC[83])
 await db.exec(SRC[84])
 // 80 и 61 в тесте не применяются целиком (в них есть лишнее для этой песочницы),
 // но их политики целиком переобъявляет 85 — проверяем именно итоговые.
+await db.exec(sql('54_security_hardening.sql').split('-- ====== B)')[0])
 await db.exec(SRC[85])
+await db.exec(SRC[86])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -421,6 +427,34 @@ await db.query('insert into member_roles values ($1,$2,$3)', [srv, USER, rEmoji]
 await check('с правом «управление эмодзи» удаление работает', async () => {
   await as(USER, `delete from server_emoji where server_id=$1`, [srv])
   return (await db.query('select 1 from server_emoji where server_id=$1', [srv])).rows.length === 0
+})
+
+// ── Сообщение о вступлении (86) ───────────────────────────────────────────
+// v1.329.0: строчку «X присоединился» пишет сама база при вступлении, а не
+// клиент — иначе её не было бы при входе с другого устройства.
+const joinSrv = (await db.query(`insert into servers (name, owner, settings) values ($1,$2,'{"public":true}'::jsonb) returning id`, ['Публичный2', OWNER])).rows[0].id
+const gen = (await db.query(`insert into channels (server_id, name) values ($1,'общий') returning id`, [joinSrv])).rows[0].id
+await db.query(`insert into channels (server_id, name, settings) values ($1,'закрытый','{"private":true}'::jsonb)`, [joinSrv])
+await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [joinSrv, OWNER, 'o'])
+
+await check('вступление добавляет системную строчку в канал', async () => {
+  await as(OTHER, `select join_public_server($1,'Новичок')`, [joinSrv])
+  const r = await db.query(`select author_name, content from messages where channel_id=$1`, [gen])
+  return r.rows.length === 1 && r.rows[0].author_name === 'Новичок' && r.rows[0].content.includes('sys:join')
+})
+await check('повторный вход не плодит строчки', async () => {
+  await as(OTHER, `select join_public_server($1,'Новичок')`, [joinSrv])
+  return (await db.query('select 1 from messages where channel_id=$1', [gen])).rows.length === 1
+})
+await check('приватный канал под системные сообщения не берётся', async () => {
+  const r = await db.query(`select count(*)::int n from messages m join channels c on c.id=m.channel_id
+                             where c.server_id=$1 and (c.settings->>'private')::boolean is true`, [joinSrv])
+  return r.rows[0].n === 0
+})
+await db.query(`update servers set settings = settings || '{"sys_welcome":false}'::jsonb where id=$1`, [joinSrv])
+await check('выключённая настройка отключает строчку', async () => {
+  await as(MOD, `select join_public_server($1,'Тихий')`, [joinSrv])
+  return (await db.query('select 1 from messages where channel_id=$1', [gen])).rows.length === 1
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

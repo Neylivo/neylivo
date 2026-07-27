@@ -481,6 +481,15 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 // v1.285.0: гаснет через час — см. GlinkShareCard/useShareExpired выше.
                 <GlinkShareCard sys={sys} createdAt={m.created_at}
                   label={currentUser && m.author === currentUser ? 'Вы поделились игрой' : m.author_name + ' зовёт тебя в игру!'} />
+              ) : sys.type === 'join' ? (
+                // v1.329.0: «X присоединился к серверу» — пишет сама база при
+                // вступлении (supabase/86_join_messages.sql), поэтому строчка
+                // появляется и когда человек вошёл с другого устройства.
+                <div className="sys-msg sys-join">
+                  <span className="sys-ic"><Icon name="user-plus" size={16} /></span>
+                  <span><b>{m.author_name}</b> присоединил(ась)ся к серверу. Встречайте!</span>
+                  <span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>
+                </div>
               ) : sys.type === 'call' ? (() => {
                 // Системное сообщение о звонке — текст зависит от того, кто смотрит.
                 const mineCall = !!currentUser && m.author === currentUser
@@ -573,6 +582,13 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 </div>}
               </div>
               <div className="msg-tools">
+                {/* v1.329.0: три частые реакции прямо в панели наведения, как в
+                    Discord. Раньше до любой реакции было два действия — открыть
+                    выбор и только потом ткнуть в эмодзи, из-за чего реакциями
+                    почти не пользовались и лента выглядела мёртвой. */}
+                {canReact !== false && onReact && QUICK.slice(0, 3).map(e => (
+                  <button key={'q' + e} className="msg-tools-emo" title={'Реакция ' + e} onClick={() => onReact(m.id, e)}><Em>{e}</Em></button>
+                ))}
                 {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
                 {currentUser && <button title="Переслать" onClick={() => setFwdFor(m)}><Icon name="forward" size={18} /></button>}
                 {canReact !== false && <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>}

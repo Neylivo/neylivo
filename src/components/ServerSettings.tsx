@@ -582,13 +582,23 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
           <div className="cset-hint" style={{ marginTop: -12 }}>Управление настройками, помогающими поддерживать активность на вашем сервере.</div>
           <div className="cset-h" style={{ fontSize: 17, marginTop: 24, marginBottom: 0 }}>Системные сообщения</div>
           <div className="cset-hint" style={{ marginTop: 4 }}>Настройте системные сообщения о событиях, отправляемые на ваш сервер.</div>
-          {toggleRow('Отправлять случайное приветственное сообщение, когда пользователь подключается к этому серверу.', '', 'sys_welcome', true)}
-          {toggleRow('Предлагать участникам отвечать на приветственное сообщение стикером.', '', 'sys_sticker', true)}
-          {toggleRow('Отправить полезные советы для настройки сервера.', '', 'sys_tips', true)}
+          {/* v1.329.0: переключатель заработал — сообщение о вступлении пишет сама
+              база (supabase/86_join_messages.sql). Два соседних, «отвечать стикером»
+              и «полезные советы», убраны: отвечать стикером на системную строку в
+              приложении нечем, а советов по настройке сервера не существует —
+              оба только сохранялись. Вернутся вместе с тем, что должны включать. */}
+          {toggleRow('Писать в канал, когда кто-то присоединился к серверу', 'Короткая строчка «X присоединился к серверу» — как в Discord. Пишет сама база при вступлении, поэтому появляется и когда человек вошёл с другого устройства.', 'sys_welcome', true)}
           <label className="cset-lbl">Канал системных сообщений</label>
-          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 8 }}>На этом канале мы публикуем системные сообщения о событиях.</div>
+          <div className="cset-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+            Куда попадают такие сообщения. Не выбран — берётся первый текстовый канал сервера.
+            Приватные и голосовые каналы в списке не предлагаются: в приватный вступивший может
+            не иметь доступа, а в голосовом ленты нет.
+          </div>
           <select className="modal-in" value={st.sys_channel ?? ''} onChange={e => up('sys_channel', e.target.value)}>
-            {channels.filter(c => (c as any).kind !== 'voice').map(c => <option key={c.id} value={c.id}># {c.name}</option>)}
+            <option value="">— первый текстовый канал —</option>
+            {channels
+              .filter(c => (c as any).kind !== 'voice' && (c as any).kind !== 'category' && !(c as any).settings?.private)
+              .map(c => <option key={c.id} value={c.id}># {c.name}</option>)}
           </select>
           <div className="cset-div" />
           <div className="cset-h" style={{ fontSize: 17, marginBottom: 0 }}>Настройки ленты событий</div>
