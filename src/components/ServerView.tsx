@@ -165,15 +165,20 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // v1.322.0: возрастное ограничение сервера — подтверждение на устройстве, как у
   // канала выше. Ключ отдельный: согласие «мне 18» для одного сервера не должно
   // молча открывать другой.
-  const [ageOkSrv, setAgeOkSrv] = useState(() => {
-    try { return (JSON.parse(localStorage.getItem('ponoi_srv_age_ok') || '[]') as string[]).includes(server.id) } catch { return false }
+  // Храним МНОЖЕСТВО подтверждённых серверов, а не «подтверждён ли текущий»:
+  // ServerView не размонтируется при переходе между серверами (см. Home.tsx),
+  // поэтому одно булево значение, посчитанное при первом входе, так и осталось бы
+  // истинным на соседнем сервере — подтвердил возраст на одном, и второй
+  // открылся бы без вопроса. Тот же приём, что у nsfwOk выше.
+  const [ageOkSet, setAgeOkSet] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ponoi_srv_age_ok') || '[]')) } catch { return new Set() }
   })
   function confirmSrvAge() {
-    try {
-      const cur: string[] = JSON.parse(localStorage.getItem('ponoi_srv_age_ok') || '[]')
-      localStorage.setItem('ponoi_srv_age_ok', JSON.stringify([...new Set([...cur, server.id])]))
-    } catch {}
-    setAgeOkSrv(true)
+    setAgeOkSet(s => {
+      const next = new Set(s); next.add(server.id)
+      try { localStorage.setItem('ponoi_srv_age_ok', JSON.stringify(Array.from(next))) } catch {}
+      return next
+    })
   }
   // v1.322.0: правила сервера. null — ещё не знаем (не мигаем заглушкой, пока
   // ответ не пришёл: иначе при каждом входе на сервер на миг показывались бы
@@ -1131,12 +1136,38 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // самое отдельно проверяет и база (server_rules_ok).
   useEffect(() => {
     if (!user || isOwner) { setRulesOk(true); return }
+    // Сбрасываем в «ещё не знаем» при переходе на другой сервер: ServerView не
+    // размонтируется, и без сброса на новом сервере на миг показалась бы заглушка
+    // с правилами предыдущего — но уже под новым названием.
+    setRulesOk(null)
     let ok = true
     rulesAccepted(server.id, user.id, (server as any).settings)
       .then(v => { if (ok) setRulesOk(v) })
       .catch(() => { if (ok) setRulesOk(true) })
     return () => { ok = false }
   }, [server.id, user?.id, isOwner, (server as any).settings?.rules_on, (server as any).settings?.rules_at])
+
+  // v1.322.0: уровень проверки участников (settings.verification) держит база
+  // (server_verification_ok, supabase/83_verification_level.sql). Здесь — только
+  // объяснение человеку: без него он получил бы на «отправить» голую ошибку
+  // правила доступа и не понял бы ни причины, ни что с ней делать. Условия те же,
+  // что в функции базы, и порядок тот же — ступени накопительные.
+  function verifyBlockReason(): string | null {
+    const lvl = Number(srvSettings.verification ?? 0)
+    if (!lvl || isOwner || !user) return null
+    const me: any = members.find(m => m.user_id === user.id)
+    // Роль снимает ограничение — так написано в самой настройке.
+    if (rolesOfId(user.id).length > 0 || me?.role_id) return null
+    const u: any = user
+    if (lvl >= 1 && !u.email_confirmed_at) return 'Чтобы писать здесь, подтверди свою почту — так настроил владелец сервера.'
+    if (lvl >= 2 && u.created_at && Date.now() - Date.parse(u.created_at) < 5 * 60_000)
+      return 'Владелец разрешил писать только тем, чьей учётной записи больше 5 минут. Подожди немного.'
+    if (lvl >= 3 && me?.joined_at && Date.now() - Date.parse(me.joined_at) < 10 * 60_000)
+      return 'Владелец разрешил писать только тем, кто пробыл на сервере больше 10 минут. Осмотрись пока.'
+    if (lvl >= 4 && !u.phone_confirmed_at)
+      return 'Владелец разрешил писать только с подтверждённым номером телефона. Вход по телефону в Ponoi пока не настроен, так что написать смогут только владелец и те, кому выдана роль.'
+    return null
+  }
 
   async function acceptSrvRules() {
     if (!user || rulesBusy) return
@@ -1150,7 +1181,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // вкладке «Доступ» только сохранялся. Подтверждение помнится на устройстве —
   // как у канала выше (nsfwOk) и как в самом Discord.
   const srvAge = !!(server as any).settings?.age_restricted
-  if (srvAge && !ageOkSrv) return (
+  if (srvAge && !ageOkSet.has(server.id)) return (
     <main className="chat srv-gate">
       <div className="nsfw-gate-box">
         <div className="nsfw-gate-ico">🔞</div>
@@ -1366,7 +1397,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {activeThread && curChannel && <div className="thread-view-wrap">
           <ThreadPanel server={server} channel={curChannel} thread={activeThread} user={user!} username={username}
             onClose={() => setActiveThread(null)} canManageMessages={canManageMessages} canAttachFiles={canAttachFiles} automodCheck={automodCheck}
-            canPost={canPostHere && (!activeThread.locked || isOwner || canManageMessages || canManageChannels)} />
+            canPost={canPostHere && !verifyBlockReason() && (!activeThread.locked || isOwner || canManageMessages || canManageChannels)} />
         </div>}
         {showPins && <div className="pins-panel">
           <div className="pins-h"><Icon name="pin" size={15} /> Закреплённые сообщения</div>
@@ -1394,7 +1425,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             обсуждений показались бы до подтверждения возраста. */}
         {curChannel && isForum(curChannel) && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) ? (
           <ForumView server={server} channel={curChannel} user={user!} username={username}
-            tags={forumTagsOf(curChannel)} canPost={canPostHere} canModerate={isOwner || canManageMessages || canManageChannels}
+            tags={forumTagsOf(curChannel)} canPost={canPostHere && !verifyBlockReason()} canModerate={isOwner || canManageMessages || canManageChannels}
             canAttachFiles={canAttachFiles} automodCheck={automodCheck}
             avatarOf={id => members.find(m => m.user_id === id)?.avatar_url}
             onOpen={t => setActiveThread(t)} />
@@ -1438,7 +1469,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="ch-readonly"><Icon name="lock" size={15} /> В этом канале можно только читать</div>}
         {curChannel && isForum(curChannel) && !canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
           <div className="ch-readonly"><Icon name="lock" size={15} /> В этом форуме можно только читать — заводить обсуждения нельзя</div>}
-        {curChannel && !isForum(curChannel) && canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
+        {/* v1.322.0: не проходишь по уровню проверки — говорим почему, а не даём
+            наткнуться на отказ базы уже после нажатия «отправить». */}
+        {curChannel && canPostHere && verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
+          <div className="ch-readonly"><Icon name="lock" size={15} /> {verifyBlockReason()}</div>}
+        {curChannel && !isForum(curChannel) && canPostHere && !verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}
