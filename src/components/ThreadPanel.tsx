@@ -41,6 +41,13 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
   }
 
   useEffect(() => {
+    // v1.327.0: панель не пересоздаётся при переходе между обсуждениями форума —
+    // без сброса «ответить» и «редактировать» уезжали за тобой в соседнее
+    // обсуждение. Ответ уходил бы со ссылкой на сообщение из другого обсуждения,
+    // а «сохранить правку» с пустым текстом удалило бы вообще не то сообщение.
+    // Ровно это уже чинили для каналов и ЛС (v1.262.0), про ветки забыли.
+    setReplyTarget(null)
+    setEditingMsg(null)
     let ok = true
     supabase.from('messages').select('*').eq('thread_id', thread.id).order('created_at', { ascending: true }).limit(300)
       .then(({ data }) => {
@@ -113,7 +120,12 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
     }
   }
 
-  async function react(id: string, emoji: string) { await toggleReaction('reactions', id, user.id, emoji); loadRx(msgsRef.current.map(m => m.id)) }
+  async function react(id: string, emoji: string) {
+    // v1.327.0: отказ базы больше не молчит — право «Ставить реакции» можно отобрать.
+    const ok = await toggleReaction('reactions', id, user.id, emoji)
+    if (!ok) toastErr('Реакции на этом сервере недоступны')
+    loadRx(msgsRef.current.map(m => m.id))
+  }
   async function pin(id: string, pinned: boolean) {
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned } as any) : m)))
     const ok = await setPin('messages', id, pinned)
@@ -121,8 +133,14 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
+    // v1.327.0: см. ServerView.tsx — при отказе базы возвращаем сообщение в ленту.
+    const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.filter(m => m.id !== id))
-    deleteMessage('messages', id)
+    if (!await deleteMessage('messages', id)) {
+      if (prev) setMessages(ms => ms.some(m => m.id === id) ? ms
+        : [...ms, prev].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)))
+      toastErr('Не удалось удалить сообщение — нет прав')
+    }
   }
   async function editMsg(id: string, content: string) {
     const prev = msgsRef.current.find(m => m.id === id)

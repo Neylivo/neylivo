@@ -1178,7 +1178,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
   async function react(id: string, emoji: string) {
     optimisticRx(id, emoji, meId)
-    await toggleReaction('dm_reactions', id, meId, emoji)
+    // v1.327.0: отказ базы больше не молчит — реакция откатывается, а не остаётся
+    // нарисованной до перезагрузки.
+    if (!await toggleReaction('dm_reactions', id, meId, emoji)) {
+      optimisticRx(id, emoji, meId)
+      toastErr('Не удалось поставить реакцию')
+      return
+    }
     loadRx(msgsRef.current.map(m => m.id))
   }
   async function pin(id: string, pinned: boolean) {
@@ -1188,8 +1194,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
+    // v1.327.0: см. ServerView.tsx — при отказе базы возвращаем сообщение в ленту.
+    const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.filter(m => m.id !== id))
-    deleteMessage('dm_messages', id)
+    if (!await deleteMessage('dm_messages', id)) {
+      if (prev) setMessages(ms => ms.some(m => m.id === id) ? ms
+        : [...ms, prev].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)))
+      toastErr('Не удалось удалить сообщение — нет прав')
+    }
   }
   async function editMsg(id: string, content: string) {
     const prev = msgsRef.current.find(m => m.id === id)

@@ -11,14 +11,21 @@ export async function loadReactions(table: RxTable, messageIds: string[]): Promi
 }
 
 // Toggle: if the user already reacted with this emoji, remove it; otherwise add it.
-export async function toggleReaction(table: RxTable, messageId: string, userId: string, emoji: string) {
+/**
+ * v1.327.0: возвращает, получилось ли. Раньше ошибка молча глоталась — а с тех
+ * пор, как право «Ставить реакции» стало настоящим (v1.321.0) и его можно отобрать
+ * у @everyone, отказ базы стал обычным делом: человек жал на эмодзи, и не
+ * происходило ровным счётом ничего, без единого слова почему.
+ */
+export async function toggleReaction(table: RxTable, messageId: string, userId: string, emoji: string): Promise<boolean> {
   const { data } = await supabase.from(table).select('emoji')
     .eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji).maybeSingle()
   if (data) {
-    await supabase.from(table).delete().eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji)
-  } else {
-    await supabase.from(table).insert({ message_id: messageId, user_id: userId, emoji })
+    const { error } = await supabase.from(table).delete().eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji)
+    return !error
   }
+  const { error } = await supabase.from(table).insert({ message_id: messageId, user_id: userId, emoji })
+  return !error
 }
 
 // Group flat reaction rows into per-message summaries: { emoji, count, mine }
@@ -44,8 +51,16 @@ export async function setPin(table: PinTable, id: string, pinned: boolean): Prom
   const { data, error } = await supabase.from(table).update({ pinned }).eq('id', id).select('id')
   return !error && !!data && data.length > 0
 }
-export async function deleteMessage(table: PinTable, id: string) {
-  await supabase.from(table).delete().eq('id', id)
+/**
+ * v1.327.0: возвращает, удалилось ли на самом деле. Раньше функция глотала и
+ * ошибку, и «правило доступа не дало удалить ни одной строки» — а вызывающая
+ * сторона к этому моменту уже убирала сообщение из ленты. В итоге сообщение
+ * пропадало с экрана и оставалось в базе: у собеседника оно на месте, а после
+ * перезагрузки возвращалось и к тебе.
+ */
+export async function deleteMessage(table: PinTable, id: string): Promise<boolean> {
+  const { data, error } = await supabase.from(table).delete().eq('id', id).select('id')
+  return !error && !!data && data.length > 0
 }
 
 export async function editMessage(table: PinTable, id: string, content: string): Promise<boolean> {

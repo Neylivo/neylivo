@@ -75,13 +75,19 @@ export function ForumView({
 
   const tagById = useMemo(() => Object.fromEntries(tags.map(t => [t.id, t])), [tags])
 
+  // v1.327.0: номер запроса. Без него медленный ответ по одному форуму приходил
+  // последним и подменял собой список уже открытого другого — ровно та же гонка,
+  // что чинили для ленты канала в v1.260.0.
+  const seq = useRef(0)
   const load = useRef<(silent?: boolean) => void>(() => {})
   load.current = (silent?: boolean) => {
+    const my = ++seq.current
+    const forChannel = channel.id
     if (!silent) setLoading(true)
-    fetchForumPosts(channel.id, sort)
-      .then(list => { setPosts(list); setErr(null) })
-      .catch(e => setErr(e.message ?? String(e)))
-      .finally(() => setLoading(false))
+    fetchForumPosts(forChannel, sort)
+      .then(list => { if (my !== seq.current) return; setPosts(list); setErr(null) })
+      .catch(e => { if (my === seq.current) setErr(e.message ?? String(e)) })
+      .finally(() => { if (my === seq.current) setLoading(false) })
   }
 
   useEffect(() => { load.current() }, [channel.id, sort])

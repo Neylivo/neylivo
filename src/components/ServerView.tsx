@@ -1059,11 +1059,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function react(id: string, emoji: string) {
     if (!user) return
     optimisticRx(id, emoji, user.id)
-    try {
-      await toggleReaction('reactions', id, user.id, emoji)
-    } catch (err: any) {
-      optimisticRx(id, emoji, user.id) // откат — сервер отказал (например, тайм-аут/нет прав)
-      toastErr(err?.message ?? 'Не удалось поставить реакцию')
+    // v1.327.0: раньше откат висел на catch, а toggleReaction ошибку глотала и
+    // никогда не бросала — значит откат не срабатывал НИ РАЗУ. Реакция оставалась
+    // нарисованной, хотя база её не приняла, и пропадала только при перезагрузке.
+    let rxOk = false
+    try { rxOk = await toggleReaction('reactions', id, user.id, emoji) } catch { rxOk = false }
+    if (!rxOk) {
+      optimisticRx(id, emoji, user.id) // откат — сервер отказал (тайм-аут, нет права «Ставить реакции»)
+      toastErr('Не удалось поставить реакцию — нет прав или тайм-аут')
       return
     }
     loadRx(msgsRef.current.map(m => m.id))
@@ -1083,8 +1086,16 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   }
   async function removeMsg(id: string) {
     if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
+    // v1.327.0: убираем из ленты сразу, но если база не дала удалить — возвращаем
+    // на место и говорим почему. Раньше сообщение исчезало только у тебя, а в базе
+    // и у собеседников оставалось.
+    const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.filter(m => m.id !== id))
-    deleteMessage('messages', id)
+    if (!await deleteMessage('messages', id)) {
+      if (prev) setMessages(ms => ms.some(m => m.id === id) ? ms
+        : [...ms, prev].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)))
+      toastErr('Не удалось удалить сообщение — нет прав')
+    }
   }
   async function editMsg(id: string, content: string) {
     const prev = msgsRef.current.find(m => m.id === id)
