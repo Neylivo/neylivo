@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ProfilePrefs, PetFree } from '../lib/profilePrefs'
+import { ensureModelViewer } from '../lib/modelViewer'
 
 export type PetCard = 'mini' | 'big'
 
@@ -77,6 +78,10 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
     if (reaction === 'burst') window.setTimeout(() => setReacting(false), BURST_TOTAL_MS)
   } : undefined
   const onReactEnd = () => setReacting(false)
+
+  // v1.298.0: библиотека 3D подтягивается только здесь и только для объёмного
+  // питомца — раньше она грузилась с чужого CDN при каждом запуске приложения.
+  useEffect(() => { if (p.petKind === 'model') void ensureModelViewer() }, [p.petKind])
 
   let mediaInner: JSX.Element
   if (p.petKind === 'video') mediaInner = <video className={animClass} style={mediaStyle} src={p.petUrl} autoPlay loop muted playsInline onClick={onReactClick} onAnimationEnd={onReactEnd} />

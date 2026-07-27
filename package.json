@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.297.0",
+  "version": "1.298.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -20,6 +20,8 @@
   "dependencies": {
     "@capacitor/android": "8.4.1",
     "@capacitor/core": "8.4.1",
+    "@fontsource/inter": "^5.3.0",
+    "@google/model-viewer": "^4.3.1",
     "@livekit/krisp-noise-filter": "^0.4.3",
     "@supabase/supabase-js": "^2.45.0",
     "electron-updater": "^6.3.9",

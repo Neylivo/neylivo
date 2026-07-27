@@ -1,3 +1,17 @@
+// v1.298.0: собственный Inter вместо запроса к Google при каждом запуске.
+// Только кириллица и латиница: остальные подмножества (греческий, вьетнамский)
+// в приложении не нужны и лишь утяжелили бы сборку.
+import '@fontsource/inter/cyrillic-400.css'
+import '@fontsource/inter/cyrillic-500.css'
+import '@fontsource/inter/cyrillic-600.css'
+import '@fontsource/inter/cyrillic-700.css'
+import '@fontsource/inter/cyrillic-800.css'
+import '@fontsource/inter/latin-400.css'
+import '@fontsource/inter/latin-500.css'
+import '@fontsource/inter/latin-600.css'
+import '@fontsource/inter/latin-700.css'
+import '@fontsource/inter/latin-800.css'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
