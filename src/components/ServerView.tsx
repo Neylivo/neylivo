@@ -276,6 +276,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     || hasPerm(myPerms, PERM.VIEW_AUDIT_LOG) || hasPerm(myPerms, PERM.MANAGE_EMOJI) || hasPerm(myPerms, PERM.MANAGE_EVENTS)
     || hasPerm(myPerms, PERM.MANAGE_WEBHOOKS) || hasPerm(myPerms, PERM.MANAGE_AUTOMOD)
   const canManageChannels = isOwner || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+  // v1.316.0: канал только для чтения. Запрет настраивается в правах канала для
+  // @everyone и по-настоящему проверяется базой (миграция 78) — здесь мы лишь не
+  // показываем поле ввода, чтобы человек не набирал сообщение, которое всё равно
+  // не уйдёт. Писать в такой канал могут владелец и те, кому выдано управление
+  // сообщениями или каналами.
+  const canPostHere = !curChannel
+    || ((curChannel as any).settings?.perms?.send !== 'deny')
+    || isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
   const canManageNicknames = isOwner || hasPerm(myPerms, PERM.MANAGE_NICKNAMES)
   const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
   const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
@@ -1319,7 +1327,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         </div>
         )}
         <TypingIndicator typers={typers} />
-        {curChannel && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
+        {curChannel && !canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
+          <div className="ch-readonly"><Icon name="lock" size={15} /> В этом канале можно только читать</div>}
+        {curChannel && canPostHere && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}

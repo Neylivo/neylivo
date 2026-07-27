@@ -4589,3 +4589,8 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .chr-perm.mut { color:var(--mut); }
 .chr-note { color:var(--mut); font-size:12px; margin-top:14px; line-height:1.45; }
 @media (max-width: 768px) { .chr-modal { width:100%; } .chr-body { max-height:60vh; } .chr-topic { display:none; } }
+
+/* v1.316.0: плашка вместо поля ввода в канале только для чтения */
+.ch-readonly { display:flex; align-items:center; justify-content:center; gap:8px; margin:0 16px 16px;
+  padding:14px; border-radius:var(--r-md); background:rgba(var(--ov, 255,255,255),.04);
+  color:var(--mut); font-size:14px; }
