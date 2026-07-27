@@ -1,6 +1,6 @@
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
-import { Room } from '../lib/livekit'
+import type { Room } from '../lib/livekit'
 import { CallRecorder, playToAll } from '../lib/callAudio'
 import { fetchClips, addClip, removeClip, decodeAudio, audioBufferToWav, fmtDur, saveMoment as saveMomentClip, type Clip } from '../lib/soundboard'
 import { uploadTo } from '../lib/storage'

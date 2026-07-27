@@ -1,5 +1,31 @@
-import { Room, RoomEvent, Track, DisconnectReason, LocalTrackPublication, LocalAudioTrack, VideoPresets, createLocalAudioTrack } from 'livekit-client'
+import type { Room, LocalTrackPublication } from 'livekit-client'
 import { supabase } from './supabase'
+import { RoomEvent, Track, verifyLivekitConstants } from './livekitConst'
+
+// v1.288.0: livekit-client грузится ТОЛЬКО при входе в звонок.
+//
+// Раньше он был обычным статическим импортом и весил 6.6 МБ из 7.6 МБ всего JS
+// приложения — то есть 87% веса первой загрузки приходилось на библиотеку,
+// которая большинству людей в этот заход вообще не понадобится. Теперь всё, что
+// от неё нужно до звонка (имена событий), лежит в livekitConst.ts, а сама
+// библиотека подтягивается здесь, при первом joinRoom.
+let lkPromise: Promise<typeof import('livekit-client')> | null = null
+function loadLivekit() {
+  if (!lkPromise) {
+    lkPromise = import('livekit-client').then(lk => {
+      // Сверяем наши константы с настоящими ровно один раз — если обновление
+      // библиотеки переименовало событие, узнаем сразу, а не по жалобам на
+      // «звонок подключился, но никого не видно».
+      verifyLivekitConstants(lk)
+      return lk
+    })
+  }
+  return lkPromise
+}
+
+/** Заранее подтянуть библиотеку — например, когда человек навёлся на кнопку звонка.
+ *  Не обязательно: joinRoom всё равно дождётся загрузки сам. */
+export function preloadLivekit(): void { void loadLivekit() }
 
 // v1.71.0: AI-шумоподавление Krisp — то же, что использует Discord: отсекает
 // клавиатуру, вентиляторы, улицу и прочий фон, оставляя только голос.
@@ -9,11 +35,12 @@ import { supabase } from './supabase'
 // v1.150.0: импорт сделан динамическим — раньше это был статический import,
 // и когда пакет однажды не резолвился (см. build_environment_issue), падал
 // не только Krisp, а ВЕСЬ этот файл и, соответственно, все звонки целиком.
-function attachKrisp(room: Room) {
+function attachKrisp(room: Room, lk: typeof import('livekit-client')) {
   room.on(RoomEvent.LocalTrackPublished, async (pub: LocalTrackPublication) => {
     if (pub.source !== Track.Source.Microphone) return
     const track = pub.track
-    if (!(track instanceof LocalAudioTrack)) return
+    // Класс берём из уже загруженного модуля: статического импорта больше нет.
+    if (!(track instanceof lk.LocalAudioTrack)) return
     try {
       const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter')
       if (!isKrispNoiseFilterSupported()) return
@@ -63,9 +90,14 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   const savedMic = localStorage.getItem('ponoi_dev_mic') || undefined
   const savedCam = localStorage.getItem('ponoi_dev_cam') || undefined
   const audioOpts = { deviceId: savedMic, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  // Загрузка библиотеки идёт параллельно с получением токена — тот же приём, что
+  // и с микрофоном ниже: сеть за токеном и сеть за кодом не ждут друг друга.
+  const lkPromise2 = loadLivekit()
+  const tokenPromise = getToken(roomName, identity, name)
+  const { Room, VideoPresets, createLocalAudioTrack } = await lkPromise2
   // Не await — стартует параллельно с получением токена/коннектом ниже.
   const micPromise = createLocalAudioTrack(audioOpts).catch(() => null)
-  let { token, url } = await getToken(roomName, identity, name)
+  let { token, url } = await tokenPromise
   const room = new Room({
     adaptiveStream: { pixelDensity: 'screen' },
     dynacast: true,
@@ -81,7 +113,7 @@ export async function joinRoom(roomName: string, identity: string, name: string)
       simulcast: true,
     },
   })
-  attachKrisp(room)
+  attachKrisp(room, await lkPromise2)
   try {
     await room.connect(url, token)
   } catch (e) {
@@ -93,7 +125,7 @@ export async function joinRoom(roomName: string, identity: string, name: string)
   }
   const micTrack = await micPromise
   if (micTrack) {
-    try { await room.localParticipant.publishTrack(micTrack, { source: Track.Source.Microphone }) }
+    try { await room.localParticipant.publishTrack(micTrack, { source: Track.Source.Microphone as any }) }
     catch { micTrack.stop(); await enableMicWithRetry(room) }
   } else {
     // Параллельный захват не удался (устройство было занято/отказано) — пробуем
@@ -114,5 +146,15 @@ async function enableMicWithRetry(room: Room) {
   }
 }
 
-export { Room, RoomEvent, Track, DisconnectReason }
-export type { LocalTrackPublication }
+// Room/LocalTrackPublication — только типы: если бы они реэкспортировались как
+// значения, любой импортёр снова утянул бы за собой всю библиотеку в главный кусок.
+export type { Room, LocalTrackPublication }
+
+/** Список устройств ввода. Раньше CallRoom дёргал статический Room.getLocalDevices
+ *  напрямую — из-за одного этого вызова класс Room должен был быть значением, а
+ *  значит вся библиотека снова оказалась бы в главном куске. */
+export async function getLocalDevices(kind: 'audioinput' | 'videoinput'): Promise<MediaDeviceInfo[]> {
+  const lk = await loadLivekit()
+  try { return await lk.Room.getLocalDevices(kind, true) } catch { return [] }
+}
+export { RoomEvent, Track, DisconnectReason } from './livekitConst'

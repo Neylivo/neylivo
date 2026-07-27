@@ -9,7 +9,8 @@
 // playToAll() takes a saved clip URL, decodes it, and publishes it as a LiveKit
 // audio track so everyone in the room hears it, while also playing it locally
 // for the person who triggered it. The track is unpublished when playback ends.
-import { Room, Track } from './livekit'
+import { Track } from './livekit'
+import type { Room } from './livekit'
 import { audioCtx, master } from './callSounds'
 
 export class CallRecorder {

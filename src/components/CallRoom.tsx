@@ -2,7 +2,8 @@
 
 import { toastErr } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
-import { Room, RoomEvent, DisconnectReason } from '../lib/livekit'
+import { RoomEvent, DisconnectReason, getLocalDevices } from '../lib/livekit'
+import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
@@ -715,7 +716,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
   async function openDev(kind: 'mic' | 'cam') {
     setQMenu(false)
     try {
-      const list = await (Room as any).getLocalDevices(kind === 'mic' ? 'audioinput' : 'videoinput', true)
+      const list = await getLocalDevices(kind === 'mic' ? 'audioinput' : 'videoinput')
       setDevices((list ?? []).filter((d: MediaDeviceInfo) => d.deviceId))
     } catch { setDevices([]) }
     setDevMenu(kind)
