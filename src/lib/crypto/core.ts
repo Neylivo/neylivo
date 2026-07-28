@@ -27,14 +27,37 @@ const CURVE = 'P-256'
 
 export interface IdentityKeyPair { publicKey: CryptoKey; privateKey: CryptoKey }
 
-/** Новая пара ключей устройства. Приватный неизвлекаем и наружу не выходит никогда. */
-export async function generateIdentity(): Promise<IdentityKeyPair> {
+/**
+ * Новая пара ключей устройства.
+ *
+ * v1.366.0: приватный ключ стал извлекаемым — и это осознанная уступка, а не
+ * недосмотр. Раньше он не существовал в переносимом виде вовсе: его нечего было
+ * украсть или потребовать выдать. Но вместе с ним при каждом выходе пропадала и
+ * переписка человека — он видел «Сообщение зашифровано для другого устройства»
+ * вместо собственных сообщений, и вернуть их было нечем.
+ *
+ * Теперь ключ можно выгрузить, чтобы положить его резервную копию, запертую
+ * паролем (см. backup.ts). Выгружает его только владелец и только в браузере;
+ * наружу уходит уже запертое. Цена: тот, кто получит и базу, и пароль, прочитает
+ * переписку. Плата за то, чтобы человек не терял свои сообщения.
+ */
+export async function generateIdentity(extractable = true): Promise<IdentityKeyPair> {
   const kp = await crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: CURVE },
-    false,                      // extractable: false — приватный ключ нельзя выгрузить
+    extractable,
     ['deriveBits'],
   ) as CryptoKeyPair
   return { publicKey: kp.publicKey, privateKey: kp.privateKey }
+}
+
+/** Приватный ключ в JWK — только для резервной копии, наружу в открытом виде не идёт. */
+export async function exportPrivateKey(key: CryptoKey): Promise<JsonWebKey> {
+  return crypto.subtle.exportKey('jwk', key)
+}
+
+/** Обратно из копии. Восстановленный ключ снова извлекаем — копию надо уметь обновить. */
+export async function importPrivateKey(jwk: JsonWebKey): Promise<CryptoKey> {
+  return crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: CURVE }, true, ['deriveBits'])
 }
 
 /** Публичный ключ в виде JWK — его и публикуем, он не секрет. */

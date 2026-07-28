@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { supabase } from '../lib/supabase'
-import { signOutAndForgetKeys } from '../lib/crypto/keys'
+// Шифрование подгружаем на месте: это окно живёт в стартовом куске (кнопка
+// «Выйти» есть под аватаркой сразу), а само шифрование нужно только в тот
+// момент, когда человек уже ввёл пароль и нажал «Выйти».
+const keys = () => import('../lib/crypto/keys')
 import { useAuth } from '../auth/AuthProvider'
 import { classifyAuthError } from '../lib/authErr'
 
@@ -56,7 +59,15 @@ export function SignOutModal({ onClose }: { onClose: () => void }) {
         setBusy(false)
         return
       }
-      await signOutAndForgetKeys()
+      // v1.366.0: пароль здесь верный и проверенный — самый надёжный момент,
+      // чтобы обновить резервную копию ключа. Дальше он будет стёрт с устройства,
+      // и без копии переписка перестала бы читаться после следующего входа.
+      const k = await keys()
+      try {
+        const uid = (await supabase.auth.getUser()).data.user?.id
+        if (uid) await k.backupMyKey(uid, pwd)
+      } catch { /* не вышло — выходить всё равно надо, копия обновится при входе */ }
+      await k.signOutAndForgetKeys()
     } catch {
       setOffline(true)
       setErr('Не удалось проверить пароль — нет связи с сервером')
@@ -67,7 +78,7 @@ export function SignOutModal({ onClose }: { onClose: () => void }) {
   /** Выход без проверки — только когда проверить нечем. */
   async function forceOut() {
     setBusy(true)
-    await signOutAndForgetKeys()
+    await (await keys()).signOutAndForgetKeys()
   }
 
   return (

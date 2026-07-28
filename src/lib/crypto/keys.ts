@@ -163,3 +163,78 @@ export async function signOutAndForgetKeys(): Promise<void> {
   try { await forgetIdentity() } catch { /* хранилище недоступно — выйти всё равно надо */ }
   await supabase.auth.signOut()
 }
+
+// ── Резервная копия ключа под паролем (v1.366.0) ────────────────────────────
+//
+// Ключ жил только на устройстве и стирался при выходе — вместе со всей
+// перепиской. Теперь он ещё и лежит на сервере, запертый паролем: при входе
+// открывается, при выходе с устройства пропадает, как и раньше.
+//
+// На сервер уходит только запертое. Пароль там не появляется ни на секунду.
+
+import { exportPrivateKey, importPrivateKey } from './core'
+
+// Сам механизм копии подгружаем на месте, а не сверху файла: этот модуль лежит в
+// стартовом куске (выход из аккаунта нужен сразу), а копия делается ровно дважды
+// за сеанс — при входе и при выходе. Тащить её в запуск незачем.
+const backup = () => import('./backup')
+
+/** Положить (или обновить) копию своего ключа. Тихо ничего не делает, если нечего класть. */
+export async function backupMyKey(userId: string, password: string): Promise<void> {
+  const kp = await myIdentity()
+  let jwk: JsonWebKey
+  try {
+    jwk = await exportPrivateKey(kp.privateKey)
+  } catch {
+    // Ключ создан до v1.366.0 — он неизвлекаем, и скопировать его нельзя вовсе.
+    // Это не ошибка человека: молчим, копия появится при следующем новом ключе.
+    return
+  }
+  const { newSalt, wrapPrivateKey } = await backup()
+  const salt = newSalt()
+  const wrapped = await wrapPrivateKey(jwk, password, salt)
+  await supabase.from('key_backups').upsert({
+    user_id: userId, salt, wrapped, device_id: deviceId(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' })
+}
+
+export type RestoreResult = 'restored' | 'none' | 'wrong-password' | 'broken' | 'unavailable'
+
+/**
+ * Достать ключ из копии и положить его на это устройство.
+ *
+ * Возвращает словами, что вышло: человеку нужны разные сообщения на «копии нет»,
+ * «пароль не тот» и «копия испорчена», и путать их нельзя.
+ */
+export async function restoreMyKey(userId: string, password: string): Promise<RestoreResult> {
+  const { data, error } = await supabase
+    .from('key_backups').select('salt, wrapped').eq('user_id', userId).maybeSingle()
+  // Таблицы ещё нет (миграция не применена) — это не «копии нет», а «спросить негде».
+  if (error) return 'unavailable'
+  if (!data) return 'none'
+  const { unwrapPrivateKey, isWrongPassword } = await backup()
+  let jwk: JsonWebKey
+  try {
+    jwk = await unwrapPrivateKey(data.wrapped as any, password, String(data.salt))
+  } catch (e) {
+    return isWrongPassword(e) ? 'wrong-password' : 'broken'
+  }
+  try {
+    const priv = await importPrivateKey(jwk)
+    // Публичную часть берём из той же JWK: у ECDH она лежит рядом с приватной,
+    // выводить её отдельно не нужно и негде.
+    const pubJwk: JsonWebKey = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true, key_ops: [] }
+    const pub = await importPublicKey(pubJwk)
+    await idbPut('priv', priv)
+    await idbPut('pub', pub)
+    cached = { privateKey: priv, publicKey: pub }
+    return 'restored'
+  } catch { return 'broken' }
+}
+
+/** Есть ли вообще копия — чтобы не предлагать восстановление, когда нечего. */
+export async function hasKeyBackup(userId: string): Promise<boolean> {
+  const { data } = await supabase.from('key_backups').select('user_id').eq('user_id', userId).maybeSingle()
+  return !!data
+}

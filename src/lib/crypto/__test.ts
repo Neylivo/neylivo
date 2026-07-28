@@ -1,3 +1,4 @@
+import { newSalt, wrapPrivateKey, unwrapPrivateKey, isWrongPassword } from './backup'
 import {
   generateIdentity, exportPublicKey, importPublicKey, deriveSharedKey,
   generateContentKey, encryptText, decryptText, wrapContentKey, unwrapContentKey,
@@ -22,12 +23,21 @@ async function mustThrow(name: string, fn: () => Promise<unknown>) {
 }
 
 async function main() {
-  // --- 1. Пара ключей и неизвлекаемость -------------------------------------
+  // --- 1. Пара ключей -------------------------------------------------------
+  //
+  // v1.366.0: до этой версии приватный ключ был неизвлекаем, и здесь проверялось
+  // именно это. Гарантию сменили осознанно: неизвлекаемый ключ означал, что при
+  // каждом выходе из аккаунта человек терял всю свою переписку — вместо своих
+  // сообщений он видел «зашифровано для другого устройства», и вернуть их было
+  // нечем. Теперь ключ выгружается, чтобы лечь в резервную копию под паролем.
+  //
+  // Гарантия стала другой, но она есть, и проверяется ниже: наружу приватный
+  // ключ уходит ТОЛЬКО запертым, открытым текстом — никогда.
   const alice = await generateIdentity()
   const bob = await generateIdentity()
-  ok('приватный ключ неизвлекаем', alice.privateKey.extractable === false)
-  await mustThrow('попытка выгрузить приватный ключ', () =>
-    crypto.subtle.exportKey('jwk', alice.privateKey))
+  ok('приватный ключ можно выгрузить для резервной копии', alice.privateKey.extractable === true)
+  ok('по-прежнему можно завести ключ без права выгрузки',
+    (await generateIdentity(false)).privateKey.extractable === false)
 
   // --- 2. ECDH симметричен: обе стороны получают ОДИН ключ ------------------
   const aPub = await importPublicKey(await exportPublicKey(alice.publicKey))
@@ -103,7 +113,9 @@ async function main() {
               const k = await deriveSharedKey(restored, bPub, 'ponoi/dm/v1')
               ok('ключ из хранилища работает после перезапуска',
                 await decryptText(k, s2) === 'и тебе привет')
-              ok('и остаётся неизвлекаемым', restored.extractable === false)
+              // Восстановленный из хранилища ключ обязан оставаться пригодным для
+              // копии: иначе после первого же перезапуска копию стало бы нечем обновить.
+              ok('и остаётся пригодным для резервной копии', restored.extractable === true)
             } catch (e: any) { ok('ключ из хранилища работает', false, e.message) }
             res()
           }
@@ -124,7 +136,7 @@ async function main() {
   const id1 = await myIdentity()
   const id2 = await myIdentity()
   ok('повторный вызов даёт ту же пару', id1.privateKey === id2.privateKey)
-  ok('приватный ключ устройства неизвлекаем', id1.privateKey.extractable === false)
+  ok('ключ устройства пригоден для резервной копии', id1.privateKey.extractable === true)
 
   // Проверяем главное свойство: забытые ключи не восстанавливаются, и переписка,
   // зашифрованная для старого устройства, новым ключом не читается.
@@ -337,6 +349,62 @@ async function main() {
     ok('пропущен обычный адрес: ' + good.slice(0, 34), isSafeUrl(good))
   }
   ok('пустой адрес отклонён', !isSafeUrl('') && !isSafeUrl(null) && !isSafeUrl(undefined))
+
+  // ── Резервная копия ключа под паролем (v1.366.0) ──────────────────────
+  //
+  // Здесь ошибка означает не «кнопка не нажимается», а «переписку прочитал
+  // посторонний» либо «человек потерял её навсегда». Проверяем оба конца:
+  // что с правильным паролем ключ возвращается ровно тот же, и что с любым
+  // другим — не возвращается вовсе.
+  {
+    const salt = newSalt()
+    const kp = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+    ) as CryptoKeyPair
+    const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey)
+
+    const sealed = await wrapPrivateKey(jwk, 'верный-пароль-123', salt)
+
+    ok('копия не содержит ключа открытым текстом',
+      !JSON.stringify(sealed).includes(String(jwk.d ?? 'нет-d')))
+    ok('соли получаются разные', newSalt() !== newSalt())
+    ok('одна и та же копия дважды не одинакова',
+      JSON.stringify(await wrapPrivateKey(jwk, 'верный-пароль-123', salt)) !== JSON.stringify(sealed))
+
+    const back = await unwrapPrivateKey(sealed, 'верный-пароль-123', salt)
+    ok('верный пароль возвращает тот же ключ', back.d === jwk.d && back.x === jwk.x && back.y === jwk.y)
+
+    let wrongRejected = false
+    try { await unwrapPrivateKey(sealed, 'верный-пароль-124', salt) } catch (e) { wrongRejected = isWrongPassword(e) }
+    ok('неверный пароль отвергнут, а не даёт мусор', wrongRejected)
+
+    let emptyRejected = false
+    try { await unwrapPrivateKey(sealed, '', salt) } catch { emptyRejected = true }
+    ok('пустой пароль не подходит', emptyRejected)
+
+    let saltRejected = false
+    try { await unwrapPrivateKey(sealed, 'верный-пароль-123', newSalt()) } catch { saltRejected = true }
+    ok('чужая соль не подходит даже с верным паролем', saltRejected)
+
+    // Восстановленный ключ обязан РАБОТАТЬ, а не просто совпадать по полям:
+    // совпадение байтов ничего не стоит, если ключ потом не выводит общий секрет.
+    const restored = await crypto.subtle.importKey(
+      'jwk', back, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'],
+    )
+    const other = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'],
+    ) as CryptoKeyPair
+    const bitsA = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: other.publicKey }, restored, 256))
+    const bitsB = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: kp.publicKey }, other.privateKey, 256))
+    ok('восстановленным ключом выводится тот же общий секрет',
+      bitsA.length === 32 && bitsA.every((v, i) => v === bitsB[i]))
+
+    // Испорченная копия и неверный пароль — разные беды, и слова человеку нужны разные.
+    const broken = { iv: sealed.iv, ct: sealed.ct.slice(0, -4) + 'AAAA' }
+    let brokenCaught = false
+    try { await unwrapPrivateKey(broken as any, 'верный-пароль-123', salt) } catch { brokenCaught = true }
+    ok('испорченная копия не открывается', brokenCaught)
+  }
 
   const failed = lines.filter(l => l.startsWith('ПРОВАЛ')).length
   lines.push('')
