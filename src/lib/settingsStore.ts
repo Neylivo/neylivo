@@ -54,6 +54,20 @@ export interface Settings {
   hideLastSeen: boolean
   e2ee: boolean
   e2eeCalls: boolean
+  /**
+   * Шифровать ли вложения в личке (v1.385.0).
+   *
+   * По умолчанию выключено. Текст шифруется по-прежнему — с ним всё в порядке.
+   * А вот вложения на деле оказались недоступны: файл уезжает шифротекстом с
+   * типом application/octet-stream, и если расшифровать его не удалось, человек
+   * видит не картинку, а «это не картинка». Неоткрывающееся фото — это не
+   * приватность, это потерянное фото.
+   *
+   * Настройку оставляем: кому шифрование вложений важнее удобства, включит.
+   * Уже отправленные зашифрованными вложения расшифровываются как и раньше —
+   * выключение касается только новых.
+   */
+  e2eeFiles: boolean
   devmode: boolean
   actOn: boolean
   actText: string
@@ -81,7 +95,7 @@ export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
-  e2ee: true, e2eeCalls: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  e2ee: true, e2eeCalls: true, e2eeFiles: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,

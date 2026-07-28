@@ -1057,7 +1057,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // v1.300.0: вложения шифруются тем же правилом, что и текст — либо всё, либо
     // сообщение не уходит. Файлы шифруются ДО загрузки, каждый своим ключом, а
     // ключи уезжают внутри самого сообщения.
-    const encFiles = !!(settings.e2ee && active && !activeGroup && files?.length)
+    // v1.385.0: вложения шифруем, только если человек этого попросил отдельно.
+    // По умолчанию — нет: зашифрованное фото, которое не открывается, это не
+    // приватность, а потерянное фото. Текст сообщения шифруется по-прежнему.
+    const encFiles = !!(settings.e2ee && settings.e2eeFiles && active && !activeGroup && files?.length)
     let fileKeys: FileKey[] = []
     let encBlobs: File[] = []
     if (encFiles) {

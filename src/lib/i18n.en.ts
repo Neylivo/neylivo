@@ -1766,3 +1766,10 @@ Object.assign(DICT_EN, {
   'Широкая картинка сверху карточки профиля. Её видят все, кто откроет твой профиль. Без неё сверху будет градиент из твоих цветов.':
     'A wide image at the top of your profile card. Everyone who opens your profile sees it. Without one, the top shows a gradient of your colours.',
 })
+
+// v1.385.0: шифрование вложений отдельной настройкой.
+Object.assign(DICT_EN, {
+  'Шифровать вложения в личке': 'Encrypt direct-message attachments',
+  'Фото и файлы в переписке один-на-один. По умолчанию выключено: зашифрованное вложение, которое не удалось открыть, показывается как повреждённое, и фото теряется. Текст сообщений шифруется в любом случае.':
+    'Photos and files in one-on-one chats. Off by default: an encrypted attachment that cannot be opened shows up as damaged and the photo is lost. Message text is encrypted either way.',
+})
