@@ -11,6 +11,7 @@ import { useSettings, devMode } from '../lib/settings'
 import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
 import { VOICE_EFFECTS, activeEffect, subscribeVoiceFx, rememberVoiceEffect, type VoiceEffect } from '../lib/voiceFx'
+import { voiceFxAvailable } from '../lib/plugins/store'
 import { applyVoiceEffect } from '../lib/livekit'
 import { matchCombo } from '../lib/keybind'
 import { useClampToViewport } from '../lib/clampPos'
@@ -419,6 +420,14 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   const [fxMenu, setFxMenu] = useState(false)
   const [fx, setFx] = useState<VoiceEffect>(() => activeEffect())
   useEffect(() => subscribeVoiceFx(() => setFx(activeEffect())), [])
+  // v1.363.0: смену голоса даёт плагин — без него кнопка предлагала бы то, чего
+  // у человека нет, а выключение плагина на неё не влияло.
+  //
+  // Считаем прямо при отрисовке, без состояния и подписки: события «плагины
+  // изменились» в приложении нет, и подписка на выдуманное имя была бы кнопкой-
+  // обманкой второго уровня — на вид живой, на деле молчащей. Проверка дешёвая,
+  // а панель звонка перерисовывается не чаще прочего.
+  const voiceFxOn = voiceFxAvailable()
   const [flash, setFlash] = useState(false)
   const [idle, setIdle] = useState(false)
   const micBeforeDeaf = useRef(true)
@@ -788,8 +797,12 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
           </>}
         </div>
         {/* v1.333.0: смена голоса прямо в звонке. Эффект переключается внутри уже
-            опубликованной дорожки, поэтому собеседник ничего не переподключает. */}
-        <div className="c2-fxwrap">
+            опубликованной дорожки, поэтому собеседник ничего не переподключает.
+
+            v1.363.0: кнопка появляется только когда плагин голоса стоит и включён.
+            Раньше она висела всегда — то есть предлагала возможность, которой у
+            человека нет, и выключение плагина ничего не меняло. */}
+        {voiceFxOn && <div className="c2-fxwrap">
           <button className={'c2-btn' + (fx !== 'none' ? ' lit' : '')} onClick={() => setFxMenu(v => !v)} title="Голос">
             <Icon name="wand" size={20} />
           </button>
@@ -810,7 +823,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
               <div className="c2-fxhint">Слышат собеседники, у тебя в наушниках голос прежний.</div>
             </div>
           </>}
-        </div>
+        </div>}
         <button className={'c2-btn' + (showSb ? ' lit' : '')} onClick={() => setShowSb(s => !s)} title={'Саундпад / Моменты' + (settings.sbKey ? ' (' + settings.sbKey + ')' : '')}><Icon name="soundboard" size={20} /></button>
         <button className={'c2-btn' + (deaf ? ' lit' : '')} onClick={toggleDeaf} title={deaf ? 'Включить звук' : 'Заглушить всех'}><Icon name={deaf ? 'headphones-off' : 'headphones'} size={20} /></button>
         <button className="c2-btn leave" onClick={leave} title="Завершить звонок"><Icon name="phone-off" size={20} /></button>

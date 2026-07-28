@@ -6,7 +6,7 @@ import type { PluginManifest } from './types'
 // Держим её здесь, чтобы «поставить из чата» не могло случайно разойтись с
 // «поставить из файла» (например, забыть перезапустить плагин или потерять его данные).
 
-export async function installPlugin(manifest: PluginManifest, code: string, sourceUserId: string | null = null): Promise<void> {
+export async function installPlugin(manifest: PluginManifest, code: string, sourceUserId: string | null = null, authoredHere = false): Promise<void> {
   // Данные уже стоявшего плагина того же id переживают обновление — иначе апдейт
   // сбрасывал бы человеку все его настройки.
   const prev = getPlugin(manifest.id)
@@ -14,6 +14,9 @@ export async function installPlugin(manifest: PluginManifest, code: string, sour
     manifest, code, enabled: true,
     installedAt: new Date().toISOString(),
     sourceUserId,
+    // Своим плагин остаётся и после обновления: пересобрал в конструкторе —
+    // пометка та же, поставил поверх чужую версию — снимется.
+    authoredHere,
     storage: prev?.storage ?? {},
   })
   await startPlugin(getPlugin(manifest.id)!)

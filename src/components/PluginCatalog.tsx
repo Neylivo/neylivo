@@ -102,7 +102,10 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
     const { manifest, code, card } = pending
     setPending(null)
     try {
-      await installPlugin(manifest, code)
+      // v1.363.0: помечаем, кто выложил. Без этого поставленный из каталога чужой
+      // плагин с твоим именем в шапке считался своим — автора пишет тот, кто
+      // собрал файл, и совпадению ника верить нельзя.
+      await installPlugin(manifest, code, card.authorId ?? null, false)
       // Считаем установку и у готовых «от нас»: число под карточкой должно быть
       // у всех, иначе непонятно, чем плитки отличаются.
       void countInstall('plugin', card.id).then(() => void load())

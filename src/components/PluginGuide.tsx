@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
-import { toastOk, toastErr } from '../lib/toast'
+import { copyText } from '../lib/copyMedia'
 import { ALL_PERMISSIONS, PERMISSION_LABEL, SENSITIVE_PERMISSIONS } from '../lib/plugins/types'
 import { PLUGIN_SPEC, AI_PROMPT_PREFIX } from '../lib/plugins/spec'
 
@@ -42,16 +42,13 @@ function onLoad(ponoi) {
   ponoi.notify('Плагин загрузился')
 }`
 
-async function copy(text: string, ok: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    toastOk(ok)
-  } catch {
-    // Буфер может быть недоступен (нет прав, не тот контекст) — молчать нельзя:
-    // человек нажал кнопку и ждёт, что текст у него.
-    toastErr('Буфер обмена недоступен — выдели текст и скопируй вручную')
-  }
-}
+// v1.363.0: копируем тем же способом, что и всё остальное приложение.
+//
+// Здесь стоял голый navigator.clipboard — в окне Electron он молча отказывает, и
+// кнопка «Скопировать инструкцию для ИИ» не делала ничего, кроме сообщения об
+// ошибке. У приложения давно есть copyText с тремя запасными путями: буфер
+// самого Electron, Clipboard API и старый execCommand.
+const copy = (text: string, ok: string) => { void copyText(text, ok) }
 
 export function PluginGuide({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('start')

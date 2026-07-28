@@ -1,6 +1,6 @@
 import { Icon } from './icons'
 import { Portal } from './Portal'
-import { toastOk } from '../lib/toast'
+import { copyText } from '../lib/copyMedia'
 import { BOT_SPEC, AI_BOT_PROMPT_PREFIX } from '../lib/plugins/spec'
 
 // v1.333.0: «как сделать своего бота» — маленькая кнопка «?» рядом с разделом
@@ -57,8 +57,7 @@ export function BotHelp({ onClose }: { onClose: () => void }) {
             подписи. В просьбе оставлено место для твоей задумки — ищи квадратные скобки.
           </div>
           <button className="pqs2-btn" onClick={() => {
-            navigator.clipboard?.writeText(AI_BOT_PROMPT_PREFIX + BOT_SPEC)
-            toastOk('Инструкция скопирована — вставляй в чат с ИИ')
+            void copyText(AI_BOT_PROMPT_PREFIX + BOT_SPEC, 'Инструкция скопирована — вставляй в чат с ИИ')
           }}><Icon name="copy" size={15} /> Скопировать инструкцию для ИИ</button>
         </div>
 
@@ -108,7 +107,7 @@ export function BotHelp({ onClose }: { onClose: () => void }) {
 
         <label className="modal-lbl">Пример</label>
         <pre className="help-code">{EXAMPLE}</pre>
-        <button className="pqs2-btn ghost" onClick={() => { navigator.clipboard?.writeText(EXAMPLE); toastOk('Пример скопирован') }}>
+        <button className="pqs2-btn ghost" onClick={() => { void copyText(EXAMPLE, 'Пример скопирован') }}>
           <Icon name="copy" size={15} /> Скопировать пример
         </button>
 

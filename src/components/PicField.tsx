@@ -63,6 +63,11 @@ export function PicField({ label, hint, value, onChange, placeholder }: {
           </button>
         )}
       </div>
+      {/* v1.363.0: самого поля выбора файла тут не было вовсе — ref указывал в
+          пустоту, и кнопка «Файл» честно ничего не делала. Поле скрытое: кнопка
+          рядом выглядит понятнее, чем стандартный «Выберите файл». */}
+      <input ref={ref} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => void pick(e.target.files?.[0] ?? null)} />
       {hint && <div className="cset-hint" style={{ marginTop: 4 }}>{hint}</div>}
     </div>
   )

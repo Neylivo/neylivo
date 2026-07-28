@@ -9,6 +9,7 @@ export {}
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { classifyAuthError } from './authErr'
+import { sessionMs } from './sessionTime'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -77,6 +78,40 @@ check('проверка заметила бы «всё считаем сетью
   // Ровно та поломка, из-за которой выход стал бы доступен без пароля.
   const broken = () => 'network' as const
   return broken() === 'network' && classifyAuthError('Invalid login credentials') === 'wrong-password'
+})
+
+console.log('\n── Время в игре: брошенные сессии ──')
+// «135 ч 39 мин · сессий: 20» на профиле — это по 6,8 часа за сессию. Столько
+// не играют: так считались записи без ended_at, каждая как восемь часов.
+const H = 3600000
+const NOW = 1_700_000_000_000
+
+check('закрытая сессия считается как есть', () =>
+  sessionMs(NOW - 2 * H, NOW - 1 * H, NOW) === H)
+check('очень длинная закрытая сессия обрезается восемью часами', () =>
+  sessionMs(NOW - 40 * H, NOW, NOW) === 8 * H)
+check('идущая прямо сейчас сессия считается', () =>
+  sessionMs(NOW - 2 * H, null, NOW) === 2 * H)
+check('брошенная запись не превращается в восемь часов', () =>
+  sessionMs(NOW - 30 * H, null, NOW) === 0)
+check('запись со вчера без конца тоже не считается', () =>
+  sessionMs(NOW - 26 * H, null, NOW) === 0)
+check('ровно на границе ещё считается', () =>
+  sessionMs(NOW - 8 * H, null, NOW) === 8 * H)
+check('сессия из будущего не даёт отрицательного', () =>
+  sessionMs(NOW + H, null, NOW) === 0)
+check('мусор вместо даты не ломает счёт', () =>
+  sessionMs('не дата', null, NOW) === 0 && sessionMs(NOW - H, 'тоже не дата', NOW) === 0)
+check('конец раньше начала даёт ноль, а не отрицательное', () =>
+  sessionMs(NOW, NOW - H, NOW) === 0)
+
+console.log('\n── Ломаем нарочно (время в игре) ──')
+check('проверка заметила бы возврат к «считаем до сих пор»', () => {
+  // Ровно тот счёт, что был до v1.363.0: брошенная запись даёт восемь часов.
+  const oldWay = (s: number, e: number | null, now: number) =>
+    Math.min(Math.max(0, (e ?? now) - s), 8 * H)
+  const abandoned = NOW - 30 * H
+  return oldWay(abandoned, null, NOW) === 8 * H && sessionMs(abandoned, null, NOW) === 0
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

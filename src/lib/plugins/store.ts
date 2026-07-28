@@ -101,3 +101,15 @@ export function deleteStorage(id: string, key: string) {
 export function listStorage(id: string): string[] {
   return Object.keys(getPlugin(id)?.storage ?? {})
 }
+
+/**
+ * Стоит ли плагин смены голоса и включён ли он (v1.363.0).
+ *
+ * Кнопка эффекта в звонке висела всегда — то есть предлагала возможность,
+ * которой у человека может не быть, а выключение плагина на неё не влияло.
+ * Смотрим не на «есть ли эффекты» (они зашиты в приложении), а на сам плагин:
+ * именно он даёт право ими пользоваться.
+ */
+export function voiceFxAvailable(): boolean {
+  return loadPlugins().some(p => p.enabled && p.manifest.permissions.includes('voice'))
+}

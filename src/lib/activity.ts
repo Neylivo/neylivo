@@ -1,5 +1,6 @@
 
 import { supabase } from './supabase'
+import { sessionMs } from './sessionTime'
 
 // История игровых сессий (миграция 14): пишем старт/конец своей игры,
 // читаем агрегат за 7 дней для вкладки «История активностей» в фулл-профиле.
@@ -31,9 +32,8 @@ export async function weekStats(userId: string): Promise<GameStat[]> {
     const by: Record<string, GameStat> = {}
     for (const r of (data ?? []) as any[]) {
       const s = new Date(r.started_at).getTime()
-      const e = r.ended_at ? new Date(r.ended_at).getTime() : Date.now()
       const st = by[r.name] ?? (by[r.name] = { name: r.name, totalMs: 0, sessions: 0, last: 0 })
-      st.totalMs += Math.min(Math.max(0, e - s), 8 * 3600000)
+      st.totalMs += sessionMs(r.started_at, r.ended_at)
       st.sessions++
       st.last = Math.max(st.last, s)
     }
@@ -64,8 +64,9 @@ export async function recentActivity(userId: string): Promise<RecentGame[]> {
     const by: Record<string, { s: number; e: number }[]> = {}
     for (const r of (data ?? []) as any[]) {
       const s = new Date(r.started_at).getTime()
-      const e = r.ended_at ? new Date(r.ended_at).getTime() : Date.now()
-      ;(by[r.name] ?? (by[r.name] = [])).push({ s, e })
+      // Держим и длительность: считать её из e - s заново значило бы обойти
+      // правило про брошенные записи, ради которого она и появилась.
+      ;(by[r.name] ?? (by[r.name] = [])).push({ s, e: s + sessionMs(r.started_at, r.ended_at) })
     }
     const out: RecentGame[] = []
     const cutoff30 = Date.now() - 30 * 86400000
@@ -78,7 +79,7 @@ export async function recentActivity(userId: string): Promise<RecentGame[]> {
       const lastDay = Math.floor(last.s / 86400000)
       while (days.has(lastDay - streak)) streak++
       const prev = rows.length > 1 ? rows[rows.length - 2] : null
-      const dur = (r: { s: number; e: number }) => Math.min(Math.max(0, r.e - r.s), 8 * 3600000)
+      const dur = (r: { s: number; e: number }) => Math.max(0, r.e - r.s)
       out.push({
         name,
         last: last.s,
@@ -121,3 +122,7 @@ export async function popularGames(names: string[]): Promise<Set<string>> {
   } catch {}
   return out
 }
+
+// Правило длительности живёт отдельным файлом без зависимостей: его проверяет
+// npm run test:ui, а туда нельзя тянуть модуль, которому нужен настроенный сервер.
+export { sessionMs } from './sessionTime'

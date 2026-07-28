@@ -129,7 +129,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     setBusy(true); setRan(null)
     try {
       const m = parsePlugin(file)
-      await installPlugin(m, file)
+      await installPlugin(m, file, null, true)
       const err = pluginError(m.id)
       if (err) { setRan('Не запустился: ' + err + ' (плагин установлен — можно править и проверять снова)'); setInstalled(true) }
       else if (isRunning(m.id)) { setRan('Запустился и работает — плагин уже установлен.'); setInstalled(true) }
@@ -150,7 +150,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     setBusy(true)
     try {
       const m = parsePlugin(file)
-      await installPlugin(m, file)
+      await installPlugin(m, file, null, true)
       toastOk(existing ? `Плагин «${m.name}» обновлён` : `Плагин «${m.name}» установлен`)
       onSaved?.()
       onClose()
@@ -166,7 +166,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     setBusy(true)
     try {
       const m = parsePlugin(file)
-      await installPlugin(m, file)          // в каталог уходит ровно то, что работает
+      await installPlugin(m, file, null, true)          // в каталог уходит ровно то, что работает
       setInstalled(true)
       await publishPlugin({
         id: m.id, name: m.name, version: m.version,

@@ -100,8 +100,16 @@ export function PluginsSettings() {
   // здесь конструктором. Чужой плагин, скачанный из каталога, своим не считается,
   // даже если ты его правил у себя.
   const myName = (localStorage.getItem('ponoi_username') || '').trim().toLowerCase()
-  const isMine = (p: { manifest: { author: string }; sourceUserId: string | null }) =>
-    !p.sourceUserId && !!myName && p.manifest.author.trim().toLowerCase() === myName
+  // v1.363.0: свой — это сделанный в конструкторе, а не совпавший по имени
+  // автора. Имя в шапке пишет тот, кто собрал файл: чужой плагин, подписанный
+  // твоим ником, оказывался в «Своих» просто так.
+  //
+  // У плагинов, поставленных до этой версии, пометки нет — для них оставляем
+  // прежнее правило, иначе они разом исчезли бы из вкладки.
+  const isMine = (p: { manifest: { author: string }; sourceUserId: string | null; authoredHere?: boolean }) =>
+    p.authoredHere !== undefined
+      ? p.authoredHere
+      : !p.sourceUserId && !!myName && p.manifest.author.trim().toLowerCase() === myName
   const mine = plugins.filter(isMine)
 
   async function pickFile(f: File | null) {
@@ -121,7 +129,10 @@ export function PluginsSettings() {
     const { manifest, code } = pending
     setPending(null)
     try {
-      await installPlugin(manifest, code)
+      // Файл выбрал сам человек: если он подписан его ником — считаем своим, как
+      // и раньше. Из каталога так не пройдёт: там автор известен точно.
+      const mineByName = !!myName && manifest.author.trim().toLowerCase() === myName
+      await installPlugin(manifest, code, null, mineByName)
       toastOk(`Плагин «${manifest.name}» установлен`)
     } catch (err: any) {
       toastErr(`Плагин установлен, но не запустился: ${err?.message ?? err}`)
