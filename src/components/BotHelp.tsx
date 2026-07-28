@@ -1,4 +1,5 @@
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { toastOk } from '../lib/toast'
 
 // v1.333.0: «как сделать своего бота» — маленькая кнопка «?» рядом с разделом
@@ -34,7 +35,7 @@ app.listen(3000)`
 
 export function BotHelp({ onClose }: { onClose: () => void }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal help-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title">Как сделать своего бота</div>
@@ -82,6 +83,6 @@ export function BotHelp({ onClose }: { onClose: () => void }) {
           <button className="modal-primary" onClick={onClose}>Понятно</button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   )
 }

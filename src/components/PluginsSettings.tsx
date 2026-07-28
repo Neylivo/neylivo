@@ -177,7 +177,8 @@ export function PluginsSettings() {
       {tab === 'mine' && <>
         <div className="pqs-optd" style={{ margin: '12px 0' }}>
           Плагин собирается прямо здесь: форма пишет шапку файла, ты — только код.
-          Готовые заготовки дают рабочий пример с первой секунды.
+          Готовые заготовки дают рабочий пример с первой секунды, а выложить его в
+          каталог можно из того же окна — уходить никуда не надо.
         </div>
         <div className="modal-inline" style={{ gap: 8 }}>
           <button className="pqs2-btn" onClick={() => setEditing({})}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
 import { useAuth } from '../auth/AuthProvider'
 import { parsePlugin } from '../lib/plugins/manifest'
@@ -7,6 +8,7 @@ import { installPlugin } from '../lib/plugins/install'
 import { getPlugin } from '../lib/plugins/store'
 import { pluginError, isRunning } from '../lib/plugins/host'
 import { ALL_PERMISSIONS, PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission } from '../lib/plugins/types'
+import { publishPlugin, shorten, SUMMARY_MAX } from '../lib/catalog'
 import {
   TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify, type Draft,
 } from '../lib/plugins/editorDraft'
@@ -40,6 +42,9 @@ export function PluginEditor({ editId, onClose, onSaved }: {
   const [tpl, setTpl] = useState(existing ? '' : 'command')
   const [busy, setBusy] = useState(false)
   const [ran, setRan] = useState<string | null>(null)
+  // Установлен ли он уже — от этого зависит, можно ли предлагать «выложить».
+  const [installed, setInstalled] = useState(!!existing)
+  const [publishing, setPublishing] = useState(false)
   const idTouched = useRef(!!existing)
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD(p => ({ ...p, [k]: v }))
@@ -84,9 +89,9 @@ export function PluginEditor({ editId, onClose, onSaved }: {
       const m = parsePlugin(file)
       await installPlugin(m, file)
       const err = pluginError(m.id)
-      if (err) setRan('Не запустился: ' + err + ' (плагин установлен — можно править и проверять снова)')
-      else if (isRunning(m.id)) setRan('Запустился и работает — плагин уже установлен.')
-      else setRan('Установлен, но не запущен — включи его во вкладке «Используемые».')
+      if (err) { setRan('Не запустился: ' + err + ' (плагин установлен — можно править и проверять снова)'); setInstalled(true) }
+      else if (isRunning(m.id)) { setRan('Запустился и работает — плагин уже установлен.'); setInstalled(true) }
+      else { setRan('Установлен, но не запущен — включи его во вкладке «Используемые».'); setInstalled(true) }
       onSaved?.()
     } catch (e: any) {
       setRan('Не запустился: ' + (e?.message ?? String(e)))
@@ -108,6 +113,27 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     } finally { setBusy(false) }
   }
 
+  /** Выложить в каталог, не уходя из конструктора. */
+  async function publish() {
+    if (problem || !user) { toastErr(problem ?? 'Нужно войти'); return }
+    setBusy(true)
+    try {
+      const m = parsePlugin(file)
+      await installPlugin(m, file)          // в каталог уходит ровно то, что работает
+      setInstalled(true)
+      await publishPlugin({
+        id: m.id, name: m.name, version: m.version,
+        summary: shorten(m.description || m.name, SUMMARY_MAX),
+        description: m.description, icon_url: null, banner_url: null,
+        code: file, permissions: m.permissions,
+      }, user.id)
+      toastOk('Плагин в каталоге — картинку и описание можно добавить там же')
+      setPublishing(false)
+      onSaved?.()
+    } catch (e: any) { toastErr(e?.message ?? String(e)) }
+    finally { setBusy(false) }
+  }
+
   function download() {
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' })
     const a = document.createElement('a')
@@ -118,7 +144,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal ped-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title">{existing ? 'Изменить плагин' : 'Новый плагин'}</div>
@@ -190,6 +216,26 @@ export function PluginEditor({ editId, onClose, onSaved }: {
             : <><Icon name="check" size={14} /> Шапка в порядке{ran ? ' · ' + ran : ''}</>}
         </div>
 
+        {/* Следующий шаг предлагается здесь же: раньше «выложить» жило в другом
+            окне, и надо было догадаться, что сперва плагин нужно установить. */}
+        {installed && !publishing && (
+          <button className="pqs2-btn ghost" style={{ marginTop: 10 }} onClick={() => setPublishing(true)}>
+            <Icon name="store" size={15} /> Выложить в каталог
+          </button>
+        )}
+        {publishing && (
+          <div className="ped-publish">
+            <div>Выложить «{d.name || 'плагин'}» в каталог? Его увидят и смогут поставить все.
+              Уйдёт и код — иначе поставить его было бы нельзя.</div>
+            <div className="modal-inline" style={{ marginTop: 8 }}>
+              <button className="pqs2-btn ghost" onClick={() => setPublishing(false)}>Отмена</button>
+              <button className="pqs2-btn" disabled={busy} onClick={() => void publish()}>
+                {busy ? 'Выкладываю…' : 'Выложить'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="modal-foot ped-foot">
           <button className="modal-ghost" onClick={download} title="Сохранить как .ponoi-файл">
             <Icon name="download" size={15} /> Файл
@@ -203,6 +249,6 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   )
 }

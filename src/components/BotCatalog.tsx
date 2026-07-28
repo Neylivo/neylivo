@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useAuth } from '../auth/AuthProvider'
@@ -202,7 +203,7 @@ function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {
 
 function BotDetail({ c, canAdd, onClose, onAdd }: { c: Card; canAdd: boolean; onClose: () => void; onAdd: () => void }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="cat-detail-h">
@@ -222,7 +223,7 @@ function BotDetail({ c, canAdd, onClose, onAdd }: { c: Card; canAdd: boolean; on
           <button className="modal-primary" disabled={!canAdd} onClick={onAdd}>Добавить на сервер</button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   )
 }
 
@@ -259,7 +260,7 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title">Выложить бота</div>
@@ -313,6 +314,6 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             </div>
           </>}
       </div>
-    </div>
+    </div></Portal>
   )
 }

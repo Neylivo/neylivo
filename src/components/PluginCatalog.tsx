@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useAuth } from '../auth/AuthProvider'
@@ -217,7 +218,7 @@ function CardView({ c, onOpen, onInstall, onRemove }: {
 
 function DetailModal({ c, onClose, onInstall }: { c: Card; onClose: () => void; onInstall: () => void }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="cat-detail-h">
@@ -242,7 +243,7 @@ function DetailModal({ c, onClose, onInstall }: { c: Card; onClose: () => void; 
           <button className="modal-primary" onClick={onInstall}>Установить</button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   )
 }
 
@@ -283,7 +284,7 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <Portal><div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title">Выложить плагин</div>
@@ -337,6 +338,6 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             </div>
           </>}
       </div>
-    </div>
+    </div></Portal>
   )
 }

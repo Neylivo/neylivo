@@ -11,6 +11,7 @@ import { setMemberNickname } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
 import { BotHelp } from './BotHelp'
+import { BotWizard } from './BotWizard'
 import { BUILTIN_BOTS } from '../lib/builtinBots'
 
 // v1.193.0: платформа ботов (Настройки пользователя, раздел «Боты» — до
@@ -21,12 +22,11 @@ import { BUILTIN_BOTS } from '../lib/builtinBots'
 export function DevPortal() {
   const [bots, setBots] = useState<BotApp[]>([])
   const [loading, setLoading] = useState(true)
-  const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
-  const [justCreated, setJustCreated] = useState<{ id: string; token: string; webhookSecret: string } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
   const [tab, setTab] = useState<'catalog' | 'used' | 'mine'>('catalog')
+  const [wizard, setWizard] = useState(false)
 
   const load = () => { myBots().then(b => { setBots(b); setLoading(false) }) }
   useEffect(load, [])
@@ -36,19 +36,6 @@ export function DevPortal() {
     if (!await confirmUi('Удалить бота «' + b.name + '»? Он пропадёт со всех серверов, куда его добавляли.', { okText: 'Удалить', danger: true })) return
     try { await deleteBot(b.id); toastOk('Бот удалён'); load() }
     catch (e: any) { toastErr(e.message ?? String(e)) }
-  }
-
-  async function create() {
-    const name = newName.trim()
-    if (!name || busy) return
-    setBusy(true)
-    try {
-      const r = await createBot(name)
-      setJustCreated(r)
-      setNewName('')
-      load()
-    } catch (e: any) { toastErr(e.message ?? String(e)) }
-    finally { setBusy(false) }
   }
 
   // Готовые боты «от нас» заводятся под твоей учётной записью, но своими их
@@ -103,35 +90,19 @@ export function DevPortal() {
       </>}
 
       {tab === 'mine' && <>
-        {justCreated && <div className="sset-info" style={{ marginTop: 12 }}>
-          <Icon name="shield" size={16} />
-          <div>
-            <b>Бот создан. Токен виден только сейчас — сохрани его.</b>
-            <div className="devp-secret">{justCreated.token}</div>
-            {/* v1.336.0: раньше здесь показывался токен и всё. Что делать дальше,
-                человек не знал — отсюда «непонятно, как создавать ботов». */}
-            <div className="bot-steps">
-              <div className="bot-step"><span>Сохрани токен и секрет вебхука: второй раз их не покажет никто.</span></div>
-              <div className="bot-step"><span>Подними свою программу на адресе https:// и впиши его ниже, в поле Webhook URL.</span></div>
-              <div className="bot-step"><span>Заведи слэш-команды — они появятся в подсказках у людей.</span></div>
-              <div className="bot-step"><span>Добавь бота на сервер: «Настройки сервера → Боты», по ID приложения.</span></div>
-            </div>
-            <div className="modal-inline" style={{ marginTop: 10 }}>
-              <button className="pqs2-btn ghost" onClick={() => setHelp(true)}>Как написать бота</button>
-              <button className="pqs2-btn ghost" onClick={() => setJustCreated(null)}>Спрятать токен</button>
-            </div>
-          </div>
-        </div>}
-
+        {/* v1.341.0: создание собрано в один мастер. Раньше это было размазано:
+            поле с кнопкой здесь, каталог готовых во вкладке рядом, токен в плашке
+            сверху, вебхук и профиль внутри карточки, справка за «?» — начать было
+            неоткуда. */}
         <div className="pqs2-desc" style={{ marginTop: 12 }}>
-          Свой бот — это программа на твоём сервере: Ponoi шлёт ей события и печатает её ответы в чат.
-          Если сервера нет, возьми готового в каталоге — те работают сами.
+          Свой бот — программа на твоём сервере: Ponoi шлёт ей события и печатает ответы в чат.
+          Своего сервера нет — возьми готового, он работает сам.
         </div>
-
         <div className="modal-inline" style={{ marginTop: 12 }}>
-          <input className="modal-in" placeholder="Название бота" value={newName} onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') create() }} style={{ flex: 1 }} />
-          <button className="modal-primary" disabled={!newName.trim() || busy} onClick={create}>{busy ? 'Создание…' : 'Создать'}</button>
+          <button className="modal-primary" onClick={() => setWizard(true)}>
+            <Icon name="plus" size={16} /> Создать бота
+          </button>
+          <button className="pqs2-btn ghost" onClick={() => setHelp(true)}>Как написать бота</button>
         </div>
 
         {loading && <div className="modal-empty">Загрузка…</div>}
@@ -144,6 +115,7 @@ export function DevPortal() {
       </>}
 
       {help && <BotHelp onClose={() => setHelp(false)} />}
+      {wizard && <BotWizard onClose={() => setWizard(false)} onDone={() => { setTab('mine'); load() }} />}
     </>
   )
 }

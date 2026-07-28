@@ -1,4 +1,5 @@
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { compareVersions } from '../lib/plugins/manifest'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type InstalledPlugin } from '../lib/plugins/types'
 
@@ -17,7 +18,7 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm }: {
 }) {
   const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <Portal><div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onCancel}><Icon name="close" size={18} /></button>
         <div className="modal-title">{existing ? 'Обновить плагин' : 'Установить плагин'}</div>
@@ -61,6 +62,6 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm }: {
           <button className="modal-primary" onClick={onConfirm}>{existing ? 'Обновить' : 'Установить'}</button>
         </div>
       </div>
-    </div>
+    </div></Portal>
   )
 }
