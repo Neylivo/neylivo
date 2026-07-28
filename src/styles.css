@@ -5568,22 +5568,44 @@ body.no-anim .mus-mini, body.no-anim .mus-mini.dragging .mus-mini-art { transiti
    читаемым — цвета выбирает человек, и среди них попадаются такие, на которых
    белым по светлому не разобрать ничего. */
 .pc-card.themed {
+  /* v1.386.0: цвет виден по-настоящему. Прошлый заход красил карточку двумя
+     очень слабыми пятнами поверх общего фона — на глаз менялись разве что
+     подписи, и «тема профиля» опять получалась не темой.
+
+     Теперь цвет человека — основа фона, а не намёк на него: карточка целиком,
+     обе колонки и подложка под текстом. Тёмная база под смесью оставлена
+     намеренно: цвета выбирает человек, среди них попадаются ядовитые, и на
+     чистом цвете текст читаться перестал бы. */
   background:
-    radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--pc-a) 26%, transparent) 0%, transparent 62%),
-    radial-gradient(110% 55% at 100% 8%, color-mix(in srgb, var(--pc-b) 22%, transparent) 0%, transparent 58%),
-    var(--bg2);
-  box-shadow: 0 18px 52px rgba(0, 0, 0, .5),
-              0 0 0 1px color-mix(in srgb, var(--pc-a) 34%, transparent);
+    radial-gradient(130% 80% at 0% 0%, color-mix(in srgb, var(--pc-a) 62%, transparent) 0%, transparent 68%),
+    radial-gradient(120% 75% at 100% 4%, color-mix(in srgb, var(--pc-b) 52%, transparent) 0%, transparent 64%),
+    linear-gradient(160deg, color-mix(in srgb, var(--pc-a) 26%, #111214), color-mix(in srgb, var(--pc-b) 16%, #111214));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6),
+              0 0 0 1px color-mix(in srgb, var(--pc-a) 45%, transparent);
 }
 .pc-card.themed .pc-av {
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--pc-a) 55%, var(--bg2));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--pc-a) 62%, #111214);
 }
-/* .pc-sech — подписи разделов («О себе», «Участник с»). Класса .pc-lbl в
-   разметке нет: сначала я покрасил его, и правило было бы мёртвым. */
+/* .pc-sech — подписи разделов. Класса .pc-lbl в разметке нет: сначала я покрасил
+   его, и правило было бы мёртвым. */
 .pc-card.themed .pc-sech { color: color-mix(in srgb, var(--pc-b) 62%, var(--mut)); }
 .pc-card.themed .pc-right {
-  background: color-mix(in srgb, var(--pc-a) 10%, #0c0d10);
-  border-left-color: color-mix(in srgb, var(--pc-a) 30%, transparent);
+  /* Правая колонка была залита сплошным #0c0d10 — сквозь неё не проходило
+     ничего, и полкарточки оставалось серым независимо от выбранных цветов. */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--pc-b) 22%, rgba(12, 13, 16, .82)),
+    color-mix(in srgb, var(--pc-a) 14%, rgba(12, 13, 16, .92)));
+  border-left-color: color-mix(in srgb, var(--pc-a) 34%, transparent);
+}
+/* Блоки внутри профиля — полупрозрачные, чтобы цвет проходил и сквозь них.
+   Классы взяты из настоящей разметки: сначала я написал .pc-block и .pc-boardcard,
+   которых в приложении нет вовсе, и правило было бы мёртвым — ровно то, что ловит
+   проверка стилей. */
+.pc-card.themed .pc-about,
+.pc-card.themed .pc-widget,
+.pc-card.themed .pc-int {
+  background: rgba(0, 0, 0, .26);
+  border-color: color-mix(in srgb, var(--pc-a) 26%, transparent);
 }
 
 /* Аватарку открываем как картинку — раньше нажатие на неё не делало ничего. */
@@ -5596,3 +5618,7 @@ body.no-anim .pc-av.clickable { transition: none; }
   height: 96px; border-radius: var(--r-md, 10px); margin-top: 10px;
   background-size: cover; background-position: center;
 }
+
+/* Обложку в плашке нельзя утащить как картинку (v1.386.0): браузер по умолчанию
+   тащит саму картинку, и вместо плашки за курсором ехала её копия. */
+.mus-mini img { -webkit-user-drag: none; user-select: none; pointer-events: none; }

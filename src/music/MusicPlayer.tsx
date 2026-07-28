@@ -1057,7 +1057,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         style={{ ...musStyle, ...miniDrag.style }} onPointerDown={miniDrag.onPointerDown}>
         <div className={'mus-mini-art' + (playing ? ' spin' : '')}
           onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер · тяни, чтобы переставить">
-          {curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={18} />}
+          {/* v1.386.0: без запрета перетаскивания браузер тащил саму картинку —
+              вместо плашки за курсором ехала копия обложки, и переставить её
+              было почти невозможно. */}
+          {curArt ? <img src={curArt} alt="" draggable={false} onDragStart={e => e.preventDefault()} /> : <Icon name="music" size={18} />}
         </div>
         <div className="mus-mini-meta" onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер">
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
