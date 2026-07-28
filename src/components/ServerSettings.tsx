@@ -792,7 +792,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
         </>}
 
         {tab === 'roles' && rolesView === 'edit' && selRoleId && <RoleEditor server={server} roles={roles} members={members} memberRoles={memberRoles}
-          isOwner={isOwner} myTopPosition={topPositionOfId(uid)}
+          isOwner={isOwner} myTopPosition={topPositionOfId(uid)} myPerms={myPerms}
           roleId={selRoleId} onSelectRole={setSelRoleId} onBack={() => setRolesView('main')} onEveryone={() => setRolesView('everyone')} onReload={reloadRoles} />}
 
         {tab === 'roles' && rolesView === 'everyone' && <>

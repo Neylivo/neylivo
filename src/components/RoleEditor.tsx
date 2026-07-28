@@ -20,11 +20,13 @@ const PALETTE = [
 ]
 const DEFAULT_COLOR = '#99aab5'
 
-export function RoleEditor({ server, roles, members, memberRoles, roleId, onSelectRole, onBack, onEveryone, onReload, isOwner, myTopPosition }: {
+export function RoleEditor({ server, roles, members, memberRoles, roleId, onSelectRole, onBack, onEveryone, onReload, isOwner, myTopPosition, myPerms }: {
   server: Server; roles: ServerRole[]; members: any[]; memberRoles: Record<string, string[]>
   roleId: string; onSelectRole: (id: string) => void; onBack: () => void; onEveryone: () => void; onReload: () => Promise<void>
   // v1.191.0: иерархия — нельзя редактировать/удалять роль не ниже своей старшей (как в Discord).
   isOwner?: boolean; myTopPosition?: number
+  // v1.330.0: свои права — раздать можно только то, что есть у тебя (миграция 87).
+  myPerms?: number
 }) {
   const { user } = useAuth()
   const [rtab, setRtab] = useState<'display' | 'perms' | 'links'>('display')
@@ -39,6 +41,11 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
   if (!found) return null
   const role = found
   const canManage = !!isOwner || (myTopPosition ?? Infinity) < role.position
+  // v1.330.0: до миграции 87 роли менял только владелец сервера, поэтому вопрос
+  // «а можно ли выдать право, которого у меня самого нет» не стоял. Теперь роли
+  // правит и «Управление ролями», и база такую выдачу отвергает — показываем это
+  // сразу, а не отказом после клика.
+  const canGrant = (bit: number) => !!isOwner || hasPerm(myPerms, bit as any)
 
   // Роли участника: новая таблица member_roles, до миграции 25 — старое одиночное role_id.
   const rolesOf = (uid: string): string[] => {
@@ -181,14 +188,16 @@ export function RoleEditor({ server, roles, members, memberRoles, roleId, onSele
               <div className="redit-permgrp-h">{g.title}</div>
               {g.perms.map(p => {
                 const on = hasPerm(role.permissions, p.bit)
+                const mine = canGrant(p.bit)
                 return (
                   <div key={p.bit} className="cset-perm">
                     <div className="cset-perm-h">{p.label}
-                      <label className="sset-rmanage" style={{ marginLeft: 'auto' }}>
-                        <input type="checkbox" checked={on} disabled={!canManage} onChange={e => togglePerm(p.bit, e.target.checked)} /> Разрешить
+                      <label className="sset-rmanage" style={{ marginLeft: 'auto' }}
+                        title={mine ? undefined : 'Этого права нет у тебя самого — выдать его нельзя'}>
+                        <input type="checkbox" checked={on} disabled={!canManage || !mine} onChange={e => togglePerm(p.bit, e.target.checked)} /> Разрешить
                       </label>
                     </div>
-                    <div className="cset-hint">{p.hint}</div>
+                    <div className="cset-hint">{p.hint}{!mine && canManage ? ' — этого права нет у тебя самого, выдать его нельзя' : ''}</div>
                   </div>
                 )
               })}

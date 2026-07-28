@@ -121,6 +121,39 @@ create table stickers (
   name text not null, url text not null,
   created_by uuid references auth.users on delete set null
 );
+-- Нужны миграции 87: события сервера (36), общие кастом-эмодзи (07), кэш обложек
+-- (13) и избранные эмодзи (23). Определения — как в соответствующих миграциях.
+create table server_events (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid not null references servers on delete cascade,
+  title text not null,
+  created_by uuid not null references auth.users on delete cascade,
+  starts_at timestamptz not null default now()
+);
+create table custom_emoji (
+  name text primary key,
+  url text not null,
+  owner uuid references auth.users on delete set null
+);
+create table game_covers (
+  name text primary key,
+  cover_url text,
+  status text not null default 'ok' check (status in ('ok', 'not_found')),
+  checked_at timestamptz not null default now()
+);
+create table emoji_favs (
+  user_id uuid not null references auth.users on delete cascade,
+  name text not null,
+  primary key (user_id, name)
+);
+alter table server_events enable row level security;
+alter table custom_emoji  enable row level security;
+alter table game_covers   enable row level security;
+create policy "server_events read" on server_events for select using (true);
+create policy "emoji_read"         on custom_emoji  for select using (true);
+create policy "game_covers read"   on game_covers   for select using (true);
+create policy "game_covers insert" on game_covers   for insert with check (true);
+
 alter table webhooks     enable row level security;
 alter table server_emoji enable row level security;
 alter table stickers     enable row level security;

@@ -256,12 +256,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  // Внешние события (например, начало редактирования сообщения) закрывают панели эмодзи/GIF.
+  // Начало редактирования сообщения закрывает панели эмодзи/GIF: иначе они висят
+  // поверх строки, в которой уже другой текст.
+  // v1.330.0: раньше это делалось по событию 'ponoi-close-pickers', которое никто
+  // и никогда не посылал — панели так и оставались открытыми. Смотрим прямо на
+  // признак редактирования, слать событие из четырёх мест незачем.
   useEffect(() => {
-    const h = () => { setEmoji(false); setGif(false) }
-    window.addEventListener('ponoi-close-pickers', h)
-    return () => window.removeEventListener('ponoi-close-pickers', h)
-  }, [])
+    if (editingTarget) { setEmoji(false); setGif(false) }
+  }, [editingTarget?.id])
 
   // Drag-and-drop файла в чат + вставка картинки из буфера (Ctrl+V).
   const [drag, setDrag] = useState(false)

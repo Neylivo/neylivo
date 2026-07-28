@@ -93,8 +93,25 @@ const SABOTAGE = {
   joinmsg: [/if v_new then perform public\.post_join_message\(.*?\); end if;/g, ''],
   // Приватный канал снова годится под системные сообщения.
   joinpriv: [/and not coalesce\(\(c\.settings ->> 'private'\)::boolean, false\)/, ''],
+  // Владельца сервера снова может назначить кто угодно с «Управлением сервером».
+  takeover: [/if new\.owner is distinct from old\.owner and auth\.uid\(\) is distinct from old\.owner then\s*\n\s*raise exception 'only_owner_can_transfer';\s*\n\s*end if;/, ''],
+  // Канал снова заводит любой участник (состояние до 87).
+  chins: [/create policy "channels_insert" on public\.channels for insert to authenticated with check \([\s\S]*?\n\);/,
+          'create policy "channels_insert" on public.channels for insert to authenticated with check (is_member(server_id));'],
+  // Раздать можно снова любое право, а не только своё.
+  grant: [/and \(p_mask & ~public\.server_permissions\(p_server, p_user\)\) = 0/, ''],
+  // Роль с чужого сервера снова засчитывается в правах.
+  foreign: [/and sr\.server_id = p_server/g, ''],
+  // Роль с чужого сервера снова можно выдать участнику.
+  mrforeign: [/\n       and r\.server_id = member_roles\.server_id/, ''],
+  // «Управление событиями» снова ничего не значит.
+  events: [/\n    or \(public\.server_permissions\(server_events\.server_id, auth\.uid\(\)\) & 256\) <> 0/, ''],
+  // Чужое кастом-эмодзи снова переписывает любой.
+  cemoji: [/using \(owner = auth\.uid\(\) or owner is null\) with check \(owner = auth\.uid\(\)\)/, 'using (true) with check (true)'],
+  // В общий кэш обложек снова кладётся любой адрес.
+  cover: [/check \(cover_url is null or cover_url like 'https:\/\/%'\)/, 'check (true)'],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -116,6 +133,7 @@ await db.exec(SRC[84])
 await db.exec(sql('54_security_hardening.sql').split('-- ====== B)')[0])
 await db.exec(SRC[85])
 await db.exec(SRC[86])
+await db.exec(SRC[87])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -456,6 +474,112 @@ await check('выключённая настройка отключает стр
   await as(MOD, `select join_public_server($1,'Тихий')`, [joinSrv])
   return (await db.query('select 1 from messages where channel_id=$1', [gen])).rows.length === 1
 })
+
+// ── Захват сервера, права ролей, события и эмодзи (87) ────────────────────
+// v1.330.0: продолжение сверки «что показывает интерфейс» против «что запрещает
+// база». Отдельный сервер, чтобы роли из проверок выше сюда не примешивались.
+const PLAIN = '66666666-6666-6666-6666-666666666666'
+await db.query('insert into auth.users values ($1)', [PLAIN])
+const s87 = (await db.query('insert into servers (name, owner) values ($1,$2) returning id', ['S87', OWNER])).rows[0].id
+for (const u of [MOD, USER, OTHER, PLAIN])
+  await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [s87, u, 'n'])
+const mkRole = async (name, perms) =>
+  (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,$3) returning id', [s87, name, perms])).rows[0].id
+const rAdmin = await mkRole('админ', 1)        // MANAGE_SERVER
+const rRoles = await mkRole('ролевод', 2 | 32) // MANAGE_ROLES + MANAGE_MESSAGES
+const rChan  = await mkRole('каналы', 4)       // MANAGE_CHANNELS
+const rEvent = await mkRole('события', 256)    // MANAGE_EVENTS
+await db.query('insert into member_roles values ($1,$2,$3)', [s87, MOD, rAdmin])
+await db.query('insert into member_roles values ($1,$2,$3)', [s87, USER, rRoles])
+await db.query('insert into member_roles values ($1,$2,$3)', [s87, OTHER, rChan])
+await db.query('insert into member_roles values ($1,$2,$3)', [s87, PLAIN, rEvent])
+
+await refused('«Управление сервером» не делает владельцем', () =>
+  as(MOD, 'update servers set owner=$1 where id=$2', [MOD, s87]))
+await check('владелец сервером остался прежним', async () =>
+  (await db.query('select owner from servers where id=$1', [s87])).rows[0].owner === OWNER)
+// Передать сервер другому человеку нельзя и владельцу: servers_update написана
+// без with check, а значит проверяется тем же условием, что и using, — строка
+// после правки должна принадлежать тому, кто правит. Возможности «передать
+// сервер» в приложении нет вообще, так что это ограничение, а не поломка; но
+// если она появится, менять придётся и политику.
+await refused('передать сервер нельзя и владельцу (такой возможности нет)', () =>
+  as(OWNER, 'update servers set owner=$1 where id=$2', [MOD, s87]))
+
+const mkChan = (uid, name) => as(uid, 'insert into channels (server_id, name) values ($1,$2)', [s87, name])
+await refused('канал заводит не любой участник', () => mkChan(PLAIN, 'самодельный'))
+await check('с «управлением каналами» канал заводится', async () => {
+  await mkChan(OTHER, 'законный'); return true
+})
+await check('владельцу канал заводить не мешаем', async () => {
+  await mkChan(OWNER, 'от владельца'); return true
+})
+
+await check('с «управлением ролями» роль создаётся', async () => {
+  await as(USER, `insert into server_roles (server_id, name, permissions) values ($1,'помощник',32)`, [s87])
+  return (await db.query(`select 1 from server_roles where server_id=$1 and name='помощник'`, [s87])).rows.length === 1
+})
+await refused('нельзя выдать право, которого у тебя нет', () =>
+  as(USER, `insert into server_roles (server_id, name, permissions) values ($1,'себе побольше',1)`, [s87]))
+await check('чужую роль сильнее своей не переписать', async () => {
+  await as(USER, `update server_roles set permissions=3 where id=$1`, [rAdmin])
+  return Number((await db.query('select permissions from server_roles where id=$1', [rAdmin])).rows[0].permissions) === 1
+})
+await check('и не удалить', async () => {
+  await as(USER, `delete from server_roles where id=$1`, [rAdmin])
+  return (await db.query('select 1 from server_roles where id=$1', [rAdmin])).rows.length === 1
+})
+
+// Роль с ЧУЖОГО сервера: своя роль на своём сервере может иметь любые биты —
+// вопрос в том, засчитываются ли они на сервере, где их никто не выдавал.
+const mine = (await db.query('insert into servers (name, owner) values ($1,$2) returning id', ['Мой', USER])).rows[0].id
+const rAll = (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,$3) returning id', [mine, 'всё', 131071])).rows[0].id
+await refused('роль с чужого сервера себе не выдать', () =>
+  as(USER, 'insert into member_roles values ($1,$2,$3)', [s87, USER, rAll]))
+// Отдельно от проверки «раздать можно только своё»: тут права роли безобидные и
+// у выдающего они есть — отвергнуть должно именно потому, что роль не отсюда.
+const rMild = (await db.query('insert into server_roles (server_id, name, permissions) values ($1,$2,32) returning id', [mine, 'тихая'])).rows[0].id
+await refused('и безобидную роль с чужого сервера тоже не выдать', () =>
+  as(USER, 'insert into member_roles values ($1,$2,$3)', [s87, OTHER, rMild]))
+await check('и даже вписанная напрямую — прав не даёт', async () => {
+  await db.query('insert into member_roles values ($1,$2,$3)', [s87, USER, rAll])
+  const r = await db.query('select (server_permissions($1,$2) & 1) <> 0 as adm', [s87, USER])
+  await db.query('delete from member_roles where server_id=$1 and role_id=$2', [s87, rAll])
+  return r.rows[0].adm === false
+})
+
+const mkEvent = (uid, title) =>
+  as(uid, 'insert into server_events (server_id, title, created_by) values ($1,$2,$3)', [s87, title, uid])
+await check('право «управление событиями» событие создаёт', async () => {
+  await mkEvent(PLAIN, 'сходка'); return true
+})
+await refused('без прав событие не создать', () => mkEvent(USER, 'самозванец'))
+
+await db.query(`insert into custom_emoji (name, url, owner) values ('pepe','своя.png',$1)`, [USER])
+const emojiUrl = async () => (await db.query(`select url from custom_emoji where name='pepe'`)).rows[0]?.url
+await check('чужое кастом-эмодзи не подменить', async () => {
+  await as(OTHER, `update custom_emoji set url='чужая.png' where name='pepe'`)
+  return await emojiUrl() === 'своя.png'
+})
+await check('чужое кастом-эмодзи не удалить', async () => {
+  await as(OTHER, `delete from custom_emoji where name='pepe'`)
+  return await emojiUrl() === 'своя.png'
+})
+await check('своё кастом-эмодзи меняется', async () => {
+  await as(USER, `update custom_emoji set url='новая.png' where name='pepe'`)
+  return await emojiUrl() === 'новая.png'
+})
+
+await refused('в общий кэш обложек не подсунуть javascript:', () =>
+  as(USER, `insert into game_covers (name, cover_url) values ('Игра','javascript:alert(1)')`))
+await check('обычная обложка кладётся по-прежнему', async () => {
+  await as(USER, `insert into game_covers (name, cover_url) values ('Игра2','https://example.com/a.png')`)
+  return (await db.query(`select 1 from game_covers where name='Игра2'`)).rows.length === 1
+})
+
+await check('избранные эмодзи попали в публикацию realtime', async () =>
+  (await db.query(`select 1 from pg_publication_tables
+                    where pubname='supabase_realtime' and schemaname='public' and tablename='emoji_favs'`)).rows.length === 1)
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

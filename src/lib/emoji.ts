@@ -163,10 +163,13 @@ export function initCustomEmoji(uid?: string) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_emoji' }, () => { fetchCustomEmoji() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_packs' }, () => { fetchPacks() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_pack_items' }, () => { fetchPacks() })
-  // v1.253.0: emoji_favs не был в publication realtime (см. supabase/64_more_realtime_2.sql) —
-  // избранное эмодзи (звёздочка) не обновлялось живьём между устройствами одного
-  // аккаунта. uid известен здесь только при первом вызове (см. Home.tsx) — но это
-  // и есть единственный раз, когда started ещё false и канал создаётся.
+  // Избранное эмодзи (звёздочка) должно обновляться живьём между устройствами
+  // одного аккаунта. uid известен здесь только при первом вызове (см. Home.tsx) —
+  // но это и есть единственный раз, когда started ещё false и канал создаётся.
+  // v1.330.0: подписка была здесь с v1.253.0, но молчала — таблицу в публикацию
+  // realtime так и не добавили, а ссылка в комментарии вела на файл
+  // supabase/64_more_realtime_2.sql, которого в репозитории нет. Добавлено в
+  // supabase/87_perm_fixes2.sql, проверяется в npm run test:db.
   if (uid) ch.on('postgres_changes', { event: '*', schema: 'public', table: 'emoji_favs', filter: 'user_id=eq.' + uid }, () => { fetchFavs(uid) })
   ch.subscribe()
 }
