@@ -118,16 +118,30 @@ export function buildFile(d: Draft, author: string): string {
   return lines.join('\n') + stripHeader(d.body)
 }
 
-/** Разбор уже установленного плагина обратно в форму — чтобы его можно было менять. */
+/**
+ * Разбор уже установленного плагина обратно в форму — чтобы его можно было менять.
+ *
+ * v1.350.0: раньше при неразбираемой шапке возвращался null, а конструктор в
+ * этом случае открывался с ПУСТОЙ заготовкой — то есть код плагина молча
+ * подменялся чужим примером, и человек, нажав «Сохранить», терял свой. Такое
+ * стало возможно, когда появилась проверка @icon: плагин, поставленный раньше с
+ * http-ссылкой на картинку, разбираться перестал. Теперь тело сохраняется в
+ * любом случае, а поля шапки просто остаются пустыми — их видно и можно
+ * заполнить заново.
+ */
 export function draftFrom(code: string): Draft | null {
+  const body = stripHeader(code)
   try {
     const m = parsePlugin(code)
     return {
       name: m.name, id: m.id, version: m.version, description: m.description,
-      permissions: m.permissions, hosts: m.hosts.join(', '), body: stripHeader(code),
+      permissions: m.permissions, hosts: m.hosts.join(', '), body,
       icon: m.icon ?? '', banner: m.banner ?? '',
     }
-  } catch { return null }
+  } catch {
+    // Шапку прочитать не вышло — но код у нас есть, и терять его нельзя.
+    return { name: '', id: '', version: '1.0.0', description: '', permissions: [], hosts: '', body, icon: '', banner: '' }
+  }
 }
 
 export function draftFromTemplate(t: Template): Draft {

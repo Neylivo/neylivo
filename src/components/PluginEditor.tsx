@@ -39,8 +39,16 @@ export function PluginEditor({ editId, onClose, onSaved }: {
 
   const [d, setD] = useState<Draft>(() => {
     const from = existing && draftFrom(existing.code)
-    if (from) return from
-    return draftFromTemplate(TEMPLATES[0])
+    if (!from) return draftFromTemplate(TEMPLATES[0])
+    // Если шапка не прочиталась, имя и id берём из того, под чем плагин уже
+    // установлен: иначе «Сохранить» завело бы второй плагин вместо правки.
+    return {
+      ...from,
+      name: from.name || existing!.manifest.name,
+      id: from.id || existing!.manifest.id,
+      version: from.version || existing!.manifest.version,
+      permissions: from.permissions.length ? from.permissions : existing!.manifest.permissions,
+    }
   })
   const [tpl, setTpl] = useState(existing ? '' : 'command')
   // v1.344.0: два режима. «Без кода» — выбрал, что делать, заполнил пару полей

@@ -795,11 +795,13 @@ body { font-size: var(--font-px, 16px); }
 .modal-inline .modal-in { flex:1; }
 .modal-color { width:48px; height:36px; border:none; border-radius:var(--r-md); background:none; cursor:pointer; padding:0; }
 .modal-hint { color:var(--mut); font-size:12px; }
-.modal-foot { display:flex; justify-content:flex-end; gap:12px; align-items:center; margin-top:20px; }
-.modal-primary { background:var(--brand); border:none; color:#fff; padding:10px 18px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; }
+.modal-foot { display:flex; justify-content:flex-end; gap:12px; align-items:center; margin-top:20px; flex-wrap:wrap; }
+.modal-primary { background:var(--brand); border:none; color:#fff; padding:10px 18px; border-radius:var(--r-sm); font-weight:600; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; line-height:1.1; }
 .modal-primary:hover { filter:brightness(1.1); }
 .modal-primary:disabled { opacity:.5; cursor:not-allowed; }
-.modal-ghost { background:none; border:none; color:var(--tx); font-weight:600; cursor:pointer; padding:10px 12px; }
+.modal-ghost { background:none; border:none; color:var(--tx); font-weight:600; cursor:pointer; padding:10px 12px;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; line-height:1.1; }
 .modal-ghost:hover { text-decoration:underline; }
 .modal-danger { background:none; border:none; color:var(--red); font-weight:600; cursor:pointer; padding:10px 12px; margin-right:auto; }
 /* v1.285.0: тумблер «только версия» в «Поделиться сборкой». */
@@ -3386,8 +3388,19 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-row-v { color:#b5bac1; font-size:14.5px; display:flex; align-items:center; }
 .pqs2-link { color:var(--blue); font-size:13px; margin-left:8px; cursor:pointer; }
 .pqs2-link:hover { text-decoration:underline; }
+/* v1.350.0: кнопка с иконкой и подписью резалась.
+   Высота жёстко 32px, а содержимое — обычный поток: иконка тянула строку вниз,
+   длинная подпись переносилась на вторую строку, и всё, что не влезло в эти
+   32px, обрезалось. Отсюда «сломанные обрезанные кнопки».
+   Лечится не увеличением высоты, а тем, что содержимое центрируется, а подпись
+   не переносится: inline-flex + nowrap. */
 .pqs2-btn { flex:none; height:32px; padding:0 16px; border:none; border-radius:var(--r-md); background:#4e5058; color:#fff;
-  font-size:13.5px; font-weight:600; cursor:pointer; transition:background .15s var(--ease-out4, ease); }
+  font-size:13.5px; font-weight:600; cursor:pointer; transition:background .15s var(--ease-out4, ease);
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap;
+  line-height:1; max-width:100%; }
+/* Подпись, которая всё же не помещается, обрезается многоточием — это честнее,
+   чем вылезти за край или разъехаться. */
+.pqs2-btn > span, .pqs2-btn { overflow:hidden; text-overflow:ellipsis; }
 .pqs2-btn:hover { background:#6d6f78; }
 .pqs2-btn:active { scale:.96; }
 .pqs2-btn:disabled { opacity:.55; cursor:default; }
@@ -4748,7 +4761,7 @@ body.no-anim .cat-tile:hover { transform: none; }
 .cat-tile-body { padding: 24px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .cat-tile .cat-nm { margin-top: 2px; }
 .cat-tile .cat-acts { margin-top: auto; padding-top: 8px; }
-.cat-tile .cat-acts .pqs2-btn { flex: 1; justify-content: center; }
+.cat-tile .cat-acts .pqs2-btn { flex: 1; min-width: 0; }
 .cat-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
 /* Плитка-образец в форме публикации — не кликается и не подпрыгивает. */
 .cat-preview { margin-top: 10px; max-width: 260px; }

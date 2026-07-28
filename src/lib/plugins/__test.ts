@@ -408,6 +408,19 @@ for (const p of OFFICIAL_PLUGINS) {
     return parsePlugin(buildFile(d, 'ник')).icon === 'https://example.com/i.png'
   })
 
+  // Правка плагина не имеет права терять его код (v1.350.0).
+  check('плагин с неразбираемой шапкой открывается со СВОИМ кодом', () => {
+    // @icon с http — такой плагин ставился до появления проверки и теперь не
+    // разбирается. Открыть его на правку и подсунуть чужой пример — потеря труда.
+    const broken = ['/**', ' * @name X', ' * @id x-y', ' * @version 1.0.0', ' * @icon http://example.com/i.png', ' */', 'function onLoad(ponoi){ ponoi.log("моё") }'].join('\n')
+    const dd = draftFrom(broken)
+    return !!dd && dd.body.includes('моё')
+  })
+  check('у разбираемого плагина форма заполняется как раньше', () => {
+    const dd = draftFrom(OFFICIAL_PLUGINS[0].code)
+    return !!dd && dd.id === OFFICIAL_PLUGINS[0].id && dd.body.includes('onLoad')
+  })
+
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)
 })()
