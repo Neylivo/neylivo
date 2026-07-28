@@ -5451,3 +5451,10 @@ body.no-anim .mus2-up-art, body.no-anim .mus2-card-q, body.no-anim .mus2-up-x { 
   width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
 }
 body.no-anim .mus2-card-del { transition: none; }
+
+/* Трекотека прокручивается, а не обрезается (v1.377.0). */
+.mus2-lib-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 24px 40px; }
+.mus2-card-p {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
+  color: var(--mut); font-size: 11.5px; white-space: nowrap;
+}

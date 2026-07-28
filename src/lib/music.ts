@@ -99,3 +99,24 @@ export async function updateTrackMeta(id: string, m: TrackMeta) {
 
 // Правило дозаписи живёт отдельно, без зависимостей — его проверяет npm run test:ui.
 export { metaPatch } from './musicMeta'
+
+/**
+ * Отметить прослушивание (v1.377.0).
+ *
+ * Считаем и общее число, и личное: общее показывается на карточке, личное
+ * решает, что поставить в очередь. Тихо ничего не делает, если миграция ещё не
+ * применена — плеер из-за счётчика останавливаться не должен.
+ */
+export async function recordPlay(trackId: string): Promise<void> {
+  try { await supabase.rpc('record_play', { p_track: trackId }) } catch { /* нет функции — не беда */ }
+}
+
+/** Сколько раз я слушал каждый трек: id -> число. Для очереди «под себя». */
+export async function myPlayCounts(): Promise<Record<string, number>> {
+  try {
+    const { data } = await supabase.from('music_plays').select('track_id, plays')
+    const out: Record<string, number> = {}
+    for (const r of (data ?? []) as any[]) out[r.track_id] = r.plays ?? 0
+    return out
+  } catch { return {} }
+}

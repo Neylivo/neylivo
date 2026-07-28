@@ -1702,3 +1702,6 @@ Object.assign(DICT_EN, { 'Убрать из трекотеки': 'Remove from li
 REGEX_EN.push([/^Убрать «(.+)» из трекотеки\? Он пропадёт у всех\.$/,
   'Remove “$1” from the library? It will disappear for everyone.'])
 REGEX_EN.push([/^Трекотека · (\d+)$/, 'Library · $1'])
+
+// v1.377.0: прослушивания.
+Object.assign(DICT_EN, { 'Прослушиваний': 'Plays' })

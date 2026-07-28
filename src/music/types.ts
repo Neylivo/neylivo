@@ -1,5 +1,10 @@
 
-export interface Track { id: string; url: string; name: string; owner: string; kind?: 'url' | 'file'; author?: string; art?: string | null; dur?: number; play?: string | null }
+export interface Track {
+  id: string; url: string; name: string; owner: string
+  kind?: 'url' | 'file'; author?: string; art?: string | null; dur?: number; play?: string | null
+  /** Сколько раз слушали все (v1.377.0). Нет колонки — нет и числа. */
+  plays?: number
+}
 export type GifPos = 'left' | 'right' | 'both'
 export interface GifCfg { url: string; pos: GifPos }
 export interface BgCfg {

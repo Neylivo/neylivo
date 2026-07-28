@@ -7,12 +7,17 @@ import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
-import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack } from '../lib/music'
+import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
+import { personalOrder } from './personalQueue'
+
+/** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
+const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
+import { nextTrack } from './nextTrack'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
@@ -562,28 +567,28 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     saveManual(manual.filter(x => x !== id))
   }
 
+  /** Перезапустить то, что играет сейчас, каким бы источником оно ни было. */
+  const restartCurrent = () => {
+    const w = widgetRef.current
+    if (w) { w.seekTo(0); w.play(); return }
+    const y = ytRef.current
+    if (y) { try { y.seekTo(0, true); y.playVideo() } catch {}; return }
+    const a = audioRef.current
+    if (a) { a.currentTime = 0; a.play().catch(() => {}) }
+  }
+
+  // v1.377.0: решение «что дальше» вынесено в lib и проверяется тестом. Здесь
+  // только исполнение: раньше вся логика жила тут и потому не проверялась ничем —
+  // повтор списка из одного трека молча превращался в тишину.
   const next = () => {
-    if (repeat === 'one') {
-      const w = widgetRef.current
-      if (w) { w.seekTo(0); w.play(); return }
-      const y = ytRef.current
-      if (y) { try { y.seekTo(0, true); y.playVideo() } catch {}; return }
-      const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) }
-      return
-    }
-    // v1.374.0: то, что поставили в очередь руками, идёт вперёд обычного порядка
-    // — иначе кнопка «в очередь» была бы обещанием, которое исполнится нескоро.
     const first = manualLive.find(id => tracks.some(t => t.id === id))
-    if (first) {
-      const i = tracks.findIndex(t => t.id === first)
-      if (i >= 0) { saveManual(manual.filter(x => x !== first)); setIdx(i); return }
-    }
-    setIdx(i => {
-      if (shuffle && tracks.length > 1) { let n = i; while (n === i) n = Math.floor(Math.random() * tracks.length); return n }
-      const n = i + 1
-      if (n >= tracks.length) return repeat === 'all' ? 0 : i
-      return n
-    })
+    const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
+    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx })
+    if (first && act.kind !== 'restart') saveManual(manual.filter(x => x !== first))
+    if (act.kind === 'restart') { restartCurrent(); return }
+    if (act.kind === 'stop') { setPlaying(false); return }
+    if (act.index === idx) { restartCurrent(); return }
+    setIdx(act.index)
   }
   const prev = () => setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
   // v1.371.0: системные кнопки («предыдущий» на гарнитуре) вешаются один раз, и
@@ -637,6 +642,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   /** Сколько ближайших показываем лентой. Больше не нужно: это подсказка, не список. */
   const UP_NEXT_SHOWN = 8
 
+  // v1.377.0: сколько раз я слушал каждый трек — по этому и строится очередь.
+  const [myPlays, setMyPlays] = useState<Record<string, number>>({})
+  useEffect(() => { myPlayCounts().then(setMyPlays) }, [])
+
+  // Отмечаем прослушивание один раз на трек: не на каждую перемотку и не на
+  // паузу, иначе число говорило бы о нажатиях, а не о том, что человек слушал.
+  const countedRef = useRef<string>('')
+  useEffect(() => {
+    if (!cur || !playing || countedRef.current === cur.id) return
+    countedRef.current = cur.id
+    void recordPlay(cur.id)
+    setMyPlays(p => ({ ...p, [cur.id]: (p[cur.id] ?? 0) + 1 }))
+    setTracks(ts => ts.map(t => (t.id === cur.id ? { ...t, plays: (t.plays ?? 0) + 1 } : t)))
+  }, [cur, playing])
+
   const upNextAll = (() => {
     const out: { t: typeof tracks[number]; i: number; manual: boolean }[] = []
     const seen = new Set<string>()
@@ -646,13 +666,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       seen.add(id)
       out.push({ t: tracks[i], i, manual: true })
     }
-    // Дальше — обычный порядок склада после текущего. При повторе всего списка
-    // он закольцовывается, иначе просто заканчивается.
-    for (let k = 1; k <= tracks.length; k++) {
-      const i = repeat === 'all' ? (idx + k) % tracks.length : idx + k
-      if (i >= tracks.length || i < 0) break
-      const t = tracks[i]
-      if (!t || seen.has(t.id)) continue
+    // v1.377.0: дальше — не «по порядку склада», а то, что слушает сам человек.
+    // Порядок склада — это время, когда трек кто-то добавил, и к слушателю он
+    // отношения не имеет: он слушает пять песен, а очередь предлагала то, что
+    // позавчера выложил сосед.
+    for (const t of personalOrder({ tracks, idx, plays: myPlays })) {
+      if (seen.has(t.id)) continue
+      const i = tracks.findIndex(x => x.id === t.id)
+      if (i < 0) continue
       seen.add(t.id)
       out.push({ t, i, manual: false })
     }
@@ -909,7 +930,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                           {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
                         </div>
                         <div className="mus2-card-t notr" translate="no">{title}</div>
-                        <div className="mus2-card-a notr" translate="no">{author || '\u00a0'}</div>
+                        <div className="mus2-card-a">
+                          <span className="notr" translate="no">{author || ''}</span>
+                          {/* v1.377.0: сколько раз слушали все. Ноль не пишем: «0
+                              прослушиваний» ничего не сообщает, только шумит. */}
+                          {(t.plays ?? 0) > 0 && <span className="mus2-card-p" title="Прослушиваний">
+                            <Icon name="play" size={10} />{fmtPlays(t.plays ?? 0)}
+                          </span>}
+                          {!author && !(t.plays ?? 0) ? '\u00a0' : null}
+                        </div>
                       </div>
                     )
                   })}

@@ -14,6 +14,8 @@ import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } fro
 import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
 import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
+import { nextTrack } from '../music/nextTrack'
+import { personalOrder } from '../music/personalQueue'
 import { isDuplicateTrack } from './musicDupe'
 
 let pass = 0, fail = 0
@@ -328,6 +330,94 @@ check('проверка заметила бы выброшенный v=', () => 
   // Если внести v в список мусора, все ролики YouTube станут одной песней.
   const broken = 'https://youtube.com/watch'
   return !sameTrack(broken, 'https://youtube.com/watch?v=abc')
+})
+
+console.log('\n── Что играть дальше ──')
+const N = (o: any) => nextTrack({ shuffle: false, ...o })
+
+check('обычный переход к следующему', () =>
+  JSON.stringify(N({ idx: 0, count: 3, repeat: 'off' })) === '{"kind":"go","index":1}')
+check('последний без повтора — остановка, а не тишина при «играет»', () =>
+  N({ idx: 2, count: 3, repeat: 'off' }).kind === 'stop')
+check('последний с повтором списка — в начало', () =>
+  JSON.stringify(N({ idx: 2, count: 3, repeat: 'all' })) === '{"kind":"go","index":0}')
+check('повтор одного — тот же трек сначала', () =>
+  N({ idx: 1, count: 3, repeat: 'one' }).kind === 'restart')
+
+console.log('\n── Ровно то, что было сломано ──')
+// Повтор списка из одного трека: следующий номер совпадал с текущим, состояние
+// не менялось, перерисовки не было — и вместо повтора наступала тишина.
+check('один трек с повтором списка играет заново', () =>
+  N({ idx: 0, count: 1, repeat: 'all' }).kind === 'restart')
+check('один трек с повтором одного играет заново', () =>
+  N({ idx: 0, count: 1, repeat: 'one' }).kind === 'restart')
+check('один трек без повтора — остановка', () =>
+  N({ idx: 0, count: 1, repeat: 'off' }).kind === 'stop')
+check('пустой список ничего не играет', () =>
+  N({ idx: 0, count: 0, repeat: 'all' }).kind === 'stop')
+
+console.log('\n── Очередь и перемешивание ──')
+check('поставленное вручную идёт вперёд порядка', () =>
+  JSON.stringify(N({ idx: 0, count: 5, repeat: 'off', manualIdx: 3 })) === '{"kind":"go","index":3}')
+check('повтор одного главнее очереди — попросили именно этот трек', () =>
+  N({ idx: 0, count: 5, repeat: 'one', manualIdx: 3 }).kind === 'restart')
+check('вручную поставленный текущий трек играет заново', () =>
+  N({ idx: 2, count: 5, repeat: 'off', manualIdx: 2 }).kind === 'restart')
+check('перемешивание не даёт тот же трек подряд', () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const a = nextTrack({ idx: 2, count: 5, repeat: 'off', shuffle: true, rnd: () => seed / 30 })
+    if (a.kind !== 'go' || a.index === 2) return false
+  }
+  return true
+})
+check('перемешивание из одного трека не зацикливается', () =>
+  nextTrack({ idx: 0, count: 1, repeat: 'all', shuffle: true, rnd: () => 0 }).kind === 'restart')
+
+console.log('\n── Очередь под человека ──')
+const T = (id: string) => ({ id })
+const LIB = [T('a'), T('b'), T('c'), T('d'), T('e')]
+
+check('чаще слушаемое идёт раньше', () => {
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10, e: 3, b: 1 } })
+  return r[0].id === 'c' && r[1].id === 'e' && r[2].id === 'b'
+})
+check('текущий трек в очередь не попадает', () => {
+  const r = personalOrder({ tracks: LIB, idx: 2, plays: { c: 10 } })
+  return !r.some(t => t.id === 'c')
+})
+check('незнакомое подмешивается, а не выбрасывается', () => {
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10 } })
+  return r.length === 4 && r.some(t => t.id === 'b') && r.some(t => t.id === 'd')
+})
+check('без истории порядок остаётся складским', () => {
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: {} })
+  return r.map(t => t.id).join('') === 'bcde'
+})
+check('ничью решает недавность', () => {
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: { b: 5, d: 5 }, lastAt: { d: 2000, b: 1000 } })
+  return r[0].id === 'd' && r[1].id === 'b'
+})
+check('выдача устойчива: два вызова подряд дают одно и то же', () => {
+  const a = personalOrder({ tracks: LIB, idx: 0, plays: { c: 2, e: 2 } }).map(t => t.id).join('')
+  const b = personalOrder({ tracks: LIB, idx: 0, plays: { c: 2, e: 2 } }).map(t => t.id).join('')
+  return a === b
+})
+check('пустой склад не ломает', () =>
+  personalOrder({ tracks: [], idx: 0, plays: {} }).length === 0)
+check('склад из одного трека даёт пустую очередь', () =>
+  personalOrder({ tracks: [T('a')], idx: 0, plays: {} }).length === 0)
+
+console.log('\n── Ломаем нарочно (очередь) ──')
+check('проверка заметила бы возврат к «просто следующий по списку»', () => {
+  // Ровно то, что было: порядок склада, к слушателю отношения не имеющий.
+  const oldWay = LIB.filter((_, n) => n !== 0).map(t => t.id).join('')
+  const now = personalOrder({ tracks: LIB, idx: 0, plays: { e: 9 } }).map(t => t.id).join('')
+  return oldWay === 'bcde' && now.startsWith('e')
+})
+check('проверка заметила бы очередь из одних любимых', () => {
+  // Если выбросить незнакомое, человек никогда не услышит ничего нового.
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10 } })
+  return r.length > 1
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
