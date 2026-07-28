@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings, type Settings as AppSettings, type CustomTheme } from '../lib/settings'
 import { fetchProfile, saveProfile, petKindOf, DEFAULT_PROFILE, nickFontOf, msgFontOf, type ProfilePrefs } from '../lib/profilePrefs'
-import { uploadTo } from '../lib/storage'
+import { uploadTo, isImage } from '../lib/storage'
 import { isVideoUrl, trimVideoTo5s } from '../lib/videoAvatar'
 import { PlateBg } from './PlateBg'
 import { ProfilePet } from './ProfilePet'
@@ -342,6 +342,23 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   const [avUrl, setAvUrl] = useState<string | null | undefined>(avatarUrl)
   const plateRef = useRef<HTMLInputElement>(null)
   const [plateBusy, setPlateBusy] = useState(false)
+  // v1.384.0: шапка профиля. Поле читалось при отрисовке карточки, но задать его
+  // было негде вовсе — настройки для него не существовало, а запись в базу была
+  // не подключена. То есть «шапка профиля» была только в типе данных.
+  const bannerRef = useRef<HTMLInputElement>(null)
+  const [bannerBusy, setBannerBusy] = useState(false)
+  async function pickBanner(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !user) return
+    if (!isImage(f)) { toastErr('Шапка — это картинка: png, jpg, gif или webp'); e.target.value = ''; return }
+    // Шапку видят все, кто откроет профиль, и грузится она целиком: держим предел.
+    if (f.size > 8 * 1024 * 1024) { toastErr('Картинка больше 8 МБ — её будут долго грузить'); e.target.value = ''; return }
+    setBannerBusy(true)
+    try {
+      const url = await uploadTo('avatars', user.id, f)
+      await patchProf({ bannerUrl: url })
+    } catch (err: any) { toastErr(err.message ?? String(err)) }
+    finally { setBannerBusy(false); e.target.value = '' }
+  }
   async function pickAv(e: React.ChangeEvent<HTMLInputElement>) {
     let f = e.target.files?.[0]; if (!f || !user) return
     setAvBusy(true)
@@ -781,6 +798,23 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     {profView.plateOutline && <button className="pqs2-btn ghost" onClick={() => setProfD('plateOutline', null)}>Убрать обводку</button>}
                   </div>
                   <input ref={plateRef} type="file" accept="image/*,video/*" hidden onChange={pickPlate} />
+                </div>
+
+                {/* v1.384.0: шапка профиля — её видят все, кто откроет карточку. */}
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t" style={{ margin: 0 }}>Шапка профиля</div>
+                  <div className="pet2-sub">Широкая картинка сверху карточки профиля. Её видят все, кто откроет твой профиль. Без неё сверху будет градиент из твоих цветов.</div>
+                  <div className="pcb-prev" style={profView.bannerUrl
+                    ? { backgroundImage: `url(${profView.bannerUrl})` }
+                    : { background: `linear-gradient(100deg, ${view.accent}, ${profView.accent})` }} />
+                  <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <button className="pqs2-btn primary" onClick={() => bannerRef.current?.click()}>
+                      {bannerBusy ? 'Загрузка…' : (profView.bannerUrl ? 'Заменить шапку' : 'Загрузить шапку')}
+                    </button>
+                    {profView.bannerUrl && <button className="pqs2-btn ghost"
+                      onClick={() => patchProf({ bannerUrl: null }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать</button>}
+                  </div>
+                  <input ref={bannerRef} type="file" accept="image/*" hidden onChange={pickBanner} />
                 </div>
 
                 <div className="pqs-acc-card2 pet2">

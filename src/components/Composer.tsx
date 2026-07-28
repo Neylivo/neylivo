@@ -1089,5 +1089,13 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
       {myMeta?.desc && <div className="att-desc">{myMeta.desc}</div>}
     </>
   }
-  return <a className="msg-file" href={clean} target="_blank" rel="noreferrer" title={size ? 'Размер файла: ' + size : undefined}><Icon name="paperclip" size={16} /> Скачать файл{size && <span className="msg-file-size">{size}</span>}</a>
+  // v1.384.0: у ссылки не было признака «скачать» и имени. В личке файл лежит на
+  // сервере под обезличенным именем, и браузер сохранял его как «…_enc» — без
+  // расширения и без намёка на то, чем это было. Настоящее имя приезжает в
+  // метаданных вложения (оно ехало внутри зашифрованного ключа).
+  const dlName = myMeta?.name || decodeURIComponent((clean.split('/').pop() ?? '').split('?')[0]) || 'файл'
+  return <a className="msg-file" href={clean} download={dlName} target="_blank" rel="noreferrer"
+    title={(myMeta?.name ? myMeta.name + (size ? ' · ' + size : '') : size ? 'Размер файла: ' + size : undefined)}>
+    <Icon name="paperclip" size={16} /> {myMeta?.name || 'Скачать файл'}{size && <span className="msg-file-size">{size}</span>}
+  </a>
 }

@@ -130,6 +130,11 @@ function fromRow(r: any): ProfilePrefs {
 function toRow(p: Partial<ProfilePrefs>, full: ProfilePrefs): any {
   const r: any = {}
   if (p.primary !== undefined) r.primary_color = p.primary
+  // v1.384.0: шапка профиля. Колонку читали (fromRow), а записывать забыли — и
+  // адрес оседал только в локальном кэше: у себя шапка видна, у остальных её нет
+  // и после перехода на другое устройство тоже. Ошибки при этом не было ни одной:
+  // обновление просто уходило без единой колонки.
+  if (p.bannerUrl !== undefined) r.banner_url = p.bannerUrl
   if (p.accent !== undefined) r.accent_color = p.accent
   if (p.about !== undefined) r.about = p.about
   if (p.petUrl !== undefined) r.pet_url = p.petUrl
@@ -228,7 +233,16 @@ export async function fetchProfile(id: string): Promise<ProfilePrefs> {
 // может показать тост с ошибкой вместо тишины.
 export async function saveProfile(id: string, patch: Partial<ProfilePrefs>): Promise<ProfilePrefs> {
   const next = { ...(cache[id] ?? DEFAULT_PROFILE), ...patch }
-  const { data: upd, error } = await supabase.from('profiles').update(toRow(patch, next)).eq('id', id).select('id')
+  const row = toRow(patch, next)
+  // v1.384.0: поле профиля, которое toRow не знает, превращало сохранение в
+  // обновление без единой колонки: ошибки нет, строка найдена, вызывающая
+  // сторона считает, что сохранила. Именно так шапка профиля годами жила только
+  // в кэше своего устройства. Пустой набор колонок — это не «нечего менять», а
+  // «поле забыли завести», и молчать об этом нельзя.
+  if (Object.keys(row).length === 0) {
+    throw new Error('Это поле профиля пока не сохраняется — сообщи об этом: ' + Object.keys(patch).join(', '))
+  }
+  const { data: upd, error } = await supabase.from('profiles').update(row).eq('id', id).select('id')
   if (error) throw new Error(error.message)
   // RLS без совпадения строки молча обновляет 0 строк — error здесь остаётся null,
   // это не ошибка сети/схемы, а «не сохранилось» без единого признака почему.

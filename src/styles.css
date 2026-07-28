@@ -5590,3 +5590,9 @@ body.no-anim .mus-mini, body.no-anim .mus-mini.dragging .mus-mini-art { transiti
 .pc-av.clickable { cursor: zoom-in; transition: transform .18s var(--ease-out4, ease); }
 .pc-av.clickable:hover { transform: scale(1.04); }
 body.no-anim .pc-av.clickable { transition: none; }
+
+/* Предпросмотр шапки профиля в настройках (v1.384.0). */
+.pcb-prev {
+  height: 96px; border-radius: var(--r-md, 10px); margin-top: 10px;
+  background-size: cover; background-position: center;
+}

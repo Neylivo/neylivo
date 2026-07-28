@@ -1755,3 +1755,14 @@ Object.assign(DICT_EN, {
   'В лобби треки добавляет ведущий': 'In a lobby, the host adds tracks',
   'Открыть аватарку': 'Open the avatar',
 })
+
+// v1.384.0: шапка профиля и имена скачиваемых файлов.
+Object.assign(DICT_EN, {
+  'Шапка профиля': 'Profile banner',
+  'Загрузить шапку': 'Upload a banner',
+  'Заменить шапку': 'Replace the banner',
+  'Шапка — это картинка: png, jpg, gif или webp': 'A banner is an image: png, jpg, gif or webp',
+  'Картинка больше 8 МБ — её будут долго грузить': 'The image is over 8 MB — it will load slowly for everyone',
+  'Широкая картинка сверху карточки профиля. Её видят все, кто откроет твой профиль. Без неё сверху будет градиент из твоих цветов.':
+    'A wide image at the top of your profile card. Everyone who opens your profile sees it. Without one, the top shows a gradient of your colours.',
+})

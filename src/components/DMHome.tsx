@@ -125,7 +125,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // поэтому распаковываются здесь же — и сюда кладутся уже готовые к показу
   // локальные ссылки. Так ни лента сообщений, ни компонент вложения ничего не знают
   // о шифровании: им как и раньше приходит обычная ссылка.
-  const [attach, setAttach] = useState<Record<string, { url: string; type: string }>>({})
+  const [attach, setAttach] = useState<Record<string, { url: string; type: string; meta?: any }>>({})
   const blobUrls = useRef<string[]>([])
   // Отзываем расшифрованные вложения при СМЕНЕ ДИАЛОГА, а не только при закрытии
   // приложения: иначе за долгую сессию с десятком переписок все просмотренные
@@ -145,7 +145,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     if (todo.length === 0) return
     ;(async () => {
       const doneText: Record<string, string> = {}
-      const doneAtt: Record<string, { url: string; type: string }> = {}
+      const doneAtt: Record<string, { url: string; type: string; meta?: any }> = {}
       for (const m of todo) {
         const payload = await openIncoming(m.content!, m.author)
         doneText[m.id] = payload.text
@@ -1376,7 +1376,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                   // спокойное многоточие (_dec) — надпись «Расшифровываю…»
                   // мозолила глаза на каждом сообщении.
                   ? { ...m, content: plain[m.id] ?? '', _enc: true, _dec: plain[m.id] === undefined,
-                      ...(attach[m.id] ? { attach_url: attach[m.id].url, attach_type: attach[m.id].type } : {}) }
+                      ...(attach[m.id] ? { attach_url: attach[m.id].url, attach_type: attach[m.id].type,
+                        // v1.384.0: настоящие имена файлов, добытые расшифровкой —
+                        // без них скачанное сохранялось как «…_enc» без расширения.
+                        ...(attach[m.id].meta ? { attach_meta: attach[m.id].meta } : {}) } : {}) }
                   : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
               nameOf={id => id === meId ? username : (activeGroup ? (groupMembers.find(p => p.id === id)?.display_name || groupMembers.find(p => p.id === id)?.username) : active!.name)}
