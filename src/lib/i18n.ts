@@ -58,7 +58,39 @@ let mute = false
 const origText = new Map<Text, string>()
 const origAttr = new Map<Element, Record<string, string>>()
 
-const SKIP_SEL = '.msgs, pre, code, .emoji-scroll, .pqs-code-val'
+// v1.357.0: что переводчик не трогает.
+//
+// Раньше в списке были только сообщения, код и эмодзи-сетка, а всё остальное
+// считалось интерфейсом. Но именами распоряжается человек: сервер «Друзья»,
+// канал «все», роль «Участник», ник «Настройки» — это ровно те строки, что
+// лежат в словаре, и они молча превращались во Friends, all, Member, Settings.
+// Перевод чужого имени — не помощь, а подмена: человек видит не то, что написал
+// он или его собеседник.
+//
+// Помечать надо источник, а не бороться со словарём: угадать, какие слова люди
+// назовут своими вещами, нельзя. Отсюда .notr и стандартный translate="no" —
+// второй заодно останавливает встроенный переводчик браузера, который коверкал
+// ники так же и без нас.
+// Классы, в которых лежит только то, что назвал человек. Разметку из-за этого
+// не переписываем: у каждого такого места класс уже есть, и он говорит ровно то
+// что надо — «здесь имя», а не «здесь подпись».
+const UGC_CLASSES = [
+  'me-nm',            // участник в списке и собеседник в списке ЛС
+  'nm',               // автор сообщения
+  'ch-txt', 'ch-emo', // название канала
+  'srv-title-nm', 'srvtag-nm', 'sset-prev-nm',  // название сервера
+  'sb-name',          // сервер в боковой панели
+  'pfr-name', 'pfr-uname', 'pc-name', 'pqs-acc-name', 'pqs-acc-uname',  // имя и юзернейм
+  'cfc-nm', 'fwd-row-nm', 'c2-bub-nm', 'vo-nm', 'wall-author',          // имена в списках и звонках
+  'chr-name', 'redit-role-nm', 'sset-rolechip',                          // названия ролей
+  'plate-prev-nm', 'botp-prev-nm', 'pet2-pv-un',                         // предпросмотры профиля и бота
+  'act-name',         // название игры — оно тоже не наше
+  'cat-nm', 'cat-author',   // имя бота или плагина и его автор
+  'forum-card-t', 'thread-view-t',  // заголовки обсуждений
+]
+const SKIP_SEL = ['.msgs', 'pre', 'code', '.emoji-scroll', '.pqs-code-val', '.notr', '[translate="no"]']
+  .concat(UGC_CLASSES.map(c => '.' + c)).join(', ')
+export { UGC_CLASSES }
 function skipped(n: Node): boolean {
   const el = n.nodeType === 1 ? (n as Element) : n.parentElement
   return !!el && !!el.closest(SKIP_SEL)

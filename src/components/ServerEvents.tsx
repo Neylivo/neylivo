@@ -94,7 +94,7 @@ export function ServerEvents({ server, channels, canCreate, onClose }: { server:
               <div key={ev.id} className="sev-row">
                 <span className="sev-cal"><Icon name="calendar" size={20} /></span>
                 <div style={{ flex: 1 }}>
-                  <b>{ev.title}</b>
+                  <b className="notr" translate="no">{ev.title}</b>
                   <div className="mut" style={{ fontSize: 12, marginTop: 2 }}>{ev.starts_at ? fmt(ev.starts_at) : ''} · {ev.place === 'voice' ? ('🔊 ' + (channels.find(c => c.id === ev.channel_id)?.name ?? 'голосовой канал')) : (ev.location || 'в другом месте')}</div>
                   {ev.description && <div className="mut" style={{ fontSize: 12, marginTop: 4 }}>{ev.description}</div>}
                 </div>

@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.356.0",
+  "version": "1.357.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -21,6 +21,7 @@
     "test:settings": "esbuild src/lib/__settings_test.ts --bundle --platform=node --format=esm --outfile=dist-settings-test/t.mjs && node dist-settings-test/t.mjs",
     "test:attack": "esbuild src/lib/plugins/__attack_test.ts --bundle --platform=node --format=esm --outfile=dist-attack-test/t.mjs && node dist-attack-test/t.mjs",
     "deploy:functions": "node scripts/deploy-functions.mjs",
+    "test:i18n": "esbuild src/lib/__i18n_test.ts --bundle --format=iife --outfile=dist-i18n-test/t.js && electron scripts/i18n-test.cjs",
     "test:slash": "esbuild src/lib/__slash_test.ts --bundle --platform=node --format=esm --outfile=dist-slash-test/t.mjs && node dist-slash-test/t.mjs",
     "test:emoji": "esbuild src/lib/__emoji_test.ts --bundle --platform=node --format=esm --outfile=dist-emoji-test/t.mjs && node dist-emoji-test/t.mjs"
   },
