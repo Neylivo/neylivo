@@ -87,6 +87,9 @@ const UGC_CLASSES = [
   'act-name',         // название игры — оно тоже не наше
   'cat-nm', 'cat-author',   // имя бота или плагина и его автор
   'forum-card-t', 'thread-view-t',  // заголовки обсуждений
+  // v1.371.0: карточка трека в трекотеке — название и исполнитель приходят из
+  // чужой записи, переводить их нельзя.
+  'mus2-card-t', 'mus2-card-a',
 ]
 const SKIP_SEL = ['.msgs', 'pre', 'code', '.emoji-scroll', '.pqs-code-val', '.notr', '[translate="no"]']
   .concat(UGC_CLASSES.map(c => '.' + c)).join(', ')

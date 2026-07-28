@@ -66,6 +66,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const playingRef = useRef(false)
   const volRef = useRef(100)
   const nextRef = useRef<() => void>(() => {})
+  const prevRef = useRef<() => void>(() => {})
   const [meta, setMeta] = useState<Record<string, ScMeta>>({})
   const [color, setColor] = useState<Rgb | null>(null)
 
@@ -104,6 +105,44 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const h = () => toastErr('Обложки и ссылки треков не сохраняются: примени миграцию supabase/22_music_meta.sql')
     window.addEventListener('ponoi-music-nometa', h)
     return () => window.removeEventListener('ponoi-music-nometa', h)
+  }, [])
+
+  // v1.371.0: название, автор и обложка уходят в системный проигрыватель — тот
+  // самый, что всплывает в Windows при нажатии кнопок громкости, и живёт на
+  // экране блокировки телефона. Оттуда же работают кнопки на клавиатуре и
+  // наушниках: раньше нажатие «плей» на гарнитуре не делало ничего.
+  useEffect(() => {
+    const ms = (navigator as any).mediaSession
+    if (!ms || !cur) return
+    try {
+      const art = curArt
+      ms.metadata = new (window as any).MediaMetadata({
+        title: curMeta?.title || cur.name || 'Трек',
+        artist: curMeta?.author || cur.author || 'Ponoi Music',
+        album: 'Ponoi Music',
+        artwork: art ? [{ src: art, sizes: '512x512' }] : [],
+      })
+      ms.playbackState = playing ? 'playing' : 'paused'
+    } catch { /* браузер не умеет — просто не будет системной карточки */ }
+  }, [cur, curMeta, curArt, playing])
+
+  useEffect(() => {
+    const ms = (navigator as any).mediaSession
+    if (!ms?.setActionHandler) return
+    const set = (name: string, fn: (() => void) | null) => {
+      // Не все действия поддерживаются везде: неизвестное имя бросает исключение,
+      // и без try один незнакомый обработчик отменил бы все остальные.
+      try { ms.setActionHandler(name, fn) } catch { /* это действие не умеют */ }
+    }
+    set('play', () => setPlaying(true))
+    set('pause', () => setPlaying(false))
+    set('previoustrack', () => prevRef.current())
+    set('nexttrack', () => nextRef.current())
+    set('stop', () => setPlaying(false))
+    return () => {
+      for (const n of ['play', 'pause', 'previoustrack', 'nexttrack', 'stop']) set(n, null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
@@ -504,6 +543,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     })
   }
   const prev = () => setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
+  // v1.371.0: системные кнопки («предыдущий» на гарнитуре) вешаются один раз, и
+  // без ссылки обработчик держал бы список таким, каким он был на первом рендере
+  // — то есть пустым, и кнопка всегда возвращала бы к первому треку.
+  prevRef.current = prev
   nextRef.current = next
 
   async function addToPlaylist(trackId: string) {
@@ -646,7 +689,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <button title="Предыдущий" onClick={prev} disabled={!tracks.length}><Icon name="skip-back" size={18} /></button>
             <button className="big" onClick={() => setPlaying(p => !p)} disabled={!tracks.length}>{playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}</button>
             <button title="Следующий" onClick={next} disabled={!tracks.length}><Icon name="skip-forward" size={18} /></button>
-            <button className={repeat !== 'off' ? 'on' : ''} title={'Повтор: ' + repeat} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
+            <button className={repeat !== 'off' ? 'on' : ''} title={repeat === 'off' ? 'Повтор выключен' : repeat === 'all' ? 'Повторять весь список' : 'Повторять один трек'} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
           </div>
           <div className="mus2-extra">
             <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
@@ -674,20 +717,57 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
             <button className="mus2-lib-x" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
           </header>
+          {/* v1.371.0: сетка карточек вместо строчек, как на главной Spotify.
+              Кто выложил трек — убрано: в списке из сотни записей это ничего не
+              говорит и только занимает место, а обложка узнаётся мгновенно. */}
           <div className="mus2-lib-body">
-            {tracks.length === 0
-              ? <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
-              : tracks.filter(t => (t.name + ' ' + (t.author || '')).toLowerCase().includes(libQ.toLowerCase())).map(t => {
-                  const i = tracks.indexOf(t)
-                  const art = meta[t.url]?.art || t.art
-                  const author = meta[t.url]?.author || t.author
-                  return <div key={t.id} className="mus2-lib-row" onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>
-                    <span className="mus2-lib-art">{art ? <img src={art} alt="" /> : <Icon name="music" size={15} />}</span>
-                    <span className="mus2-lib-meta"><span className="mus2-lib-t">{meta[t.url]?.title || t.name}</span>{author ? <span className="mus2-lib-a">{author}</span> : null}</span>
-                    {t.dur ? <span className="mus2-lib-d">{fmt(t.dur)}</span> : null}
-                    <span className="mus2-lib-own">{t.owner}</span>
-                  </div>
-                })}
+            {(() => {
+              const q = libQ.trim().toLowerCase()
+              const shown = tracks.filter(t => {
+                if (!q) return true
+                const title = (meta[t.url]?.title || t.name || '').toLowerCase()
+                const author = (meta[t.url]?.author || t.author || '').toLowerCase()
+                return title.includes(q) || author.includes(q)
+              })
+              if (tracks.length === 0) {
+                return <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
+              }
+              if (shown.length === 0) {
+                return <div className="mus2-empty center">Ничего не нашлось по запросу «{libQ.trim()}»</div>
+              }
+              return <>
+                <div className="mus2-lib-count">{shown.length === tracks.length
+                  ? `Треков: ${tracks.length}`
+                  : `Найдено: ${shown.length} из ${tracks.length}`}</div>
+                <div className="mus2-grid">
+                  {shown.map(t => {
+                    const i = tracks.indexOf(t)
+                    const art = meta[t.url]?.art || t.art
+                    const author = meta[t.url]?.author || t.author
+                    const title = meta[t.url]?.title || t.name
+                    const on = i === idx
+                    return (
+                      <div key={t.id} className={'mus2-card' + (on ? ' on' : '')}
+                        title={title + (author ? ' — ' + author : '')}
+                        onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>
+                        <div className="mus2-card-art">
+                          {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={34} />}
+                          {/* Кнопка появляется на наведении и по фокусу — до неё
+                              можно дойти и с клавиатуры, а не только мышью. */}
+                          <button className="mus2-card-play" tabIndex={-1} aria-hidden
+                            onClick={e => { e.stopPropagation(); setIdx(i); setPlaying(true); setShowLib(false) }}>
+                            <Icon name={on && playing ? 'pause' : 'play'} size={18} />
+                          </button>
+                          {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
+                        </div>
+                        <div className="mus2-card-t notr" translate="no">{title}</div>
+                        <div className="mus2-card-a notr" translate="no">{author || '\u00a0'}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            })()}
           </div>
         </div>
       </div>}

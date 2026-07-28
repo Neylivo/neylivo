@@ -5305,3 +5305,71 @@ body.no-anim .mus2::before { animation: none; }
 }
 .mus2-seek:hover input[type="range"]::-webkit-slider-thumb,
 .mus2-seek input[type="range"]:focus::-webkit-slider-thumb { opacity: 1; }
+
+/* ══ Трекотека сеткой, как главная Spotify (v1.371.0) ══════════════════════
+   Раньше это был список строчек, где справа стоял идентификатор того, кто
+   выложил трек, — в сотне записей он ничего не говорит и только занимает место.
+   Обложка узнаётся мгновенно, поэтому карточки. */
+.mus2-lib-count {
+  padding: 2px 4px 12px; color: var(--mut); font-size: 13px;
+}
+.mus2-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.mus2-card {
+  padding: 12px; border-radius: var(--r-lg, 12px); cursor: pointer;
+  background: rgba(var(--ov, 255,255,255), .04);
+  transition: background .18s var(--ease-out4, ease), transform .18s var(--ease-out4, ease);
+  min-width: 0;
+}
+.mus2-card:hover { background: rgba(var(--ov, 255,255,255), .1); }
+.mus2-card.on { background: var(--mus-a-soft, rgba(var(--ov, 255,255,255), .12)); }
+
+.mus2-card-art {
+  position: relative; width: 100%; aspect-ratio: 1 / 1;
+  border-radius: var(--r-md, 10px); overflow: hidden; margin-bottom: 10px;
+  background: var(--bg3); color: var(--mut);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .38);
+}
+.mus2-card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Круглая кнопка выезжает снизу — ровно тот приём, по которому эта сетка и
+   узнаётся. Появляется на наведении, чтобы в покое не мельтешить. */
+.mus2-card-play {
+  position: absolute; right: 8px; bottom: 8px;
+  width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--brand); color: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .18s var(--ease-out4, ease), transform .18s var(--ease-out4, ease);
+}
+.mus2-card:hover .mus2-card-play,
+.mus2-card:focus-within .mus2-card-play { opacity: 1; transform: translateY(0); }
+.mus2-card-play:hover { filter: brightness(1.12); }
+
+/* Длительность — поверх обложки, как метка на карточке, а не отдельным столбцом. */
+.mus2-card-d {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  background: rgba(0, 0, 0, .62); color: #fff;
+}
+
+.mus2-card-t {
+  font-weight: 700; font-size: 14px; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mus2-card-a {
+  color: var(--mut); font-size: 12.5px; margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+body.no-anim .mus2-card, body.no-anim .mus2-card-play { transition: none; }
+
+@media (max-width: 560px) {
+  .mus2-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+  .mus2-card { padding: 9px; }
+  .mus2-card-play { width: 34px; height: 34px; }
+}

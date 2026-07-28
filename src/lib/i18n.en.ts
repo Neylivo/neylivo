@@ -1658,3 +1658,15 @@ Object.assign(DICT_EN, {
 REGEX_EN.push([/^SoundCloud не отдал (\d+) тре\S+ из плейлиста — попробуй добавить плейлист ещё раз, их доберёт$/,
   'SoundCloud did not return $1 track(s) from the playlist — add the playlist again and they will be picked up'])
 REGEX_EN.push([/^Добавлено треков: (\d+)$/, 'Tracks added: $1'])
+
+// v1.371.0: трекотека сеткой и подписи повтора.
+Object.assign(DICT_EN, {
+  'Повтор выключен': 'Repeat off',
+  'Повторять весь список': 'Repeat all',
+  'Повторять один трек': 'Repeat one',
+  'Трекотека пуста. Добавь трек — его увидят все.': 'The library is empty. Add a track — everyone will see it.',
+  'Поиск по названию или исполнителю…': 'Search by title or artist…',
+})
+REGEX_EN.push([/^Треков: (\d+)$/, 'Tracks: $1'])
+REGEX_EN.push([/^Найдено: (\d+) из (\d+)$/, 'Found: $1 of $2'])
+REGEX_EN.push([/^Ничего не нашлось по запросу «(.+)»$/, 'Nothing found for “$1”'])
