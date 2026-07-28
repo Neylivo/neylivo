@@ -3,7 +3,7 @@ import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import {
-  myBots, createBot, setBotWebhook, deleteBot, fetchBotCommands, saveBotCommand, deleteBotCommand,
+  myBots, setBotWebhook, deleteBot, fetchBotCommands, saveBotCommand, deleteBotCommand,
   addBotToServer, removeBotFromServer, setBotProfile, fetchBotProfile, type BotApp, type BotCommand,
 } from '../lib/botApi'
 import { Avatar } from './Avatar'
@@ -22,7 +22,6 @@ import { BUILTIN_BOTS } from '../lib/builtinBots'
 export function DevPortal() {
   const [bots, setBots] = useState<BotApp[]>([])
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
   const [tab, setTab] = useState<'catalog' | 'used' | 'mine'>('catalog')

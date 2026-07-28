@@ -45,13 +45,23 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
     const b = BUILTIN_BOTS.find(x => x.kind === pick)
     if (!b || !server) return
     setBusy('ready')
+    let created: string | null = null
     try {
       const r = await createBot(b.name, b.kind)
+      created = r.id
       await addBotToServer(r.id, server)
       void countInstall('bot', 'builtin:' + b.kind)
       toastOk(`«${b.name}» добавлен на сервер`)
       onDone(); onClose()
-    } catch (e: any) { toastErr(e?.message ?? String(e)) }
+    } catch (e: any) {
+      // Разделяем два разных отказа: не смогли завести бота вообще и завели, но
+      // не поставили (например, нет права «Управление ботами» на этом сервере).
+      // Во втором случае бот уже существует, и молчать об этом нельзя.
+      onDone()
+      toastErr(created
+        ? `Бот «${b.name}» создан, но на сервер не встал: ${e?.message ?? e}. Он в разделе «Используемые» — попробуй добавить из «Настройки сервера → Боты».`
+        : (e?.message ?? String(e)))
+    }
     finally { setBusy('') }
   }
 
@@ -66,22 +76,41 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
     finally { setBusy('') }
   }
 
+  /**
+   * Настройки применяются ПОШАГОВО и независимо.
+   *
+   * Раньше это был один try: если спотыкался, скажем, профиль (а он споткнётся у
+   * всех, пока не применена миграция 91), то команда не заводилась и бот не
+   * вставал на сервер — при том что сам бот уже создан. Человек видел ошибку про
+   * аватарку и не понимал, почему бота нет на сервере. Теперь каждый шаг сам за
+   * себя, а в конце честно перечисляется, что именно не получилось.
+   */
   async function finishOwn() {
     if (!made) return
     setBusy('finish')
-    try {
-      if (webhook.trim()) await setBotWebhook(made.id, webhook.trim())
-      if (avatar.trim() || about.trim()) {
-        await setBotProfile(made.id, { avatarUrl: avatar.trim() || null, about: about.trim(), primary: null, accent: null })
-      }
-      if (cmdName.trim() && cmdDesc.trim()) {
-        await saveBotCommand(made.id, { name: cmdName.trim().toLowerCase(), description: cmdDesc.trim(), options: [] })
-      }
-      if (server) await addBotToServer(made.id, server)
-      toastOk('Бот готов')
-      onDone(); onClose()
-    } catch (e: any) { toastErr(e?.message ?? String(e)) }
-    finally { setBusy('') }
+    const failed: string[] = []
+    const step = async (what: string, fn: () => Promise<unknown>) => {
+      try { await fn() } catch (e: any) { failed.push(what + ': ' + (e?.message ?? String(e))) }
+    }
+
+    if (webhook.trim()) await step('адрес вебхука', () => setBotWebhook(made.id, webhook.trim()))
+    if (avatar.trim() || about.trim()) {
+      await step('внешний вид', () => setBotProfile(made.id, {
+        avatarUrl: avatar.trim() || null, about: about.trim(), primary: null, accent: null,
+      }))
+    }
+    if (cmdName.trim() && cmdDesc.trim()) {
+      await step('команда', () => saveBotCommand(made.id, {
+        name: cmdName.trim().toLowerCase(), description: cmdDesc.trim(), options: [],
+      }))
+    }
+    if (server) await step('добавление на сервер', () => addBotToServer(made.id, server))
+
+    setBusy('')
+    onDone()
+    if (failed.length === 0) { toastOk('Бот готов'); onClose(); return }
+    // Бот создан в любом случае — говорим и это, иначе человек решит, что всё зря.
+    toastErr('Бот создан, но не всё применилось — ' + failed.join('; '))
   }
 
   const copy = (v: string, what: string) => { navigator.clipboard?.writeText(v); toastOk(what + ' скопирован') }
