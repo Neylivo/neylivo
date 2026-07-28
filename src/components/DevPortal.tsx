@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
 import { BotHelp } from './BotHelp'
+import { BUILTIN_BOTS } from '../lib/builtinBots'
 
 // v1.193.0: платформа ботов (Настройки пользователя, раздел «Боты» — до
 // v1.335.0 назывался «Мои приложения»). Токен
@@ -23,9 +24,17 @@ export function DevPortal() {
   const [justCreated, setJustCreated] = useState<{ id: string; token: string; webhookSecret: string } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
+  const [tab, setTab] = useState<'catalog' | 'used' | 'mine'>('catalog')
 
   const load = () => { myBots().then(b => { setBots(b); setLoading(false) }) }
   useEffect(load, [])
+
+  /** Удалить готового бота целиком: он сам заведён нами, чинить в нём нечего. */
+  async function removeReady(b: BotApp) {
+    if (!await confirmUi('Удалить бота «' + b.name + '»? Он пропадёт со всех серверов, куда его добавляли.', { okText: 'Удалить', danger: true })) return
+    try { await deleteBot(b.id); toastOk('Бот удалён'); load() }
+    catch (e: any) { toastErr(e.message ?? String(e)) }
+  }
 
   async function create() {
     const name = newName.trim()
@@ -40,43 +49,97 @@ export function DevPortal() {
     finally { setBusy(false) }
   }
 
+  // Готовые боты «от нас» заводятся под твоей учётной записью, но своими их
+  // считать неправильно: код у них наш. Поэтому «Свои» — те, что ты сделал сам.
+  const own = bots.filter(b => !b.builtin)
+  const ready = bots.filter(b => !!b.builtin)
+
   return (
     <>
       <h2>Боты
         <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
       </h2>
-      <div className="pqs2-desc">Готовые боты и те, что выложили люди. Выбери сервер справа от поиска и добавляй в один клик.</div>
+      <div className="pqs2-desc">Готовые боты работают сразу. Свой — это программа у тебя, которой Ponoi шлёт события.</div>
 
-      {/* v1.335.0: каталог сразу здесь, а не за кнопкой «Каталог ботов» — раньше,
-          чтобы что-то увидеть, надо было открыть окно поверх окна настроек. */}
-      <BotCatalog inline />
+      <div className="sec-tabs">
+        <button className={'sec-tab' + (tab === 'catalog' ? ' on' : '')} onClick={() => setTab('catalog')}>
+          <Icon name="store" size={15} /> Каталог
+        </button>
+        <button className={'sec-tab' + (tab === 'used' ? ' on' : '')} onClick={() => setTab('used')}>
+          <Icon name="check" size={15} /> Используемые
+          {ready.length > 0 && <span className="sec-tab-n">{ready.length}</span>}
+        </button>
+        <button className={'sec-tab' + (tab === 'mine' ? ' on' : '')} onClick={() => setTab('mine')}>
+          <Icon name="code" size={15} /> Свои
+          {own.length > 0 && <span className="sec-tab-n">{own.length}</span>}
+        </button>
+      </div>
 
-      <div className="pqs-sec-t" style={{ marginTop: 22 }}>Мои боты</div>
-      <div className="pqs2-desc">Свой бот получает токен для API и (по желанию) вебхук, куда Ponoi шлёт события сообщений и вызовы слэш-команд.</div>
+      {tab === 'catalog' && <BotCatalog inline />}
 
-      {justCreated && <div className="sset-info" style={{ marginTop: 12 }}>
-        <Icon name="shield" size={16} />
-        <div>
-          <b>Бот создан — токен виден только сейчас, сохрани его.</b>
-          <div className="devp-secret">{justCreated.token}</div>
-          <div className="cset-hint" style={{ marginTop: 6 }}>Заголовок для API-запросов бота: <code>Authorization: Bot {'{токен}'}</code></div>
-          <button className="pqs2-btn ghost" style={{ marginTop: 8 }} onClick={() => setJustCreated(null)}>Понятно, спрятать</button>
+      {tab === 'used' && <>
+        <div className="pqs2-desc" style={{ marginTop: 12 }}>
+          Готовые боты, которых ты добавил из каталога. Они работают без своего сервера — всё
+          считается внутри Ponoi. Убрать бота с конкретного сервера можно в «Настройки сервера → Боты».
         </div>
-      </div>}
+        {loading && <div className="modal-empty">Загрузка…</div>}
+        {!loading && ready.length === 0 && <div className="modal-empty">Пока ни одного. Возьми готового в каталоге.</div>}
+        <div style={{ marginTop: 12 }}>
+          {ready.map(b => (
+            <div key={b.id} className="devp-card">
+              <div className="devp-card-h">
+                <span className="cat-emoji">{BUILTIN_BOTS.find(x => x.kind === b.builtin)?.emoji ?? '🤖'}</span>
+                <b>{b.name}</b>
+                <span className="cat-badge">от Ponoi</span>
+                <button className="pqs2-btn ghost danger" style={{ marginLeft: 'auto' }}
+                  onClick={() => void removeReady(b)}>Удалить</button>
+              </div>
+              <div className="plug-sub">{BUILTIN_BOTS.find(x => x.kind === b.builtin)?.summary ?? ''}</div>
+            </div>
+          ))}
+        </div>
+      </>}
 
-      <div className="modal-inline" style={{ marginTop: 16 }}>
-        <input className="modal-in" placeholder="Название бота" value={newName} onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') create() }} style={{ flex: 1 }} />
-        <button className="modal-primary" disabled={!newName.trim() || busy} onClick={create}>{busy ? 'Создание…' : 'Создать'}</button>
-      </div>
+      {tab === 'mine' && <>
+        {justCreated && <div className="sset-info" style={{ marginTop: 12 }}>
+          <Icon name="shield" size={16} />
+          <div>
+            <b>Бот создан. Токен виден только сейчас — сохрани его.</b>
+            <div className="devp-secret">{justCreated.token}</div>
+            {/* v1.336.0: раньше здесь показывался токен и всё. Что делать дальше,
+                человек не знал — отсюда «непонятно, как создавать ботов». */}
+            <div className="bot-steps">
+              <div className="bot-step"><span>Сохрани токен и секрет вебхука: второй раз их не покажет никто.</span></div>
+              <div className="bot-step"><span>Подними свою программу на адресе https:// и впиши его ниже, в поле Webhook URL.</span></div>
+              <div className="bot-step"><span>Заведи слэш-команды — они появятся в подсказках у людей.</span></div>
+              <div className="bot-step"><span>Добавь бота на сервер: «Настройки сервера → Боты», по ID приложения.</span></div>
+            </div>
+            <div className="modal-inline" style={{ marginTop: 10 }}>
+              <button className="pqs2-btn ghost" onClick={() => setHelp(true)}>Как написать бота</button>
+              <button className="pqs2-btn ghost" onClick={() => setJustCreated(null)}>Спрятать токен</button>
+            </div>
+          </div>
+        </div>}
 
-      {loading && <div className="modal-empty">Загрузка…</div>}
-      {!loading && bots.length === 0 && <div className="cset-hint" style={{ marginTop: 12 }}>Своих ботов пока нет. Готовые из каталога выше заводятся сами — они тоже появятся здесь.</div>}
+        <div className="pqs2-desc" style={{ marginTop: 12 }}>
+          Свой бот — это программа на твоём сервере: Ponoi шлёт ей события и печатает её ответы в чат.
+          Если сервера нет, возьми готового в каталоге — те работают сами.
+        </div>
 
-      <div style={{ marginTop: 16 }}>
-        {bots.map(b => <BotCard key={b.id} bot={b} open={openId === b.id} onToggle={() => setOpenId(v => v === b.id ? null : b.id)}
-          onDeleted={() => { setOpenId(null); load() }} />)}
-      </div>
+        <div className="modal-inline" style={{ marginTop: 12 }}>
+          <input className="modal-in" placeholder="Название бота" value={newName} onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') create() }} style={{ flex: 1 }} />
+          <button className="modal-primary" disabled={!newName.trim() || busy} onClick={create}>{busy ? 'Создание…' : 'Создать'}</button>
+        </div>
+
+        {loading && <div className="modal-empty">Загрузка…</div>}
+        {!loading && own.length === 0 && <div className="modal-empty">Своих ботов пока нет.</div>}
+
+        <div style={{ marginTop: 16 }}>
+          {own.map(b => <BotCard key={b.id} bot={b} open={openId === b.id} onToggle={() => setOpenId(v => v === b.id ? null : b.id)}
+            onDeleted={() => { setOpenId(null); load() }} />)}
+        </div>
+      </>}
 
       {help && <BotHelp onClose={() => setHelp(false)} />}
     </>
@@ -168,6 +231,7 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
   const [appId, setAppId] = useState('')
   const [busy, setBusy] = useState(false)
   const [help, setHelp] = useState(false)
+  const [tab, setTab] = useState<'catalog' | 'used'>('catalog')
 
   const load = () => {
     if (!memberIds.length) { setInstalled([]); return }
@@ -199,22 +263,38 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
       </h2>
       <div className="pqs2-desc">Возьми готового из каталога — или добавь по ID приложения, если бота тебе дали лично.</div>
 
-      <BotCatalog serverId={serverId} onAdded={load} inline />
-
-      <div className="pqs-sec-t" style={{ marginTop: 22 }}>По ID приложения</div>
-      <div className="modal-inline" style={{ marginTop: 8 }}>
-        <input className="modal-in" placeholder="ID приложения бота" value={appId} onChange={e => setAppId(e.target.value)} style={{ flex: 1 }} />
-        <button className="pqs2-btn ghost" disabled={!appId.trim() || busy} onClick={add}>{busy ? 'Добавление…' : 'Добавить по ID'}</button>
+      {/* v1.336.0: две вкладки — что можно взять и что уже стоит. Раньше и то и
+          другое лежало одной лентой, и «кто у меня стоит» приходилось искать
+          под всем каталогом. */}
+      <div className="sec-tabs">
+        <button className={'sec-tab' + (tab === 'catalog' ? ' on' : '')} onClick={() => setTab('catalog')}>
+          <Icon name="store" size={15} /> Каталог
+        </button>
+        <button className={'sec-tab' + (tab === 'used' ? ' on' : '')} onClick={() => setTab('used')}>
+          <Icon name="check" size={15} /> На этом сервере
+          {installed.length > 0 && <span className="sec-tab-n">{installed.length}</span>}
+        </button>
       </div>
-      <div style={{ marginTop: 16 }}>
+
+      {tab === 'catalog' && <>
+        <BotCatalog serverId={serverId} onAdded={load} inline />
+        <div className="pqs-sec-t" style={{ marginTop: 22 }}>По ID приложения</div>
+        <div className="pqs2-desc">Если бота тебе дали лично — вставь сюда его ID.</div>
+        <div className="modal-inline" style={{ marginTop: 8 }}>
+          <input className="modal-in" placeholder="ID приложения бота" value={appId} onChange={e => setAppId(e.target.value)} style={{ flex: 1 }} />
+          <button className="pqs2-btn ghost" disabled={!appId.trim() || busy} onClick={add}>{busy ? 'Добавление…' : 'Добавить по ID'}</button>
+        </div>
+      </>}
+
+      {tab === 'used' && <div style={{ marginTop: 14 }}>
         {installed.map(b => (
           <div key={b.id} className="devp-card-h" style={{ background: 'var(--bg2)', borderRadius: 8, marginBottom: 8 }}>
             <Icon name="code" size={18} /><b>{b.name}</b>
-            <button className="pqs2-btn ghost" style={{ marginLeft: 'auto' }} onClick={() => remove(b)}>Удалить</button>
+            <button className="pqs2-btn ghost" style={{ marginLeft: 'auto' }} onClick={() => remove(b)}>Убрать</button>
           </div>
         ))}
-        {installed.length === 0 && <div className="cset-hint">На сервере пока нет ботов.</div>}
-      </div>
+        {installed.length === 0 && <div className="modal-empty">На сервере пока нет ботов. Возьми готового во вкладке «Каталог».</div>}
+      </div>}
 
       {help && <BotHelp onClose={() => setHelp(false)} />}
     </>

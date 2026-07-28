@@ -10,6 +10,7 @@
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS } from './types'
+import { TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify } from './editorDraft'
 
 let pass = 0, fail = 0
 const ok = (n: string) => { pass++; console.log('OK   ' + n) }
@@ -194,6 +195,70 @@ for (const p of OFFICIAL_PLUGINS) {
     check('плагин, который ничего не зарегистрировал, виден как пустой', () =>
       calls.commands.length === 0 && calls.settingsPages.length === 0 && calls.events.length === 0)
   })()
+
+  // ── Конструктор плагинов ─────────────────────────────────────────────────
+  // Смысл конструктора в том, что человеку не надо знать формат шапки. Значит
+  // шапка, которую он собирает, обязана разбираться, а заготовки — работать.
+  console.log('\n── Конструктор ──')
+  check('имя переводится в пригодный идентификатор', () => {
+    const cases: [string, string][] = [
+      ['Мой плагин', 'moy-plagin'],
+      ['Hello World', 'hello-world'],
+      ['  ---Ёжик!!!  ', 'ezhik'],
+    ]
+    return cases.every(([from, to]) => slugify(from) === to)
+  })
+  check('идентификатор из имени принимается разбором', () => {
+    const d = draftFromTemplate(TEMPLATES[0])
+    d.name = 'Мой первый плагин'
+    d.id = slugify(d.name)
+    const m = parsePlugin(buildFile(d, 'ник'))
+    return m.id === 'moy-pervyy-plagin'
+  })
+
+  for (const t of TEMPLATES) {
+    const d = draftFromTemplate(t)
+    d.name = 'Проба ' + t.key
+    d.id = slugify(d.name)
+    d.description = 'заготовка ' + t.label
+    const file = buildFile(d, 'ник')
+
+    check(`заготовка «${t.label}»: шапка собирается и разбирается`, () => {
+      const m = parsePlugin(file)
+      return m.name === d.name && m.id === d.id && m.author === 'ник'
+        && m.permissions.length === t.permissions.length
+    })
+
+    const { ponoi, calls } = stubPonoi()
+    let ok2 = false
+    try { await loadPlugin(file)(ponoi); ok2 = true } catch (e: any) { bad(`заготовка «${t.label}»: запускается`, e?.message) }
+    if (ok2) {
+      ok(`заготовка «${t.label}»: запускается`)
+      // Заготовка не должна просить прав, которыми не пользуется, и наоборот.
+      if (calls.commands.length) check(`заготовка «${t.label}»: команды объявлены`, () => t.permissions.includes('commands'))
+      if (calls.sent.length) check(`заготовка «${t.label}»: отправка объявлена`, () => t.permissions.includes('messages.write'))
+      if (calls.settingsPages.length) check(`заготовка «${t.label}»: настройки объявлены`, () => t.permissions.includes('settings'))
+      if (calls.css) check(`заготовка «${t.label}»: css объявлен`, () => t.permissions.includes('css'))
+      if (calls.events.includes('message')) check(`заготовка «${t.label}»: чтение сообщений объявлено`, () => t.permissions.includes('messages.read'))
+    }
+  }
+
+  check('готовый плагин разбирается обратно в форму без потерь', () => {
+    const src = OFFICIAL_PLUGINS[0].code
+    const d = draftFrom(src)
+    if (!d) return false
+    const again = parsePlugin(buildFile(d, d ? parsePlugin(src).author : ''))
+    const was = parsePlugin(src)
+    return again.id === was.id && again.name === was.name && again.version === was.version
+      && again.permissions.join(',') === was.permissions.join(',')
+  })
+  check('повторная сборка не приклеивает вторую шапку', () => {
+    const d = draftFrom(OFFICIAL_PLUGINS[0].code)!
+    const twice = buildFile({ ...d, body: buildFile(d, 'ник') }, 'ник')
+    // Блок /** ... */ должен остаться ровно один — иначе поля начали бы
+    // задваиваться, а читался бы всё равно первый.
+    return (twice.match(/\/\*\*/g) ?? []).length === 1
+  })
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

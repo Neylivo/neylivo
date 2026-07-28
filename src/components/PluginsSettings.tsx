@@ -11,6 +11,7 @@ import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '..
 import { PermissionGate } from './PluginPermissionGate'
 import { PluginCatalog } from './PluginCatalog'
 import { PluginHelp } from './PluginHelp'
+import { PluginEditor } from './PluginEditor'
 
 // v1.286.0: раздел «Плагины» в настройках. Плагины ставятся на устройство, поэтому
 // весь список локальный — ни таблицы, ни синхронизации между устройствами.
@@ -70,6 +71,11 @@ export function PluginsSettings() {
   const [open, setOpen] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [help, setHelp] = useState(false)
+  // v1.336.0: три вкладки вместо одной ленты. Каталог, то что уже стоит, и своё —
+  // это три разных дела: чтобы дойти до своих плагинов, раньше надо было
+  // пролистать весь каталог.
+  const [tab, setTab] = useState<'catalog' | 'installed' | 'mine'>('catalog')
+  const [editing, setEditing] = useState<{ id?: string } | null>(null)
   const pages = useSettingsPages()
 
   // Список и состояние запуска меняются не только отсюда (плагин может упасть сам),
@@ -82,6 +88,13 @@ export function PluginsSettings() {
   }, [])
 
   const plugins = loadPlugins()
+  // «Свои» — те, что поставлены не из чата и подписаны твоим именем: собранные
+  // здесь конструктором. Чужой плагин, скачанный из каталога, своим не считается,
+  // даже если ты его правил у себя.
+  const myName = (localStorage.getItem('ponoi_username') || '').trim().toLowerCase()
+  const isMine = (p: { manifest: { author: string }; sourceUserId: string | null }) =>
+    !p.sourceUserId && !!myName && p.manifest.author.trim().toLowerCase() === myName
+  const mine = plugins.filter(isMine)
 
   async function pickFile(f: File | null) {
     if (fileRef.current) fileRef.current.value = ''
@@ -134,20 +147,46 @@ export function PluginsSettings() {
         доступ к твоему аккаунту и файлам у них закрыт. Ставятся на это устройство.
       </div>
 
-      <button className="pqs2-btn ghost" onClick={() => fileRef.current?.click()}>
-        <Icon name="plus" size={16} /> Установить из файла
-      </button>
+      <div className="sec-tabs">
+        <button className={'sec-tab' + (tab === 'catalog' ? ' on' : '')} onClick={() => setTab('catalog')}>
+          <Icon name="store" size={15} /> Каталог
+        </button>
+        <button className={'sec-tab' + (tab === 'installed' ? ' on' : '')} onClick={() => setTab('installed')}>
+          <Icon name="cube" size={15} /> Используемые
+          {plugins.length > 0 && <span className="sec-tab-n">{plugins.length}</span>}
+        </button>
+        <button className={'sec-tab' + (tab === 'mine' ? ' on' : '')} onClick={() => setTab('mine')}>
+          <Icon name="edit" size={15} /> Свои
+          {mine.length > 0 && <span className="sec-tab-n">{mine.length}</span>}
+        </button>
+      </div>
 
-      {/* Каталог прямо здесь: раньше он открывался окном поверх настроек. */}
-      <PluginCatalog inline />
-
-      <div className="pqs-sec-t" style={{ marginTop: 22 }}>Установленные</div>
       <input ref={fileRef} type="file" accept=".ponoi,.js,text/javascript" hidden
         onChange={e => void pickFile(e.target.files?.[0] ?? null)} />
 
-      {plugins.length === 0 && <div className="modal-empty">Пока ни одного плагина.</div>}
+      {tab === 'catalog' && <PluginCatalog inline />}
 
-      {plugins.map(p => {
+      {tab === 'mine' && <>
+        <div className="pqs-optd" style={{ margin: '12px 0' }}>
+          Плагин собирается прямо здесь: форма пишет шапку файла, ты — только код.
+          Готовые заготовки дают рабочий пример с первой секунды.
+        </div>
+        <div className="modal-inline" style={{ gap: 8 }}>
+          <button className="pqs2-btn" onClick={() => setEditing({})}>
+            <Icon name="plus" size={16} /> Создать плагин
+          </button>
+          <button className="pqs2-btn ghost" onClick={() => fileRef.current?.click()}>
+            <Icon name="download" size={16} /> Поставить из файла
+          </button>
+        </div>
+        {mine.length === 0 && <div className="modal-empty">Своих плагинов пока нет.</div>}
+      </>}
+
+      {tab === 'installed' && plugins.length === 0 && (
+        <div className="modal-empty">Ни одного плагина не установлено. Загляни в каталог.</div>
+      )}
+
+      {(tab === 'installed' ? plugins : tab === 'mine' ? mine : []).map(p => {
         const err = pluginError(p.manifest.id)
         const page = pages.find(x => x.pluginId === p.manifest.id)
         const isOpen = open === p.manifest.id
@@ -164,6 +203,11 @@ export function PluginsSettings() {
                 {page && p.enabled && (
                   <button className="pqs2-btn ghost" onClick={() => setOpen(isOpen ? null : p.manifest.id)}>
                     <Icon name="gear" size={15} /> Настройки
+                  </button>
+                )}
+                {isMine(p) && (
+                  <button className="pqs2-btn ghost" title="Изменить код" onClick={() => setEditing({ id: p.manifest.id })}>
+                    <Icon name="edit" size={15} />
                   </button>
                 )}
                 <button className="pqs2-btn ghost danger" title="Удалить" onClick={() => void remove(p.manifest.id, p.manifest.name)}>
@@ -193,6 +237,10 @@ export function PluginsSettings() {
       })}
 
       {help && <PluginHelp onClose={() => setHelp(false)} />}
+      {editing && (
+        <PluginEditor editId={editing.id} onClose={() => setEditing(null)}
+          onSaved={() => { setVer(v => v + 1); setTab('installed') }} />
+      )}
 
       {pending && (
         <PermissionGate

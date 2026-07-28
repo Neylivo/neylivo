@@ -4826,3 +4826,55 @@ body.no-anim .mic-bar { transition: none; transform: none !important; }
 
 .cam-preview { margin-top: 12px; width: 100%; max-width: 320px; border-radius: 10px; background: #000;
   aspect-ratio: 16 / 9; object-fit: cover; transform: scaleX(-1); }
+
+
+/* ── Конструктор плагина (v1.336.0) ───────────────────────────────────────
+   Форма пишет шапку файла, человек пишет только код. Раньше плагин надо было
+   собирать в блокноте и помнить формат — ошибку показывали уже при установке. */
+.ped-modal { width: min(720px, 94vw); max-height: 88vh; }
+.ped-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.ped-tpl { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px;
+  border-radius: 10px; border: 1px solid transparent; background: var(--bg3); color: var(--tx);
+  cursor: pointer; font-size: 12px; text-align: center; }
+.ped-tpl:hover { background: var(--c-hover); }
+.ped-tpl.on { border-color: var(--brand); background: var(--c-hover); }
+.ped-tpl-e { font-size: 20px; line-height: 1; }
+.ped-tpl-l { line-height: 1.25; }
+.ped-row { display: grid; grid-template-columns: 1fr 120px; gap: 10px; }
+.ped-perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.ped-perm { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px;
+  background: var(--bg3); font-size: 12.5px; cursor: pointer; }
+.ped-perm.on { background: var(--c-hover); }
+.ped-perm.warn.on { box-shadow: inset 0 0 0 1px #faa61a; }
+.ped-code { width: 100%; min-height: 220px; resize: vertical; margin-top: 2px; padding: 12px;
+  border-radius: 10px; border: 1px solid var(--c-hover); background: var(--bg3); color: var(--tx);
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55;
+  white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 2; }
+.ped-status { display: flex; align-items: center; gap: 7px; margin-top: 12px; padding: 9px 11px;
+  border-radius: 8px; font-size: 12.5px; background: rgba(59,165,93,.12); color: #3ba55d; }
+.ped-status.bad { background: rgba(237,66,69,.12); color: #ed4245; }
+.ped-foot { display: flex; gap: 8px; }
+.ped-foot .modal-ghost:first-child { margin-right: auto; }
+
+/* ── Вкладки разделов «Плагины» и «Боты» (v1.336.0) ───────────────────────
+   Каталог, то что уже стоит, и своё — три разных дела, и в одной ленте они
+   мешали друг другу: чтобы дойти до своих плагинов, надо было пролистать
+   весь каталог. */
+.sec-tabs { display: flex; gap: 4px; margin: 14px 0 4px; padding: 4px; border-radius: 10px;
+  background: var(--bg3); width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.sec-tab { border: none; background: none; color: var(--mut); cursor: pointer; font-size: 13px;
+  font-weight: 600; padding: 7px 14px; border-radius: 7px; display: flex; align-items: center; gap: 7px; }
+.sec-tab:hover { color: var(--tx); }
+.sec-tab.on { background: var(--bg2); color: var(--tx); }
+.sec-tab-n { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+  background: var(--c-hover); color: var(--mut); }
+.sec-tab.on .sec-tab-n { background: var(--brand); color: #fff; }
+
+/* Шаги «что дальше» после создания бота — иначе токен показан, а что с ним
+   делать, человек не знает. */
+.bot-steps { counter-reset: step; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.bot-step { display: flex; gap: 10px; font-size: 12.5px; line-height: 1.45; }
+.bot-step::before { counter-increment: step; content: counter(step); flex: none; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.bot-step span { color: var(--mut); }

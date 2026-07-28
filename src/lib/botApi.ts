@@ -10,6 +10,8 @@ export interface BotApp {
   avatar_url: string | null
   webhook_url: string | null
   created_at: string
+  /** Вид готового бота «от нас» (v1.333.0); null — обычный бот с вебхуком. */
+  builtin: string | null
 }
 export interface BotCommand { id: string; bot_app_id: string; name: string; description: string; options: { name: string; description: string; required?: boolean }[] }
 
@@ -23,8 +25,11 @@ async function edgeErr(error: any): Promise<string> {
 }
 
 export async function myBots(): Promise<BotApp[]> {
-  const { data } = await supabase.from('bot_apps').select('id, owner_id, bot_user_id, name, avatar_url, webhook_url, created_at').order('created_at')
-  return (data ?? []) as BotApp[]
+  // select('*'), а не перечисление колонок: колонку builtin добавляет миграция 89,
+  // и пока её не применили, запрос со списком колонок падал бы целиком — вместе
+  // со всем разделом ботов. С '*' просто не будет этого поля.
+  const { data } = await supabase.from('bot_apps').select('*').order('created_at')
+  return ((data ?? []) as any[]).map(b => ({ ...b, builtin: b.builtin ?? null })) as BotApp[]
 }
 
 // Возвращает токен и секрет ОДИН раз — дальше они не читаются нигде (хранится только hash).
