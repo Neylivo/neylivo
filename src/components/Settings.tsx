@@ -18,6 +18,7 @@ import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appI
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
+import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint, signOutAndForgetKeys } from '../lib/crypto/keys'
 import { IS_MOBILE } from '../lib/mobile'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
@@ -1049,14 +1050,19 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
 
               {cat === 'voice' && <>
                 <h2>Голос и видео</h2>
-                <div className="pqs2-desc">Громкость микрофона и динамиков в звонках.</div>
+                <div className="pqs2-desc">Устройства, громкости и проверка — можно убедиться, что тебя слышно, никому не звоня.</div>
+
+                <VoiceDevices />
+
                 <Row title="Громкость микрофона" desc={view.micVol + '%'}>
                   <input type="range" min={0} max={100} value={view.micVol} onChange={e => setD('micVol', Number(e.target.value))} />
                 </Row>
                 <Row title="Громкость динамика" desc={view.spkVol + '%'}>
                   <input type="range" min={0} max={100} value={view.spkVol} onChange={e => setD('spkVol', Number(e.target.value))} />
                 </Row>
-                <div className="pqs-note">Выбор устройств и обработка голоса применяются при звонке (LiveKit).</div>
+
+                <MicTest />
+                <CameraTest />
 
                 <div className="pqs-sec-t">Режим ввода</div>
                 <Row title="Голос по нажатию (push-to-talk)" desc="Микрофон говорит, только пока зажата клавиша — вместо обычного вкл/выкл">

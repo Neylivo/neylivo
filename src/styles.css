@@ -4763,3 +4763,27 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .help-tbl code { flex: none; max-width: 46%; background: var(--bg3); border-radius: 5px; padding: 2px 5px;
   font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; word-break: break-word; }
 .help-tbl span { color: var(--mut); }
+
+/* ── Проверка микрофона и камеры (v1.334.0) ───────────────────────────────
+   Полоска из отдельных сегментов, как в Discord: движение видно боковым
+   зрением, а не только если всматриваться. Зелёный до двух третей, жёлтый
+   ближе к краю, красный на самом конце — по цвету сразу понятно, что громко. */
+.mic-test { background: var(--bg2); border-radius: 10px; padding: 14px; margin-top: 14px; }
+.mic-test-h { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.mic-test-h .pqs-optd { margin-top: 2px; }
+
+.mic-bars { display: flex; gap: 3px; margin-top: 12px; height: 12px; align-items: stretch; }
+.mic-bar { flex: 1; border-radius: 2px; background: var(--c-hover); transition: background .06s linear, transform .06s linear; transform-origin: center; }
+.mic-bars.live .mic-bar { background: rgba(var(--ov), .10); }
+.mic-bar.on { background: #3ba55d; transform: scaleY(1.25); }
+.mic-bar.on.warm { background: #faa61a; }
+.mic-bar.on.hot { background: #ed4245; }
+/* Без анимаций (настройка «Анимации») полоска не прыгает — только цвет. */
+body.no-anim .mic-bar { transition: none; transform: none !important; }
+
+.mic-verdict { font-size: 12.5px; color: var(--mut); margin-top: 10px; min-height: 17px; }
+.mic-monitor { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; cursor: pointer; }
+.mic-monitor .mut { color: var(--mut); }
+
+.cam-preview { margin-top: 12px; width: 100%; max-width: 320px; border-radius: 10px; background: #000;
+  aspect-ratio: 16 / 9; object-fit: cover; transform: scaleX(-1); }
