@@ -5458,3 +5458,64 @@ body.no-anim .mus2-card-del { transition: none; }
   display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
   color: var(--mut); font-size: 11.5px; white-space: nowrap;
 }
+
+/* ══ Лобби «слушать вместе» (v1.379.0) ═════════════════════════════════════
+   Прежнее меню было выпадашкой, закрывавшейся от увода мыши, и помещался в неё
+   только код. С кем ты слушаешь — не было видно нигде, и даже дошло ли
+   приглашение, понять было нельзя. */
+.tog-modal { max-width: 420px; }
+.tog-code-box {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px; margin: 14px 0 10px;
+  background: var(--bg3); border-radius: var(--r-lg, 12px);
+}
+.tog-code-lbl { color: var(--mut); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.tog-code {
+  font-size: 30px; font-weight: 800; letter-spacing: .16em;
+  font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--brand);
+  user-select: all;   /* код набирают руками — пусть выделяется одним щелчком */
+}
+.tog-hint { color: var(--mut); font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+.tog-empty {
+  padding: 14px; text-align: center; color: var(--mut); font-size: 13px;
+  background: var(--bg3); border-radius: var(--r-md, 10px);
+}
+.tog-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.tog-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; border-radius: var(--r-sm, 8px);
+}
+.tog-row:hover { background: rgba(var(--ov, 255,255,255), .05); }
+.tog-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.tog-host, .tog-me {
+  flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+}
+.tog-host { background: var(--brand); color: #fff; }
+.tog-me { background: rgba(var(--ov, 255,255,255), .1); color: var(--mut); }
+.tog-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+.mus2-tog.on { color: var(--brand); }
+.mus2-tog-n {
+  margin-left: 5px; padding: 1px 6px; border-radius: 999px;
+  background: var(--brand); color: #fff; font-size: 11px; font-weight: 700;
+}
+
+/* ══ Очередь: аккуратнее и понятнее (v1.379.0) ═════════════════════════════
+   Лента осталась одной строкой, но раньше карточки в ней были просто
+   квадратами: что играет следующим, а что через пять треков, видно не было. */
+.mus2-upnext { padding-top: 4px; scroll-behavior: smooth; }
+.mus2-upnext::-webkit-scrollbar { height: 6px; }
+.mus2-upnext::-webkit-scrollbar-thumb { background: rgba(var(--ov, 255,255,255), .16); border-radius: 3px; }
+.mus2-upnext::-webkit-scrollbar-track { background: transparent; }
+
+/* Первый в ленте — тот, что заиграет сразу: он крупнее и подписан. */
+.mus2-up:first-child .mus2-up-art { width: 86px; height: 86px; }
+.mus2-up:first-child { width: 86px; }
+.mus2-up:first-child .mus2-up-art::after {
+  content: 'следующий'; position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 3px 0; text-align: center; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .82));
+  color: #fff;
+}
+.mus2-up-t { font-weight: 500; }
+.mus2-up:hover .mus2-up-t { color: var(--tx); }

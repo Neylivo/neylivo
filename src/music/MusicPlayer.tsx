@@ -15,6 +15,8 @@ const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
+import { Avatar } from '../components/Avatar'
+import { copyText } from '../lib/copyMedia'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { nextTrack } from './nextTrack'
@@ -61,6 +63,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists)
   const [together, setTogether] = useState<{ code: string; host: boolean } | null>(null)
   const [togetherUi, setTogetherUi] = useState(false)
+  const [lobby, setLobby] = useState<{ id: string; name: string; avatar: string | null; host: boolean }[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const togChan = useRef<any>(null)
@@ -410,9 +413,27 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       const a = audioRef.current
       if (a && typeof payload.t === 'number' && Math.abs(a.currentTime - payload.t) > 2) a.currentTime = payload.t
     })
-    ch.subscribe()
+    // v1.379.0: кто сидит в лобби. Раньше «Вместе» показывало только код — с кем
+    // ты слушаешь и слушает ли кто-то вообще, узнать было нельзя ниоткуда, и
+    // непонятно было даже, дошло ли приглашение.
+    ch.on('presence', { event: 'sync' }, () => {
+      const st = ch.presenceState() as Record<string, any[]>
+      const seen = new Map<string, { id: string; name: string; avatar: string | null; host: boolean }>()
+      for (const arr of Object.values(st)) {
+        for (const m of arr) {
+          if (!m?.id) continue
+          // Один человек может открыть плеер дважды — считаем его одним.
+          seen.set(m.id, { id: m.id, name: m.name ?? 'Гость', avatar: m.avatar ?? null, host: !!m.host })
+        }
+      }
+      setLobby([...seen.values()].sort((a, b) => Number(b.host) - Number(a.host)))
+    })
+    ch.subscribe(st => {
+      if (st !== 'SUBSCRIBED' || !meId) return
+      void ch.track({ id: meId, name: me, avatar: null, host: together.host })
+    })
     togChan.current = ch
-    return () => { supabase.removeChannel(ch); togChan.current = null }
+    return () => { setLobby([]); supabase.removeChannel(ch); togChan.current = null }
   }, [together])
 
   useEffect(() => {
@@ -846,22 +867,70 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
           <div className="mus2-extra">
             <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
-            <div className="mus2-together-wrap">
-              <button className="mus2-tog" onClick={() => setTogetherUi(u => !u)}><Icon name="users" size={15} /> Вместе {together ? '•' : <Icon name="plus" size={13} />}</button>
-              {togetherUi && <div className="mus2-tog-pop" onMouseLeave={() => setTogetherUi(false)}>
-                {together ? <>
-                  <div className="mus2-tog-code">Код: <b>{together.code}</b></div>
-                  <button onClick={() => { navigator.clipboard?.writeText(together.code) }}>Копировать код</button>
-                  <button onClick={() => setTogether(null)}>Выйти</button>
-                </> : <>
-                  <button onClick={startTogether}>Создать сессию</button>
-                  <button onClick={joinTogether}>Войти по коду</button>
-                </>}
-              </div>}
-            </div>
+            <button className={'mus2-tog' + (together ? ' on' : '')} onClick={() => setTogetherUi(true)}>
+              <Icon name="users" size={15} /> Вместе
+              {together && lobby.length > 0 ? <span className="mus2-tog-n">{lobby.length}</span> : null}
+            </button>
           </div>
         </div>
       </footer>
+
+      {/* v1.379.0: «Вместе» — отдельное окно, а не выпадашка на наведении.
+          Прежняя закрывалась, стоило увести мышь, и в ней помещался только код;
+          с кем ты слушаешь — не было видно нигде. */}
+      {togetherUi && <Portal>
+        <div className="modal-overlay" onClick={() => setTogetherUi(false)}>
+          <div className="modal tog-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-x" onClick={() => setTogetherUi(false)}><Icon name="close" size={18} /></button>
+            <div className="modal-title">Слушать вместе</div>
+
+            {together ? <>
+              <div className="tog-code-box">
+                <div className="tog-code-lbl">Код лобби</div>
+                <div className="tog-code notr" translate="no">{together.code}</div>
+                <button className="pqs2-btn" onClick={() => void copyText(together.code, 'Код скопирован')}>
+                  <Icon name="copy" size={15} /> Скопировать
+                </button>
+              </div>
+              <div className="tog-hint">
+                {together.host
+                  ? 'Ты ведущий: что играет у тебя, то играет у всех. Отдай код тому, кого зовёшь.'
+                  : 'Ты слушаешь вместе с ведущим — переключение треков за ним.'}
+              </div>
+
+              <label className="modal-lbl">В лобби{lobby.length > 0 ? ` — ${lobby.length}` : ''}</label>
+              {lobby.length === 0
+                ? <div className="tog-empty">Пока никого. Отдай код — и человек появится здесь.</div>
+                : <div className="tog-list">
+                    {lobby.map(u => (
+                      <div key={u.id} className="tog-row">
+                        <Avatar name={u.name} url={u.avatar} userId={u.id} size={28} />
+                        <span className="tog-nm notr" translate="no">{u.name}</span>
+                        {u.host && <span className="tog-host">ведущий</span>}
+                        {u.id === meId && <span className="tog-me">это ты</span>}
+                      </div>
+                    ))}
+                  </div>}
+
+              <div className="modal-foot">
+                <button className="modal-ghost" onClick={() => setTogetherUi(false)}>Закрыть</button>
+                <button className="modal-primary danger" onClick={() => { setTogether(null); setTogetherUi(false) }}>Выйти из лобби</button>
+              </div>
+            </> : <>
+              <div className="tog-hint">
+                Один человек включает музыку, остальные слышат то же и тогда же.
+                Треки берутся из трекотеки — она общая, так что у всех они есть.
+              </div>
+              <div className="modal-foot tog-foot">
+                <button className="modal-primary" onClick={() => { startTogether(); }}>
+                  <Icon name="plus" size={15} /> Создать лобби
+                </button>
+                <button className="modal-ghost" onClick={() => { void joinTogether() }}>Войти по коду</button>
+              </div>
+            </>}
+          </div>
+        </div>
+      </Portal>}
 
       {/* v1.374.0: трекотека — отдельное меню поверх приложения, а не выдвижная
           часть плеера. Это разные дела: плеер отвечает «что играет», трекотека —

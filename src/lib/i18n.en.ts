@@ -1705,3 +1705,26 @@ REGEX_EN.push([/^Трекотека · (\d+)$/, 'Library · $1'])
 
 // v1.377.0: прослушивания.
 Object.assign(DICT_EN, { 'Прослушиваний': 'Plays' })
+
+// v1.379.0: лобби «слушать вместе».
+Object.assign(DICT_EN, {
+  'Слушать вместе': 'Listen together',
+  'Код лобби': 'Lobby code',
+  'Скопировать': 'Copy',
+  'Код скопирован': 'Code copied',
+  'Создать лобби': 'Create a lobby',
+  'Войти по коду': 'Join with a code',
+  'Выйти из лобби': 'Leave the lobby',
+  'ведущий': 'host',
+  'это ты': 'you',
+  'следующий': 'next',
+  'Пока никого. Отдай код — и человек появится здесь.':
+    'Nobody yet. Share the code and they will show up here.',
+  'Ты ведущий: что играет у тебя, то играет у всех. Отдай код тому, кого зовёшь.':
+    'You are the host: whatever plays for you plays for everyone. Share the code with whoever you invite.',
+  'Ты слушаешь вместе с ведущим — переключение треков за ним.':
+    'You are listening with the host — they control the track.',
+  'Один человек включает музыку, остальные слышат то же и тогда же. Треки берутся из трекотеки — она общая, так что у всех они есть.':
+    'One person plays the music, everyone else hears the same thing at the same time. Tracks come from the shared library, so everyone has them.',
+})
+REGEX_EN.push([/^В лобби — (\d+)$/, 'In the lobby — $1'])
