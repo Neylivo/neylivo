@@ -51,15 +51,17 @@ export async function onLoad(ponoi) {
       key: 'default',
       label: 'Голос по умолчанию',
       description: 'Включается сам при входе в звонок',
-      value: (await ponoi.storage.get('default')) || 'none',
+      value: await ponoi.voice.current(),
       options: list.map(e => ({ value: e.id, label: e.label })),
     }],
   })
 
   ponoi.on('settings', async (e) => {
     if (e.key !== 'default') return
-    const ok = await ponoi.voice.setEffect(e.value)
-    if (ok) ponoi.notify('Голос переключён')
+    // setEffect запоминает выбор сам — он же станет голосом следующего звонка.
+    const now = await ponoi.voice.setEffect(e.value)
+    const label = (list.find(x => x.id === e.value) || {}).label || e.value
+    ponoi.notify(now ? 'Голос: ' + label : 'Голос ' + label + ' включится со следующего звонка')
   })
 }
 `

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './icons'
 
 // Список устройств берём напрямую у браузера, а НЕ через getLocalDevices из
@@ -60,17 +60,39 @@ function DevicePicker({ kind, label, hint }: { kind: 'mic' | 'cam'; label: strin
 export function MicTest() {
   const [on, setOn] = useState(false)
   const [monitor, setMonitor] = useState(false)
-  // Состояние — только число зажжённых сегментов: перерисовывать React 60 раз в
-  // секунду ради дробного числа незачем, глазу видно ровно сегменты.
-  const [lit, setLit] = useState(0)
-  const [peak, setPeak] = useState(0)        // самый громкий момент за проверку
+  // v1.337.0: полоска рисуется НЕ через состояние React.
+  //
+  // Раньше каждый кадр вызывался setState, и React перерисовывал два десятка
+  // узлов по шестьдесят раз в секунду — на слабой машине это заметно подтормаживало
+  // всю страницу настроек. Теперь сегменты создаются один раз и дальше меняются
+  // прямой записью класса, и только те, что действительно поменялись: обычно это
+  // один-два узла за кадр вместо двадцати двух.
+  const [peak, setPeak] = useState(0)        // самый громкий момент — для подписи, редко
   const peakRef = useRef(0)
   const [err, setErr] = useState<string | null>(null)
 
+  const barRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const litRef = useRef(0)
   const streamRef = useRef<MediaStream | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
   const monitorRef = useRef<GainNode | null>(null)
   const rafRef = useRef(0)
+
+  /** Зажечь ровно n сегментов, тронув только изменившиеся. */
+  function paint(n: number) {
+    const prev = litRef.current
+    if (n === prev) return
+    const from = Math.min(prev, n), to = Math.max(prev, n)
+    for (let i = from; i < to; i++) barRefs.current[i]?.classList.toggle('on', i < n)
+    litRef.current = n
+  }
+
+  // Сегменты создаются один раз и больше React'ом не трогаются: элементы стабильны,
+  // поэтому перерисовка из-за подписи не сбрасывает то, что мы написали в DOM.
+  const bars = useMemo(() => Array.from({ length: BARS }, (_, i) => (
+    <span key={i} ref={el => { barRefs.current[i] = el }}
+      className={'mic-bar' + (i > BARS * 0.82 ? ' hot' : i > BARS * 0.6 ? ' warm' : '')} />
+  )), [])
 
   // Останавливаем всё при уходе со страницы: иначе микрофон остался бы
   // захваченным, и в системе продолжал бы гореть значок записи.
@@ -84,7 +106,7 @@ export function MicTest() {
     streamRef.current = null
     ctxRef.current?.close().catch(() => {})
     ctxRef.current = null
-    setLit(0)
+    paint(0)
     setOn(false)
   }
 
@@ -102,7 +124,9 @@ export function MicTest() {
       ctxRef.current = ctx
       const src = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
-      analyser.fftSize = 1024
+      // 512 вместо 1024: для громкости этого с запасом, а работы на кадр вдвое
+      // меньше. Сглаживание оставляем самому анализатору.
+      analyser.fftSize = 512
       analyser.smoothingTimeConstant = 0.6
       src.connect(analyser)
 
@@ -120,7 +144,13 @@ export function MicTest() {
       let shown = 0
       setPeak(0); peakRef.current = 0
       let lastPeakPush = 0
-      const tick = () => {
+      let lastFrame = 0
+      const tick = (now: number) => {
+        rafRef.current = requestAnimationFrame(tick)
+        // Считаем не чаще ~33 раз в секунду: глаз разницы с шестьюдесятью не
+        // видит, а половина работы уходит.
+        if (now - lastFrame < 30) return
+        lastFrame = now
         analyser.getFloatTimeDomainData(buf)
         // Среднеквадратичное — оно ближе к тому, что человек считает громкостью,
         // чем «самый большой отсчёт»: одиночный щелчок не растягивает полоску.
@@ -135,14 +165,15 @@ export function MicTest() {
         const v = rms <= 0 ? 0 : Math.max(0, Math.min(1, (20 * Math.log10(rms) + 60) / 60))
         // Вверх — сразу, вниз — плавно: так полоска не дёргается на паузах между
         // словами и при этом честно показывает момент, когда ты заговорил.
-        shown = v > shown ? v : shown * 0.86 + v * 0.14
-        setLit(prev => { const n = Math.round(shown * BARS); return n === prev ? prev : n })
+        shown = v > shown ? v : shown * 0.78 + v * 0.22
+        paint(Math.round(shown * BARS))
         if (v > peakRef.current) peakRef.current = v
         // Подпись под полоской меняется редко — обновляем её пару раз в секунду,
-        // а не каждый кадр.
-        const now = performance.now()
-        if (now - lastPeakPush > 400) { lastPeakPush = now; setPeak(peakRef.current) }
-        rafRef.current = requestAnimationFrame(tick)
+        // а не каждый кадр. Это единственный setState во всём цикле.
+        if (now - lastPeakPush > 500) {
+          lastPeakPush = now
+          setPeak(p => (Math.abs(p - peakRef.current) < 0.02 ? p : peakRef.current))
+        }
       }
       rafRef.current = requestAnimationFrame(tick)
       setOn(true)
@@ -180,11 +211,8 @@ export function MicTest() {
         </button>
       </div>
 
-      <div className={'mic-bars' + (on ? ' live' : '')} role="img"
-        aria-label={`Уровень сигнала: ${Math.round((lit / BARS) * 100)}%`}>
-        {Array.from({ length: BARS }, (_, i) => (
-          <span key={i} className={'mic-bar' + (i < lit ? ' on' : '') + (i > BARS * 0.82 ? ' hot' : i > BARS * 0.6 ? ' warm' : '')} />
-        ))}
+      <div className={'mic-bars' + (on ? ' live' : '')} role="img" aria-label="Уровень сигнала с микрофона">
+        {bars}
       </div>
 
       {verdict && <div className="mic-verdict">{verdict}</div>}

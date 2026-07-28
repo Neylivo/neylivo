@@ -4812,13 +4812,16 @@ body.no-anim .cat-tile:hover { transform: none; }
 .mic-test-h .pqs-optd { margin-top: 2px; }
 
 .mic-bars { display: flex; gap: 3px; margin-top: 12px; height: 12px; align-items: stretch; }
-.mic-bar { flex: 1; border-radius: 2px; background: var(--c-hover); transition: background .06s linear, transform .06s linear; transform-origin: center; }
-.mic-bars.live .mic-bar { background: rgba(var(--ov), .10); }
-.mic-bar.on { background: #3ba55d; transform: scaleY(1.25); }
-.mic-bar.on.warm { background: #faa61a; }
-.mic-bar.on.hot { background: #ed4245; }
-/* Без анимаций (настройка «Анимации») полоска не прыгает — только цвет. */
-body.no-anim .mic-bar { transition: none; transform: none !important; }
+/* v1.337.0: анимируется только цвет и только через background-color. Раньше в
+   переходе участвовал ещё и transform, и сокращение background целиком — на
+   двух десятках сегментов это давало заметные подтормаживания. */
+.mic-bar { flex: 1; border-radius: 2px; background-color: var(--c-hover); transition: background-color .08s linear; }
+.mic-bars.live .mic-bar { background-color: rgba(var(--ov), .10); }
+.mic-bar.on { background-color: #3ba55d; }
+.mic-bar.on.warm { background-color: #faa61a; }
+.mic-bar.on.hot { background-color: #ed4245; }
+/* Без анимаций (настройка «Анимации») цвет меняется мгновенно. */
+body.no-anim .mic-bar { transition: none; }
 
 .mic-verdict { font-size: 12.5px; color: var(--mut); margin-top: 10px; min-height: 17px; }
 .mic-monitor { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; cursor: pointer; }

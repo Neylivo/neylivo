@@ -3,7 +3,7 @@ import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
-import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage } from '../lib/plugins/store'
+import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
@@ -21,7 +21,15 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
   // Значение, которое видно человеку, держим локально: плагин присылает строки один
   // раз при регистрации и не обязан перерисовывать их на каждое нажатие.
   const [local, setLocal] = useState<Record<string, unknown>>({})
-  const valueOf = (r: SettingsRow & { value?: unknown }) => (r.key in local ? local[r.key] : r.value)
+  // v1.337.0: раньше запасным значением было r.value — то, что плагин прислал ОДИН
+  // РАЗ при своей загрузке. Выбор сохранялся в хранилище плагина честно, но стоило
+  // закрыть и открыть настройки заново, как строка снова показывала старое:
+  // выглядело это ровно как «не сохраняется». Читаем текущее из хранилища.
+  const valueOf = (r: SettingsRow & { value?: unknown }) => {
+    if (r.key in local) return local[r.key]
+    const saved = readStorage(pluginId, r.key)
+    return saved === undefined ? r.value : saved
+  }
 
   function change(key: string, value: unknown) {
     setLocal(v => ({ ...v, [key]: value }))

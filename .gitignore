@@ -14,3 +14,4 @@ android/captures
 *.apk
 dist-crypto-test/
 dist-plugin-test/
+dist-settings-test/

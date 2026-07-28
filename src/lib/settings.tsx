@@ -4,14 +4,20 @@ import { applyLang } from './i18n'
 import { applyAppIcon, DEFAULT_APP_ICON } from './appIcon'
 import { getUserPrefs, patchUserPrefs } from './userPrefs'
 import { customNickFamily } from './profilePrefs'
+// v1.337.0: сами данные и их запись/чтение — в settingsStore.ts. Там же они и
+// проверяются (npm run test:settings): «сохраняется ли настройка» невозможно
+// проверить, пока это перемешано с React-провайдером.
+import {
+  DEFAULTS, DEFAULT_CUSTOM, ACCOUNT_KEYS, isAccountKey, loadSettings, saveSettings,
+  type Settings, type CustomTheme,
+} from './settingsStore'
+export { DEFAULTS, DEFAULT_CUSTOM } from './settingsStore'
+export type { Settings, CustomTheme } from './settingsStore'
 
 // Account-level переключатели (уведомления, кто может писать в ЛС, сбор данных) —
 // синхронизируются через user_prefs (миграция 39), а не только на этом устройстве.
 // Остальные поля Settings (тема, зум, шрифт, хоткеи, громкость...) — про это устройство,
 // остаются в localStorage.
-const ACCOUNT_KEYS = ['notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests', 'hideLastSeen', 'defaultServerNotif'] as const
-type AccountKey = typeof ACCOUNT_KEYS[number]
-function isAccountKey(k: string): k is AccountKey { return (ACCOUNT_KEYS as readonly string[]).includes(k) }
 function withAccount(s: Settings): Settings {
   const acc = getUserPrefs().account
   const next = { ...s }
@@ -19,99 +25,6 @@ function withAccount(s: Settings): Settings {
   return next
 }
 
-export interface CustomTheme {
-  dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string
-  dim: number       // texture dim 0..100 (reserved for texture backgrounds)
-  on: boolean       // whether custom theme overrides the preset
-}
-
-export interface Settings {
-  theme: string       // preset key (see THEMES)
-  accent: string
-  custom: CustomTheme
-  compact: boolean
-  fontPx: number      // 12 .. 20 (px)
-  zoom: number        // 70 .. 130 (%)
-  animations: boolean
-  autoTheme: boolean   // автосмена темы по времени суток (по умолчанию выключена)
-  // v1.309.0: следовать системной теме. Телефон и Windows уже знают, светло сейчас
-  // или темно, — и знают точнее, чем расписание «с 8 до 20»: у человека может быть
-  // ночная смена или тёмная тема круглосуточно. Идёт отдельным флагом, а не
-  // значением autoTheme, чтобы не ломать уже настроенное у тех, кто пользуется
-  // сменой по времени.
-  systemTheme: boolean
-  notifSystem: boolean
-  notifSounds: boolean
-  mentionsOnly: boolean
-  unreadBadge: boolean
-  // v1.269.0: кружок с числом заявок в друзья рядом с кнопкой «Друзья» — можно
-  // выключить отдельно от остальных уведомлений (тем, кому кидают сотни заявок,
-  // бесконечный кружок надоедает). Заявки/их приём/отклонение работают как обычно —
-  // тумблер только прячет сам индикатор.
-  notifFriendRequests: boolean
-  micVol: number
-  spkVol: number
-  lang: string
-  // v1.230.0: dmAll/dmMembers жили тут, но никогда никак не проверялись — чисто
-  // декоративные тумблеры. Настоящая приватность ЛС/звонков переехала в
-  // ProfilePrefs (dmMessagePrivacy/dmCallPrivacy, публичные profiles.*), т.к.
-  // проверять её нужно и другим людям (RLS/Edge Function), не только владельцу.
-  // v1.304.0: dataCollect убран. Тумблер «Сбор данных об использовании» был
-  // включён по умолчанию и обещал сбор, которого нет: ни аналитики, ни телеметрии
-  // в приложении не было никогда. Проверялся он, как и прежние декоративные
-  // настройки приватности, нигде. Для приложения, которое ничего о человеке не
-  // собирает, такая кнопка — не просто мусор, а ложь в свою же сторону.
-  //
-  // v1.307.0: скрытие активности убрано. Что человек слушает и во что играет —
-  // социальная функция, и видна она только тем, кто и так видит его в приложении:
-  // сверх этого она об анонимности ничего не говорит. Прятать её отдельной
-  // настройкой значило бы разменивать заметную часть смысла приложения на защиту,
-  // которой в этом месте и не требовалось.
-  /** Не отмечать «был в сети». */
-  hideLastSeen: boolean
-  // v1.295.0: сквозное шифрование личных сообщений. По умолчанию включено —
-  // защита, которую надо не забыть включить, защищает только тех, кто про неё знал.
-  e2ee: boolean
-  // v1.304.0: шифрование самого разговора. По умолчанию ВКЛЮЧЕНО: защита, которую
-  // надо не забыть включить, защищает только тех, кто про неё знал.
-  // Побочный эффект перехода: если у собеседника версия старше v1.303.0, он не
-  // поймёт присланный ключ и не услышит звук — обеим сторонам нужно обновиться.
-  // Когда ключ передать не удалось вовсе, звонок честно идёт без шифрования.
-  e2eeCalls: boolean
-  devmode: boolean
-  actOn: boolean
-  actText: string
-  sbKey: string   // in-call: save last 15s of the conversation
-  fontFamily: string   // '' = system
-  fontFamilyUrl: string   // v1.166.0: свой файл шрифта интерфейса (.ttf/.otf/.woff/.woff2), '' = использовать fontFamily
-  radius: number       // UI corner radius px
-  msgGap: number       // extra gap between messages px
-  time24: boolean      // 24h vs 12h clock
-  showAvatars: boolean
-  groupMessages: boolean
-  bigEmoji: boolean    // render emoji-only messages large
-  otherFonts: boolean  // v1.112.0: показывать шрифты ника/сообщений других пользователей в чате
-  sendKey: 'enter' | 'ctrl'
-  keyMusic: string
-  keyHome: string
-  appIcon: string   // v1.160.0: свой логотип приложения — data URL загруженного файла, '' = стандартный
-  // v1.246.0: голос по нажатию (push-to-talk) — как в Discord. pttMode выключен по
-  // умолчанию (обычное вкл/выкл микрофона); keyPTT — клавиша, локальная настройка
-  // устройства (разная клавиатура/раскладка на разных устройствах), не синхронизируется.
-  pttMode: boolean
-  keyPTT: string
-  // v1.246.0: режим уведомлений по умолчанию для серверов, на которых явно ничего
-  // не выбирали (см. notifModeOf в src/lib/srvNotify.ts) — синхронная account-настройка,
-  // чтобы новый сервер сразу открывался с привычным режимом на любом устройстве.
-  defaultServerNotif: 'all' | 'mentions' | 'mute'
-  // v1.278.0: стиль поля ввода сообщения — плоский флэт по умолчанию выглядел
-  // «криво»/бедно на некоторых темах (просто чуть светлее фона, без глубины).
-  // Готовые пресеты + доступ к «своему» через акцентный цвет (уже есть в теме).
-  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
-}
-
-// 10 named theme presets. Each overrides the core design tokens; the app aliases
-// (--bg/--bg2/--bg3/--brand) derive from these automatically.
 export interface ThemeDef { key: string; name: string; dark: string; main: string; panel: string; content: string; hover: string; active: string; accent: string; tx: string; mut: string }
 
 // v1.296.0: светлая ли тема — по воспринимаемой яркости основного фона. Формула
@@ -139,23 +52,6 @@ export const THEMES: ThemeDef[] = [
   { key:'cosmos',   name:'Космос',   dark:'#0d0f1e', main:'#111427', panel:'#181c33', content:'#1c213d', hover:'#262c4d', active:'#212642', accent:'#5865f2', tx:'#dbdee8', mut:'#8f93b0' },
 ]
 
-export const DEFAULT_CUSTOM: CustomTheme = {
-  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', dim:35, on:false,
-}
-
-export const DEFAULTS: Settings = {
-  theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
-  notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
-  micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
-  e2ee: true, e2eeCalls: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
-  fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
-  sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
-  appIcon: DEFAULT_APP_ICON,
-  pttMode: false, keyPTT: '',
-  defaultServerNotif: 'all',
-  composerStyle: 'default',
-}
-
 const ACCENTS = ['#5865f2', '#eb459e', '#3ba55d', '#faa61a', '#ed4245', '#9b59b6', '#1abc9c', '#e67e22']
 
 interface SettingsCtx {
@@ -168,28 +64,10 @@ interface SettingsCtx {
 const Ctx = createContext<SettingsCtx>({ settings: DEFAULTS, set: () => {}, setCustom: () => {}, accents: ACCENTS, themes: THEMES })
 
 function load(): Settings {
-  try {
-    const raw = localStorage.getItem('ponoi_settings')
-    if (raw) {
-      const p = JSON.parse(raw)
-      const s = { ...DEFAULTS, ...p, custom: { ...DEFAULT_CUSTOM, ...(p.custom ?? {}) } }
-      // v1.62.0: одноразовая миграция — сбор данных включён по умолчанию
-      if (!localStorage.getItem('ponoi_mig_162')) {
-        localStorage.setItem('ponoi_mig_162', '1')
-        localStorage.setItem('ponoi_settings', JSON.stringify(s))
-      }
-      return withAccount(s)
-    }
-    localStorage.setItem('ponoi_mig_162', '1')
-  } catch {}
-  const s = { ...DEFAULTS }
-  // v1.167.0: первый запуск, языка ещё нигде не сохранено — угадываем по языку
-  // ОС/браузера, а не жёстко на русский. Не трогает тех, у кого lang уже сохранён.
-  const lang = localStorage.getItem('ponoi_lang')
-  if (lang) s.lang = lang
-  else if (typeof navigator !== 'undefined' && !/^ru/i.test(navigator.language || '')) s.lang = 'en'
-  const zoom = localStorage.getItem('ponoi_zoom'); if (zoom) s.zoom = Number(zoom)
-  return withAccount(s)
+  // Пометка из v1.62.0 сохраняется: по ней отличается «человек уже пользовался
+  // приложением» от первого запуска.
+  try { if (!localStorage.getItem('ponoi_mig_162')) localStorage.setItem('ponoi_mig_162', '1') } catch {}
+  return withAccount(loadSettings())
 }
 
 function apply(s: Settings) {
@@ -290,7 +168,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     window.addEventListener('ponoi-uprefs', onSync)
     return () => window.removeEventListener('ponoi-uprefs', onSync)
   }, [])
-  function persist(next: Settings) { localStorage.setItem('ponoi_settings', JSON.stringify(next)); return next }
+  const persist = (next: Settings) => saveSettings(next)
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
     setSettings(prev => persist({ ...prev, [k]: v }))
     if (isAccountKey(k as string)) patchUserPrefs({ account: { ...getUserPrefs().account, [k]: v } })

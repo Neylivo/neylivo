@@ -86,7 +86,15 @@ export function patchUserPrefs(patch: Partial<UserPrefsRow>) {
     if (!error) return
     window.setTimeout(() => {
       supabase.from('user_prefs').upsert({ user_id: save, ...patch, updated_at: new Date().toISOString() }).then(({ error: e2 }) => {
-        if (e2) console.error('patchUserPrefs: не удалось сохранить (повтор тоже не помог)', e2.message, patch)
+        if (!e2) return
+        console.error('patchUserPrefs: не удалось сохранить (повтор тоже не помог)', e2.message, patch)
+        // v1.337.0: раньше отказ уходил только в консоль. Настройка при этом
+        // оставалась применённой на этом устройстве, но на сервер не попадала —
+        // и следующая синхронизация возвращала старое значение. Со стороны это
+        // выглядело ровно как «настройка не сохраняется», и понять причину было
+        // неоткуда. Говорим прямо, один раз на попытку.
+        void import('./toast').then(t => t.toastErr(
+          'Настройка не сохранилась на сервере — на этом устройстве применена, но на других может остаться прежней.'))
       })
     }, 2000)
   })

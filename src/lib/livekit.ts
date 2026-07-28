@@ -1,7 +1,8 @@
 import type { Room, LocalTrackPublication } from 'livekit-client'
 import { supabase } from './supabase'
 import { getSettings } from './settings'
-import { VoiceChain, setActiveChain, savedVoiceEffect, type VoiceEffect } from './voiceFx'
+import { setActiveChain, savedVoiceEffect, type VoiceEffect } from './voiceFx'
+import { VoiceChain } from './voiceFxChain'
 import { RoomEvent, Track, verifyLivekitConstants } from './livekitConst'
 
 // v1.288.0: livekit-client грузится ТОЛЬКО при входе в звонок.

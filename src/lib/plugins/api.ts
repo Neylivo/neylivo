@@ -5,7 +5,7 @@ import {
   setPluginCss, setSettingsPage, type SettingsRow,
 } from './registry'
 import { readStorage, writeStorage, deleteStorage } from './store'
-import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect } from '../voiceFx'
+import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
 
 // v1.286.0: хостовая реализация всего, что плагин может вызвать. Единственное место,
 // где решается «можно или нельзя»: в самой песочнице (bootstrap.ts) никаких проверок
@@ -156,6 +156,11 @@ export function createDispatcher(
         need('voice')
         const raw = String(args[0] ?? 'none')
         if (!isVoiceEffect(raw)) throw new Denied(`Неизвестный эффект голоса «${str(raw, 30, 'эффект')}».`)
+        // v1.337.0: выбор запоминается ВСЕГДА, даже когда звонка сейчас нет.
+        // Раньше плагин мог выставить «голос по умолчанию», это никуда не
+        // записывалось, и следующий звонок начинался с прежнего голоса —
+        // настройка выглядела нерабочей.
+        rememberVoiceEffect(raw)
         // false — звонка сейчас нет; это не ошибка плагина, поэтому возвращаем
         // ответ, а не исключение: пусть сам решит, ругаться или промолчать.
         return setVoiceEffect(raw)
@@ -166,7 +171,9 @@ export function createDispatcher(
       }
       case 'voice.current': {
         need('voice')
-        return activeEffect()
+        // Вне звонка активной цепочки нет — отвечаем сохранённым выбором, иначе
+        // плагин всегда видел бы «Обычный» и рисовал бы неверную настройку.
+        return activeEffect() !== 'none' ? activeEffect() : savedVoiceEffect()
       }
 
       case 'notify': {
