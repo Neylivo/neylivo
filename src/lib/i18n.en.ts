@@ -1627,3 +1627,9 @@ Object.assign(DICT_EN, {
   'При выходе с этого устройства стираются ключи шифрования личных сообщений. Переписка останется у собеседника, но здесь после входа прежние сообщения прочитать уже не выйдет.':
     'Logging out wipes the direct-message encryption keys on this device. Your chat partner keeps their copy, but after logging back in here the older messages will no longer be readable.',
 })
+
+// v1.364.0: смотреть чужую демонстрацию из списка голосового канала.
+Object.assign(DICT_EN, {
+  'Нажмите ещё раз — открыть канал': 'Click again to open the channel',
+})
+REGEX_EN.push([/^Смотреть демонстрацию (.+)$/, 'Watch $1’s screen share'])

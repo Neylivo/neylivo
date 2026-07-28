@@ -5192,3 +5192,9 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
   margin: 6px 0 14px; color: var(--mut); font-size: 13px; line-height: 1.55;
 }
 .so-err { color: #ed4245; font-size: 13px; margin-top: 8px; }
+
+/* ── Кто в эфире — по нему можно нажать (v1.364.0) ────────────────────────
+   Раньше «В ЭФИРЕ» было просто надписью, и добраться до чужой демонстрации
+   было нечем. Курсор и подсветка говорят, что строка живая. */
+.vo-watch { cursor: pointer; border-radius: var(--r-sm, 6px); }
+.vo-watch:hover { background: rgba(var(--ov, 255,255,255), .08); }

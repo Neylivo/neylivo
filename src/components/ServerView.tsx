@@ -849,7 +849,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   // Вход в голосовой канал (v1.30.0, как в Discord): никакого экрана звонка —
   // просто подключаемся, появляемся под каналом у всех и в панели над профилем.
-  async function joinVoice(c: Channel) {
+  //
+  // v1.364.0: так и было написано, но код делал ровно наоборот — вход открывал
+  // экран звонка на всю ширину, и человека выбрасывало из переписки, которую он
+  // читал. Экран звонка теперь открывается только там, где его правда просят:
+  //   • повторный клик по каналу, в котором ты уже сидишь (строка ниже);
+  //   • клик по тому, кто в эфире, — то есть «хочу смотреть».
+  //
+  // Аргумент show нужен второму случаю: он и подключает, и открывает разом.
+  async function joinVoice(c: Channel, show = false) {
     if (!user) return
     if (voice?.ch.id === c.id) { setVoicePanel(true); closeMobNav(); return }   // v1.133.0: как в Discord — клик по своему каналу снова открывает его вид
     // v1.332.0: «Лимит пользователей» в настройках канала сохранялся и не читался
@@ -870,7 +878,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     setVoice(null)
     setConnecting(c)
     setSpeaking({})
-    setVoicePanel(true)
+    setVoicePanel(show)
     closeMobNav()
     voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null, live: false })
     try {
@@ -1337,7 +1345,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
                   </span>
                 </div>
                 {(voiceUsers[c.id] ?? []).map(u => (
-                  <div key={u.userId} className={'vo' + (speaking[u.userId] ? ' speaking' : '')} title={u.username}>
+                  // v1.364.0: по тому, кто в эфире, теперь можно нажать — это и есть
+                  // «посмотреть стрим»: подключаемся к каналу и открываем экран
+                  // звонка. Раньше надпись «В ЭФИРЕ» была просто надписью, и
+                  // добраться до чужой демонстрации было нечем.
+                  <div key={u.userId}
+                    className={'vo' + (speaking[u.userId] ? ' speaking' : '') + (u.live ? ' vo-watch' : '')}
+                    title={u.live ? 'Смотреть демонстрацию ' + u.username : u.username}
+                    onClick={u.live ? (e => { e.stopPropagation(); void joinVoice(c, true) }) : undefined}>
                     <span className="vo-av"><Avatar name={u.username} url={u.avatar} userId={u.userId} size={20} /></span>
                     <span className="vo-nm">{u.username}</span>
                     {u.live && <span className="vo-live">В ЭФИРЕ</span>}
