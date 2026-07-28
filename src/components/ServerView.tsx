@@ -9,6 +9,7 @@ import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { Avatar } from './Avatar'
+import { isKnownBot } from '../lib/botTag'
 import { usePresence } from '../lib/presence'
 import { notifyMessage, msgSound, uiChime, closeNotif } from '../lib/notify'
 import { mentionsUser, mentionsRoleName, mentionsHere } from '../lib/md'
@@ -1651,9 +1652,14 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             const targetOwner = rolePop.userId === server.owner
             const targetSelf = rolePop.userId === user?.id
             const outranks = isOwner || topPositionOfId(user?.id ?? '') < topPositionOfId(rolePop.userId)
-            const showKick = canKick && !targetOwner && !targetSelf && outranks
-            const showBan = canBan && !targetOwner && !targetSelf && outranks
-            const showTimeout = canTimeout && !targetOwner && !targetSelf && outranks
+            // v1.356.0: бота не кикают, не банят и не глушат тайм-аутом — его
+            // убирают в настройках сервера, по праву «Управление ботами». База
+            // теперь тоже так считает (миграция 96), а кнопку прячем, чтобы не
+            // предлагать заведомо невозможное.
+            const targetBot = isKnownBot(rolePop.userId)
+            const showKick = canKick && !targetOwner && !targetSelf && !targetBot && outranks
+            const showBan = canBan && !targetOwner && !targetSelf && !targetBot && outranks
+            const showTimeout = canTimeout && !targetOwner && !targetSelf && !targetBot && outranks
             const targetMember = members.find(m => m.user_id === rolePop.userId)
             const untilRaw = targetMember?.timeout_until as string | undefined
             const isTimedOut = !!untilRaw && new Date(untilRaw).getTime() > Date.now()

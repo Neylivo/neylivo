@@ -24,6 +24,7 @@ import { RoleEditor } from './RoleEditor'
 import { ServerBotsPanel } from './DevPortal'
 import type { Server, Channel } from '../types'
 import { Icon } from './icons'
+import { isKnownBot } from '../lib/botTag'
 import { CH_FONTS, chFontFamily } from '../lib/chStyle'
 import { EmojiPicker } from './EmojiPicker'
 import { TagEmoji, tagFontFamily } from './TagEmoji'
@@ -711,7 +712,11 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
               {filtered.map(m => {
                 const mrs = (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).map(id => roles.find(r => r.id === id)).filter(Boolean) as ServerRole[]
                 // v1.156.0: кик/бан — не владельцу, не себе, и только если моя старшая роль строго выше жертвы.
-                const targetable = m.user_id !== uid && m.role !== 'owner' && (isOwner || topPositionOfId(uid) < topPositionOfId(m.user_id))
+                // v1.356.0: бота из этой таблицы не выгнать — он убирается на вкладке
+                // «Боты», где для этого есть своё право. Кнопки кика и бана у него
+                // просто нет, а база отказала бы и так.
+                const targetable = m.user_id !== uid && m.role !== 'owner' && !isKnownBot(m.user_id)
+                  && (isOwner || topPositionOfId(uid) < topPositionOfId(m.user_id))
                 return (
                   <tr key={m.user_id}>
                     <td><div className="sset-mrow">

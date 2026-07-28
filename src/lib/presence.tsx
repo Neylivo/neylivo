@@ -7,6 +7,7 @@ import { saveMatch } from './gameMatches'
 import { useAuth } from '../auth/AuthProvider'
 import { DEVICE } from './mobile'
 import { toast } from './toast'
+import { isKnownBot, primeBotUsers } from './botTag'
 import { openThread } from './friends'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
@@ -70,6 +71,8 @@ function customActivity(): Activity | null {
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
   const { user } = useAuth()
+  // Список ботов нужен statusOf ниже — забираем его один раз, при поднятии.
+  useEffect(() => { void primeBotUsers() }, [])
   const [online, setOnline] = useState<Record<string, PresenceState>>({})
   const onlineRef = useRef<Record<string, PresenceState>>({})
   useEffect(() => { onlineRef.current = online }, [online])
@@ -363,6 +366,10 @@ export function PresenceProvider({ username, avatarUrl, children }:
 
   function statusOf(userId: string): Status {
     if (userId === user?.id) return myStatus
+    // v1.356.0: бот всегда в сети. Он не «сидит» в приложении и в presence не
+    // отмечается, поэтому показывался серым — как будто сломан или ушёл, хотя
+    // на команды отвечает всегда. Так же это устроено в Discord.
+    if (isKnownBot(userId)) return 'online'
     return online[userId]?.status ?? 'offline'
   }
 

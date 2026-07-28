@@ -26,6 +26,7 @@ import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../li
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
 import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
+import { slashPrefix, parseSlash } from '../lib/slashCmd'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 // v1.352.0: подсказка эмодзи по «:», как в Discord и Telegram. Разбор хвоста
@@ -383,13 +384,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const slashTyping = /^\/(\w*)$/.exec(text)
-  const cmdSugg = slashTyping ? botCmds.filter(c => c.name.startsWith(slashTyping[1].toLowerCase())).slice(0, 8) : []
-  // Отдельная регулярка с \p{L}: имена команд плагинов могут быть на любом языке
-  // (/привет), а \w выше по строке понимает только латиницу.
-  const slashTypingUni = /^\/([\p{L}\p{N}_-]*)$/u.exec(text)
-  const pluginCmdSugg = slashTypingUni
-    ? pluginCmds.filter(c => c.name.startsWith(slashTypingUni[1].toLowerCase())).slice(0, 8)
+  // v1.356.0: и боты, и плагины разбираются одной регуляркой с \p{L}. Раньше у
+  // ботов стояла \w — только латиница, — и ни одна русская команда готового бота
+  // (/кубик, /опрос, /шар) не подсказывалась и не срабатывала вовсе.
+  const slashTyping = slashPrefix(text)
+  const cmdSugg = slashTyping !== null ? botCmds.filter(c => c.name.startsWith(slashTyping)).slice(0, 8) : []
+  const pluginCmdSugg = slashTyping !== null
+    ? pluginCmds.filter(c => c.name.startsWith(slashTyping)).slice(0, 8)
     : []
 
   /** Команда плагина: /имя остаток-строки. Вернёт true, если команда нашлась и отработала. */
@@ -414,11 +415,11 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   }
   // /имя аргумент1 аргумент2 — позиционно раскладывается по options команды.
   async function runSlashCommand(cmdText: string): Promise<boolean> {
-    const m = /^\/(\w+)(?:\s+([\s\S]*))?$/.exec(cmdText.trim())
-    if (!m || !serverId || !channelId) return false
-    const cmd = botCmds.find(c => c.name === m[1].toLowerCase())
+    const p = parseSlash(cmdText)
+    if (!p || !serverId || !channelId) return false
+    const cmd = botCmds.find(c => c.name === p.name)
     if (!cmd) return false
-    const parts = (m[2] ?? '').trim().split(/\s+/).filter(Boolean)
+    const parts = p.rest.split(/\s+/).filter(Boolean)
     const args: Record<string, string> = {}
     cmd.options.forEach((o, i) => { if (parts[i] !== undefined) args[o.name] = parts[i] })
     setCmdBusy(true)
@@ -557,7 +558,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // Команды плагинов проверяются первыми: они локальные и не ходят в сеть, а имя
     // может совпасть с командой бота — приоритет у того, что стоит у тебя самого.
     if (!isEditing && pluginCmds.length && /^\/[\p{L}\p{N}_-]+/u.test(text.trim()) && await runPluginCommand(text)) return
-    if (!isEditing && botCmds.length && /^\/\w+/.test(text.trim()) && await runSlashCommand(text)) return
+    // Тот же \p{L}, что и у плагинов строкой выше: с \w сюда не доходила ни одна
+    // русская команда бота, и «/кубик» просто улетал в чат обычным сообщением.
+    if (!isEditing && botCmds.length && parseSlash(text) && await runSlashCommand(text)) return
     if (isEditing) {
       const t = text.trim()
       sendingRef.current = true

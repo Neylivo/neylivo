@@ -131,8 +131,9 @@ const SABOTAGE = {
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
   botrm: [/if v_owner <> auth\.uid\(\) and \(server_permissions\(p_server, auth\.uid\(\)\) & 512\) = 0 then\s*raise exception 'missing_manage_bots';\s*end if;/, ''],
   bothuman: [/if not exists \(select 1 from bot_apps where bot_user_id = p_bot_user\) then\s*raise exception 'not_a_bot';\s*end if;/, ''],
+  botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -162,6 +163,15 @@ await db.exec(SRC[91])
 await db.exec(SRC[92])
 await db.exec(SRC[93])
 await db.exec(SRC[95])
+// Журнал сервера заводится в 68 — её песочница целиком не применяет, а функции
+// из 96 в него пишут. Без таблицы «бота нельзя кикнуть» проходило бы по ложной
+// причине: исключение про бота бросается раньше, чем дело дойдёт до записи.
+await db.exec(`create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  server_id uuid not null references servers on delete cascade,
+  actor_id uuid not null, actor_name text not null, action text not null,
+  target_name text, detail text, created_at timestamptz not null default now());`)
+await db.exec(SRC[96])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -805,6 +815,46 @@ await check('избранные эмодзи попали в публикаци�
     const gone = (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, BOT])).rows.length === 0
     await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT, 'Кубик'])
     return gone
+  })
+
+  await check('бота нельзя кикнуть', async () => {
+    try {
+      await as(OWNER, 'select kick_member($1,$2)', [srv, BOT])
+      return false
+    } catch (e) { return String(e.message).includes('target_is_bot') }
+  })
+
+  await check('бота нельзя забанить', async () => {
+    // Бан был хуже кика: строка в server_bans мешала владельцу вернуть своего же
+    // бота обратно, и причина нигде не показывалась.
+    try {
+      await as(OWNER, 'select ban_member($1,$2,null)', [srv, BOT])
+      return false
+    } catch (e) { return String(e.message).includes('target_is_bot') }
+  })
+
+  await check('бота нельзя отправить в тайм-аут', async () => {
+    try {
+      await as(OWNER, `select timeout_member($1,$2, now() + interval '1 hour')`, [srv, BOT])
+      return false
+    } catch (e) { return String(e.message).includes('target_is_bot') }
+  })
+
+  await check('живого участника кикать по-прежнему можно', async () => {
+    // Иначе защита ботов тихо сломала бы модерацию целиком.
+    await as(OWNER, 'select kick_member($1,$2)', [srv, OTHER])
+    const gone = (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, OTHER])).rows.length === 0
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, OTHER, 'n'])
+    return gone
+  })
+
+  await check('кик по-прежнему пишется в журнал сервера', async () => {
+    // Тела функций в 96 переписаны целиком — легко было потерять запись в журнал.
+    const before = (await db.query(`select count(*)::int c from audit_log where action='kick'`)).rows[0].c
+    await as(OWNER, 'select kick_member($1,$2)', [srv, OTHER])
+    const after = (await db.query(`select count(*)::int c from audit_log where action='kick'`)).rows[0].c
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, OTHER, 'n'])
+    return after === before + 1
   })
 
   void app
