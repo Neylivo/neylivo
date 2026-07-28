@@ -40,6 +40,39 @@ function allFiles(dir) {
   console.log('классов помечено как «чужой текст»: ' + classes.length + ', все найдены в разметке')
 }
 
+// v1.365.0: переменные темы, которых не существует.
+//
+// CSS не ругается на var(--чего-нет): если запасное значение есть — берётся оно
+// (и тема перестаёт на это влиять), если нет — свойство просто отбрасывается.
+// Так у нас и вышло: окно справки было прозрачным, часть полей ввода тоже, а 44
+// места красились в жёсткий белый на любой теме. Глазами это ловится только
+// случайно, поэтому сверяем список объявленных с использованными.
+//
+// Часть переменных задаёт JS во время работы — они перечислены как известные.
+{
+  const css = fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8')
+  const declared = new Set((css.match(/--[a-z0-9-]+\s*:/g) || []).map(x => x.replace(/\s*:$/, '')))
+  const SET_BY_JS = [
+    '--ov', '--font-px', '--fold', '--chatbg-url', '--chatbg-blur', '--chatbg-tint',
+    '--mus-a', '--mus-a2', '--mus-a-soft', '--mus-bg1', '--tx-name', '--plate-oc', '--pb-i', '--td',
+  ]
+  const bad = []
+  const re = /var\(\s*(--[a-z0-9-]+)\s*(,)?/g
+  let m
+  while ((m = re.exec(css))) {
+    const name = m[1], hasFallback = !!m[2]
+    if (declared.has(name) || SET_BY_JS.includes(name)) continue
+    bad.push(name + (hasFallback ? '' : ' (без запасного значения — свойство отбрасывается)'))
+  }
+  const uniq = [...new Set(bad)]
+  if (uniq.length) {
+    console.error('  ПРОВАЛ в стилях используются переменные, которых тема не объявляет:')
+    for (const b of uniq) console.error('    ' + b)
+    process.exit(1)
+  }
+  console.log('переменных темы: все использованные объявлены')
+}
+
 app.disableHardwareAcceleration()
 setTimeout(() => { console.log('ЗАВИС — проверки не завершились'); process.exit(2) }, 90000)
 app.whenReady().then(async () => {

@@ -11,7 +11,7 @@ import { PicField } from './PicField'
 import { setMemberNickname } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
-import { BotHelp } from './BotHelp'
+import { BotGuide } from './BotGuide'
 import { BotWizard } from './BotWizard'
 import { BUILTIN_BOTS } from '../lib/builtinBots'
 
@@ -116,7 +116,7 @@ export function DevPortal() {
         </div>
       </>}
 
-      {help && <BotHelp onClose={() => setHelp(false)} />}
+      {help && <BotGuide onClose={() => setHelp(false)} />}
       {wizard && <BotWizard onClose={() => setWizard(false)} onDone={() => { setTab('mine'); load() }} />}
     </>
   )
@@ -382,7 +382,7 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
         {installed.length === 0 && <div className="modal-empty">На сервере пока нет ботов. Возьми готового во вкладке «Каталог».</div>}
       </div>}
 
-      {help && <BotHelp onClose={() => setHelp(false)} />}
+      {help && <BotGuide onClose={() => setHelp(false)} />}
     </>
   )
 }

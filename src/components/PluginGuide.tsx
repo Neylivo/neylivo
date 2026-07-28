@@ -70,7 +70,7 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
             ))}
           </nav>
 
-          <div className="pg-main">
+          <div className="pg-main"><div className="pg-inner">
             {tab === 'start' && <>
               <h3>Плагин — это один файл</h3>
               <p>
@@ -222,7 +222,7 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
                 <li>Одинаковый <code>@id</code> у двух плагинов: второй заменит первый.</li>
               </ul>
             </>}
-          </div>
+          </div></div>
         </div>
       </div>
     </Portal>

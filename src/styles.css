@@ -15,6 +15,25 @@
   --bg:var(--c-content); --bg2:var(--c-panel); --bg3:var(--c-dark);
   --tx:#dbdee1; --mut:#949ba4; --brand:var(--c-accent);
   --green:#3ba55d; --red:#ed4245; --blue:#00a8fc;
+  /* v1.365.0: «самый яркий текст» — цвет наведённой иконки и активной строки.
+     Он использовался в 44 местах как var(--tx-hi, #fff), но самой переменной не
+     существовало: запасное значение срабатывало всегда, и на светлой теме белым
+     по белому пропадали иконки. Одно место было и вовсе без запасного значения —
+     там свойство просто отбрасывалось. Теперь она есть, и темы её переопределяют. */
+  --tx-hi:#ffffff;
+  /* --ov задаёт JS при применении темы (src/lib/settings.tsx): 255,255,255 на
+     тёмной, 0,0,0 на светлой. Значение по умолчанию нужно здесь, потому что в
+     пяти местах она используется без запасного значения, и до первой отрисовки
+     настроек эти правила просто отбрасывались. */
+  --ov:255,255,255;
+  /* v1.365.0: имена-синонимы, которыми пользовались, ни разу их не объявив.
+     Каждое такое место брало запасное значение и переставало слушаться темы —
+     отсюда «на некоторых темах выглядит некрасиво». Объявляем через настоящие
+     переменные: теперь светлая тема перекрашивает и их. */
+  --bg1:var(--c-dark); --bg4:var(--c-hover);
+  --txt:var(--tx); --text-normal:var(--tx); --text-muted:var(--mut);
+  --header-primary:var(--tx-hi); --bg-primary:var(--bg);
+  --accent:var(--brand); --yellow:#faa61a;
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -111,8 +130,8 @@ body {
 .me-av { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:14px; overflow:hidden; cursor:pointer; }
 .me-av img { width:100%; height:100%; object-fit:cover; }
 .me-nm { flex:1; font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.me-out { background:none; border:none; color:var(--mut); cursor:pointer; font-size:16px; transition:color .15s var(--ease-out4, ease); }
-.me-out:hover { color:var(--tx); }
+/* Геометрия и цвет — общие с .me-ic выше (v1.365.0), тут только плавность. */
+.me-out { transition:color .15s var(--ease-out4, ease), background .15s var(--ease-out4, ease); }
 
 .chat { position:relative; flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
 .chat-head { padding:16px; font-weight:700; border-bottom:1px solid rgba(0,0,0,.2); box-shadow:0 1px 0 rgba(0,0,0,.2); display:flex; align-items:center; }
@@ -304,7 +323,7 @@ body.compact .msg { padding-top:0; padding-bottom:0; }
 body.compact .msgs { gap:0; }
 
 /* themes */
-:root[data-theme='light'] { --bg:#ffffff; --bg2:#f2f3f5; --bg3:#e3e5e8; --tx:#2e3338; --mut:#5c5e66; --c-hover:#e3e5e8; --c-main:#f2f3f5; }
+:root[data-theme='light'] { --ov:0,0,0; --bg:#ffffff; --bg2:#f2f3f5; --bg3:#e3e5e8; --tx:#2e3338; --mut:#5c5e66; --c-hover:#e3e5e8; --c-main:#f2f3f5; --tx-hi:#060607; }
 :root[data-theme='midnight'] { --bg:#0b0b0e; --bg2:#111318; --bg3:#000000; --c-main:#050506; --c-hover:#1a1c22; }
 
 .pqs { position:fixed; inset:0; z-index:var(--z-fullscreen, 100); display:flex; background:var(--bg); animation:pop .12s var(--ease-spring, ease) both; }
@@ -669,9 +688,24 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-actnm{font-size:15px;font-weight:700;color:#f2f3f5;}
 .pfr-actsub{font-size:13px;color:var(--mut);margin-top:2px;}
 .pfr-actempty{font-size:13px;color:#80848e;padding:8px 2px;}
-.me-ic{border:none;background:transparent;color:#b5bac1;font-size:15px;width:32px;height:32px;border-radius:var(--r-sm);cursor:pointer;}
-.me-ic:hover{background:rgba(var(--ov, 255,255,255),.06);color:var(--tx-hi, #fff);}
-.me-ic.off{color:#f23f43;}
+/* v1.365.0: микрофон, наушники и шестерёнка — один ряд, одна геометрия, один
+   цвет из темы.
+
+   Было две беды разом. Цвет у микрофона и наушников стоял числом (#b5bac1), а у
+   шестерёнки брался из темы — на светлых темах одни иконки перекрашивались, а
+   другие оставались серыми. И размер был только у двух из трёх: шестерёнка шла
+   обычной строчной кнопкой, поэтому сидела ниже соседей и другого размера.
+
+   Наведение тоже красилось в var(--tx-hi) — такой переменной в теме нет вовсе,
+   то есть всегда получался белый, даже на светлом фоне. */
+.me-ic, .me-out {
+  border:none; background:transparent; color:var(--mut); cursor:pointer;
+  width:32px; height:32px; flex:none;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:var(--r-sm); padding:0;
+}
+.me-ic:hover, .me-out:hover { background:rgba(var(--ov, 255,255,255),.06); color:var(--tx); }
+.me-ic.off{color:var(--red);}
 @media (max-width:1100px){.pfr-right{display:none;}}
 
 
@@ -1996,7 +2030,7 @@ body.no-anim .member-typing i { animation:none; }
 /* Нижняя панель: микрофон «передёргивает» при муте, наушники «сжимаются» при дефе. */
 .me-ic { transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
 .me-ic:active { transform: scale(.88); }
-.me-ic svg { display: block; margin: 0 auto; }
+.me-ic svg, .me-out svg { display: block; }
 .me-ic.anim-shake svg { animation: mic-shake .3s ease-in-out; }
 .me-ic.anim-squeeze svg { animation: phones-squeeze .3s ease-in-out; }
 
@@ -3638,9 +3672,9 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .inv-modal .inv-title, .inv-modal .inv-sub { position:relative; }
 .inv-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:26px; }
 .inv-sub { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--mut); margin-top:4px; }
-.inv-sub b { font-weight:600; color:var(--txt); }
+.inv-sub b { font-weight:600; color:var(--tx); }
 .inv-search { margin-top:12px; position:relative; }
-.inv-search input { width:100%; box-sizing:border-box; background:var(--bg3); border:none; border-radius:var(--r-md); padding:9px 36px 9px 12px; font-size:14px; color:var(--txt); outline:none; }
+.inv-search input { width:100%; box-sizing:border-box; background:var(--bg3); border:none; border-radius:var(--r-md); padding:9px 36px 9px 12px; font-size:14px; color:var(--tx); outline:none; }
 .inv-sic { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--mut); display:flex; }
 .inv-list { max-height:280px; overflow-y:auto; margin-top:8px; display:flex; flex-direction:column; gap:2px; }
 .inv-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:var(--r-md); }
@@ -3648,13 +3682,13 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .inv-names { flex:1; min-width:0; display:flex; align-items:baseline; gap:8px; }
 .inv-nm { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .inv-hd { font-size:12.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.inv-btn { flex:none; padding:5px 16px; font-size:13.5px; border-radius:var(--r-sm); border:1px solid var(--brand); background:transparent; color:var(--txt); transition:background .12s var(--ease-out4, ease); }
+.inv-btn { flex:none; padding:5px 16px; font-size:13.5px; border-radius:var(--r-sm); border:1px solid var(--brand); background:transparent; color:var(--tx); transition:background .12s var(--ease-out4, ease); }
 .inv-btn:hover:not(:disabled) { background:var(--brand); color:#fff; }
 .inv-btn.sent, .inv-btn.already, .inv-btn:disabled { border-color:transparent; color:var(--mut); background:transparent; cursor:default; }
 .inv-foot { margin-top:10px; padding-top:12px; border-top:1px solid rgba(var(--ov, 255,255,255),.07); }
 .inv-foot-lb { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.3px; color:var(--mut); margin-bottom:8px; }
 .inv-linkrow { display:flex; align-items:center; gap:6px; background:var(--bg3); border-radius:var(--r-md); padding:4px; }
-.inv-linkrow input { flex:1; min-width:0; background:transparent; border:none; color:var(--txt); font-size:13.5px; padding:6px 8px; outline:none; }
+.inv-linkrow input { flex:1; min-width:0; background:transparent; border:none; color:var(--tx); font-size:13.5px; padding:6px 8px; outline:none; }
 .inv-copy { flex:none; background:var(--brand); color:#fff; border-radius:var(--r-sm); padding:8px 18px; font-size:13.5px; font-weight:600; transition:background .12s var(--ease-out4, ease); }
 .inv-copy.ok { background:color-mix(in srgb, var(--brand) 70%, #000); }
 .inv-note { font-size:12px; color:var(--mut); margin-top:8px; }
