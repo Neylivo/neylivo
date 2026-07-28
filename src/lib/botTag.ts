@@ -37,3 +37,16 @@ export function primeBotUsers(): Promise<void> {
 
 /** Бот ли это, без обращения к базе. До primeBotUsers() отвечает «нет». */
 export const isKnownBot = (userId: string): boolean => botUsers.has(userId)
+
+/**
+ * Перечитать список (v1.361.0).
+ *
+ * Список забирается один раз за сеанс, и без этого только что созданный бот
+ * висел бы серым до перезапуска приложения, а только что удалённый — наоборот,
+ * значился бы в сети. Зовём после создания, удаления и постановки на сервер.
+ */
+export function refreshBotUsers(): Promise<void> {
+  primed = null
+  botUsers.clear()
+  return primeBotUsers()
+}

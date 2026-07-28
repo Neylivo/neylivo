@@ -131,9 +131,10 @@ const SABOTAGE = {
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
   botrm: [/if v_owner <> auth\.uid\(\) and \(server_permissions\(p_server, auth\.uid\(\)\) & 512\) = 0 then\s*raise exception 'missing_manage_bots';\s*end if;/, ''],
   bothuman: [/if not exists \(select 1 from bot_apps where bot_user_id = p_bot_user\) then\s*raise exception 'not_a_bot';\s*end if;/, ''],
+  botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -172,6 +173,7 @@ await db.exec(`create table if not exists audit_log (
   actor_id uuid not null, actor_name text not null, action text not null,
   target_name text, detail text, created_at timestamptz not null default now());`)
 await db.exec(SRC[96])
+await db.exec(SRC[97])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -857,6 +859,43 @@ await check('избранные эмодзи попали в публикаци�
     return after === before + 1
   })
 
+  await check('удаление бота убирает его со всех серверов', async () => {
+    // Ровно то, что было сломано: приложение удалили, а участник остался висеть
+    // серым, и убрать его было уже нечем — кнопка ищет бота среди bot_apps.
+    const srv2 = (await db.query('insert into servers (name, owner) values ($1,$2) returning id', ['S2', OWNER])).rows[0].id
+    const BOT2 = 'b0b00000-0000-4000-8000-00000000b072'
+    await db.query('insert into auth.users values ($1)', [BOT2])
+    const app2 = (await db.query(
+      `insert into bot_apps (owner_id, bot_user_id, name, token_hash) values ($1,$2,'Шар','h') returning id`,
+      [OWNER, BOT2])).rows[0].id
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT2, 'Шар'])
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv2, BOT2, 'Шар'])
+
+    await db.query('delete from bot_apps where id = $1', [app2])
+    const left = (await db.query('select 1 from server_members where user_id = $1', [BOT2])).rows.length
+    return left === 0
+  })
+
+  await check('удаление бота не задевает других участников', async () => {
+    // Иначе уборка призраков вычистила бы заодно живых людей.
+    const BOT3 = 'b0b00000-0000-4000-8000-00000000b073'
+    await db.query('insert into auth.users values ($1)', [BOT3])
+    const app3 = (await db.query(
+      `insert into bot_apps (owner_id, bot_user_id, name, token_hash) values ($1,$2,'Кубик','h') returning id`,
+      [OWNER, BOT3])).rows[0].id
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT3, 'Кубик'])
+    const before = (await db.query('select count(*)::int c from server_members where server_id=$1', [srv])).rows[0].c
+    await db.query('delete from bot_apps where id = $1', [app3])
+    const after = (await db.query('select count(*)::int c from server_members where server_id=$1', [srv])).rows[0].c
+    return after === before - 1
+  })
+
+  await check('уборка призраков не трогает живых ботов', async () => {
+    // Тот же запрос, что в миграции: у живого бота приложение есть, значит его
+    // строка обязана уцелеть.
+    const alive = (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, BOT])).rows.length
+    return alive === 1
+  })
   void app
 }
 

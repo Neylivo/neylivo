@@ -1,6 +1,7 @@
 // v1.193.0: платформа ботов — рендерер-обвязка вокруг Edge Functions
 // (supabase/functions/bot-*) и таблиц bot_apps/bot_commands.
 import { supabase } from './supabase'
+import { refreshBotUsers } from './botTag'
 
 export interface BotApp {
   id: string
@@ -83,6 +84,9 @@ export async function createBot(name: string, builtin?: string): Promise<{ id: s
   const { data, error } = await supabase.functions.invoke('bot-create', { body })
   if (error) throw new Error(await edgeErr(error, 'bot-create'))
   if (data?.error) throw new Error(data.error)
+  // Чтобы только что созданный бот сразу считался живым: список ботов
+  // забирается один раз за сеанс, иначе он висел бы серым до перезапуска.
+  await refreshBotUsers()
   return data
 }
 
@@ -95,12 +99,18 @@ export async function setBotWebhook(botAppId: string, webhookUrl: string | null)
 export async function deleteBot(botAppId: string): Promise<void> {
   const { error } = await supabase.from('bot_apps').delete().eq('id', botAppId)
   if (error) throw error
+  // Строки участника на серверах убирает сама база (миграция 97) — иначе бот
+  // оставался бы висеть в списке серым, и убрать его было бы уже нечем.
+  await refreshBotUsers()
 }
 
 export async function addBotToServer(botAppId: string, serverId: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('bot-add-to-server', { body: { botAppId, serverId } })
   if (error) throw new Error(await edgeErr(error, 'bot-add-to-server'))
   if (data?.error) throw new Error(data.error)
+  // Список ботов забирается один раз за сеанс: без обновления только что
+  // поставленный бот висел бы серым до перезапуска приложения.
+  await refreshBotUsers()
 }
 
 /**
