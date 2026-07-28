@@ -3529,7 +3529,6 @@ body.no-anim .pet-burst-emoji { animation: none; }
 .pfr-add2-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
 .pfr-add2-h { font-size:20px; font-weight:800; color:#f2f3f5; }
 .pfr-add2-sub { font-size:14px; color:#b5bac1; margin-top:6px; line-height:1.5; }
-.pfr-add2-mascot { width:110px; height:92px; flex:none; margin-right:8px; }
 .pfr-add2-inwrap { position:relative; display:flex; align-items:center; margin-top:16px; background:var(--bg3);
   border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-md); padding:6px 6px 6px 16px; transition:border-color .15s var(--ease-out4, ease); }
 .pfr-add2-inwrap:focus-within { border-color:var(--brand); }

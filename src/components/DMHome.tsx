@@ -1403,19 +1403,6 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                   <div className="pfr-add2-h">Добавить в друзья</div>
                   <div className="pfr-add2-sub">Вы можете добавить друзей по имени пользователя в Ponoi.</div>
                 </div>
-                <svg className="pfr-add2-mascot" viewBox="0 0 120 100" fill="none" aria-hidden="true">
-                  <ellipse cx="62" cy="93" rx="34" ry="5" fill="rgba(0,0,0,.35)"/>
-                  <path d="M36 42 q-16 -2 -18 -16" stroke="#5865f2" strokeWidth="9" strokeLinecap="round"/>
-                  <circle cx="16" cy="24" r="8" fill="#eef0ff"/>
-                  <rect x="34" y="26" width="56" height="50" rx="17" fill="#5865f2"/>
-                  <rect x="42" y="70" width="40" height="21" rx="8" fill="#eef0ff"/>
-                  <rect x="56" y="74" width="12" height="6" rx="3" fill="#5865f2"/>
-                  <circle cx="53" cy="48" r="5" fill="#fff"/>
-                  <circle cx="72" cy="48" r="5" fill="#fff"/>
-                  <path d="M55 61 q8 7 16 0" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-                  <path d="M64 26 q1 -9 9 -12" stroke="#23a55a" strokeWidth="5" strokeLinecap="round"/>
-                  <ellipse cx="78" cy="12" rx="9" ry="5" fill="#23a55a" transform="rotate(-15 78 12)"/>
-                </svg>
               </div>
               <div className={'pfr-add2-inwrap' + (codeMsg ? (codeOk ? ' ok' : ' err') : '')}>
                 <input placeholder="Введите имя пользователя" value={code}
