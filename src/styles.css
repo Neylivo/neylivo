@@ -5259,3 +5259,49 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
 }
 .mus2-extonly-t { font-weight: 700; font-size: 15px; color: #fff; }
 .mus2-extonly-d { font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, .72); max-width: 260px; }
+
+/* ══ Ponoi Music: живой фон и мелочи в духе Spotify (v1.370.0) ═════════════
+   Плеер и раньше подбирал цвет под обложку, но красил им только свечение вокруг
+   картинки — сама панель оставалась ровно серой, и от трека к треку ничего не
+   менялось. У Spotify цвет обложки разливается по всему полотну и медленно
+   дышит; здесь то же самое, только на наших переменных.
+
+   Всё держится на --mus-a, которую плеер уже вычисляет из обложки (artColor.ts).
+   Нет обложки — нет и цвета: слой просто не виден, панель остаётся прежней. */
+.mus2::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(110% 70% at 18% 0%, var(--mus-a-soft, transparent) 0%, transparent 62%),
+    radial-gradient(90% 60% at 92% 8%, var(--mus-a-soft, transparent) 0%, transparent 58%),
+    linear-gradient(180deg, var(--mus-bg1, transparent) 0%, transparent 46%);
+  opacity: .9;
+  transition: background 1.2s ease;
+  animation: mus-breathe 14s ease-in-out infinite;
+}
+/* Содержимое обязано лежать выше слоя с цветом, иначе он его перекроет. */
+.mus2 > * { position: relative; z-index: 1; }
+
+@keyframes mus-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .9; }
+  50%      { transform: translate3d(0, -1.5%, 0) scale(1.06); opacity: 1; }
+}
+/* «Без анимаций» в настройках выключает и это — обещание должно выполняться. */
+body.no-anim .mus2::before { animation: none; }
+
+/* Обложка: мягче тень и лёгкий подъём под курсором — как карточка альбома. */
+.mus2-art {
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+  transition: transform .35s var(--ease-out4, ease), box-shadow .35s var(--ease-out4, ease);
+}
+.mus2-now:hover .mus2-art { transform: translateY(-3px); box-shadow: 0 26px 60px rgba(0, 0, 0, .62); }
+
+/* Строка очереди: плавная подсветка вместо резкой смены цвета. */
+.mus2-li { transition: background .15s var(--ease-out4, ease); }
+
+/* Полоса времени: «капля» появляется под курсором, как в Spotify — в покое
+   линия чистая, а попасть по ней всё равно легко. */
+.mus2-seek input[type="range"]::-webkit-slider-thumb {
+  opacity: 0; transition: opacity .15s ease;
+}
+.mus2-seek:hover input[type="range"]::-webkit-slider-thumb,
+.mus2-seek input[type="range"]:focus::-webkit-slider-thumb { opacity: 1; }

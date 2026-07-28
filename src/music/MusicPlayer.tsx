@@ -10,7 +10,7 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
-import { isSoundcloudUrl, scMeta, scResolveTracks, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
+import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
@@ -405,7 +405,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         }
         setScUrl('')
         setTracks(await fetchTracks())
+        // v1.370.0: если SoundCloud отдал не весь плейлист — говорим, сколько
+        // недостаёт. Раньше пропущенные исчезали молча, и человек видел «добавлено
+        // 47» вместо 52, не зная, что чего-то не хватает.
+        const lost = lastImportSkipped()
         if (added === 0) toastErr('Эти треки уже есть в трекотеке')
+        else if (lost.length) {
+          toastOk(`Добавлено треков: ${added}`)
+          toastErr(`SoundCloud не отдал ${lost.length} ${lost.length === 1 ? 'трек' : 'треков'} из плейлиста — попробуй добавить плейлист ещё раз, их доберёт`)
+        }
         else toastOk(added === 1 ? 'Трек добавлен в трекотеку' : `Добавлено треков: ${added}`)
       } catch {
         // Запасной путь: сохраняем сам линк с oEmbed-метаданными.

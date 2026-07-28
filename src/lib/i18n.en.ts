@@ -1653,3 +1653,8 @@ Object.assign(DICT_EN, {
   'Обложки и ссылки треков не сохраняются: примени миграцию supabase/22_music_meta.sql':
     'Track covers and links are not being saved: apply the supabase/22_music_meta.sql migration',
 })
+
+// v1.370.0: неполный импорт плейлиста.
+REGEX_EN.push([/^SoundCloud не отдал (\d+) тре\S+ из плейлиста — попробуй добавить плейлист ещё раз, их доберёт$/,
+  'SoundCloud did not return $1 track(s) from the playlist — add the playlist again and they will be picked up'])
+REGEX_EN.push([/^Добавлено треков: (\d+)$/, 'Tracks added: $1'])

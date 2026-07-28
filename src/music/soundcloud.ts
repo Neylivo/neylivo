@@ -120,7 +120,16 @@ function scArt(u: any): string | null {
  * (api.soundcloud.com/tracks/…). Работает через невидимый одноразовый виджет:
  * READY -> getSounds(); ленивые элементы плейлиста добираем skip(i) + getCurrentSound.
  */
+// Сколько ждём один ленивый элемент плейлиста: 60 попыток по 200 мс = 12 секунд.
+// v1.370.0: было 8, и на длинном плейлисте с медленной сетью треки терялись.
+const LAZY_TRIES = 60
+
+/** Номера треков, которые SoundCloud не отдал при последнем разборе. */
+let lastSkipped: number[] = []
+export function lastImportSkipped(): number[] { return lastSkipped }
+
 export async function scResolveTracks(url: string, onProgress?: (done: number, total: number) => void): Promise<ScTrack[]> {
+  lastSkipped = []
   let target = url
   if (/^https?:\/\/on\.soundcloud\.com\//i.test(url)) {
     // Короткие ссылки виджет сам не резолвит — берём каноничный URL из oEmbed.
@@ -144,6 +153,10 @@ export async function scResolveTracks(url: string, onProgress?: (done: number, t
     const sounds: any[] = await new Promise(res => w.getSounds((s: any[]) => res(Array.isArray(s) ? s : [])))
     const total = Math.max(sounds.length, 1)
     const out: ScTrack[] = []
+    // v1.370.0: сколько треков плейлиста не отдалось. Раньше такие просто
+    // пропускались молча, и человек получал «добавлено 47» вместо 52, не зная,
+    // что пятерых не хватает и каких.
+    const skipped: number[] = []
     const toTrack = (s: any): ScTrack => ({
       url: String(s.permalink_url || url),
       title: String(s.title || 'Трек'),
@@ -162,19 +175,21 @@ export async function scResolveTracks(url: string, onProgress?: (done: number, t
           let tries = 0
           const iv = setInterval(() => {
             w.getCurrentSoundIndex((ci: number) => {
-              if (ci !== i) { if (++tries > 40) { clearInterval(iv); res(null) }; return }
+              if (ci !== i) { if (++tries > LAZY_TRIES) { clearInterval(iv); res(null) }; return }
               w.getCurrentSound((cs: any) => {
                 if (cs && cs.title) { clearInterval(iv); try { w.pause() } catch {}; res(cs) }
-                else if (++tries > 40) { clearInterval(iv); res(null) }
+                else if (++tries > LAZY_TRIES) { clearInterval(iv); res(null) }
               })
             })
           }, 200)
         })
       }
       if (s && s.title) out.push(toTrack(s))
+      else skipped.push(i + 1)
       onProgress?.(i + 1, total)
     }
     try { w.pause() } catch {}
+    lastSkipped = skipped
     return out
   } finally { try { frame.remove() } catch {} }
 }
