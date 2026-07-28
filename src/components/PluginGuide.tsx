@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { copyText } from '../lib/copyMedia'
@@ -52,10 +52,19 @@ const copy = (text: string, ok: string) => { void copyText(text, ok) }
 
 export function PluginGuide({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('start')
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
 
   return (
     <Portal>
-      <div className="pg-screen">
+      {/* v1.368.0: окно, а не весь экран. Разделы и прокрутка остались, но приложение
+          видно вокруг — справку открывают, чтобы свериться, не бросая начатое.
+          Щелчок мимо и Esc закрывают, как у остальных окон. */}
+      <div className="pg-screen" onClick={onClose}>
+        <div className="pg-win" onClick={e => e.stopPropagation()}>
         <div className="pg-head">
           <div className="pg-title"><Icon name="code" size={20} /> Как сделать плагин</div>
           <button className="pg-x" onClick={onClose} title="Закрыть"><Icon name="close" size={18} /></button>
@@ -223,6 +232,7 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
               </ul>
             </>}
           </div></div>
+        </div>
         </div>
       </div>
     </Portal>

@@ -5130,10 +5130,21 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
    --acc). Несуществующая переменная — это не «цвет по умолчанию», это отсутствие
    свойства: фон не задавался никакой, и сквозь окно просвечивало всё приложение.
    Здесь только те переменные, что тема правда объявляет. */
+/* v1.368.0: окно, а не весь экран. Справку открывают, чтобы свериться, не
+   бросая начатое, — приложение должно остаться видно вокруг. Разделы и
+   прокрутка внутри те же, поэтому длинный текст по-прежнему не обрезается. */
 .pg-screen {
   position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, .6);
+}
+.pg-win {
   display: flex; flex-direction: column;
+  width: min(1040px, 100%); height: min(760px, 100%);
   background: var(--bg); color: var(--tx);
+  border-radius: var(--r-xl, 14px); overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .55);
 }
 .pg-head {
   flex: none; display: flex; align-items: center; gap: 12px;
@@ -5202,6 +5213,9 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
 .pg-aitxt { color: var(--mut); font-size: 13.5px; line-height: 1.6; }
 
 @media (max-width: 720px) {
+  /* На телефоне окно занимает почти всё: обрамление там только съедает место. */
+  .pg-screen { padding: 0; }
+  .pg-win { width: 100%; height: 100%; border-radius: 0; }
   .pg-body { flex-direction: column; }
   .pg-nav {
     width: auto; flex-direction: row; overflow-x: auto; gap: 6px;
