@@ -4968,3 +4968,48 @@ body.no-anim .mic-bar { transition: none; }
 .ped-color { width: 56px; height: 34px; border: none; background: none; padding: 0; cursor: pointer; }
 .ped-perm-note { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bg3);
   font-size: 12.5px; color: var(--mut); line-height: 1.45; }
+
+
+/* ── Аварийный режим плагинов (v1.345.0) ──────────────────────────────────
+   Плашка нарочно не опирается на переменные темы и стоит выше всего: её задача —
+   быть видимой даже тогда, когда плагин уже успел испортить оформление.
+   !important здесь осознанный: чужой css в этом месте не должен побеждать. */
+.safe-banner {
+  position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  z-index: 2147483647 !important; display: flex !important; align-items: center !important;
+  justify-content: center !important; gap: 12px !important; flex-wrap: wrap !important;
+  padding: 10px 16px !important; background: #ed4245 !important; color: #fff !important;
+  font-size: 13px !important; font-family: system-ui, sans-serif !important;
+  opacity: 1 !important; visibility: visible !important; transform: none !important;
+  pointer-events: auto !important;
+}
+.safe-banner button {
+  background: #fff !important; color: #ed4245 !important; border: none !important;
+  border-radius: 6px !important; padding: 6px 12px !important; font-weight: 700 !important;
+  font-size: 12.5px !important; cursor: pointer !important; display: inline-block !important;
+}
+
+
+/* ── Конструктор плагина: отдельный экран (v1.345.0) ──────────────────────
+   Раньше это была модалка: места мало, а клик мимо неё закрывал всё написанное.
+   Теперь полноэкранная панель с собственной шапкой, и промах по фону не делает
+   ничего — закрыть можно только крестиком, и то со спросом. */
+.ped-screen { position: fixed; inset: 0; z-index: var(--z-modal-ov, 150);
+  background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.ped-sheet { width: min(1000px, 100%); height: min(92vh, 900px); background: var(--bg2);
+  border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.55); display: flex; flex-direction: column;
+  overflow: hidden; }
+.ped-top { flex: none; height: 52px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px 0 20px; border-bottom: 1px solid rgba(var(--ov), .08); }
+.ped-top-t { font-size: 16px; font-weight: 800; }
+.ped-top-x { width: 32px; height: 32px; border: none; border-radius: 50%; background: none;
+  color: var(--mut); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.ped-top-x:hover { background: var(--c-hover); color: var(--tx); }
+.ped-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 24px; }
+/* На большом экране код заметно выше: он тут главный. */
+.ped-screen .ped-code { min-height: 300px; }
+@media (max-width: 700px) {
+  .ped-screen { padding: 0; }
+  .ped-sheet { width: 100%; height: 100%; border-radius: 0; }
+  .ped-scroll { padding: 16px; }
+}

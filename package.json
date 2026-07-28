@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.344.0",
+  "version": "1.345.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -18,7 +18,8 @@
     "test:crypto": "esbuild src/lib/crypto/__test.ts --bundle --format=iife --outfile=dist-crypto-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/crypto-test.cjs",
     "test:db": "node scripts/db-test/rls-test.mjs",
     "test:plugins": "esbuild src/lib/plugins/__test.ts --bundle --platform=node --format=cjs --outfile=dist-plugin-test/t.cjs && node dist-plugin-test/t.cjs",
-    "test:settings": "esbuild src/lib/__settings_test.ts --bundle --platform=node --format=esm --outfile=dist-settings-test/t.mjs && node dist-settings-test/t.mjs"
+    "test:settings": "esbuild src/lib/__settings_test.ts --bundle --platform=node --format=esm --outfile=dist-settings-test/t.mjs && node dist-settings-test/t.mjs",
+    "test:attack": "esbuild src/lib/plugins/__attack_test.ts --bundle --platform=node --format=esm --outfile=dist-attack-test/t.mjs && node dist-attack-test/t.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

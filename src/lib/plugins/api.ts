@@ -29,6 +29,26 @@ const MAX_LABEL = 40
 
 class Denied extends Error {}
 
+/**
+ * Ограничение частоты (v1.345.0).
+ *
+ * Отправка сообщений и уведомления раньше не были ничем ограничены: плагин мог
+ * за секунду выплюнуть в канал сотню сообщений от имени человека — и забанят
+ * за это человека, а не плагин. Считаем по скользящему окну, отдельно для
+ * каждого плагина и каждого действия.
+ */
+const RATE: Record<string, number[]> = {}
+function rateLimit(key: string, times: number, windowMs: number, what: string) {
+  const now = Date.now()
+  const arr = (RATE[key] ??= []).filter(t => now - t < windowMs)
+  if (arr.length >= times) {
+    RATE[key] = arr
+    throw new Denied(`Слишком часто: ${what} можно не больше ${times} раз за ${Math.round(windowMs / 1000)} с.`)
+  }
+  arr.push(now)
+  RATE[key] = arr
+}
+
 function str(v: unknown, max: number, what: string): string {
   const s = String(v ?? '').trim()
   if (!s) throw new Denied(`${what}: пустое значение`)
@@ -148,6 +168,9 @@ export function createDispatcher(
 
       case 'messages.send': {
         need('messages.write')
+        // Человек пишет руками в лучшем случае несколько сообщений за десять
+        // секунд — плагину столько же и хватит.
+        rateLimit(id + ':send', 5, 10_000, 'отправлять сообщения')
         await ctx.sendMessage(String(args[0] ?? '').slice(0, 4000))
         return null
       }
@@ -178,6 +201,7 @@ export function createDispatcher(
 
       case 'notify': {
         need('notify')
+        rateLimit(id + ':notify', 10, 10_000, 'показывать уведомления')
         ctx.toast(String(args[0] ?? '').slice(0, 200))
         return null
       }
@@ -203,6 +227,9 @@ export function createDispatcher(
 
       case 'net.fetch': {
         need('net')
+        // Запросы наружу — тоже поток: без потолка плагин превращается в
+        // маленький ддос-клиент с чужого компьютера.
+        rateLimit(id + ':net', 20, 10_000, 'обращаться в интернет')
         return await pluginFetch(plugin, String(args[0] ?? ''), args[1] as any)
       }
 

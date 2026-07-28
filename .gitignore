@@ -15,3 +15,4 @@ android/captures
 dist-crypto-test/
 dist-plugin-test/
 dist-settings-test/
+dist-attack-test/

@@ -1,6 +1,6 @@
 import { PluginSandbox, type FnRef } from './sandbox'
 import { createDispatcher, type HostContext } from './api'
-import { clearPlugin } from './registry'
+import { clearPlugin, pluginsDisabled } from './registry'
 import { loadPlugins, getPlugin, subscribePlugins } from './store'
 import type { InstalledPlugin } from './types'
 
@@ -109,6 +109,10 @@ export async function stopPlugin(id: string): Promise<void> {
 
 /** Поднять все включённые плагины. Вызывается один раз при старте приложения. */
 export async function startEnabledPlugins(): Promise<void> {
+  // v1.345.0: аварийный режим. Если плагин испортил приложение настолько, что до
+  // настроек не добраться, человек включает его адресом ?safe=1 или сочетанием
+  // клавиш — и ни один плагин не запускается вовсе.
+  if (pluginsDisabled()) return
   for (const p of loadPlugins()) {
     if (!p.enabled) continue
     // Последовательно, а не Promise.all: у каждого свой таймаут на загрузку, и

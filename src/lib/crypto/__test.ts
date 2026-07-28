@@ -288,7 +288,7 @@ async function main() {
     'иначе от анимации остался бы один кадр')
   ok('обычный файл не трогаем', !needsStrip(new File([new Uint8Array(4)], 'a.pdf', { type: 'application/pdf' })))
 
-  const { UNREADABLE_BROKEN, UNREADABLE_OTHER_DEVICE } = await import('./dm')
+  const { UNREADABLE_BROKEN, UNREADABLE_OTHER_DEVICE, isUnreadable } = await import('./dm')
 
   // --- 15. Ключ звонка: та же дорога, что и у сообщения ----------------------
   // Звонки целиком проверить нечем (нужны два человека и сервер), но МОЯ половина —
@@ -306,7 +306,7 @@ async function main() {
   // Проверка защиты из DMHome: неудачную расшифровку отличаем по замку в начале.
   // Ключ — base64, а в его алфавите замка нет, поэтому спутать нельзя.
   ok('признак неудачи не совпадёт с настоящим ключом',
-    !callKey.startsWith('🔒') && UNREADABLE_BROKEN.startsWith('🔒') && UNREADABLE_OTHER_DEVICE.startsWith('🔒'))
+    !isUnreadable(callKey) && isUnreadable(UNREADABLE_BROKEN) && isUnreadable(UNREADABLE_OTHER_DEVICE))
 
   await mustThrow('чужой не достанет ключ звонка', () =>
     openMessage(callEnv, 'bob-phone', eve.privateKey, alicePub))

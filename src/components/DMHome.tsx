@@ -34,7 +34,7 @@ import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
 import { publishMyKey } from '../lib/crypto/keys'
-import { sealForPeer, openIncoming, NoRecipientKeys } from '../lib/crypto/dm'
+import { sealForPeer, openIncoming, NoRecipientKeys, isUnreadable } from '../lib/crypto/dm'
 import { isEncrypted } from '../lib/crypto/envelope'
 import { b64 } from '../lib/crypto/core'
 import { encryptFile, decryptFile, markEncrypted, stripEncMark, TooLargeToEncrypt, type FileKey } from '../lib/crypto/files'
@@ -504,7 +504,9 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         let callKey: string | null = null
         if (detail.ek && detail.fromId) {
           const opened = await openIncoming(detail.ek, detail.fromId)
-          if (opened.text && !opened.text.startsWith('🔒')) callKey = opened.text
+          // Признак «не прочиталось» — не по виду текста, а по самой константе
+          // (isUnreadable): иначе смена надписи молча ломала бы передачу ключа.
+          if (opened.text && !isUnreadable(opened.text)) callKey = opened.text
         }
         const room = await joinRoom('dm_' + tid, meId, username, callKey ? { key: callKey } : undefined)
         if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
@@ -1359,7 +1361,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                   // Подставляем расшифрованные текст И вложения: ниже по ленте
                   // ни один компонент про шифрование не знает — им приходит
                   // обычное сообщение с обычными ссылками.
-                  ? { ...m, content: plain[m.id] ?? '🔒 Расшифровываю…', _enc: true,
+                  ? { ...m, content: plain[m.id] ?? 'Расшифровываю…', _enc: true,
                       ...(attach[m.id] ? { attach_url: attach[m.id].url, attach_type: attach[m.id].type } : {}) }
                   : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
@@ -1369,7 +1371,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 // v1.295.0: reply_preview хранится в базе ОТКРЫТЫМ текстом. Для
                 // зашифрованного сообщения цитата вынесла бы его содержимое наружу
                 // в обход шифрования — поэтому вместо текста только пометка.
-                preview: (m as any)._enc ? '🔒 зашифрованное сообщение' : (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : activeAvatar) }); setEditingMsg(null) }}
+                preview: (m as any)._enc ? 'сообщение' : (m.content || 'вложение').slice(0, 120), avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : activeAvatar) }); setEditingMsg(null) }}
               onStartEdit={m => { setEditingMsg({ id: m.id, content: m.content ?? '' }); setReplyTarget(null) }} editingId={editingMsg?.id ?? null}
               onMarkUnread={m => { setNewDividerId(m.id); if (threadId) setDmRead(threadId, new Date(m.created_at).getTime() - 1) }}
               onProfile={(m, x, y) => setMini({ userId: m.author, name: m.author_name, avatarUrl: m.author === meId ? avatarUrl : (activeGroup ? (groupMembers.find(p => p.id === m.author)?.avatar_url ?? null) : null), status: statusOf(m.author), x, y })} />

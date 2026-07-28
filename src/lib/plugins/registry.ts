@@ -43,6 +43,42 @@ interface Registry {
 }
 const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [] }
 
+/**
+ * Сколько всего один плагин может добавить (v1.345.0).
+ *
+ * Раньше потолка не было вовсе: плагин мог зарегистрировать десять тысяч кнопок
+ * и превратить поле ввода в кашу, а приложение — в тормозящее нечто. Причём для
+ * этого не нужен злой умысел, хватит цикла с ошибкой. Числа взяты с запасом:
+ * ни один осмысленный плагин столько не просит.
+ */
+const MAX_PER_PLUGIN = { buttons: 5, actions: 5, commands: 15 }
+
+/** Снимок для проверок — приложению он не нужен, оно читает через хуки. */
+export const getRegistry = (): Registry => reg
+
+// ---- Аварийный режим ----------------------------------------------------------
+// Плагин с разрешением css может закрыть приложение непрозрачным слоем или
+// спрятать всё подряд — тогда человек не доберётся даже до настроек, чтобы его
+// выключить. Значит нужен способ выключить ВСЕ плагины, не нажимая ничего внутри
+// приложения: он и есть здесь. Включается горячими клавишами и адресом ?safe=1,
+// переживает перезагрузку.
+const SAFE_KEY = 'ponoi_plugins_off'
+let disabled = (() => { try { return localStorage.getItem(SAFE_KEY) === '1' } catch { return false } })()
+
+export const pluginsDisabled = (): boolean => disabled
+
+export function setPluginsDisabled(on: boolean) {
+  disabled = on
+  try { on ? localStorage.setItem(SAFE_KEY, '1') : localStorage.removeItem(SAFE_KEY) } catch {}
+  if (on) {
+    // Снимаем всё сразу: и стили, и кнопки, и команды — не дожидаясь, пока
+    // плагины остановятся сами.
+    for (const [, el] of styleEls) el.textContent = ''
+    reg.composerButtons = []; reg.messageActions = []; reg.commands = []; reg.settingsPages = []
+  }
+  notify()
+}
+
 const listeners = new Set<() => void>()
 function notify() { listeners.forEach(fn => { try { fn() } catch {} }) }
 function useReg<T>(pick: () => T): T {
@@ -63,6 +99,7 @@ function useReg<T>(pick: () => T): T {
 const styleEls = new Map<string, HTMLStyleElement>()
 
 export function setPluginCss(pluginId: string, css: string) {
+  if (disabled) return
   let el = styleEls.get(pluginId)
   if (!el) {
     el = document.createElement('style')
@@ -74,19 +111,37 @@ export function setPluginCss(pluginId: string, css: string) {
 }
 
 // ---- Регистрация вкладов ------------------------------------------------------
+/** Ошибка «плагин просит слишком много» — текст уходит прямо ему. */
+export class PluginLimit extends Error {}
+
+function guard(kind: keyof typeof MAX_PER_PLUGIN, list: { pluginId: string }[], pluginId: string, replacing: boolean) {
+  if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
+  if (replacing) return
+  const mine = list.filter(x => x.pluginId === pluginId).length
+  const max = MAX_PER_PLUGIN[kind]
+  if (mine >= max) {
+    const what = kind === 'buttons' ? 'кнопок' : kind === 'actions' ? 'действий над сообщением' : 'команд'
+    throw new PluginLimit(`Плагин просит слишком много ${what}: больше ${max} нельзя.`)
+  }
+}
+
 export function addComposerButton(b: ComposerButton) {
+  guard('buttons', reg.composerButtons, b.pluginId, reg.composerButtons.some(x => x.key === b.key && x.pluginId === b.pluginId))
   reg.composerButtons = [...reg.composerButtons.filter(x => x.key !== b.key || x.pluginId !== b.pluginId), b]
   notify()
 }
 export function addMessageAction(a: MessageAction) {
+  guard('actions', reg.messageActions, a.pluginId, reg.messageActions.some(x => x.key === a.key && x.pluginId === a.pluginId))
   reg.messageActions = [...reg.messageActions.filter(x => x.key !== a.key || x.pluginId !== a.pluginId), a]
   notify()
 }
 export function addCommand(c: SlashCommand) {
+  guard('commands', reg.commands, c.pluginId, reg.commands.some(x => x.name === c.name && x.pluginId === c.pluginId))
   reg.commands = [...reg.commands.filter(x => x.name !== c.name || x.pluginId !== c.pluginId), c]
   notify()
 }
 export function setSettingsPage(p: PluginSettingsPage) {
+  if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
   reg.settingsPages = [...reg.settingsPages.filter(x => x.pluginId !== p.pluginId), p]
   notify()
 }

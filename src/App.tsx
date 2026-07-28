@@ -19,6 +19,7 @@ import { lazyNamed } from './lib/lazyScreen'
 // Аварийный чат нужен в редкой ситуации «основной сервер лёг» — грузим тогда же.
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 import { startEnabledPlugins } from './lib/plugins/host'
+import { pluginsDisabled, setPluginsDisabled } from './lib/plugins/registry'
 
 // v1.275.0: через сколько непрерывной деградации предлагать аварийный чат —
 // достаточно долго, чтобы не дёргать на секундный сбой, но не тянуть, если
@@ -262,6 +263,34 @@ export default function App() {
   // может зависнуть именно из-за той же недоступности Supabase) — поэтому
   // рендерится вне {loading ? ... : ...} ниже, а не только внутри Home.
   const [showEmergency, setShowEmergency] = useState(false)
+  // v1.345.0: аварийный режим плагинов.
+  //
+  // Плагину с разрешением на оформление ничто не мешает закрыть приложение
+  // непрозрачным слоем или спрятать половину интерфейса — и тогда до настроек,
+  // чтобы его выключить, человек не доберётся. Значит нужен выход, который НЕ
+  // требует ничего нажимать внутри приложения: адрес ?safe=1 и сочетание
+  // Ctrl+Shift+Alt+P. Выбор запоминается, поэтому переживает перезагрузку.
+  const [safe, setSafe] = useState(() => pluginsDisabled())
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(location.search).get('safe') === '1' && !pluginsDisabled()) {
+        setPluginsDisabled(true); setSafe(true)
+      }
+    } catch {}
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.shiftKey || !e.altKey) return
+      if (e.code !== 'KeyP') return
+      e.preventDefault()
+      const next = !pluginsDisabled()
+      setPluginsDisabled(next)
+      setSafe(next)
+      // Плагины запускаются один раз при старте — обратно поднимаем перезагрузкой.
+      if (!next) location.reload()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const verClicks = useRef<number[]>([])
   function verClick() {
     const now = Date.now()
@@ -280,6 +309,13 @@ export default function App() {
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
     </div>
     {showEmergency && <EmergencyChat onClose={() => setShowEmergency(false)} />}
+    {/* Плашка живёт поверх всего и своими стилями: плагин мог испортить общие. */}
+    {safe && (
+      <div className="safe-banner">
+        <span>Плагины выключены аварийным режимом — оформление и кнопки от них не работают.</span>
+        <button onClick={() => { setPluginsDisabled(false); location.reload() }}>Включить обратно</button>
+      </div>
+    )}
     {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу.
         v1.231.0: Ponoi сейчас в бета-тестировании — метка БЕТА рядом с версией
         везде, где она показывается (тут и в окне «Что нового»). */}

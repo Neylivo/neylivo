@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
+import { confirmUi } from '../lib/confirm'
 import { useAuth } from '../auth/AuthProvider'
 import { parsePlugin } from '../lib/plugins/manifest'
 import { installPlugin } from '../lib/plugins/install'
@@ -76,6 +77,11 @@ export function PluginEditor({ editId, onClose, onSaved }: {
   }, [d.name])
 
   const file = useMemo(() => buildFile(d, author), [d, author])
+  // Тело трогали руками, если оно не совпадает ни с заготовкой, ни с рецептом.
+  const dirtyBody = useMemo(() => {
+    const base = mode === 'easy' ? recipe.build(rv) : (TEMPLATES.find(t => t.key === tpl)?.body ?? '')
+    return d.body.trim() !== base.trim()
+  }, [d.body, mode, recipe, rv, tpl])
   // Разбор на каждый ввод: ошибку видно сразу, а не после нажатия «Установить».
   const problem = useMemo(() => {
     try { parsePlugin(file); return null } catch (e: any) { return e?.message ?? String(e) }
@@ -155,6 +161,14 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     finally { setBusy(false) }
   }
 
+  /** Закрыть, не потеряв написанное молча. */
+  async function tryClose() {
+    const touched = !existing && (d.name.trim() || d.description.trim() || dirtyBody)
+    if (touched && !await confirmUi('Закрыть конструктор? Плагин не установлен, написанное пропадёт.',
+      { okText: 'Закрыть', danger: true })) return
+    onClose()
+  }
+
   function download() {
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' })
     const a = document.createElement('a')
@@ -164,11 +178,20 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000)
   }
 
+  // v1.345.0: конструктор — отдельный экран, а не окошко.
+  // Во-первых, места мало: код, поля и разрешения в модалку не помещались.
+  // Во-вторых, промах мимо окна закрывал его вместе со всем написанным — здесь
+  // клик по фону не делает НИЧЕГО, а закрытие с несохранённым спросит.
   return (
-    <Portal><div className="modal-overlay" onClick={onClose}>
-      <div className="modal ped-modal" onClick={e => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        <div className="modal-title">{existing ? 'Изменить плагин' : 'Новый плагин'}</div>
+    <Portal><div className="ped-screen">
+      <div className="ped-sheet">
+        <div className="ped-top">
+          <div className="ped-top-t">{existing ? 'Изменить плагин' : 'Новый плагин'}</div>
+          <button className="ped-top-x" onClick={() => void tryClose()} title="Закрыть">
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+        <div className="ped-scroll">
         <div className="modal-sub">
           {existing ? 'Правь код — шапку файла форма перепишет сама.'
             : mode === 'easy'
@@ -329,6 +352,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
             onClick={() => void save()}>
             {existing ? 'Сохранить' : 'Установить'}
           </button>
+        </div>
         </div>
       </div>
     </div></Portal>
