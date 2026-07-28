@@ -27,6 +27,7 @@ import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
 import { nextTrack } from '../music/nextTrack'
 import { personalOrder } from '../music/personalQueue'
 import { guardLink } from './linkguard'
+import { contentTypeOf } from './fileType'
 import { isDuplicateTrack } from './musicDupe'
 
 let pass = 0, fail = 0
@@ -478,6 +479,36 @@ check('проверка заметила бы возврат к «не разо�
   const f = fakeEvent()
   guardLink(f.ev, 'не ссылка вовсе')
   return oldWay(null, 'не ссылка вовсе') === 'пропустили' && f.blocked()
+})
+
+console.log('\n── Тип файла при загрузке ──')
+// Ровно то, что сломало отправку фото: файл уезжал как application/octet-stream,
+// хранилище отдавало его с запретом угадывать тип, и картинка не показывалась.
+const F = (name: string, type = '') => new File([new Uint8Array([1, 2, 3])], name, { type })
+
+check('готовый тип не подменяется', () =>
+  contentTypeOf(F('a.png', 'image/jpeg')) === 'image/jpeg')
+check('без типа берётся из имени', () =>
+  contentTypeOf(F('1783783440386.png')) === 'image/png')
+check('регистр расширения не мешает', () =>
+  contentTypeOf(F('SHOT.PNG')) === 'image/png')
+check('jpg и jpeg — одно и то же', () =>
+  contentTypeOf(F('a.jpg')) === 'image/jpeg' && contentTypeOf(F('a.jpeg')) === 'image/jpeg')
+check('видео тоже узнаётся', () => contentTypeOf(F('v.mp4')) === 'video/mp4')
+check('звук тоже узнаётся', () => contentTypeOf(F('s.mp3')) === 'audio/mpeg')
+check('незнакомое расширение остаётся общим типом', () =>
+  contentTypeOf(F('a.qwerty')) === 'application/octet-stream')
+check('файл без расширения не ломает разбор', () =>
+  contentTypeOf(F('README')) === 'application/octet-stream')
+check('точка в имени не путает', () =>
+  contentTypeOf(F('my.photo.2026.png')) === 'image/png')
+
+console.log('\n── Ломаем нарочно (тип файла) ──')
+check('проверка заметила бы возврат к «пустой тип — октеты»', () => {
+  // Ровно то, что стояло до v1.384.0.
+  const oldWay = (f: File) => f.type || 'application/octet-stream'
+  const shot = F('1783783440386.png')
+  return oldWay(shot) === 'application/octet-stream' && contentTypeOf(shot) === 'image/png'
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

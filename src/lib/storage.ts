@@ -1,22 +1,28 @@
 import { supabase } from './supabase'
+import { contentTypeOf } from './fileType'
+export { contentTypeOf } from './fileType'
 
 // Uploads a file into <bucket>/<uid>/<timestamp>_<name> and returns its public URL.
 export async function uploadTo(bucket: string, uid: string, file: File): Promise<string> {
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${uid}/${Date.now()}_${safe}`
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: '3600', upsert: false,
+    cacheControl: '3600', upsert: false, contentType: contentTypeOf(file),
   })
   if (error) throw error
   const { data } = supabase.storage.from(bucket).getPublicUrl(path)
   return data.publicUrl
 }
 
+// v1.384.0: у файла из буфера обмена типа может не быть — тогда смотрим на имя.
+// Без этого вставленный скриншот считался не картинкой и уходил как вложение-файл.
 export const isImage = (f: File | string) =>
-  typeof f === 'string' ? /\.(png|jpe?g|gif|webp|svg)$/i.test(f) : f.type.startsWith('image/')
+  typeof f === 'string' ? /\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(f)
+    : contentTypeOf(f).startsWith('image/')
 
 export const isVideo = (f: File | string) =>
-  typeof f === 'string' ? /\.(mp4|webm|mov|m4v|mkv|avi)(\?|$)/i.test(f) : f.type.startsWith('video/')
+  typeof f === 'string' ? /\.(mp4|webm|mov|m4v|mkv|avi)(\?|#|$)/i.test(f)
+    : contentTypeOf(f).startsWith('video/')
 
 
 // Загрузка с прогрессом: XMLHttpRequest даёт события progress, которых нет в supabase-js.
@@ -34,7 +40,7 @@ export async function uploadWithProgress(bucket: string, uid: string, file: File
     xhr.setRequestHeader('Authorization', 'Bearer ' + token)
     xhr.setRequestHeader('apikey', anon)
     xhr.setRequestHeader('cache-control', 'max-age=3600')
-    xhr.setRequestHeader('content-type', file.type || 'application/octet-stream')
+    xhr.setRequestHeader('content-type', contentTypeOf(file))
     xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total) }
     xhr.onload = () => { if (xhr.status < 300) resolve(); else reject(new Error('Загрузка не удалась (' + xhr.status + ')')) }
     xhr.onerror = () => reject(new Error('Сбой сети при загрузке файла'))

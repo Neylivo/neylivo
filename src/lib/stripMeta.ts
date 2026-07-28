@@ -19,6 +19,13 @@ const RASTER = ['image/jpeg', 'image/png', 'image/webp']
 const QUALITY = 0.92
 
 export function needsStrip(file: File): boolean {
+  // v1.384.0: у файла из буфера обмена типа может не быть вовсе — тогда
+  // определяем его по имени, иначе снимок экрана уходил как есть, вместе с
+  // метаданными, ради которых всё это и делается.
+  if (!file.type) {
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+    return ['png', 'jpg', 'jpeg', 'webp'].includes(ext)
+  }
   // GIF пропускаем сознательно: перекодирование через холст оставило бы от
   // анимации один кадр. SVG — не растр, и метаданных в привычном смысле не несёт.
   return RASTER.includes(file.type)
@@ -41,7 +48,9 @@ export async function stripImageMetadata(file: File): Promise<File | null> {
     if (!ctx) return null
     ctx.drawImage(bitmap, 0, 0)
     // PNG оставляем PNG: у него бывает прозрачность, а перевод в JPEG залил бы её чёрным.
-    const type = file.type === 'image/png' ? 'image/png' : file.type
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+    const src = file.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg')
+    const type = src === 'image/png' ? 'image/png' : src
     const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, type, QUALITY))
     if (!blob) return null
     return new File([blob], file.name, { type, lastModified: Date.now() })
