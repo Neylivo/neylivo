@@ -20,6 +20,7 @@ import { copyText } from '../lib/copyMedia'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { nextTrack } from './nextTrack'
+import { useDragBar } from './useDragBar'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
@@ -63,6 +64,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists)
   const [together, setTogether] = useState<{ code: string; host: boolean } | null>(null)
   const [togetherUi, setTogetherUi] = useState(false)
+  const miniDrag = useDragBar()
   const [lobby, setLobby] = useState<{ id: string; name: string; avatar: string | null; host: boolean }[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -1030,19 +1032,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}
     </main>
     {!visible && cur && (
-      <div className="mus-mini" style={musStyle}>
-        <div className={'mus-mini-art' + (playing ? ' spin' : '')} onClick={onClose} title="Открыть плеер">
+      // v1.381.0: плашку можно утащить куда угодно, пока тащишь — она сворачивается
+      // в кружок. Полоса шириной в треть экрана, летающая за курсором, закрывает
+      // больше, чем стояла на месте.
+      <div ref={miniDrag.ref} className={'mus-mini' + (miniDrag.dragging ? ' dragging' : '')}
+        style={{ ...musStyle, ...miniDrag.style }} onPointerDown={miniDrag.onPointerDown}>
+        <div className={'mus-mini-art' + (playing ? ' spin' : '')}
+          onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер · тяни, чтобы переставить">
           {curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={18} />}
         </div>
-        <div className="mus-mini-meta" onClick={onClose} title="Открыть плеер">
+        <div className="mus-mini-meta" onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер">
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
           <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'Ponoi Music')}</div>
         </div>
-        <button className="mm-play" title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
+        <button className="mm-play" onPointerDown={e => e.stopPropagation()} title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
           {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}
         </button>
-        <button title="Следующий" onClick={next} disabled={tracks.length < 2}><Icon name="skip-forward" size={15} /></button>
-        <button title="Выключить музыку" onClick={() => { setPlaying(false); onStop() }}><Icon name="close" size={15} /></button>
+        <button onPointerDown={e => e.stopPropagation()} title="Следующий" onClick={next} disabled={tracks.length < 2}><Icon name="skip-forward" size={15} /></button>
+        <button onPointerDown={e => e.stopPropagation()} title="Выключить музыку" onClick={() => { setPlaying(false); onStop() }}><Icon name="close" size={15} /></button>
       </div>
     )}
   </>)

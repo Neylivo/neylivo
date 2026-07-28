@@ -17,7 +17,7 @@ import { sendPush } from '../lib/push'
 import { MiniProfile, MiniProfileData } from './MiniProfile'
 import { Composer } from './Composer'
 import { MessageList, jumpToMessage } from './MessageList'
-import { GameLine } from './ActivityLabel'
+import { GameLine, ListenLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
 import { chNameStyle } from '../lib/chStyle'
@@ -138,7 +138,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const voicePresRef = useRef<any>(null)
   const joinSeq = useRef(0)   // v1.142.0: поздно завершившийся коннект не должен перебить более свежий вход/выход
   const isOwner = server.owner === user?.id
-  const { statusOf, activityOf, gameOf, deviceOf } = usePresence()
+  const { statusOf, activityOf, gameOf, listeningOf, deviceOf } = usePresence()
   const [mini, setMini] = useState<MiniProfileData | null>(null)
   const [roles, setRoles] = useState<ServerRole[]>([])
   const [memberRoles, setMemberRoles] = useState<Record<string, string[]>>({})  // v1.96.0: user_id -> все его роли
@@ -1595,6 +1595,11 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <span className="me-nm" style={{ color: rr?.color, fontFamily: memberFonts(m.user_id).nick }}>{m.member_name}{(() => { const ir = allRolesOf(m.user_id).find(r => r.icon_url); return ir ? <img className="role-badge" src={ir.icon_url!} alt="" title={ir.name} /> : null })()}<UserTagBadge userId={m.user_id} />
                 {(() => { const g = gameOf(m.user_id)
                   if (g) return <GameLine game={g} />
+                  // v1.381.0: музыка — сразу после игры. Показывалась она только в
+                  // мини-профиле, и со стороны выглядело, что другие не видят, что
+                  // ты слушаешь: данные доходили, а места для них не было.
+                  const l = listeningOf(m.user_id)
+                  if (l) return <ListenLine l={l} />
                   return act && <small className="member-act"><ActivityLabel activity={act} /></small> })()}
               </span>
               {isTyping && <span className="member-typing" title="печатает…"><i/><i/><i/></span>}

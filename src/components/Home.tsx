@@ -358,7 +358,9 @@ export function Home() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      if (settings.keyMusic && matchCombo(e, settings.keyMusic)) { e.preventDefault(); setView({ kind: 'music' }) }
+      // Та же клавиша закрывает плеер, если он уже открыт: сочетание — тоже
+      // переключатель, а не «открыть ещё раз».
+      if (settings.keyMusic && matchCombo(e, settings.keyMusic)) { e.preventDefault(); setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' }) }
       else if (settings.keyHome && matchCombo(e, settings.keyHome)) { e.preventDefault(); setView({ kind: 'dm' }) }
     }
     window.addEventListener('keydown', onKey)
@@ -589,7 +591,10 @@ export function Home() {
         <div className={'srv-wrap music-bottom' + (view.kind === 'music' ? ' on' : '')}>
           <RailTip text="Ponoi Music">
             <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-              onClick={() => setView({ kind: 'music' })}><Icon name="music" size={22} /></button>
+              // v1.381.0: повторное нажатие закрывает — раньше кнопка только
+              // открывала, и выйти из плеера ею было нельзя, хотя выглядит она
+              // как переключатель и ведёт себя так везде в приложении.
+              onClick={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}><Icon name="music" size={22} /></button>
           </RailTip>
         </div>
       </nav>

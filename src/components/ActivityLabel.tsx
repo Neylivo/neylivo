@@ -59,6 +59,22 @@ export function GameLine({ game }: { game: Game }) {
   </small>
 }
 
+// v1.381.0: «Слушает …» строкой под ником — рядом с игрой.
+//
+// Музыка публиковалась в присутствии наравне с игрой, но показывалась ровно в
+// одном месте — в мини-профиле, куда надо ещё догадаться зайти. В списке
+// участников её не было, и со стороны это выглядело как «другие не видят, что
+// ты слушаешь»: данные доходили, показать их было негде.
+export function ListenLine({ l }: { l: { title: string; artist?: string | null } }) {
+  const full = l.title + (l.artist ? ' — ' + l.artist : '')
+  return <small className="member-act listen" title={'Слушает ' + full}>
+    <span className="mag-ico"><Icon name="music" size={14} /></span>
+    {/* notr: это чужое название трека, переводить его нельзя. Выделение
+        разрешено намеренно — название хотят скопировать, чтобы найти у себя. */}
+    <span className="mag-tx notr" translate="no">{l.title}{l.artist && <span className="mag-mode"> — {l.artist}</span>}</span>
+  </small>
+}
+
 // То же, но в строку — вкладка «Друзья» и карточки «Активные контакты».
 export function GameInline({ game }: { game: Game }) {
   return <span className="game-inline">

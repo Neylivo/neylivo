@@ -92,6 +92,7 @@ const UGC_CLASSES = [
   'mus2-card-t', 'mus2-card-a',
   'mus2-up-t',        // название трека в ленте «дальше»
   'tog-nm', 'tog-code',  // имя в лобби и код — их придумали не мы
+  'mag-tx',           // название игры и трека в строке активности
 ]
 const SKIP_SEL = ['.msgs', 'pre', 'code', '.emoji-scroll', '.pqs-code-val', '.notr', '[translate="no"]']
   .concat(UGC_CLASSES.map(c => '.' + c)).join(', ')

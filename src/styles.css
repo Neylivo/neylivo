@@ -5520,3 +5520,32 @@ body.no-anim .mus2-card-del { transition: none; }
 }
 .mus2-up-t { font-weight: 500; }
 .mus2-up:hover .mus2-up-t { color: var(--tx); }
+
+/* ══ Мини-плашка: тянется и сворачивается в шарик (v1.381.0) ═══════════════
+   Висела в правом нижнем углу намертво и закрывала то, что там оказалось.
+   Теперь её можно утащить куда угодно, а на время перетаскивания она
+   сжимается в кружок: полоса шириной в треть экрана, летающая за курсором,
+   закрывает ещё больше, чем стояла на месте. */
+.mus-mini { touch-action: none; user-select: none; cursor: grab;
+  transition: width .18s var(--ease-out4, ease), height .18s var(--ease-out4, ease),
+              padding .18s var(--ease-out4, ease), border-radius .18s var(--ease-out4, ease); }
+.mus-mini.dragging {
+  cursor: grabbing;
+  width: 56px; height: 56px; padding: 0; gap: 0;
+  border-radius: 50%; overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+}
+/* В свёрнутом виде остаётся только обложка — по ней и понятно, что тащишь. */
+.mus-mini.dragging .mus-mini-meta,
+.mus-mini.dragging button { display: none; }
+.mus-mini.dragging .mus-mini-art { width: 56px; height: 56px; border-radius: 50%; }
+/* Крутящаяся обложка под курсором мешает целиться. */
+.mus-mini.dragging .mus-mini-art.spin { animation: none; }
+
+body.no-anim .mus-mini, body.no-anim .mus-mini.dragging .mus-mini-art { transition: none; }
+
+/* Название трека в активности можно выделить и скопировать (v1.381.0).
+   Строки активности наследовали общий запрет выделения — а название трека
+   как раз хотят взять, чтобы найти его у себя. */
+.member-act.listen .mag-tx, .mus-mini-t, .mus2-card-t, .tog-code { user-select: text; }
+.member-act.listen .mag-ico { color: var(--brand); }

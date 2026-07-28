@@ -40,7 +40,7 @@ import { b64 } from '../lib/crypto/core'
 import { encryptFile, decryptFile, markEncrypted, stripEncMark, TooLargeToEncrypt, type FileKey } from '../lib/crypto/files'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
-import { GameLine, GameInline } from './ActivityLabel'
+import { GameLine, GameInline, ListenLine } from './ActivityLabel'
 import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/msgCache'
 import { getDmRead, setDmRead, isDmPinned, isDmClosed, isDmMuted, isDmIgnored, friendNickOf, reopenDm, closeDm } from '../lib/userPrefs'
 import { useAvatarOf, avatarOf } from '../lib/avatars'
@@ -214,7 +214,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const [copied, setCopied] = useState(false)
   const [codeMsg, setCodeMsg] = useState('')
   const [codeOk, setCodeOk] = useState(false) // v1.53.0: зелёное/красное сообщение под полем, как в Discord
-  const { statusOf, gameOf, deviceOf } = usePresence()
+  const { statusOf, gameOf, listeningOf, deviceOf } = usePresence()
   const msgsRef = useRef<DMMessage[]>([])
   // v1.187.0: правый клик по другу в списке ЛС — меню закреп/мьют/никнейм/блок/etc.
   const [dmCtx, setDmCtx] = useState<{ friend: Friend; x: number; y: number } | null>(null)
@@ -1275,7 +1275,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
               <span className="me-nm">{friendNickOf(f.id) ?? f.name}
                 {isDmPinned(f.id) && <Icon name="pin" size={12} />}
-                {(() => { const g = gameOf(f.id); return g ? <GameLine game={g} /> : null })()}
+                {(() => {
+                  const g = gameOf(f.id)
+                  if (g) return <GameLine game={g} />
+                  const l = listeningOf(f.id)
+                  return l ? <ListenLine l={l} /> : null
+                })()}
               </span>
               {/* v1.229.0: крестик на наведении — как в Discord, «Закрыть ЛС»: прячет
                   из списка, ничего не удаляет, вернётся само, если собеседник напишет. */}

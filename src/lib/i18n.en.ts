@@ -1741,3 +1741,9 @@ Object.assign(DICT_EN, {
 REGEX_EN.push([/^Нет доступа к файлу \((\d+)\)$/, 'No access to the file ($1)'])
 REGEX_EN.push([/^Сервер ответил (\d+)$/, 'The server replied $1'])
 REGEX_EN.push([/^Это не картинка: (.+)$/, 'Not an image: $1'])
+
+// v1.381.0: музыка в списке участников и перетаскиваемая плашка.
+Object.assign(DICT_EN, {
+  'Открыть плеер · тяни, чтобы переставить': 'Open the player · drag to move it',
+})
+REGEX_EN.push([/^Слушает (.+)$/, 'Listening to $1'])
