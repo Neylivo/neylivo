@@ -1584,3 +1584,28 @@ Object.assign(DICT_EN, {
   'Отправить код ещё раз': 'Resend code',
   'Назад': 'Back',
 })
+
+// v1.358.0: свёртывание длинных сообщений, переключение каналов с клавиатуры и
+// пополнившаяся шпаргалка горячих клавиш.
+Object.assign(DICT_EN, {
+  'Показать полностью': 'Show more',
+  'Свернуть': 'Show less',
+  'Поиск по сообщениям канала': 'Search messages in channel',
+  'Предыдущий канал': 'Previous channel',
+  'Следующий канал': 'Next channel',
+  'Закрыть окно / отменить ответ или правку': 'Close dialog / cancel reply or edit',
+  'Двойной щелчок': 'Double click',
+  'Ответить на сообщение': 'Reply to message',
+  'Shift + удалить': 'Shift + delete',
+  'Удалить сообщение без подтверждения': 'Delete message without confirmation',
+  ': + буквы': ': + letters',
+  'Подсказка эмодзи прямо в поле ввода': 'Emoji suggestions right in the input',
+  '@ + буквы': '@ + letters',
+  'Упомянуть участника или роль': 'Mention a member or role',
+  '/ + буквы': '/ + letters',
+  'Команда бота или плагина': 'Bot or plugin command',
+  'Этот бот уже стоит на выбранном сервере': 'This bot is already on the selected server',
+  'Уже на сервере': 'Already added',
+  'Некуда добавлять': 'Nowhere to add',
+  'Эмодзи': 'Emoji',
+})

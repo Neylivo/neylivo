@@ -5067,3 +5067,22 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
 .picf-prev { flex: none; width: 34px; height: 34px; border-radius: 8px; background: var(--bg3);
   display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--mut); }
 .picf-prev img { width: 100%; height: 100%; object-fit: cover; }
+
+
+/* ── Длинное сообщение свёрнуто (v1.358.0) ────────────────────────────────
+   Обрезаем по высоте, а не прячем текст совсем: видно начало и понятно, стоит
+   ли разворачивать. Плавное затухание снизу — подсказка, что там ещё есть. */
+.msg-txt.msg-clamp {
+  max-height: 26em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+}
+.msg-more {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 2px; padding: 2px 8px;
+  background: none; border: none; cursor: pointer;
+  color: var(--accent, #5865f2); font-size: 13px; font-weight: 600;
+  border-radius: 6px; white-space: nowrap;
+}
+.msg-more:hover { background: var(--bg3); text-decoration: underline; }

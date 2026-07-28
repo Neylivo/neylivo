@@ -727,6 +727,29 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // eslint-disable-next-line
   }, [])
 
+  // v1.358.0: Alt+↑/↓ — соседний текстовый канал, как в Discord. Мышью до
+  // нужного канала в длинном списке идти долго, а руки и так на клавиатуре.
+  //
+  // Голосовые пропускаем нарочно: переключение туда — это вход в звонок, такое
+  // не должно случаться от нажатия стрелки.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+      const list = channels.filter(c => (c as any).kind !== 'voice')
+      if (list.length < 2) return
+      e.preventDefault()
+      const i = list.findIndex(c => c.id === curChannelRef.current?.id)
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      // Из начала списка вверх — в конец: по кругу, чтобы не упираться.
+      const next = list[((i < 0 ? 0 : i) + step + list.length) % list.length]
+      if (next && next.id !== curChannelRef.current?.id) void selectChannel(next)
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels])
+
   // Escape закрывает панель закреплённых.
   useEffect(() => {
     if (!showPins) return

@@ -6,6 +6,7 @@ import { renderMd, mentionsUser, mentionsRoleName } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings, devMode } from '../lib/settings'
+import { isLongText } from '../lib/longText'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta, type SysMsg } from '../lib/sysmsg'
@@ -364,6 +365,9 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   const [revealedIgnored, setRevealedIgnored] = useState<Set<string>>(new Set())
   const [pickFor, setPickFor] = useState<string | null>(null)
   const [fwdFor, setFwdFor] = useState<UiMessage | null>(null)
+  // Развёрнутые сообщения помним по id: свернуть обратно можно тем же нажатием,
+  // а при обновлении ленты выбор не теряется.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [emojiAt, setEmojiAt] = useState<{ id: string; x: number; y: number } | null>(null)
   const [, setEmojiVer] = useState(0)
   // v1.286.0: пункты меню сообщения, добавленные плагинами (см. lib/plugins/registry).
@@ -580,7 +584,16 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
                   : (m as any)._dec ? <div className="msg-dec" title="Расшифровывается"><i /><i /><i /></div>
-                  : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}>(изменено)</span>}</div>}
+                  : m.content && !isOnlyGifLink(m) && (() => {
+                    const long = isLongText(m.content)
+                    const open = !!expanded[m.id]
+                    return <>
+                      <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '') + (long && !open ? ' msg-clamp' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}>(изменено)</span>}</div>
+                      {long && <button className="msg-more" onClick={() => setExpanded(e => ({ ...e, [m.id]: !e[m.id] }))}>
+                        {open ? 'Свернуть' : 'Показать полностью'}
+                      </button>}
+                    </>
+                  })()}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }}
                   editable={m.author === currentUser} attachMeta={m.attach_meta}
                   uploading={(m as any)._uploading} progress={(m as any)._upProgress} pendingNames={(m as any)._uploadNames}

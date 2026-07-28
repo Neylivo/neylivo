@@ -825,7 +825,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(sugg[mIdx].name); return }
               if (e.key === 'Escape') { e.preventDefault(); setMQ(null); return }
             }
-            if (e.key === 'ArrowUp' && !text && !isEditing) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
+            // v1.358.0: с Alt стрелка принадлежит переключению каналов (ServerView),
+            // иначе на пустом поле срабатывало и то и другое разом.
+            if (e.key === 'ArrowUp' && !e.altKey && !text && !isEditing) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
             if (e.key === 'Escape') { setEmoji(false); setGif(false); if (isEditing) onCancelEdit?.(); else onCancelReply?.(); return }
             if (e.key === 'Enter') {
               const hasCtrl = e.ctrlKey || e.metaKey
