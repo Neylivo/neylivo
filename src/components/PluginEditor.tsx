@@ -3,6 +3,7 @@ import { Icon } from './icons'
 import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
+import { PicField } from './PicField'
 import { useAuth } from '../auth/AuthProvider'
 import { parsePlugin } from '../lib/plugins/manifest'
 import { installPlugin } from '../lib/plugins/install'
@@ -314,13 +315,9 @@ export function PluginEditor({ editId, onClose, onSaved }: {
             </div>
           </div>
           <div className="botp-fields">
-            <input className="modal-in" placeholder="Ссылка на картинку (https://…)"
-              value={d.icon} onChange={e => set('icon', e.target.value)} />
-            <input className="modal-in" placeholder="Ссылка на шапку карточки (https://…)"
-              value={d.banner} onChange={e => set('banner', e.target.value)} />
-            <div className="cset-hint" style={{ marginTop: 0 }}>
-              Так плагин будет выглядеть в каталоге и в списке установленных.
-            </div>
+            <PicField label="Картинка" value={d.icon} onChange={v => set('icon', v)} />
+            <PicField label="Шапка карточки" value={d.banner} onChange={v => set('banner', v)}
+              hint="Так плагин будет выглядеть в каталоге и в списке установленных." />
           </div>
         </div>
 

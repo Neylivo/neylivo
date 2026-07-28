@@ -10,6 +10,7 @@ import { getPlugin, loadPlugins } from '../lib/plugins/store'
 import { OFFICIAL_PLUGINS } from '../lib/plugins/official'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission, type PluginManifest } from '../lib/plugins/types'
 import { PermissionGate } from './PluginPermissionGate'
+import { PicField } from './PicField'
 import {
   fetchPluginCatalog, publishPlugin, unpublishPlugin, countInstall, fetchInstallCounts, shorten,
   SUMMARY_MAX, DESC_MAX, type CatalogPlugin,
@@ -307,11 +308,8 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <textarea className="cset-topic" maxLength={DESC_MAX} value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Как пользоваться, какие команды, что настраивается" />
 
-            <label className="modal-lbl">Значок (ссылка https, необязательно)</label>
-            <input className="modal-in" value={icon} onChange={e => setIcon(e.target.value)} placeholder="https://…/icon.png" />
-
-            <label className="modal-lbl">Фон карточки (ссылка https, необязательно)</label>
-            <input className="modal-in" value={banner} onChange={e => setBanner(e.target.value)} placeholder="https://…/banner.jpg" />
+            <PicField label="Значок" value={icon} onChange={setIcon} />
+            <PicField label="Фон карточки" value={banner} onChange={setBanner} />
             <div className="cat-preview">
               <div className="cat-tile as-preview">
                 <div className={'cat-tile-bg' + (banner.trim() ? '' : ' plain')}

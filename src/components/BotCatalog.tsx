@@ -12,6 +12,7 @@ import {
   SUMMARY_MAX, DESC_MAX, type CatalogBot,
 } from '../lib/catalog'
 import { fmtAdds } from './PluginCatalog'
+import { PicField } from './PicField'
 import { BUILTIN_BOTS } from '../lib/builtinBots'
 
 // v1.333.0: каталог ботов — то же, что каталог плагинов, только про ботов.
@@ -283,11 +284,8 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             <textarea className="cset-topic" maxLength={DESC_MAX} value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Команды, что настраивается, куда писать, если сломался" />
 
-            <label className="modal-lbl">Значок (ссылка https, необязательно)</label>
-            <input className="modal-in" value={icon} onChange={e => setIcon(e.target.value)} placeholder="https://…/icon.png" />
-
-            <label className="modal-lbl">Фон карточки (ссылка https, необязательно)</label>
-            <input className="modal-in" value={banner} onChange={e => setBanner(e.target.value)} placeholder="https://…/banner.jpg" />
+            <PicField label="Значок" value={icon} onChange={setIcon} />
+            <PicField label="Фон карточки" value={banner} onChange={setBanner} />
             <div className="cat-preview">
               <div className="cat-tile as-preview">
                 <div className={'cat-tile-bg' + (banner.trim() ? '' : ' plain')}

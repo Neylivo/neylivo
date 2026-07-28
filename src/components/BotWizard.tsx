@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { Avatar } from './Avatar'
+import { PicField } from './PicField'
 import { toastOk, toastErr } from '../lib/toast'
 import { createBot, addBotToServer, setBotWebhook, setBotProfile, saveBotCommand } from '../lib/botApi'
 import { myServers } from '../lib/servers'
@@ -340,8 +341,8 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
               <div className="botp-prev-nm">{name.trim() || 'Бот'}<span className="bot-badge">БОТ</span></div>
             </div>
             <div className="botp-fields">
-              <input className="modal-in" placeholder="Ссылка на аватарку (https://…)" value={avatar} onChange={e => setAvatar(e.target.value)} />
-              <input className="modal-in" placeholder="Ссылка на шапку профиля (https://…)" value={banner} onChange={e => setBanner(e.target.value)} />
+              <PicField label="Аватарка" value={avatar} onChange={setAvatar} />
+              <PicField label="Шапка профиля" value={banner} onChange={setBanner} />
               <textarea className="cset-topic" maxLength={300} placeholder="О себе: что бот умеет" value={about} onChange={e => setAbout(e.target.value)} />
             </div>
           </div>

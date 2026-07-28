@@ -24,8 +24,41 @@ export interface BotCommand {
 // код ответа функции, а data при этом форсится в null — реальный текст ошибки
 // (json {error:...}, который шлют bot-create/bot-add-to-server/bot-interact) жив
 // только в ещё не прочитанном error.context (это тот самый Response).
-async function edgeErr(error: any): Promise<string> {
-  try { const body = await error?.context?.json?.(); if (body?.error) return String(body.error) } catch { /* не json — используем текст ниже */ }
+//
+// v1.351.0: этого было мало. Если функция вообще не развёрнута или упала до
+// нашего кода, тела с полем error нет, и человек получал ровно «Edge Function
+// returned a non-2xx status code» — бесполезную строку, по которой нельзя
+// понять ни что сломалось, ни что делать. Теперь достаём и код ответа, и сырой
+// текст, а самые частые случаи объясняем словами.
+async function edgeErr(error: any, fn?: string): Promise<string> {
+  const res = error?.context
+  const status: number | undefined = typeof res?.status === 'number' ? res.status : undefined
+  let raw = ''
+  try {
+    // Тело читается один раз: сначала как текст, а json разбираем уже из него.
+    raw = typeof res?.text === 'function' ? String(await res.text()) : ''
+  } catch { /* тело недоступно — обойдёмся кодом ответа */ }
+  if (raw) {
+    try {
+      const body = JSON.parse(raw)
+      if (body?.error) return String(body.error)
+    } catch { /* не json — покажем как есть ниже */ }
+  }
+
+  const where = fn ? `Функция «${fn}»` : 'Серверная функция'
+  if (status === 404) {
+    return `${where} не развёрнута на сервере. Нужно выполнить: supabase functions deploy ${fn ?? '<имя>'}`
+  }
+  if (status === 401 || status === 403) {
+    return `${where} отклонила запрос (${status}). Скорее всего истёк вход — перезайди в приложение.`
+  }
+  if (status === 500 && /column .* does not exist|relation .* does not exist/i.test(raw)) {
+    return `${where} упала: в базе нет нужной колонки или таблицы — не применена одна из миграций supabase/.`
+  }
+  if (status) {
+    const tail = raw.trim().slice(0, 200)
+    return `${where} ответила ${status}${tail ? ': ' + tail : ' без объяснения'}`
+  }
   return error?.message ?? String(error)
 }
 
@@ -43,8 +76,12 @@ export async function myBots(): Promise<BotApp[]> {
  *   Обычный бот создаётся без него, как и раньше.
  */
 export async function createBot(name: string, builtin?: string): Promise<{ id: string; token: string; webhookSecret: string; botUserId: string }> {
-  const { data, error } = await supabase.functions.invoke('bot-create', { body: { name, builtin: builtin ?? null } })
-  if (error) throw new Error(await edgeErr(error))
+  // Поле builtin шлём, только когда оно есть: у не обновлённой функции запрос
+  // тогда выглядит ровно так же, как раньше, и она его понимает.
+  const body: Record<string, unknown> = { name }
+  if (builtin) body.builtin = builtin
+  const { data, error } = await supabase.functions.invoke('bot-create', { body })
+  if (error) throw new Error(await edgeErr(error, 'bot-create'))
   if (data?.error) throw new Error(data.error)
   return data
 }
@@ -62,7 +99,7 @@ export async function deleteBot(botAppId: string): Promise<void> {
 
 export async function addBotToServer(botAppId: string, serverId: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('bot-add-to-server', { body: { botAppId, serverId } })
-  if (error) throw new Error(await edgeErr(error))
+  if (error) throw new Error(await edgeErr(error, 'bot-add-to-server'))
   if (data?.error) throw new Error(data.error)
 }
 
@@ -157,6 +194,6 @@ export async function deleteBotCommand(id: string): Promise<void> {
 // кладёт ответ бота в чат (см. supabase/functions/bot-interact).
 export async function invokeBotCommand(botAppId: string, channelId: string, command: string, args: Record<string, string>): Promise<void> {
   const { data, error } = await supabase.functions.invoke('bot-interact', { body: { botAppId, channelId, command, args } })
-  if (error) throw new Error(await edgeErr(error))
+  if (error) throw new Error(await edgeErr(error, 'bot-interact'))
   if (data?.error) throw new Error(data.error)
 }

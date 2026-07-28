@@ -7,6 +7,7 @@ import {
   addBotToServer, removeBotFromServer, setBotProfile, fetchBotProfile, type BotApp, type BotCommand,
 } from '../lib/botApi'
 import { Avatar } from './Avatar'
+import { PicField } from './PicField'
 import { setMemberNickname } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
@@ -222,10 +223,10 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
             <div className="botp-prev-nm">{bot.name}<span className="bot-badge">БОТ</span></div>
           </div>
           <div className="botp-fields">
-            <input className="modal-in" placeholder="Ссылка на аватарку (https://…)"
-              value={avatar} onChange={e => setAvatar(e.target.value)} />
-            <input className="modal-in" placeholder="Ссылка на шапку профиля (https://…)"
-              value={banner} onChange={e => setBanner(e.target.value)} />
+            <PicField label="Аватарка" value={avatar} onChange={setAvatar}
+              hint="Видна в чате и в списке участников" />
+            <PicField label="Шапка профиля" value={banner} onChange={setBanner}
+              hint="Видна в мини-профиле и в полном" />
             <textarea className="cset-topic" maxLength={300} placeholder="О себе: что бот умеет"
               value={about} onChange={e => setAbout(e.target.value)} />
             <div className="modal-inline">
