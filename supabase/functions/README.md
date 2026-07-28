@@ -38,9 +38,14 @@ npm run deploy:functions      # зальёт все функции с прави
    ```bash
    npx supabase secrets set DB_WEBHOOK_SECRET=<длинная строка>
    ```
-2. Dashboard → Database → Webhooks → создать: таблица `messages`, событие `INSERT`,
-   тип `HTTP Request`, адрес — URL функции `bot-dispatch`.
-3. Там же в заголовках вебхука добавь `X-Webhook-Secret` с тем же значением.
+2. Применить `supabase/94_bot_dispatch_hook.sql` в SQL Editor, заменив в нём два
+   места: адрес функции и тот же секрет. Это тот же самый вызов, что делает
+   Database Webhook из Dashboard, — просто SQL-ом, потому что в новых панелях
+   раздел Webhooks переехал в Integrations и есть не у всех.
+
+Через Dashboard, если раздел на месте: Database (или Integrations) → Webhooks →
+создать хук на таблицу `messages`, событие `INSERT`, тип «Supabase Edge Functions»,
+функция `bot-dispatch`, и в заголовках `X-Webhook-Secret` с тем же значением.
 
 Заголовок обязателен: функция залита с `--no-verify-jwt`, и без него кто угодно
 слал бы туда поддельные `{record:{…}}` и заставлял нас подписывать чужой текст
