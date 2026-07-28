@@ -4,6 +4,7 @@ import { GIF_KEY, BG_KEY, BG_IDB_KEY } from './types'
 import { idbSet, idbDel } from '../lib/idb'
 import { videoDuration } from './videoDuration'
 import { Icon } from '../components/icons'
+import { Portal } from '../components/Portal'
 
 export function loadGif(): GifCfg { try { return JSON.parse(localStorage.getItem(GIF_KEY) || '') } catch { return { url: '', pos: 'both' } } }
 export function loadBg(): BgCfg { try { return JSON.parse(localStorage.getItem(BG_KEY) || '') } catch { return { type: 'none', mode: 'url', url: '', dim: 40, ver: 0 } } }
@@ -12,6 +13,12 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
   const [gif, setGif] = useState<GifCfg>(loadGif())
   const [bg, setBg] = useState<BgCfg>(loadBg())
   const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
 
   useEffect(() => { localStorage.setItem(GIF_KEY, JSON.stringify(gif)); onChange() }, [gif])
   useEffect(() => { localStorage.setItem(BG_KEY, JSON.stringify(bg)); onChange() }, [bg])
@@ -28,8 +35,16 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
 
   async function clearBg() { await idbDel(BG_IDB_KEY); setBg({ type: 'none', mode: 'url', url: '', dim: bg.dim, ver: bg.ver + 1 }) }
 
+  // v1.375.0: окно уезжает в корень страницы, а не остаётся внутри панели плеера.
+  //
+  // Разметка тут и раньше описывала окно посреди экрана, но лежала она внутри
+  // .mus2 — а у той свой слой (z-index) и обрезка по краям. Дочернее окно из
+  // такого слоя выбраться не может: оно прижималось к низу узкой колонки плеера
+  // и выглядело как выехавшая снизу панель, а не как окно.
+  //
+  // Тот же приём, что у остальных окон приложения: рисуем через портал.
   return (
-    <div className="ms-overlay" onClick={onClose}>
+    <Portal><div className="ms-overlay" onClick={onClose}>
       <div className="ms-modal" onClick={e => e.stopPropagation()}>
         <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
 
@@ -66,6 +81,6 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
         </>}
         {msg && <div className="ms-msg">{msg}</div>}
       </div>
-    </div>
+    </div></Portal>
   )
 }

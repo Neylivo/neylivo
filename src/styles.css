@@ -225,7 +225,10 @@ body {
 .mus-li { padding:8px 12px; border-radius:var(--r-sm); color:var(--tx); cursor:pointer; background:rgba(0,0,0,.25); }
 .mus-li:hover { background:rgba(var(--ov, 255,255,255),.08); }
 .mus-li.on { background:var(--brand); color:#fff; }
-.ms-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:var(--z-sheet, 50); }
+/* v1.375.0: слой выше панели плеера (--z-panel 120). Раньше стоял --z-sheet 50,
+   то есть НИЖЕ плеера — окно настроек оказывалось под ним даже там, где успевало
+   отрисоваться поверх страницы. */
+.ms-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal-ov, 150); }
 .ms-modal { background:var(--bg2); border-radius:var(--r-xl); padding:18px; width:420px; max-width:calc(100vw - 32px); max-height:86vh; overflow-y:auto; animation:pop .2s var(--ease-spring, ease) both; }
 .ms-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
 .ms-head button { background:none; border:none; color:var(--mut); font-size:16px; cursor:pointer; }
