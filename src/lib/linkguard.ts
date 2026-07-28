@@ -11,9 +11,20 @@ function trusted(): string[] {
 }
 
 export function guardLink(e: MouseEvent, url: string) {
-  let host = ''
-  try { host = new URL(url).hostname } catch { return }
-  if (!host || trusted().includes(host)) return
+  // v1.378.0: раньше при непонятном адресе функция просто выходила — и переход
+  // происходил сам собой, без спроса. Защита, которая при сомнении пропускает,
+  // защищает ровно до первой неожиданности.
+  //
+  // Через разметку сюда попадают только http(s) — ссылками становятся лишь они
+  // (URL_RE в md.tsx). Но полагаться на это нельзя: у guardLink может появиться
+  // другой вызывающий, и тогда «не разобрали — пропустили» станет дырой.
+  // Не разобрали или не http(s) — не пускаем вовсе.
+  let u: URL
+  try { u = new URL(url) } catch { e.preventDefault(); return }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') { e.preventDefault(); return }
+  const host = u.hostname
+  if (!host) { e.preventDefault(); return }
+  if (trusted().includes(host)) return
   e.preventDefault()
   confirmUi('Переход на внешний сайт: ' + host + '. Открыть ссылку? Этот сайт больше не будет спрашиваться.', { okText: 'Открыть' })
     .then(ok => {

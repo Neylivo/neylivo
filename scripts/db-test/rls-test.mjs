@@ -131,12 +131,13 @@ const SABOTAGE = {
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
   botrm: [/if v_owner <> auth\.uid\(\) and \(server_permissions\(p_server, auth\.uid\(\)\) & 512\) = 0 then\s*raise exception 'missing_manage_bots';\s*end if;/, ''],
   bothuman: [/if not exists \(select 1 from bot_apps where bot_user_id = p_bot_user\) then\s*raise exception 'not_a_bot';\s*end if;/, ''],
+  covers: [/using \(cover_url is null or status = 'not_found'\)/, 'using (true)'],
   plays: [/new\.plays := old\.plays;/, ''],
   keybak: [/using \(user_id = auth\.uid\(\)\)/g, 'using (true)'],
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -184,6 +185,20 @@ await db.exec(`create table if not exists music_tracks (
   kind text not null default 'url', created_at timestamptz not null default now());`)
 await db.exec(SRC[99])
 await db.exec(SRC[100])
+// game_covers заводится в 13, которую песочница целиком не применяет.
+await db.exec(`create table if not exists game_covers (
+  name text primary key, cover_url text,
+  status text not null default 'ok' check (status in ('ok','not_found')),
+  checked_at timestamptz not null default now());
+alter table game_covers enable row level security;
+drop policy if exists "game_covers read" on game_covers;
+create policy "game_covers read" on game_covers for select to authenticated using (true);
+drop policy if exists "game_covers insert" on game_covers;
+create policy "game_covers insert" on game_covers for insert to authenticated with check (true);
+alter table game_covers drop constraint if exists game_covers_url_https;
+alter table game_covers add constraint game_covers_url_https
+  check (cover_url is null or cover_url like 'https://%');`)
+await db.exec(SRC[101])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -1041,6 +1056,48 @@ await check('избранные эмодзи попали в публикаци�
   await check('прослушивание несуществующего трека ничего не ломает', async () => {
     await as(USER, `select record_play('00000000-0000-4000-8000-000000000000')`)
     return true
+  })
+}
+
+
+// ── Общий кэш обложек (v1.378.0) ─────────────────────────────────────────
+//
+// Кэш заполняют, а не переписывают. Раньше любой вошедший мог подменить обложку
+// известной игры, и её увидели бы все: подставить скрипт нельзя (адрес обязан
+// быть https), а картинку-подмену или счётчик, собирающий адреса всех зрителей,
+// вполне.
+{
+  await db.query(`insert into game_covers (name, cover_url) values ('CS2','https://ok/cs2.jpg')`)
+  await db.query(`insert into game_covers (name, cover_url, status) values ('Unknown', null, 'not_found')`)
+
+  await check('найденную обложку переписать нельзя', async () => {
+    await as(USER, `update game_covers set cover_url = 'https://evil/x.jpg' where name = 'CS2'`)
+    const r = await db.query(`select cover_url from game_covers where name='CS2'`)
+    return r.rows[0].cover_url === 'https://ok/cs2.jpg'
+  })
+
+  await check('ненайденную можно дозаполнить', async () => {
+    await as(USER, `update game_covers set cover_url = 'https://ok/u.jpg', status='ok' where name='Unknown'`)
+    const r = await db.query(`select cover_url from game_covers where name='Unknown'`)
+    return r.rows[0].cover_url === 'https://ok/u.jpg'
+  })
+
+  await check('новую обложку добавить по-прежнему можно', async () => {
+    await as(USER, `insert into game_covers (name, cover_url) values ('Dota','https://ok/d.jpg')`)
+    return (await db.query(`select 1 from game_covers where name='Dota'`)).rows.length === 1
+  })
+
+  await check('не-https в кэш не попадёт', async () => {
+    try {
+      await db.query(`insert into game_covers (name, cover_url) values ('Bad','http://evil/x.jpg')`)
+      return false
+    } catch { return true }
+  })
+
+  await check('строку кэша нельзя удалить, чтобы вставить свою', async () => {
+    // Иначе запрет на перезапись обходится в два шага.
+    await as(USER, `delete from game_covers where name='CS2'`)
+    return (await db.query(`select 1 from game_covers where name='CS2'`)).rows.length === 1
   })
 }
 

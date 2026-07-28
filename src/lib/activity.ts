@@ -5,7 +5,22 @@ import { sessionMs } from './sessionTime'
 // История игровых сессий (миграция 14): пишем старт/конец своей игры,
 // читаем агрегат за 7 дней для вкладки «История активностей» в фулл-профиле.
 
+/**
+ * Скрыт ли «был в сети» (v1.378.0).
+ *
+ * Читаем настройку напрямую: этот модуль зовут из мест без провайдера настроек,
+ * а флаг нужен ровно один.
+ */
+function hiddenLastSeen(): boolean {
+  try { return !!JSON.parse(localStorage.getItem('ponoi_settings') || '{}').hideLastSeen } catch { return false }
+}
+
 export async function startSession(userId: string, name: string, since: number): Promise<string | null> {
+  // v1.378.0: «скрывать был в сети» останавливало отметку last_seen, но историю
+  // игровых сессий писало по-прежнему — а по ней видно ровно то же самое и даже
+  // подробнее: когда человек был за компьютером и во что играл. Читать её может
+  // любой вошедший. Настройка обещала одно, а данные утекали через соседнюю дверь.
+  if (hiddenLastSeen()) return null
   try {
     const { data } = await supabase.from('activity_sessions')
       .insert({ user_id: userId, kind: 'game', name, started_at: new Date(since).toISOString() })

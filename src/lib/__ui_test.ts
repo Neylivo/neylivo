@@ -7,6 +7,16 @@
 // Запуск: npm run test:ui
 export {}
 
+// linkguard живёт в браузере: подкладываем минимум, чтобы он загрузился.
+const _store = new Map<string, string>()
+;(globalThis as any).localStorage = {
+  getItem: (k: string) => (_store.has(k) ? _store.get(k)! : null),
+  setItem: (k: string, v: string) => { _store.set(k, String(v)) },
+  removeItem: (k: string) => { _store.delete(k) }, clear: () => _store.clear(),
+}
+;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
+;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
+
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
@@ -16,6 +26,7 @@ import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
 import { nextTrack } from '../music/nextTrack'
 import { personalOrder } from '../music/personalQueue'
+import { guardLink } from './linkguard'
 import { isDuplicateTrack } from './musicDupe'
 
 let pass = 0, fail = 0
@@ -418,6 +429,55 @@ check('проверка заметила бы очередь из одних л�
   // Если выбросить незнакомое, человек никогда не услышит ничего нового.
   const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10 } })
   return r.length > 1
+})
+
+console.log('\n── Защита переходов по ссылкам ──')
+// Раньше при непонятном адресе функция просто выходила — и браузер переходил
+// сам, без спроса. Защита, которая при сомнении пропускает, защищает ровно до
+// первой неожиданности.
+function fakeEvent() {
+  let stopped = false
+  return { ev: { preventDefault: () => { stopped = true } } as any, blocked: () => stopped }
+}
+
+check('javascript: не пропускается', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, 'javascript:alert(1)')
+  return f.blocked()
+})
+check('data: не пропускается', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, 'data:text/html,<script>alert(1)</script>')
+  return f.blocked()
+})
+check('file: не пропускается', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, 'file:///C:/Windows/System32')
+  return f.blocked()
+})
+check('мусор вместо адреса не пропускается', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, 'не ссылка вовсе')
+  return f.blocked()
+})
+check('пустая строка не пропускается', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, '')
+  return f.blocked()
+})
+check('обычный https останавливается для вопроса, а не летит сразу', () => {
+  const f = fakeEvent()
+  guardLink(f.ev, 'https://example.com/page')
+  return f.blocked()
+})
+
+console.log('\n── Ломаем нарочно (ссылки) ──')
+check('проверка заметила бы возврат к «не разобрали — пропускаем»', () => {
+  // Ровно то, что стояло до v1.378.0: выход без preventDefault.
+  const oldWay = (_e: any, url: string) => { try { new URL(url) } catch { return 'пропустили' } return 'спросили' }
+  const f = fakeEvent()
+  guardLink(f.ev, 'не ссылка вовсе')
+  return oldWay(null, 'не ссылка вовсе') === 'пропустили' && f.blocked()
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
