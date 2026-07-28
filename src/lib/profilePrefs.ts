@@ -12,6 +12,8 @@ export interface PetFree { x: number; y: number } // позиция в % от к
 export interface ProfilePrefs {
   primary: string          // profile card banner primary color
   accent: string           // profile card accent color
+  /** Картинка-шапка профиля (v1.349.0). Пусто — рисуется градиент из цветов выше. */
+  bannerUrl: string | null
   about: string
   petUrl: string | null    // public URL (Supabase Storage) of the pet media
   petKind: PetKind
@@ -59,6 +61,7 @@ export interface ProfilePrefs {
 export interface Integration { label: string; url: string }
 
 export const DEFAULT_PROFILE: ProfilePrefs = {
+  bannerUrl: null,
   primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
   petFree: { x: 80, y: 22 },
@@ -96,6 +99,7 @@ function fromRow(r: any): ProfilePrefs {
   return {
     primary: r.primary_color ?? DEFAULT_PROFILE.primary,
     accent: r.accent_color ?? DEFAULT_PROFILE.accent,
+    bannerUrl: r.banner_url ?? null,
     about: r.about ?? DEFAULT_PROFILE.about,
     petUrl: r.pet_url ?? null,
     petKind: (r.pet_kind as PetKind) ?? 'none',
@@ -188,12 +192,17 @@ const COLS_TAG = COLS_WIDGETS + ', tag_server_id'
 const COLS_STATS = COLS_TAG + ', steam_id, game_stats_visibility'
 const COLS_DM_PRIVACY = COLS_STATS + ', dm_message_privacy, dm_call_privacy'
 const COLS_PET_REACTION = COLS_DM_PRIVACY + ', pet_reaction'
+// v1.349.0: картинка-шапка. Отдельной ступенькой, как и всё остальное: пока
+// миграция 93 не применена, запрос с этой колонкой отвалится, и мы честно
+// откатимся на предыдущий набор — профиль просто будет без шапки.
+const COLS_BANNER = COLS_PET_REACTION + ', banner_url'
 
 export async function fetchProfile(id: string): Promise<ProfilePrefs> {
   if (!id) return { ...DEFAULT_PROFILE }
   // Расширенные колонки появляются после миграции 15; до неё откатываемся на базовый набор.
   // Колонки «кубика» появляются после миграции 24, расширенные — после 15; откатываемся ступенчато.
-  let { data, error } = await supabase.from('profiles').select(COLS_PET_REACTION).eq('id', id).maybeSingle()
+  let { data, error } = await supabase.from('profiles').select(COLS_BANNER).eq('id', id).maybeSingle()
+  if (error) ({ data, error } = await supabase.from('profiles').select(COLS_PET_REACTION).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_DM_PRIVACY).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_STATS).eq('id', id).maybeSingle())
   if (error) ({ data, error } = await supabase.from('profiles').select(COLS_TAG).eq('id', id).maybeSingle())

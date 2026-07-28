@@ -5038,3 +5038,8 @@ body.no-anim .mic-bar { transition: none; }
 .msg-dec i:nth-child(3) { animation-delay: .3s; }
 @keyframes msg-dec-pulse { 0%, 100% { opacity: .25; } 50% { opacity: .7; } }
 body.no-anim .msg-dec i { animation: none; opacity: .4; }
+
+/* Своя картинка плагина в списке установленных (v1.349.0). */
+.plug-ic { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; }
+.plug-ic.ph { background: var(--bg3); font-size: 13px; line-height: 1; }

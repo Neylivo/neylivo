@@ -203,6 +203,10 @@ export function PluginsSettings() {
           <div key={p.manifest.id} className="plug-card">
             <div className="plug-head">
               <div className="plug-name">
+                {/* Своя картинка плагина, если он её задал (v1.349.0). */}
+                {p.manifest.icon
+                  ? <img className="plug-ic" src={p.manifest.icon} alt="" />
+                  : <span className="plug-ic ph">🧩</span>}
                 {p.manifest.name}
                 <span className="plug-ver">{p.manifest.version}</span>
                 {p.enabled && isRunning(p.manifest.id) && <span className="plug-dot on" title="Работает" />}

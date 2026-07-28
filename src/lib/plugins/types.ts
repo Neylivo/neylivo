@@ -58,6 +58,10 @@ export interface PluginManifest {
   description: string
   permissions: Permission[]
   hosts: string[]       // домены для 'net'; без 'net' игнорируется
+  /** Своя картинка плагина, https (v1.349.0). Пусто — рисуется значок по умолчанию. */
+  icon: string | null
+  /** Шапка карточки плагина, https. Пусто — мягкая заливка от акцента. */
+  banner: string | null
 }
 
 export interface InstalledPlugin {

@@ -197,7 +197,11 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     <>
       <div className="mini-overlay" onClick={onClose} />
       <div key={data.userId} ref={boxRef} className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
-        <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
+        {/* v1.349.0: если задана картинка-шапка — показываем её, иначе прежний
+            градиент из двух цветов. Так профиль бота выглядит как настоящий. */}
+        <div className="mini-banner" style={pp.bannerUrl
+          ? { backgroundImage: `url(${pp.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
         {!isMe && <div className="mini-topbtns">
           {!isBot && <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>}
           <button title="Ещё" onClick={() => setMore(m => !m)}><Icon name="more" size={16} /></button>

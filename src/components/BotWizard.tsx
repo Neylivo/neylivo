@@ -40,6 +40,7 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [made, setMade] = useState<{ id: string; token: string; webhookSecret: string; botUserId: string } | null>(null)
   const [webhook, setWebhook] = useState('')
   const [avatar, setAvatar] = useState('')
+  const [banner, setBanner] = useState('')
   const [about, setAbout] = useState('')
   const [cmdName, setCmdName] = useState('')
   const [cmdDesc, setCmdDesc] = useState('')
@@ -139,9 +140,10 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
     }
 
     if (webhook.trim()) await step('адрес вебхука', () => setBotWebhook(made.id, webhook.trim()))
-    if (avatar.trim() || about.trim()) {
+    if (avatar.trim() || about.trim() || banner.trim()) {
       await step('внешний вид', () => setBotProfile(made.id, {
         avatarUrl: avatar.trim() || null, about: about.trim(), primary: null, accent: null,
+        bannerUrl: banner.trim() || null,
       }))
     }
     if (cmdName.trim() && cmdDesc.trim()) {
@@ -331,12 +333,15 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
 
           <label className="modal-lbl">Как он будет выглядеть</label>
           <div className="botp-row">
-            <div className="botp-prev" style={{ background: 'linear-gradient(160deg, #5865f2, #5865f2)' }}>
+            <div className="botp-prev" style={banner.trim()
+              ? { backgroundImage: `url(${banner.trim()})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+              : { background: 'linear-gradient(160deg, #5865f2, #5865f2)' }}>
               <Avatar name={name.trim() || 'Бот'} url={avatar.trim() || null} userId={made.botUserId} size={48} />
               <div className="botp-prev-nm">{name.trim() || 'Бот'}<span className="bot-badge">БОТ</span></div>
             </div>
             <div className="botp-fields">
               <input className="modal-in" placeholder="Ссылка на аватарку (https://…)" value={avatar} onChange={e => setAvatar(e.target.value)} />
+              <input className="modal-in" placeholder="Ссылка на шапку профиля (https://…)" value={banner} onChange={e => setBanner(e.target.value)} />
               <textarea className="cset-topic" maxLength={300} placeholder="О себе: что бот умеет" value={about} onChange={e => setAbout(e.target.value)} />
             </div>
           </div>

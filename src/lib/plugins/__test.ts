@@ -382,6 +382,32 @@ for (const p of OFFICIAL_PLUGINS) {
       missingPermissions(r.build(vals), r.permissions).length === 0)
   }
 
+  // ── Картинка и шапка плагина (v1.349.0) ─────────────────────────────────
+  // Адрес показывается всем и грузится их браузерами — сюда не должно проходить
+  // ничего, кроме https-ссылки.
+  console.log('\n── Картинки плагина ──')
+  const withPic = (extra: string) => ['/**', ' * @name П', ' * @id pic-test', ' * @version 1.0.0', extra, ' */', 'function onLoad(){}'].join('\n')
+  check('обычная https-ссылка принимается', () => {
+    const m = parsePlugin(withPic(' * @icon https://example.com/i.png'))
+    return m.icon === 'https://example.com/i.png' && m.banner === null
+  })
+  check('шапка принимается отдельно', () =>
+    parsePlugin(withPic(' * @banner https://example.com/b.jpg')).banner === 'https://example.com/b.jpg')
+  for (const bad2 of ['javascript:alert(1)', 'data:image/svg+xml,<svg/>', 'http://example.com/i.png', '/local.png']) {
+    check('опасная ссылка отвергается: ' + bad2.slice(0, 24), () => {
+      try { parsePlugin(withPic(' * @icon ' + bad2)); return false } catch { return true }
+    })
+  }
+  check('без картинок плагин по-прежнему разбирается', () => {
+    const m = parsePlugin(withPic(' * @author кто-то'))
+    return m.icon === null && m.banner === null
+  })
+  check('картинка переживает разбор обратно в форму и сборку', () => {
+    const src = withPic(' * @icon https://example.com/i.png')
+    const d = draftFrom(src)!
+    return parsePlugin(buildFile(d, 'ник')).icon === 'https://example.com/i.png'
+  })
+
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)
 })()

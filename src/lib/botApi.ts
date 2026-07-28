@@ -80,6 +80,7 @@ export async function removeBotFromServer(botUserId: string, serverId: string): 
  */
 export async function setBotProfile(botAppId: string, p: {
   avatarUrl: string | null; about: string; primary: string | null; accent: string | null
+  bannerUrl?: string | null
 }): Promise<void> {
   const { error } = await supabase.rpc('set_bot_profile', {
     p_app: botAppId,
@@ -87,23 +88,31 @@ export async function setBotProfile(botAppId: string, p: {
     p_about: p.about,
     p_primary: p.primary,
     p_accent: p.accent,
+    p_banner: p.bannerUrl ?? null,
   })
   if (error) {
     const m = String(error.message || '')
     if (m.includes('not_your_bot')) throw new Error('Это не твой бот')
     if (m.includes('bad_avatar')) throw new Error('Ссылка на аватарку должна начинаться с https://')
+    if (m.includes('bad_banner')) throw new Error('Ссылка на шапку должна начинаться с https://')
     if (m.includes('bad_color')) throw new Error('Цвет должен быть в виде #rrggbb')
-    if (m.includes('set_bot_profile')) throw new Error('Нужно применить миграцию supabase/91_bot_profile.sql')
+    // Функция с шестью параметрами появляется только в 93: пока её нет, Postgres
+    // говорит «функция не найдена» — подсказываем именно ту миграцию.
+    if (m.includes('set_bot_profile')) throw new Error('Нужно применить миграции supabase/91_bot_profile.sql и 93_profile_banner.sql')
     throw new Error(m)
   }
 }
 
 /** Текущий профиль бота — чтобы форма открывалась заполненной. */
 export async function fetchBotProfile(botUserId: string): Promise<{
-  avatar_url: string | null; about: string | null; primary_color: string | null; accent_color: string | null
+  avatar_url: string | null; about: string | null; primary_color: string | null
+  accent_color: string | null; banner_url?: string | null
 } | null> {
-  const { data } = await supabase.from('profiles')
-    .select('avatar_url, about, primary_color, accent_color').eq('id', botUserId).maybeSingle()
+  // Колонка banner_url появляется в 93 — если её ещё нет, читаем прежний набор.
+  let { data, error } = await supabase.from('profiles')
+    .select('avatar_url, about, primary_color, accent_color, banner_url').eq('id', botUserId).maybeSingle()
+  if (error) ({ data } = await supabase.from('profiles')
+    .select('avatar_url, about, primary_color, accent_color').eq('id', botUserId).maybeSingle())
   return (data as any) ?? null
 }
 

@@ -12,6 +12,8 @@ import { ALL_PERMISSIONS, PluginParseError, type Permission, type PluginManifest
 //    * @description Переводит входящие сообщения
 //    * @permissions messages.read, ui, storage
 //    * @hosts translate.googleapis.com
+//    * @icon https://example.com/icon.png
+//    * @banner https://example.com/banner.jpg
 //    */
 //   export function onLoad(ponoi) { ... }
 
@@ -95,6 +97,17 @@ export function parsePlugin(code: string): PluginManifest {
     throw new PluginParseError('Плагин просит разрешение net, но не указал ни одного домена в @hosts.')
   }
 
+  // v1.349.0: своя картинка и шапка. Только https и только картинка по виду
+  // адреса: это поле показывается всем, кто видит плагин в каталоге, и грузится
+  // их браузерами — javascript: и data: тут не нужны никому.
+  const pic = (raw: string | undefined): string | null => {
+    const v = (raw ?? '').trim()
+    if (!v) return null
+    if (!/^https:\/\//i.test(v)) throw new PluginParseError('Ссылка на картинку должна начинаться с https://')
+    if (v.length > 500) throw new PluginParseError('Слишком длинная ссылка на картинку.')
+    return v
+  }
+
   return {
     id,
     name,
@@ -105,6 +118,8 @@ export function parsePlugin(code: string): PluginManifest {
     // Без разрешения net домены не значат ничего — не храним, чтобы они не создавали
     // ложного впечатления на экране установки.
     hosts: permissions.includes('net') ? hosts : [],
+    icon: pic(tags.icon),
+    banner: pic(tags.banner),
   }
 }
 

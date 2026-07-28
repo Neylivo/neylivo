@@ -130,7 +130,7 @@ const SABOTAGE = {
   // Вид встроенного бота снова можно приписать своему боту.
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -158,6 +158,7 @@ await db.exec(SRC[89])
 await db.exec(SRC[90])
 await db.exec(SRC[91])
 await db.exec(SRC[92])
+await db.exec(SRC[93])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -705,6 +706,12 @@ await refused('аватарка бота только по https', () =>
   as(USER, `select set_bot_profile($1,'javascript:alert(1)','x',null,null)`, [botApp]))
 await refused('цвет бота только шестнадцатеричный', () =>
   as(USER, `select set_bot_profile($1,null,'x','red',null)`, [botApp]))
+await check('шапка профиля бота сохраняется', async () => {
+  await as(USER, `select set_bot_profile($1,'https://e/a.png','я бот','#112233','#445566','https://e/b.jpg')`, [botApp])
+  return (await db.query('select banner_url from profiles where id=$1', [MOD])).rows[0].banner_url === 'https://e/b.jpg'
+})
+await refused('шапка только по https', () =>
+  as(USER, `select set_bot_profile($1,null,'x',null,null,'javascript:alert(1)')`, [botApp]))
 await check('аватарка продублирована в каталог', async () =>
   (await db.query('select avatar_url from bot_apps where id=$1', [botApp])).rows[0].avatar_url === 'https://e/a.png')
 

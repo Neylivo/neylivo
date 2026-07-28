@@ -133,6 +133,7 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
   // v1.340.0: профиль бота — аватарка, «о себе» и цвета карточки. Раньше бот
   // выглядел буквой на сером фоне, и поменять это не мог даже его владелец.
   const [avatar, setAvatar] = useState('')
+  const [banner, setBanner] = useState('')
   const [about, setAbout] = useState('')
   const [primary, setPrimary] = useState('#5865f2')
   const [accent, setAccent] = useState('#5865f2')
@@ -144,6 +145,7 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
     fetchBotProfile(bot.bot_user_id).then(p => {
       if (!p) return
       setAvatar(p.avatar_url ?? '')
+      setBanner((p as any).banner_url ?? '')
       setAbout(p.about ?? '')
       setPrimary(p.primary_color || '#5865f2')
       setAccent(p.accent_color || '#5865f2')
@@ -156,6 +158,7 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
       await setBotProfile(bot.id, {
         avatarUrl: avatar.trim() || null, about: about.trim(),
         primary: primary || null, accent: accent || null,
+        bannerUrl: banner.trim() || null,
       })
       toastOk('Профиль бота сохранён')
     } catch (e: any) { toastErr(e.message ?? String(e)) }
@@ -206,17 +209,23 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
       {open && <div className="devp-card-body">
         <label className="modal-lbl">Внешний вид</label>
         <div className="cset-hint" style={{ marginTop: 0 }}>
-          Так бота увидят в списке участников и в профиле. Писать сам он не умеет — отвечает
-          только на то, что ему присылают.
+          Так бота увидят везде: аватарка — в чате и в списке участников, шапка и «о себе» —
+          в мини-профиле и в полном. Писать сам он не умеет: отвечает только на то, что ему присылают.
         </div>
         <div className="botp-row">
-          <div className="botp-prev" style={{ background: `linear-gradient(160deg, ${primary}, ${accent})` }}>
+          {/* Образец показывает ровно то, что увидят другие: шапка сверху,
+              аватарка поверх неё — как в настоящей карточке профиля. */}
+          <div className="botp-prev" style={banner.trim()
+            ? { backgroundImage: `url(${banner.trim()})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: `linear-gradient(160deg, ${primary}, ${accent})` }}>
             <Avatar name={bot.name} url={avatar.trim() || null} userId={bot.bot_user_id} size={48} />
             <div className="botp-prev-nm">{bot.name}<span className="bot-badge">БОТ</span></div>
           </div>
           <div className="botp-fields">
             <input className="modal-in" placeholder="Ссылка на аватарку (https://…)"
               value={avatar} onChange={e => setAvatar(e.target.value)} />
+            <input className="modal-in" placeholder="Ссылка на шапку профиля (https://…)"
+              value={banner} onChange={e => setBanner(e.target.value)} />
             <textarea className="cset-topic" maxLength={300} placeholder="О себе: что бот умеет"
               value={about} onChange={e => setAbout(e.target.value)} />
             <div className="modal-inline">

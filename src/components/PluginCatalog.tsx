@@ -46,7 +46,7 @@ function officialCards(): Card[] {
     return {
       id: m.id, name: m.name, author: m.author, summary: p.summary, description: m.description,
       emoji: p.emoji, permissions: m.permissions, official: true, code: p.code, version: m.version,
-      installs: 0,
+      iconUrl: m.icon, bannerUrl: m.banner, installs: 0,
     }
   })
 }

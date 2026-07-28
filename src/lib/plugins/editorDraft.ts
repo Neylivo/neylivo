@@ -15,6 +15,9 @@ export interface Draft {
   permissions: Permission[]
   hosts: string
   body: string
+  /** Своя картинка и шапка карточки плагина (v1.349.0), https или пусто. */
+  icon: string
+  banner: string
 }
 
 export interface Template {
@@ -109,6 +112,8 @@ export function buildFile(d: Draft, author: string): string {
   if (d.description.trim()) lines.push(` * @description ${d.description.trim().replace(/\s+/g, ' ')}`)
   if (d.permissions.length) lines.push(` * @permissions ${d.permissions.join(', ')}`)
   if (d.permissions.includes('net') && d.hosts.trim()) lines.push(` * @hosts ${d.hosts.trim()}`)
+  if (d.icon.trim()) lines.push(` * @icon ${d.icon.trim()}`)
+  if (d.banner.trim()) lines.push(` * @banner ${d.banner.trim()}`)
   lines.push(' */', '')
   return lines.join('\n') + stripHeader(d.body)
 }
@@ -120,12 +125,13 @@ export function draftFrom(code: string): Draft | null {
     return {
       name: m.name, id: m.id, version: m.version, description: m.description,
       permissions: m.permissions, hosts: m.hosts.join(', '), body: stripHeader(code),
+      icon: m.icon ?? '', banner: m.banner ?? '',
     }
   } catch { return null }
 }
 
 export function draftFromTemplate(t: Template): Draft {
-  return { name: '', id: '', version: '1.0.0', description: '', permissions: [...t.permissions], hosts: '', body: t.body }
+  return { name: '', id: '', version: '1.0.0', description: '', permissions: [...t.permissions], hosts: '', body: t.body, icon: '', banner: '' }
 }
 
 // ── Какие разрешения нужны этому коду ─────────────────────────────────────

@@ -325,7 +325,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
       <div className="pc-card" onClick={e => e.stopPropagation()}>
         <button className="pc-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="pc-left">
-          <div className="pc-banner" style={{ background: `linear-gradient(100deg, ${pp.primary}, ${pp.accent})` }} />
+          <div className="pc-banner" style={pp.bannerUrl
+            ? { backgroundImage: `url(${pp.bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: `linear-gradient(100deg, ${pp.primary}, ${pp.accent})` }} />
           <ProfilePet p={pp} scale={0.6} card="big" bannerH={150} />
           <div className="pc-avwrap">
             <div className="pc-av"><Avatar name={name} url={avatarUrl} size={124} /></div>

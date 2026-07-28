@@ -162,7 +162,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
       await publishPlugin({
         id: m.id, name: m.name, version: m.version,
         summary: shorten(m.description || m.name, SUMMARY_MAX),
-        description: m.description, icon_url: null, banner_url: null,
+        description: m.description, icon_url: m.icon, banner_url: m.banner,
         code: file, permissions: m.permissions,
       }, user.id)
       toastOk('Плагин в каталоге — картинку и описание можно добавить там же')
@@ -289,6 +289,32 @@ export function PluginEditor({ editId, onClose, onSaved }: {
         <label className="modal-lbl">Описание</label>
         <input className="modal-in" value={d.description} onChange={e => set('description', e.target.value)}
           placeholder="Одной строкой: что он делает" />
+
+        {/* v1.349.0: своё лицо у плагина — как у бота. Обе картинки необязательны:
+            без них рисуется значок по умолчанию и мягкая заливка. */}
+        <label className="modal-lbl">Как он будет выглядеть</label>
+        <div className="botp-row">
+          <div className="cat-tile as-preview" style={{ width: 200 }}>
+            <div className={'cat-tile-bg' + (d.banner.trim() ? '' : ' plain')}
+              style={d.banner.trim() ? { backgroundImage: `url(${d.banner.trim()})` } : undefined} />
+            <div className="cat-tile-ic">
+              {d.icon.trim() ? <img src={d.icon.trim()} alt="" /> : <span className="cat-emoji">🧩</span>}
+            </div>
+            <div className="cat-tile-body">
+              <div className="cat-nm">{d.name || 'Мой плагин'}</div>
+              <div className="cat-sum">{d.description || 'Короткое описание'}</div>
+            </div>
+          </div>
+          <div className="botp-fields">
+            <input className="modal-in" placeholder="Ссылка на картинку (https://…)"
+              value={d.icon} onChange={e => set('icon', e.target.value)} />
+            <input className="modal-in" placeholder="Ссылка на шапку карточки (https://…)"
+              value={d.banner} onChange={e => set('banner', e.target.value)} />
+            <div className="cset-hint" style={{ marginTop: 0 }}>
+              Так плагин будет выглядеть в каталоге и в списке установленных.
+            </div>
+          </div>
+        </div>
 
         {mode === 'easy' && (
           <div className="ped-perm-note">

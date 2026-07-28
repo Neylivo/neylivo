@@ -151,7 +151,8 @@ create table profiles (
   avatar_url text,
   about text,
   primary_color text,
-  accent_color text
+  accent_color text,
+  banner_url text
 );
 create table bot_apps (
   id uuid primary key default gen_random_uuid(),
