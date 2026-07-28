@@ -566,6 +566,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                       {fwd.text && <div className="msg-txt">{renderContent(fwd.text, roleColors)}</div>}
                       <div className="msg-fwd-src">от <b>{fwd.author}</b>{fwd.at ? ' • ' + timeFull(fwd.at) : ''}</div>
                     </div>
+                  : (m as any)._dec ? <div className="msg-dec" title="Расшифровывается"><i /><i /><i /></div>
                   : m.content && !isOnlyGifLink(m) && <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}>(изменено)</span>}</div>}
                 <Attachment url={m.attach_url} type={m.attach_type} meta={{ name: m.author_name, avatar: m.author_avatar, at: m.created_at }}
                   editable={m.author === currentUser} attachMeta={m.attach_meta}

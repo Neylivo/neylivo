@@ -5021,3 +5021,13 @@ body.no-anim .mic-bar { transition: none; }
 .ped-status-fix { flex: none; border: none; border-radius: 7px; padding: 5px 12px; cursor: pointer;
   font-size: 12px; font-weight: 700; background: currentColor; color: var(--bg2); }
 .ped-status-fix:hover { filter: brightness(1.1); }
+
+/* Расшифровка идёт (v1.347.0): три спокойные точки вместо слова. Обычно это
+   доли секунды — надпись успевала мелькнуть и раздражала на каждом сообщении. */
+.msg-dec { display: inline-flex; gap: 4px; align-items: center; height: 20px; }
+.msg-dec i { width: 5px; height: 5px; border-radius: 50%; background: var(--mut); opacity: .35;
+  animation: msg-dec-pulse 1s ease-in-out infinite; }
+.msg-dec i:nth-child(2) { animation-delay: .15s; }
+.msg-dec i:nth-child(3) { animation-delay: .3s; }
+@keyframes msg-dec-pulse { 0%, 100% { opacity: .25; } 50% { opacity: .7; } }
+body.no-anim .msg-dec i { animation: none; opacity: .4; }

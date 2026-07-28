@@ -1126,6 +1126,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
           return
         }
         const real = data as DMMessage
+        // v1.347.0: своё же сообщение возвращается с сервера конвертом, и лента,
+        // увидев шифротекст, показывала «Расшифровываю…» вместо только что
+        // написанного текста — на доли секунды, но каждый раз и очень заметно.
+        // Расшифровывать своё незачем: открытый текст у нас на руках, кладём его
+        // сразу.
+        if (isEncrypted(real.content)) setPlain(p => ({ ...p, [real.id]: t }))
         setMessages(m => m.some(x => x.id === real.id) ? m.filter(x => x.id !== tmpId) : m.map(x => x.id === tmpId ? { ...real, _localId: tmpId } as any : x))
         // v1.295.0: КРИТИЧНО — в push уходит текст сообщения, а push идёт через
         // сервер. Для зашифрованной переписки это означало бы, что содержимое
@@ -1361,7 +1367,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                   // Подставляем расшифрованные текст И вложения: ниже по ленте
                   // ни один компонент про шифрование не знает — им приходит
                   // обычное сообщение с обычными ссылками.
-                  ? { ...m, content: plain[m.id] ?? 'Расшифровываю…', _enc: true,
+                  // Пока расшифровка идёт, текста нет вовсе, а лента рисует
+                  // спокойное многоточие (_dec) — надпись «Расшифровываю…»
+                  // мозолила глаза на каждом сообщении.
+                  ? { ...m, content: plain[m.id] ?? '', _enc: true, _dec: plain[m.id] === undefined,
                       ...(attach[m.id] ? { attach_url: attach[m.id].url, attach_type: attach[m.id].type } : {}) }
                   : m)} reactions={reactions} currentUser={meId} currentUserName={username} newDividerId={newDividerId}
               linkCtx={threadId ? { kind: 'dm', dmId: threadId } : undefined}
