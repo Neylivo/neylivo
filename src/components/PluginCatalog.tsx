@@ -151,7 +151,7 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
 
         {detail && <DetailModal c={detail} onClose={() => setDetail(null)} onInstall={() => { beginInstall(detail); setDetail(null) }} />}
         {pending && (
-          <PermissionGate manifest={pending.manifest} existing={getPlugin(pending.manifest.id)}
+          <PermissionGate code={pending.code} manifest={pending.manifest} existing={getPlugin(pending.manifest.id)}
             onCancel={() => setPending(null)} onConfirm={() => void doInstall()} />
         )}
         {publishing && <PublishModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}

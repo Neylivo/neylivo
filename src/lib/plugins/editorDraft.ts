@@ -127,3 +127,53 @@ export function draftFrom(code: string): Draft | null {
 export function draftFromTemplate(t: Template): Draft {
   return { name: '', id: '', version: '1.0.0', description: '', permissions: [...t.permissions], hosts: '', body: t.body }
 }
+
+// ── Какие разрешения нужны этому коду ─────────────────────────────────────
+//
+// v1.346.0. Самая частая беда при написании плагина руками: код зовёт
+// ponoi.notify, а в @permissions разрешения нет — и плагин падает уже у
+// человека, красной строкой на карточке. Формально ошибка понятная, но доходить
+// до неё не должен никто: по коду прекрасно видно, что он собирается делать.
+//
+// Разбор нарочно простой — по вызовам, а не разбором синтаксиса: плагин может
+// быть написан как угодно, а нам достаточно не пропустить очевидное. Ошибка в
+// сторону «попросили лишнего» безопаснее: лишнее разрешение человек снимет
+// сам, а недостающее сломает плагин.
+const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
+  { re: /\bponoi\s*\.\s*css\s*\(/,                          perms: ['css'],                       what: 'ponoi.css' },
+  { re: /\bponoi\s*\.\s*notify\s*\(/,                       perms: ['notify'],                    what: 'ponoi.notify' },
+  { re: /\bponoi\s*\.\s*commands\s*\.\s*register\s*\(/,     perms: ['commands'],                  what: 'ponoi.commands.register' },
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*send\s*\(/,         perms: ['messages.write'],            what: 'ponoi.messages.send' },
+  { re: /\bponoi\s*\.\s*storage\s*\./,                       perms: ['storage'],                   what: 'ponoi.storage' },
+  { re: /\bponoi\s*\.\s*net\s*\.\s*fetch\s*\(/,             perms: ['net'],                       what: 'ponoi.net.fetch' },
+  { re: /\bponoi\s*\.\s*voice\s*\./,                         perms: ['voice'],                     what: 'ponoi.voice' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addSettingsPage\s*\(/,     perms: ['settings'],                  what: 'ponoi.ui.addSettingsPage' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addComposerButton\s*\(/,   perms: ['ui'],                        what: 'ponoi.ui.addComposerButton' },
+  // Действие над сообщением получает само сообщение — поэтому и чтение тоже.
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addMessageAction\s*\(/,    perms: ['ui', 'messages.read'],       what: 'ponoi.ui.addMessageAction' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]message['"`]/,         perms: ['messages.read'],             what: "ponoi.on('message')" },
+]
+
+export interface NeededPerm { perm: Permission; what: string }
+
+/** Что код собирается делать — и какое разрешение для этого нужно. */
+export function permissionsFromCode(body: string): NeededPerm[] {
+  const out: NeededPerm[] = []
+  for (const n of NEEDS) {
+    if (!n.re.test(body)) continue
+    for (const p of n.perms) if (!out.some(x => x.perm === p)) out.push({ perm: p, what: n.what })
+  }
+  return out
+}
+
+/** Чего коду не хватает при текущем наборе разрешений. */
+export function missingPermissions(body: string, have: Permission[]): NeededPerm[] {
+  return permissionsFromCode(body).filter(n => !have.includes(n.perm))
+}
+
+/** Разрешения, объявленные впустую: код их не использует. */
+export function unusedPermissions(body: string, have: Permission[]): Permission[] {
+  const need = permissionsFromCode(body).map(n => n.perm)
+  // hosts-разрешение net проверяется вместе с net; остальные — как есть.
+  return have.filter(p => !need.includes(p))
+}

@@ -11,7 +11,8 @@ import { pluginError, isRunning } from '../lib/plugins/host'
 import { ALL_PERMISSIONS, PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission } from '../lib/plugins/types'
 import { publishPlugin, shorten, SUMMARY_MAX } from '../lib/catalog'
 import {
-  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify, type Draft,
+  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify,
+  missingPermissions, unusedPermissions, type Draft,
 } from '../lib/plugins/editorDraft'
 import { RECIPES, recipeDefaults, recipeReady, type Recipe } from '../lib/plugins/recipes'
 
@@ -78,6 +79,11 @@ export function PluginEditor({ editId, onClose, onSaved }: {
 
   const file = useMemo(() => buildFile(d, author), [d, author])
   // Тело трогали руками, если оно не совпадает ни с заготовкой, ни с рецептом.
+  // v1.346.0: чего коду не хватает. Раньше это выяснялось только на живом
+  // человеке: плагин падал красной строкой «не выдано разрешение notify».
+  const missing = useMemo(() => missingPermissions(d.body, d.permissions), [d.body, d.permissions])
+  const unused = useMemo(() => unusedPermissions(d.body, d.permissions), [d.body, d.permissions])
+
   const dirtyBody = useMemo(() => {
     const base = mode === 'easy' ? recipe.build(rv) : (TEMPLATES.find(t => t.key === tpl)?.body ?? '')
     return d.body.trim() !== base.trim()
@@ -127,6 +133,11 @@ export function PluginEditor({ editId, onClose, onSaved }: {
 
   async function save() {
     if (problem) { toastErr(problem); return }
+    if (missing.length > 0) {
+      toastErr('Сначала добавь разрешения, которые просит код: '
+        + missing.map(m => PERMISSION_LABEL[m.perm]).join(', '))
+      return
+    }
     setBusy(true)
     try {
       const m = parsePlugin(file)
@@ -310,6 +321,36 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           Полный список того, что он умеет, — в справке «?» рядом с заголовком раздела.
         </div>
         </>}
+
+        {/* Разрешения — самая частая причина «плагин не работает». Говорим об
+            этом ДО установки и чиним одной кнопкой, а не красной строкой потом. */}
+        {missing.length > 0 && (
+          <div className="ped-status warn">
+            <Icon name="shield" size={14} />
+            <span>
+              Код зовёт {missing.map(m => m.what).join(', ')} — для этого нужно{' '}
+              {missing.map(m => '«' + PERMISSION_LABEL[m.perm] + '»').join(', ')}.
+              Без этого плагин не заработает.
+            </span>
+            <button className="ped-status-fix"
+              onClick={() => setD(p => ({ ...p, permissions: [...p.permissions, ...missing.map(m => m.perm)] }))}>
+              Добавить
+            </button>
+          </div>
+        )}
+        {missing.length === 0 && unused.length > 0 && mode === 'code' && (
+          <div className="ped-status hint">
+            <Icon name="check" size={14} />
+            <span>
+              Лишнее разрешение: {unused.map(p => '«' + PERMISSION_LABEL[p] + '»').join(', ')} — код им не
+              пользуется. Человек увидит это при установке.
+            </span>
+            <button className="ped-status-fix"
+              onClick={() => setD(p => ({ ...p, permissions: p.permissions.filter(x => !unused.includes(x)) }))}>
+              Убрать
+            </button>
+          </div>
+        )}
 
         <div className={'ped-status' + (problem ? ' bad' : '')}>
           {problem

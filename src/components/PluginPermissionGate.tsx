@@ -2,6 +2,7 @@ import { Icon } from './icons'
 import { Portal } from './Portal'
 import { compareVersions } from '../lib/plugins/manifest'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type InstalledPlugin } from '../lib/plugins/types'
+import { missingPermissions } from '../lib/plugins/editorDraft'
 
 // v1.333.0: вынесено из PluginsSettings.tsx отдельным файлом. Каталог плагинов
 // показывает тот же экран разрешений, а импорт «каталог -> настройки -> каталог»
@@ -10,12 +11,18 @@ import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type Inst
 
 /** Экран разрешений — показывается ДО установки, пока чужой код ещё не запускался.
  *  Экспортируется: тот же экран открывает карточка плагина в чате. */
-export function PermissionGate({ manifest, existing, onCancel, onConfirm }: {
+export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }: {
   manifest: PluginManifest
   existing: InstalledPlugin | undefined
   onCancel: () => void
   onConfirm: () => void
+  /** Сам файл — чтобы заранее сказать, что плагин не заработает (v1.346.0). */
+  code?: string
 }) {
+  // Плагин, забывший объявить разрешение, установится и тут же упадёт. Честнее
+  // предупредить здесь, чем показать человеку красную строку и оставить гадать,
+  // он что-то сделал не так или плагин кривой.
+  const willFail = code ? missingPermissions(code, manifest.permissions) : []
   const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
   return (
     <Portal><div className="modal-overlay" onClick={onCancel}>
@@ -50,6 +57,17 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm }: {
         ))}
         {manifest.hosts.length > 0 && (
           <div className="cset-hint" style={{ marginTop: 8 }}>Сайты: {manifest.hosts.join(', ')}</div>
+        )}
+
+        {willFail.length > 0 && (
+          <div className="plug-err" style={{ marginTop: 12 }}>
+            <Icon name="flag" size={14} />
+            <span>
+              Плагин зовёт {willFail.map(m => m.what).join(', ')}, но не просил{' '}
+              {willFail.map(m => '«' + PERMISSION_LABEL[m.perm] + '»'). join(', ')} — в этом месте он
+              упадёт. Это ошибка автора плагина, а не твоя.
+            </span>
+          </div>
         )}
 
         <div className="cset-hint" style={{ marginTop: 14 }}>

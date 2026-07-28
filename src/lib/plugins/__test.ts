@@ -10,7 +10,10 @@
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS } from './types'
-import { TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify } from './editorDraft'
+import {
+  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify,
+  permissionsFromCode, missingPermissions, unusedPermissions,
+} from './editorDraft'
 import { RECIPES, recipeDefaults, recipeReady } from './recipes'
 
 let pass = 0, fail = 0
@@ -324,6 +327,60 @@ for (const p of OFFICIAL_PLUGINS) {
     if (handler) await handler('')
     check('в чат уходит ровно то, что человек написал', () => calls.sent[0] === текст)
   })()
+
+  // ── Определитель разрешений ──────────────────────────────────────────────
+  // Он существует ровно чтобы человек не встретил «не выдано разрешение notify»
+  // уже после установки. Значит ошибиться он не имеет права: пропустит вызов —
+  // и плагин снова упадёт у человека.
+  console.log('\n── Разрешения по коду ──')
+  const CASES: [string, string, string[]][] = [
+    ['уведомление', 'function onLoad(p){ p.notify("x") }', ['notify']],
+    ['команда с отправкой', 'function onLoad(p){ p.commands.register("a","b",()=>p.messages.send("c")) }', ['commands', 'messages.write']],
+    ['стили', 'function onLoad(p){ p.css("a{}") }', ['css']],
+    ['хранилище', 'function onLoad(p){ p.storage.set("k",1) }', ['storage']],
+    ['сеть', 'function onLoad(p){ p.net.fetch("https://x/") }', ['net']],
+    ['голос', 'function onLoad(p){ p.voice.setEffect("robot") }', ['voice']],
+    ['страница настроек', 'function onLoad(p){ p.ui.addSettingsPage({}) }', ['settings']],
+    ['кнопка композера', 'function onLoad(p){ p.ui.addComposerButton({}) }', ['ui']],
+    ['действие над сообщением', 'function onLoad(p){ p.ui.addMessageAction({}) }', ['ui', 'messages.read']],
+    ['подписка на сообщения', 'function onLoad(p){ p.on("message", ()=>{}) }', ['messages.read']],
+    ['пробелы и переносы не мешают', 'function onLoad(p){ p . notify ( "x" ) }', ['notify']],
+    ['ничего не зовёт — ничего не нужно', 'function onLoad(p){ var x = 1 }', []],
+  ]
+  // Определитель смотрит на имя переменной ponoi, а в примерах она названа p —
+  // проверяем на настоящем имени, как в реальных плагинах.
+  for (const [label, code, want] of CASES) {
+    const real = code.replace(/\bp\b/g, 'ponoi')
+    check('видит: ' + label, () => {
+      const got = permissionsFromCode(real).map(x => x.perm).sort()
+      return JSON.stringify(got) === JSON.stringify([...want].sort())
+    })
+  }
+
+  check('недостающее находится, лишнее находится', () => {
+    const code = 'function onLoad(ponoi){ ponoi.notify("x") }'
+    const miss = missingPermissions(code, []).map(m => m.perm)
+    const extra = unusedPermissions(code, ['notify', 'css'] as any)
+    return miss.length === 1 && miss[0] === 'notify' && extra.length === 1 && extra[0] === 'css'
+  })
+
+  // Самое важное: у ГОТОВЫХ плагинов и заготовок расхождений быть не должно —
+  // иначе мы сами раздаём то, что не запустится.
+  for (const p of OFFICIAL_PLUGINS) {
+    const m = parsePlugin(p.code)
+    check(`${p.id}: объявленных разрешений хватает коду`, () =>
+      missingPermissions(p.code, m.permissions).length === 0)
+  }
+  for (const t of TEMPLATES) {
+    check(`заготовка «${t.label}»: разрешений хватает коду`, () =>
+      missingPermissions(t.body, t.permissions).length === 0)
+  }
+  for (const r of RECIPES) {
+    const vals = recipeDefaults(r)
+    for (const f of r.fields) if (!vals[f.key]) vals[f.key] = f.color ? '#ff0000' : 'проверка'
+    check(`рецепт «${r.label}»: разрешений хватает коду`, () =>
+      missingPermissions(r.build(vals), r.permissions).length === 0)
+  }
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

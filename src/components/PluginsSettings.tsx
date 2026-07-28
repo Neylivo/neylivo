@@ -253,6 +253,7 @@ export function PluginsSettings() {
 
       {pending && (
         <PermissionGate
+          code={pending.code}
           manifest={pending.manifest}
           existing={getPlugin(pending.manifest.id)}
           onCancel={() => setPending(null)}
