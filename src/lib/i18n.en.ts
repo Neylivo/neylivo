@@ -561,6 +561,8 @@ const DICT_EN_FULL: Record<string, string> = {
   "Настройки конфиденциальности": "Privacy Settings",
   "Настройки ленты событий": "Event Feed Settings",
   "Настройки приложения": "App Settings",
+  // v1.339.0: раздел меню настроек, где стоят плагины и боты.
+  "Другое": "Other",
   "Настройки уведомлений": "Notification Settings",
   "Настройте системные сообщения о событиях, отправляемые на ваш сервер.": "Customize the system event messages sent to your server.",
   "Начать беседу": "Start a conversation",
