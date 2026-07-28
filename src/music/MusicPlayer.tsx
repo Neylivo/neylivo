@@ -887,7 +887,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             {together ? <>
               <div className="tog-code-box">
                 <div className="tog-code-lbl">Код лобби</div>
-                <div className="tog-code notr" translate="no">{together.code}</div>
+                {/* Сам код тоже копирует: если буфер почему-то недоступен, текст
+                    хотя бы выделяется одним щелчком и его можно взять руками. */}
+                <div className="tog-code notr" translate="no" title="Нажми, чтобы скопировать"
+                  onClick={() => void copyText(together.code, 'Код скопирован')}>{together.code}</div>
                 <button className="pqs2-btn" onClick={() => void copyText(together.code, 'Код скопирован')}>
                   <Icon name="copy" size={15} /> Скопировать
                 </button>

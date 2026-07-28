@@ -939,6 +939,13 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   const [viewer, setViewer] = useState(false)
   const [size, setSize] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  // v1.380.0: почему именно картинка не открылась.
+  //
+  // Раньше на любой сбой писалось одно «Не удалось загрузить изображение», и
+  // дальше упереться было не во что: файла нет? нет доступа? загрузился пустым?
+  // сеть? Для человека это одинаково выглядит как «приложение сломалось», а
+  // починить по такому описанию нельзя ничего. Спрашиваем адрес и говорим прямо.
+  const [why, setWhy] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const idx = attachIndex ?? 0
   const myMeta = attachMeta?.[idx] ?? null
@@ -970,6 +977,31 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     </div>
   }
   const clean = url.replace('#spoiler', '')
+
+  /**
+   * Выяснить, почему картинка не открылась, и сказать это словами.
+   *
+   * Спрашиваем сам адрес: браузер про <img> сообщает только «не вышло», а вот
+   * запрос отвечает кодом и размером — по ним и видно, чего не хватает.
+   */
+  async function explainFail(u: string) {
+    setFailed(true)
+    try {
+      const r = await fetch(u, { method: 'GET' })
+      if (r.status === 404) { setWhy('Файла нет на сервере — загрузка не доехала'); return }
+      if (r.status === 403 || r.status === 401) { setWhy('Нет доступа к файлу (' + r.status + ')'); return }
+      if (!r.ok) { setWhy('Сервер ответил ' + r.status); return }
+      const blob = await r.blob()
+      if (blob.size === 0) { setWhy('Файл пустой — загрузился 0 байт'); return }
+      if (!blob.type.startsWith('image/')) {
+        setWhy('Это не картинка: ' + (blob.type || 'тип не указан'))
+        return
+      }
+      setWhy('Файл на месте, но браузер его не показал — возможно, повреждён')
+    } catch {
+      setWhy('Не достучались до файла — проверь соединение')
+    }
+  }
   const upOverlay = uploading && <div className="att-upload-ov"><span className="att-spin" />{progress != null && <b>{Math.round(progress * 100)}%</b>}</div>
   // v1.250.0: стикер — крупная картинка БЕЗ рамки/спойлера/лайтбокса вложения
   // (как в Discord: attach_type хранится как 'sticker:<имя>' — второй колонки
@@ -980,7 +1012,7 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
       <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
         <Icon name="image" size={16} /> Не удалось загрузить стикер
       </a>
-    ) : <img className="msg-sticker" src={clean} alt={name} title={name} loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
+    ) : <img className="msg-sticker" src={clean} alt={name} title={name} loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => void explainFail(clean)} />
   }
   // Голосовое сообщение / аудио — встроенный плеер (blob: локально играбелен, пока грузится).
   if (type === 'audio') return <audio className="msg-audio" controls preload="metadata" src={clean} />
@@ -992,13 +1024,13 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   if (type === 'image') {
     if (failed) return (
       <a className="msg-att-broken" href={clean} target="_blank" rel="noreferrer" title="Открыть ссылку в браузере">
-        <Icon name="image" size={16} /> Не удалось загрузить изображение
+        <Icon name="image" size={16} /> {why ?? 'Не удалось загрузить изображение'}
       </a>
     )
     if (url.includes('#spoiler') && !revealed) return (
       <div className="att-editwrap">
         <div className="att-spoiler" title="Спойлер — нажми, чтобы показать" onClick={() => setRevealed(true)}>
-          <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => setFailed(true)} />
+          <img className="msg-att blurred" src={clean} alt="спойлер" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onError={() => void explainFail(clean)} />
           <span className="att-spoiler-tag">СПОЙЛЕР</span>
         </div>
         {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
@@ -1008,7 +1040,7 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     )
     return <>
       <div className="att-editwrap">
-        <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => !uploading && setViewer(true)} onError={() => setFailed(true)} />
+        <img className="msg-att zoomable" src={clean} alt="вложение" loading="lazy" decoding="async" draggable={false} onDragStart={e => e.preventDefault()} onClick={() => !uploading && setViewer(true)} onError={() => void explainFail(clean)} />
         {upOverlay}
         {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
         {editOpen && <AttachEditModal initial={{ spoiler: false, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
@@ -1025,7 +1057,7 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
         <Icon name="video" size={16} /> Не удалось загрузить видео
       </a>
     )
-    return <div className="att-editwrap"><video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => setFailed(true)} />{upOverlay}</div>
+    return <div className="att-editwrap"><video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => void explainFail(clean)} />{upOverlay}</div>
   }
   // v1.286.0: .ponoi — карточка плагина с разрешениями и кнопкой установки.
   // Проверяется раньше кода: файл плагина это тоже JS, и без этой ветки он показался

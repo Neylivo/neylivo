@@ -5474,6 +5474,7 @@ body.no-anim .mus2-card-del { transition: none; }
   font-size: 30px; font-weight: 800; letter-spacing: .16em;
   font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--brand);
   user-select: all;   /* код набирают руками — пусть выделяется одним щелчком */
+  cursor: pointer;
 }
 .tog-hint { color: var(--mut); font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
 .tog-empty {

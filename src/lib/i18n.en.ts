@@ -1728,3 +1728,16 @@ Object.assign(DICT_EN, {
     'One person plays the music, everyone else hears the same thing at the same time. Tracks come from the shared library, so everyone has them.',
 })
 REGEX_EN.push([/^В лобби — (\d+)$/, 'In the lobby — $1'])
+
+// v1.380.0: понятная причина, почему картинка не открылась.
+Object.assign(DICT_EN, {
+  'Файла нет на сервере — загрузка не доехала': 'The file is not on the server — the upload did not go through',
+  'Файл пустой — загрузился 0 байт': 'The file is empty — 0 bytes were uploaded',
+  'Не достучались до файла — проверь соединение': 'Could not reach the file — check your connection',
+  'Файл на месте, но браузер его не показал — возможно, повреждён':
+    'The file is there, but the browser would not show it — it may be damaged',
+  'Нажми, чтобы скопировать': 'Click to copy',
+})
+REGEX_EN.push([/^Нет доступа к файлу \((\d+)\)$/, 'No access to the file ($1)'])
+REGEX_EN.push([/^Сервер ответил (\d+)$/, 'The server replied $1'])
+REGEX_EN.push([/^Это не картинка: (.+)$/, 'Not an image: $1'])
