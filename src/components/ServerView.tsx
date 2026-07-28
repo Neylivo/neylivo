@@ -1097,8 +1097,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       })
     }
   }
-  async function removeMsg(id: string) {
-    if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
+  async function removeMsg(id: string, skipConfirm?: boolean) {
+    if (!skipConfirm && !await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     // v1.327.0: убираем из ленты сразу, но если база не дала удалить — возвращаем
     // на место и говорим почему. Раньше сообщение исчезало только у тебя, а в базе
     // и у собеседников оставалось.

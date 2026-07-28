@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.351.0",
+  "version": "1.352.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,7 +19,8 @@
     "test:db": "node scripts/db-test/rls-test.mjs",
     "test:plugins": "esbuild src/lib/plugins/__test.ts --bundle --platform=node --format=cjs --outfile=dist-plugin-test/t.cjs && node dist-plugin-test/t.cjs",
     "test:settings": "esbuild src/lib/__settings_test.ts --bundle --platform=node --format=esm --outfile=dist-settings-test/t.mjs && node dist-settings-test/t.mjs",
-    "test:attack": "esbuild src/lib/plugins/__attack_test.ts --bundle --platform=node --format=esm --outfile=dist-attack-test/t.mjs && node dist-attack-test/t.mjs"
+    "test:attack": "esbuild src/lib/plugins/__attack_test.ts --bundle --platform=node --format=esm --outfile=dist-attack-test/t.mjs && node dist-attack-test/t.mjs",
+    "test:emoji": "esbuild src/lib/__emoji_test.ts --bundle --platform=node --format=esm --outfile=dist-emoji-test/t.mjs && node dist-emoji-test/t.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

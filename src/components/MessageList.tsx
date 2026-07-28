@@ -319,7 +319,9 @@ interface Props {
   // v1.198.0: право ADD_REACTIONS — undefined (ЛС) значит «можно», false прячет все кнопки добавления реакции.
   canReact?: boolean
   onPin?: (id: string, pinned: boolean) => void
-  onDelete?: (id: string) => void
+  // v1.352.0: второй довод — «не спрашивать». Он приходит от Shift, как в Discord:
+  // тем, кто чистит чат пачкой, подтверждение на каждое сообщение только мешает.
+  onDelete?: (id: string, skipConfirm?: boolean) => void
   onReply?: (m: UiMessage) => void
   // v1.177.0: редактирование переехало в композер (как в Discord) — вместо
   // сохранения текста MessageList просто сообщает родителю, что редактируем ЭТО
@@ -548,7 +550,18 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
             <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '')}
-              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}>
+              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}
+              onDoubleClick={e => {
+                // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
+                // двойным щелчком при этом не ломается: если что-то выделилось, человек
+                // копирует, а не отвечает, и мы не мешаем.
+                if (!onReply) return
+                if (window.getSelection()?.toString()) return
+                const t = e.target as HTMLElement
+                // Внутри ссылок, кнопок, полей и картинок двойной щелчок значит своё.
+                if (t.closest('a, button, input, textarea, img, video, .msg-reply, .msg-react')) return
+                onReply(m)
+              }}>
               <div className="msg-gutter">
                 {grouped
                   ? <span className="msg-ts-hover" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
@@ -618,8 +631,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         const isGif = !!img && /\.gif(?:$|\?)/i.test(img.split('#')[0])
         const fwdM = parseFwd(menuMsg.content)
         const textOf = fwdM ? fwdM.text : (menuMsg.content ?? '')
-        const item = (label: string, icon: string, fn: () => void, cls = '') => (
-          <div className={'ctx-item' + cls} onClick={() => { fn(); setMenu(null) }}><span>{label}</span><Icon name={icon} size={16} /></div>
+        const item = (label: string, icon: string, fn: (e: React.MouseEvent) => void, cls = '', title?: string) => (
+          <div className={'ctx-item' + cls} title={title} onClick={e => { fn(e); setMenu(null) }}><span>{label}</span><Icon name={icon} size={16} /></div>
         )
         return <>
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
@@ -659,7 +672,8 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           </> : null}
           {(canDelete ? canDelete(menuMsg) : menuMsg.author === currentUser) ? <>
             <div className="ctx-sep" />
-            {item('Удалить сообщение', 'trash', () => onDelete?.(menu.id), ' danger')}
+            {item('Удалить сообщение', 'trash', e => onDelete?.(menu.id, e.shiftKey), ' danger',
+              'С зажатым Shift — удалить сразу, без вопроса')}
           </> : null}
           {devMode() ? <>
             <div className="ctx-sep" />

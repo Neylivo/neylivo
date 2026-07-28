@@ -131,8 +131,8 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
     const ok = await setPin('messages', id, pinned)
     if (!ok) { setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned: !pinned } as any) : m))); toastErr('Не удалось изменить закреп') }
   }
-  async function removeMsg(id: string) {
-    if (!await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
+  async function removeMsg(id: string, skipConfirm?: boolean) {
+    if (!skipConfirm && !await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     // v1.327.0: см. ServerView.tsx — при отказе базы возвращаем сообщение в ленту.
     const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.filter(m => m.id !== id))

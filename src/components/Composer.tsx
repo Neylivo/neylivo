@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { isImage, isVideo } from '../lib/storage'
 import { EmojiPicker } from './EmojiPicker'
+import { loadCustom } from '../lib/emoji'
+import { searchEmojiNames, emojiQueryAt } from '../lib/emojiNames'
 import { GifPicker } from './GifPicker'
 import { Icon } from './icons'
 import { Avatar } from './Avatar'
@@ -26,6 +28,9 @@ import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugi
 import { toast } from '../lib/toast'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
+// v1.352.0: подсказка эмодзи по «:», как в Discord и Telegram. Разбор хвоста
+// живёт в lib/emojiNames — он проверяется тестом отдельно от разметки.
+const EMOJI_SUGG_MAX = 8
 const MAXLEN = 50000
 // v1.150.0: лимит подняли до 50 000 символов — без анти-спам-проверки это была бы
 // дыра для «залить чат 50 000 одинаковых букв». Реальный текст никогда не повторяет
@@ -137,6 +142,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const [gif, setGif] = useState(false)
   const [mQ, setMQ] = useState<string | null>(null)
   const [mIdx, setMIdx] = useState(0)
+  // Отдельный запрос для эмодзи: с «@» они не пересекаются — двоеточие обрывает
+  // хвост упоминания, — но своё состояние нужно, чтобы стрелки ходили по своему списку.
+  const [eQ, setEQ] = useState<string | null>(null)
+  const [eIdx, setEIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
@@ -316,6 +325,23 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     ? mentionSuggAll.filter(s => s.name.toLowerCase().startsWith(mQ.toLowerCase())).slice(0, 8)
     : []
 
+  // Свои и серверные эмодзи идут первыми: их ставили руками именно для этого чата,
+  // и вставляются они как :имя: — тем же текстом, который потом рисует md.
+  interface EmojiSugg { name: string; char?: string; url?: string }
+  const emojiSugg: EmojiSugg[] = (() => {
+    if (eQ === null) return []
+    const q = eQ.toLowerCase()
+    const custom = loadCustom()
+    const own: EmojiSugg[] = Object.keys(custom)
+      .filter(n => n.toLowerCase().includes(q))
+      .sort((a, b) => Number(b.toLowerCase().startsWith(q)) - Number(a.toLowerCase().startsWith(q)) || a.localeCompare(b))
+      .slice(0, EMOJI_SUGG_MAX)
+      .map(n => ({ name: n, url: custom[n] }))
+    const uni = searchEmojiNames(q, EMOJI_SUGG_MAX - own.length)
+      .map(e => ({ name: e.name, char: e.char }))
+    return [...own, ...uni]
+  })()
+
   // v1.193.0: слэш-команды ботов — только в начале сообщения (как в Discord),
   // список — команды ботов, реально стоящих на этом сервере (в ЛС нет serverId — нет команд).
   const [botCmds, setBotCmds] = useState<(BotCommand & { botAppId: string })[]>([])
@@ -409,6 +435,27 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     const m = upto.match(MENTION_TAIL)
     setMQ(m ? m[1] : null)
     setMIdx(0)
+    setEQ(m ? null : emojiQueryAt(upto, upto.length))
+    setEIdx(0)
+  }
+
+  // Юникодный эмодзи вставляем самим символом, свой — записью :имя:, потому что
+  // картинку рисует уже разметка сообщения по этому имени.
+  function pickEmoji(it: { name: string; char?: string; url?: string }) {
+    const el = inputRef.current
+    const caret = el?.selectionStart ?? text.length
+    const upto = text.slice(0, caret)
+    const q = emojiQueryAt(upto, upto.length)
+    if (q === null) { setEQ(null); return }
+    const ins = (it.char ?? ':' + it.name + ':') + ' '
+    const start = caret - (q.length + 1)
+    const next = text.slice(0, start) + ins + text.slice(caret)
+    setText(next); keepDraft(next)
+    setEQ(null)
+    requestAnimationFrame(() => {
+      const p = start + ins.length
+      el?.focus(); el?.setSelectionRange(p, p)
+    })
   }
 
   function pickMention(name: string) {
@@ -573,7 +620,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       lastSent.current = { t, at: Date.now() }
       if (channelId) lastSendByChannel.current[channelId] = Date.now()
       setFailed(false)
-      setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
+      setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); setEQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
     finally { setBusy(false); sendingRef.current = false }
   }
@@ -674,6 +721,20 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             </div>
           ))}
         </div>}
+        {emojiSugg.length > 0 && <div className="mention-pop">
+          <div className="mention-h">Эмодзи</div>
+          {emojiSugg.map((s, i) => (
+            <div key={(s.url ? 'c:' : 'u:') + s.name} className={'mention-it' + (i === eIdx ? ' on' : '')}
+              onMouseEnter={() => setEIdx(i)}
+              onMouseDown={e => { e.preventDefault(); pickEmoji(s) }}>
+              {s.url
+                ? <img className="inline-emoji" src={s.url} alt="" />
+                : <span style={{ fontSize: 18, lineHeight: '18px' }}>{s.char}</span>}
+              <span>{s.name}</span>
+              {s.url && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>свой</span>}
+            </div>
+          ))}
+        </div>}
         {sugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Упомянуть</div>
           {sugg.map((s, i) => (
@@ -748,6 +809,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               if (e.key === 'ArrowUp') { e.preventDefault(); setCmdIdx(i => (i - 1 + cmdSugg.length) % cmdSugg.length); return }
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickCommand(cmdSugg[Math.min(cmdIdx, cmdSugg.length - 1)]); return }
               if (e.key === 'Escape') { e.preventDefault(); setText(''); return }
+            }
+            if (emojiSugg.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setEIdx(i => (i + 1) % emojiSugg.length); return }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setEIdx(i => (i - 1 + emojiSugg.length) % emojiSugg.length); return }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickEmoji(emojiSugg[eIdx]); return }
+              if (e.key === 'Escape') { e.preventDefault(); setEQ(null); return }
             }
             if (sugg.length > 0) {
               if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx(i => (i + 1) % sugg.length); return }
