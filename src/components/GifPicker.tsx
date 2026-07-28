@@ -92,8 +92,14 @@ export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
     return () => window.clearTimeout(debRef.current)
   }, [q, tab])
 
+  // v1.331.0: «Мои GIF» — личная коллекция, и запрос шёл БЕЗ фильтра по владельцу:
+  // на вкладке лежали гифки всех пользователей приложения вперемешку со своими, и
+  // крестик рядом с каждой удалял чужую (в базе стояло `delete using (true)`).
+  // Показываем только свои; сама база теперь тоже чужих не отдаёт (миграция 88).
   async function refresh() {
-    const { data } = await supabase.from('gifs').select('id, url').order('created_at', { ascending: false })
+    if (!user) { setMine([]); return }
+    const { data } = await supabase.from('gifs').select('id, url')
+      .eq('owner', user.id).order('created_at', { ascending: false })
     setMine((data ?? []) as Gif[])
   }
   useEffect(() => {
@@ -102,7 +108,7 @@ export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gifs' }, () => { refresh() })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [])
+  }, [user?.id])
 
   async function removeMine(id: string) {
     await supabase.from('gifs').delete().eq('id', id)
@@ -161,7 +167,7 @@ export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
           <div className="emoji-grp">Избранное</div>
           <div className="gif-grid">{favs.map(u => cell(u))}</div>
         </>}
-        <div className="emoji-grp">Общие GIF</div>
+        <div className="emoji-grp">Все твои GIF</div>
         {mine.length === 0 && <div className="ep2-hint">Пока пусто — добавь GIF на вкладке «По ссылке».</div>}
         <div className="gif-grid">{mine.map(g => cell(g.url, g.id))}</div>
       </div>}

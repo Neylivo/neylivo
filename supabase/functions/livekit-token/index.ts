@@ -78,7 +78,17 @@ Deno.serve(async (req) => {
       if (channel) {
         const { data: member } = await admin.from('server_members').select('user_id')
           .eq('server_id', channel.server_id).eq('user_id', identity).maybeSingle()
-        allowed = !!member
+        // v1.331.0: одного членства мало. Приватный канал (settings.private +
+        // private_roles, миграция 69) закрыт для тех, кому его не выдали, — но
+        // проверялось это только на чтении канала и сообщений. Голосовой канал
+        // тоже бывает приватным, а сюда запрос приходит с одним лишь именем
+        // комнаты ch_<id>: членства в сервере хватало, чтобы получить токен и
+        // подключиться к закрытому голосовому каналу мимо интерфейса.
+        // Спрашиваем ту же функцию, что и правила доступа, — не пересказ её.
+        // Ответ не получен — отказываем: молчаливый пропуск при сбое проверки и
+        // есть то, ради чего проверку обходят.
+        const { data: canView } = await admin.rpc('can_view_channel', { p_channel_id: channelId, p_user: identity })
+        allowed = !!member && canView === true
       }
     } else if (room.startsWith('dm_')) {
       const threadId = room.slice(3)

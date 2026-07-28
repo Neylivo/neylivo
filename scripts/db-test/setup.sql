@@ -141,6 +141,12 @@ create table game_covers (
   status text not null default 'ok' check (status in ('ok', 'not_found')),
   checked_at timestamptz not null default now()
 );
+create table gifs (
+  id uuid primary key default gen_random_uuid(),
+  url text not null,
+  owner uuid references auth.users on delete set null
+);
+alter table gifs enable row level security;
 create table emoji_favs (
   user_id uuid not null references auth.users on delete cascade,
   name text not null,

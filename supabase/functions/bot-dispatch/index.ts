@@ -71,7 +71,19 @@ Deno.serve(async (req) => {
     const { data: members } = await admin.from('server_members').select('user_id').eq('server_id', channel.server_id)
     const memberIds = new Set((members ?? []).map((m: any) => m.user_id))
     const { data: bots } = await admin.from('bot_apps').select('id, bot_user_id, webhook_url, webhook_secret').not('webhook_url', 'is', null)
-    const targets = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id) && isSafeWebhookUrl(b.webhook_url))
+    const inServer = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id) && isSafeWebhookUrl(b.webhook_url))
+
+    // v1.331.0: членства в сервере мало. Приватный канал (69) закрыт для тех, кому
+    // его не выдали, а сюда сообщение приходит уже вставленным, и текст уходил
+    // КАЖДОМУ боту сервера — включая переписку в закрытых каналах, куда бота не
+    // пускали. Бота может завести любой вошедший (bot-create), так что это был
+    // способ читать закрытый канал целиком, ни разу в него не заглянув.
+    // Проверяем той же функцией, что и правила доступа.
+    const targets: any[] = []
+    await Promise.all(inServer.map(async (b: any) => {
+      const { data: canView } = await admin.rpc('can_view_channel', { p_channel_id: msg.channel_id, p_user: b.bot_user_id })
+      if (canView === true) targets.push(b)
+    }))
 
     const body = JSON.stringify({ type: 'MESSAGE_CREATE', message: msg })
     await Promise.all(targets.map(async (b: any) => {

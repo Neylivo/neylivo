@@ -110,8 +110,15 @@ const SABOTAGE = {
   cemoji: [/using \(owner = auth\.uid\(\) or owner is null\) with check \(owner = auth\.uid\(\)\)/, 'using (true) with check (true)'],
   // В общий кэш обложек снова кладётся любой адрес.
   cover: [/check \(cover_url is null or cover_url like 'https:\/\/%'\)/, 'check (true)'],
+  // Чужие «Мои GIF» снова видно.
+  gifs: [/using \(owner = auth\.uid\(\)\);\n/, 'using (true);\n'],
+  // Полное состояние до 88: чужие GIF и видно, и можно удалить. Отдельной поломки
+  // «только удаление» не бывает: запрет на чтение и так не даёт найти чужую строку,
+  // поэтому проверка удаления имеет смысл только когда открыто и то, и другое.
+  gifsdel: [/for select to authenticated\n  using \(owner = auth\.uid\(\)\);([\s\S]*?)using \(owner = auth\.uid\(\) or owner is null\);/,
+            'for select to authenticated\n  using (true);$1using (true);'],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -134,6 +141,7 @@ await db.exec(sql('54_security_hardening.sql').split('-- ====== B)')[0])
 await db.exec(SRC[85])
 await db.exec(SRC[86])
 await db.exec(SRC[87])
+await db.exec(SRC[88])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -575,6 +583,22 @@ await refused('в общий кэш обложек не подсунуть javas
 await check('обычная обложка кладётся по-прежнему', async () => {
   await as(USER, `insert into game_covers (name, cover_url) values ('Игра2','https://example.com/a.png')`)
   return (await db.query(`select 1 from game_covers where name='Игра2'`)).rows.length === 1
+})
+
+// «Мои GIF» — личная коллекция, а не общая на всё приложение (88).
+await db.query(`insert into gifs (url, owner) values ('чужая.gif',$1)`, [OTHER])
+await db.query(`insert into gifs (url, owner) values ('своя.gif',$1)`, [USER])
+await check('чужие GIF не видно', async () =>
+  (await as(USER, 'select url from gifs')).rows.every(r => r.url === 'своя.gif'))
+await check('свои GIF видно', async () =>
+  (await as(USER, 'select url from gifs')).rows.length === 1)
+await check('чужую GIF не удалить', async () => {
+  await as(USER, `delete from gifs where url='чужая.gif'`)
+  return (await db.query(`select 1 from gifs where url='чужая.gif'`)).rows.length === 1
+})
+await check('свою GIF удалить можно', async () => {
+  await as(USER, `delete from gifs where url='своя.gif'`)
+  return (await db.query(`select 1 from gifs where url='своя.gif'`)).rows.length === 0
 })
 
 await check('избранные эмодзи попали в публикацию realtime', async () =>

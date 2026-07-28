@@ -55,8 +55,20 @@ Deno.serve(async (req) => {
         .eq('server_id', channel.server_id).eq('user_id', app.bot_user_id).maybeSingle()
       if (!member) return json({ error: 'bot is not a member of this server' }, 403)
 
-      // Отправка текста сама по себе ничем не гейтится и у людей (нет SEND_MESSAGES-бита,
-      // см. messages_insert в 03_members_invites.sql) — членства достаточно, для бота так же.
+      // v1.331.0: раньше здесь стояло «отправка текста ничем не гейтится и у людей,
+      // членства достаточно» — это было верно для messages_insert из 03, но с тех
+      // пор правило обросло проверками: канал только для чтения (78) и приватный
+      // канал (69). Бот ходит с сервисным ключом, RLS его не касается, так что обе
+      // проверки он просто не замечал: писал в «Объявления», где людям писать
+      // запрещено, и в закрытый канал, доступ к которому ему не давали.
+      // Спрашиваем те же функции, что и правила доступа.
+      const [{ data: canView }, { data: canSend }] = await Promise.all([
+        admin.rpc('can_view_channel', { p_channel_id: channelId, p_user: app.bot_user_id }),
+        admin.rpc('channel_can_send', { p_channel: channelId, p_user: app.bot_user_id }),
+      ])
+      if (canView !== true) return json({ error: 'bot has no access to this channel' }, 403)
+      if (canSend !== true) return json({ error: 'channel is read-only for this bot' }, 403)
+
       const { data: msg, error: insErr } = await admin.from('messages').insert({
         channel_id: channelId, author: app.bot_user_id, author_name: app.name, content: String(content).slice(0, 4000),
       }).select().single()

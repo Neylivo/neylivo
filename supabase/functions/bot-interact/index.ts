@@ -73,6 +73,21 @@ Deno.serve(async (req) => {
     if (!caller) return json({ error: 'not a member of this server' }, 403)
     if (caller.timeout_until && new Date(caller.timeout_until) > new Date()) return json({ error: 'you are timed out' }, 403)
 
+    // v1.331.0: членства мало — вставка идёт сервисным ключом, то есть мимо
+    // messages_insert, где с 69 и 78 проверяются приватный канал и канал только
+    // для чтения. Без этих строк участник, которому закрытый канал не выдавали,
+    // вызывал в нём слэш-команду и получал там сообщение; в «Объявлениях», где
+    // писать запрещено всем, — тоже. Спрашиваем и за вызывающего, и за бота:
+    // сообщение появляется от бота, но по просьбе человека.
+    const [{ data: viewUser }, { data: sendUser }, { data: viewBot }, { data: sendBot }] = await Promise.all([
+      admin.rpc('can_view_channel', { p_channel_id: channelId, p_user: user.id }),
+      admin.rpc('channel_can_send', { p_channel: channelId, p_user: user.id }),
+      admin.rpc('can_view_channel', { p_channel_id: channelId, p_user: app.bot_user_id }),
+      admin.rpc('channel_can_send', { p_channel: channelId, p_user: app.bot_user_id }),
+    ])
+    if (viewUser !== true || viewBot !== true) return json({ error: 'no access to this channel' }, 403)
+    if (sendUser !== true || sendBot !== true) return json({ error: 'channel is read-only here' }, 403)
+
     const body = JSON.stringify({
       type: 'INTERACTION_CREATE', command, args: args ?? {},
       channelId, userId: user.id,
