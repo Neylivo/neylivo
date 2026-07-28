@@ -8,6 +8,7 @@
 // FK на auth.users, обойти нельзя), profiles.is_bot=true, генерирует токен
 // (виден только сейчас, дальше храним лишь его sha256).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { builtinBot, isBuiltinKind } from '../_shared/builtinBots.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,8 +28,17 @@ async function sha256(s: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const { name } = await req.json()
-    if (!name || typeof name !== 'string' || !name.trim()) return json({ error: 'name required' }, 400)
+    const { name, builtin } = await req.json()
+    // v1.333.0: готовый бот «от нас». Вид приходит от клиента, но принимается
+    // только из известного списка (_shared/builtinBots.ts) — произвольную строку
+    // сюда не записать, иначе любой приписал бы своему боту чужую логику. Имя и
+    // команды берём из списка, а не из запроса: бот «Кубик» должен называться
+    // «Кубик» у всех одинаково.
+    const kind = builtin != null ? String(builtin) : ''
+    if (kind && !isBuiltinKind(kind)) return json({ error: 'unknown builtin bot' }, 400)
+    const preset = kind ? builtinBot(kind)! : null
+    const botName = preset ? preset.name : String(name ?? '').trim()
+    if (!botName) return json({ error: 'name required' }, 400)
 
     const url = Deno.env.get('SUPABASE_URL')!
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -45,27 +55,36 @@ Deno.serve(async (req) => {
     const botEmail = `bot+${crypto.randomUUID()}@ponoi.bots`
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: botEmail, email_confirm: true, password: crypto.randomUUID() + crypto.randomUUID(),
-      user_metadata: { is_bot: true, bot_name: name.trim() },
+      user_metadata: { is_bot: true, bot_name: botName },
     })
     if (createErr || !created.user) return json({ error: createErr?.message ?? 'failed to create bot account' }, 500)
     const botUserId = created.user.id
 
-    await admin.from('profiles').insert({ id: botUserId, username: name.trim(), display_name: name.trim(), is_bot: true })
+    await admin.from('profiles').insert({ id: botUserId, username: botName, display_name: botName, is_bot: true })
 
     const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
     const tokenHash = await sha256(token)
     const webhookSecret = crypto.randomUUID().replace(/-/g, '')
 
     const { data: app, error: appErr } = await admin.from('bot_apps').insert({
-      owner_id: user.id, bot_user_id: botUserId, name: name.trim(),
+      owner_id: user.id, bot_user_id: botUserId, name: botName,
       token_hash: tokenHash, webhook_secret: webhookSecret,
+      builtin: kind || null,
     }).select().single()
     if (appErr || !app) {
       await admin.auth.admin.deleteUser(botUserId).catch(() => {})
       return json({ error: appErr?.message ?? 'failed to create bot_apps row' }, 500)
     }
 
-    return json({ id: app.id, botUserId, name: app.name, token, webhookSecret })
+    // Команды готового бота заводим сразу: без них автодополнение в композере
+    // не покажет, что бот вообще умеет, и человек не узнает, как им пользоваться.
+    if (preset && preset.commands.length) {
+      await admin.from('bot_commands').insert(
+        preset.commands.map(c => ({ bot_app_id: app.id, name: c.name, description: c.description, options: [] })),
+      )
+    }
+
+    return json({ id: app.id, botUserId, name: app.name, token, webhookSecret, builtin: kind || null })
   } catch (e) {
     return json({ error: String(e) }, 500)
   }

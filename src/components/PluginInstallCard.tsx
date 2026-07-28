@@ -4,7 +4,7 @@ import { toastOk, toastErr } from '../lib/toast'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { getPlugin } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
-import { PermissionGate } from './PluginsSettings'
+import { PermissionGate } from './PluginPermissionGate'
 import { SENSITIVE_PERMISSIONS, PERMISSION_LABEL, type PluginManifest } from '../lib/plugins/types'
 
 // v1.286.0: файл .ponoi, отправленный в чат, показывается карточкой плагина — с

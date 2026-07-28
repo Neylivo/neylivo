@@ -2,73 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
-import { parsePlugin, compareVersions, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
+import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
-import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type InstalledPlugin } from '../lib/plugins/types'
+import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
+import { PermissionGate } from './PluginPermissionGate'
+import { PluginCatalog } from './PluginCatalog'
+import { PluginHelp } from './PluginHelp'
 
 // v1.286.0: раздел «Плагины» в настройках. Плагины ставятся на устройство, поэтому
 // весь список локальный — ни таблицы, ни синхронизации между устройствами.
-
-/** Экран разрешений — показывается ДО установки, пока чужой код ещё не запускался.
- *  Экспортируется: тот же экран открывает карточка плагина в чате. */
-export function PermissionGate({ manifest, existing, onCancel, onConfirm }: {
-  manifest: PluginManifest
-  existing: InstalledPlugin | undefined
-  onCancel: () => void
-  onConfirm: () => void
-}) {
-  const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <button className="modal-x" onClick={onCancel}><Icon name="close" size={18} /></button>
-        <div className="modal-title">{existing ? 'Обновить плагин' : 'Установить плагин'}</div>
-        <div className="modal-sub">
-          {existing
-            ? (upgrade > 0
-              ? `Установлена версия ${existing.manifest.version}, ставится ${manifest.version}.`
-              : upgrade < 0
-                ? `Внимание: установлена БОЛЕЕ НОВАЯ версия ${existing.manifest.version}, ставится ${manifest.version}.`
-                : `Такая же версия ${manifest.version} — переустановка.`)
-            : 'Проверь, что просит плагин, прежде чем соглашаться.'}
-        </div>
-
-        <div className="sset-info" style={{ marginTop: 16, alignItems: 'flex-start' }}>
-          <Icon name="cube" size={16} />
-          <span><b>{manifest.name}</b> {manifest.version}<br />
-            <span className="mut">автор: {manifest.author}</span>
-            {manifest.description && <><br />{manifest.description}</>}
-          </span>
-        </div>
-
-        <label className="modal-lbl">Плагин сможет</label>
-        {manifest.permissions.length === 0 && <div className="cset-hint">Ничего особенного — плагин ничего не запрашивает.</div>}
-        {manifest.permissions.map(p => (
-          <div key={p} className={'plug-perm' + (SENSITIVE_PERMISSIONS.includes(p) ? ' warn' : '')}>
-            <Icon name={SENSITIVE_PERMISSIONS.includes(p) ? 'shield' : 'check'} size={15} />
-            <span>{PERMISSION_LABEL[p]}</span>
-          </div>
-        ))}
-        {manifest.hosts.length > 0 && (
-          <div className="cset-hint" style={{ marginTop: 8 }}>Сайты: {manifest.hosts.join(', ')}</div>
-        )}
-
-        <div className="cset-hint" style={{ marginTop: 14 }}>
-          Плагин выполняется в песочнице: он не видит твой пароль, сессию и файлы на компьютере.
-          Но всё, что перечислено выше, он делать сможет — ставь только то, чему доверяешь.
-        </div>
-
-        <div className="modal-foot">
-          <button className="modal-ghost" onClick={onCancel}>Отмена</button>
-          <button className="modal-primary" onClick={onConfirm}>{existing ? 'Обновить' : 'Установить'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /** Страница настроек одного плагина — строки описаны самим плагином (см. registry). */
 function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: SettingsRow[] }) {
@@ -124,6 +69,8 @@ export function PluginsSettings() {
   const [pending, setPending] = useState<{ manifest: PluginManifest; code: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [catalog, setCatalog] = useState(false)
+  const [help, setHelp] = useState(false)
   const pages = useSettingsPages()
 
   // Список и состояние запуска меняются не только отсюда (плагин может упасть сам),
@@ -177,15 +124,25 @@ export function PluginsSettings() {
 
   return (
     <>
-      <div className="pqs-sec-h">Плагины</div>
+      <div className="pqs-sec-h">
+        Плагины
+        {/* v1.333.0: маленький «?» рядом с разделом — формат плагина раньше был
+            описан только в исходниках, узнать его человеку было негде. */}
+        <button className="help-q" title="Как сделать свой плагин" onClick={() => setHelp(true)}>?</button>
+      </div>
       <div className="pqs-optd" style={{ marginBottom: 14 }}>
         Плагины расширяют Ponoi: свои кнопки, команды и оформление. Выполняются в песочнице —
         доступ к твоему аккаунту и файлам у них закрыт. Ставятся на это устройство.
       </div>
 
-      <button className="pqs2-btn" onClick={() => fileRef.current?.click()}>
-        <Icon name="plus" size={16} /> Установить из файла
-      </button>
+      <div className="modal-inline" style={{ gap: 8 }}>
+        <button className="pqs2-btn" onClick={() => setCatalog(true)}>
+          <Icon name="store" size={16} /> Каталог плагинов
+        </button>
+        <button className="pqs2-btn ghost" onClick={() => fileRef.current?.click()}>
+          <Icon name="plus" size={16} /> Установить из файла
+        </button>
+      </div>
       <input ref={fileRef} type="file" accept=".ponoi,.js,text/javascript" hidden
         onChange={e => void pickFile(e.target.files?.[0] ?? null)} />
 
@@ -235,6 +192,9 @@ export function PluginsSettings() {
           </div>
         )
       })}
+
+      {catalog && <PluginCatalog onClose={() => setCatalog(false)} />}
+      {help && <PluginHelp onClose={() => setHelp(false)} />}
 
       {pending && (
         <PermissionGate

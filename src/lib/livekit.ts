@@ -1,6 +1,7 @@
 import type { Room, LocalTrackPublication } from 'livekit-client'
 import { supabase } from './supabase'
 import { getSettings } from './settings'
+import { VoiceChain, setActiveChain, savedVoiceEffect, type VoiceEffect } from './voiceFx'
 import { RoomEvent, Track, verifyLivekitConstants } from './livekitConst'
 
 // v1.288.0: livekit-client грузится ТОЛЬКО при входе в звонок.
@@ -129,54 +130,67 @@ async function buildE2ee(lk: typeof import('livekit-client'), opt: E2eeOptions) 
 }
 
 /**
- * «Громкость микрофона» из настроек — программное усиление входа, как ползунок
- * Input Volume в Discord.
+ * Обработка микрофона: «Громкость микрофона» из настроек и эффект голоса.
  *
- * v1.332.0: ползунок в настройках сохранялся и не читался нигде — двигать его
- * можно было сколько угодно, на звук это не влияло. У микрофона нет громкости
- * как свойства, поэтому пропускаем дорожку через GainNode и публикуем уже
- * обработанную.
+ * v1.332.0: ползунок громкости сохранялся и не читался нигде. v1.333.0: сюда же
+ * встал голосовой эффект (см. voiceFx.ts) — цепочка одна и та же, менять эффект
+ * посреди звонка можно без перепубликации дорожки.
  *
- * Осторожно и намеренно: при 100% (значение по умолчанию) дорожка НЕ трогается
- * вовсе — путь остаётся ровно таким, каким был. Если WebAudio по какой-то
- * причине не заведётся, возвращаем исходную дорожку: тихий микрофон хуже
- * неотрегулированного, а звонки — самая непроверяемая часть приложения.
+ * Осторожно и намеренно: если громкость 100% и эффект «Обычный» — дорожка НЕ
+ * трогается вовсе, путь остаётся ровно прежним. Цепочка появляется только когда
+ * человек сам чего-то попросил, и если WebAudio не заведётся, остаётся исходная
+ * дорожка: тихий микрофон хуже необработанного, а звонки — самая непроверяемая
+ * часть приложения.
  */
-function applyMicGain<T extends { mediaStreamTrack: MediaStreamTrack; stop: () => void }>(
-  track: T | null,
-): { track: T | MediaStreamTrack | null; cleanup?: () => void } {
-  if (!track) return { track }
-  const pct = getSettings().micVol
-  if (pct === 100) return { track }
+let curRoom: Room | null = null
+let curMic: { mediaStreamTrack: MediaStreamTrack; stop: () => void } | null = null
+let curChain: VoiceChain | null = null
+
+function buildChain(track: { mediaStreamTrack: MediaStreamTrack }, effect: VoiceEffect): VoiceChain | null {
   try {
-    const Ctx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
-    const ctx = new Ctx()
-    ctx.resume().catch(() => {})
-    const src = ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]))
-    const gain = ctx.createGain()
-    gain.gain.value = pct / 100
-    const dest = ctx.createMediaStreamDestination()
-    src.connect(gain).connect(dest)
-    const out = dest.stream.getAudioTracks()[0]
-    if (!out) return { track }
-    // Публикуем именно обработанную дорожку: подменить её внутри готового
-    // LocalAudioTrack нельзя, зато publishTrack принимает и обычный
-    // MediaStreamTrack. Исходная остаётся источником цепочки, поэтому глушим её
-    // не сразу, а по выходу из звонка — иначе микрофон остался бы захваченным и
-    // после отбоя (в системе так и горел бы значок «идёт запись»).
-    return { track: out, cleanup: () => { try { track.stop() } catch {} ; ctx.close().catch(() => {}) } }
-  } catch { return { track } }
+    const chain = new VoiceChain(track.mediaStreamTrack, getSettings().micVol / 100)
+    chain.setEffect(effect)
+    if (!chain.track) { chain.close(); return null }
+    return chain
+  } catch { return null }
+}
+
+function releaseMicChain() {
+  if (curChain) { setActiveChain(null); curChain.close(); curChain = null }
+  try { curMic?.stop() } catch {}
+  curMic = null
+  curRoom = null
 }
 
 /**
- * Настройки голосового канала («Настройки канала» → «Битрейт» / «Качество видео»).
+ * Включить эффект голоса прямо во время разговора.
  *
- * v1.332.0: оба сохранялись в settings канала и не читались нигде — ползунок
- * битрейта и выбор качества были декорацией. Теперь они доходят до LiveKit:
- * битрейт задаёт звук, качество — потолок разрешения камеры. 'auto' оставляет
- * прежнее поведение (1080p и 256 кбит/с), то есть у каналов, где ничего не
- * выбирали, ничего и не меняется.
+ * Если цепочки ещё нет (человек не трогал ни громкость, ни эффекты), она
+ * создаётся здесь же, и обработанная дорожка публикуется вместо исходной. Это
+ * единственный момент, когда собеседник видит перепубликацию — дальше
+ * переключение эффектов идёт внутри цепочки и для него незаметно.
  */
+export async function applyVoiceEffect(effect: VoiceEffect): Promise<boolean> {
+  if (curChain) { curChain.setEffect(effect); setActiveChain(curChain); return true }
+  if (effect === 'none') return true
+  if (!curRoom || !curMic) return false
+  const chain = buildChain(curMic, effect)
+  if (!chain) return false
+  try {
+    const lp: any = curRoom.localParticipant
+    const pub = Array.from(lp.audioTrackPublications?.values?.() ?? lp.audioTracks?.values?.() ?? [])
+      .find((p: any) => p?.source === Track.Source.Microphone) as any
+    await lp.publishTrack(chain.track, { source: Track.Source.Microphone })
+    if (pub?.track) { try { await lp.unpublishTrack(pub.track, false) } catch {} }
+    curChain = chain
+    setActiveChain(chain)
+    return true
+  } catch {
+    chain.close()
+    return false
+  }
+}
+
 export interface ChannelMedia { bitrateKbps?: number; videoQuality?: string }
 const VQ_HEIGHT: Record<string, number> = {
   '144p': 144, '240p': 240, '360p': 360, '480p': 480, '720p': 720, '1080p': 1080, '1440p': 1440,
@@ -241,11 +255,21 @@ export async function joinRoom(roomName: string, identity: string, name: string,
     ;({ token, url } = await getToken(roomName, identity, name))
     await room.connect(url, token)
   }
-  const { track: micTrack, cleanup: micCleanup } = applyMicGain(await micPromise)
-  if (micCleanup) room.once(RoomEvent.Disconnected as any, micCleanup)
+  const rawMic = await micPromise
+  // Прошлая цепочка (быстрый переход между каналами) — закрываем, иначе её
+  // AudioContext и захваченный микрофон остались бы жить.
+  releaseMicChain()
+  curRoom = room
+  curMic = rawMic
+  room.once(RoomEvent.Disconnected as any, releaseMicChain)
+  const wantEffect = savedVoiceEffect()
+  const chain = rawMic && (getSettings().micVol !== 100 || wantEffect !== 'none')
+    ? buildChain(rawMic, wantEffect) : null
+  if (chain) { curChain = chain; setActiveChain(chain) }
+  const micTrack: any = chain?.track ?? rawMic
   if (micTrack) {
     try { await room.localParticipant.publishTrack(micTrack, { source: Track.Source.Microphone as any }) }
-    catch { micTrack.stop(); micCleanup?.(); await enableMicWithRetry(room) }
+    catch { try { micTrack.stop?.() } catch {} ; releaseMicChain(); await enableMicWithRetry(room) }
   } else {
     // Параллельный захват не удался (устройство было занято/отказано) — пробуем
     // ещё раз тем же путём, что и раньше: до нескольких попыток с паузой.

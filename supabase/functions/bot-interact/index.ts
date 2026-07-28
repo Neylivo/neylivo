@@ -7,6 +7,7 @@
 // ждёт синхронный ответ бота — webhook_secret нельзя отдавать в браузер, поэтому
 // подписанный POST на webhook_url бота идёт отсюда, не напрямую с клиента.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { runBuiltinCommand } from '../_shared/builtinBots.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -56,9 +57,14 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'unauthorized' }, 401)
 
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-    const { data: app } = await admin.from('bot_apps').select('id, bot_user_id, name, webhook_url, webhook_secret').eq('id', botAppId).maybeSingle()
-    if (!app || !app.webhook_url) return json({ error: 'bot has no webhook configured' }, 404)
-    if (!isSafeWebhookUrl(app.webhook_url)) return json({ error: 'bot webhook URL is not allowed' }, 400)
+    const { data: app } = await admin.from('bot_apps').select('id, bot_user_id, name, webhook_url, webhook_secret, builtin').eq('id', botAppId).maybeSingle()
+    if (!app) return json({ error: 'bot not found' }, 404)
+    // v1.333.0: у встроенного бота вебхука нет — он и не нужен, ответ считается
+    // здесь же (см. _shared/builtinBots.ts).
+    if (!app.builtin) {
+      if (!app.webhook_url) return json({ error: 'bot has no webhook configured' }, 404)
+      if (!isSafeWebhookUrl(app.webhook_url)) return json({ error: 'bot webhook URL is not allowed' }, 400)
+    }
 
     const { data: channel } = await admin.from('channels').select('id, server_id').eq('id', channelId).maybeSingle()
     if (!channel) return json({ error: 'channel not found' }, 404)
@@ -88,13 +94,25 @@ Deno.serve(async (req) => {
     if (viewUser !== true || viewBot !== true) return json({ error: 'no access to this channel' }, 403)
     if (sendUser !== true || sendBot !== true) return json({ error: 'channel is read-only here' }, 403)
 
+    let botReply: string | null = null
+
+    if (app.builtin) {
+      const arg = String((args && (args.text ?? args.arg ?? args.value)) ?? '')
+      botReply = await runBuiltinCommand(String(app.builtin), String(command), arg, channelId, admin)
+      if (!botReply) return json({ error: 'unknown command for this bot' }, 400)
+      const { data: msg0, error: insErr0 } = await admin.from('messages').insert({
+        channel_id: channelId, author: app.bot_user_id, author_name: app.name, content: botReply.slice(0, 4000),
+      }).select().single()
+      if (insErr0) return json({ error: insErr0.message }, 500)
+      return json({ id: msg0.id })
+    }
+
     const body = JSON.stringify({
       type: 'INTERACTION_CREATE', command, args: args ?? {},
       channelId, userId: user.id,
     })
     const sig = await hmac(app.webhook_secret, body)
 
-    let botReply: string | null = null
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 5000)   // Discord тоже ждёт ~3-5 сек синхронного ответа

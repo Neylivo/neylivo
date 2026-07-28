@@ -378,7 +378,15 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
       seenMsgIds.current.add(m.id)
       const age = Date.now() - new Date(m.created_at).getTime()
       if (age >= 0 && age < 30_000) {
-        emitPluginEvent('message', { id: m.id, author: m.author, content: m.content ?? '' })
+        // v1.333.0: mentionsMe и имя автора — плагину иначе неоткуда узнать, что
+        // обратились именно к тебе: своего ника он не знает и знать не должен.
+        // Своё же сообщение событием не считаем — плагин-автоответчик отвечал бы
+        // сам себе.
+        emitPluginEvent('message', {
+          id: m.id, author: m.author, authorName: m.author_name, content: m.content ?? '',
+          mine: m.author === currentUser,
+          mentionsMe: !!currentUserName && !!m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName),
+        })
       }
     }
     // Множество виденного не должно расти бесконечно за долгую сессию.

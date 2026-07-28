@@ -28,8 +28,12 @@ export async function myBots(): Promise<BotApp[]> {
 }
 
 // Возвращает токен и секрет ОДИН раз — дальше они не читаются нигде (хранится только hash).
-export async function createBot(name: string): Promise<{ id: string; token: string; webhookSecret: string }> {
-  const { data, error } = await supabase.functions.invoke('bot-create', { body: { name } })
+/**
+ * @param builtin вид готового бота «от нас» (см. supabase/functions/_shared/builtinBots.ts).
+ *   Обычный бот создаётся без него, как и раньше.
+ */
+export async function createBot(name: string, builtin?: string): Promise<{ id: string; token: string; webhookSecret: string; botUserId: string }> {
+  const { data, error } = await supabase.functions.invoke('bot-create', { body: { name, builtin: builtin ?? null } })
   if (error) throw new Error(await edgeErr(error))
   if (data?.error) throw new Error(data.error)
   return data

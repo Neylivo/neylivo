@@ -13,3 +13,4 @@ android/app/release.keystore
 android/captures
 *.apk
 dist-crypto-test/
+dist-plugin-test/

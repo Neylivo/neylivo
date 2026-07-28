@@ -101,6 +101,14 @@ const ponoi = {
   net: {
     fetch: (url, init) => call('net.fetch', [String(url), init || {}]),
   },
+  // v1.333.0: эффект своего голоса в звонке. Плагин только выбирает — обработка
+  // звука целиком в приложении, сюда не попадает ни одного сэмпла.
+  voice: {
+    list: () => call('voice.effects', []),
+    current: () => call('voice.current', []),
+    // Отвечает false, если звонка сейчас нет: менять нечего.
+    setEffect: (id) => call('voice.setEffect', [String(id)]),
+  },
   notify: (text) => call('notify', [String(text)]),
   // Промис ОБЯЗАТЕЛЬНО возвращается наружу: подписка может быть отклонена (нет
   // разрешения messages.read), и без return этот отказ становился бы необработанным
@@ -122,8 +130,15 @@ self.onmessage = async (e) => {
     try {
       // Плагин получает ponoi аргументом, а не через глобал: так видно, откуда он
       // берётся, и нельзя случайно затереть его объявлением своей переменной.
+      // v1.333.0: код выполняется через new Function, то есть НЕ как модуль — а в
+      // документации плагина (manifest.ts) с самого начала стоял пример с
+      // "export function onLoad". Такой плагин падал сразу на "Unexpected token
+      // export": то есть по нашей же инструкции написать рабочий плагин было
+      // нельзя. Снимаем ведущее export у объявлений верхнего уровня — работают и
+      // форма из документации, и обычная function onLoad.
+      const code = m.code.replace(/^[ \t]*export[ \t]+(default[ \t]+)?(?=(async[ \t]+)?(function|const|let|var|class)\b)/gm, '')
       const factory = new Function('ponoi', 'module', 'exports',
-        m.code + '\nreturn (typeof onLoad === "function" ? onLoad : (module.exports && module.exports.onLoad) || (exports && exports.onLoad));')
+        code + '\nreturn (typeof onLoad === "function" ? onLoad : (module.exports && module.exports.onLoad) || (exports && exports.onLoad));')
       const mod = { exports: {} }
       const onLoad = factory(ponoi, mod, mod.exports)
       if (typeof onLoad === 'function') await onLoad(ponoi)

@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase'
 import { useSettings, devMode } from '../lib/settings'
 import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
+import { VOICE_EFFECTS, activeEffect, subscribeVoiceFx, rememberVoiceEffect, type VoiceEffect } from '../lib/voiceFx'
+import { applyVoiceEffect } from '../lib/livekit'
 import { matchCombo } from '../lib/keybind'
 import { useClampToViewport } from '../lib/clampPos'
 import { Soundboard } from './Soundboard'
@@ -414,6 +416,9 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
   const [count, setCount] = useState(1)
   const [showSb, setShowSb] = useState(false)
+  const [fxMenu, setFxMenu] = useState(false)
+  const [fx, setFx] = useState<VoiceEffect>(() => activeEffect())
+  useEffect(() => subscribeVoiceFx(() => setFx(activeEffect())), [])
   const [flash, setFlash] = useState(false)
   const [idle, setIdle] = useState(false)
   const micBeforeDeaf = useRef(true)
@@ -779,6 +784,30 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
                 {SHARE_FPS.map(f => <button key={f} className={sq.fps === f ? 'on' : ''} onClick={() => setSq(s => ({ ...s, fps: f }))}>{f} FPS</button>)}
               </div>
               <button className="c2-go" onClick={startShare}><Icon name="screen-share" size={16} /> В эфир</button>
+            </div>
+          </>}
+        </div>
+        {/* v1.333.0: смена голоса прямо в звонке. Эффект переключается внутри уже
+            опубликованной дорожки, поэтому собеседник ничего не переподключает. */}
+        <div className="c2-fxwrap">
+          <button className={'c2-btn' + (fx !== 'none' ? ' lit' : '')} onClick={() => setFxMenu(v => !v)} title="Голос">
+            <Icon name="wand" size={20} />
+          </button>
+          {fxMenu && <>
+            <div className="c2-menu-ov" onClick={() => setFxMenu(false)} />
+            <div className="c2-menu c2-fxmenu">
+              <div className="c2-menu-h">Голос</div>
+              {VOICE_EFFECTS.map(e => (
+                <button key={e.id} className={'c2-dev' + (fx === e.id ? ' on' : '')} title={e.hint}
+                  onClick={async () => {
+                    rememberVoiceEffect(e.id)
+                    const ok = await applyVoiceEffect(e.id)
+                    if (!ok) toastErr('Не получилось переключить голос — эффект включится со следующего звонка')
+                    setFx(activeEffect())
+                    setFxMenu(false)
+                  }}>{e.label}</button>
+              ))}
+              <div className="c2-fxhint">Слышат собеседники, у тебя в наушниках голос прежний.</div>
             </div>
           </>}
         </div>

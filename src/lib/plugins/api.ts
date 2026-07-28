@@ -5,6 +5,7 @@ import {
   setPluginCss, setSettingsPage, type SettingsRow,
 } from './registry'
 import { readStorage, writeStorage, deleteStorage } from './store'
+import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect } from '../voiceFx'
 
 // v1.286.0: хостовая реализация всего, что плагин может вызвать. Единственное место,
 // где решается «можно или нельзя»: в самой песочнице (bootstrap.ts) никаких проверок
@@ -149,6 +150,23 @@ export function createDispatcher(
         need('messages.write')
         await ctx.sendMessage(String(args[0] ?? '').slice(0, 4000))
         return null
+      }
+
+      case 'voice.setEffect': {
+        need('voice')
+        const raw = String(args[0] ?? 'none')
+        if (!isVoiceEffect(raw)) throw new Denied(`Неизвестный эффект голоса «${str(raw, 30, 'эффект')}».`)
+        // false — звонка сейчас нет; это не ошибка плагина, поэтому возвращаем
+        // ответ, а не исключение: пусть сам решит, ругаться или промолчать.
+        return setVoiceEffect(raw)
+      }
+      case 'voice.effects': {
+        need('voice')
+        return VOICE_EFFECTS.map(e => ({ id: e.id, label: e.label }))
+      }
+      case 'voice.current': {
+        need('voice')
+        return activeEffect()
       }
 
       case 'notify': {

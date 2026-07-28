@@ -19,9 +19,10 @@ export type Permission =
   | 'net'             // сеть, только на домены из @hosts
   | 'settings'        // своя страница настроек
   | 'notify'          // всплывающие уведомления
+  | 'voice'           // переключать эффект своего голоса в звонке
 
 export const ALL_PERMISSIONS: Permission[] = [
-  'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify',
+  'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify', 'voice',
 ]
 
 /** Человеческое описание разрешения — ровно то, что читает человек перед установкой. */
@@ -35,6 +36,10 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   'net': 'Обращаться в интернет (только к указанным сайтам)',
   'settings': 'Своя страница настроек',
   'notify': 'Показывать уведомления',
+  // v1.333.0: плагин выбирает эффект, но самого звука не получает — обработка
+  // целиком в приложении (src/lib/voiceFx.ts). Формулировка ровно об этом,
+  // чтобы никто не решил, будто плагин слышит разговор.
+  'voice': 'Менять эффект твоего голоса в звонке (сам звук ему не доступен)',
 }
 
 /**

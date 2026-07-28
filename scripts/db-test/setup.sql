@@ -141,6 +141,35 @@ create table game_covers (
   status text not null default 'ok' check (status in ('ok', 'not_found')),
   checked_at timestamptz not null default now()
 );
+-- Нужны миграции 89 (каталоги): профиль даёт имя автора, bot_apps — самого бота.
+create table profiles (
+  id uuid primary key references auth.users on delete cascade,
+  username text,
+  display_name text,
+  is_bot boolean not null default false
+);
+create table bot_apps (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users on delete cascade,
+  bot_user_id uuid not null references auth.users on delete cascade,
+  name text not null,
+  avatar_url text,
+  webhook_url text,
+  webhook_secret text not null default 's',
+  token_hash text not null default 'h',
+  created_at timestamptz not null default now()
+);
+alter table bot_apps enable row level security;
+create policy "ba_read"  on bot_apps for select using (auth.uid() = owner_id);
+create policy "ba_write" on bot_apps for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+create table bot_commands (
+  id uuid primary key default gen_random_uuid(),
+  bot_app_id uuid not null references bot_apps on delete cascade,
+  name text not null,
+  description text not null,
+  options jsonb not null default '[]'
+);
+
 create table gifs (
   id uuid primary key default gen_random_uuid(),
   url text not null,

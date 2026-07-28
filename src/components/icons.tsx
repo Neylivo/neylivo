@@ -23,6 +23,9 @@ export function Icon({ name, size, className, style }: { name: string; size?: nu
     case 'expand': return <svg {...p}><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
     case 'shrink': return <svg {...p}><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/></svg>
     case 'compass': return <svg {...p}><circle cx="12" cy="12" r="9"/><polygon points="16 8 14 14 8 16 10 10 16 8"/></svg>
+    // v1.333.0: смена голоса в звонке и каталог плагинов.
+    case 'wand': return <svg {...p}><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></svg>
+    case 'store': return <svg {...p}><path d="M3 9h18l-1.5-5h-15L3 9z"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></svg>
     case 'code': return <svg {...p}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
     case 'megaphone': return <svg {...p}><path d="M3 11l15-6v14L3 13v-2z"/><path d="M18 8a3 3 0 0 1 0 8"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
     case 'flag': return <svg {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>

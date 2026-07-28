@@ -117,8 +117,15 @@ const SABOTAGE = {
   // поэтому проверка удаления имеет смысл только когда открыто и то, и другое.
   gifsdel: [/for select to authenticated\n  using \(owner = auth\.uid\(\)\);([\s\S]*?)using \(owner = auth\.uid\(\) or owner is null\);/,
             'for select to authenticated\n  using (true);$1using (true);'],
+  // Имя автора в каталоге снова приходит от клиента.
+  // \s* вокруг переносов — файлы миграций лежат с CRLF, и голый \n в них не ловится.
+  catauthor: [/new\.author_name := coalesce\(\s*\(select coalesce\(nullif\(p\.display_name, ''\), p\.username\) from public\.profiles p where p\.id = auth\.uid\(\)\),\s*'неизвестен'\);/, ''],
+  // Автора снова переписывает любая правка — включая счётчик установок.
+  catowner: [/new\.author_id := old\.author_id;/, 'new.author_id := auth.uid();'],
+  // Вид встроенного бота снова можно приписать своему боту.
+  botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -142,6 +149,7 @@ await db.exec(SRC[85])
 await db.exec(SRC[86])
 await db.exec(SRC[87])
 await db.exec(SRC[88])
+await db.exec(SRC[89])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -599,6 +607,66 @@ await check('чужую GIF не удалить', async () => {
 await check('свою GIF удалить можно', async () => {
   await as(USER, `delete from gifs where url='своя.gif'`)
   return (await db.query(`select 1 from gifs where url='своя.gif'`)).rows.length === 0
+})
+
+// ── Каталоги плагинов и ботов (89) ───────────────────────────────────────
+await db.query(`insert into profiles (id, username, display_name) values ($1,'user','Пользователь')`, [USER])
+await db.query(`insert into profiles (id, username, display_name) values ($1,'other','Посторонний')`, [OTHER])
+const pluginRow = (id, uid) => as(uid,
+  `insert into plugin_catalog (id, name, version, author_id, author_name, summary, code)
+   values ($1,'Плагин','1.0.0',$2,'кто-то','коротко','function onLoad(){}')`, [id, uid])
+
+await check('плагин выкладывается в каталог', async () => {
+  await pluginRow('my-plugin', USER)
+  return (await db.query(`select 1 from plugin_catalog where id='my-plugin'`)).rows.length === 1
+})
+await check('имя автора ставит база, а не клиент', async () =>
+  (await db.query(`select author_name from plugin_catalog where id='my-plugin'`)).rows[0].author_name === 'Пользователь')
+await check('автор — тот, кто выкладывает', async () =>
+  (await db.query(`select author_id from plugin_catalog where id='my-plugin'`)).rows[0].author_id === USER)
+// Подделать автора нельзя не отказом, а тем, что база всё равно ставит своё:
+// прислать чужой author_id можно, но в строке окажется тот, кто её выложил.
+await check('автора не подделать — база ставит своего', async () => {
+  await as(OTHER, `insert into plugin_catalog (id, name, version, author_id, author_name, summary, code)
+                   values ('fake','Подделка','1.0.0',$1,'Пользователь','коротко','x')`, [USER])
+  const r = (await db.query(`select author_id, author_name from plugin_catalog where id='fake'`)).rows[0]
+  return r.author_id === OTHER && r.author_name === 'Посторонний'
+})
+await check('чужой плагин не переписать', async () => {
+  await as(OTHER, `update plugin_catalog set code='зло' where id='my-plugin'`)
+  return (await db.query(`select code from plugin_catalog where id='my-plugin'`)).rows[0].code === 'function onLoad(){}'
+})
+await check('чужой плагин не снять с каталога', async () => {
+  await as(OTHER, `delete from plugin_catalog where id='my-plugin'`)
+  return (await db.query(`select 1 from plugin_catalog where id='my-plugin'`)).rows.length === 1
+})
+await refused('занятый id не перехватить', () => pluginRow('my-plugin', OTHER))
+await check('счётчик установок двигает посторонний', async () => {
+  await as(OTHER, `select plugin_installed('my-plugin')`)
+  return (await db.query(`select installs from plugin_catalog where id='my-plugin'`)).rows[0].installs === 1
+})
+await check('чужая установка не делает установившего автором', async () =>
+  (await db.query(`select author_id from plugin_catalog where id='my-plugin'`)).rows[0].author_id === USER)
+await check('свой плагин автор снимает сам', async () => {
+  await as(USER, `delete from plugin_catalog where id='my-plugin'`)
+  return (await db.query(`select 1 from plugin_catalog where id='my-plugin'`)).rows.length === 0
+})
+
+const botApp = (await db.query(
+  `insert into bot_apps (owner_id, bot_user_id, name) values ($1,$2,'Мой бот') returning id`, [USER, MOD])).rows[0].id
+await check('своего бота автор выкладывает', async () => {
+  await as(USER, `insert into bot_catalog (app_id, name, author_id, author_name, summary) values ($1,'Мой бот',$2,'x','коротко')`, [botApp, USER])
+  return (await db.query('select 1 from bot_catalog where app_id=$1', [botApp])).rows.length === 1
+})
+await refused('чужого бота в каталог не выложить', () => as(OTHER,
+  `insert into bot_catalog (app_id, name, author_id, author_name, summary) values ($1,'Чужой',$2,'x','коротко')`, [botApp, OTHER]))
+await check('вид встроенного бота не приписать себе', async () => {
+  await as(USER, `update bot_apps set builtin='dice' where id=$1`, [botApp]).catch(() => {})
+  return (await db.query('select builtin from bot_apps where id=$1', [botApp])).rows[0].builtin === null
+})
+await check('счётчик добавлений двигает посторонний', async () => {
+  await as(OTHER, `select bot_added($1)`, [botApp])
+  return (await db.query('select adds from bot_catalog where app_id=$1', [botApp])).rows[0].adds === 1
 })
 
 await check('избранные эмодзи попали в публикацию realtime', async () =>

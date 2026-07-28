@@ -15,6 +15,7 @@
 // Слэш-команды (INTERACTION_CREATE) шлются не отсюда — см. src/lib/botApi.ts,
 // вызывается напрямую из Composer.tsx при отправке команды, синхронно ждёт ответ.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { runBuiltinMessage } from '../_shared/builtinBots.ts'
 
 const cors = { 'Content-Type': 'application/json' }
 
@@ -70,8 +71,13 @@ Deno.serve(async (req) => {
 
     const { data: members } = await admin.from('server_members').select('user_id').eq('server_id', channel.server_id)
     const memberIds = new Set((members ?? []).map((m: any) => m.user_id))
-    const { data: bots } = await admin.from('bot_apps').select('id, bot_user_id, webhook_url, webhook_secret').not('webhook_url', 'is', null)
-    const inServer = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id) && isSafeWebhookUrl(b.webhook_url))
+    const { data: bots } = await admin.from('bot_apps').select('id, bot_user_id, name, webhook_url, webhook_secret, builtin')
+    // v1.333.0: встроенные боты (см. _shared/builtinBots.ts) отвечают сами —
+    // вебхука у них нет и не должно быть. Всё остальное как раньше: наружу идём
+    // только к тем, у кого адрес задан и он безопасен.
+    const inScope = (bots ?? []).filter((b: any) => memberIds.has(b.bot_user_id))
+    const builtins = inScope.filter((b: any) => b.builtin)
+    const inServer = inScope.filter((b: any) => !b.builtin && b.webhook_url && isSafeWebhookUrl(b.webhook_url))
 
     // v1.331.0: членства в сервере мало. Приватный канал (69) закрыт для тех, кому
     // его не выдали, а сюда сообщение приходит уже вставленным, и текст уходил
@@ -85,6 +91,21 @@ Deno.serve(async (req) => {
       if (canView === true) targets.push(b)
     }))
 
+    // Встроенные — тем же правилом доступа к каналу, что и остальные.
+    let builtinReplies = 0
+    for (const b of builtins) {
+      const { data: canView } = await admin.rpc('can_view_channel', { p_channel_id: msg.channel_id, p_user: b.bot_user_id })
+      if (canView !== true) continue
+      const reply = runBuiltinMessage(String(b.builtin), msg)
+      if (!reply) continue
+      const { data: canSend } = await admin.rpc('channel_can_send', { p_channel: msg.channel_id, p_user: b.bot_user_id })
+      if (canSend !== true) continue
+      await admin.from('messages').insert({
+        channel_id: msg.channel_id, author: b.bot_user_id, author_name: b.name ?? 'Бот', content: reply,
+      })
+      builtinReplies++
+    }
+
     const body = JSON.stringify({ type: 'MESSAGE_CREATE', message: msg })
     await Promise.all(targets.map(async (b: any) => {
       try {
@@ -93,7 +114,7 @@ Deno.serve(async (req) => {
       } catch { /* один упавший вебхук не должен ронять остальных */ }
     }))
 
-    return new Response(JSON.stringify({ dispatched: targets.length }), { headers: cors })
+    return new Response(JSON.stringify({ dispatched: targets.length, builtin: builtinReplies }), { headers: cors })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: cors })
   }

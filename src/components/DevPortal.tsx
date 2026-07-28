@@ -7,6 +7,8 @@ import {
   addBotToServer, removeBotFromServer, type BotApp, type BotCommand,
 } from '../lib/botApi'
 import { supabase } from '../lib/supabase'
+import { BotCatalog } from './BotCatalog'
+import { BotHelp } from './BotHelp'
 
 // v1.193.0: «Мои приложения» — платформа ботов (Настройки пользователя). Токен
 // и webhook-секрет видны только один раз, сразу после создания (как у Discord) —
@@ -19,6 +21,8 @@ export function DevPortal() {
   const [busy, setBusy] = useState(false)
   const [justCreated, setJustCreated] = useState<{ id: string; token: string; webhookSecret: string } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [help, setHelp] = useState(false)
+  const [catalog, setCatalog] = useState(false)
 
   const load = () => { myBots().then(b => { setBots(b); setLoading(false) }) }
   useEffect(load, [])
@@ -38,7 +42,9 @@ export function DevPortal() {
 
   return (
     <>
-      <h2>Мои приложения</h2>
+      <h2>Мои приложения
+        <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
+      </h2>
       <div className="pqs2-desc">Свои боты для серверов — как в Discord: приложение получает токен для API и (по желанию) вебхук, куда Ponoi шлёт события сообщений и вызовы слэш-команд.</div>
 
       {justCreated && <div className="sset-info" style={{ marginTop: 12 }}>
@@ -64,6 +70,13 @@ export function DevPortal() {
         {bots.map(b => <BotCard key={b.id} bot={b} open={openId === b.id} onToggle={() => setOpenId(v => v === b.id ? null : b.id)}
           onDeleted={() => { setOpenId(null); load() }} />)}
       </div>
+
+      <button className="pqs2-btn ghost" style={{ marginTop: 16 }} onClick={() => setCatalog(true)}>
+        <Icon name="store" size={16} /> Каталог ботов
+      </button>
+
+      {catalog && <BotCatalog onClose={() => setCatalog(false)} />}
+      {help && <BotHelp onClose={() => setHelp(false)} />}
     </>
   )
 }
@@ -152,6 +165,8 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
   const [installed, setInstalled] = useState<{ id: string; bot_user_id: string; name: string }[]>([])
   const [appId, setAppId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [catalog, setCatalog] = useState(false)
+  const [help, setHelp] = useState(false)
 
   const load = () => {
     if (!memberIds.length) { setInstalled([]); return }
@@ -178,11 +193,16 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
 
   return (
     <>
-      <h2>Боты</h2>
-      <div className="pqs2-desc">Добавь бота по ID приложения — его владелец найдёт ID в «Мои приложения» (Настройки пользователя).</div>
-      <div className="modal-inline" style={{ marginTop: 16 }}>
+      <h2>Боты
+        <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
+      </h2>
+      <div className="pqs2-desc">Возьми готового из каталога — или добавь по ID приложения, если бота тебе дали лично.</div>
+      <button className="pqs2-btn" style={{ marginTop: 14 }} onClick={() => setCatalog(true)}>
+        <Icon name="store" size={16} /> Каталог ботов
+      </button>
+      <div className="modal-inline" style={{ marginTop: 12 }}>
         <input className="modal-in" placeholder="ID приложения бота" value={appId} onChange={e => setAppId(e.target.value)} style={{ flex: 1 }} />
-        <button className="modal-primary" disabled={!appId.trim() || busy} onClick={add}>{busy ? 'Добавление…' : 'Добавить'}</button>
+        <button className="pqs2-btn ghost" disabled={!appId.trim() || busy} onClick={add}>{busy ? 'Добавление…' : 'Добавить по ID'}</button>
       </div>
       <div style={{ marginTop: 16 }}>
         {installed.map(b => (
@@ -193,6 +213,9 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
         ))}
         {installed.length === 0 && <div className="cset-hint">На сервере пока нет ботов.</div>}
       </div>
+
+      {catalog && <BotCatalog serverId={serverId} onAdded={load} onClose={() => setCatalog(false)} />}
+      {help && <BotHelp onClose={() => setHelp(false)} />}
     </>
   )
 }
