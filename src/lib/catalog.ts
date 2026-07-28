@@ -18,6 +18,7 @@ export interface CatalogPlugin {
   summary: string
   description: string | null
   icon_url: string | null
+  banner_url: string | null
   code: string
   permissions: string[]
   installs: number
@@ -32,6 +33,7 @@ export interface CatalogBot {
   summary: string
   description: string | null
   icon_url: string | null
+  banner_url: string | null
   adds: number
   updated_at: string
 }
@@ -58,6 +60,12 @@ function why(e: any): string {
   if (/relation .* does not exist|schema cache|not find the table/i.test(msg)) {
     return 'Каталог ещё не включён: нужно применить миграцию supabase/89_catalogs.sql.'
   }
+  // v1.335.0: фон карточки добавила отдельная миграция — если её не применили,
+  // Postgres жалуется именно на эту колонку, и понятнее сказать про неё, чем
+  // показать «column banner_url does not exist».
+  if (/banner_url/i.test(msg)) {
+    return 'Фон карточки появится после миграции supabase/90_catalog_banner.sql.'
+  }
   return msg || 'Не удалось загрузить каталог.'
 }
 
@@ -77,7 +85,7 @@ export async function fetchBotCatalog(): Promise<CatalogResult<CatalogBot>> {
 
 export interface PublishPlugin {
   id: string; name: string; version: string; summary: string; description: string
-  icon_url: string | null; code: string; permissions: string[]
+  icon_url: string | null; banner_url: string | null; code: string; permissions: string[]
 }
 
 /**
@@ -90,7 +98,7 @@ export async function publishPlugin(p: PublishPlugin, meId: string): Promise<voi
     id: p.id, name: p.name, version: p.version,
     summary: shorten(p.summary, SUMMARY_MAX),
     description: p.description.slice(0, DESC_MAX) || null,
-    icon_url: p.icon_url, code: p.code, permissions: p.permissions,
+    icon_url: p.icon_url, banner_url: p.banner_url, code: p.code, permissions: p.permissions,
     author_id: meId, author_name: '',
   }
   const { error } = await supabase.from('plugin_catalog').upsert(row)
@@ -114,13 +122,14 @@ export async function countPluginInstall(id: string): Promise<void> {
 }
 
 export async function publishBot(b: {
-  app_id: string; name: string; summary: string; description: string; icon_url: string | null
+  app_id: string; name: string; summary: string; description: string
+  icon_url: string | null; banner_url: string | null
 }, meId: string): Promise<void> {
   const { error } = await supabase.from('bot_catalog').upsert({
     app_id: b.app_id, name: b.name,
     summary: shorten(b.summary, SUMMARY_MAX),
     description: b.description.slice(0, DESC_MAX) || null,
-    icon_url: b.icon_url, author_id: meId, author_name: '',
+    icon_url: b.icon_url, banner_url: b.banner_url, author_id: meId, author_name: '',
   })
   if (error) {
     if (/row-level security/i.test(error.message)) {

@@ -49,7 +49,9 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'plugins', label: 'Плагины', icon: 'cube' },
   ] },
   { group: 'Разработчикам', items: [
-    { k: 'devportal', label: 'Мои приложения', icon: 'code' },
+    // v1.335.0: было «Мои приложения» — название из Discord, но у нас за ним
+    // прячутся именно боты, и по слову «приложения» их никто не искал.
+    { k: 'devportal', label: 'Боты', icon: 'code' },
   ] },
 ]
 

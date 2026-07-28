@@ -69,7 +69,6 @@ export function PluginsSettings() {
   const [pending, setPending] = useState<{ manifest: PluginManifest; code: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [catalog, setCatalog] = useState(false)
   const [help, setHelp] = useState(false)
   const pages = useSettingsPages()
 
@@ -135,14 +134,14 @@ export function PluginsSettings() {
         доступ к твоему аккаунту и файлам у них закрыт. Ставятся на это устройство.
       </div>
 
-      <div className="modal-inline" style={{ gap: 8 }}>
-        <button className="pqs2-btn" onClick={() => setCatalog(true)}>
-          <Icon name="store" size={16} /> Каталог плагинов
-        </button>
-        <button className="pqs2-btn ghost" onClick={() => fileRef.current?.click()}>
-          <Icon name="plus" size={16} /> Установить из файла
-        </button>
-      </div>
+      <button className="pqs2-btn ghost" onClick={() => fileRef.current?.click()}>
+        <Icon name="plus" size={16} /> Установить из файла
+      </button>
+
+      {/* Каталог прямо здесь: раньше он открывался окном поверх настроек. */}
+      <PluginCatalog inline />
+
+      <div className="pqs-sec-t" style={{ marginTop: 22 }}>Установленные</div>
       <input ref={fileRef} type="file" accept=".ponoi,.js,text/javascript" hidden
         onChange={e => void pickFile(e.target.files?.[0] ?? null)} />
 
@@ -193,7 +192,6 @@ export function PluginsSettings() {
         )
       })}
 
-      {catalog && <PluginCatalog onClose={() => setCatalog(false)} />}
       {help && <PluginHelp onClose={() => setHelp(false)} />}
 
       {pending && (

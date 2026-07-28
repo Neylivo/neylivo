@@ -868,7 +868,7 @@ body { font-size: var(--font-px, 16px); }
 
 /* ===== pass 17: Ponoi Music redesign (mus2-*) ===== */
 /* Музыка: по умолчанию панель у правого края (как в макете), .full — на весь экран */
-.mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:var(--z-modal-ov, 120); display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
+.mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:var(--z-panel, 120); display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
 .mus2.full { left:0; width:auto; border-left:none; box-shadow:none; }
 /* Узкая панель: очередь сверху, обложка ниже, всё компактнее */
 .mus2:not(.full) .mus2-body { flex-direction:column; }
@@ -1061,8 +1061,14 @@ body { font-size: var(--font-px, 16px); }
   --z-petmenu-ov: 95;
   --z-petmenu: 96;
   --z-fullscreen: 100;
-  --z-modal-ov: 120;
-  --z-modal: 121;
+  /* v1.335.0: модалки подняты ВЫШЕ полноэкранных панелей (--z-fullscreen 100)
+     и окна настроек сервера (--z-musiclib 140). Раньше модалка, открытая из
+     настроек, оказывалась ПОД самим окном настроек: её края торчали по сторонам,
+     и выглядело это как «вылезает за рамки». Панель музыки осталась на 120
+     (--z-panel), чтобы её отношение с библиотекой музыки не поменялось. */
+  --z-panel: 120;
+  --z-modal-ov: 150;
+  --z-modal: 151;
   --z-over-modal: 130;
   --z-over-modal2: 131;
   --z-musiclib: 140;
@@ -4722,19 +4728,52 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .cat-body { overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
 .cat-sec { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--mut); margin: 16px 0 8px; }
-.cat-grid { display: flex; flex-direction: column; gap: 8px; }
-.cat-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
-  background: var(--bg2); cursor: pointer; }
-.cat-card:hover { background: var(--c-hover); }
+/* v1.335.0: плитки вместо строк. Строкой список читается как таблица — глазу
+   не за что зацепиться, и десяток плагинов выглядит одинаково. Плитка с фоном
+   и крупным значком узнаётся с расстояния, а сетка сама подстраивается под
+   ширину окна настроек. */
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 12px; }
+.cat-tile { position: relative; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
+  background: var(--bg2); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.cat-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.28); }
+body.no-anim .cat-tile { transition: none; }
+body.no-anim .cat-tile:hover { transform: none; }
+/* Фон плитки: своя картинка либо мягкая заливка от акцента — пустой плитка не
+   выглядит никогда. */
+.cat-tile-bg { height: 68px; background-size: cover; background-position: center; flex: none; }
+.cat-tile-bg.plain { background: linear-gradient(135deg, var(--brand) 0%, rgba(var(--ov), .10) 100%); opacity: .55; }
+.cat-tile-ic { position: absolute; top: 40px; left: 12px; width: 48px; height: 48px; border-radius: 12px;
+  background: var(--bg3); border: 3px solid var(--bg2); display: flex; align-items: center; justify-content: center;
+  overflow: hidden; }
+.cat-tile-ic img { width: 100%; height: 100%; object-fit: cover; }
+.cat-tile-body { padding: 24px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.cat-tile .cat-nm { margin-top: 2px; }
+.cat-tile .cat-acts { margin-top: auto; padding-top: 8px; }
+.cat-tile .cat-acts .pqs2-btn { flex: 1; justify-content: center; }
+.cat-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+/* Плитка-образец в форме публикации — не кликается и не подпрыгивает. */
+.cat-preview { margin-top: 10px; max-width: 260px; }
+.cat-tile.as-preview { cursor: default; pointer-events: none; }
+.cat-tile.as-preview:hover { transform: none; box-shadow: none; }
+
+/* Каталог, встроенный прямо в страницу настроек (без окна поверх окна). */
+.cat-inline { margin-top: 12px; }
+.cat-inline .cat-body { overflow: visible; margin: 0; padding: 0; }
+.cat-srv { max-width: 190px; flex: none; }
+
 .cat-ic { width: 44px; height: 44px; flex: none; border-radius: 10px; background: var(--bg3);
   display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .cat-ic.big { width: 56px; height: 56px; }
 .cat-ic img { width: 100%; height: 100%; object-fit: cover; }
 .cat-emoji { font-size: 22px; line-height: 1; }
 .cat-tx { min-width: 0; flex: 1; }
-.cat-nm { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 6px; }
+.cat-nm { font-weight: 600; font-size: 14.5px; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cat-badge { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
-  background: var(--brand); color: #fff; letter-spacing: .02em; }
+  background: var(--brand); color: #fff; letter-spacing: .02em; flex: none; }
+.cat-badge.on { background: #3ba55d; }
+.cat-nm { min-width: 0; }
+.cat-nm > :first-child, .cat-tile .cat-nm { overflow: hidden; }
 /* Короткое описание — ровно две строки, дальше многоточие: карточки в списке
    должны быть одной высоты, иначе список «прыгает». */
 .cat-sum { font-size: 12.5px; color: var(--tx); opacity: .85; margin-top: 2px;

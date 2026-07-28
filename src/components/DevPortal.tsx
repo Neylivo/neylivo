@@ -10,7 +10,8 @@ import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
 import { BotHelp } from './BotHelp'
 
-// v1.193.0: «Мои приложения» — платформа ботов (Настройки пользователя). Токен
+// v1.193.0: платформа ботов (Настройки пользователя, раздел «Боты» — до
+// v1.335.0 назывался «Мои приложения»). Токен
 // и webhook-секрет видны только один раз, сразу после создания (как у Discord) —
 // дальше в БД хранится только их хэш. Если токен потерян — проще удалить бота
 // и создать нового, чем городить отдельный «перегенерировать» эндпоинт для v1.
@@ -22,7 +23,6 @@ export function DevPortal() {
   const [justCreated, setJustCreated] = useState<{ id: string; token: string; webhookSecret: string } | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
-  const [catalog, setCatalog] = useState(false)
 
   const load = () => { myBots().then(b => { setBots(b); setLoading(false) }) }
   useEffect(load, [])
@@ -42,10 +42,17 @@ export function DevPortal() {
 
   return (
     <>
-      <h2>Мои приложения
+      <h2>Боты
         <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
       </h2>
-      <div className="pqs2-desc">Свои боты для серверов — как в Discord: приложение получает токен для API и (по желанию) вебхук, куда Ponoi шлёт события сообщений и вызовы слэш-команд.</div>
+      <div className="pqs2-desc">Готовые боты и те, что выложили люди. Выбери сервер справа от поиска и добавляй в один клик.</div>
+
+      {/* v1.335.0: каталог сразу здесь, а не за кнопкой «Каталог ботов» — раньше,
+          чтобы что-то увидеть, надо было открыть окно поверх окна настроек. */}
+      <BotCatalog inline />
+
+      <div className="pqs-sec-t" style={{ marginTop: 22 }}>Мои боты</div>
+      <div className="pqs2-desc">Свой бот получает токен для API и (по желанию) вебхук, куда Ponoi шлёт события сообщений и вызовы слэш-команд.</div>
 
       {justCreated && <div className="sset-info" style={{ marginTop: 12 }}>
         <Icon name="shield" size={16} />
@@ -64,18 +71,13 @@ export function DevPortal() {
       </div>
 
       {loading && <div className="modal-empty">Загрузка…</div>}
-      {!loading && bots.length === 0 && <div className="cset-hint" style={{ marginTop: 12 }}>Пока нет ни одного приложения.</div>}
+      {!loading && bots.length === 0 && <div className="cset-hint" style={{ marginTop: 12 }}>Своих ботов пока нет. Готовые из каталога выше заводятся сами — они тоже появятся здесь.</div>}
 
       <div style={{ marginTop: 16 }}>
         {bots.map(b => <BotCard key={b.id} bot={b} open={openId === b.id} onToggle={() => setOpenId(v => v === b.id ? null : b.id)}
           onDeleted={() => { setOpenId(null); load() }} />)}
       </div>
 
-      <button className="pqs2-btn ghost" style={{ marginTop: 16 }} onClick={() => setCatalog(true)}>
-        <Icon name="store" size={16} /> Каталог ботов
-      </button>
-
-      {catalog && <BotCatalog onClose={() => setCatalog(false)} />}
       {help && <BotHelp onClose={() => setHelp(false)} />}
     </>
   )
@@ -158,14 +160,13 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
 }
 
 // v1.193.0: вкладка «Боты» в настройках сервера — добавить чужого/своего бота
-// по ID приложения (владелец бота делится им из «Мои приложения»), список уже
+// по ID приложения (владелец бота делится им из раздела «Боты»), список уже
 // добавленных с кнопкой «Удалить» (обычный server_members.delete — доступен тем,
 // у кого MANAGE_WEBHOOKS, тот же гейт, что открывает саму вкладку).
 export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; memberIds: string[] }) {
   const [installed, setInstalled] = useState<{ id: string; bot_user_id: string; name: string }[]>([])
   const [appId, setAppId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [catalog, setCatalog] = useState(false)
   const [help, setHelp] = useState(false)
 
   const load = () => {
@@ -197,10 +198,11 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
         <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
       </h2>
       <div className="pqs2-desc">Возьми готового из каталога — или добавь по ID приложения, если бота тебе дали лично.</div>
-      <button className="pqs2-btn" style={{ marginTop: 14 }} onClick={() => setCatalog(true)}>
-        <Icon name="store" size={16} /> Каталог ботов
-      </button>
-      <div className="modal-inline" style={{ marginTop: 12 }}>
+
+      <BotCatalog serverId={serverId} onAdded={load} inline />
+
+      <div className="pqs-sec-t" style={{ marginTop: 22 }}>По ID приложения</div>
+      <div className="modal-inline" style={{ marginTop: 8 }}>
         <input className="modal-in" placeholder="ID приложения бота" value={appId} onChange={e => setAppId(e.target.value)} style={{ flex: 1 }} />
         <button className="pqs2-btn ghost" disabled={!appId.trim() || busy} onClick={add}>{busy ? 'Добавление…' : 'Добавить по ID'}</button>
       </div>
@@ -214,7 +216,6 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
         {installed.length === 0 && <div className="cset-hint">На сервере пока нет ботов.</div>}
       </div>
 
-      {catalog && <BotCatalog serverId={serverId} onAdded={load} onClose={() => setCatalog(false)} />}
       {help && <BotHelp onClose={() => setHelp(false)} />}
     </>
   )

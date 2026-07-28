@@ -125,7 +125,7 @@ const SABOTAGE = {
   // Вид встроенного бота снова можно приписать своему боту.
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -150,6 +150,7 @@ await db.exec(SRC[86])
 await db.exec(SRC[87])
 await db.exec(SRC[88])
 await db.exec(SRC[89])
+await db.exec(SRC[90])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -654,6 +655,21 @@ await check('свой плагин автор снимает сам', async () =
 
 const botApp = (await db.query(
   `insert into bot_apps (owner_id, bot_user_id, name) values ($1,$2,'Мой бот') returning id`, [USER, MOD])).rows[0].id
+await check('фон карточки сохраняется у плагина', async () => {
+  await as(USER, `insert into plugin_catalog (id, name, version, author_id, author_name, summary, code, icon_url, banner_url)
+                  values ('with-art','С картинками','1.0.0',$1,'x','коротко','c','https://e/i.png','https://e/b.jpg')`, [USER])
+  const r = (await db.query(`select icon_url, banner_url from plugin_catalog where id='with-art'`)).rows[0]
+  return r.icon_url === 'https://e/i.png' && r.banner_url === 'https://e/b.jpg'
+})
+await check('фон можно поменять при обновлении', async () => {
+  await as(USER, `update plugin_catalog set banner_url='https://e/new.jpg' where id='with-art'`)
+  return (await db.query(`select banner_url from plugin_catalog where id='with-art'`)).rows[0].banner_url === 'https://e/new.jpg'
+})
+await check('чужой фон не поменять', async () => {
+  await as(OTHER, `update plugin_catalog set banner_url='https://зло' where id='with-art'`)
+  return (await db.query(`select banner_url from plugin_catalog where id='with-art'`)).rows[0].banner_url === 'https://e/new.jpg'
+})
+
 await check('своего бота автор выкладывает', async () => {
   await as(USER, `insert into bot_catalog (app_id, name, author_id, author_name, summary) values ($1,'Мой бот',$2,'x','коротко')`, [botApp, USER])
   return (await db.query('select 1 from bot_catalog where app_id=$1', [botApp])).rows.length === 1

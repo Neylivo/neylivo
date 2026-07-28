@@ -4,6 +4,8 @@ import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useAuth } from '../auth/AuthProvider'
 import { createBot, addBotToServer, myBots, type BotApp } from '../lib/botApi'
+import { myServers } from '../lib/servers'
+import type { Server } from '../types'
 import {
   fetchBotCatalog, publishBot, unpublishBot, countBotAdd, shorten,
   SUMMARY_MAX, DESC_MAX, type CatalogBot,
@@ -23,6 +25,7 @@ interface Card {
   description: string | null
   emoji?: string
   iconUrl?: string | null
+  bannerUrl?: string | null
   adds?: number
   official: boolean
   appId?: string        // у выложенных людьми — id приложения
@@ -30,12 +33,29 @@ interface Card {
   authorId?: string
 }
 
-export function BotCatalog({ serverId, onAdded, onClose }: {
+/**
+ * @param inline встроить в страницу настроек вместо окна поверх окна (v1.335.0).
+ */
+export function BotCatalog({ serverId, onAdded, onClose, inline }: {
   serverId?: string
   onAdded?: () => void
-  onClose: () => void
+  onClose?: () => void
+  inline?: boolean
 }) {
   const { user } = useAuth()
+  // Каталог открыт не из сервера (раздел «Боты» в настройках) — тогда сервер
+  // выбирается прямо здесь. Иначе половина каталога была бы серой и непонятно
+  // почему: «Добавить» есть, а нажать нельзя.
+  const [servers, setServers] = useState<Server[] | null>(null)
+  const [pickedServer, setPickedServer] = useState('')
+  useEffect(() => {
+    if (serverId) return
+    myServers().then(list => {
+      setServers(list)
+      setPickedServer(prev => prev || (list[0]?.id ?? ''))
+    }).catch(() => setServers([]))
+  }, [serverId])
+  const target = serverId ?? pickedServer
   const [rows, setRows] = useState<CatalogBot[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -55,7 +75,7 @@ export function BotCatalog({ serverId, onAdded, onClose }: {
   }))
   const community: Card[] = (rows ?? []).map(r => ({
     key: r.app_id, name: r.name, author: r.author_name, summary: r.summary, description: r.description,
-    iconUrl: r.icon_url, adds: r.adds, official: false, appId: r.app_id, authorId: r.author_id,
+    iconUrl: r.icon_url, bannerUrl: r.banner_url, adds: r.adds, official: false, appId: r.app_id, authorId: r.author_id,
   }))
 
   const term = q.trim().toLowerCase()
@@ -64,11 +84,11 @@ export function BotCatalog({ serverId, onAdded, onClose }: {
 
   /** Готовый бот: заводим его под твоей учётной записью и сразу ставим на сервер. */
   async function addOfficial(c: Card) {
-    if (!c.kind || !serverId) return
+    if (!c.kind || !target) return
     setBusy(c.key)
     try {
       const made = await createBot(c.name, c.kind)
-      await addBotToServer(made.id, serverId)
+      await addBotToServer(made.id, target)
       toastOk(`Бот «${c.name}» добавлен на сервер`)
       onAdded?.()
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
@@ -76,10 +96,10 @@ export function BotCatalog({ serverId, onAdded, onClose }: {
   }
 
   async function addCommunity(c: Card) {
-    if (!c.appId || !serverId) return
+    if (!c.appId || !target) return
     setBusy(c.key)
     try {
-      await addBotToServer(c.appId, serverId)
+      await addBotToServer(c.appId, target)
       void countBotAdd(c.appId)
       toastOk(`Бот «${c.name}» добавлен на сервер`)
       onAdded?.()
@@ -88,6 +108,59 @@ export function BotCatalog({ serverId, onAdded, onClose }: {
   }
 
   const add = (c: Card) => (c.official ? addOfficial(c) : addCommunity(c))
+
+  const body = <>
+        <div className="cat-top">
+          <div className="cat-search">
+            <span className="cat-si"><Icon name="search" size={16} /></span>
+            <input placeholder="Поиск по названию, описанию или автору" value={q} onChange={e => setQ(e.target.value)} />
+          </div>
+          {!serverId && (
+            <select className="modal-in cat-srv" value={pickedServer} onChange={e => setPickedServer(e.target.value)}
+              title="Куда добавлять бота">
+              {(servers ?? []).length === 0 && <option value="">Нет серверов</option>}
+              {(servers ?? []).map(sv => <option key={sv.id} value={sv.id}>{sv.name}</option>)}
+            </select>
+          )}
+          <button className="pqs2-btn ghost" onClick={() => setPublishing(true)}>
+            <Icon name="plus" size={15} /> Выложить своего
+          </button>
+        </div>
+
+        <div className="cat-body">
+          <div className="cat-sec">От создателей Ponoi</div>
+          <div className="cat-grid">
+            {official.filter(match).map(c => (
+              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target}
+                onOpen={() => setDetail(c)} onAdd={() => void add(c)} />
+            ))}
+          </div>
+
+          <div className="cat-sec">Выложили люди{community.length > 0 && ` — ${community.length}`}</div>
+          {rows === null && <div className="cat-hint">Загружаю…</div>}
+          {err && <div className="cat-hint">{err}</div>}
+          {rows !== null && !err && community.length === 0 && (
+            <div className="cat-hint">Пока никто ничего не выложил. Своего бота из списка ниже можно выложить кнопкой выше.</div>
+          )}
+          <div className="cat-grid">
+            {community.filter(match).map(c => (
+              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target}
+                onOpen={() => setDetail(c)} onAdd={() => void add(c)}
+                onRemove={user && c.authorId === user.id ? async () => {
+                  if (!await confirmUi(`Убрать «${c.name}» из каталога? С серверов, где он уже стоит, бот не пропадёт.`, { okText: 'Убрать', danger: true })) return
+                  try { await unpublishBot(c.appId!); toastOk('Убрано из каталога'); void load() }
+                  catch (e: any) { toastErr(e?.message ?? String(e)) }
+                } : undefined} />
+            ))}
+          </div>
+        </div>
+
+        {detail && <BotDetail c={detail} canAdd={!!target} onClose={() => setDetail(null)}
+          onAdd={() => { void add(detail); setDetail(null) }} />}
+        {publishing && <PublishBotModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}
+  </>
+
+  if (inline) return <div className="cat-inline">{body}</div>
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -99,48 +172,7 @@ export function BotCatalog({ serverId, onAdded, onClose }: {
             ? 'Бот становится обычным участником сервера: права, каналы и запреты у него те же, что у людей.'
             : 'Открой каталог из настроек сервера, чтобы можно было добавить бота сразу туда.'}
         </div>
-
-        <div className="cat-top">
-          <div className="cat-search">
-            <span className="cat-si"><Icon name="search" size={16} /></span>
-            <input placeholder="Поиск по названию, описанию или автору" value={q} onChange={e => setQ(e.target.value)} />
-          </div>
-          <button className="pqs2-btn ghost" onClick={() => setPublishing(true)}>
-            <Icon name="plus" size={15} /> Выложить своего
-          </button>
-        </div>
-
-        <div className="cat-body">
-          <div className="cat-sec">От создателей Ponoi</div>
-          <div className="cat-grid">
-            {official.filter(match).map(c => (
-              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!serverId}
-                onOpen={() => setDetail(c)} onAdd={() => void add(c)} />
-            ))}
-          </div>
-
-          <div className="cat-sec">Выложили люди{community.length > 0 && ` — ${community.length}`}</div>
-          {rows === null && <div className="cat-hint">Загружаю…</div>}
-          {err && <div className="cat-hint">{err}</div>}
-          {rows !== null && !err && community.length === 0 && (
-            <div className="cat-hint">Пока никто ничего не выложил. Свой бот из «Мои приложения» выкладывается кнопкой выше.</div>
-          )}
-          <div className="cat-grid">
-            {community.filter(match).map(c => (
-              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!serverId}
-                onOpen={() => setDetail(c)} onAdd={() => void add(c)}
-                onRemove={user && c.authorId === user.id ? async () => {
-                  if (!await confirmUi(`Убрать «${c.name}» из каталога? С серверов, где он уже стоит, бот не пропадёт.`, { okText: 'Убрать', danger: true })) return
-                  try { await unpublishBot(c.appId!); toastOk('Убрано из каталога'); void load() }
-                  catch (e: any) { toastErr(e?.message ?? String(e)) }
-                } : undefined} />
-            ))}
-          </div>
-        </div>
-
-        {detail && <BotDetail c={detail} canAdd={!!serverId} onClose={() => setDetail(null)}
-          onAdd={() => { void add(detail); setDetail(null) }} />}
-        {publishing && <PublishBotModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}
+        {body}
       </div>
     </div>
   )
@@ -150,23 +182,25 @@ function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {
   c: Card; busy: boolean; canAdd: boolean; onOpen: () => void; onAdd: () => void; onRemove?: () => void
 }) {
   return (
-    <div className="cat-card" onClick={onOpen}>
-      <div className="cat-ic">
+    <div className="cat-tile" onClick={onOpen}>
+      <div className={'cat-tile-bg' + (c.bannerUrl ? '' : ' plain')}
+        style={c.bannerUrl ? { backgroundImage: 'url(' + c.bannerUrl + ')' } : undefined} />
+      <div className="cat-tile-ic">
         {c.iconUrl ? <img src={c.iconUrl} alt="" /> : <span className="cat-emoji">{c.emoji ?? '🤖'}</span>}
       </div>
-      <div className="cat-tx">
+      <div className="cat-tile-body">
         <div className="cat-nm">{c.name}{c.official && <span className="cat-badge">от Ponoi</span>}</div>
         <div className="cat-sum">{shorten(c.summary)}</div>
         <div className="cat-meta">
-          <span>{c.author}</span>
-          {typeof c.adds === 'number' && <><span className="cat-dot" />{c.adds} добавлений</>}
+          <span className="cat-author">{c.author}</span>
+          {typeof c.adds === 'number' && <><span className="cat-dot" />{c.adds}</>}
         </div>
-      </div>
-      <div className="cat-acts" onClick={e => e.stopPropagation()}>
-        <button className="pqs2-btn" disabled={busy || !canAdd}
-          title={canAdd ? undefined : 'Открой каталог из настроек сервера'}
-          onClick={onAdd}>{busy ? 'Добавляю…' : 'Добавить'}</button>
-        {onRemove && <button className="pqs2-btn ghost danger" title="Убрать из каталога" onClick={onRemove}><Icon name="trash" size={14} /></button>}
+        <div className="cat-acts" onClick={e => e.stopPropagation()}>
+          <button className="pqs2-btn" disabled={busy || !canAdd}
+            title={canAdd ? undefined : 'Сначала нужен сервер, куда добавлять'}
+            onClick={onAdd}>{busy ? 'Добавляю…' : 'Добавить'}</button>
+          {onRemove && <button className="pqs2-btn ghost danger" title="Убрать из каталога" onClick={onRemove}><Icon name="trash" size={14} /></button>}
+        </div>
       </div>
     </div>
   )
@@ -187,7 +221,7 @@ function BotDetail({ c, canAdd, onClose, onAdd }: { c: Card; canAdd: boolean; on
         <div className="cat-desc">{c.description || c.summary}</div>
         {c.official && <div className="cset-hint">
           Готовый бот работает сразу: свой сервер для него не нужен, всё считается внутри Ponoi.
-          Он заводится под твоей учётной записью — удалить его можно в «Мои приложения».
+          Он заводится под твоей учётной записью — удалить его можно в разделе «Боты» (Настройки пользователя).
         </div>}
         <div className="modal-foot">
           <button className="modal-ghost" onClick={onClose}>Закрыть</button>
@@ -205,6 +239,7 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
   const [icon, setIcon] = useState('')
+  const [banner, setBanner] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => { myBots().then(b => { setBots(b); setPick(b[0]?.id ?? '') }) }, [])
@@ -213,12 +248,15 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   async function go() {
     if (!chosen || !user) return
     if (!summary.trim()) { toastErr('Короткое описание обязательно — по нему выбирают в списке'); return }
-    if (icon.trim() && !/^https:\/\//i.test(icon.trim())) { toastErr('Ссылка на картинку должна начинаться с https://'); return }
+    for (const [v, what] of [[icon, 'значок'], [banner, 'фон']] as const) {
+      if (v.trim() && !/^https:\/\//i.test(v.trim())) { toastErr('Ссылка на ' + what + ' должна начинаться с https://'); return }
+    }
     setBusy(true)
     try {
       await publishBot({
         app_id: chosen.id, name: chosen.name, summary: summary.trim(),
         description: description.trim(), icon_url: icon.trim() || null,
+        banner_url: banner.trim() || null,
       }, user.id)
       toastOk('Бот в каталоге')
       onDone()
@@ -234,7 +272,7 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         <div className="modal-sub">В каталог попадает только id приложения и описание — токен и секрет не уходят никуда.</div>
 
         {bots === null ? <div className="cat-hint">Загружаю…</div>
-          : bots.length === 0 ? <div className="cat-hint">Сначала заведи бота в «Мои приложения» — потом его можно будет выложить.</div>
+          : bots.length === 0 ? <div className="cat-hint">Сначала заведи своего бота ниже, в «Мои боты», — потом его можно будет выложить.</div>
           : <>
             <label className="modal-lbl">Какой бот</label>
             <select className="modal-in" value={pick} onChange={e => setPick(e.target.value)}>
@@ -250,8 +288,25 @@ function PublishBotModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             <textarea className="cset-topic" maxLength={DESC_MAX} value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Команды, что настраивается, куда писать, если сломался" />
 
-            <label className="modal-lbl">Картинка (ссылка https, необязательно)</label>
+            <label className="modal-lbl">Значок (ссылка https, необязательно)</label>
             <input className="modal-in" value={icon} onChange={e => setIcon(e.target.value)} placeholder="https://…/icon.png" />
+
+            <label className="modal-lbl">Фон карточки (ссылка https, необязательно)</label>
+            <input className="modal-in" value={banner} onChange={e => setBanner(e.target.value)} placeholder="https://…/banner.jpg" />
+            <div className="cat-preview">
+              <div className="cat-tile as-preview">
+                <div className={'cat-tile-bg' + (banner.trim() ? '' : ' plain')}
+                  style={banner.trim() ? { backgroundImage: 'url(' + banner.trim() + ')' } : undefined} />
+                <div className="cat-tile-ic">
+                  {icon.trim() ? <img src={icon.trim()} alt="" /> : <span className="cat-emoji">🤖</span>}
+                </div>
+                <div className="cat-tile-body">
+                  <div className="cat-nm">{chosen?.name ?? 'Бот'}</div>
+                  <div className="cat-sum">{shorten(summary || 'Короткое описание появится здесь')}</div>
+                </div>
+              </div>
+              <div className="cset-hint" style={{ marginTop: 0 }}>Так плитка будет выглядеть в каталоге.</div>
+            </div>
 
             <div className="cset-hint" style={{ marginTop: 10 }}>
               Бот в каталоге — твоя ответственность: он ходит по серверам под твоим именем.

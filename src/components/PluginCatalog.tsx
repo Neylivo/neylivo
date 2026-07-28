@@ -30,6 +30,7 @@ interface Card {
   description: string | null
   emoji?: string
   iconUrl?: string | null
+  bannerUrl?: string | null
   permissions: Permission[]
   installs?: number
   official: boolean
@@ -51,12 +52,17 @@ function officialCards(): Card[] {
 function toCard(r: CatalogPlugin): Card {
   return {
     id: r.id, name: r.name, author: r.author_name, summary: r.summary, description: r.description,
-    iconUrl: r.icon_url, permissions: (r.permissions ?? []) as Permission[], installs: r.installs,
+    iconUrl: r.icon_url, bannerUrl: r.banner_url, permissions: (r.permissions ?? []) as Permission[], installs: r.installs,
     official: false, code: r.code, version: r.version, authorId: r.author_id,
   }
 }
 
-export function PluginCatalog({ onClose }: { onClose: () => void }) {
+/**
+ * @param inline встроить прямо в страницу настроек, без окна поверх окна.
+ *   Модалка внутри модалки — лишний шаг: раздел «Плагины» показывает каталог
+ *   сразу, листаешь и ставишь, ничего не открывая (v1.335.0).
+ */
+export function PluginCatalog({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const { user } = useAuth()
   const [rows, setRows] = useState<CatalogPlugin[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -99,13 +105,7 @@ export function PluginCatalog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal cat-modal" onClick={e => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        <div className="modal-title">Каталог плагинов</div>
-        <div className="modal-sub">Ставится на это устройство. Всё, что просит плагин, показывается до установки.</div>
-
+  const body = <>
         <div className="cat-top">
           <div className="cat-search">
             <span className="cat-si"><Icon name="search" size={16} /></span>
@@ -148,6 +148,17 @@ export function PluginCatalog({ onClose }: { onClose: () => void }) {
             onCancel={() => setPending(null)} onConfirm={() => void doInstall()} />
         )}
         {publishing && <PublishModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}
+  </>
+
+  if (inline) return <div className="cat-inline">{body}</div>
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal cat-modal" onClick={e => e.stopPropagation()}>
+        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
+        <div className="modal-title">Каталог плагинов</div>
+        <div className="modal-sub">Ставится на это устройство. Всё, что просит плагин, показывается до установки.</div>
+        {body}
       </div>
     </div>
   )
@@ -159,27 +170,30 @@ function CardView({ c, onOpen, onInstall, onRemove }: {
   const installed = !!getPlugin(c.id)
   const sensitive = c.permissions.filter(p => SENSITIVE_PERMISSIONS.includes(p))
   return (
-    <div className="cat-card" onClick={onOpen}>
-      <div className="cat-ic">
+    <div className="cat-tile" onClick={onOpen}>
+      <div className={'cat-tile-bg' + (c.bannerUrl ? '' : ' plain')}
+        style={c.bannerUrl ? { backgroundImage: `url(${c.bannerUrl})` } : undefined} />
+      <div className="cat-tile-ic">
         {c.iconUrl ? <img src={c.iconUrl} alt="" /> : <span className="cat-emoji">{c.emoji ?? '🧩'}</span>}
       </div>
-      <div className="cat-tx">
+      <div className="cat-tile-body">
         <div className="cat-nm">
           {c.name}
           {c.official && <span className="cat-badge">от Ponoi</span>}
+          {installed && <span className="cat-badge on">стоит</span>}
         </div>
         <div className="cat-sum">{shorten(c.summary)}</div>
         <div className="cat-meta">
-          <span>{c.author}</span>
-          {typeof c.installs === 'number' && <><span className="cat-dot" />{c.installs} установок</>}
+          <span className="cat-author">{c.author}</span>
+          {typeof c.installs === 'number' && <><span className="cat-dot" />{c.installs}</>}
           {sensitive.length > 0 && <span className="cat-warn" title={sensitive.map(p => PERMISSION_LABEL[p]).join(', ')}>
-            <Icon name="shield" size={12} /> просит доступ
+            <Icon name="shield" size={12} />
           </span>}
         </div>
-      </div>
-      <div className="cat-acts" onClick={e => e.stopPropagation()}>
-        <button className="pqs2-btn" onClick={onInstall}>{installed ? 'Переустановить' : 'Установить'}</button>
-        {onRemove && <button className="pqs2-btn ghost danger" title="Убрать из каталога" onClick={onRemove}><Icon name="trash" size={14} /></button>}
+        <div className="cat-acts" onClick={e => e.stopPropagation()}>
+          <button className="pqs2-btn" onClick={onInstall}>{installed ? 'Переустановить' : 'Установить'}</button>
+          {onRemove && <button className="pqs2-btn ghost danger" title="Убрать из каталога" onClick={onRemove}><Icon name="trash" size={14} /></button>}
+        </div>
       </div>
     </div>
   )
@@ -224,6 +238,7 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
   const [icon, setIcon] = useState('')
+  const [banner, setBanner] = useState('')
   const [busy, setBusy] = useState(false)
   const chosen = installed.find(p => p.manifest.id === pick)
 
@@ -234,13 +249,16 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   async function go() {
     if (!chosen || !user) return
     if (!summary.trim()) { toastErr('Короткое описание обязательно — по нему выбирают в списке'); return }
-    if (icon.trim() && !/^https:\/\//i.test(icon.trim())) { toastErr('Ссылка на картинку должна начинаться с https://'); return }
+    for (const [v, what] of [[icon, 'значок'], [banner, 'фон']] as const) {
+      if (v.trim() && !/^https:\/\//i.test(v.trim())) { toastErr('Ссылка на ' + what + ' должна начинаться с https://'); return }
+    }
     setBusy(true)
     try {
       await publishPlugin({
         id: chosen.manifest.id, name: chosen.manifest.name, version: chosen.manifest.version,
         summary: summary.trim(), description: description.trim(),
-        icon_url: icon.trim() || null, code: chosen.code, permissions: chosen.manifest.permissions,
+        icon_url: icon.trim() || null, banner_url: banner.trim() || null,
+        code: chosen.code, permissions: chosen.manifest.permissions,
       }, user.id)
       toastOk('Плагин в каталоге')
       onDone()
@@ -272,8 +290,25 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
             <textarea className="cset-topic" maxLength={DESC_MAX} value={description} onChange={e => setDescription(e.target.value)}
               placeholder="Как пользоваться, какие команды, что настраивается" />
 
-            <label className="modal-lbl">Картинка (ссылка https, необязательно)</label>
+            <label className="modal-lbl">Значок (ссылка https, необязательно)</label>
             <input className="modal-in" value={icon} onChange={e => setIcon(e.target.value)} placeholder="https://…/icon.png" />
+
+            <label className="modal-lbl">Фон карточки (ссылка https, необязательно)</label>
+            <input className="modal-in" value={banner} onChange={e => setBanner(e.target.value)} placeholder="https://…/banner.jpg" />
+            <div className="cat-preview">
+              <div className="cat-tile as-preview">
+                <div className={'cat-tile-bg' + (banner.trim() ? '' : ' plain')}
+                  style={banner.trim() ? { backgroundImage: 'url(' + banner.trim() + ')' } : undefined} />
+                <div className="cat-tile-ic">
+                  {icon.trim() ? <img src={icon.trim()} alt="" /> : <span className="cat-emoji">🧩</span>}
+                </div>
+                <div className="cat-tile-body">
+                  <div className="cat-nm">{chosen?.manifest.name ?? 'Плагин'}</div>
+                  <div className="cat-sum">{shorten(summary || 'Короткое описание появится здесь')}</div>
+                </div>
+              </div>
+              <div className="cset-hint" style={{ marginTop: 0 }}>Так плитка будет выглядеть в каталоге.</div>
+            </div>
 
             <div className="cset-hint" style={{ marginTop: 10 }}>
               В каталог уходит и код плагина — иначе его нельзя было бы поставить. Не выкладывай то,
