@@ -180,7 +180,7 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
       </div>
       {!canPost && <div className="ch-readonly"><Icon name="lock" size={15} /> Обсуждение закрыто — отвечать могут только модераторы</div>}
       {canPost && <Composer placeholder={'Написать в ветке'} onSend={sendMsg} draftKey={'thread_' + thread.id}
-        serverId={server.id} channelId={channel.id} canAttachFiles={canAttachFiles} automodCheck={automodCheck}
+        serverId={server.id} channelId={channel.id} channelName={channel.name} serverName={server.name} canAttachFiles={canAttachFiles} automodCheck={automodCheck}
         replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
         onCancelReply={() => setReplyTarget(null)}
         editingTarget={editingMsg} onSaveEdit={saveEditedMsg} onCancelEdit={() => setEditingMsg(null)} />}

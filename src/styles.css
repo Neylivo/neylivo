@@ -5086,3 +5086,85 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
   border-radius: 6px; white-space: nowrap;
 }
 .msg-more:hover { background: var(--bg3); text-decoration: underline; }
+
+/* ── Большое окно «как сделать плагин» (v1.360.0) ─────────────────────────
+   Отдельный экран, а не модальное окно: текста тут на несколько страниц, и в
+   обычном окне половина оказывалась за краем. Слева разделы, справа сам текст
+   со своей прокруткой — тело страницы не ездит. */
+.pg-screen {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column;
+  background: var(--bg1); color: var(--tx);
+}
+.pg-head {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--bd);
+}
+.pg-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+.pg-x {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--mut); padding: 6px; border-radius: 8px; display: flex;
+}
+.pg-x:hover { background: var(--bg3); color: var(--tx); }
+
+.pg-body { flex: 1; min-height: 0; display: flex; }
+.pg-nav {
+  flex: none; width: 210px; padding: 14px 10px; overflow-y: auto;
+  border-right: 1px solid var(--bd); display: flex; flex-direction: column; gap: 2px;
+}
+.pg-navbtn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 11px; border: none; border-radius: 8px; cursor: pointer;
+  background: none; color: var(--mut); font-size: 14px; text-align: left;
+}
+.pg-navbtn:hover { background: var(--bg3); color: var(--tx); }
+.pg-navbtn.on { background: var(--bg3); color: var(--tx); font-weight: 600; }
+
+.pg-main { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 26px 60px; max-width: 860px; }
+.pg-main h3 { margin: 24px 0 8px; font-size: 16px; }
+.pg-main h3:first-child { margin-top: 0; }
+.pg-main p { margin: 0 0 12px; line-height: 1.6; color: var(--tx); }
+.pg-main code {
+  background: var(--bg3); padding: 1px 5px; border-radius: 4px;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+}
+.pg-note {
+  border-left: 3px solid var(--bd); padding-left: 12px;
+  color: var(--mut); font-size: 13.5px;
+}
+.pg-code {
+  background: var(--bg2); border: 1px solid var(--bd); border-radius: 10px;
+  padding: 12px 14px; margin: 0 0 10px; overflow-x: auto;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5;
+}
+.pg-steps, .pg-list { margin: 0 0 12px; padding-left: 22px; line-height: 1.7; }
+.pg-list li { margin-bottom: 4px; }
+
+.pg-tbl { display: flex; flex-direction: column; gap: 1px; margin-bottom: 14px; }
+.pg-tbl > div {
+  display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+  padding: 8px 10px; background: var(--bg2); border-radius: 8px;
+}
+.pg-tbl > div > code { flex: none; min-width: 190px; background: none; padding: 0; color: var(--acc, #5865f2); }
+.pg-tbl > div > span { flex: 1; min-width: 180px; color: var(--mut); font-size: 13.5px; }
+.pg-warn { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: #faa61a; font-size: 12px; }
+
+.pg-aibox {
+  border: 1px solid var(--bd); border-radius: 12px; padding: 14px;
+  margin-bottom: 18px; background: var(--bg2);
+  display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+}
+.pg-aihead { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.pg-aitxt { color: var(--mut); font-size: 13.5px; line-height: 1.6; }
+.pg-aibtn { font-weight: 600; }
+
+@media (max-width: 720px) {
+  .pg-body { flex-direction: column; }
+  .pg-nav {
+    width: auto; flex-direction: row; overflow-x: auto; gap: 6px;
+    border-right: none; border-bottom: 1px solid var(--bd); padding: 10px;
+  }
+  .pg-navbtn { width: auto; white-space: nowrap; }
+  .pg-main { padding: 16px 14px 50px; }
+  .pg-tbl > div > code { min-width: 0; }
+}

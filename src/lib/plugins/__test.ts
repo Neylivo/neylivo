@@ -15,6 +15,12 @@ import {
   permissionsFromCode, missingPermissions, unusedPermissions,
 } from './editorDraft'
 import { RECIPES, recipeDefaults, recipeReady } from './recipes'
+import { PLUGIN_SPEC, AI_PROMPT_PREFIX, BOT_SPEC, AI_BOT_PROMPT_PREFIX } from './spec'
+import { readFileSync } from 'node:fs'
+
+// Исходник диспетчера читаем файлом: нам нужны имена его case-ветвей, а не то,
+// что он делает — вызвать их отсюда нельзя, там браузерное окружение.
+const DISPATCHER_SRC = readFileSync('src/lib/plugins/api.ts', 'utf8')
 
 let pass = 0, fail = 0
 const ok = (n: string) => { pass++; console.log('OK   ' + n) }
@@ -420,6 +426,97 @@ for (const p of OFFICIAL_PLUGINS) {
     const dd = draftFrom(OFFICIAL_PLUGINS[0].code)
     return !!dd && dd.id === OFFICIAL_PLUGINS[0].id && dd.body.includes('onLoad')
   })
+
+  // ── Инструкция не должна расходиться с приложением (v1.360.0) ─────────
+  //
+  // Инструкцию человек отдаёт ИИ и получает готовый плагин. Если в ней нет
+  // половины методов — ИИ напишет правдоподобный код, который не запустится, и
+  // человек решит, что сломано приложение. Поэтому сверяем текст с настоящим
+  // диспетчером: появился метод — про него обязано быть написано.
+  const SPEC_KNOWN_METHODS = [
+    'log', 'css', 'ui.addComposerButton', 'ui.addMessageAction', 'ui.addSettingsPage',
+    'ui.confirm', 'ui.prompt', 'clipboard.write', 'commands.register', 'messages.send',
+    'voice.setEffect', 'voice.effects', 'voice.current', 'notify',
+    'storage.get', 'storage.set', 'storage.remove', 'storage.keys',
+    'net.fetch', 'subscribe', 'me', 'channel',
+  ]
+
+  check('в инструкции описано каждое разрешение', () => {
+    const missing = ALL_PERMISSIONS.filter(p => !PLUGIN_SPEC.includes(p))
+    if (missing.length) throw new Error('не описаны: ' + missing.join(', '))
+    return true
+  })
+
+  check('в инструкции упомянут каждый метод API', () => {
+    // subscribe в тексте зовётся ponoi.on — так его и вызывают.
+    const missing = SPEC_KNOWN_METHODS.filter(m => {
+      if (m === 'subscribe') return !PLUGIN_SPEC.includes('ponoi.on')
+      if (m === 'me') return !PLUGIN_SPEC.includes('ponoi.me')
+      if (m === 'channel') return !PLUGIN_SPEC.includes('ponoi.channel')
+      // voice.effects снаружи зовётся ponoi.voice.list — так его и вызывают.
+      if (m === 'voice.effects') return !PLUGIN_SPEC.includes('ponoi.voice.list')
+      const tail = m.includes('.') ? m : m
+      return !PLUGIN_SPEC.includes(tail)
+    })
+    if (missing.length) throw new Error('не упомянуты: ' + missing.join(', '))
+    return true
+  })
+
+  check('список методов в проверке совпадает с диспетчером', () => {
+    // Иначе проверка выше становится бесполезной: забыли добавить метод сюда —
+    // и его отсутствие в инструкции никто не заметит.
+    const src = DISPATCHER_SRC
+    const inCode = [...src.matchAll(/case '([a-z.]+)':/g)].map(m => m[1])
+    const real = inCode.filter(m => !['toggle', 'text', 'select', 'button'].includes(m))
+    const forgotten = real.filter(m => !SPEC_KNOWN_METHODS.includes(m))
+    if (forgotten.length) throw new Error('метод есть в коде, но не в списке проверки: ' + forgotten.join(', '))
+    return true
+  })
+
+  check('пример из инструкции разбирается как настоящий плагин', () => {
+    // Кусок между «## Пример целиком» и следующим заголовком, с отступом в 4
+    // пробела — ровно то, что человек скопирует.
+    const m = PLUGIN_SPEC.split('## Пример целиком')[1] ?? ''
+    const code = m.split('## ')[0].split('\n')
+      .filter(l => l.startsWith('    ') || l.trim() === '')
+      .map(l => l.slice(4)).join('\n').trim()
+    // parsePlugin бросает исключение, а не возвращает null: если пример в
+    // инструкции сломан, тут будет видно чем именно.
+    const man = parsePlugin(code)
+    return man.id === 'hello-plugin' && man.permissions.includes('commands')
+  })
+
+  check('пример просит ровно те разрешения, что использует', () => {
+    const m = PLUGIN_SPEC.split('## Пример целиком')[1] ?? ''
+    const code = m.split('## ')[0].split('\n')
+      .filter(l => l.startsWith('    ') || l.trim() === '')
+      .map(l => l.slice(4)).join('\n').trim()
+    const man = parsePlugin(code)
+    const body = code.slice(code.indexOf('*/') + 2)
+    return missingPermissions(body, man.permissions).length === 0
+  })
+
+  check('просьба к ИИ оставляет человеку место для его задумки', () =>
+    AI_PROMPT_PREFIX.includes('[') && AI_PROMPT_PREFIX.length > 80)
+
+  check('в инструкции про ботов сказано главное', () => {
+    // Три вещи, без которых бот заведомо не заработает: проверка подписи, адрес
+    // API и формат синхронного ответа на команду. Забыть любую — значит отдать
+    // человеку правдоподобный, но нерабочий код.
+    const must = ['X-Ponoi-Signature', 'INTERACTION_CREATE', 'MESSAGE_CREATE', 'bot-api', 'content', 'https']
+    const missing = must.filter(m => !BOT_SPEC.includes(m))
+    if (missing.length) throw new Error('не сказано про: ' + missing.join(', '))
+    return true
+  })
+
+  check('инструкция про ботов не выдаёт их за плагины', () => {
+    // Разные вещи с разными правилами: спутать их — верный способ получить код,
+    // который никуда не встанет.
+    return BOT_SPEC.includes('.ponoi') === false && BOT_SPEC.includes('onLoad') === false
+  })
+
+  check('просьба к ИИ про бота тоже оставляет место', () =>
+    AI_BOT_PROMPT_PREFIX.includes('[') && AI_BOT_PROMPT_PREFIX.length > 80)
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

@@ -10,7 +10,7 @@ import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
 import { PermissionGate } from './PluginPermissionGate'
 import { PluginCatalog } from './PluginCatalog'
-import { PluginHelp } from './PluginHelp'
+import { PluginGuide } from './PluginGuide'
 import { PluginEditor } from './PluginEditor'
 
 // v1.286.0: раздел «Плагины» в настройках. Плагины ставятся на устройство, поэтому
@@ -249,7 +249,7 @@ export function PluginsSettings() {
         )
       })}
 
-      {help && <PluginHelp onClose={() => setHelp(false)} />}
+      {help && <PluginGuide onClose={() => setHelp(false)} />}
       {editing && (
         <PluginEditor editId={editing.id} onClose={() => setEditing(null)}
           onSaved={() => { setVer(v => v + 1); setTab('installed') }} />

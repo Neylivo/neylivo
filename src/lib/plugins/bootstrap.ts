@@ -86,7 +86,16 @@ const ponoi = {
     addComposerButton: (opt) => call('ui.addComposerButton', [opt]),
     addMessageAction: (opt) => call('ui.addMessageAction', [opt]),
     addSettingsPage: (opt) => call('ui.addSettingsPage', [opt]),
+    // Окно рисует приложение, плагин получает только ответ: своё окно он подделал
+    // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
+    confirm: (opt) => call('ui.confirm', [opt || {}]),
+    prompt: (opt) => call('ui.prompt', [opt || {}]),
   },
+  clipboard: {
+    write: (text) => call('clipboard.write', [String(text)]),
+  },
+  me: () => call('me', []),
+  channel: () => call('channel', []),
   commands: {
     register: (name, description, handler) => call('commands.register', [String(name), String(description), handler]),
   },
@@ -97,6 +106,7 @@ const ponoi = {
     get: (key) => call('storage.get', [String(key)]),
     set: (key, value) => call('storage.set', [String(key), value]),
     remove: (key) => call('storage.remove', [String(key)]),
+    keys: () => call('storage.keys', []),
   },
   net: {
     fetch: (url, init) => call('net.fetch', [String(url), init || {}]),

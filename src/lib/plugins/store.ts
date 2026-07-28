@@ -90,3 +90,14 @@ export function deleteStorage(id: string, key: string) {
     return { ...p, storage: next }
   }), true)
 }
+
+/**
+ * Ключи, которые плагин у себя завёл (v1.360.0).
+ *
+ * Без этого своё же хранилище нельзя было ни обойти, ни почистить: get брал по
+ * известному ключу, а узнать, какие ключи есть, было неоткуда — плагину
+ * приходилось вести отдельный список ключей вручную, и тот рассыхался.
+ */
+export function listStorage(id: string): string[] {
+  return Object.keys(getPlugin(id)?.storage ?? {})
+}

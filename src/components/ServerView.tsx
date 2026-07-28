@@ -1547,7 +1547,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {curChannel && canPostHere && verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
           <div className="ch-readonly"><Icon name="lock" size={15} /> {verifyBlockReason()}</div>}
         {curChannel && !isForum(curChannel) && canPostHere && !verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
-          serverId={server.id} channelId={curChannel.id}
+          serverId={server.id} channelId={curChannel.id} channelName={curChannel.name} serverName={server.name}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}
           canMentionRoles={hasPerm(myPerms, PERM.MENTION_ROLES) || isOwner}
           mentionables={members.map(m => m.member_name).filter(Boolean)}

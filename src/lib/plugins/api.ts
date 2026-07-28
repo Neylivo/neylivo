@@ -4,7 +4,7 @@ import {
   addCommand, addComposerButton, addMessageAction, commandOwner, safeIcon,
   setPluginCss, setSettingsPage, type SettingsRow,
 } from './registry'
-import { readStorage, writeStorage, deleteStorage } from './store'
+import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
 import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
 
 // v1.286.0: хостовая реализация всего, что плагин может вызвать. Единственное место,
@@ -18,6 +18,14 @@ export interface HostContext {
   sendMessage: (text: string) => Promise<void>
   /** Всплывающее уведомление. */
   toast: (text: string) => void
+  /** Кто сейчас в приложении. null — ещё не вошли. */
+  me?: () => { id: string; name: string } | null
+  /** Какой канал открыт. null — никакой (например, открыты настройки). */
+  channel?: () => { id: string; name: string; serverId: string | null; serverName: string | null } | null
+  /** Спросить у человека «да/нет». Возвращает его ответ. */
+  confirm?: (title: string, text: string, ok: string) => Promise<boolean>
+  /** Спросить строку. null — человек отказался. */
+  prompt?: (title: string, placeholder: string, value: string) => Promise<string | null>
 }
 
 /** Сколько ждём ответа от чужого сайта и сколько байт согласны принять. */
@@ -231,6 +239,62 @@ export function createDispatcher(
         // маленький ддос-клиент с чужого компьютера.
         rateLimit(id + ':net', 20, 10_000, 'обращаться в интернет')
         return await pluginFetch(plugin, String(args[0] ?? ''), args[1] as any)
+      }
+
+      // ---- v1.360.0: обстановка вокруг ------------------------------------
+      // Плагину почти всегда нужно знать, от чьего имени он работает и куда
+      // пишет: без этого нельзя ни поздороваться по имени, ни отличить свои
+      // сообщения от чужих. Раньше не было никак.
+      case 'me': {
+        need('context')
+        return ctx.me?.() ?? null
+      }
+
+      case 'channel': {
+        need('context')
+        return ctx.channel?.() ?? null
+      }
+
+      // ---- Спросить у человека --------------------------------------------
+      // Плагин не имеет доступа к странице и своё окно нарисовать не может — и
+      // не должен: тогда он смог бы подделать любое окно приложения. Поэтому
+      // окно рисует приложение, а плагин получает только ответ.
+      case 'ui.confirm': {
+        need('ui')
+        rateLimit(id + ':ask', 5, 10_000, 'спрашивать')
+        const o = (args[0] ?? {}) as any
+        if (!ctx.confirm) return false
+        return await ctx.confirm(
+          str(o.title ?? 'Вопрос', 60, 'title'),
+          String(o.text ?? '').slice(0, 300),
+          str(o.ok ?? 'Да', 20, 'ok'),
+        )
+      }
+
+      case 'ui.prompt': {
+        need('ui')
+        rateLimit(id + ':ask', 5, 10_000, 'спрашивать')
+        const o = (args[0] ?? {}) as any
+        if (!ctx.prompt) return null
+        return await ctx.prompt(
+          str(o.title ?? 'Введи значение', 60, 'title'),
+          String(o.placeholder ?? '').slice(0, 60),
+          String(o.value ?? '').slice(0, 500),
+        )
+      }
+
+      case 'clipboard.write': {
+        need('ui')
+        rateLimit(id + ':clip', 10, 10_000, 'копировать в буфер')
+        const t = String(args[0] ?? '').slice(0, 10_000)
+        if (!t) throw new Denied('Нечего копировать.')
+        await navigator.clipboard?.writeText(t)
+        return true
+      }
+
+      case 'storage.keys': {
+        need('storage')
+        return listStorage(id)
       }
 
       case 'subscribe': {

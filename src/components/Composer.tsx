@@ -26,6 +26,7 @@ import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../li
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
 import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
+import { confirmUi, promptUi } from '../lib/confirm'
 import { slashPrefix, parseSlash, buildArgs } from '../lib/slashCmd'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -92,7 +93,7 @@ function slowModeSeconds(label?: string): number {
   return m[2] === 'с' ? n : m[2] === 'м' ? n * 60 : n * 3600
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode, automodCheck }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode, automodCheck, channelName, serverName }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -112,6 +113,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // v1.193.0: слэш-команды ботов — только на серверах (в ЛС ботов нет), нужен
     // channelId/serverId, чтобы найти команды ботов, реально стоящих на сервере.
     serverId?: string; channelId?: string
+    // v1.360.0: названия нужны плагинам с разрешением «context» — чтобы понимать,
+    // где они работают. Необязательные: у ветки и лички своего названия нет.
+    channelName?: string; serverName?: string
     // v1.198.0: права ATTACH_FILES/MENTION_EVERYONE — undefined (ЛС, где прав нет) значит «можно».
     canAttachFiles?: boolean; canMentionEveryone?: boolean
     // v1.239.0: MENTION_ROLES — недоступно по умолчанию (в отличие от MENTION_EVERYONE),
@@ -376,6 +380,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   const claimCtx = (force: boolean) => claimHostContext(ctxIdRef.current, {
     sendMessage: async text => { await onSendRef.current(text) },
     toast: msg => toast(msg),
+    // v1.360.0: обстановка и вопросы к человеку. Окна рисует приложение — плагин
+    // получает только ответ: своё окно он подделал бы под любое окно Ponoi.
+    me: () => (user ? { id: user.id, name: user.user_metadata?.display_name ?? user.email ?? '' } : null),
+    channel: () => (channelId
+      ? { id: channelId, name: channelName ?? '', serverId: serverId ?? null, serverName: serverName ?? null }
+      : null),
+    confirm: (title, text, ok) => confirmUi(text ? title + '\n' + text : title, { okText: ok }),
+    prompt: (title, placeholder, value) => promptUi(title, { placeholder, initial: value }),
   }, force)
   useEffect(() => {
     const id = ctxIdRef.current

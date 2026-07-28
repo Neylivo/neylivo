@@ -1,6 +1,7 @@
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { toastOk } from '../lib/toast'
+import { BOT_SPEC, AI_BOT_PROMPT_PREFIX } from '../lib/plugins/spec'
 
 // v1.333.0: «как сделать своего бота» — маленькая кнопка «?» рядом с разделом
 // ботов. Раньше формат вебхука и заголовок авторизации были описаны только
@@ -43,6 +44,22 @@ export function BotHelp({ onClose }: { onClose: () => void }) {
         <div className="help-p">
           Бот в Ponoi — обычный участник сервера с настоящей учётной записью: те же права,
           те же каналы и те же запреты, что у людей.
+        </div>
+
+        {/* v1.360.0: то же, что у плагинов — описание, которое можно отдать ИИ.
+            Написать бота руками умеет не каждый, а объяснить словами, чего от него
+            хочешь, — почти каждый. */}
+        <div className="pg-aibox" style={{ marginBottom: 16 }}>
+          <div className="pg-aihead"><Icon name="star" size={16} /> Не хочешь писать код?</div>
+          <div className="pg-aitxt">
+            Скопируй полное описание того, как устроены боты Ponoi, отдай любому ИИ и
+            допиши своими словами, чего хочешь. В ответ придёт готовый код с проверкой
+            подписи. В просьбе оставлено место для твоей задумки — ищи квадратные скобки.
+          </div>
+          <button className="pqs2-btn" onClick={() => {
+            navigator.clipboard?.writeText(AI_BOT_PROMPT_PREFIX + BOT_SPEC)
+            toastOk('Инструкция скопирована — вставляй в чат с ИИ')
+          }}><Icon name="copy" size={15} /> Скопировать инструкцию для ИИ</button>
         </div>
 
         <label className="modal-lbl">Три вида ботов — выбери по силам</label>
