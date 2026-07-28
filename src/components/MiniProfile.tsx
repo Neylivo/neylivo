@@ -16,6 +16,7 @@ const Settings = lazyNamed(() => import('./Settings'), 'Settings')
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
 import { devMode } from '../lib/settings'
+import { isBotUser } from '../lib/botTag'
 import { UserTagBadge } from './TagEmoji'
 import { gameIconOf } from '../lib/gameIcon'
 import type { Profile } from '../types'
@@ -71,6 +72,15 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
+  // v1.340.0: у бота профиль тот же, но действий с ним нет: подружиться,
+  // написать или позвонить боту нельзя, и кнопки, которые всё равно ничего не
+  // сделают, — та же кнопка-обманка. Вместо них — честная отметка «БОТ».
+  const [isBot, setIsBot] = useState(false)
+  useEffect(() => {
+    let ok = true
+    isBotUser(data.userId).then(v => { if (ok) setIsBot(v) })
+    return () => { ok = false }
+  }, [data.userId])
   const [sub, setSub] = useState<'acc' | null>(null)   // подменю своего попапа (учётные записи)
   const [edit, setEdit] = useState(false)          // карточка профиля («Редактировать профиль»)
   const [accSettings, setAccSettings] = useState(false)  // настройки («Управление учётными записями»)
@@ -189,7 +199,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
       <div key={data.userId} ref={boxRef} className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
         <div className="mini-banner" style={{ background: `linear-gradient(90deg, ${pp.primary}, ${pp.accent})` }} />
         {!isMe && <div className="mini-topbtns">
-          <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>
+          {!isBot && <button title="Добавить в друзья" onClick={addFriend}><Icon name="users" size={16} /></button>}
           <button title="Ещё" onClick={() => setMore(m => !m)}><Icon name="more" size={16} /></button>
           {more && <div className="mini-more">
             <button onClick={() => { navigator.clipboard?.writeText(uname || data.name); setMore(false) }}>Скопировать юзернейм</button>
@@ -204,7 +214,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>
         </div>
         <div className="mini-body">
-          <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">{data.name}<UserTagBadge userId={data.userId} /></div>
+          <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">
+            {data.name}{isBot && <span className="bot-badge">БОТ</span>}<UserTagBadge userId={data.userId} />
+          </div>
           <div className="mini-code">
             <span className="mini-uname">{uname || data.name}</span>
           </div>
@@ -213,7 +225,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               <span key={r.name} className="mini-rolechip"><span className="role-dot" style={{ background: r.color ?? '#99aab5' }} />{r.name}</span>
             ))}
           </div>}
-          {data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
+          {isBot
+            ? <div className="mini-status">Бот — отвечает на команды, сам не пишет</div>
+            : data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
           {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
             <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-kind"><Icon name={gameIconOf(game.name)} size={14} /></span>Играет в</span>{/* v1.139.0: значок по жанру игры */}
@@ -287,7 +301,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             </div>}
           </>}
           {isMe && !meControls && <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>}
-          {!isMe && <div className="mini-msgbox">
+          {/* Боту не пишут: он отвечает на команды, а личка с ним никуда не ведёт.
+              Поле ввода тут было бы обещанием, которого никто не выполнит. */}
+          {!isMe && !isBot && <div className="mini-msgbox">
                 <input placeholder={'Сообщение для @' + data.name} value={msg}
                   onChange={e => setMsg(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') sendDm(); if (e.key === 'Escape') onClose() }} />

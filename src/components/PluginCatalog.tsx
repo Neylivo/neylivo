@@ -10,7 +10,7 @@ import { OFFICIAL_PLUGINS } from '../lib/plugins/official'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission, type PluginManifest } from '../lib/plugins/types'
 import { PermissionGate } from './PluginPermissionGate'
 import {
-  fetchPluginCatalog, publishPlugin, unpublishPlugin, countPluginInstall, shorten,
+  fetchPluginCatalog, publishPlugin, unpublishPlugin, countInstall, fetchInstallCounts, shorten,
   SUMMARY_MAX, DESC_MAX, type CatalogPlugin,
 } from '../lib/catalog'
 
@@ -45,6 +45,7 @@ function officialCards(): Card[] {
     return {
       id: m.id, name: m.name, author: m.author, summary: p.summary, description: m.description,
       emoji: p.emoji, permissions: m.permissions, official: true, code: p.code, version: m.version,
+      installs: 0,
     }
   })
 }
@@ -65,6 +66,7 @@ function toCard(r: CatalogPlugin): Card {
 export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
   const { user } = useAuth()
   const [rows, setRows] = useState<CatalogPlugin[] | null>(null)
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<Card | null>(null)
@@ -76,11 +78,13 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
     const r = await fetchPluginCatalog()
     setRows(r.items)
     setErr(r.error)
+    setCounts(await fetchInstallCounts('plugin'))
   }
   useEffect(() => { void load() }, [])
 
-  const official = officialCards()
-  const community = (rows ?? []).map(toCard)
+  const withCount = (c: Card): Card => ({ ...c, installs: counts[c.id] ?? c.installs ?? 0 })
+  const official = officialCards().map(withCount)
+  const community = (rows ?? []).map(toCard).map(withCount)
   const term = q.trim().toLowerCase()
   const match = (c: Card) =>
     !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term) || c.author.toLowerCase().includes(term)
@@ -97,7 +101,9 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
     setPending(null)
     try {
       await installPlugin(manifest, code)
-      if (!card.official) void countPluginInstall(card.id)
+      // Считаем установку и у готовых «от нас»: число под карточкой должно быть
+      // у всех, иначе непонятно, чем плитки отличаются.
+      void countInstall('plugin', card.id).then(() => void load())
       setVer(v => v + 1)
       toastOk(`Плагин «${manifest.name}» установлен`)
     } catch (e: any) {
@@ -153,6 +159,26 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
   return <div className="cat-inline">{body}</div>
 }
 
+/** «12 установок» с правильным окончанием — число без подписи ничего не говорит. */
+export function fmtInstalls(n: number): string {
+  const d = n % 100
+  const word = d >= 11 && d <= 14 ? 'установок'
+    : n % 10 === 1 ? 'установка'
+    : n % 10 >= 2 && n % 10 <= 4 ? 'установки'
+    : 'установок'
+  return n + ' ' + word
+}
+
+/** То же для ботов: их не «ставят», а добавляют на сервер. */
+export function fmtAdds(n: number): string {
+  const d = n % 100
+  const word = d >= 11 && d <= 14 ? 'добавлений'
+    : n % 10 === 1 ? 'добавление'
+    : n % 10 >= 2 && n % 10 <= 4 ? 'добавления'
+    : 'добавлений'
+  return n + ' ' + word
+}
+
 function CardView({ c, onOpen, onInstall, onRemove }: {
   c: Card; onOpen: () => void; onInstall: () => void; onRemove?: () => void
 }) {
@@ -174,7 +200,8 @@ function CardView({ c, onOpen, onInstall, onRemove }: {
         <div className="cat-sum">{shorten(c.summary)}</div>
         <div className="cat-meta">
           <span className="cat-author">{c.author}</span>
-          {typeof c.installs === 'number' && <><span className="cat-dot" />{c.installs}</>}
+          <span className="cat-dot" />
+          <span title="Сколько раз ставили">{fmtInstalls(c.installs ?? 0)}</span>
           {sensitive.length > 0 && <span className="cat-warn" title={sensitive.map(p => PERMISSION_LABEL[p]).join(', ')}>
             <Icon name="shield" size={12} />
           </span>}

@@ -146,7 +146,12 @@ create table profiles (
   id uuid primary key references auth.users on delete cascade,
   username text,
   display_name text,
-  is_bot boolean not null default false
+  is_bot boolean not null default false,
+  -- Нужны миграции 91 (профиль бота): те же колонки, что заводят 04 и 06.
+  avatar_url text,
+  about text,
+  primary_color text,
+  accent_color text
 );
 create table bot_apps (
   id uuid primary key default gen_random_uuid(),

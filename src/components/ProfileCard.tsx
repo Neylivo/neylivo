@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase'
 import { mutualServers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from './icons'
+import { isBotUser } from '../lib/botTag'
 import { gameIconOf } from '../lib/gameIcon'
 import { colorFor, initial } from '../lib/ui'
 import { confirmUi } from '../lib/confirm'
@@ -103,6 +104,15 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const { user } = useAuth()
   const { gameOf, statusOf } = usePresence()
   const isMe = user?.id === userId
+  // v1.340.0: у бота карточка та же, но действий с ним нет — ни дружбы, ни лички.
+  // Кнопка, которая заведомо ничего не сделает, — та же кнопка-обманка, поэтому
+  // вместо ряда действий стоит honest-строка «это бот».
+  const [isBot, setIsBot] = useState(false)
+  useEffect(() => {
+    let ok = true
+    isBotUser(userId).then(v => { if (ok) setIsBot(v) })
+    return () => { ok = false }
+  }, [userId])
   const [pp, setPp] = useState<ProfilePrefs>(() => cachedProfile(userId) ?? DEFAULT_PROFILE)   // v1.142.0: сразу из кэша, без мелькания
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   const [pron, setPron] = useState('')
@@ -334,7 +344,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   ? <span className="pc-pron" onClick={() => isMe && setPronEdit(true)} title={isMe ? 'Изменить местоимения' : undefined}>{pron}</span>
                   : isMe && <button className="pc-pron-add" onClick={() => setPronEdit(true)}>Добавить местоимения</button>}
             </div>
-            {!isMe && <div className="pc-btnrow">
+            {!isMe && isBot && (
+              <div className="pc-botnote">
+                <span className="bot-badge">БОТ</span>
+                <span>Отвечает на команды в чате. Написать ему лично или добавить в друзья нельзя.</span>
+              </div>
+            )}
+            {!isMe && !isBot && <div className="pc-btnrow">
               {fStatus === 'friends' ? <>
                 <button className="pc-msgbtn" onClick={openDm}><Icon name="message" size={16} /> Сообщение</button>
                 <div className="pc-friendicwrap">

@@ -4,8 +4,10 @@ import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import {
   myBots, createBot, setBotWebhook, deleteBot, fetchBotCommands, saveBotCommand, deleteBotCommand,
-  addBotToServer, removeBotFromServer, type BotApp, type BotCommand,
+  addBotToServer, removeBotFromServer, setBotProfile, fetchBotProfile, type BotApp, type BotCommand,
 } from '../lib/botApi'
+import { Avatar } from './Avatar'
+import { setMemberNickname } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { BotCatalog } from './BotCatalog'
 import { BotHelp } from './BotHelp'
@@ -153,7 +155,37 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
   const [cmdName, setCmdName] = useState('')
   const [cmdDesc, setCmdDesc] = useState('')
 
-  useEffect(() => { if (open) fetchBotCommands(bot.id).then(setCommands) }, [open, bot.id])
+  // v1.340.0: профиль бота — аватарка, «о себе» и цвета карточки. Раньше бот
+  // выглядел буквой на сером фоне, и поменять это не мог даже его владелец.
+  const [avatar, setAvatar] = useState('')
+  const [about, setAbout] = useState('')
+  const [primary, setPrimary] = useState('#5865f2')
+  const [accent, setAccent] = useState('#5865f2')
+  const [savingProf, setSavingProf] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    fetchBotCommands(bot.id).then(setCommands)
+    fetchBotProfile(bot.bot_user_id).then(p => {
+      if (!p) return
+      setAvatar(p.avatar_url ?? '')
+      setAbout(p.about ?? '')
+      setPrimary(p.primary_color || '#5865f2')
+      setAccent(p.accent_color || '#5865f2')
+    })
+  }, [open, bot.id, bot.bot_user_id])
+
+  async function saveProfile() {
+    setSavingProf(true)
+    try {
+      await setBotProfile(bot.id, {
+        avatarUrl: avatar.trim() || null, about: about.trim(),
+        primary: primary || null, accent: accent || null,
+      })
+      toastOk('Профиль бота сохранён')
+    } catch (e: any) { toastErr(e.message ?? String(e)) }
+    finally { setSavingProf(false) }
+  }
 
   async function saveWebhook() {
     setSavingWh(true)
@@ -191,6 +223,31 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
         <Icon name="chevron-right" size={14} style={open ? { transform: 'rotate(90deg)' } : undefined} />
       </div>
       {open && <div className="devp-card-body">
+        <label className="modal-lbl">Внешний вид</label>
+        <div className="cset-hint" style={{ marginTop: 0 }}>
+          Так бота увидят в списке участников и в профиле. Писать сам он не умеет — отвечает
+          только на то, что ему присылают.
+        </div>
+        <div className="botp-row">
+          <div className="botp-prev" style={{ background: `linear-gradient(160deg, ${primary}, ${accent})` }}>
+            <Avatar name={bot.name} url={avatar.trim() || null} userId={bot.bot_user_id} size={48} />
+            <div className="botp-prev-nm">{bot.name}<span className="bot-badge">БОТ</span></div>
+          </div>
+          <div className="botp-fields">
+            <input className="modal-in" placeholder="Ссылка на аватарку (https://…)"
+              value={avatar} onChange={e => setAvatar(e.target.value)} />
+            <textarea className="cset-topic" maxLength={300} placeholder="О себе: что бот умеет"
+              value={about} onChange={e => setAbout(e.target.value)} />
+            <div className="modal-inline">
+              <label className="botp-color">Основной <input type="color" value={primary} onChange={e => setPrimary(e.target.value)} /></label>
+              <label className="botp-color">Акцент <input type="color" value={accent} onChange={e => setAccent(e.target.value)} /></label>
+              <button className="pqs2-btn ghost" disabled={savingProf} onClick={saveProfile}>
+                {savingProf ? 'Сохранение…' : 'Сохранить профиль'}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <label className="modal-lbl">ID приложения (для добавления на сервер)</label>
         <div className="modal-inline">
           <input className="modal-in" value={bot.id} readOnly style={{ flex: 1 }} />
@@ -232,6 +289,22 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
   const [busy, setBusy] = useState(false)
   const [help, setHelp] = useState(false)
   const [tab, setTab] = useState<'catalog' | 'used'>('catalog')
+  const [nick, setNick] = useState<Record<string, string>>({})
+
+  /** Ник бота на этом сервере — тем же путём, что и ник человека. */
+  async function renameBot(b: { bot_user_id: string; name: string }) {
+    const v = (nick[b.bot_user_id] ?? '').trim()
+    if (!v) return
+    try {
+      await setMemberNickname(serverId, b.bot_user_id, v, true)
+      toastOk('Ник изменён')
+      setNick(n => ({ ...n, [b.bot_user_id]: '' }))
+      load()
+    } catch (e: any) {
+      const m = String(e?.message ?? e)
+      toastErr(m.includes('permission') ? 'Нужно право «Управление никами»' : m)
+    }
+  }
 
   const load = () => {
     if (!memberIds.length) { setInstalled([]); return }
@@ -288,9 +361,20 @@ export function ServerBotsPanel({ serverId, memberIds }: { serverId: string; mem
 
       {tab === 'used' && <div style={{ marginTop: 14 }}>
         {installed.map(b => (
-          <div key={b.id} className="devp-card-h" style={{ background: 'var(--bg2)', borderRadius: 8, marginBottom: 8 }}>
-            <Icon name="code" size={18} /><b>{b.name}</b>
-            <button className="pqs2-btn ghost" style={{ marginLeft: 'auto' }} onClick={() => remove(b)}>Убрать</button>
+          <div key={b.id} className="devp-card" style={{ marginBottom: 8 }}>
+            <div className="devp-card-h">
+              <Icon name="code" size={18} /><b>{b.name}</b><span className="bot-badge">БОТ</span>
+              <button className="pqs2-btn ghost" style={{ marginLeft: 'auto' }} onClick={() => remove(b)}>Убрать</button>
+            </div>
+            {/* v1.340.0: ник бота на ЭТОМ сервере — как у людей. Раньше бота
+                можно было переименовать только там, где он заведён, то есть
+                у его владельца, и на всех серверах сразу. */}
+            <div className="modal-inline" style={{ marginTop: 8 }}>
+              <input className="modal-in" style={{ flex: 1 }} placeholder={'Ник на этом сервере — сейчас «' + b.name + '»'}
+                value={nick[b.bot_user_id] ?? ''} onChange={e => setNick(n => ({ ...n, [b.bot_user_id]: e.target.value }))} />
+              <button className="pqs2-btn ghost" disabled={!(nick[b.bot_user_id] ?? '').trim()}
+                onClick={() => void renameBot(b)}>Переименовать</button>
+            </div>
           </div>
         ))}
         {installed.length === 0 && <div className="modal-empty">На сервере пока нет ботов. Возьми готового во вкладке «Каталог».</div>}

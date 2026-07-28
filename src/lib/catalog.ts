@@ -117,8 +117,24 @@ export async function unpublishPlugin(id: string): Promise<void> {
   if (error) throw new Error(why(error))
 }
 
-export async function countPluginInstall(id: string): Promise<void> {
-  try { await supabase.rpc('plugin_installed', { p_id: id }) } catch { /* счётчик не стоит показа ошибки */ }
+/**
+ * Счётчик установок. Считает и то, что лежит в каталоге, и готовое «от нас» —
+ * у последнего строки в каталоге нет вовсе, а число под карточкой должно быть
+ * у всех (v1.340.0, миграция 91).
+ */
+export async function countInstall(kind: 'plugin' | 'bot', ref: string): Promise<void> {
+  try { await supabase.rpc('catalog_installed', { p_kind: kind, p_ref: ref }) }
+  catch { /* счётчик не стоит показа ошибки */ }
+}
+
+/** Сколько раз ставили — по всем видам сразу, одним запросом. */
+export async function fetchInstallCounts(kind: 'plugin' | 'bot'): Promise<Record<string, number>> {
+  try {
+    const { data } = await supabase.from('catalog_stats').select('ref, installs').eq('kind', kind).limit(500)
+    const out: Record<string, number> = {}
+    for (const r of (data ?? []) as any[]) out[String(r.ref)] = Number(r.installs) || 0
+    return out
+  } catch { return {} }
 }
 
 export async function publishBot(b: {
@@ -144,6 +160,4 @@ export async function unpublishBot(appId: string): Promise<void> {
   if (error) throw new Error(why(error))
 }
 
-export async function countBotAdd(appId: string): Promise<void> {
-  try { await supabase.rpc('bot_added', { p_app: appId }) } catch {}
-}
+

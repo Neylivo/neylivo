@@ -122,10 +122,15 @@ const SABOTAGE = {
   catauthor: [/new\.author_name := coalesce\(\s*\(select coalesce\(nullif\(p\.display_name, ''\), p\.username\) from public\.profiles p where p\.id = auth\.uid\(\)\),\s*'неизвестен'\);/, ''],
   // Автора снова переписывает любая правка — включая счётчик установок.
   catowner: [/new\.author_id := old\.author_id;/, 'new.author_id := auth.uid();'],
+  // Профиль чужого бота снова настраивает кто угодно.
+  botprof: [/select bot_user_id into v_bot from public\.bot_apps\s*\n\s*where id = p_app and owner_id = auth\.uid\(\);/,
+            'select bot_user_id into v_bot from public.bot_apps where id = p_app;'],
+  // Аватарке бота снова годится любой адрес.
+  botava: [/if p_avatar is not null and p_avatar <> '' and p_avatar !~ '\^https:\/\/' then raise exception 'bad_avatar'; end if;/, ''],
   // Вид встроенного бота снова можно приписать своему боту.
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -151,6 +156,7 @@ await db.exec(SRC[87])
 await db.exec(SRC[88])
 await db.exec(SRC[89])
 await db.exec(SRC[90])
+await db.exec(SRC[91])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -683,6 +689,39 @@ await check('вид встроенного бота не приписать се
 await check('счётчик добавлений двигает посторонний', async () => {
   await as(OTHER, `select bot_added($1)`, [botApp])
   return (await db.query('select adds from bot_catalog where app_id=$1', [botApp])).rows[0].adds === 1
+})
+
+// ── Профиль бота и счётчики каталога (91) ────────────────────────────────
+await db.query(`insert into profiles (id, username, display_name, is_bot) values ($1,'bot','Бот',true)`, [MOD])
+await check('владелец настраивает своего бота', async () => {
+  await as(USER, `select set_bot_profile($1,'https://e/a.png','я бот','#112233','#445566')`, [botApp])
+  const r = (await db.query('select avatar_url, about, primary_color from profiles where id=$1', [MOD])).rows[0]
+  return r.avatar_url === 'https://e/a.png' && r.about === 'я бот' && r.primary_color === '#112233'
+})
+await refused('чужого бота не настроить', () =>
+  as(OTHER, `select set_bot_profile($1,'https://зло/a.png','взлом',null,null)`, [botApp]))
+await refused('аватарка бота только по https', () =>
+  as(USER, `select set_bot_profile($1,'javascript:alert(1)','x',null,null)`, [botApp]))
+await refused('цвет бота только шестнадцатеричный', () =>
+  as(USER, `select set_bot_profile($1,null,'x','red',null)`, [botApp]))
+await check('аватарка продублирована в каталог', async () =>
+  (await db.query('select avatar_url from bot_apps where id=$1', [botApp])).rows[0].avatar_url === 'https://e/a.png')
+
+await check('счётчик считает и встроенное, у чего строки в каталоге нет', async () => {
+  await as(OTHER, `select catalog_installed('bot','builtin:dice')`)
+  await as(USER, `select catalog_installed('bot','builtin:dice')`)
+  const r = (await db.query(`select installs from catalog_stats where kind='bot' and ref='builtin:dice'`)).rows[0]
+  return r?.installs === 2
+})
+await check('счётчик плагина считается и в общей таблице', async () => {
+  await as(OTHER, `select catalog_installed('plugin','ponoi-dice')`)
+  return (await db.query(`select installs from catalog_stats where kind='plugin' and ref='ponoi-dice'`)).rows[0]?.installs === 1
+})
+await refused('вид счётчика на выбор не подсунуть', () =>
+  as(OTHER, `select catalog_installed('что-нибудь','x')`))
+await check('счётчик напрямую не переписать', async () => {
+  await as(OTHER, `update catalog_stats set installs = 9999 where kind='bot'`)
+  return (await db.query(`select installs from catalog_stats where kind='bot' and ref='builtin:dice'`)).rows[0].installs === 2
 })
 
 await check('избранные эмодзи попали в публикацию realtime', async () =>

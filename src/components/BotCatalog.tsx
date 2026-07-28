@@ -7,9 +7,10 @@ import { createBot, addBotToServer, myBots, type BotApp } from '../lib/botApi'
 import { myServers } from '../lib/servers'
 import type { Server } from '../types'
 import {
-  fetchBotCatalog, publishBot, unpublishBot, countBotAdd, shorten,
+  fetchBotCatalog, publishBot, unpublishBot, countInstall, fetchInstallCounts, shorten,
   SUMMARY_MAX, DESC_MAX, type CatalogBot,
 } from '../lib/catalog'
+import { fmtAdds } from './PluginCatalog'
 import { BUILTIN_BOTS } from '../lib/builtinBots'
 
 // v1.333.0: каталог ботов — то же, что каталог плагинов, только про ботов.
@@ -57,6 +58,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   }, [serverId])
   const target = serverId ?? pickedServer
   const [rows, setRows] = useState<CatalogBot[] | null>(null)
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<Card | null>(null)
@@ -66,16 +68,19 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   async function load() {
     const r = await fetchBotCatalog()
     setRows(r.items); setErr(r.error)
+    setCounts(await fetchInstallCounts('bot'))
   }
   useEffect(() => { void load() }, [])
 
   const official: Card[] = BUILTIN_BOTS.map(b => ({
     key: 'builtin:' + b.kind, name: b.name, author: 'Ponoi', summary: b.summary,
     description: b.description, emoji: b.emoji, official: true, kind: b.kind,
+    adds: counts['builtin:' + b.kind] ?? 0,
   }))
   const community: Card[] = (rows ?? []).map(r => ({
     key: r.app_id, name: r.name, author: r.author_name, summary: r.summary, description: r.description,
-    iconUrl: r.icon_url, bannerUrl: r.banner_url, adds: r.adds, official: false, appId: r.app_id, authorId: r.author_id,
+    iconUrl: r.icon_url, bannerUrl: r.banner_url, adds: counts[r.app_id] ?? r.adds,
+    official: false, appId: r.app_id, authorId: r.author_id,
   }))
 
   const term = q.trim().toLowerCase()
@@ -89,6 +94,9 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
     try {
       const made = await createBot(c.name, c.kind)
       await addBotToServer(made.id, target)
+      // Готовых считаем по виду: своего приложения у них каждый раз новое, а
+      // «сколько раз брали Кубика» — про самого Кубика.
+      void countInstall('bot', 'builtin:' + c.kind).then(() => void load())
       toastOk(`Бот «${c.name}» добавлен на сервер`)
       onAdded?.()
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
@@ -100,7 +108,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
     setBusy(c.key)
     try {
       await addBotToServer(c.appId, target)
-      void countBotAdd(c.appId)
+      void countInstall('bot', c.appId).then(() => void load())
       toastOk(`Бот «${c.name}» добавлен на сервер`)
       onAdded?.()
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
@@ -178,7 +186,8 @@ function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {
         <div className="cat-sum">{shorten(c.summary)}</div>
         <div className="cat-meta">
           <span className="cat-author">{c.author}</span>
-          {typeof c.adds === 'number' && <><span className="cat-dot" />{c.adds}</>}
+          <span className="cat-dot" />
+          <span title="Сколько раз добавляли на серверы">{fmtAdds(c.adds ?? 0)}</span>
         </div>
         <div className="cat-acts" onClick={e => e.stopPropagation()}>
           <button className="pqs2-btn" disabled={busy || !canAdd}

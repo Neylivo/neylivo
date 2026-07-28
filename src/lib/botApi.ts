@@ -66,6 +66,42 @@ export async function removeBotFromServer(botUserId: string, serverId: string): 
   if (error) throw error
 }
 
+/**
+ * Профиль бота: аватарка, «о себе» и цвета карточки (v1.340.0).
+ *
+ * Через функцию, а не прямым update: строка профиля принадлежит боту, и правило
+ * доступа пускает к ней только его самого. Функция проверяет, что зовущий —
+ * владелец приложения (см. supabase/91_bot_profile.sql).
+ */
+export async function setBotProfile(botAppId: string, p: {
+  avatarUrl: string | null; about: string; primary: string | null; accent: string | null
+}): Promise<void> {
+  const { error } = await supabase.rpc('set_bot_profile', {
+    p_app: botAppId,
+    p_avatar: p.avatarUrl,
+    p_about: p.about,
+    p_primary: p.primary,
+    p_accent: p.accent,
+  })
+  if (error) {
+    const m = String(error.message || '')
+    if (m.includes('not_your_bot')) throw new Error('Это не твой бот')
+    if (m.includes('bad_avatar')) throw new Error('Ссылка на аватарку должна начинаться с https://')
+    if (m.includes('bad_color')) throw new Error('Цвет должен быть в виде #rrggbb')
+    if (m.includes('set_bot_profile')) throw new Error('Нужно применить миграцию supabase/91_bot_profile.sql')
+    throw new Error(m)
+  }
+}
+
+/** Текущий профиль бота — чтобы форма открывалась заполненной. */
+export async function fetchBotProfile(botUserId: string): Promise<{
+  avatar_url: string | null; about: string | null; primary_color: string | null; accent_color: string | null
+} | null> {
+  const { data } = await supabase.from('profiles')
+    .select('avatar_url, about, primary_color, accent_color').eq('id', botUserId).maybeSingle()
+  return (data as any) ?? null
+}
+
 export async function fetchBotCommands(botAppId: string): Promise<BotCommand[]> {
   const { data } = await supabase.from('bot_commands').select('*').eq('bot_app_id', botAppId).order('name')
   return (data ?? []) as BotCommand[]
