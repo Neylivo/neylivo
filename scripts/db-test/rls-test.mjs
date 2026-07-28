@@ -135,7 +135,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -176,6 +176,12 @@ await db.exec(`create table if not exists audit_log (
 await db.exec(SRC[96])
 await db.exec(SRC[97])
 await db.exec(SRC[98])
+// music_tracks заводится в 06, которую песочница целиком не применяет.
+await db.exec(`create table if not exists music_tracks (
+  id uuid primary key default gen_random_uuid(), url text not null, name text not null,
+  owner uuid not null references auth.users on delete cascade, owner_name text,
+  kind text not null default 'url', created_at timestamptz not null default now());`)
+await db.exec(SRC[99])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -964,6 +970,38 @@ await check('избранные эмодзи попали в публикаци�
     } catch { return true }
   })
 }
+
+// ── Один трек — одна запись (v1.373.0) ───────────────────────────────────
+//
+// Проверка «уже есть» стояла в интерфейсе и только на двух путях из четырёх.
+// А между «посмотрел, нет ли такого» и «вставил» помещается вторая вставка с
+// другого устройства — от этого никакая проверка в интерфейсе не спасает.
+{
+  const U = 'https://soundcloud.com/a/b'
+  await db.query(`insert into music_tracks (url, name, owner) values ($1,'T',$2)`, [U, OWNER])
+
+  await check('тот же адрес второй раз база не примет', async () => {
+    try {
+      await db.query(`insert into music_tracks (url, name, owner) values ($1,'T2',$2)`, [U, USER])
+      return false
+    } catch { return true }
+  })
+
+  await check('другой трек добавляется свободно', async () => {
+    await db.query(`insert into music_tracks (url, name, owner) values ($1,'T3',$2)`,
+      ['https://soundcloud.com/a/c', USER])
+    return (await db.query('select 1 from music_tracks')).rows.length === 2
+  })
+
+  await check('повтор не проходит и от другого человека', async () => {
+    // Трекотека общая: «уже добавил кто-то другой» — тоже повтор.
+    try {
+      await db.query(`insert into music_tracks (url, name, owner) values ($1,'T4',$2)`, [U, OTHER])
+      return false
+    } catch { return true }
+  })
+}
+
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

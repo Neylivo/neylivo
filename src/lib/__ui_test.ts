@@ -13,6 +13,8 @@ import { sessionMs } from './sessionTime'
 import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
 import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
 import { metaPatch } from './musicMeta'
+import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
+import { isDuplicateTrack } from './musicDupe'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -257,6 +259,75 @@ check('проверка заметила бы возврат к «пишем в�
   const oldWay = (m: any) => ({ author: m.author || null, art: m.art ?? null, play_url: m.play ?? null })
   const only = { art: 'https://i/500.jpg' }
   return oldWay(only).play_url === null && !('play_url' in metaPatch(only))
+})
+
+console.log('\n── Одна песня — одна запись ──')
+// Ошибиться тут можно в обе стороны, и обе плохи: слишком строго — трекотека
+// набивается повторами, слишком вольно — разные песни схлопываются в одну и
+// вторая просто не добавится.
+check('хвост «поделиться» не делает песню другой', () =>
+  sameTrack('https://soundcloud.com/a/b', 'https://soundcloud.com/a/b?si=abc123'))
+check('рекламные хвосты тоже', () =>
+  sameTrack('https://soundcloud.com/a/b', 'https://soundcloud.com/a/b?utm_source=x&utm_medium=y'))
+check('трек из плейлиста и он же отдельно — одно и то же', () =>
+  sameTrack('https://soundcloud.com/p/t?in=user/sets/list', 'https://soundcloud.com/p/t'))
+check('www ничего не меняет', () =>
+  sameTrack('https://www.soundcloud.com/a/b', 'https://soundcloud.com/a/b'))
+check('http и https — одна песня', () =>
+  sameTrack('http://soundcloud.com/a/b', 'https://soundcloud.com/a/b'))
+check('хвостовая косая ничего не меняет', () =>
+  sameTrack('https://soundcloud.com/a/b/', 'https://soundcloud.com/a/b'))
+check('якорь ничего не меняет', () =>
+  sameTrack('https://soundcloud.com/a/b#t=30', 'https://soundcloud.com/a/b'))
+check('момент воспроизведения не делает песню другой', () =>
+  sameTrack('https://youtube.com/watch?v=abc&t=42', 'https://youtube.com/watch?v=abc'))
+check('порядок доводов не решает', () =>
+  sameTrack('https://ex.com/t?a=1&b=2', 'https://ex.com/t?b=2&a=1'))
+
+console.log('\n── Разные песни остаются разными ──')
+check('разные видео YouTube не схлопываются', () =>
+  !sameTrack('https://youtube.com/watch?v=aaa', 'https://youtube.com/watch?v=bbb'))
+check('v= не выбрасывается вместе с мусором', () =>
+  normalizeTrackUrl('https://youtube.com/watch?v=abc&t=42&si=z').includes('v=abc'))
+check('разные треки одного автора не схлопываются', () =>
+  !sameTrack('https://soundcloud.com/a/one', 'https://soundcloud.com/a/two'))
+check('разные сайты не схлопываются', () =>
+  !sameTrack('https://soundcloud.com/a/b', 'https://example.com/a/b'))
+check('разные файлы не схлопываются', () =>
+  !sameTrack('https://x.co/f/1.mp3', 'https://x.co/f/2.mp3'))
+
+console.log('\n── Ничего не ломаем на непонятном ──')
+check('непонятная строка возвращается как есть', () =>
+  normalizeTrackUrl('просто текст') === 'просто текст')
+check('пустое остаётся пустым', () => normalizeTrackUrl('') === '')
+check('локальный путь не трогаем', () =>
+  normalizeTrackUrl('/local/song.mp3') === '/local/song.mp3')
+check('приведение устойчиво: второй раз ничего не меняет', () => {
+  const once = normalizeTrackUrl('https://www.soundcloud.com/a/b/?si=1&x=2')
+  return normalizeTrackUrl(once) === once
+})
+
+console.log('\n── Отказ базы про повтор узнаётся ──')
+check('код 23505 — это повтор', () => isDuplicateTrack({ code: '23505' }))
+check('имя указателя тоже узнаётся', () =>
+  isDuplicateTrack({ message: 'duplicate key value violates unique constraint "music_tracks_url_uniq"' }))
+check('другая ошибка за повтор не сходит', () =>
+  !isDuplicateTrack({ code: '42703', message: 'column does not exist' }))
+check('отсутствие ошибки — не повтор', () =>
+  !isDuplicateTrack(null) && !isDuplicateTrack(undefined))
+
+console.log('\n── Ломаем нарочно (повторы) ──')
+check('проверка заметила бы сравнение строк как есть', () => {
+  // Ровно то, что было до v1.373.0: сравнивали исходные адреса, и тот же трек с
+  // хвостом «поделиться» ложился второй записью.
+  const oldWay = (a: string, b: string) => a === b
+  const withTail = 'https://soundcloud.com/a/b?si=abc123'
+  return !oldWay(withTail, 'https://soundcloud.com/a/b') && sameTrack(withTail, 'https://soundcloud.com/a/b')
+})
+check('проверка заметила бы выброшенный v=', () => {
+  // Если внести v в список мусора, все ролики YouTube станут одной песней.
+  const broken = 'https://youtube.com/watch'
+  return !sameTrack(broken, 'https://youtube.com/watch?v=abc')
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

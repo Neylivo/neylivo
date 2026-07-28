@@ -4,6 +4,9 @@
 // appear for all listeners immediately. Метаданные (автор/обложка/длительность/
 // play-URL) хранятся в базе (22_music_meta.sql) — видны всем и навсегда.
 import { supabase } from './supabase'
+import { normalizeTrackUrl } from '../music/trackUrl'
+// Правило «это повтор» живёт отдельно, без зависимостей — его проверяет тест.
+export { isDuplicateTrack } from './musicDupe'
 import { metaPatch, type TrackMeta } from './musicMeta'
 import type { Track } from '../music/types'
 
@@ -37,11 +40,17 @@ function warnNoMusicMeta() {
   } catch { /* не браузер — молча */ }
 }
 
+
+
 export async function addTrack(t: NewTrack) {
   // Полная запись с метаданными (нужна миграция 22_music_meta.sql). Если колонок
   // ещё нет — тихо откатываемся на старый формат, чтобы ничего не сломать.
+  // v1.373.0: адрес приводим к одному виду здесь, а не на каждом из четырёх
+  // путей добавления: мимо этой функции в таблицу ничего не попадает, и забыть
+  // тут невозможно — в отличие от «не забыть вызвать перед каждым insert».
+  const url = normalizeTrackUrl(t.url)
   const full = {
-    url: t.url, name: t.name, owner: t.ownerId, owner_name: t.ownerName, kind: t.kind,
+    url, name: t.name, owner: t.ownerId, owner_name: t.ownerName, kind: t.kind,
     author: t.author || null, art: t.art ?? null,
     duration: typeof t.dur === 'number' && t.dur > 0 ? Math.round(t.dur) : null,
     play_url: t.play ?? null,
@@ -49,7 +58,7 @@ export async function addTrack(t: NewTrack) {
   let r = await supabase.from('music_tracks').insert(full).select().single()
   if (r.error && (r.error.code === 'PGRST204' || r.error.code === '42703' || /column/i.test(r.error.message || ''))) {
     r = await supabase.from('music_tracks')
-      .insert({ url: t.url, name: t.name, owner: t.ownerId, owner_name: t.ownerName, kind: t.kind })
+      .insert({ url, name: t.name, owner: t.ownerId, owner_name: t.ownerName, kind: t.kind })
       .select().single()
     // v1.369.0: раньше этот откат был совсем молчаливым, и человек не мог понять,
     // почему обложка каждый раз пропадает: колонок под неё в базе просто нет, и

@@ -1670,3 +1670,12 @@ Object.assign(DICT_EN, {
 REGEX_EN.push([/^Треков: (\d+)$/, 'Tracks: $1'])
 REGEX_EN.push([/^Найдено: (\d+) из (\d+)$/, 'Found: $1 of $2'])
 REGEX_EN.push([/^Ничего не нашлось по запросу «(.+)»$/, 'Nothing found for “$1”'])
+
+// v1.373.0: повторы в трекотеке.
+Object.assign(DICT_EN, {
+  'Такой трек уже есть в трекотеке': 'This track is already in the library',
+  'Все эти треки уже есть в трекотеке': 'All of these tracks are already in the library',
+  'Из плейлиста нечего добавить': 'Nothing to add from this playlist',
+})
+REGEX_EN.push([/^Уже были в трекотеке: (\d+)$/, 'Already in the library: $1'])
+REGEX_EN.push([/^Добавлено треков: (\d+), уже были: (\d+)$/, 'Tracks added: $1, already there: $2'])

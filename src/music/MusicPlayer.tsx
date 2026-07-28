@@ -7,10 +7,11 @@ import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
-import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta } from '../lib/music'
+import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
+import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
@@ -412,9 +413,20 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (fs.length === 0 || !meId) return
     setUploading(true)
     try {
+      let dupes = 0
       for (const f of fs) {
         const url = await uploadTo('attachments', meId, f)   // shared public URL
-        await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
+        const r = await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
+        // v1.373.0: у файлов проверки не было вовсе — один и тот же трек заливался
+        // сколько угодно раз. Теперь отказ приходит из базы, и мы его показываем,
+        // а не глотаем: человек должен понимать, почему добавилось не всё.
+        if (isDuplicateTrack(r.error)) dupes++
+        else if (r.error) throw new Error(r.error.message)
+      }
+      if (dupes > 0) {
+        toastErr(dupes === fs.length
+          ? (dupes === 1 ? 'Такой трек уже есть в трекотеке' : 'Все эти треки уже есть в трекотеке')
+          : `Уже были в трекотеке: ${dupes}`)
       }
       setTracks(await fetchTracks())
     } catch (err: any) { toastErr(err.message ?? String(err)) }
@@ -433,11 +445,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       try {
         const list = await scResolveTracks(url, (d, t) => setImporting(t > 1 ? `Добавляю: ${d}/${t}…` : 'Добавляю трек…'))
         if (list.length === 0) throw new Error('empty')
-        const have = new Set(tracks.map(x => x.url))
-        let added = 0
+        // v1.373.0: сравниваем приведённые адреса. Один и тот же трек приезжает
+        // с разными хвостами (?si=, ?in=…/sets/…), и по строкам это разные ссылки.
+        const have = new Set(tracks.map(x => normalizeTrackUrl(x.url)))
+        let added = 0, dupes = 0
         for (const s of list) {
-          if (have.has(s.url)) continue
-          have.add(s.url)
+          const key = normalizeTrackUrl(s.url)
+          if (have.has(key)) { dupes++; continue }
+          have.add(key)
           setMeta(prev => ({ ...prev, [s.url]: { title: s.title, author: s.author, art: s.art, play: s.play } }))
           await addTrack({ url: s.url, name: s.title, ownerId: meId, ownerName: me, kind: 'url', author: s.author, art: s.art, dur: s.dur, play: s.play })
           added++
@@ -448,7 +463,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // недостаёт. Раньше пропущенные исчезали молча, и человек видел «добавлено
         // 47» вместо 52, не зная, что чего-то не хватает.
         const lost = lastImportSkipped()
-        if (added === 0) toastErr('Эти треки уже есть в трекотеке')
+        if (added === 0) toastErr(dupes > 0 ? 'Эти треки уже есть в трекотеке' : 'Из плейлиста нечего добавить')
+        else if (dupes > 0 && !lost.length) toastOk(`Добавлено треков: ${added}, уже были: ${dupes}`)
         else if (lost.length) {
           toastOk(`Добавлено треков: ${added}`)
           toastErr(`SoundCloud не отдал ${lost.length} ${lost.length === 1 ? 'трек' : 'треков'} из плейлиста — попробуй добавить плейлист ещё раз, их доберёт`)
@@ -459,7 +475,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         try {
           setImporting('Сохраняю трек…')
           const m = await scMeta(url)
-          if (tracks.some(x => x.url === url)) { toastErr('Этот трек уже есть в трекотеке') }
+          if (tracks.some(x => sameTrack(x.url, url))) { toastErr('Этот трек уже есть в трекотеке') }
           else {
             const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
             if (m) setMeta(prev => ({ ...prev, [url]: m }))
@@ -484,7 +500,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       setImporting('Читаю ' + SERVICE_NAME[svc] + '…')
       try {
         const sm = await streamingMeta(url)
-        if (tracks.some(x => x.url === url)) { toastErr('Этот трек уже есть в трекотеке'); return }
+        if (tracks.some(x => sameTrack(x.url, url))) { toastErr('Этот трек уже есть в трекотеке'); return }
         setImporting('Ищу, где это можно послушать…')
         const found = await findPlayable(sm?.title ?? titleFromUrl(url), sm?.author ?? '')
         const meta2 = {
@@ -494,10 +510,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           play: found?.play ?? null,
         }
         setMeta(prev => ({ ...prev, [url]: meta2 }))
-        await addTrack({
+        const r = await addTrack({
           url, name: meta2.title, ownerId: meId, ownerName: me, kind: 'url',
           author: meta2.author, art: meta2.art, play: meta2.play,
         })
+        if (isDuplicateTrack(r.error)) { toastErr('Этот трек уже есть в трекотеке'); return }
         setScUrl('')
         setTracks(await fetchTracks())
         toastOk(found
