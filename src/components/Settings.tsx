@@ -19,7 +19,8 @@ import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
 import { MicTest, CameraTest, VoiceDevices } from './MicTest'
-import { myFingerprint, signOutAndForgetKeys } from '../lib/crypto/keys'
+import { myFingerprint } from '../lib/crypto/keys'
+import { SignOutModal } from './SignOutModal'
 import { IS_MOBILE } from '../lib/mobile'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
@@ -179,6 +180,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   // v1.63.0: черновик настроек приложения — изменения (масштаб, шрифт, тема и т.д.)
   // применяются НЕ мгновенно, а только после кнопки «Сохранить изменения».
   const [draft, setDraft] = useState<Partial<AppSettings>>({})
+  // v1.362.0: выход спрашивает пароль — кнопка стоит вплотную к тем, по которым
+  // жмут постоянно, и промах стоит стёртых ключей шифрования личных сообщений.
+  const [signOut, setSignOut] = useState(false)
   const view: AppSettings = { ...settings, ...draft }
   function setD<K extends keyof AppSettings>(k: K, v: AppSettings[K]) {
     setDraft(d => {
@@ -609,7 +613,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 )
               })}
               <div className="pqs2-navsep" />
-              <button className="pqs2-item danger" onClick={() => { void signOutAndForgetKeys() }}>
+              <button className="pqs2-item danger" onClick={() => setSignOut(true)}>
                 <span className="pqs2-item-ic"><Icon name="signout" size={16} /></span>Выйти
               </button>
             </div>
@@ -1224,6 +1228,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
           </div>
         </div>
       </div>
+      {signOut && <SignOutModal onClose={() => setSignOut(false)} />}
     </div>
   )
 }

@@ -1609,3 +1609,21 @@ Object.assign(DICT_EN, {
   'Некуда добавлять': 'Nowhere to add',
   'Эмодзи': 'Emoji',
 })
+
+// v1.362.0: выход из аккаунта с подтверждением паролем.
+Object.assign(DICT_EN, {
+  'Выйти из аккаунта?': 'Log out?',
+  'Пароль от аккаунта': 'Account password',
+  'Чтобы не выйти случайно': 'So you do not log out by accident',
+  'Остаться': 'Stay',
+  'Выйти': 'Log out',
+  'Проверяю…': 'Checking…',
+  'Выхожу…': 'Logging out…',
+  'Всё равно выйти': 'Log out anyway',
+  'Введи пароль': 'Enter your password',
+  'Неверный пароль': 'Wrong password',
+  'Не удалось проверить пароль — нет связи с сервером': 'Could not verify the password — no connection to the server',
+  'У этого аккаунта нет почты — выход с паролем недоступен': 'This account has no email — password confirmation is unavailable',
+  'При выходе с этого устройства стираются ключи шифрования личных сообщений. Переписка останется у собеседника, но здесь после входа прежние сообщения прочитать уже не выйдет.':
+    'Logging out wipes the direct-message encryption keys on this device. Your chat partner keeps their copy, but after logging back in here the older messages will no longer be readable.',
+})

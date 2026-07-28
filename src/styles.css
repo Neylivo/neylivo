@@ -5168,3 +5168,18 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
   .pg-main { padding: 16px 14px 50px; }
   .pg-tbl > div > code { min-width: 0; }
 }
+
+/* ── Выход из аккаунта с паролем (v1.362.0) ───────────────────────────────
+   Окно нарочно не похоже на обычное подтверждение: красная иконка и предупре-
+   ждение сверху — чтобы по нему не щёлкали не глядя, как по «ок». */
+.so-modal { max-width: 420px; }
+.so-ic {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(237, 66, 69, .12); color: #ed4245; margin-bottom: 12px;
+}
+.so-warn {
+  background: var(--bg3); border-radius: 10px; padding: 10px 12px;
+  margin: 6px 0 14px; color: var(--mut); font-size: 13px; line-height: 1.55;
+}
+.so-err { color: #ed4245; font-size: 13px; margin-top: 8px; }

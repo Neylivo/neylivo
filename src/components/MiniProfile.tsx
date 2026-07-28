@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
-import { signOutAndForgetKeys } from '../lib/crypto/keys'
+import { SignOutModal } from './SignOutModal'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
 import { ActivityLabel, ClockElapsed } from './ActivityLabel'
@@ -68,6 +68,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const { gameOf, listeningOf } = usePresence()
   const game = gameOf(data.userId)   // живая карточка «Играет в …» с обложкой
   const listening = listeningOf(data.userId)   // v1.106.0: вторая активность «Слушает музыку»
+  // v1.362.0: выход спрашивает пароль — здесь кнопка вплотную под аватаркой,
+  // промахнуться проще всего.
+  const [signOut, setSignOut] = useState(false)
   const [moreActs, setMoreActs] = useState(false)   // v1.106.0: раскрыты ли все активности («Ещё»)
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
@@ -301,7 +304,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               <div className="mini-subsep" />
               <button className="mini-subrow" onClick={() => { setSub(null); setAccSettings(true) }}>Управление учётными записями</button>
               {onPickAvatar && <button className="mini-subrow" onClick={() => { setSub(null); onPickAvatar() }}>Сменить аватар</button>}
-              <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => { void signOutAndForgetKeys() }}>Выйти из аккаунта</button>
+              <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => setSignOut(true)}>Выйти из аккаунта</button>
             </div>}
           </>}
           {isMe && !meControls && <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>}
@@ -317,6 +320,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
       </div>
       {edit && <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="board" onClose={() => setEdit(false)} />}
       {accSettings && <Settings username={data.name} avatarUrl={av} onClose={() => setAccSettings(false)} />}
+      {signOut && <SignOutModal onClose={() => setSignOut(false)} />}
     </>
   )
 }

@@ -8,6 +8,7 @@
 export {}
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
+import { classifyAuthError } from './authErr'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -42,6 +43,40 @@ check('проверка заметила бы порог «свернуть вс
   const tooEager = (t: string) => t.split('\n').length > 2
   const normal = 'первая\nвторая\nтретья'
   return tooEager(normal) && !isLongText(normal)
+})
+
+console.log('\n── Выход с паролем: отказ и обрыв связи ──')
+// От этого различения зависит, выпустит ли приложение из аккаунта без пароля.
+// Принять неверный пароль за обрыв связи — значит открыть выход кому угодно,
+// оставив защиту на вид целой.
+check('неверный пароль — это отказ, а не сеть', () =>
+  classifyAuthError('Invalid login credentials') === 'wrong-password')
+check('пустая ошибка — тоже отказ', () =>
+  classifyAuthError('') === 'wrong-password' && classifyAuthError(undefined) === 'wrong-password')
+check('незнакомая ошибка считается отказом', () =>
+  classifyAuthError('Something odd happened') === 'wrong-password')
+check('слишком много попыток — тоже не сеть', () =>
+  classifyAuthError('Email rate limit exceeded') === 'wrong-password')
+
+check('обрыв связи распознаётся', () =>
+  classifyAuthError('Failed to fetch') === 'network')
+check('таймаут распознаётся', () =>
+  classifyAuthError('Request timeout') === 'network')
+check('сетевая ошибка распознаётся', () =>
+  classifyAuthError('NetworkError when attempting to fetch resource') === 'network')
+check('502/503/504 — это сеть', () =>
+  ['502 Bad Gateway', 'Service Unavailable 503', 'gateway 504'].every(m => classifyAuthError(m) === 'network'))
+
+check('ошибка объектом, а не строкой, не ломает разбор', () => {
+  const e: any = { toString: () => 'Invalid login credentials' }
+  return classifyAuthError(e) === 'wrong-password'
+})
+
+console.log('\n── Ломаем нарочно (выход) ──')
+check('проверка заметила бы «всё считаем сетью»', () => {
+  // Ровно та поломка, из-за которой выход стал бы доступен без пароля.
+  const broken = () => 'network' as const
+  return broken() === 'network' && classifyAuthError('Invalid login credentials') === 'wrong-password'
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
