@@ -5549,3 +5549,44 @@ body.no-anim .mus-mini, body.no-anim .mus-mini.dragging .mus-mini-art { transiti
    как раз хотят взять, чтобы найти его у себя. */
 .member-act.listen .mag-tx, .mus-mini-t, .mus2-card-t, .tog-code { user-select: text; }
 .member-act.listen .mag-ico { color: var(--brand); }
+
+/* Полоска «слушаешь вместе» (v1.382.0): объясняет, почему кнопки выключены. */
+.mus2-guestbar {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 12px 8px; padding: 7px 10px;
+  background: var(--mus-a-soft, rgba(88, 101, 242, .18));
+  border-radius: var(--r-md, 10px); color: var(--tx); font-size: 12.5px;
+}
+
+/* ══ Тема профиля красит весь профиль (v1.383.0) ═══════════════════════════
+   Человек выбирал два цвета — и видел их только в полоске сверху, да и то лишь
+   когда не поставил картинку. Всё остальное оставалось общим серым: «тема
+   профиля» была не темой, а фоном шапки.
+
+   Цвета приходят переменными --pc-a и --pc-b. Красим ими карточку целиком, но
+   в меру: подложка, обводка аватарки, подписи разделов. Текст оставляем
+   читаемым — цвета выбирает человек, и среди них попадаются такие, на которых
+   белым по светлому не разобрать ничего. */
+.pc-card.themed {
+  background:
+    radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--pc-a) 26%, transparent) 0%, transparent 62%),
+    radial-gradient(110% 55% at 100% 8%, color-mix(in srgb, var(--pc-b) 22%, transparent) 0%, transparent 58%),
+    var(--bg2);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .5),
+              0 0 0 1px color-mix(in srgb, var(--pc-a) 34%, transparent);
+}
+.pc-card.themed .pc-av {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--pc-a) 55%, var(--bg2));
+}
+/* .pc-sech — подписи разделов («О себе», «Участник с»). Класса .pc-lbl в
+   разметке нет: сначала я покрасил его, и правило было бы мёртвым. */
+.pc-card.themed .pc-sech { color: color-mix(in srgb, var(--pc-b) 62%, var(--mut)); }
+.pc-card.themed .pc-right {
+  background: color-mix(in srgb, var(--pc-a) 10%, #0c0d10);
+  border-left-color: color-mix(in srgb, var(--pc-a) 30%, transparent);
+}
+
+/* Аватарку открываем как картинку — раньше нажатие на неё не делало ничего. */
+.pc-av.clickable { cursor: zoom-in; transition: transform .18s var(--ease-out4, ease); }
+.pc-av.clickable:hover { transform: scale(1.04); }
+body.no-anim .pc-av.clickable { transition: none; }

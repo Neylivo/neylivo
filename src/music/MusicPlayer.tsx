@@ -64,6 +64,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists)
   const [together, setTogether] = useState<{ code: string; host: boolean } | null>(null)
   const [togetherUi, setTogetherUi] = useState(false)
+  // v1.382.0: в лобби всем управляет ведущий.
+  //
+  // Раньше запрет был только на приём: гость получал состояние от ведущего, но
+  // сам мог нажать паузу, перемотать или переключить трек — и рассинхронизировался
+  // до следующего события. Со стороны это выглядело как «оно само сбилось».
+  // А ещё гость мог удалить трек из трекотеки посреди общего прослушивания —
+  // трекотека общая, и это касалось всех.
+  //
+  // Поэтому у гостя выключены и управление, и правка склада. Громкость своя —
+  // её слышит только он, и отбирать её не за что.
+  const guest = !!together && !together.host
+  const noGuest = 'Управляет ведущий лобби'
+
   const miniDrag = useDragBar()
   const [lobby, setLobby] = useState<{ id: string; name: string; avatar: string | null; host: boolean }[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -751,14 +764,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
 
           <div className="mus2-addrow">
-            <input className="mus2-in" placeholder="Ссылка: Spotify, YouTube, SoundCloud, Apple Music, Deezer, Bandcamp, .mp3…" value={scUrl}
+            <input className="mus2-in" disabled={guest} placeholder={guest ? 'В лобби треки добавляет ведущий' : 'Ссылка: Spotify, YouTube, SoundCloud, Apple Music, Deezer, Bandcamp, .mp3…'} value={scUrl}
               onChange={e => setScUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addSoundcloud() }} />
-            <button className="mus2-addbtn" onClick={addSoundcloud} disabled={!!importing}>{importing ? '…' : 'Добавить'}</button>
+            <button className="mus2-addbtn" onClick={addSoundcloud} disabled={!!importing || guest} title={guest ? noGuest : undefined}>{importing ? '…' : 'Добавить'}</button>
           </div>
           {importing && <div className="mus2-importing">{importing}</div>}
           {/* v1.376.0: поле «найти трек в очереди» убрано — после того, как очередь
               стала лентой ближайших, фильтровать в ней было нечего, и поле просто
               ничего не делало. Поиск по всему складу живёт в самой трекотеке. */}
+          {/* v1.382.0: без этой строки выключенные кнопки выглядят поломкой, а не
+              правилом. Человек должен понимать, почему он не может нажать. */}
+          {guest && <div className="mus2-guestbar">
+            <Icon name="users" size={14} /> Слушаешь вместе — треками управляет ведущий
+          </div>}
           <div className="mus2-addrow">
             <button className="mus2-libbtn wide" onClick={() => setShowLib(true)}>
               <Icon name="music" size={15} /> Трекотека{tracks.length > 0 ? ` · ${tracks.length}` : ''}
@@ -777,7 +795,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="mus2-sec">
               ДАЛЬШЕ В ОЧЕРЕДИ
               <span className="mus2-qn">{upNext.length > 0 ? upNext.length : ''}</span>
-              <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button>
+              <button className="mus2-filebtn" title={guest ? noGuest : 'Добавить файлы'} disabled={guest} onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button>
             </div>
             <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
 
@@ -791,7 +809,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     return (
                       <div key={'q' + t.id} className={'mus2-up' + (manual ? ' manual' : '')}
                         title={(meta[t.url]?.title || t.name) + (manual ? ' · добавлен в очередь вручную' : '')}
-                        onClick={() => { playAt(i); setPlaying(true) }}>
+                        onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true) }}>
                         <div className="mus2-up-art">
                           {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={18} />}
                           {manual && <span className="mus2-up-mark" title="Добавлен вручную"><Icon name="plus" size={10} /></span>}
@@ -855,17 +873,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-seek">
           <span>{fmt(curT)}</span>
           <input type="range" min={0} max={dur || 0} step={0.1} value={curT}
-            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else if (curYt) { try { ytRef.current?.seekTo(v, true) } catch {}; setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur} />
+            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else if (curYt) { try { ytRef.current?.seekTo(v, true) } catch {}; setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur || guest} title={guest ? noGuest : undefined} />
           <span>{fmt(dur)}</span>
         </div>
         <div className="mus2-ctlrow">
           <div className="mus2-vol"><Icon name="volume" size={16} /> <input type="range" min={0} max={100} value={vol} onChange={e => setVol(+e.target.value)} /></div>
           <div className="mus2-ctl">
-            <button className={shuffle ? 'on' : ''} title="Перемешать" onClick={() => setShuffle(s => !s)}><Icon name="shuffle" size={18} /></button>
-            <button title="Предыдущий" onClick={prev} disabled={!tracks.length}><Icon name="skip-back" size={18} /></button>
-            <button className="big" onClick={() => setPlaying(p => !p)} disabled={!tracks.length}>{playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}</button>
-            <button title="Следующий" onClick={next} disabled={!tracks.length}><Icon name="skip-forward" size={18} /></button>
-            <button className={repeat !== 'off' ? 'on' : ''} title={repeat === 'off' ? 'Повтор выключен' : repeat === 'all' ? 'Повторять весь список' : 'Повторять один трек'} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
+            <button className={shuffle ? 'on' : ''} title={guest ? noGuest : 'Перемешать'} disabled={guest} onClick={() => setShuffle(s => !s)}><Icon name="shuffle" size={18} /></button>
+            <button title={guest ? noGuest : 'Предыдущий'} onClick={prev} disabled={!tracks.length || guest}><Icon name="skip-back" size={18} /></button>
+            <button className="big" title={guest ? noGuest : undefined} onClick={() => setPlaying(p => !p)} disabled={!tracks.length || guest}>{playing ? <Icon name="pause" size={20} /> : <Icon name="play" size={20} />}</button>
+            <button title={guest ? noGuest : 'Следующий'} onClick={next} disabled={!tracks.length || guest}><Icon name="skip-forward" size={18} /></button>
+            <button className={repeat !== 'off' ? 'on' : ''} title={guest ? noGuest : repeat === 'off' ? 'Повтор выключен' : repeat === 'all' ? 'Повторять весь список' : 'Повторять один трек'} disabled={guest} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
           </div>
           <div className="mus2-extra">
             <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
@@ -980,7 +998,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     return (
                       <div key={t.id} className={'mus2-card' + (on ? ' on' : '')}
                         title={title + (author ? ' — ' + author : '')}
-                        onClick={() => { playAt(i); setPlaying(true); setShowLib(false) }}>
+                        onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true); setShowLib(false) }}>
                         <div className="mus2-card-art">
                           {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={34} />}
                           {/* Кнопка появляется на наведении и по фокусу — до неё
@@ -990,17 +1008,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             <Icon name={on && playing ? 'pause' : 'play'} size={18} />
                           </button>
                           {/* v1.374.0: поставить в очередь, не бросая то, что играет. */}
-                          <button className="mus2-card-q" title="Поставить следующим"
+                          {!guest && <button className="mus2-card-q" title="Поставить следующим"
                             onClick={e => { e.stopPropagation(); queueNext(t.id) }}>
                             <Icon name="plus" size={15} />
-                          </button>
+                          </button>}
                           {/* v1.376.0: удаление вернулось сюда. Кнопка жила в старом
                               вертикальном списке очереди и исчезла вместе с ним —
                               убрать трек из трекотеки стало нечем вовсе. */}
-                          <button className="mus2-card-del" title="Убрать из трекотеки"
+                          {!guest && <button className="mus2-card-del" title="Убрать из трекотеки"
                             onClick={e => { e.stopPropagation(); void removeTrack(t.id, title) }}>
                             <Icon name="trash" size={14} />
-                          </button>
+                          </button>}
                           {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
                         </div>
                         <div className="mus2-card-t notr" translate="no">{title}</div>
@@ -1045,10 +1063,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
           <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'Ponoi Music')}</div>
         </div>
-        <button className="mm-play" onPointerDown={e => e.stopPropagation()} title={playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur}>
+        <button className="mm-play" onPointerDown={e => e.stopPropagation()} title={guest ? noGuest : playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur || guest}>
           {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}
         </button>
-        <button onPointerDown={e => e.stopPropagation()} title="Следующий" onClick={next} disabled={tracks.length < 2}><Icon name="skip-forward" size={15} /></button>
+        <button onPointerDown={e => e.stopPropagation()} title={guest ? noGuest : 'Следующий'} onClick={next} disabled={tracks.length < 2 || guest}><Icon name="skip-forward" size={15} /></button>
         <button onPointerDown={e => e.stopPropagation()} title="Выключить музыку" onClick={() => { setPlaying(false); onStop() }}><Icon name="close" size={15} /></button>
       </div>
     )}

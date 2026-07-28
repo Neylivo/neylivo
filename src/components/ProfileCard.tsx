@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Avatar } from './Avatar'
+import { Lightbox } from './Lightbox'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
 import { fetchProfile, saveProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
@@ -319,10 +320,25 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   }
 
   const memberSince = isMe ? ((user as any)?.created_at ?? pp.createdAt) : pp.createdAt
+  const [avBig, setAvBig] = useState(false)
 
-  return (
+  // v1.383.0: цвета профиля красят весь профиль, а не одну шапку.
+  //
+  // Человек выбирал два цвета — и видел их только в полоске сверху, и то лишь
+  // когда не поставил картинку. Всё остальное оставалось общим серым, то есть
+  // «тема профиля» темой не была: она была фоном шапки.
+  //
+  // Отдаём цвета переменными и красим ими карточку целиком — фон, обводку
+  // аватарки, заголовки. Картинка-шапка при этом никуда не девается: она
+  // остаётся сверху, а цвета работают под ней и вокруг.
+  const themeVars = {
+    '--pc-a': pp.primary,
+    '--pc-b': pp.accent,
+  } as React.CSSProperties
+
+  return (<>
     <div className="pc-backdrop" onClick={onClose}>
-      <div className="pc-card" onClick={e => e.stopPropagation()}>
+      <div className="pc-card themed" style={themeVars} onClick={e => e.stopPropagation()}>
         <button className="pc-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="pc-left">
           <div className="pc-banner" style={pp.bannerUrl
@@ -330,7 +346,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             : { background: `linear-gradient(100deg, ${pp.primary}, ${pp.accent})` }} />
           <ProfilePet p={pp} scale={0.6} card="big" bannerH={150} />
           <div className="pc-avwrap">
-            <div className="pc-av"><Avatar name={name} url={avatarUrl} size={124} /></div>
+            {/* v1.383.0: аватарку открываем как картинку — раньше нажатие на неё
+                не делало ничего, хотя её как раз и хотят рассмотреть. */}
+            <div className={'pc-av' + (avatarUrl ? ' clickable' : '')}
+              title={avatarUrl ? 'Открыть аватарку' : undefined}
+              onClick={() => { if (avatarUrl) setAvBig(true) }}>
+              <Avatar name={name} url={avatarUrl} size={124} />
+            </div>
             <span className="pc-av-status"><StatusDot status={status} size={20} /></span>
           </div>
           <div className="pc-body">
@@ -552,5 +574,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
         games={gamePicker.field === 'favGames' ? favs.slice(1) : wish} max={WIDGET_MAX}
         onToggle={g => toggleMulti(gamePicker.field, g)} onClose={() => setGamePicker(null)} />}
     </div>
+    {avBig && avatarUrl && <Lightbox url={avatarUrl} onClose={() => setAvBig(false)} />}
+  </>
   )
 }

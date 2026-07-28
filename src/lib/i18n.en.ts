@@ -1747,3 +1747,11 @@ Object.assign(DICT_EN, {
   'Открыть плеер · тяни, чтобы переставить': 'Open the player · drag to move it',
 })
 REGEX_EN.push([/^Слушает (.+)$/, 'Listening to $1'])
+
+// v1.382-383: лобби для слушателя и профиль.
+Object.assign(DICT_EN, {
+  'Управляет ведущий лобби': 'The lobby host is in control',
+  'Слушаешь вместе — треками управляет ведущий': 'Listening together — the host controls the tracks',
+  'В лобби треки добавляет ведущий': 'In a lobby, the host adds tracks',
+  'Открыть аватарку': 'Open the avatar',
+})
