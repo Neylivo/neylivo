@@ -129,8 +129,10 @@ const SABOTAGE = {
   botava: [/if p_avatar is not null and p_avatar <> '' and p_avatar !~ '\^https:\/\/' then raise exception 'bad_avatar'; end if;/, ''],
   // Вид встроенного бота снова можно приписать своему боту.
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
+  botrm: [/if v_owner <> auth\.uid\(\) and \(server_permissions\(p_server, auth\.uid\(\)\) & 512\) = 0 then\s*raise exception 'missing_manage_bots';\s*end if;/, ''],
+  bothuman: [/if not exists \(select 1 from bot_apps where bot_user_id = p_bot_user\) then\s*raise exception 'not_a_bot';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -159,6 +161,7 @@ await db.exec(SRC[90])
 await db.exec(SRC[91])
 await db.exec(SRC[92])
 await db.exec(SRC[93])
+await db.exec(SRC[95])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -743,6 +746,69 @@ await refused('слишком длинный ответ база не приме
 await check('избранные эмодзи попали в публикацию realtime', async () =>
   (await db.query(`select 1 from pg_publication_tables
                     where pubname='supabase_realtime' and schemaname='public' and tablename='emoji_favs'`)).rows.length === 1)
+
+
+// ── Боты на сервере (v1.355.0) ───────────────────────────────────────────
+// Бота нельзя поставить дважды и убрать его вправе не любой участник.
+{
+  const BOT = 'b0b00000-0000-4000-8000-00000000b071'
+  await db.query('insert into auth.users values ($1)', [BOT])
+  const app = (await db.query(
+    `insert into bot_apps (owner_id, bot_user_id, name, token_hash) values ($1,$2,'Кубик','h') returning id`,
+    [OWNER, BOT])).rows[0].id
+  await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT, 'Кубик'])
+
+  await check('одного бота нельзя добавить на сервер дважды', async () => {
+    // Ключ (server_id, user_id) — та самая защита, на которую опирается функция
+    // bot-add-to-server, отвечая «этот бот уже есть на сервере».
+    try {
+      await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT, 'Кубик'])
+      return false
+    } catch { return true }
+  })
+
+  await check('участник без права не уберёт бота напрямую', async () => {
+    // Прямое удаление строки бота — то, что делала кнопка до v1.355.0.
+    await as(USER, 'delete from server_members where server_id=$1 and user_id=$2', [srv, BOT])
+    return (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, BOT])).rows.length === 1
+  })
+
+  await check('участник без права не уберёт бота и через функцию', async () => {
+    try {
+      await as(USER, 'select remove_bot_from_server($1,$2)', [BOT, srv])
+      return false
+    } catch (e) { return String(e.message).includes('missing_manage_bots') }
+  })
+
+  await check('«Управление ботами» не даёт выгонять живых людей', async () => {
+    // Иначе право на ботов тихо превратилось бы в право кикать участников.
+    try {
+      await as(OWNER, 'select remove_bot_from_server($1,$2)', [USER, srv])
+      return false
+    } catch (e) { return String(e.message).includes('not_a_bot') }
+  })
+
+  await check('роль с «Управлением ботами» бота убирает', async () => {
+    const r = (await db.query(
+      'insert into server_roles (server_id, name, permissions) values ($1,$2,$3) returning id', [srv, 'botmaster', 512])).rows[0].id
+    await db.query('insert into member_roles values ($1,$2,$3)', [srv, USER, r])
+    await as(USER, 'select remove_bot_from_server($1,$2)', [BOT, srv])
+    const gone = (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, BOT])).rows.length === 0
+    // Возвращаем на место — дальше по файлу сервер ещё используется.
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT, 'Кубик'])
+    await db.query('delete from member_roles where server_id=$1 and user_id=$2 and role_id=$3', [srv, USER, r])
+    return gone
+  })
+
+  await check('владелец сервера бота убирает', async () => {
+    await as(OWNER, 'select remove_bot_from_server($1,$2)', [BOT, srv])
+    const gone = (await db.query('select 1 from server_members where server_id=$1 and user_id=$2', [srv, BOT])).rows.length === 0
+    await db.query('insert into server_members (server_id, user_id, member_name) values ($1,$2,$3)', [srv, BOT, 'Кубик'])
+    return gone
+  })
+
+  void app
+}
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

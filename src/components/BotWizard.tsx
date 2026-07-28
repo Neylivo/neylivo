@@ -4,11 +4,9 @@ import { Portal } from './Portal'
 import { Avatar } from './Avatar'
 import { PicField } from './PicField'
 import { toastOk, toastErr } from '../lib/toast'
-import { createBot, addBotToServer, setBotWebhook, setBotProfile, saveBotCommand } from '../lib/botApi'
-import { myServers } from '../lib/servers'
+import { createBot, addBotToServer, setBotWebhook, setBotProfile, saveBotCommand, serversForBots } from '../lib/botApi'
 import { BUILTIN_BOTS } from '../lib/builtinBots'
 import { countInstall } from '../lib/catalog'
-import type { Server } from '../types'
 
 // v1.341.0: создание бота одним мастером.
 //
@@ -25,7 +23,8 @@ interface Pair { name: string; reply: string }
 
 export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [kind, setKind] = useState<Kind | null>(null)
-  const [servers, setServers] = useState<Server[] | null>(null)
+  // v1.355.0: только серверы, куда я вправе ставить ботов — как и в каталоге.
+  const [servers, setServers] = useState<{ id: string; name: string }[] | null>(null)
   const [server, setServer] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -47,7 +46,7 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [cmdDesc, setCmdDesc] = useState('')
 
   useEffect(() => {
-    myServers().then(list => { setServers(list); setServer(prev => prev || (list[0]?.id ?? '')) }).catch(() => setServers([]))
+    serversForBots().then(list => { setServers(list); setServer(prev => prev || (list[0]?.id ?? '')) }).catch(() => setServers([]))
   }, [])
 
   async function createReady() {
@@ -223,7 +222,7 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
           </div>
           <label className="modal-lbl">Куда добавить</label>
           <select className="modal-in" value={server} onChange={e => setServer(e.target.value)}>
-            {(servers ?? []).length === 0 && <option value="">Нет серверов</option>}
+            {(servers ?? []).length === 0 && <option value="">Некуда добавлять</option>}
             {(servers ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <div className="modal-foot">

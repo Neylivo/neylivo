@@ -4,9 +4,7 @@ import { Portal } from './Portal'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useAuth } from '../auth/AuthProvider'
-import { createBot, addBotToServer, myBots, type BotApp } from '../lib/botApi'
-import { myServers } from '../lib/servers'
-import type { Server } from '../types'
+import { createBot, addBotToServer, deleteBot, myBots, botsOnServer, serversForBots, type BotApp } from '../lib/botApi'
 import {
   fetchBotCatalog, publishBot, unpublishBot, countInstall, fetchInstallCounts, shorten,
   SUMMARY_MAX, DESC_MAX, type CatalogBot,
@@ -49,16 +47,35 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   // Каталог открыт не из сервера (раздел «Боты» в настройках) — тогда сервер
   // выбирается прямо здесь. Иначе половина каталога была бы серой и непонятно
   // почему: «Добавить» есть, а нажать нельзя.
-  const [servers, setServers] = useState<Server[] | null>(null)
+  // v1.355.0: в списке только серверы, куда я действительно вправе ставить ботов —
+  // свои и те, где моей роли выдали «Управление ботами». Раньше тут были все
+  // подряд, и на чужом сервере «Добавить» просто падало отказом: выглядело как
+  // поломка, а не как отсутствие права.
+  const [servers, setServers] = useState<{ id: string; name: string }[] | null>(null)
   const [pickedServer, setPickedServer] = useState('')
   useEffect(() => {
     if (serverId) return
-    myServers().then(list => {
+    serversForBots().then(list => {
       setServers(list)
       setPickedServer(prev => prev || (list[0]?.id ?? ''))
     }).catch(() => setServers([]))
   }, [serverId])
   const target = serverId ?? pickedServer
+
+  // Кто уже стоит на выбранном сервере: карточка такого бота показывает
+  // «Уже на сервере» вместо «Добавить». Сервер откажет и так, но у готовых ботов
+  // отказ приходит уже ПОСЛЕ того, как заведено новое бот-приложение, и каждый
+  // промах оставлял бы за собой мусор.
+  const [onServer, setOnServer] = useState<{ apps: Set<string>; kinds: Set<string> }>({ apps: new Set(), kinds: new Set() })
+  const reloadOnServer = () => {
+    if (!target) { setOnServer({ apps: new Set(), kinds: new Set() }); return }
+    botsOnServer(target).then(list => setOnServer({
+      apps: new Set(list.map(b => b.appId)),
+      kinds: new Set(list.map(b => b.builtin).filter(Boolean) as string[]),
+    })).catch(() => { /* не смогли узнать — просто не подсвечиваем, сервер всё равно откажет */ })
+  }
+  useEffect(reloadOnServer, [target])
+  const alreadyAdded = (c: Card) => c.official ? (!!c.kind && onServer.kinds.has(c.kind)) : (!!c.appId && onServer.apps.has(c.appId))
   const [rows, setRows] = useState<CatalogBot[] | null>(null)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [err, setErr] = useState<string | null>(null)
@@ -95,11 +112,21 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
     setBusy(c.key)
     try {
       const made = await createBot(c.name, c.kind)
-      await addBotToServer(made.id, target)
+      try {
+        await addBotToServer(made.id, target)
+      } catch (e) {
+        // Готового бота заводим ДО постановки на сервер, поэтому отказ на втором
+        // шаге (успели добавить с другого устройства, отобрали право) оставлял бы
+        // за собой ничейное бот-приложение. Прибираем за собой и показываем
+        // исходную причину, а не «не удалось удалить».
+        await deleteBot(made.id).catch(() => { /* не вышло убрать — причина важнее */ })
+        throw e
+      }
       // Готовых считаем по виду: своего приложения у них каждый раз новое, а
       // «сколько раз брали Кубика» — про самого Кубика.
       void countInstall('bot', 'builtin:' + c.kind).then(() => void load())
       toastOk(`Бот «${c.name}» добавлен на сервер`)
+      reloadOnServer()
       onAdded?.()
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
     finally { setBusy('') }
@@ -112,6 +139,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
       await addBotToServer(c.appId, target)
       void countInstall('bot', c.appId).then(() => void load())
       toastOk(`Бот «${c.name}» добавлен на сервер`)
+      reloadOnServer()
       onAdded?.()
     } catch (e: any) { toastErr(e?.message ?? String(e)) }
     finally { setBusy('') }
@@ -128,7 +156,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
           {!serverId && (
             <select className="modal-in cat-srv" value={pickedServer} onChange={e => setPickedServer(e.target.value)}
               title="Куда добавлять бота">
-              {(servers ?? []).length === 0 && <option value="">Нет серверов</option>}
+              {(servers ?? []).length === 0 && <option value="">Некуда добавлять</option>}
               {(servers ?? []).map(sv => <option key={sv.id} value={sv.id}>{sv.name}</option>)}
             </select>
           )}
@@ -141,7 +169,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
           <div className="cat-sec">От создателей Ponoi</div>
           <div className="cat-grid">
             {official.filter(match).map(c => (
-              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target}
+              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target} added={alreadyAdded(c)}
                 onOpen={() => setDetail(c)} onAdd={() => void add(c)} />
             ))}
           </div>
@@ -154,7 +182,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
           )}
           <div className="cat-grid">
             {community.filter(match).map(c => (
-              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target}
+              <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target} added={alreadyAdded(c)}
                 onOpen={() => setDetail(c)} onAdd={() => void add(c)}
                 onRemove={user && c.authorId === user.id ? async () => {
                   if (!await confirmUi(`Убрать «${c.name}» из каталога? С серверов, где он уже стоит, бот не пропадёт.`, { okText: 'Убрать', danger: true })) return
@@ -173,8 +201,8 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   return <div className="cat-inline">{body}</div>
 }
 
-function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {
-  c: Card; busy: boolean; canAdd: boolean; onOpen: () => void; onAdd: () => void; onRemove?: () => void
+function BotCardView({ c, busy, canAdd, added, onOpen, onAdd, onRemove }: {
+  c: Card; busy: boolean; canAdd: boolean; added?: boolean; onOpen: () => void; onAdd: () => void; onRemove?: () => void
 }) {
   return (
     <div className="cat-tile" onClick={onOpen}>
@@ -192,9 +220,10 @@ function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {
           <span title="Сколько раз добавляли на серверы">{fmtAdds(c.adds ?? 0)}</span>
         </div>
         <div className="cat-acts" onClick={e => e.stopPropagation()}>
-          <button className="pqs2-btn" disabled={busy || !canAdd}
-            title={canAdd ? undefined : 'Сначала нужен сервер, куда добавлять'}
-            onClick={onAdd}>{busy ? 'Добавляю…' : 'Добавить'}</button>
+          <button className="pqs2-btn" disabled={busy || !canAdd || added}
+            title={added ? 'Этот бот уже стоит на выбранном сервере'
+              : canAdd ? undefined : 'Сначала нужен сервер, куда добавлять'}
+            onClick={onAdd}>{added ? 'Уже на сервере' : busy ? 'Добавляю…' : 'Добавить'}</button>
           {onRemove && <button className="pqs2-btn ghost danger" title="Убрать из каталога" onClick={onRemove}><Icon name="trash" size={14} /></button>}
         </div>
       </div>

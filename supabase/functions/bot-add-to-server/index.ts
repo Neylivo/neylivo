@@ -34,21 +34,50 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceKey)
 
     const { data: server } = await admin.from('servers').select('id, owner').eq('id', serverId).maybeSingle()
-    if (!server) return json({ error: 'server not found' }, 404)
+    if (!server) return json({ error: 'Сервер не найден' }, 404)
     if (server.owner !== user.id) {
-      // MANAGE_WEBHOOKS (512) через server_permissions(); owner уже отсёкся выше.
+      // MANAGE_WEBHOOKS (512) = «Управление ботами» в интерфейсе; owner уже отсёкся выше.
       const { data: permRow } = await admin.rpc('server_permissions', { p_server: serverId, p_user: user.id })
       const perms = typeof permRow === 'number' ? permRow : Number(permRow ?? 0)
-      if ((perms & 512) === 0) return json({ error: 'missing MANAGE_WEBHOOKS permission' }, 403)
+      if ((perms & 512) === 0) {
+        return json({ error: 'Ботов на этот сервер может добавлять только владелец или тот, чьей роли выдали право «Управление ботами»' }, 403)
+      }
     }
 
-    const { data: app } = await admin.from('bot_apps').select('id, bot_user_id, name').eq('id', botAppId).maybeSingle()
-    if (!app) return json({ error: 'bot app not found' }, 404)
+    const { data: app } = await admin.from('bot_apps').select('id, bot_user_id, name, builtin').eq('id', botAppId).maybeSingle()
+    if (!app) return json({ error: 'Бот не найден' }, 404)
+
+    // v1.355.0: раньше повторное добавление молча «удавалось» — ошибку дубликата
+    // глушили, и человек видел «Бот добавлен» второй раз подряд, хотя ничего не
+    // происходило. Первичный ключ (server_id, user_id) второй строки и так бы не
+    // дал, но врать об этом нельзя: отвечаем честно.
+    const { data: already } = await admin.from('server_members')
+      .select('user_id').eq('server_id', serverId).eq('user_id', app.bot_user_id).maybeSingle()
+    if (already) return json({ error: 'Этот бот уже есть на сервере' }, 409)
+
+    // Готовые боты («Кубик», «Таймер» и прочие из _shared/builtinBots.ts) — особый
+    // случай: каждое добавление заводит НОВОЕ бот-приложение со своим bot_user_id,
+    // поэтому ключ выше их не ловит, и на сервере оказывалось два одинаковых бота,
+    // отвечающих на одну команду хором. Считаем их одинаковыми по виду.
+    if (app.builtin) {
+      const { data: members } = await admin.from('server_members').select('user_id').eq('server_id', serverId)
+      const ids = (members ?? []).map((m: any) => m.user_id)
+      if (ids.length) {
+        const { data: sameKind } = await admin.from('bot_apps')
+          .select('id').eq('builtin', app.builtin).in('bot_user_id', ids).limit(1)
+        if (sameKind && sameKind.length) return json({ error: `Бот «${app.name}» уже есть на сервере` }, 409)
+      }
+    }
 
     const { error: insErr } = await admin.from('server_members').insert({
       server_id: serverId, user_id: app.bot_user_id, member_name: app.name, role: 'member',
     })
-    if (insErr && !String(insErr.message).includes('duplicate')) return json({ error: insErr.message }, 500)
+    if (insErr) {
+      // Гонка: между проверкой выше и вставкой бота успели добавить с другого
+      // устройства. Ответ тот же самый — для человека это одно и то же.
+      if (String(insErr.message).includes('duplicate')) return json({ error: 'Этот бот уже есть на сервере' }, 409)
+      return json({ error: insErr.message }, 500)
+    }
 
     return json({ ok: true, botUserId: app.bot_user_id })
   } catch (e) {

@@ -103,9 +103,65 @@ export async function addBotToServer(botAppId: string, serverId: string): Promis
   if (data?.error) throw new Error(data.error)
 }
 
-export async function removeBotFromServer(botUserId: string, serverId: string): Promise<void> {
-  const { error } = await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', botUserId)
+/**
+ * Кто из ботов уже стоит на сервере (v1.355.0).
+ *
+ * Нужно, чтобы каталог не предлагал добавить то, что уже добавлено. Отказ всё
+ * равно даёт сервер, но у готовых ботов путь такой: сначала заводится новое
+ * бот-приложение, и только потом оно ставится на сервер — узнав об отказе
+ * последним, мы бы оставляли за собой мусорное приложение при каждом промахе.
+ *
+ * Возвращаем и вид готового бота (builtin): двух «Кубиков» на сервере быть не
+ * должно, хотя приложения у них разные.
+ */
+export async function botsOnServer(serverId: string): Promise<{ botUserId: string; appId: string; builtin: string | null }[]> {
+  const { data: members } = await supabase.from('server_members').select('user_id').eq('server_id', serverId)
+  const ids = (members ?? []).map((m: any) => m.user_id)
+  if (!ids.length) return []
+  const { data } = await supabase.from('bot_apps_public').select('id, bot_user_id, builtin').in('bot_user_id', ids)
+  return (data ?? []).map((b: any) => ({ botUserId: b.bot_user_id, appId: b.id, builtin: b.builtin ?? null }))
+}
+
+/**
+ * Серверы, куда я вправе ставить ботов: свои или те, где моей роли выдали
+ * «Управление ботами» (v1.355.0).
+ *
+ * Раньше в выборе были все серверы подряд, и на чужом «Добавить» просто падало
+ * с отказом — выглядело как поломка, а не как отсутствие права.
+ */
+export async function serversForBots(): Promise<{ id: string; name: string }[]> {
+  const { data: servers, error } = await supabase.from('servers').select('id, name, owner').order('created_at')
   if (error) throw error
+  const me = (await supabase.auth.getUser()).data.user?.id
+  const out: { id: string; name: string }[] = []
+  for (const sv of (servers ?? []) as any[]) {
+    if (sv.owner === me) { out.push({ id: sv.id, name: sv.name }); continue }
+    const { data: mask } = await supabase.rpc('server_permissions', { p_server: sv.id, p_user: me })
+    // 512 = MANAGE_WEBHOOKS, в интерфейсе «Управление ботами» (src/lib/permissions.ts).
+    if ((Number(mask ?? 0) & 512) !== 0) out.push({ id: sv.id, name: sv.name })
+  }
+  return out
+}
+
+/**
+ * Убрать бота с сервера (v1.355.0).
+ *
+ * Через функцию, а не прямым delete: правило sm_delete пускает только к своей
+ * строке, а строка бота принадлежит боту — запрос не падал, он просто удалял
+ * ноль строк, и кнопка «Убрать бота» ничего не делала. Право проверяет база
+ * (supabase/95_bot_membership.sql), не интерфейс.
+ */
+export async function removeBotFromServer(botUserId: string, serverId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_bot_from_server', { p_bot_user: botUserId, p_server: serverId })
+  if (!error) return
+  const m = String(error.message ?? '')
+  if (m.includes('missing_manage_bots')) throw new Error('Убирать ботов может только владелец сервера или тот, чьей роли выдали право «Управление ботами»')
+  if (m.includes('not_a_bot')) throw new Error('Это не бот — обычных участников убирают через список участников')
+  if (m.includes('server_not_found')) throw new Error('Сервер не найден')
+  if (m.includes('remove_bot_from_server') && m.includes('does not exist')) {
+    throw new Error('Нужно применить миграцию supabase/95_bot_membership.sql')
+  }
+  throw new Error(m || 'Не удалось убрать бота')
 }
 
 /**
