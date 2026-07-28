@@ -246,9 +246,26 @@ function apply(s: Settings) {
 let _current: Settings = DEFAULTS
 export function getSettings(): Settings { return _current }
 
+/**
+ * Режим разработчика («Дополнительно» → «Режим разработчика»).
+ *
+ * v1.332.0: тумблер сохранялся и не читался вообще нигде, а пункты «Копировать ID»
+ * висели во всех контекстных меню всегда — то есть настройка обещала показать то,
+ * что и так показано, и выключить это было нельзя. Теперь как в Discord: пункты с
+ * ID появляются только при включённом режиме. Читаем в момент отрисовки меню —
+ * меню живёт долю секунды, подписка на изменения тут ни к чему.
+ */
+export const devMode = (): boolean => _current.devmode
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(load)
   useEffect(() => { apply(settings); _current = settings }, [settings])
+  // v1.332.0: своя активность живёт в presence, а presence поднимается выше этого
+  // провайдера и настройки читает напрямую из localStorage — сообщаем ему, что
+  // текст поменялся, иначе новый статус увидели бы только после перезапуска.
+  useEffect(() => {
+    window.dispatchEvent(new Event('ponoi-activity'))
+  }, [settings.actOn, settings.actText])
   // Язык интерфейса: применяем перевод при старте и при смене.
   useEffect(() => { applyLang(settings.lang) }, [settings.lang])
   // v1.158.0: логотип приложения — favicon сразу, иконка окна/трея в Electron (асинхронно).

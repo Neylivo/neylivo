@@ -5,7 +5,7 @@ import { timeShort, timeFull, dayLabel, msgTime, callTime, fmtN, ruMembers } fro
 import { renderMd, mentionsUser, mentionsRoleName } from '../lib/md'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
-import { useSettings } from '../lib/settings'
+import { useSettings, devMode } from '../lib/settings'
 import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta, type SysMsg } from '../lib/sysmsg'
@@ -652,8 +652,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             <div className="ctx-sep" />
             {item('Удалить сообщение', 'trash', () => onDelete?.(menu.id), ' danger')}
           </> : null}
-          <div className="ctx-sep" />
-          {item('Копировать ID сообщения', 'id-card', () => { copyText(menuMsg.id, 'ID скопирован') })}
+          {devMode() ? <>
+            <div className="ctx-sep" />
+            {item('Копировать ID сообщения', 'id-card', () => { copyText(menuMsg.id, 'ID скопирован') })}
+          </> : null}
         </div>
         </>
       })()}

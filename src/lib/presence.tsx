@@ -48,6 +48,25 @@ function prefFlag(key: string): boolean {
 }
 const hiddenLastSeen = () => prefFlag('hideLastSeen')
 
+/**
+ * Своя активность («Настройки» → «Активность»): произвольная строка о себе, как
+ * Custom Status в Discord.
+ *
+ * v1.332.0: тумблер и поле ввода были в настройках, сохранялись — и не читались
+ * нигде: ручную активность когда-то убрали из presence, а её настройку оставили.
+ * То есть человек писал о себе строку, а её не видел никто, включая его самого.
+ * since = 0 — таймера у своей активности нет (в Discord его тоже нет): тикающее
+ * время осмысленно для игры и музыки, а не для строки «пью чай».
+ */
+function customActivity(): Activity | null {
+  try {
+    const s = JSON.parse(localStorage.getItem('ponoi_settings') || '{}')
+    if (s.actOn === false) return null
+    const text = String(s.actText ?? '').trim().slice(0, 128)
+    return text ? { text, since: 0 } : null
+  } catch { return null }
+}
+
 export function PresenceProvider({ username, avatarUrl, children }:
   { username: string; avatarUrl?: string | null; children: ReactNode }) {
   const { user } = useAuth()
@@ -93,12 +112,26 @@ export function PresenceProvider({ username, avatarUrl, children }:
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, device: DEVICE })
+      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, activity: customActivity(), device: DEVICE })
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
     // eslint-disable-next-line
   }, [user, username, avatarUrl])
+
+  // Свою активность поменяли в настройках — перевыкладываем присутствие, чтобы
+  // строка появилась у всех сразу, а не после перезапуска приложения.
+  useEffect(() => {
+    const h = () => {
+      chanRef.current?.track({
+        username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null,
+        listening: lisRef.current, game: gameRef.current, activity: customActivity(), device: DEVICE,
+      })
+      setOnline(o => ({ ...o }))   // своя строка рисуется из настроек, а не из online
+    }
+    window.addEventListener('ponoi-activity', h)
+    return () => window.removeEventListener('ponoi-activity', h)
+  }, [])
 
   // «Был в сети»: раз в минуту отмечаемся в profiles.last_seen.
   // Если миграция 11 ещё не применена (колонки нет) — запрос тихо вернёт ошибку, ничего не ломается.
@@ -256,7 +289,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, device: DEVICE })
+        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, activity: customActivity(), device: DEVICE })
       }
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
         // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,
@@ -297,7 +330,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     if (!l && !lisRef.current) return   // нечего сбрасывать — не дёргаем канал
     lisRef.current = l
     setMyListeningState(l)
-    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current, device: DEVICE })
+    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current, activity: customActivity(), device: DEVICE })
   }
 
   // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
@@ -311,7 +344,10 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const text = '🎵 Слушает: ' + l.title + (l.author ? ' — ' + l.author : '') + (l.source ? ' · ' + l.source : '')
       return { text, since: l.at - Math.floor(l.pos * 1000) }
     }
-    return null   // ручная активность удалена — только авто (игра/музыка)
+    // Своя активность — последней: игра и музыка говорят о человеке точнее, чем
+    // строка, написанная когда-то. Своя читается из настроек напрямую: она может
+    // ещё не разойтись по presence в первый миг после изменения.
+    return userId === user?.id ? customActivity() : (online[userId]?.activity ?? null)
   }
 
   function gameOf(userId: string): Game | null {

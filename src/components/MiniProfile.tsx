@@ -15,6 +15,7 @@ import { lazyNamed } from '../lib/lazyScreen'
 const Settings = lazyNamed(() => import('./Settings'), 'Settings')
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
+import { devMode } from '../lib/settings'
 import { UserTagBadge } from './TagEmoji'
 import { gameIconOf } from '../lib/gameIcon'
 import type { Profile } from '../types'
@@ -192,7 +193,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <button title="Ещё" onClick={() => setMore(m => !m)}><Icon name="more" size={16} /></button>
           {more && <div className="mini-more">
             <button onClick={() => { navigator.clipboard?.writeText(uname || data.name); setMore(false) }}>Скопировать юзернейм</button>
-            <button onClick={() => { navigator.clipboard?.writeText(data.userId); setMore(false) }}>Скопировать ID</button>
+            {devMode() && <button onClick={() => { navigator.clipboard?.writeText(data.userId); setMore(false) }}>Скопировать ID</button>}
           </div>}
         </div>}
         <ProfilePet p={pp} scale={0.3} card="mini" bannerH={74} />
@@ -266,10 +267,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 <Icon name="users" size={16} /> Переключение между учётными записями
                 <span className="mini-row-chev"><Icon name="chevron-down" size={14} /></span>
               </button>
-              <div className="mini-rowsep" />
-              <button className="mini-row" onClick={() => { navigator.clipboard?.writeText(data.userId); onClose() }}>
-                <Icon name="id-card" size={16} /> Копировать ID пользователя
-              </button>
+              {devMode() && <>
+                <div className="mini-rowsep" />
+                <button className="mini-row" onClick={() => { navigator.clipboard?.writeText(data.userId); onClose() }}>
+                  <Icon name="id-card" size={16} /> Копировать ID пользователя
+                </button>
+              </>}
             </div>
             {sub === 'acc' && <div className="mini-sub">
               <div className="mini-acc">

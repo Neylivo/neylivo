@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     let allowed = false
     if (room.startsWith('ch_')) {
       const channelId = room.slice(3)
-      const { data: channel } = await admin.from('channels').select('server_id').eq('id', channelId).maybeSingle()
+      const { data: channel } = await admin.from('channels').select('server_id, settings').eq('id', channelId).maybeSingle()
       if (channel) {
         const { data: member } = await admin.from('server_members').select('user_id')
           .eq('server_id', channel.server_id).eq('user_id', identity).maybeSingle()
@@ -89,6 +89,27 @@ Deno.serve(async (req) => {
         // есть то, ради чего проверку обходят.
         const { data: canView } = await admin.rpc('can_view_channel', { p_channel_id: channelId, p_user: identity })
         allowed = !!member && canView === true
+
+        // v1.332.0: «Лимит пользователей» из настроек канала. В интерфейсе он не
+        // читался вовсе, но и одного интерфейса тут мало: токен можно попросить и
+        // без приложения. Считаем тех, кто уже в комнате, — если мест нет, токен
+        // не выдаём. Управляющий каналами (бит 4) и владелец проходят всегда:
+        // иначе модератор не смог бы зайти и разобраться с тем, что там творится.
+        const limit = Number((channel as any).settings?.user_limit ?? 0)
+        if (allowed && limit > 0) {
+          const { data: perms } = await admin.rpc('server_permissions', { p_server: channel.server_id, p_user: identity })
+          const { data: srv } = await admin.from('servers').select('owner').eq('id', channel.server_id).maybeSingle()
+          const bypass = srv?.owner === identity || (Number(perms ?? 0) & 4) !== 0
+          if (!bypass) {
+            try {
+              const svc = new RoomServiceClient(lkUrl, key, secret)
+              const list = await svc.listParticipants(room)
+              // Свой же повторный вход (перезаход, второе устройство) местом не считаем.
+              const others = list.filter((p: any) => p.identity !== identity).length
+              if (others >= limit) return json({ error: 'voice channel is full' }, 403)
+            } catch { /* LiveKit не ответил — не запираем канал из-за сбоя проверки */ }
+          }
+        }
       }
     } else if (room.startsWith('dm_')) {
       const threadId = room.slice(3)

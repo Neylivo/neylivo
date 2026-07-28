@@ -15,10 +15,15 @@ export function fmtElapsed(since: number): string {
 // Живая строка активности: «Играю в Doom — 2 ч 34 мин 1 сек», тикает каждую секунду.
 export function ActivityLabel({ activity }: { activity: Activity }) {
   const [, setTick] = useState(0)
+  const timed = activity.since > 0
   useEffect(() => {
+    if (!timed) return
     const t = window.setInterval(() => setTick(v => v + 1), 1000)
     return () => window.clearInterval(t)
-  }, [])
+  }, [timed])
+  // v1.332.0: своя активность приходит с since = 0 — у неё нет начала, которое
+  // имело бы смысл показывать. «Пью чай — 4 ч 12 мин 6 сек» выглядело бы шуткой.
+  if (!timed) return <>{activity.text}</>
   return <>{activity.text} — {fmtElapsed(activity.since)}</>
 }
 

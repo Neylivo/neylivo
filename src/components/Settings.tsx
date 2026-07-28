@@ -1031,7 +1031,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <div className="pqs2-desc">Какие события присылают уведомления и нужен ли звук.</div>
                 <Row title="Системные уведомления"><Toggle on={view.notifSystem} onChange={v => setD('notifSystem', v)} /></Row>
                 <Row title="Звуки уведомлений"><Toggle on={view.notifSounds} onChange={v => setD('notifSounds', v)} /></Row>
-                <Row title="Упоминания" desc="Уведомлять только о @упоминаниях"><Toggle on={view.mentionsOnly} onChange={v => setD('mentionsOnly', v)} /></Row>
+                <Row title="Упоминания" desc="Уведомлять только о @упоминаниях — на всех серверах сразу; личные сообщения приходят всегда"><Toggle on={view.mentionsOnly} onChange={v => setD('mentionsOnly', v)} /></Row>
                 <Row title="Счётчик на иконке" desc="Показывать количество непрочитанных"><Toggle on={view.unreadBadge} onChange={v => setD('unreadBadge', v)} /></Row>
                 <Row title="Кружок заявок в друзья" desc="Число ожидающих заявок рядом с кнопкой «Друзья» (без звука). Выключи, если заявок приходят сотни и кружок надоедает — сами заявки при этом никуда не денутся">
                   <Toggle on={view.notifFriendRequests} onChange={v => setD('notifFriendRequests', v)} />

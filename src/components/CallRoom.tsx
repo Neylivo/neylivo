@@ -7,7 +7,7 @@ import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
-import { useSettings } from '../lib/settings'
+import { useSettings, devMode } from '../lib/settings'
 import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
 import { matchCombo } from '../lib/keybind'
@@ -217,7 +217,7 @@ function PartCtxMenu({ identity, x, y, onClose, onProfile }:
           <span>{hidden ? 'Показать видео' : 'Отключить видео'}</span><Icon name={hidden ? 'video' : 'video-off'} size={14} />
         </div>
         <div className="ctx-sep" />
-        <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(identity); onClose() }}><span>Копировать ID пользователя</span><Icon name="id-card" size={14} /></div>
+        {devMode() && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(identity); onClose() }}><span>Копировать ID пользователя</span><Icon name="id-card" size={14} /></div>}
       </div>
     </>
   )
@@ -385,8 +385,10 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
   )
 }
 
-export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
+export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverSounds, serverName }:
   { room: Room; meId: string; meName: string; onLeave: () => void; peer?: { name: string; avatarUrl?: string | null } | null
+    // Звуки сервера — из настроек сервера, показываются в саундпаде (v1.332.0).
+    serverSounds?: { name: string; url: string }[]; serverName?: string
     // v1.183.0: правый клик по участнику — меню как в Discord (профиль/громкость/
     // заглушить у себя/скрыть видео/копировать ID). Профиль открывает родитель
     // (у него уже есть MiniProfile) — CallRoom только сообщает, кого открыть.
@@ -752,7 +754,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile }:
       {audioBlocked && <button className="c2-audio-blocked" onClick={() => room.startAudio().catch(() => {})}>
         <Icon name="volume" size={14} /> Браузер заблокировал звук — нажми, чтобы включить
       </button>}
-      {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} onClose={() => setShowSb(false)} />}
+      {showSb && <Soundboard room={room} recorder={recRef.current} meId={meId} meName={meName} serverSounds={serverSounds} serverName={serverName} onClose={() => setShowSb(false)} />}
       {pctx && <PartCtxMenu identity={pctx.p.identity} x={pctx.x} y={pctx.y} onClose={() => setPctx(null)}
         onProfile={onProfile ? () => onProfile(pctx.p.identity, pctx.name, pctx.avatar, pctx.x, pctx.y) : undefined} />}
       <div className="c2-bar">

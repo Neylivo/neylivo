@@ -27,6 +27,11 @@ const openNotifs = new Map<string, Notification>()
 export function notifyMessage(title: string, body: string, icon?: string | null, tag?: string) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted') return
+    // v1.332.0: тумблер «Системные уведомления» в настройках не читался ЗДЕСЬ и
+    // нигде больше — то есть выключить их было нельзя, они показывались всегда.
+    // Проверка стоит в одном месте, у самого показа: любой новый вызывающий
+    // получает её даром и не может забыть.
+    if (!getSettings().notifSystem) return
     // Only notify when the user isn't actively looking at the app.
     if (document.visibilityState === 'visible' && document.hasFocus()) return
     if (tag) { try { openNotifs.get(tag)?.close() } catch {} }

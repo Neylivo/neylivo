@@ -95,8 +95,15 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   // v1.321.0: права @everyone — отдельная колонка servers.base_permissions, а не
   // settings: её читает server_permissions() в базе, и именно поэтому запрет
   // держится и против запроса мимо приложения. 15872 — то же значение по
-  // умолчанию, что стоит в миграции 49_role_perms2.sql.
-  const DEFAULT_BASE_PERMS = 15872
+  // умолчанию, что стоит в миграции 85_perm_fixes.sql.
+  //
+  // v1.332.0: здесь было 15872 — прежнее значение из 49_role_perms2.sql, в которое
+  // по ошибке затесался бит 512 («Управление вебхуками»), из-за чего это право
+  // получал каждый участник каждого сервера. В базе это починила миграция 85, а
+  // тут число осталось старым: сервер без явно заданных прав @everyone
+  // показывался бы с выданным управлением вебхуками, и первое же сохранение
+  // настроек вернуло бы в базу ровно то, что 85 убирала.
+  const DEFAULT_BASE_PERMS = 15360
   const [basePerms, setBasePerms] = useState<number>(server.base_permissions ?? DEFAULT_BASE_PERMS)
   const [baseBasePerms, setBaseBasePerms] = useState<number>(server.base_permissions ?? DEFAULT_BASE_PERMS)
   const dirty = name !== baseName || JSON.stringify(normSt(st)) !== baseSt || basePerms !== baseBasePerms

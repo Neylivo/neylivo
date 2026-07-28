@@ -23,8 +23,46 @@ function parseMode(raw: string | undefined, fallback: NotifMode): NotifMode {
   return raw as NotifMode
 }
 
+/**
+ * Режим по умолчанию, заданный НА СЕРВЕРЕ его владельцем («Настройки сервера» →
+ * «Уведомления по умолчанию»), — как в Discord.
+ *
+ * v1.332.0: настройка сохранялась в settings сервера и не читалась нигде: сервер,
+ * который просил «по умолчанию только упоминания», всё равно звенел на каждое
+ * сообщение. Держим её в отдельном реестре, потому что notifModeOf() знает только
+ * id сервера, а тянуть сюда сам объект сервера пришлось бы через десяток мест.
+ */
+const srvDefaults = new Map<string, NotifMode>()
+export function setServerNotifDefaults(servers: { id: string; settings?: any }[]) {
+  for (const s of servers) {
+    const v = s.settings?.default_notif
+    if (v === 'all' || v === 'mentions' || v === 'mute') srvDefaults.set(s.id, v)
+    else srvDefaults.delete(s.id)
+  }
+}
+
 export function notifModeOf(serverId: string): NotifMode {
-  return parseMode(getUserPrefs().srv_notif[serverId], getSettings().defaultServerNotif)
+  // Порядок как в Discord: выбор человека на этом сервере важнее умолчания
+  // сервера, а умолчание сервера — важнее общего «Новые серверы» в настройках.
+  const fallback = srvDefaults.get(serverId) ?? getSettings().defaultServerNotif
+  return parseMode(getUserPrefs().srv_notif[serverId], fallback)
+}
+
+/**
+ * Звучать ли на это сообщение: режим канала/сервера плюс общий тумблер
+ * «Уведомлять только о @упоминаниях» из настроек.
+ *
+ * v1.332.0: тумблер mentionsOnly не читался нигде — он сохранялся, синхронизировался
+ * между устройствами и ни на что не влиял. Складываем его с режимом сервера так же,
+ * как в Discord: общая настройка может только ужесточить выбранное на сервере, но не
+ * ослабить, иначе заглушённый сервер снова начал бы звенеть. Личных сообщений это не
+ * касается — ЛС и так адресовано лично тебе (в Discord «только упоминания» их тоже не
+ * трогает).
+ */
+export function shouldNotify(mode: NotifMode, mentioned: boolean): boolean {
+  if (mode === 'mute') return false
+  if (mode === 'mentions') return mentioned
+  return getSettings().mentionsOnly ? mentioned : true
 }
 
 // muteUntil: undefined/0 — заглушить насовсем; timestamp (мс) — до какого момента.

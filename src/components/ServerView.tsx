@@ -3,6 +3,7 @@ import { netOk, netFail } from '../lib/netStatus'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { devMode } from '../lib/settings'
 import { useAuth } from '../auth/AuthProvider'
 import type { Server, Channel, Message } from '../types'
 import { MeBar } from './MeBar'
@@ -50,7 +51,7 @@ import { InviteModal } from './InviteModal'
 import { CreateChannelModal } from './CreateChannelModal'
 import { ServerPrivacyModal, CreateCategoryModal, ChannelNotifModal } from './ServerModals'
 import { chNotifModeOf } from '../lib/chNotify'
-import { notifModeOf } from '../lib/srvNotify'
+import { notifModeOf, shouldNotify } from '../lib/srvNotify'
 import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
 import { getChRead, setChRead } from '../lib/userPrefs'
 import { ChannelsRolesModal } from './ChannelsRolesModal'
@@ -599,7 +600,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             // РОЛИ (только личное @ник) — рассинхрон с подсветкой сообщения и бейджем
             // непрочитанного (Home.tsx/MessageList.tsx), которые роль уже учитывали (v1.239.0).
             const mentioned = !!msg.content && (mentionsUser(msg.content, username) || myRoleNameList.some(rn => mentionsRoleName(msg.content!, rn)))
-            if (mode === 'all' || (mode === 'mentions' && mentioned)) {
+            if (shouldNotify(mode, mentioned)) {
               msgSound()
               notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '', (msg as any).author_avatar, 'ch:' + curChannel.id)
             }
@@ -827,6 +828,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   async function joinVoice(c: Channel) {
     if (!user) return
     if (voice?.ch.id === c.id) { setVoicePanel(true); closeMobNav(); return }   // v1.133.0: как в Discord — клик по своему каналу снова открывает его вид
+    // v1.332.0: «Лимит пользователей» в настройках канала сохранялся и не читался
+    // нигде — канал с лимитом 2 пускал сколько угодно человек. Как в Discord:
+    // заполненный канал не пускает, но управляющий каналами заходит всё равно
+    // (иначе модератор не смог бы попасть в канал, чтобы навести там порядок).
+    const limit = Number((c as any).settings?.user_limit ?? 0)
+    if (limit > 0 && (voiceUsers[c.id]?.length ?? 0) >= limit && !canManageChannels) {
+      toastErr('В канале уже ' + limit + ' — больше туда не пускает')
+      return
+    }
     // v1.142.0: вход моментальный — панель голосового канала и твоя аватарка
     // появляются сразу (оптимистично, через presence), а подключение к LiveKit
     // (токен + connect + микрофон) идёт в фоне. Раньше всё это ждали до показа —
@@ -840,7 +850,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     closeMobNav()
     voicePresRef.current?.track({ chId: c.id, username, avatar: avatarUrl ?? null, live: false })
     try {
-      const room = await joinRoom('ch_' + c.id, user.id, username)
+      const room = await joinRoom('ch_' + c.id, user.id, username, undefined, {
+        bitrateKbps: Number((c as any).settings?.bitrate) || undefined,
+        videoQuality: (c as any).settings?.video_quality,
+      })
       if (joinSeq.current !== seq) { try { room.disconnect() } catch {}; return }   // пользователь уже ушёл/сменил канал
       setVoice({ room, ch: c })
       setVMic(true)
@@ -1254,7 +1267,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             <div className="srv-mi" onClick={e => { e.stopPropagation(); const nv = !hideMuted; setHideMuted(nv); localStorage.setItem('ponoi_hide_muted', nv ? '1' : '0') }}><span className="srv-mi-lb">Скрыть заглушённые каналы</span> <span className={'srv-mchk' + (hideMuted ? ' on' : '')}>{hideMuted && <Icon name="check" size={12} />}</span></div>
             {!isOwner && <><div className="srv-msep" /><div className="srv-mi danger" onClick={leave}><span className="srv-mi-lb">Покинуть сервер</span> <Icon name="signout" size={16} /></div></>}
             <div className="srv-msep" />
-            <div className="srv-mi" onClick={() => { navigator.clipboard?.writeText(server.id); toastOk('ID сервера скопирован') }}><span className="srv-mi-lb">Копировать ID сервера</span> <Icon name="id-card" size={16} /></div>
+            {devMode() && <div className="srv-mi" onClick={() => { navigator.clipboard?.writeText(server.id); toastOk('ID сервера скопирован') }}><span className="srv-mi-lb">Копировать ID сервера</span> <Icon name="id-card" size={16} /></div>}
           </div>
         </>}
         <div className="ch-list">
@@ -1286,6 +1299,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <div key={c.id}>
                 <div className={'ch' + (mutedCh[c.id] ? ' muted' : '') + (voice?.ch.id === c.id ? ' on vconn' : curChannel?.id === c.id ? ' on' : '')} onClick={() => joinVoice(c)} onDoubleClick={() => joinVoice(c)} onContextMenu={onChCtx(c)} title={voice?.ch.id === c.id ? 'Нажмите ещё раз — открыть канал' : undefined}>
                   <ChName c={c} srv={srvSettings} />
+                  {/* Занятость канала с лимитом — «2/4», как в Discord. */}
+                  {Number((c as any).settings?.user_limit ?? 0) > 0 &&
+                    <span className="ch-limit">{(voiceUsers[c.id] ?? []).length}/{Number((c as any).settings.user_limit)}</span>}
                   <span className="ch-acts">
                     {/* v1.249.0: чат голосового канала — тот же MessageList/Composer, что
                         и у текстовых, просто с channelId голосового канала (сообщения не
@@ -1425,7 +1441,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             ?? channels.find(c => c.name.toLowerCase().startsWith(nm.toLowerCase()))?.id ?? null,
         }} />}
         {voice && <VoiceConn room={voice.room} sinks={!voicePanel} meName={username} onSpeak={ids => setSpeaking(Object.fromEntries(ids.map(i => [i, true])))} />}
-        {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} onLeave={() => { setVoicePanel(false); leaveVoice() }}
+        {voice && voicePanel && <CallRoom room={voice.room} meId={user?.id ?? ''} meName={username} serverSounds={srvSettings.sounds} serverName={server.name} onLeave={() => { setVoicePanel(false); leaveVoice() }}
           onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
         {connecting && !voice && voicePanel && <div className="c2-wrap c2-connecting">
           <div className="c2-bubbles"><div className="c2-bub"><div className="c2-bub-av birth"><Avatar name={username} url={avatarUrl} size={84} /></div><div className="c2-bub-nm">{username}</div></div></div>
@@ -1723,7 +1739,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           <div className="ctx-item" onClick={invite}><Icon name="user-plus" size={14} /> Пригласить на сервер</div>
           <div className="ctx-item" onClick={() => setNotifForCh(chCtx.ch)}><Icon name={mutedCh[chCtx.ch.id] ? 'bell-off' : 'bell'} size={14} /> Уведомления канала</div>
           {canManageChannels && <div className="ctx-item" onClick={() => setChSettings(chCtx.ch)}><Icon name="gear" size={14} /> Настройки канала</div>}
-          <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(chCtx.ch.id); toastOk('ID канала скопирован') }}><Icon name="id-card" size={14} /> Копировать ID канала</div>
+          {devMode() && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(chCtx.ch.id); toastOk('ID канала скопирован') }}><Icon name="id-card" size={14} /> Копировать ID канала</div>}
         </div>
       </>}
       {catCtx && <>

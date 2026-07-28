@@ -1,5 +1,6 @@
 import type { Room, LocalTrackPublication } from 'livekit-client'
 import { supabase } from './supabase'
+import { getSettings } from './settings'
 import { RoomEvent, Track, verifyLivekitConstants } from './livekitConst'
 
 // v1.288.0: livekit-client грузится ТОЛЬКО при входе в звонок.
@@ -127,7 +128,61 @@ async function buildE2ee(lk: typeof import('livekit-client'), opt: E2eeOptions) 
   return { keyProvider, worker }
 }
 
-export async function joinRoom(roomName: string, identity: string, name: string, e2ee?: E2eeOptions): Promise<Room> {
+/**
+ * «Громкость микрофона» из настроек — программное усиление входа, как ползунок
+ * Input Volume в Discord.
+ *
+ * v1.332.0: ползунок в настройках сохранялся и не читался нигде — двигать его
+ * можно было сколько угодно, на звук это не влияло. У микрофона нет громкости
+ * как свойства, поэтому пропускаем дорожку через GainNode и публикуем уже
+ * обработанную.
+ *
+ * Осторожно и намеренно: при 100% (значение по умолчанию) дорожка НЕ трогается
+ * вовсе — путь остаётся ровно таким, каким был. Если WebAudio по какой-то
+ * причине не заведётся, возвращаем исходную дорожку: тихий микрофон хуже
+ * неотрегулированного, а звонки — самая непроверяемая часть приложения.
+ */
+function applyMicGain<T extends { mediaStreamTrack: MediaStreamTrack; stop: () => void }>(
+  track: T | null,
+): { track: T | MediaStreamTrack | null; cleanup?: () => void } {
+  if (!track) return { track }
+  const pct = getSettings().micVol
+  if (pct === 100) return { track }
+  try {
+    const Ctx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
+    const ctx = new Ctx()
+    ctx.resume().catch(() => {})
+    const src = ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]))
+    const gain = ctx.createGain()
+    gain.gain.value = pct / 100
+    const dest = ctx.createMediaStreamDestination()
+    src.connect(gain).connect(dest)
+    const out = dest.stream.getAudioTracks()[0]
+    if (!out) return { track }
+    // Публикуем именно обработанную дорожку: подменить её внутри готового
+    // LocalAudioTrack нельзя, зато publishTrack принимает и обычный
+    // MediaStreamTrack. Исходная остаётся источником цепочки, поэтому глушим её
+    // не сразу, а по выходу из звонка — иначе микрофон остался бы захваченным и
+    // после отбоя (в системе так и горел бы значок «идёт запись»).
+    return { track: out, cleanup: () => { try { track.stop() } catch {} ; ctx.close().catch(() => {}) } }
+  } catch { return { track } }
+}
+
+/**
+ * Настройки голосового канала («Настройки канала» → «Битрейт» / «Качество видео»).
+ *
+ * v1.332.0: оба сохранялись в settings канала и не читались нигде — ползунок
+ * битрейта и выбор качества были декорацией. Теперь они доходят до LiveKit:
+ * битрейт задаёт звук, качество — потолок разрешения камеры. 'auto' оставляет
+ * прежнее поведение (1080p и 256 кбит/с), то есть у каналов, где ничего не
+ * выбирали, ничего и не меняется.
+ */
+export interface ChannelMedia { bitrateKbps?: number; videoQuality?: string }
+const VQ_HEIGHT: Record<string, number> = {
+  '144p': 144, '240p': 240, '360p': 360, '480p': 480, '720p': 720, '1080p': 1080, '1440p': 1440,
+}
+
+export async function joinRoom(roomName: string, identity: string, name: string, e2ee?: E2eeOptions, media?: ChannelMedia): Promise<Room> {
   const tokenKey = roomName + '|' + identity
   // v1.64.0: максимальное качество звонка — подавление эха/шума и автогромкость,
   // высокобитрейтный стерео-звук (RED + DTX), камера 1080p с simulcast.
@@ -149,18 +204,25 @@ export async function joinRoom(roomName: string, identity: string, name: string,
   // Не await — стартует параллельно с получением токена/коннектом ниже.
   const micPromise = createLocalAudioTrack(audioOpts).catch(() => null)
   let { token, url } = await tokenPromise
+  // Качество видео канала: берём готовый пресет LiveKit по высоте кадра, чтобы
+  // разрешение и битрейт картинки были согласованы, а не выдуманы здесь.
+  const vqH = media?.videoQuality && media.videoQuality !== 'auto' ? VQ_HEIGHT[media.videoQuality] : undefined
+  const vqPreset = vqH
+    ? (Object.values(VideoPresets) as any[]).filter(p => p?.resolution?.height).sort((a, b) => a.resolution.height - b.resolution.height)
+        .find(p => p.resolution.height >= vqH)
+    : undefined
   const room = new Room({
     adaptiveStream: { pixelDensity: 'screen' },
     dynacast: true,
     audioCaptureDefaults: audioOpts,
-    videoCaptureDefaults: { deviceId: savedCam, resolution: VideoPresets.h1080.resolution },
+    videoCaptureDefaults: { deviceId: savedCam, resolution: (vqPreset ?? VideoPresets.h1080).resolution },
     publishDefaults: {
       dtx: true,
       red: true,
-      audioPreset: { maxBitrate: 256_000 },
+      audioPreset: { maxBitrate: media?.bitrateKbps ? media.bitrateKbps * 1000 : 256_000 },
       videoCodec: 'vp9',
       backupCodec: true,
-      videoEncoding: { maxBitrate: 8_000_000, maxFramerate: 30 },
+      videoEncoding: vqPreset?.encoding ?? { maxBitrate: 8_000_000, maxFramerate: 30 },
       simulcast: true,
     },
     ...(e2eeOpts ? { e2ee: e2eeOpts } : {}),
@@ -179,10 +241,11 @@ export async function joinRoom(roomName: string, identity: string, name: string,
     ;({ token, url } = await getToken(roomName, identity, name))
     await room.connect(url, token)
   }
-  const micTrack = await micPromise
+  const { track: micTrack, cleanup: micCleanup } = applyMicGain(await micPromise)
+  if (micCleanup) room.once(RoomEvent.Disconnected as any, micCleanup)
   if (micTrack) {
     try { await room.localParticipant.publishTrack(micTrack, { source: Track.Source.Microphone as any }) }
-    catch { micTrack.stop(); await enableMicWithRetry(room) }
+    catch { micTrack.stop(); micCleanup?.(); await enableMicWithRetry(room) }
   } else {
     // Параллельный захват не удался (устройство было занято/отказано) — пробуем
     // ещё раз тем же путём, что и раньше: до нескольких попыток с паузой.

@@ -2347,6 +2347,10 @@ body.no-anim .member-typing i { animation:none; }
 .srv-mchk.on { background:var(--brand); border-color:var(--brand); color:#fff; }
 .ch { display:flex; align-items:center; justify-content:space-between; gap:6px; }
 .ch-nm { display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Занятость голосового канала с лимитом — «2/4», справа от названия. Прячется
+   при наведении, чтобы не толкаться с кнопками канала (как в Discord). */
+.ch-limit { margin-left:auto; flex:none; font-size:12px; color:var(--mut); font-variant-numeric:tabular-nums; }
+.ch:hover .ch-limit { display:none; }
 .ch-acts { display:none; gap:4px; flex:none; }
 .ch:hover .ch-acts { display:flex; }
 .ch-acts button { background:none; border:none; color:var(--mut); cursor:pointer; padding:2px; display:flex; }
@@ -3273,6 +3277,9 @@ body.no-anim .member-typing i { animation:none; }
 .fsm-tx { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .fsm-nm { font-weight:700; font-size:15px; color:#f2f3f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fsm-meta { font-size:12.5px; color:var(--mut); display:flex; align-items:center; gap:6px; }
+/* «Особенности» сервера в подборке — короткие плашки под названием. */
+.fsm-feats { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.fsm-feat { font-size:11.5px; line-height:1; padding:4px 7px; border-radius:999px; background:var(--c-hover); color:var(--tx); white-space:nowrap; }
 .fsm-dot { width:8px; height:8px; border-radius:50%; background:#23a55a; flex:none; }
 .fsm-mine { display:inline-flex; align-items:center; gap:4px; color:#23a55a; font-weight:600; }
 .fsm-join { flex:none; height:32px; padding:0 14px; border:none; border-radius:var(--r-sm); background:var(--brand); color:#fff;
@@ -3600,7 +3607,12 @@ button:disabled { cursor:not-allowed; }
 button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2px; }
 
 /* ===== v1.68.0: панель «Пригласить друзей» + карточка приглашения — 1-в-1 как в Discord ===== */
-.inv-modal { width:440px; }
+.inv-modal { width:440px; position:relative; overflow:hidden; }
+/* Фон приглашения из настроек сервера — полоса под заголовком, как splash
+   приглашения в Discord. Текст поверх остаётся читаемым за счёт затемнения. */
+.inv-bg { position:absolute; inset:0 0 auto 0; height:96px; background-size:cover; background-position:center; opacity:.5;
+  -webkit-mask-image:linear-gradient(to bottom, #000 40%, transparent); mask-image:linear-gradient(to bottom, #000 40%, transparent); pointer-events:none; }
+.inv-modal .inv-title, .inv-modal .inv-sub { position:relative; }
 .inv-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:26px; }
 .inv-sub { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--mut); margin-top:4px; }
 .inv-sub b { font-weight:600; color:var(--txt); }

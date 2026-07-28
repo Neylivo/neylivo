@@ -7,8 +7,14 @@ import { uploadTo } from '../lib/storage'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
 
-export function Soundboard({ room, recorder, meId, meName, onClose }:
-  { room: Room; recorder: CallRecorder | null; meId: string; meName: string; onClose: () => void }) {
+export function Soundboard({ room, recorder, meId, meName, onClose, serverSounds, serverName }:
+  { room: Room; recorder: CallRecorder | null; meId: string; meName: string; onClose: () => void
+    // v1.332.0: звуки сервера («Настройки сервера» → «Звуковая панель»). Их
+    // загружали, они складывались в настройки сервера — и не появлялись нигде:
+    // саундпад показывал только общие клипы из soundboard_clips. Раздел прямо
+    // обещал «будут доступны всем участникам сервера», а звук было не включить.
+    // Теперь они здесь же, отдельной группой, и играются тем же playToAll.
+    serverSounds?: { name: string; url: string }[]; serverName?: string }) {
   const [clips, setClips] = useState<Clip[]>([])
   const [busy, setBusy] = useState('')
   const [q, setQ] = useState('')
@@ -137,7 +143,13 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
     setTrim(null)
   }
 
-  const list = q ? clips.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : clips
+  // Звуки сервера подмешиваем в тот же список: играются они так же, просто их
+  // нельзя удалить или обрезать отсюда — они принадлежат серверу, а не тебе.
+  const srvClips: Clip[] = (serverSounds ?? [])
+    .filter(s => s?.url)
+    .map((s, i) => ({ id: 'srv:' + i, url: s.url, name: s.name || 'Звук', owner: serverName ?? 'Сервер', ownerId: 'server', duration: 0, created_at: '' }))
+  const all = [...srvClips, ...clips]
+  const list = q ? all.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : all
 
   return (
     <div className="sb" onClick={e => e.stopPropagation()}>
@@ -169,12 +181,12 @@ export function Soundboard({ room, recorder, meId, meName, onClose }:
             </button>
             <div className="sb-meta">
               <div className="sb-name">{c.name}</div>
-              <div className="sb-sub">{fmtDur(c.duration)} · {c.owner}</div>
+              <div className="sb-sub">{c.ownerId === 'server' ? 'Звук сервера · ' + c.owner : fmtDur(c.duration) + ' · ' + c.owner}</div>
             </div>
             <button className="sb-blast" title="Включить всем в канале" onClick={() => blast(c)}>
               <Icon name={playingId === c.id ? 'pause' : 'volume'} size={15} /> {playingId === c.id ? 'Стоп' : 'Всем'}
             </button>
-            <button className="sb-trim" title="Обрезать" onClick={() => openTrim(c)}><Icon name="scissors" size={15} /></button>
+            {c.ownerId !== 'server' && <button className="sb-trim" title="Обрезать" onClick={() => openTrim(c)}><Icon name="scissors" size={15} /></button>}
             {c.ownerId === meId && <button className="sb-del" title="Удалить" onClick={async () => { try { await removeClip(c.id); refresh() } catch (e: any) { toastErr(e.message ?? String(e)) } }}><Icon name="trash" size={14} /></button>}
           </div>
         ))}

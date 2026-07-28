@@ -24,7 +24,7 @@ import { HotkeysModal } from './HotkeysModal'
 import { FolderModal } from './FolderModal'
 import { RailTip } from './RailTip'
 import { loadFolders, toggleFolder, type SrvFolder } from '../lib/folders'
-import { notifModeOf, setNotifMode } from '../lib/srvNotify'
+import { notifModeOf, setNotifMode, setServerNotifDefaults } from '../lib/srvNotify'
 import { bumpDm, bumpMention, bumpSoft, bumpUnread, clearBadgeKey, useBadgeCount } from '../lib/badge'
 import { isDmMuted, setChRead } from '../lib/userPrefs'
 import { mentionsUser, mentionsRoleName } from '../lib/md'
@@ -426,6 +426,9 @@ export function Home() {
     try { list = await myServers(); netOk() }
     catch (e) { netFail(); console.error('[servers] load failed:', e); return }
     setServers(list)
+    // Умолчание уведомлений, заданное владельцем сервера, — оно нужно srvNotify,
+    // а тот про сами серверы ничего не знает (v1.332.0).
+    setServerNotifDefaults(list as any)
     cacheSet('servers', list)
     if (selectId) {
       const s = list.find(x => x.id === selectId)
@@ -446,6 +449,7 @@ export function Home() {
     if (!data) return
     const fresh = data as Server
     setServers(list => list.map(s => (s.id === id ? fresh : s)))
+    setServerNotifDefaults([fresh as any])
     setView(v => (v.kind === 'server' && v.server.id === id ? { kind: 'server', server: fresh } : v))
   }
 

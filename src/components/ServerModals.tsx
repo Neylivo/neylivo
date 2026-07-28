@@ -1,3 +1,4 @@
+import { devMode } from '../lib/settings'
 import { toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
@@ -310,6 +311,15 @@ export function FindServerModal({ uid, username, onClose, onJoined }:
                       {s.members > 0 && <><span className="fsm-dot" />{s.members} {plural(s.members, 'участник', 'участника', 'участников')}</>}
                       {s.joined && <span className="fsm-mine"><Icon name="check" size={12} /> Вы участник</span>}
                     </span>
+                    {/* v1.332.0: «Особенности» из настроек сервера. Владелец
+                        заполнял до пяти строк «о характере сервера», они
+                        сохранялись — и не показывались никому и нигде. Место им
+                        ровно тут, где человек выбирает, куда идти. */}
+                    {(((s as any).settings?.features ?? []) as string[]).filter(f => f?.trim()).length > 0 &&
+                      <span className="fsm-feats">
+                        {(((s as any).settings.features ?? []) as string[]).filter(f => f?.trim()).slice(0, 5)
+                          .map((f, i) => <span key={i} className="fsm-feat">{f.trim()}</span>)}
+                      </span>}
                   </span>
                   <button className={'fsm-join' + (s.joined ? ' open' : '')} disabled={busyId === s.id}
                     onClick={e => { e.stopPropagation(); join(s) }}>
@@ -354,7 +364,9 @@ export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
   }, [onClose])
   return (
     <div className="ctxmenu" ref={clamp.ref} style={clamp.style} onClick={e => e.stopPropagation()}>
-      {CTX_ITEMS.filter(i => isOwner ? i.k !== 'leave' : i.k !== 'settings').map(i => (
+      {CTX_ITEMS.filter(i => isOwner ? i.k !== 'leave' : i.k !== 'settings')
+        // «Копировать ID сервера» — только в режиме разработчика, как в Discord.
+        .filter(i => i.k !== 'copyid' || devMode()).map(i => (
         <div key={i.k} className={'ctxmenu-item' + ((i as any).danger ? ' danger' : '')}
           onClick={() => { onAction(i.k); onClose() }}>
           <span className="ctxmenu-ic"><Icon name={i.k === 'mute' && muted ? 'bell' : i.icon} size={16} /></span>{i.k === 'mute' ? (muted ? 'Включить уведомления' : 'Заглушить сервер') : i.label}

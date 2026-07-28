@@ -21,6 +21,7 @@ interface FriendRow { id: string; name: string; handle?: string | null; avatar?:
 export function InviteModal({ server, channelName, meId, meName, onClose }:
   { server: Server; channelName?: string | null; meId: string; meName: string; onClose: () => void }) {
   const [q, setQ] = useState('')
+  const inviteBg: string | null = ((server as any).settings ?? {}).invite_bg ?? null
   const [friends, setFriends] = useState<FriendRow[]>([])
   const [sent, setSent] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState<Record<string, boolean>>({})
@@ -98,7 +99,11 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
       const onlineCnt = Math.max(allIds.filter(id => (online as any)[id] && (online as any)[id].status !== 'offline').length, 1)
       const meta = {
         ic: (server as any).avatar_url ?? null,
-        bn: st.banner_url ?? null,
+        // v1.332.0: «Фон приглашения» из настроек сервера. Картинку загружали, она
+        // сохранялась в settings.invite_bg — и не показывалась нигде: карточка
+        // приглашения брала только баннер сервера. Теперь как задумано: если фон
+        // приглашения задан, он и идёт на карточку, иначе прежний баннер.
+        bn: st.invite_bg ?? st.banner_url ?? null,
         d: st.description ?? null,
         m: Math.max(allIds.length, onlineCnt),
         o: onlineCnt,
@@ -125,6 +130,7 @@ export function InviteModal({ server, channelName, meId, meName, onClose }:
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal inv-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={16} /></button>
+        {inviteBg && <div className="inv-bg" style={{ backgroundImage: `url(${inviteBg})` }} />}
         <div className="modal-title inv-title">Пригласить друзей в {server.name}</div>
         {chName && <div className="inv-sub"><Icon name="hash" size={14} /> Участники окажутся в <b>{chName}</b></div>}
         <div className="inv-search">

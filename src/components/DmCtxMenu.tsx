@@ -8,6 +8,7 @@ import {
   getUserPrefs, patchUserPrefs, friendNickOf, setFriendNick, setDmRead, closeDm,
 } from '../lib/userPrefs'
 import { clearBadgeKey } from '../lib/badge'
+import { devMode } from '../lib/settings'
 import { blockUser } from '../lib/block'
 import { createInvite } from '../lib/servers'
 import { openThread } from '../lib/friends'
@@ -159,9 +160,11 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
         ) : (
           <div className="ctx-item" onClick={() => mute(null)}><span>Включить уведомления</span><Icon name="bell" size={14} /></div>
         )}
-        <div className="ctx-sep" />
-        <div className="ctx-item" onClick={copyUserId}><span>Копировать ID пользователя</span><span className="ctx-idbadge">ID</span></div>
-        <div className="ctx-item" onClick={copyThreadId}><span>Копировать ID канала</span><span className="ctx-idbadge">ID</span></div>
+        {devMode() && <>
+          <div className="ctx-sep" />
+          <div className="ctx-item" onClick={copyUserId}><span>Копировать ID пользователя</span><span className="ctx-idbadge">ID</span></div>
+          <div className="ctx-item" onClick={copyThreadId}><span>Копировать ID канала</span><span className="ctx-idbadge">ID</span></div>
+        </>}
       </div>
     </>
   )

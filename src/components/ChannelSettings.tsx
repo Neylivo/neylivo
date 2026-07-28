@@ -317,10 +317,14 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
               {bubble(limit, 0, 99, limit === 0 ? '∞' : limit + ' ' + plural(limit, 'пользователь', 'пользователя', 'пользователей'))}
               <input type="range" className="cset-slider" min={0} max={99} value={limit} onChange={e => { setLimit(Number(e.target.value)); setDirty(true) }} />
             </div>
-            <div className="cset-hint">Ограничивает количество пользователей, которые могут подключаться к этому голосовому каналу. Пользователи с правом на <b>перемещение участников</b> могут игнорировать это ограничение и перемещать других пользователей в канал.</div>
+            <div className="cset-hint">Ограничивает количество пользователей, которые могут подключаться к этому голосовому каналу. Пользователи с правом <b>управлять каналами</b> заходят в заполненный канал всё равно.</div>
             <label className="cset-lbl">Назначение региона</label>
-            <select className="modal-in" value={region} onChange={e => { setRegion(e.target.value); setDirty(true) }}>{REGIONS.map(o => <option key={o}>{o}</option>)}</select>
-            <div className="cset-hint">Для всех пользователей канала независимо от их местонахождения будет предпринята попытка подключения к указанному вами региону. От региона может зависеть качество видео и звука.</div>
+            {/* v1.332.0: выбор региона сохранялся и не читался нигде — и читаться
+                ему неоткуда: сервер связи у Ponoi ровно один, выбирать не из чего.
+                Оставляем на виду, но честно выключенным: обещать выбор, которого
+                нет, — то же самое, что оставить кнопку-обманку. */}
+            <select className="modal-in" value={region} disabled title="Сервер связи один — выбирать не из чего">{REGIONS.map(o => <option key={o}>{o}</option>)}</select>
+            <div className="cset-hint">Сервер связи у Ponoi один, поэтому выбирать регион не из чего — все подключаются к нему. Настройка появится, когда серверов станет несколько.</div>
           </>}
         </>}
         {tab === 'perms' && <>
