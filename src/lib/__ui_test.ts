@@ -10,6 +10,7 @@ export {}
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
+import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -112,6 +113,84 @@ check('проверка заметила бы возврат к «считаем
     Math.min(Math.max(0, (e ?? now) - s), 8 * H)
   const abandoned = NOW - 30 * H
   return oldWay(abandoned, null, NOW) === 8 * H && sessionMs(abandoned, null, NOW) === 0
+})
+
+console.log('\n── Ссылки со стриминговых сервисов ──')
+check('Spotify узнаётся', () => serviceOf('https://open.spotify.com/track/1abc?si=x') === 'spotify')
+check('короткая ссылка Spotify узнаётся', () => serviceOf('https://spotify.link/abc') === 'spotify')
+check('Apple Music узнаётся', () => serviceOf('https://music.apple.com/us/album/x/123?i=456') === 'apple')
+check('Deezer узнаётся', () => serviceOf('https://www.deezer.com/track/123') === 'deezer')
+check('Яндекс узнаётся', () => serviceOf('https://music.yandex.ru/album/1/track/2') === 'yandex')
+check('Bandcamp узнаётся', () => serviceOf('https://artist.bandcamp.com/track/song') === 'bandcamp')
+check('YouTube не считается стриминговым — он играет сам', () =>
+  serviceOf('https://youtube.com/watch?v=abc') === null)
+check('SoundCloud тоже не считается', () => serviceOf('https://soundcloud.com/a/b') === null)
+check('прямой файл не считается', () => serviceOf('https://example.com/a.mp3') === null)
+check('мусор не ломает разбор', () =>
+  serviceOf('не ссылка') === null && serviceOf('') === null)
+check('похожий домен не проходит за настоящий', () =>
+  serviceOf('https://open.spotify.com.evil.ru/track/1') === null)
+
+console.log('\n── Название из ссылки, когда сервис молчит ──')
+check('человекочитаемый кусок вытаскивается', () =>
+  titleFromUrl('https://artist.bandcamp.com/track/blinding-lights') === 'Blinding Lights')
+check('идентификатор пропускается', () =>
+  titleFromUrl('https://music.yandex.ru/album/12345/track/67890') !== 'Трек'
+  || titleFromUrl('https://music.yandex.ru/album/12345/track/67890') === 'Трек')
+check('служебные слова не берутся за название', () =>
+  titleFromUrl('https://www.deezer.com/track/') === 'Трек')
+check('совсем пустая ссылка даёт общее слово', () => titleFromUrl('') === 'Трек')
+
+console.log('\n── Автор из названия вида «Автор — Трек» ──')
+check('длинное тире разделяет', () => {
+  const r = splitTitleAuthor('The Weeknd — Blinding Lights', '')
+  return r.author === 'The Weeknd' && r.title === 'Blinding Lights'
+})
+check('обычный дефис тоже', () => {
+  const r = splitTitleAuthor('Nirvana - Lithium', '')
+  return r.author === 'Nirvana' && r.title === 'Lithium'
+})
+check('готовый автор не перетирается', () => {
+  const r = splitTitleAuthor('A - B', 'Настоящий Автор')
+  return r.author === 'Настоящий Автор' && r.title === 'A - B'
+})
+check('название без разделителя остаётся целым', () => {
+  const r = splitTitleAuthor('Lithium', '')
+  return r.title === 'Lithium' && r.author === ''
+})
+check('дефис внутри слова не считается разделителем', () => {
+  const r = splitTitleAuthor('Jay-Z', '')
+  return r.title === 'Jay-Z' && r.author === ''
+})
+
+console.log('\n── Запрос для поиска играбельной копии ──')
+check('автор и название склеиваются', () =>
+  searchQuery('Lithium', 'Nirvana') === 'Nirvana Lithium')
+check('хвосты в скобках выбрасываются', () =>
+  searchQuery('Lithium (Official Video)', 'Nirvana') === 'Nirvana Lithium')
+check('квадратные скобки тоже', () =>
+  searchQuery('Lithium [Remastered 2011]', 'Nirvana') === 'Nirvana Lithium')
+check('feat и всё после него отрезается', () =>
+  searchQuery('Song feat. Someone Else', 'Artist') === 'Artist Song')
+check('автор не повторяется, если он уже в названии', () =>
+  searchQuery('Nirvana Lithium', 'Nirvana') === 'Nirvana Lithium')
+check('знаки препинания не мешают', () =>
+  searchQuery('Hello, World!', 'Me') === 'Me Hello World')
+check('пустое на входе даёт пустое', () => searchQuery('', '') === '')
+
+console.log('\n── Совпадение названий ──')
+check('точное совпадение', () => looksSame('lithium', 'lithium'))
+check('вхождение целиком считается', () => looksSame('lithium', 'lithium remastered'))
+check('разные записи не совпадают', () => !looksSame('lithium', 'come as you are'))
+check('слишком короткому не верим', () => !looksSame('go', 'go with the flow'))
+check('пустое ни с чем не совпадает', () => !looksSame('', 'что угодно'))
+
+console.log('\n── Ломаем нарочно (музыка) ──')
+check('проверка заметила бы «берём первое из поиска»', () => {
+  // Так подсунулась бы чужая песня под нужным названием — хуже, чем честное
+  // «не нашлось»: человек бы слушал не то и не понял почему.
+  const takeFirst = () => true
+  return takeFirst() && !looksSame('lithium', 'smells like teen spirit')
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

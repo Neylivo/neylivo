@@ -12,6 +12,8 @@ import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
 import { isSoundcloudUrl, scMeta, scResolveTracks, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
+import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
+import { openSafely } from '../lib/safeUrl'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 
@@ -78,8 +80,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const scPlayUrl = curSc && cur ? (curMeta?.play || cur.play || cur.url) : ''
   // YouTube: id видео прямо из ссылки.
   const ytId = curYt && cur ? (parseYouTubeId(cur.url) || '') : ''
+  // v1.367.0: трек со стримингового сервиса, для которого играбельной копии не
+  // нашлось. Сам адрес отдавать <audio> нельзя — это страница, а не звук: тег
+  // молча не заиграет, и человек будет думать, что сломался плеер. Показываем
+  // карточку и кнопку открыть в сервисе.
+  const curPlayable = (curMeta?.play || cur?.play) ?? null
+  const curStreamOnly = !!cur && !curSc && !curYt && !curPlayable && isStreamingUrl(cur.url)
+  const curSvc = cur ? serviceOf(cur.url) : null
   // Обычный <audio>: для Audius-ссылок подставляем прямой stream-URL из resolve.
-  const audioSrc = cur && !curSc && !curYt ? (curMeta?.play || cur.play || cur.url) : undefined
+  const audioSrc = cur && !curSc && !curYt && !curStreamOnly ? (curPlayable || cur.url) : undefined
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
     '--mus-a': rgb(acc),
@@ -403,6 +412,42 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       finally { setImporting('') }
       return
     }
+    // v1.367.0: ссылка со стримингового сервиса (Spotify, Apple Music, Deezer,
+    // Яндекс, Bandcamp). Полный трек оттуда сторонним приложением не играется —
+    // он отдаётся только их собственным проигрывателем и только подписчику.
+    // Поэтому берём название с обложкой и ищем ту же запись там, где её можно
+    // играть целиком. Не нашли — трек всё равно сохраняется карточкой, а не
+    // пропадает: у него есть обложка, автор и кнопка открыть в сервисе.
+    const svc = serviceOf(url)
+    if (svc) {
+      setImporting('Читаю ' + SERVICE_NAME[svc] + '…')
+      try {
+        const sm = await streamingMeta(url)
+        if (tracks.some(x => x.url === url)) { toastErr('Этот трек уже есть в трекотеке'); return }
+        setImporting('Ищу, где это можно послушать…')
+        const found = await findPlayable(sm?.title ?? titleFromUrl(url), sm?.author ?? '')
+        const meta2 = {
+          title: sm?.title ?? titleFromUrl(url),
+          author: sm?.author ?? SERVICE_NAME[svc],
+          art: sm?.art ?? found?.art ?? null,
+          play: found?.play ?? null,
+        }
+        setMeta(prev => ({ ...prev, [url]: meta2 }))
+        await addTrack({
+          url, name: meta2.title, ownerId: meId, ownerName: me, kind: 'url',
+          author: meta2.author, art: meta2.art, play: meta2.play,
+        })
+        setScUrl('')
+        setTracks(await fetchTracks())
+        toastOk(found
+          ? 'Трек добавлен и играет целиком'
+          : `«${meta2.title}» добавлен. ${SERVICE_NAME[svc]} не даёт играть свои треки снаружи, а копии в открытых каталогах не нашлось — карточка откроется в сервисе`)
+      } catch (err: any) {
+        toastErr(err?.message ?? String(err))
+      } finally { setImporting('') }
+      return
+    }
+
     // Остальные источники: YouTube / Audius / прямой аудио-файл по ссылке.
     const m = isYouTubeUrl(url) ? await ytMeta(url) : isAudiusUrl(url) ? await audiusMeta(url) : null
     if (!m && isAudiusUrl(url)) { toastErr('Не удалось прочитать ссылку Audius — проверь её'); return }
@@ -491,7 +536,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
 
           <div className="mus2-addrow">
-            <input className="mus2-in" placeholder="Ссылка: SoundCloud, YouTube, Audius или .mp3…" value={scUrl}
+            <input className="mus2-in" placeholder="Ссылка: Spotify, YouTube, SoundCloud, Apple Music, Deezer, Bandcamp, .mp3…" value={scUrl}
               onChange={e => setScUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addSoundcloud() }} />
             <button className="mus2-addbtn" onClick={addSoundcloud} disabled={!!importing}>{importing ? '…' : 'Добавить'}</button>
           </div>
@@ -546,6 +591,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             {curArt && <div className="mus2-artglow" style={{ backgroundImage: `url(${curArt})` }} />}
             <div className={'mus2-vinyl' + (playing ? ' spin' : '')}>{curArt && <img src={curArt} alt="" />}</div>
             <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
+            {/* v1.367.0: честная табличка вместо молчащего плеера. Сервис не даёт
+                играть свои треки снаружи, копии не нашлось — так и говорим. */}
+            {curStreamOnly && curSvc && <div className="mus2-extonly">
+              <div className="mus2-extonly-t">{SERVICE_NAME[curSvc]} не даёт играть свои треки снаружи</div>
+              <div className="mus2-extonly-d">Копии в открытых каталогах не нашлось. Обложка и название — здесь, сам трек — там.</div>
+              <button className="pqs2-btn" onClick={() => openSafely(cur.url)}>
+                <Icon name="external" size={15} /> Открыть в {SERVICE_NAME[curSvc]}
+              </button>
+            </div>}
           </div>
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>

@@ -1633,3 +1633,17 @@ Object.assign(DICT_EN, {
   'Нажмите ещё раз — открыть канал': 'Click again to open the channel',
 })
 REGEX_EN.push([/^Смотреть демонстрацию (.+)$/, 'Watch $1’s screen share'])
+
+// v1.367.0: ссылки со стриминговых сервисов в Ponoi Music.
+Object.assign(DICT_EN, {
+  'Ссылка: Spotify, YouTube, SoundCloud, Apple Music, Deezer, Bandcamp, .mp3…':
+    'Link: Spotify, YouTube, SoundCloud, Apple Music, Deezer, Bandcamp, .mp3…',
+  'Ищу, где это можно послушать…': 'Looking for somewhere to play it…',
+  'Трек добавлен и играет целиком': 'Track added and plays in full',
+  'Копии в открытых каталогах не нашлось. Обложка и название — здесь, сам трек — там.':
+    'No copy found in open catalogues. Cover and title are here, the track itself is there.',
+  'Этот трек уже есть в трекотеке': 'This track is already in your library',
+})
+REGEX_EN.push([/^Читаю (.+)…$/, 'Reading $1…'])
+REGEX_EN.push([/^(.+) не даёт играть свои треки снаружи$/, '$1 does not allow playing its tracks outside'])
+REGEX_EN.push([/^Открыть в (.+)$/, 'Open in $1'])
