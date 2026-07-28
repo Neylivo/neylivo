@@ -90,6 +90,7 @@ const UGC_CLASSES = [
   // v1.371.0: карточка трека в трекотеке — название и исполнитель приходят из
   // чужой записи, переводить их нельзя.
   'mus2-card-t', 'mus2-card-a',
+  'mus2-up-t',        // название трека в ленте «дальше»
 ]
 const SKIP_SEL = ['.msgs', 'pre', 'code', '.emoji-scroll', '.pqs-code-val', '.notr', '[translate="no"]']
   .concat(UGC_CLASSES.map(c => '.' + c)).join(', ')

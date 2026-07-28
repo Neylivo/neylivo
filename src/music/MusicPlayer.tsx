@@ -146,6 +146,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Esc закрывает трекотеку — как любое другое окно приложения.
+  useEffect(() => {
+    if (!showLib) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setShowLib(false) } }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [showLib])
+
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
 
   // ---- Авто-активность «Слушает…» (как Spotify-статус в Discord) ----
@@ -552,6 +560,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) }
       return
     }
+    // v1.374.0: то, что поставили в очередь руками, идёт вперёд обычного порядка
+    // — иначе кнопка «в очередь» была бы обещанием, которое исполнится нескоро.
+    const first = manualLive.find(id => tracks.some(t => t.id === id))
+    if (first) {
+      const i = tracks.findIndex(t => t.id === first)
+      if (i >= 0) { saveManual(manual.filter(x => x !== first)); setIdx(i); return }
+    }
     setIdx(i => {
       if (shuffle && tracks.length > 1) { let n = i; while (n === i) n = Math.floor(Math.random() * tracks.length); return n }
       const n = i + 1
@@ -588,6 +603,70 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const showLeft = gif.url && (gif.pos === 'left' || gif.pos === 'both')
   const showRight = gif.url && (gif.pos === 'right' || gif.pos === 'both')
   const filteredQueue = qFilter ? tracks.filter(t => t.name.toLowerCase().includes(qFilter.toLowerCase())) : tracks
+
+  // ── Очередь: что заиграет дальше (v1.374.0) ──────────────────────────────
+  //
+  // Раньше «очередь» и «трекотека» были одним и тем же списком, и панель
+  // показывала весь склад целиком. У Spotify это разные вещи, и не из вредности:
+  // очередь отвечает на вопрос «что сейчас будет», а склад — «что у меня есть».
+  // Смешивать их значит не отвечать ни на один.
+  //
+  // Ручная очередь — то, что человек поставил кнопкой «в очередь»: играет сразу
+  // после текущего, вперёд обычного порядка. Дальше идёт обычный порядок склада.
+  const MANUAL_KEY = 'ponoi_mus_queue_v1'
+  const [manual, setManual] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(MANUAL_KEY) || '[]') } catch { return [] }
+  })
+  const saveManual = (v: string[]) => {
+    setManual(v)
+    try { localStorage.setItem(MANUAL_KEY, JSON.stringify(v)) } catch { /* переполнено — переживём */ }
+  }
+  // Треки могли удалить из трекотеки, пока они стояли в очереди.
+  const manualLive = manual.filter(id => tracks.some(t => t.id === id))
+
+  /** Сколько ближайших показываем лентой. Больше не нужно: это подсказка, не список. */
+  const UP_NEXT_SHOWN = 8
+
+  const upNextAll = (() => {
+    const out: { t: typeof tracks[number]; i: number; manual: boolean }[] = []
+    const seen = new Set<string>()
+    for (const id of manualLive) {
+      const i = tracks.findIndex(t => t.id === id)
+      if (i < 0 || i === idx || seen.has(id)) continue
+      seen.add(id)
+      out.push({ t: tracks[i], i, manual: true })
+    }
+    // Дальше — обычный порядок склада после текущего. При повторе всего списка
+    // он закольцовывается, иначе просто заканчивается.
+    for (let k = 1; k <= tracks.length; k++) {
+      const i = repeat === 'all' ? (idx + k) % tracks.length : idx + k
+      if (i >= tracks.length || i < 0) break
+      const t = tracks[i]
+      if (!t || seen.has(t.id)) continue
+      seen.add(t.id)
+      out.push({ t, i, manual: false })
+    }
+    return out
+  })()
+  const upNext = upNextAll.slice(0, UP_NEXT_SHOWN)
+  const moreAfter = Math.max(0, upNextAll.length - upNext.length)
+
+  /** Поставить трек следующим. Уже стоящий — переставляем, а не задваиваем. */
+  function queueNext(id: string) {
+    saveManual([id, ...manual.filter(x => x !== id)])
+    toastOk('Заиграет следующим')
+  }
+  /** Убрать из ручной очереди. Обычный порядок склада так не выкинуть — это не очередь. */
+  function dropFromQueue(id: string) {
+    if (!manual.includes(id)) { toastOk('Этот трек идёт по порядку — убрать можно только из трекотеки'); return }
+    saveManual(manual.filter(x => x !== id))
+  }
+  /** Перейти к треку и снять его с ручной очереди: он уже играет, ждать нечего. */
+  function playAt(i: number) {
+    const t = tracks[i]
+    if (t && manual.includes(t.id)) saveManual(manual.filter(x => x !== t.id))
+    setIdx(i)
+  }
 
   return (<>
     <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '') + (full ? ' full' : '') + (visible ? '' : ' mus2-hidden')} style={musStyle}>
@@ -629,26 +708,48 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
 
           {tab === 'queue' ? <>
-            <div className="mus2-sec">ТЕКУЩАЯ ОЧЕРЕДЬ <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button></div>
-            <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
-            <div className="mus2-list">
-              {filteredQueue.length === 0 && <div className="mus2-empty">Пусто. Вставь ссылку — SoundCloud, YouTube, Audius или прямой .mp3.</div>}
-              {filteredQueue.map((t) => {
-                const i = tracks.indexOf(t)
-                return (
-                  <div key={t.id} className={'mus2-li' + (i === idx ? ' on' : '')} onClick={() => { setIdx(i); setPlaying(true) }}>
-                    <span className="mus2-li-art">{(meta[t.url]?.art || t.art) ? <img src={(meta[t.url]?.art || t.art) as string} alt="" /> : <Icon name="music" size={13} />}</span>
-                    <span className="mus2-li-n">
-                      <span className="mus2-li-t">{i === idx && playing ? <Icon name="music" size={13} className="mus2-playing-ic" /> : null}{meta[t.url]?.title || t.name}</span>
-                      {(meta[t.url]?.author || t.author) ? <span className="mus2-li-a">{meta[t.url]?.author || t.author}</span> : null}
-                    </span>
-                    {t.dur ? <span className="mus2-li-d">{fmt(t.dur)}</span> : null}
-                    <span className="mus2-li-add" title="В плейлист" onClick={e => { e.stopPropagation(); addToPlaylist(t.id) }}><Icon name="plus" size={14} /></span>
-                    <span className="mus2-li-del" title="Убрать" onClick={e => { e.stopPropagation(); removeTrack(t.id) }}><Icon name="close" size={13} /></span>
-                  </div>
-                )
-              })}
+            {/* v1.374.0: очередь — это то, что заиграет ДАЛЬШЕ, а не весь склад.
+                Раньше сюда вываливалась вся трекотека целиком: с сотней треков
+                список занимал пол-экрана, а прокрутить его до нужного было
+                дольше, чем найти трек в самой трекотеке.
+
+                Показываем ближайшие несколько лентой вбок — она занимает одну
+                строку вместо половины панели, и по ней видно, что будет, не
+                листая ничего. Весь склад живёт в трекотеке, отдельной кнопкой. */}
+            <div className="mus2-sec">
+              ДАЛЬШЕ В ОЧЕРЕДИ
+              <span className="mus2-qn">{upNext.length > 0 ? upNext.length : ''}</span>
+              <button className="mus2-filebtn" title="Добавить файлы" onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button>
             </div>
+            <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
+
+            {upNext.length === 0
+              ? <div className="mus2-empty">{tracks.length === 0
+                  ? 'Пусто. Вставь ссылку — Spotify, YouTube, SoundCloud или прямой .mp3.'
+                  : 'Это последний трек. Открой трекотеку и выбери, что дальше.'}</div>
+              : <div className="mus2-upnext">
+                  {upNext.map(({ t, i, manual }) => {
+                    const art = meta[t.url]?.art || t.art
+                    return (
+                      <div key={'q' + t.id} className={'mus2-up' + (manual ? ' manual' : '')}
+                        title={(meta[t.url]?.title || t.name) + (manual ? ' · добавлен в очередь вручную' : '')}
+                        onClick={() => { playAt(i); setPlaying(true) }}>
+                        <div className="mus2-up-art">
+                          {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={18} />}
+                          {manual && <span className="mus2-up-mark" title="Добавлен вручную"><Icon name="plus" size={10} /></span>}
+                          <button className="mus2-up-x" title="Убрать из очереди"
+                            onClick={e => { e.stopPropagation(); dropFromQueue(t.id) }}><Icon name="close" size={11} /></button>
+                        </div>
+                        <div className="mus2-up-t notr" translate="no">{meta[t.url]?.title || t.name}</div>
+                      </div>
+                    )
+                  })}
+                  {moreAfter > 0 && <div className="mus2-up mus2-up-more" title="Открыть трекотеку"
+                    onClick={() => setShowLib(true)}>
+                    <div className="mus2-up-art"><span className="mus2-up-morecnt">+{moreAfter}</span></div>
+                    <div className="mus2-up-t">ещё</div>
+                  </div>}
+                </div>}
           </> : <>
             <div className="mus2-sec">ПЛЕЙЛИСТЫ</div>
             <div className="mus2-list">
@@ -727,6 +828,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
       </footer>
 
+      {/* v1.374.0: трекотека — отдельное меню поверх приложения, а не выдвижная
+          часть плеера. Это разные дела: плеер отвечает «что играет», трекотека —
+          «что у меня есть», и склад на сотню записей не должен ютиться в узкой
+          колонке рядом с обложкой. */}
       {showLib && <div className="mus2-lib" onClick={() => setShowLib(false)}>
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
@@ -766,14 +871,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     return (
                       <div key={t.id} className={'mus2-card' + (on ? ' on' : '')}
                         title={title + (author ? ' — ' + author : '')}
-                        onClick={() => { setIdx(i); setPlaying(true); setShowLib(false) }}>
+                        onClick={() => { playAt(i); setPlaying(true); setShowLib(false) }}>
                         <div className="mus2-card-art">
                           {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={34} />}
                           {/* Кнопка появляется на наведении и по фокусу — до неё
                               можно дойти и с клавиатуры, а не только мышью. */}
                           <button className="mus2-card-play" tabIndex={-1} aria-hidden
-                            onClick={e => { e.stopPropagation(); setIdx(i); setPlaying(true); setShowLib(false) }}>
+                            onClick={e => { e.stopPropagation(); playAt(i); setPlaying(true); setShowLib(false) }}>
                             <Icon name={on && playing ? 'pause' : 'play'} size={18} />
+                          </button>
+                          {/* v1.374.0: поставить в очередь, не бросая то, что играет. */}
+                          <button className="mus2-card-q" title="Поставить следующим"
+                            onClick={e => { e.stopPropagation(); queueNext(t.id) }}>
+                            <Icon name="plus" size={15} />
                           </button>
                           {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
                         </div>

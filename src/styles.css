@@ -5373,3 +5373,61 @@ body.no-anim .mus2-card, body.no-anim .mus2-card-play { transition: none; }
   .mus2-card { padding: 9px; }
   .mus2-card-play { width: 34px; height: 34px; }
 }
+
+/* ══ Очередь лентой вбок (v1.374.0) ════════════════════════════════════════
+   Раньше в «очередь» вываливалась вся трекотека вертикальным списком: с сотней
+   треков он занимал пол-панели, а прокрутить его до нужного было дольше, чем
+   найти трек в самой трекотеке. Очередь отвечает на вопрос «что сейчас будет» —
+   для этого хватает одной строки карточек. Склад живёт в трекотеке. */
+.mus2-upnext {
+  display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden;
+  padding: 2px 12px 10px; scrollbar-width: thin;
+}
+.mus2-up { flex: none; width: 72px; cursor: pointer; }
+.mus2-up-art {
+  position: relative; width: 72px; height: 72px; border-radius: var(--r-md, 10px);
+  overflow: hidden; background: var(--bg3); color: var(--mut);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+  transition: transform .18s var(--ease-out4, ease);
+}
+.mus2-up:hover .mus2-up-art { transform: translateY(-2px); }
+.mus2-up-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Поставленное вручную видно сразу — иначе непонятно, почему порядок не по списку. */
+.mus2-up.manual .mus2-up-art { box-shadow: 0 0 0 2px var(--brand), 0 4px 12px rgba(0, 0, 0, .35); }
+.mus2-up-mark {
+  position: absolute; left: 4px; top: 4px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center;
+}
+.mus2-up-x {
+  position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%;
+  border: none; cursor: pointer; background: rgba(0, 0, 0, .68); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s ease;
+}
+.mus2-up:hover .mus2-up-x { opacity: 1; }
+.mus2-up-t {
+  margin-top: 5px; font-size: 11.5px; line-height: 1.3; color: var(--mut);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mus2-up-more .mus2-up-art { background: rgba(var(--ov, 255,255,255), .06); }
+.mus2-up-morecnt { font-size: 15px; font-weight: 700; color: var(--tx); }
+.mus2-qn {
+  margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  background: rgba(var(--ov, 255,255,255), .1); font-size: 11px; font-weight: 700; color: var(--mut);
+}
+
+/* Кнопка «в очередь» на карточке трекотеки — рядом с воспроизведением. */
+.mus2-card-q {
+  position: absolute; right: 8px; bottom: 56px;
+  width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .68); color: #fff;
+  opacity: 0; transform: translateY(6px);
+  transition: opacity .18s var(--ease-out4, ease), transform .18s var(--ease-out4, ease);
+}
+.mus2-card:hover .mus2-card-q, .mus2-card:focus-within .mus2-card-q { opacity: 1; transform: translateY(0); }
+.mus2-card-q:hover { background: var(--brand); }
+
+body.no-anim .mus2-up-art, body.no-anim .mus2-card-q, body.no-anim .mus2-up-x { transition: none; }

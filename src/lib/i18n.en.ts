@@ -1679,3 +1679,20 @@ Object.assign(DICT_EN, {
 })
 REGEX_EN.push([/^Уже были в трекотеке: (\d+)$/, 'Already in the library: $1'])
 REGEX_EN.push([/^Добавлено треков: (\d+), уже были: (\d+)$/, 'Tracks added: $1, already there: $2'])
+
+// v1.374.0: очередь отдельно от трекотеки.
+Object.assign(DICT_EN, {
+  'ДАЛЬШЕ В ОЧЕРЕДИ': 'UP NEXT',
+  'Поставить следующим': 'Add to queue',
+  'Заиграет следующим': 'Playing next',
+  'Убрать из очереди': 'Remove from queue',
+  'Добавлен вручную': 'Added manually',
+  'Это последний трек. Открой трекотеку и выбери, что дальше.':
+    'This is the last track. Open the library and pick what plays next.',
+  'Этот трек идёт по порядку — убрать можно только из трекотеки':
+    'This track is up in order — it can only be removed from the library',
+  'Пусто. Вставь ссылку — Spotify, YouTube, SoundCloud или прямой .mp3.':
+    'Empty. Paste a link — Spotify, YouTube, SoundCloud or a direct .mp3.',
+  'Открыть трекотеку': 'Open library',
+  'ещё': 'more',
+})
