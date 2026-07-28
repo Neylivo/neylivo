@@ -1647,3 +1647,9 @@ Object.assign(DICT_EN, {
 REGEX_EN.push([/^Читаю (.+)…$/, 'Reading $1…'])
 REGEX_EN.push([/^(.+) не даёт играть свои треки снаружи$/, '$1 does not allow playing its tracks outside'])
 REGEX_EN.push([/^Открыть в (.+)$/, 'Open in $1'])
+
+// v1.369.0: предупреждение о ненакаченной миграции музыки.
+Object.assign(DICT_EN, {
+  'Обложки и ссылки треков не сохраняются: примени миграцию supabase/22_music_meta.sql':
+    'Track covers and links are not being saved: apply the supabase/22_music_meta.sql migration',
+})

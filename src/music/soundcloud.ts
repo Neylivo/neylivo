@@ -11,8 +11,25 @@ function loadCache(): Record<string, ScMeta> {
 const cache = loadCache()
 function saveCache() { try { localStorage.setItem(META_KEY, JSON.stringify(cache)) } catch {} }
 
+/**
+ * Ссылка на SoundCloud (v1.369.0 — переписано).
+ *
+ * Что было не так. Проверка гоняла регулярку `(^|\.)soundcloud\.com/` по всей
+ * строке: перед доменом требовалась точка или начало строки. У обычной ссылки
+ * `https://soundcloud.com/автор/трек` перед доменом стоит `//` — ни то, ни
+ * другое. То есть самый частый вид ссылки не опознавался вовсе: он проваливался
+ * в ветку «прочие источники», сохранялся голым адресом без обложки, без автора
+ * и без ссылки воспроизведения. Работали только `www.soundcloud.com` (там точка
+ * есть) и короткие `on.soundcloud.com`.
+ *
+ * Разбираем адрес как адрес, а не как текст: тогда и поддомены на месте, и
+ * похожий домен `soundcloud.com.evil.ru` за свой не сойдёт.
+ */
 export function isSoundcloudUrl(u: string) {
-  return /(^|\.)soundcloud\.com\//i.test(u) || /^https?:\/\/on\.soundcloud\.com\//i.test(u)
+  try {
+    const h = new URL(u.trim()).hostname.toLowerCase()
+    return h === 'soundcloud.com' || h.endsWith('.soundcloud.com')
+  } catch { return false }
 }
 
 /** Чистим SC-ссылку: убираем query/hash (utm, si и прочий трекинг ломают виджет). */
@@ -20,7 +37,8 @@ export function cleanScUrl(u: string): string {
   let s = u.trim()
   try {
     const url = new URL(s)
-    if (/(^|\.)soundcloud\.com$/i.test(url.hostname)) {
+    const h = url.hostname.toLowerCase()
+    if (h === 'soundcloud.com' || h.endsWith('.soundcloud.com')) {
       url.search = ''
       url.hash = ''
       s = url.toString().replace(/\/$/, '')

@@ -97,6 +97,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     '--mus-bg1': rgb(scale(acc, .16)),
   } as React.CSSProperties) : undefined
 
+  // v1.369.0: в базе нет колонок под обложку и ссылку воспроизведения — тогда
+  // они живут только в кэше этого браузера и «пропадают навсегда» при переходе
+  // на другое устройство. Молчать об этом нельзя: выглядит как поломка плеера.
+  useEffect(() => {
+    const h = () => toastErr('Обложки и ссылки треков не сохраняются: примени миграцию supabase/22_music_meta.sql')
+    window.addEventListener('ponoi-music-nometa', h)
+    return () => window.removeEventListener('ponoi-music-nometa', h)
+  }, [])
+
   function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
 
   // ---- Авто-активность «Слушает…» (как Spotify-статус в Discord) ----
@@ -194,7 +203,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   useEffect(() => {
     let ok = true
     // v1.79.0: тянем метаданные для всего, у чего нет обложки (раньше — только без любых метаданных).
-    const missing = tracks.filter(t => !meta[t.url] && !t.art && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
+    // v1.369.0: добираем и тем, у кого нет ссылки воспроизведения, а не только
+    // обложки: у SoundCloud без неё трек играет через адрес страницы.
+    const missing = tracks.filter(t => !meta[t.url] && (!t.art || !t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
     ;(async () => {
       for (const t of missing) {
@@ -203,7 +214,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         if (m) {
           setMeta(prev => ({ ...prev, [t.url]: m }))
           // v1.79.0: дозаписываем в базу — обложка/название появятся у всех.
-          if (!t.art) updateTrackMeta(t.id, m)
+          // v1.369.0: заодно и ссылку воспроизведения, если её у трека не было:
+          // без неё SoundCloud-трек играет через адрес страницы, что медленнее и
+          // не всегда срабатывает. Пустые поля не перезаписываются (см. metaPatch).
+          if (!t.art || !t.play) updateTrackMeta(t.id, m)
         }
       }
     })()

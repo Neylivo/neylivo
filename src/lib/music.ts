@@ -4,6 +4,7 @@
 // appear for all listeners immediately. Метаданные (автор/обложка/длительность/
 // play-URL) хранятся в базе (22_music_meta.sql) — видны всем и навсегда.
 import { supabase } from './supabase'
+import { metaPatch, type TrackMeta } from './musicMeta'
 import type { Track } from '../music/types'
 
 export async function fetchTracks(): Promise<Track[]> {
@@ -26,6 +27,16 @@ export interface NewTrack {
   author?: string; art?: string | null; dur?: number; play?: string | null
 }
 
+let warnedNoMeta = false
+function warnNoMusicMeta() {
+  if (warnedNoMeta) return
+  warnedNoMeta = true
+  // Через событие, а не импортом тостов: этот модуль зовут и из мест без интерфейса.
+  try {
+    window.dispatchEvent(new CustomEvent('ponoi-music-nometa'))
+  } catch { /* не браузер — молча */ }
+}
+
 export async function addTrack(t: NewTrack) {
   // Полная запись с метаданными (нужна миграция 22_music_meta.sql). Если колонок
   // ещё нет — тихо откатываемся на старый формат, чтобы ничего не сломать.
@@ -40,6 +51,10 @@ export async function addTrack(t: NewTrack) {
     r = await supabase.from('music_tracks')
       .insert({ url: t.url, name: t.name, owner: t.ownerId, owner_name: t.ownerName, kind: t.kind })
       .select().single()
+    // v1.369.0: раньше этот откат был совсем молчаливым, и человек не мог понять,
+    // почему обложка каждый раз пропадает: колонок под неё в базе просто нет, и
+    // она живёт только в кэше этого браузера. Говорим прямо один раз.
+    warnNoMusicMeta()
   }
   return r
 }
@@ -54,10 +69,24 @@ export async function removeTrackDb(id: string) {
 /** Дозапись метаданных трека (v1.79.0): если чей-то клиент смог получить
  *  обложку/автора/play-URL — сохраняем в базу, чтобы видели все и навсегда.
  *  Ошибки (нет колонок из 22_music_meta.sql, нет прав) молча игнорируем. */
-export async function updateTrackMeta(id: string, m: { author?: string; art?: string | null; play?: string | null }) {
+/**
+ * Дозапись метаданных трека (v1.369.0 — переписано).
+ *
+ * Что было не так. Обновление писало ВСЕ три поля разом, подставляя null там,
+ * где нового значения не было. А зовут его в том числе ради одной обложки — и
+ * тогда вместе с ней в базу уезжали `author: null` и `play_url: null`, стирая
+ * рабочую ссылку воспроизведения, добытую раньше. Трек с виду обновлялся, а на
+ * деле переставал играть: обложка появилась, звук пропал.
+ *
+ * Теперь пишем только то, что реально узнали. Нечего писать — запроса нет вовсе.
+ */
+export async function updateTrackMeta(id: string, m: TrackMeta) {
+  const patch = metaPatch(m)
+  if (Object.keys(patch).length === 0) return
   try {
-    await supabase.from('music_tracks').update({
-      author: m.author || null, art: m.art ?? null, play_url: m.play ?? null,
-    }).eq('id', id)
-  } catch {}
+    await supabase.from('music_tracks').update(patch).eq('id', id)
+  } catch { /* колонок нет — см. предупреждение в addTrack */ }
 }
+
+// Правило дозаписи живёт отдельно, без зависимостей — его проверяет npm run test:ui.
+export { metaPatch } from './musicMeta'

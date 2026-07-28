@@ -11,6 +11,8 @@ import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
 import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
+import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
+import { metaPatch } from './musicMeta'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -191,6 +193,70 @@ check('проверка заметила бы «берём первое из п�
   // «не нашлось»: человек бы слушал не то и не понял почему.
   const takeFirst = () => true
   return takeFirst() && !looksSame('lithium', 'smells like teen spirit')
+})
+
+console.log('\n── Ссылка SoundCloud на трек внутри сборника ──')
+// Ровно та ссылка, на которой это заметили: трек, открытый из плейлиста. Хвост
+// ?in=… говорит «этот трек в таком-то сете». Оставить его — и виджет загрузит
+// ВЕСЬ сет вместо одной песни.
+const IN_SET = 'https://soundcloud.com/prodsekmese/tuborosho-shalawa-featmellstroy?in=zexel-336741540/sets/burmalda-fm'
+
+check('это распознаётся как SoundCloud', () => isSoundcloudUrl(IN_SET))
+check('хвост про сборник отрезается', () =>
+  cleanScUrl(IN_SET) === 'https://soundcloud.com/prodsekmese/tuborosho-shalawa-featmellstroy')
+check('трекотека не получит весь сет вместо песни', () =>
+  !cleanScUrl(IN_SET).includes('sets'))
+check('трекинговые хвосты тоже уходят', () =>
+  cleanScUrl('https://soundcloud.com/a/b?si=123&utm_source=x') === 'https://soundcloud.com/a/b')
+check('якорь уходит', () =>
+  cleanScUrl('https://soundcloud.com/a/b#t=30') === 'https://soundcloud.com/a/b')
+check('чистая ссылка не портится', () =>
+  cleanScUrl('https://soundcloud.com/a/b') === 'https://soundcloud.com/a/b')
+check('чужой адрес не трогаем', () =>
+  cleanScUrl('https://example.com/a?b=1') === 'https://example.com/a?b=1')
+check('обычная ссылка без www опознаётся — на этом всё и ломалось', () =>
+  isSoundcloudUrl('https://soundcloud.com/artist/track'))
+check('с www тоже', () => isSoundcloudUrl('https://www.soundcloud.com/a/b'))
+check('короткая ссылка тоже', () => isSoundcloudUrl('https://on.soundcloud.com/abc'))
+check('похожий домен за свой не сойдёт', () =>
+  !isSoundcloudUrl('https://soundcloud.com.evil.ru/a/b'))
+check('чужой сайт не опознаётся', () => !isSoundcloudUrl('https://example.com/soundcloud.com/a'))
+check('две одинаковые ссылки с разными хвостами дают одно и то же', () =>
+  cleanScUrl(IN_SET) === cleanScUrl('https://soundcloud.com/prodsekmese/tuborosho-shalawa-featmellstroy?si=zzz'))
+
+console.log('\n── Дозапись метаданных не должна стирать рабочее ──')
+// Из-за этого трек «обновлялся» и переставал играть: вместе с обложкой в базу
+// уезжали author: null и play_url: null, стирая ссылку, добытую раньше.
+check('одна обложка обновляет только обложку', () => {
+  const p = metaPatch({ art: 'https://i/500.jpg' })
+  return p.art === 'https://i/500.jpg' && !('play_url' in p) && !('author' in p)
+})
+check('пустые поля не попадают в запрос', () => {
+  const p = metaPatch({ art: null, play: null, author: '' })
+  return Object.keys(p).length === 0
+})
+check('всё известное записывается', () => {
+  const p = metaPatch({ art: 'a', play: 'b', author: 'c', dur: 210 })
+  return p.art === 'a' && p.play_url === 'b' && p.author === 'c' && p.duration === 210
+})
+check('нулевая длительность не пишется', () =>
+  !('duration' in metaPatch({ art: 'a', dur: 0 })))
+check('дробная длительность округляется', () =>
+  metaPatch({ dur: 210.7 }).duration === 211)
+
+console.log('\n── Ломаем нарочно (музыка, дозапись) ──')
+check('проверка заметила бы прежнее опознание ссылки', () => {
+  // Ровно та регулярка, что стояла до v1.369.0: перед доменом требовалась точка
+  // или начало строки, а у обычной ссылки там «//». Самый частый вид ссылки не
+  // опознавался вовсе и сохранялся голым адресом.
+  const old = /(^|\.)soundcloud\.com\//i
+  return !old.test('https://soundcloud.com/a/b') && isSoundcloudUrl('https://soundcloud.com/a/b')
+})
+check('проверка заметила бы возврат к «пишем все поля разом»', () => {
+  // Ровно тот запрос, что уходил до v1.369.0.
+  const oldWay = (m: any) => ({ author: m.author || null, art: m.art ?? null, play_url: m.play ?? null })
+  const only = { art: 'https://i/500.jpg' }
+  return oldWay(only).play_url === null && !('play_url' in metaPatch(only))
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
