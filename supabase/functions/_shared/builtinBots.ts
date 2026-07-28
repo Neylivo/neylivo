@@ -57,8 +57,16 @@ export const BUILTIN_BOTS: BuiltinBot[] = [
   },
 ]
 
+/**
+ * Бот с заранее записанными ответами (v1.344.0). В каталоге его нет: это не
+ * готовый бот «от нас», а пустая заготовка, которую человек наполняет сам —
+ * пишет команду и что на неё отвечать. Выполняется тоже здесь, своего сервера
+ * ему не нужно.
+ */
+export const SIMPLE_KIND = 'simple'
+
 export const isBuiltinKind = (k: unknown): k is string =>
-  typeof k === 'string' && BUILTIN_BOTS.some(b => b.kind === k)
+  typeof k === 'string' && (k === SIMPLE_KIND || BUILTIN_BOTS.some(b => b.kind === k))
 
 export const builtinBot = (kind: string): BuiltinBot | undefined =>
   BUILTIN_BOTS.find(b => b.kind === kind)
@@ -81,9 +89,21 @@ const BALL = [
  *   сообщений того же канала, где команду и позвали.
  */
 export async function runBuiltinCommand(
-  kind: string, command: string, arg: string, channelId: string, db: any,
+  kind: string, command: string, arg: string, channelId: string, db: any, appId?: string,
 ): Promise<string | null> {
   const a = String(arg ?? '').trim()
+
+  // Ответ такого бота лежит в его же команде — там, куда владелец его вписал.
+  if (kind === SIMPLE_KIND) {
+    if (!appId) return null
+    const { data } = await db.from('bot_commands')
+      .select('reply').eq('bot_app_id', appId).eq('name', command).maybeSingle()
+    const reply = (data as any)?.reply
+    if (!reply) return null
+    // {текст} — то, что человек дописал после команды. Больше никакой подстановки:
+    // всё остальное пусть остаётся ровно тем, что владелец написал.
+    return String(reply).replace(/\{текст\}/g, a).slice(0, 2000)
+  }
   switch (kind + ':' + command) {
     case 'dice:кубик': {
       const sides = Math.min(1000, Math.max(2, parseInt(a || '6', 10) || 6))

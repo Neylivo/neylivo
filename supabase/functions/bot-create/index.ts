@@ -8,7 +8,7 @@
 // FK на auth.users, обойти нельзя), profiles.is_bot=true, генерирует токен
 // (виден только сейчас, дальше храним лишь его sha256).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { builtinBot, isBuiltinKind } from '../_shared/builtinBots.ts'
+import { builtinBot, isBuiltinKind, SIMPLE_KIND } from '../_shared/builtinBots.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +36,8 @@ Deno.serve(async (req) => {
     // «Кубик» у всех одинаково.
     const kind = builtin != null ? String(builtin) : ''
     if (kind && !isBuiltinKind(kind)) return json({ error: 'unknown builtin bot' }, 400)
-    const preset = kind ? builtinBot(kind)! : null
+    // У 'simple' готового набора нет: имя и команды задаёт сам человек.
+    const preset = kind && kind !== SIMPLE_KIND ? builtinBot(kind)! : null
     const botName = preset ? preset.name : String(name ?? '').trim()
     if (!botName) return json({ error: 'name required' }, 400)
 

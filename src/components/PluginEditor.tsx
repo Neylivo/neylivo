@@ -12,6 +12,7 @@ import { publishPlugin, shorten, SUMMARY_MAX } from '../lib/catalog'
 import {
   TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify, type Draft,
 } from '../lib/plugins/editorDraft'
+import { RECIPES, recipeDefaults, recipeReady, type Recipe } from '../lib/plugins/recipes'
 
 // v1.336.0: конструктор плагина.
 //
@@ -40,6 +41,26 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     return draftFromTemplate(TEMPLATES[0])
   })
   const [tpl, setTpl] = useState(existing ? '' : 'command')
+  // v1.344.0: два режима. «Без кода» — выбрал, что делать, заполнил пару полей
+  // обычными словами, код собрался сам. Готовый плагин открывается сразу в
+  // режиме кода: его тело мы не разбираем обратно в поля и делать вид, что
+  // разобрали, не станем.
+  const [mode, setMode] = useState<'easy' | 'code'>(existing ? 'code' : 'easy')
+  const [recipe, setRecipe] = useState<Recipe>(RECIPES[0])
+  const [rv, setRv] = useState<Record<string, string>>(() => recipeDefaults(RECIPES[0]))
+
+  function pickRecipe(r: Recipe) {
+    setRecipe(r)
+    setRv(recipeDefaults(r))
+    setRan(null)
+  }
+
+  // Пока человек в простом режиме, тело и разрешения плагина держим собранными
+  // из рецепта: перейдя в «Код», он увидит ровно то, что получилось.
+  useEffect(() => {
+    if (mode !== 'easy') return
+    setD(p => ({ ...p, permissions: [...recipe.permissions], body: recipe.build(rv) }))
+  }, [mode, recipe, rv])
   const [busy, setBusy] = useState(false)
   const [ran, setRan] = useState<string | null>(null)
   // Установлен ли он уже — от этого зависит, можно ли предлагать «выложить».
@@ -148,9 +169,54 @@ export function PluginEditor({ editId, onClose, onSaved }: {
       <div className="modal ped-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title">{existing ? 'Изменить плагин' : 'Новый плагин'}</div>
-        <div className="modal-sub">Шапку файла напишет форма — тебе остаётся только код.</div>
+        <div className="modal-sub">
+          {existing ? 'Правь код — шапку файла форма перепишет сама.'
+            : mode === 'easy'
+              ? 'Выбери, что он должен делать, и заполни пару полей. Писать код не нужно.'
+              : 'Шапку файла напишет форма — тебе остаётся только код.'}
+        </div>
 
-        {!existing && <>
+        {!existing && (
+          <div className="ped-modes">
+            <button className={'ped-mode' + (mode === 'easy' ? ' on' : '')} onClick={() => setMode('easy')}>
+              Без кода
+            </button>
+            <button className={'ped-mode' + (mode === 'code' ? ' on' : '')} onClick={() => setMode('code')}>
+              Код
+            </button>
+          </div>
+        )}
+
+        {!existing && mode === 'easy' && <>
+          <label className="modal-lbl">Что должен делать плагин</label>
+          <div className="ped-tpls">
+            {RECIPES.map(r => (
+              <button key={r.key} className={'ped-tpl' + (recipe.key === r.key ? ' on' : '')} title={r.hint}
+                onClick={() => pickRecipe(r)}>
+                <span className="ped-tpl-e">{r.emoji}</span>
+                <span className="ped-tpl-l">{r.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="cset-hint" style={{ marginTop: 6 }}>{recipe.hint}</div>
+
+          {recipe.fields.map(f => (
+            <div key={f.key}>
+              <label className="modal-lbl">{f.label}</label>
+              {f.color
+                ? <input type="color" className="ped-color" value={rv[f.key] ?? '#5865f2'}
+                    onChange={e => setRv(v => ({ ...v, [f.key]: e.target.value }))} />
+                : f.multiline
+                  ? <textarea className="cset-topic" maxLength={1500} placeholder={f.placeholder}
+                      value={rv[f.key] ?? ''} onChange={e => setRv(v => ({ ...v, [f.key]: e.target.value }))} />
+                  : <input className="modal-in" placeholder={f.placeholder} value={rv[f.key] ?? ''}
+                      onChange={e => setRv(v => ({ ...v, [f.key]: e.target.value }))} />}
+            </div>
+          ))}
+          {!recipeReady(recipe, rv) && <div className="cset-hint" style={{ marginTop: 6 }}>Заполни поля выше — иначе плагин ничего не сделает.</div>}
+        </>}
+
+        {!existing && mode === 'code' && <>
           <label className="modal-lbl">С чего начать</label>
           <div className="ped-tpls">
             {TEMPLATES.map(t => (
@@ -174,6 +240,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           </div>
         </div>
 
+        {mode === 'code' && <>
         <label className="modal-lbl">Идентификатор</label>
         <input className="modal-in" value={d.id} disabled={!!existing}
           onChange={e => { idTouched.current = true; set('id', e.target.value.toLowerCase()) }} placeholder="my-plugin" />
@@ -183,10 +250,20 @@ export function PluginEditor({ editId, onClose, onSaved }: {
             : 'Подставляется из названия. По нему плагин обновляется, поэтому должен быть уникальным.'}
         </div>
 
+        </>}
+
         <label className="modal-lbl">Описание</label>
         <input className="modal-in" value={d.description} onChange={e => set('description', e.target.value)}
           placeholder="Одной строкой: что он делает" />
 
+        {mode === 'easy' && (
+          <div className="ped-perm-note">
+            Плагин попросит только то, без чего не заработает:{' '}
+            {recipe.permissions.map(p => PERMISSION_LABEL[p]).join(', ').toLowerCase() || 'ничего'}.
+          </div>
+        )}
+
+        {mode === 'code' && <>
         <label className="modal-lbl">Что плагину разрешено</label>
         <div className="ped-perms">
           {ALL_PERMISSIONS.map(p => (
@@ -209,6 +286,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           Функция <code>onLoad</code> получает объект <code>ponoi</code> — через него плагин и работает.
           Полный список того, что он умеет, — в справке «?» рядом с заголовком раздела.
         </div>
+        </>}
 
         <div className={'ped-status' + (problem ? ' bad' : '')}>
           {problem
@@ -240,11 +318,15 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           <button className="modal-ghost" onClick={download} title="Сохранить как .ponoi-файл">
             <Icon name="download" size={15} /> Файл
           </button>
-          <button className="modal-ghost" disabled={busy || !!problem} onClick={() => void tryRun()}
-            title="Поставит плагин и запустит — иначе проверить его нельзя">
-            {busy ? '…' : 'Проверить'}
-          </button>
-          <button className="modal-primary" disabled={busy || !!problem} onClick={() => void save()}>
+          {mode === 'code' && (
+            <button className="modal-ghost" disabled={busy || !!problem} onClick={() => void tryRun()}
+              title="Поставит плагин и запустит — иначе проверить его нельзя">
+              {busy ? '…' : 'Проверить'}
+            </button>
+          )}
+          <button className="modal-primary"
+            disabled={busy || !!problem || (mode === 'easy' && !recipeReady(recipe, rv))}
+            onClick={() => void save()}>
             {existing ? 'Сохранить' : 'Установить'}
           </button>
         </div>

@@ -4930,3 +4930,41 @@ body.no-anim .mic-bar { transition: none; }
 /* Подтверждение публикации прямо в конструкторе (v1.341.0). */
 .ped-publish { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--bg3);
   font-size: 12.5px; line-height: 1.45; color: var(--mut); }
+
+
+/* ── Бот без программирования (v1.344.0) ──────────────────────────────────
+   Три пути вместо двух: главное — чтобы человек сразу видел, какой из них не
+   требует ни строчки кода. */
+.bw-choice.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 720px) { .bw-choice.three { grid-template-columns: 1fr; } }
+.bw-card { position: relative; padding-bottom: 30px; }
+.bw-card-tag { position: absolute; left: 16px; bottom: 12px; font-size: 10.5px; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px; letter-spacing: .02em; }
+.bw-card-tag.easy { background: rgba(59,165,93,.18); color: #3ba55d; }
+.bw-card-tag.hard { background: rgba(var(--ov), .10); color: var(--mut); }
+
+.bw-pair { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  border-radius: 10px; background: var(--bg3); margin-bottom: 8px; }
+.bw-pair-cmd { display: flex; align-items: center; gap: 4px; font-weight: 700; color: var(--mut); }
+.bw-pair-cmd input { flex: 1; background: none; border: none; color: var(--tx); font-size: 14px;
+  font-weight: 600; outline: none; padding: 2px 0; }
+.bw-pair textarea { width: 100%; min-height: 54px; resize: vertical; border-radius: 8px; padding: 8px 10px;
+  border: 1px solid var(--c-hover); background: var(--bg2); color: var(--tx); font-size: 13px;
+  font-family: inherit; line-height: 1.45; }
+.bw-pair-x { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border: none;
+  border-radius: 50%; background: none; color: var(--mut); cursor: pointer; display: flex;
+  align-items: center; justify-content: center; }
+.bw-pair-x:hover { background: var(--c-hover); color: var(--tx); }
+
+
+/* ── Плагин без кода (v1.344.0) ───────────────────────────────────────────
+   Переключатель режимов стоит первым: человек сразу видит, что писать код —
+   не обязанность, а выбор. */
+.ped-modes { display: inline-flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--bg3); margin-bottom: 4px; }
+.ped-mode { border: none; background: none; color: var(--mut); cursor: pointer; font-size: 13px;
+  font-weight: 600; padding: 6px 16px; border-radius: 7px; }
+.ped-mode:hover { color: var(--tx); }
+.ped-mode.on { background: var(--bg2); color: var(--tx); }
+.ped-color { width: 56px; height: 34px; border: none; background: none; padding: 0; cursor: pointer; }
+.ped-perm-note { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bg3);
+  font-size: 12.5px; color: var(--mut); line-height: 1.45; }

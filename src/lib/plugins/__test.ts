@@ -11,6 +11,7 @@ import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS } from './types'
 import { TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify } from './editorDraft'
+import { RECIPES, recipeDefaults, recipeReady } from './recipes'
 
 let pass = 0, fail = 0
 const ok = (n: string) => { pass++; console.log('OK   ' + n) }
@@ -259,6 +260,70 @@ for (const p of OFFICIAL_PLUGINS) {
     // задваиваться, а читался бы всё равно первый.
     return (twice.match(/\/\*\*/g) ?? []).length === 1
   })
+
+  // ── Плагины без кода ─────────────────────────────────────────────────────
+  // Рецепт собирает код за человека, который сам его не напишет и ошибку в нём
+  // не заметит. Значит проверять обязаны мы: каждый рецепт должен собираться,
+  // запускаться и просить ровно те права, которыми пользуется.
+  console.log('\n── Плагины без кода ──')
+  for (const r of RECIPES) {
+    const vals = recipeDefaults(r)
+    // Пустые поля заполняем осмысленным: рецепт с пустотой ничего не делает.
+    for (const f of r.fields) if (!vals[f.key]) vals[f.key] = f.color ? '#ff0000' : 'проверка'
+
+    check(`рецепт «${r.label}»: поля заполнены`, () => recipeReady(r, vals))
+
+    const d = draftFromTemplate(TEMPLATES[0])
+    d.name = 'Проба ' + r.key
+    d.id = slugify(d.name)
+    d.permissions = [...r.permissions]
+    d.body = r.build(vals)
+    const file = buildFile(d, 'ник')
+
+    check(`рецепт «${r.label}»: шапка разбирается`, () => {
+      const m = parsePlugin(file)
+      return m.id === d.id && m.permissions.join(',') === r.permissions.join(',')
+    })
+
+    const { ponoi, calls } = stubPonoi()
+    let started = false
+    try { await loadPlugin(file)(ponoi); started = true; ok(`рецепт «${r.label}»: запускается`) }
+    catch (e: any) { bad(`рецепт «${r.label}»: запускается`, e?.message ?? String(e)) }
+    if (!started) continue
+
+    check(`рецепт «${r.label}»: что-то делает`, () =>
+      calls.commands.length + calls.events.length + calls.css > 0)
+    if (calls.commands.length) check(`рецепт «${r.label}»: команды объявлены`, () => r.permissions.includes('commands'))
+    if (calls.events.includes('message')) check(`рецепт «${r.label}»: чтение сообщений объявлено`, () => r.permissions.includes('messages.read'))
+    if (calls.css) check(`рецепт «${r.label}»: css объявлен`, () => r.permissions.includes('css'))
+  }
+
+  // Текст от человека попадает в код строкой — кавычки и переносы не должны
+  // ломать плагин. Это самое вероятное, на чём собранный код развалился бы.
+  check('текст с кавычками и переносами не ломает собранный плагин', () => {
+    const r = RECIPES.find(x => x.key === 'command')!
+    const злой = 'Он сказал: "привет" \n а потом \'пока\' и ${x} и `бэктик`'
+    const d = draftFromTemplate(TEMPLATES[0])
+    d.name = 'Проба кавычек'; d.id = slugify(d.name)
+    d.permissions = [...r.permissions]
+    d.body = r.build({ cmd: 'тест', text: злой })
+    const fn = loadPlugin(buildFile(d, 'ник'))
+    return typeof fn === 'function'
+  })
+  await (async () => {
+    const r = RECIPES.find(x => x.key === 'command')!
+    const текст = 'строка с "кавычками" и переносом\nвторая'
+    const d = draftFromTemplate(TEMPLATES[0])
+    d.name = 'Проба текста'; d.id = slugify(d.name)
+    d.permissions = [...r.permissions]
+    d.body = r.build({ cmd: 'тест', text: текст })
+    const { ponoi, calls } = stubPonoi()
+    let handler: any = null
+    ponoi.commands.register = async (_n: string, _d: string, h: any) => { handler = h; calls.commands.push(_n) }
+    await loadPlugin(buildFile(d, 'ник'))(ponoi)
+    if (handler) await handler('')
+    check('в чат уходит ровно то, что человек написал', () => calls.sent[0] === текст)
+  })()
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

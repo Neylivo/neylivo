@@ -38,9 +38,11 @@ export function DevPortal() {
   }
 
   // Готовые боты «от нас» заводятся под твоей учётной записью, но своими их
-  // считать неправильно: код у них наш. Поэтому «Свои» — те, что ты сделал сам.
-  const own = bots.filter(b => !b.builtin)
-  const ready = bots.filter(b => !!b.builtin)
+  // считать неправильно: код у них наш. А вот бот «без кода» (builtin = simple) —
+  // свой: ответы в нём писал человек, и править их он будет здесь же.
+  const isReady = (b: BotApp) => !!b.builtin && b.builtin !== 'simple'
+  const own = bots.filter(b => !isReady(b))
+  const ready = bots.filter(isReady)
 
   return (
     <>
@@ -120,6 +122,8 @@ export function DevPortal() {
 }
 
 function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolean; onToggle: () => void; onDeleted: () => void }) {
+  // Бот «без кода»: вебхука у него нет, а команды несут готовые ответы.
+  const simple = bot.builtin === 'simple'
   const [webhook, setWebhook] = useState(bot.webhook_url ?? '')
   const [savingWh, setSavingWh] = useState(false)
   const [commands, setCommands] = useState<BotCommand[]>([])
@@ -168,7 +172,12 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
     const name = cmdName.trim().toLowerCase(), desc = cmdDesc.trim()
     if (!name || !desc) return
     try {
-      await saveBotCommand(bot.id, { name, description: desc, options: [] })
+      await saveBotCommand(bot.id, {
+        name, description: desc.slice(0, 90), options: [],
+        // У бота «без кода» то, что человек написал, и есть ответ: заставлять его
+        // писать отдельно «описание» и «ответ» — лишний шаг ни за чем.
+        ...(simple ? { reply: desc } : {}),
+      })
       setCmdName(''); setCmdDesc('')
       setCommands(await fetchBotCommands(bot.id))
     } catch (e: any) { toastErr(e.message ?? String(e)) }
@@ -188,8 +197,9 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
   return (
     <div className="devp-card">
       <div className="devp-card-h" onClick={onToggle}>
-        <Icon name="code" size={18} />
+        <Icon name={simple ? 'message' : 'code'} size={18} />
         <b>{bot.name}</b>
+        {simple && <span className="cat-badge">без кода</span>}
         <span className="devp-card-id" title="ID приложения — им делишься с владельцем сервера">{bot.id}</span>
         <Icon name="chevron-right" size={14} style={open ? { transform: 'rotate(90deg)' } : undefined} />
       </div>
@@ -224,6 +234,12 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
           <input className="modal-in" value={bot.id} readOnly style={{ flex: 1 }} />
           <button className="pqs2-btn ghost" onClick={() => { navigator.clipboard?.writeText(bot.id); toastOk('ID скопирован') }}>Копировать</button>
         </div>
+        {simple && <div className="cset-hint" style={{ marginTop: 4 }}>
+          Этот бот отвечает заранее написанными ответами — программа и свой сервер ему не нужны.
+          Добавляй команды ниже: слева имя, справа ответ.
+        </div>}
+
+        {!simple && <>
         <label className="modal-lbl">Webhook URL</label>
         <div className="cset-hint" style={{ marginTop: 0 }}>Сюда Ponoi шлёт подписанные POST-запросы: новое сообщение на серверах, где состоит бот, и вызовы слэш-команд.</div>
         <div className="modal-inline">
@@ -231,16 +247,21 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
           <button className="pqs2-btn ghost" disabled={savingWh} onClick={saveWebhook}>{savingWh ? 'Сохранение…' : 'Сохранить'}</button>
         </div>
 
-        <label className="modal-lbl" style={{ marginTop: 14 }}>Слэш-команды</label>
+        </>}
+
+        <label className="modal-lbl" style={{ marginTop: 14 }}>{simple ? 'Команды и ответы' : 'Слэш-команды'}</label>
         {commands.map(c => (
           <div key={c.id} className="devp-cmd">
-            <span>/{c.name}</span><span className="mut">{c.description}</span>
+            <span>/{c.name}</span>
+            <span className="mut">{simple ? (c.reply || c.description) : c.description}</span>
             <span className="devp-cmd-x" onClick={() => removeCommand(c.id)}><Icon name="trash" size={13} /></span>
           </div>
         ))}
         <div className="modal-inline" style={{ marginTop: 6 }}>
-          <input className="modal-in" placeholder="имя" value={cmdName} onChange={e => setCmdName(e.target.value.replace(/[^a-z0-9_]/gi, ''))} style={{ flex: 1 }} />
-          <input className="modal-in" placeholder="описание" value={cmdDesc} onChange={e => setCmdDesc(e.target.value)} style={{ flex: 2 }} />
+          <input className="modal-in" placeholder="имя" value={cmdName}
+            onChange={e => setCmdName(e.target.value.replace(simple ? /[^a-zа-яё0-9_-]/gi : /[^a-z0-9_]/gi, ''))} style={{ flex: 1 }} />
+          <input className="modal-in" placeholder={simple ? 'что ответить' : 'описание'} value={cmdDesc}
+            onChange={e => setCmdDesc(e.target.value)} style={{ flex: 2 }} />
           <button className="pqs2-btn ghost" onClick={addCommand}>Добавить</button>
         </div>
 

@@ -130,7 +130,7 @@ const SABOTAGE = {
   // Вид встроенного бота снова можно приписать своему боту.
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -157,6 +157,7 @@ await db.exec(SRC[88])
 await db.exec(SRC[89])
 await db.exec(SRC[90])
 await db.exec(SRC[91])
+await db.exec(SRC[92])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -723,6 +724,14 @@ await check('счётчик напрямую не переписать', async (
   await as(OTHER, `update catalog_stats set installs = 9999 where kind='bot'`)
   return (await db.query(`select installs from catalog_stats where kind='bot' and ref='builtin:dice'`)).rows[0].installs === 2
 })
+
+// ── Бот без программирования (92) ────────────────────────────────────────
+await check('ответ команды сохраняется', async () => {
+  await db.query(`insert into bot_commands (bot_app_id, name, description, reply) values ($1,'правила','x','Не ругаться')`, [botApp])
+  return (await db.query(`select reply from bot_commands where bot_app_id=$1 and name='правила'`, [botApp])).rows[0].reply === 'Не ругаться'
+})
+await refused('слишком длинный ответ база не примет', () =>
+  db.query(`insert into bot_commands (bot_app_id, name, description, reply) values ($1,'длинная','x',$2)`, [botApp, 'я'.repeat(2001)]))
 
 await check('избранные эмодзи попали в публикацию realtime', async () =>
   (await db.query(`select 1 from pg_publication_tables

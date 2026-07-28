@@ -13,7 +13,12 @@ export interface BotApp {
   /** Вид готового бота «от нас» (v1.333.0); null — обычный бот с вебхуком. */
   builtin: string | null
 }
-export interface BotCommand { id: string; bot_app_id: string; name: string; description: string; options: { name: string; description: string; required?: boolean }[] }
+export interface BotCommand {
+  id: string; bot_app_id: string; name: string; description: string
+  options: { name: string; description: string; required?: boolean }[]
+  /** Готовый ответ — только у бота без программирования (v1.344.0, миграция 92). */
+  reply?: string | null
+}
 
 // supabase-js бросает generic FunctionsHttpError («non-2xx status code») на ЛЮБОЙ
 // код ответа функции, а data при этом форсится в null — реальный текст ошибки
@@ -118,8 +123,13 @@ export async function fetchServerBotCommands(serverId: string): Promise<(BotComm
   const { data } = await supabase.from('bot_commands').select('*').in('bot_app_id', serverBotIds)
   return ((data ?? []) as BotCommand[]).map(c => ({ ...c, botAppId: c.bot_app_id }))
 }
-export async function saveBotCommand(botAppId: string, cmd: { id?: string; name: string; description: string; options: BotCommand['options'] }): Promise<void> {
-  const row = { bot_app_id: botAppId, name: cmd.name.trim().toLowerCase(), description: cmd.description.trim(), options: cmd.options }
+export async function saveBotCommand(botAppId: string, cmd: { id?: string; name: string; description: string; options: BotCommand['options']; reply?: string | null }): Promise<void> {
+  const row: Record<string, unknown> = {
+    bot_app_id: botAppId, name: cmd.name.trim().toLowerCase(), description: cmd.description.trim(), options: cmd.options,
+  }
+  // Поле есть только после миграции 92 — не шлём его, если ответа нет, чтобы у
+  // тех, кто её ещё не применил, обычные команды продолжали сохраняться.
+  if (cmd.reply !== undefined) row.reply = cmd.reply
   if (cmd.id) {
     const { data, error } = await supabase.from('bot_commands').update(row).eq('id', cmd.id).select('id')
     if (error) throw error

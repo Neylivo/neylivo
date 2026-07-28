@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
 
     if (app.builtin) {
       const arg = String((args && (args.text ?? args.arg ?? args.value)) ?? '')
-      botReply = await runBuiltinCommand(String(app.builtin), String(command), arg, channelId, admin)
+      botReply = await runBuiltinCommand(String(app.builtin), String(command), arg, channelId, admin, String(app.id))
       if (!botReply) return json({ error: 'unknown command for this bot' }, 400)
       const { data: msg0, error: insErr0 } = await admin.from('messages').insert({
         channel_id: channelId, author: app.bot_user_id, author_name: app.name, content: botReply.slice(0, 4000),

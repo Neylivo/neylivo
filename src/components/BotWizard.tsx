@@ -17,7 +17,10 @@ import type { Server } from '../types'
 // Человек, впервые открывший раздел, не понимал, с чего начать и чем всё
 // кончится. Здесь один путь: выбрал, каким будет бот, — получил рабочего.
 
-type Kind = 'ready' | 'own'
+type Kind = 'ready' | 'simple' | 'own'
+
+/** Одна пара «команда — ответ» в боте без программирования. */
+interface Pair { name: string; reply: string }
 
 export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [kind, setKind] = useState<Kind | null>(null)
@@ -27,6 +30,10 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
 
   // Готовый
   const [pick, setPick] = useState(BUILTIN_BOTS[0]?.kind ?? '')
+
+  // Без программирования
+  const [simpleName, setSimpleName] = useState('')
+  const [pairs, setPairs] = useState<Pair[]>([{ name: 'привет', reply: 'Привет! Я бот этого сервера.' }])
 
   // Свой
   const [name, setName] = useState('')
@@ -62,6 +69,44 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
         ? `Бот «${b.name}» создан, но на сервер не встал: ${e?.message ?? e}. Он в разделе «Используемые» — попробуй добавить из «Настройки сервера → Боты».`
         : (e?.message ?? String(e)))
     }
+    finally { setBusy('') }
+  }
+
+  /**
+   * Бот без программирования: команда — заранее написанный ответ.
+   *
+   * v1.344.0. До этого «свой бот» означал «напиши программу и подними её на
+   * своём сервере» — то есть для большинства был недоступен вовсе. А хотят чаще
+   * всего простого: чтобы по /правила бот прислал правила. Выполняется он нашей
+   * же функцией, никакого «снаружи» ему не нужно.
+   */
+  async function createSimple() {
+    const n = simpleName.trim()
+    const list = pairs.map(p => ({ name: p.name.trim().toLowerCase(), reply: p.reply.trim() }))
+                      .filter(p => p.name && p.reply)
+    if (!n || list.length === 0) return
+    setBusy('simple')
+    const failed: string[] = []
+    try {
+      const r = await createBot(n, 'simple')
+      for (const p of list) {
+        try {
+          await saveBotCommand(r.id, {
+            name: p.name,
+            description: p.reply.slice(0, 90),
+            options: [],
+            reply: p.reply,
+          })
+        } catch (e: any) { failed.push('/' + p.name + ': ' + (e?.message ?? e)) }
+      }
+      if (server) {
+        try { await addBotToServer(r.id, server) }
+        catch (e: any) { failed.push('добавление на сервер: ' + (e?.message ?? e)) }
+      }
+      onDone()
+      if (failed.length === 0) { toastOk(`«${n}» готов и отвечает`); onClose() }
+      else toastErr('Бот создан, но не всё получилось — ' + failed.join('; '))
+    } catch (e: any) { toastErr(e?.message ?? String(e)) }
     finally { setBusy('') }
   }
 
@@ -124,22 +169,33 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
         {!kind && <>
           <div className="modal-title">Создать бота</div>
           <div className="modal-sub">Два пути. Первый — на пять минут, второй — если хочешь свою логику.</div>
-          <div className="bw-choice">
+          <div className="bw-choice three">
             <button className="bw-card" onClick={() => setKind('ready')}>
               <span className="bw-card-e">⚡</span>
-              <span className="bw-card-t">Готовый от Ponoi</span>
+              <span className="bw-card-t">Готовый</span>
               <span className="bw-card-d">
-                Кубик, опросы, статистика, встречающий, шар предсказаний. Работает сразу,
-                свой сервер не нужен — всё считается внутри Ponoi.
+                Кубик, опросы, статистика, встречающий, шар предсказаний.
+                Работает сразу, настраивать нечего.
               </span>
+              <span className="bw-card-tag easy">проще всего</span>
+            </button>
+            <button className="bw-card" onClick={() => setKind('simple')}>
+              <span className="bw-card-e">💬</span>
+              <span className="bw-card-t">Свой, без кода</span>
+              <span className="bw-card-d">
+                Ты пишешь: команда — и что на неё отвечать. Например /правила → текст правил.
+                Программировать не надо, сервер не нужен.
+              </span>
+              <span className="bw-card-tag easy">без программирования</span>
             </button>
             <button className="bw-card" onClick={() => setKind('own')}>
               <span className="bw-card-e">🛠️</span>
-              <span className="bw-card-t">Свой</span>
+              <span className="bw-card-t">Свой, с программой</span>
               <span className="bw-card-d">
-                Ты пишешь программу, она живёт на твоём https-адресе, Ponoi шлёт ей события
-                и печатает ответы в чат. Нужен свой сервер.
+                Ты пишешь программу, она живёт на твоём https-адресе. Полная свобода,
+                но нужен свой сервер.
               </span>
+              <span className="bw-card-tag hard">для программистов</span>
             </button>
           </div>
         </>}
@@ -171,6 +227,60 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
             <button className="modal-ghost" onClick={() => setKind(null)}>Назад</button>
             <button className="modal-primary" disabled={!server || !!busy} onClick={() => void createReady()}>
               {busy ? 'Добавляю…' : 'Добавить'}
+            </button>
+          </div>
+        </>}
+
+        {/* ── Без кода: команда и ответ ──────────────────────────────────── */}
+        {kind === 'simple' && <>
+          <div className="modal-title">Бот, который отвечает</div>
+          <div className="modal-sub">Напиши, на какую команду что отвечать. Всё остальное сделаем мы.</div>
+
+          <label className="modal-lbl">Как его назвать</label>
+          <input className="modal-in" autoFocus placeholder="Например: Справочная" value={simpleName}
+            onChange={e => setSimpleName(e.target.value)} />
+
+          <label className="modal-lbl">Что он умеет</label>
+          {pairs.map((p, i) => (
+            <div key={i} className="bw-pair">
+              <div className="bw-pair-cmd">
+                <span>/</span>
+                <input placeholder="правила" value={p.name}
+                  onChange={e => setPairs(list => list.map((x, n) => n === i
+                    ? { ...x, name: e.target.value.replace(/[^a-zа-яё0-9_-]/gi, '').toLowerCase() } : x))} />
+              </div>
+              <textarea placeholder="Что бот ответит на эту команду" value={p.reply}
+                onChange={e => setPairs(list => list.map((x, n) => n === i ? { ...x, reply: e.target.value } : x))} />
+              {pairs.length > 1 && (
+                <button className="bw-pair-x" title="Убрать"
+                  onClick={() => setPairs(list => list.filter((_, n) => n !== i))}>
+                  <Icon name="close" size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+          {pairs.length < 15 && (
+            <button className="pqs2-btn ghost" onClick={() => setPairs(list => [...list, { name: '', reply: '' }])}>
+              <Icon name="plus" size={15} /> Ещё команда
+            </button>
+          )}
+          <div className="cset-hint" style={{ marginTop: 8 }}>
+            В ответе можно написать <code>{'{текст}'}</code> — туда подставится то, что человек
+            допишет после команды. Например ответ «Привет, {'{текст}'}!» на <code>/привет Аня</code>
+            даст «Привет, Аня!».
+          </div>
+
+          <label className="modal-lbl">Сразу поставить на сервер</label>
+          <select className="modal-in" value={server} onChange={e => setServer(e.target.value)}>
+            <option value="">Не ставить пока</option>
+            {(servers ?? []).map(sv => <option key={sv.id} value={sv.id}>{sv.name}</option>)}
+          </select>
+
+          <div className="modal-foot">
+            <button className="modal-ghost" onClick={() => setKind(null)}>Назад</button>
+            <button className="modal-primary" disabled={!!busy || !simpleName.trim() || !pairs.some(p => p.name.trim() && p.reply.trim())}
+              onClick={() => void createSimple()}>
+              {busy ? 'Создаю…' : 'Создать'}
             </button>
           </div>
         </>}
