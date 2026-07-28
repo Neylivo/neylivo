@@ -5,7 +5,7 @@ import { confirmUi } from '../lib/confirm'
 import { toastOk, toastErr } from '../lib/toast'
 import {
   isDmPinned, toggleDmPinned, isDmMuted, setDmMuted, isDmIgnored, toggleDmIgnored,
-  getUserPrefs, patchUserPrefs, friendNickOf, setFriendNick, setDmRead, closeDm,
+  getUserPrefs, patchUserPrefs, friendNickOf, setFriendNick, setDmRead,
 } from '../lib/userPrefs'
 import { clearBadgeKey } from '../lib/badge'
 import { devMode } from '../lib/settings'

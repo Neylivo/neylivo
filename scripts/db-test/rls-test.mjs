@@ -131,10 +131,11 @@ const SABOTAGE = {
   botkind: [/if tg_op = 'UPDATE' and new\.builtin is distinct from old\.builtin then\s*raise exception 'builtin_is_not_settable';\s*end if;/, ''],
   botrm: [/if v_owner <> auth\.uid\(\) and \(server_permissions\(p_server, auth\.uid\(\)\) & 512\) = 0 then\s*raise exception 'missing_manage_bots';\s*end if;/, ''],
   bothuman: [/if not exists \(select 1 from bot_apps where bot_user_id = p_bot_user\) then\s*raise exception 'not_a_bot';\s*end if;/, ''],
+  keybak: [/using \(user_id = auth\.uid\(\)\)/g, 'using (true)'],
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -174,6 +175,7 @@ await db.exec(`create table if not exists audit_log (
   target_name text, detail text, created_at timestamptz not null default now());`)
 await db.exec(SRC[96])
 await db.exec(SRC[97])
+await db.exec(SRC[98])
 await db.exec('grant usage on schema auth to authenticated; grant select on auth.users to authenticated;')
 // threads появляется только в 70, поэтому права выдаём после миграций.
 await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -897,6 +899,70 @@ await check('избранные эмодзи попали в публикаци�
     return alive === 1
   })
   void app
+}
+
+// ── Копии ключей шифрования (v1.372.0) ───────────────────────────────────
+//
+// Тут лежат запертые паролем приватные ключи личных сообщений. Ошибка в правиле
+// доступа означает не «кнопка не работает», а «чужие ключи скачал кто угодно» —
+// пусть и запертые, но это уже половина работы для перебора. Проверяем оба
+// конца: свою строку видно и можно менять, чужую — нет ни на чтение, ни на что
+// ещё. И отдельно: сам факт наличия копии тоже не должен быть виден чужому,
+// по нему видно, кем и когда пользовались приложением.
+{
+  await db.query(`insert into key_backups (user_id, salt, wrapped) values ($1,$2,$3)`,
+    [OWNER, 'c29sdC1zdHJpbmc=', JSON.stringify({ iv: 'aXY=', ct: 'Y3Q=' })])
+  await db.query(`insert into key_backups (user_id, salt, wrapped) values ($1,$2,$3)`,
+    [USER, 'dGVzdHNhbHR0ZXN0', JSON.stringify({ iv: 'aXY=', ct: 'Y3Q=' })])
+
+  await check('свою копию ключа видно', async () =>
+    (await as(USER, 'select salt from key_backups where user_id=$1', [USER])).rows.length === 1)
+
+  await check('чужую копию ключа не прочитать', async () =>
+    (await as(USER, 'select salt from key_backups where user_id=$1', [OWNER])).rows.length === 0)
+
+  await check('чужую копию не видно и в списке целиком', async () => {
+    // Без where — самый частый способ «случайно» выгрести таблицу целиком.
+    const r = await as(USER, 'select user_id from key_backups')
+    return r.rows.length === 1 && r.rows[0].user_id === USER
+  })
+
+  await check('чужую копию нельзя перезаписать своей', async () => {
+    // Иначе можно подменить человеку ключ и заставить его потерять переписку.
+    await as(USER, `update key_backups set wrapped = $1 where user_id = $2`,
+      [JSON.stringify({ iv: 'BAD', ct: 'BAD' }), OWNER])
+    const r = await db.query('select wrapped from key_backups where user_id=$1', [OWNER])
+    return JSON.stringify(r.rows[0].wrapped).includes('aXY')
+  })
+
+  await check('чужую копию нельзя удалить', async () => {
+    await as(USER, 'delete from key_backups where user_id=$1', [OWNER])
+    return (await db.query('select 1 from key_backups where user_id=$1', [OWNER])).rows.length === 1
+  })
+
+  await check('нельзя завести копию от чужого имени', async () => {
+    try {
+      await as(USER, `insert into key_backups (user_id, salt, wrapped) values ($1,$2,$3)`,
+        [OTHER, 'dGVzdHNhbHR0ZXN0', JSON.stringify({ iv: 'a', ct: 'b' })])
+    } catch { /* правило отклонило — этого и ждём */ }
+    return (await db.query('select 1 from key_backups where user_id=$1', [OTHER])).rows.length === 0
+  })
+
+  await check('свою копию можно обновить', async () => {
+    await as(USER, `update key_backups set wrapped = $1 where user_id = $2`,
+      [JSON.stringify({ iv: 'bmV3', ct: 'bmV3' }), USER])
+    const r = await db.query('select wrapped from key_backups where user_id=$1', [USER])
+    return JSON.stringify(r.rows[0].wrapped).includes('bmV3')
+  })
+
+  await check('мусор вместо копии база не примет', async () => {
+    // Ограничение на размер: место под произвольные данные тут не нужно.
+    try {
+      await db.query(`insert into key_backups (user_id, salt, wrapped) values ($1,$2,$3)`,
+        [OTHER, 'x', JSON.stringify({ junk: 'y'.repeat(5000) })])
+      return false
+    } catch { return true }
+  })
 }
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

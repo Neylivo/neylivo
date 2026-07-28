@@ -1,5 +1,5 @@
 import { toastErr } from '../lib/toast'
-import { isSafeUrl, openSafely } from '../lib/safeUrl'
+import { isSafeUrl } from '../lib/safeUrl'
 import { stripAll } from '../lib/stripMeta'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'

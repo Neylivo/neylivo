@@ -1,6 +1,5 @@
 import { devMode } from '../lib/settings'
 import { toastErr } from '../lib/toast'
-import { confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Server, Channel } from '../types'
 import { uploadTo } from '../lib/storage'
