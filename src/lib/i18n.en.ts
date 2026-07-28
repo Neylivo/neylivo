@@ -1773,3 +1773,9 @@ Object.assign(DICT_EN, {
   'Фото и файлы в переписке один-на-один. По умолчанию выключено: зашифрованное вложение, которое не удалось открыть, показывается как повреждённое, и фото теряется. Текст сообщений шифруется в любом случае.':
     'Photos and files in one-on-one chats. Off by default: an encrypted attachment that cannot be opened shows up as damaged and the photo is lost. Message text is encrypted either way.',
 })
+
+// v1.387.0: шифрование выключено по умолчанию.
+Object.assign(DICT_EN, {
+  'Шифрование сейчас выключено: содержимое переписки, вложений и звонков доступно серверу. Включи переключатели ниже, если хочешь скрыть его.':
+    'Encryption is currently off: the contents of your chats, attachments and calls are visible to the server. Turn the switches below on if you want to hide them.',
+})

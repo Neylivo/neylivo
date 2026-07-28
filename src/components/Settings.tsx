@@ -86,7 +86,15 @@ function E2eeSection() {
   const { settings, set } = useSettings()
   const [fp, setFp] = useState<string | null>(null)
   useEffect(() => { myFingerprint().then(setFp).catch(() => setFp(null)) }, [])
+  const anyOn = settings.e2ee || settings.e2eeFiles || settings.e2eeCalls
   return <>
+    {/* v1.387.0: шифрование выключено по умолчанию, и молчать об этом нельзя.
+        Отпечаток ключа ниже и слова «нечитаемо для сервера» при выключенных
+        переключателях создавали бы ровно то впечатление, которого нет на деле. */}
+    {!anyOn && <div className="pqs2-desc" style={{ marginBottom: 12 }}>
+      Шифрование сейчас выключено: содержимое переписки, вложений и звонков
+      доступно серверу. Включи переключатели ниже, если хочешь скрыть его.
+    </div>}
     <Row title="Шифровать личные сообщения"
       desc="Содержимое переписки один-на-один становится нечитаемым для сервера. Групповые диалоги и серверные каналы пока шифрованием не защищены.">
       <Toggle on={settings.e2ee} onChange={v => set('e2ee', v)} />
@@ -103,14 +111,14 @@ function E2eeSection() {
       desc="Голос и видео становятся нечитаемыми для сервера. Работает в личных звонках один-на-один. Если у собеседника версия приложения старше, он не услышит звук — обоим нужно обновиться.">
       <Toggle on={settings.e2eeCalls} onChange={v => set('e2eeCalls', v)} />
     </Row>
-    <div className="pqs2-desc" style={{ marginTop: 10 }}>
+    {anyOn && <div className="pqs2-desc" style={{ marginTop: 10 }}>
       Отпечаток ключа этого устройства. Продиктуй его собеседнику голосом или сверь при
       встрече: совпали цифры — переписку никто не подменил по дороге. Это единственный
       способ убедиться, что сервер не подставил свой ключ вместо ключа собеседника.
-    </div>
-    <div className="pqs-code-val" style={{ marginTop: 8, letterSpacing: 1 }}>
+    </div>}
+    {anyOn && <div className="pqs-code-val" style={{ marginTop: 8, letterSpacing: 1 }}>
       {fp ?? 'ключ ещё не создан'}
-    </div>
+    </div>}
     <div className="pqs2-desc" style={{ marginTop: 10 }}>
       Шифрование не скрывает, <b>кто</b> с кем и <b>когда</b> переписывается — эти данные
       нужны серверу для доставки. Скрывается только содержание.

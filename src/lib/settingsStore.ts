@@ -95,7 +95,17 @@ export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
-  e2ee: true, e2eeCalls: true, e2eeFiles: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  // v1.387.0: всё шифрование выключено по умолчанию — решение владельца.
+  //
+  // Что это значит по-честному: содержимое личной переписки, вложений и звонков
+  // становится доступно серверу. Скрывать его от сервера перестаём — это не
+  // «стало хуже работать», это другой выбор, и человек может вернуть прежнее
+  // тремя переключателями в «Приватности».
+  //
+  // Ключи устройства при этом никуда не деваются: уже зашифрованная переписка
+  // читается как и раньше, а включив настройку обратно, человек сразу продолжит
+  // шифровать — заново ничего заводить не придётся.
+  e2ee: false, e2eeCalls: false, e2eeFiles: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,
