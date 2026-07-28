@@ -26,7 +26,7 @@ import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../li
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
 import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
-import { slashPrefix, parseSlash } from '../lib/slashCmd'
+import { slashPrefix, parseSlash, buildArgs } from '../lib/slashCmd'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 // v1.352.0: подсказка эмодзи по «:», как в Discord и Telegram. Разбор хвоста
@@ -419,9 +419,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     if (!p || !serverId || !channelId) return false
     const cmd = botCmds.find(c => c.name === p.name)
     if (!cmd) return false
-    const parts = p.rest.split(/\s+/).filter(Boolean)
-    const args: Record<string, string> = {}
-    cmd.options.forEach((o, i) => { if (parts[i] !== undefined) args[o.name] = parts[i] })
+    const args = buildArgs(p.rest, cmd.options ?? [])
     setCmdBusy(true)
     try {
       await invokeBotCommand(cmd.botAppId, channelId, cmd.name, args)

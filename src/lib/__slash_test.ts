@@ -9,7 +9,7 @@
 // Запуск: npm run test:slash
 export {}
 
-import { slashPrefix, parseSlash } from './slashCmd'
+import { slashPrefix, parseSlash, buildArgs } from './slashCmd'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -59,6 +59,38 @@ for (const n of REAL) {
   })
 }
 
+console.log('\n── Доводы доходят до бота ──')
+// Готовые боты заводятся с пустым options, и до v1.359.0 всё написанное после
+// команды выбрасывалось: «/шар завтра дождь?» приходил к боту без вопроса вовсе.
+check('у команды без описанных доводов текст не теряется', () => {
+  const p = parseSlash('/шар завтра идти в туалет?')
+  return !!p && buildArgs(p.rest, []).text === 'завтра идти в туалет?'
+})
+check('число для кубика доходит', () => {
+  const p = parseSlash('/кубик 20')
+  return !!p && buildArgs(p.rest, []).text === '20'
+})
+check('варианты с палками доходят целиком', () => {
+  const p = parseSlash('/выбери чай | кофе | сон')
+  return !!p && buildArgs(p.rest, []).text === 'чай | кофе | сон'
+})
+check('вопрос шару доходит целиком', () => {
+  const p = parseSlash('/шар Стоит ли деплоить в пятницу?')
+  return !!p && buildArgs(p.rest, []).text === 'Стоит ли деплоить в пятницу?'
+})
+check('команда без довода не выдумывает пустой', () => {
+  const p = parseSlash('/монетка')
+  return !!p && buildArgs(p.rest, []).text === undefined
+})
+check('описанные доводы по-прежнему раскладываются', () => {
+  const a = buildArgs('вася 5', [{ name: 'кому' }, { name: 'сколько' }])
+  return a['кому'] === 'вася' && a['сколько'] === '5'
+})
+check('свой довод по имени text главнее подстраховки', () => {
+  const a = buildArgs('привет мир', [{ name: 'text' }])
+  return a.text === 'привет'
+})
+
 console.log('\n── Ломаем нарочно ──')
 check('проверка заметила бы возврат к \\w', () => {
   // Ровно та регулярка, что стояла до v1.356.0. Если кто-то вернёт её обратно,
@@ -66,6 +98,18 @@ check('проверка заметила бы возврат к \\w', () => {
   const old = /^\/(\w*)$/
   const nowWorks = slashPrefix('/ку') === 'ку'
   return !old.test('/ку') && nowWorks
+})
+check('проверка заметила бы потерю довода', () => {
+  // Ровно тот разбор, что стоял до v1.359.0: без описанных доводов — пусто,
+  // и бот получал команду без единого слова из того, что ему написали.
+  const oldWay = (rest: string, options: { name: string }[]) => {
+    const args: Record<string, string> = {}
+    const parts = rest.split(/\s+/).filter(Boolean)
+    options.forEach((o, i) => { if (parts[i] !== undefined) args[o.name] = parts[i] })
+    return args
+  }
+  return oldWay('завтра дождь?', []).text === undefined
+    && buildArgs('завтра дождь?', []).text === 'завтра дождь?'
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

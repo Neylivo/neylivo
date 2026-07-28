@@ -29,3 +29,27 @@ export function parseSlash(text: string): { name: string; rest: string } | null 
   const m = /^\/([\p{L}\p{N}_-]+)(?:\s+([\s\S]*))?$/u.exec(text.trim())
   return m ? { name: m[1].toLowerCase(), rest: (m[2] ?? '').trim() } : null
 }
+
+/**
+ * Доводы команды: то, что человек написал после имени (v1.359.0).
+ *
+ * Раньше здесь было только позиционное раскладывание по options — и у готовых
+ * ботов всё написанное после команды пропадало бесследно. Их команды заводятся
+ * с пустым options (см. bot-create), поэтому цикл не выполнялся ни разу:
+ * «/шар завтра дождь?» приходил к боту без вопроса вовсе, и тот отвечал
+ * «задай вопрос», как будто его не задавали.
+ *
+ * Поэтому хвост строки всегда идёт ещё и целиком, под именем text — его и ждут
+ * встроенные боты (bot-interact: args.text ?? args.arg ?? args.value). Заодно
+ * это единственный способ передать довод с пробелами: «/выбери чай | кофе»
+ * позиционным разбором превратилось бы в одно слово «чай».
+ */
+export function buildArgs(rest: string, options: { name: string }[]): Record<string, string> {
+  const args: Record<string, string> = {}
+  const parts = rest.split(/\s+/).filter(Boolean)
+  options.forEach((o, i) => { if (parts[i] !== undefined) args[o.name] = parts[i] })
+  // Не затираем одноимённый описанный довод: если команда сама объявила text,
+  // её разбор главнее нашей подстраховки.
+  if (rest && args.text === undefined) args.text = rest
+  return args
+}
