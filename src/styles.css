@@ -5434,3 +5434,20 @@ body.no-anim .mus2-card, body.no-anim .mus2-card-play { transition: none; }
 .mus2-card-q:hover { background: var(--brand); }
 
 body.no-anim .mus2-up-art, body.no-anim .mus2-card-q, body.no-anim .mus2-up-x { transition: none; }
+
+/* Удаление трека с карточки (v1.376.0). Кнопка жила в старом списке очереди и
+   исчезла вместе с ним — убрать трек из трекотеки стало нечем. Ставим её слева,
+   подальше от воспроизведения справа: промах по ней стоит дорого, трекотека общая. */
+.mus2-card-del {
+  position: absolute; left: 8px; top: 8px;
+  width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .68); color: #fff;
+  opacity: 0; transition: opacity .18s var(--ease-out4, ease), background .15s ease;
+}
+.mus2-card:hover .mus2-card-del, .mus2-card:focus-within .mus2-card-del { opacity: 1; }
+.mus2-card-del:hover { background: var(--red); }
+.mus2-libbtn.wide {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+body.no-anim .mus2-card-del { transition: none; }

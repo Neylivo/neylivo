@@ -1696,3 +1696,9 @@ Object.assign(DICT_EN, {
   'Открыть трекотеку': 'Open library',
   'ещё': 'more',
 })
+
+// v1.376.0: удаление трека вернулось на карточку.
+Object.assign(DICT_EN, { 'Убрать из трекотеки': 'Remove from library' })
+REGEX_EN.push([/^Убрать «(.+)» из трекотеки\? Он пропадёт у всех\.$/,
+  'Remove “$1” from the library? It will disappear for everyone.'])
+REGEX_EN.push([/^Трекотека · (\d+)$/, 'Library · $1'])

@@ -1,5 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { promptUi } from '../lib/confirm'
+import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
@@ -10,6 +10,7 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack } from '../lib/music'
 import { MusicSettings, loadGif, loadBg } from './MusicSettings'
 import { Icon } from '../components/icons'
+import { Portal } from '../components/Portal'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
@@ -46,7 +47,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [vol, setVol] = useState(() => Number(localStorage.getItem('ponoi_mus_vol') || '100'))
   const [tab, setTab] = useState<'queue' | 'playlists'>('queue')
   const [scUrl, setScUrl] = useState('')
-  const [qFilter, setQFilter] = useState('')
   const [showLib, setShowLib] = useState(false)
   const [libQ, setLibQ] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -544,11 +544,22 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setTracks(await fetchTracks())
   }
 
-  async function removeTrack(id: string) {
+  async function removeTrack(id: string, name?: string) {
+    // v1.376.0: спрашиваем. Трекотека общая — удаляя трек, человек убирает его у
+    // всех, и промах по кнопке на карточке стоит дороже, чем лишний вопрос.
+    if (!await confirmUi(`Убрать «${name || 'трек'}» из трекотеки? Он пропадёт у всех.`,
+      { okText: 'Убрать', danger: true })) return
     const { data, error } = await removeTrackDb(id)
     if (error || !data?.length) { toastErr('Не удалось удалить трек' + (error?.message ? ': ' + error.message : '')); return }
-    setTracks(t => t.filter(x => x.id !== id))
-    setIdx(i => Math.max(0, Math.min(i, tracks.length - 2)))
+    const gone = tracks.findIndex(x => x.id === id)
+    const rest = tracks.filter(x => x.id !== id)
+    setTracks(rest)
+    // Удалили трек ПЕРЕД текущим — иначе играть начало бы соседнюю песню:
+    // номер тот же, а список сдвинулся. Раньше номер просто прижимался к концу.
+    if (gone >= 0 && gone < idx) setIdx(i => Math.max(0, i - 1))
+    else if (gone === idx) setIdx(i => Math.min(i, Math.max(0, rest.length - 1)))
+    // Из очереди тоже убираем: ждать удалённого нечего.
+    saveManual(manual.filter(x => x !== id))
   }
 
   const next = () => {
@@ -602,7 +613,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   const showLeft = gif.url && (gif.pos === 'left' || gif.pos === 'both')
   const showRight = gif.url && (gif.pos === 'right' || gif.pos === 'both')
-  const filteredQueue = qFilter ? tracks.filter(t => t.name.toLowerCase().includes(qFilter.toLowerCase())) : tracks
 
   // ── Очередь: что заиграет дальше (v1.374.0) ──────────────────────────────
   //
@@ -702,9 +712,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <button className="mus2-addbtn" onClick={addSoundcloud} disabled={!!importing}>{importing ? '…' : 'Добавить'}</button>
           </div>
           {importing && <div className="mus2-importing">{importing}</div>}
+          {/* v1.376.0: поле «найти трек в очереди» убрано — после того, как очередь
+              стала лентой ближайших, фильтровать в ней было нечего, и поле просто
+              ничего не делало. Поиск по всему складу живёт в самой трекотеке. */}
           <div className="mus2-addrow">
-            <input className="mus2-in" placeholder="Найти трек в очереди…" value={qFilter} onChange={e => setQFilter(e.target.value)} />
-            <button className="mus2-libbtn" onClick={() => setShowLib(true)}>Трекотека</button>
+            <button className="mus2-libbtn wide" onClick={() => setShowLib(true)}>
+              <Icon name="music" size={15} /> Трекотека{tracks.length > 0 ? ` · ${tracks.length}` : ''}
+            </button>
           </div>
 
           {tab === 'queue' ? <>
@@ -832,7 +846,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           часть плеера. Это разные дела: плеер отвечает «что играет», трекотека —
           «что у меня есть», и склад на сотню записей не должен ютиться в узкой
           колонке рядом с обложкой. */}
-      {showLib && <div className="mus2-lib" onClick={() => setShowLib(false)}>
+      {showLib && <Portal><div className="mus2-lib" onClick={() => setShowLib(false)}>
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
             <b>Ponoi Music · Трекотека</b>
@@ -885,6 +899,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             onClick={e => { e.stopPropagation(); queueNext(t.id) }}>
                             <Icon name="plus" size={15} />
                           </button>
+                          {/* v1.376.0: удаление вернулось сюда. Кнопка жила в старом
+                              вертикальном списке очереди и исчезла вместе с ним —
+                              убрать трек из трекотеки стало нечем вовсе. */}
+                          <button className="mus2-card-del" title="Убрать из трекотеки"
+                            onClick={e => { e.stopPropagation(); void removeTrack(t.id, title) }}>
+                            <Icon name="trash" size={14} />
+                          </button>
                           {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
                         </div>
                         <div className="mus2-card-t notr" translate="no">{title}</div>
@@ -897,7 +918,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             })()}
           </div>
         </div>
-      </div>}
+      </div></Portal>}
 
       {curYt && ytId && <iframe key={ytId} ref={ytFrameRef} className="mus2-ytframe" title="YouTube" allow="autoplay; encrypted-media"
         src={'https://www.youtube.com/embed/' + ytId + '?enablejsapi=1&playsinline=1&controls=0&rel=0'} />}
