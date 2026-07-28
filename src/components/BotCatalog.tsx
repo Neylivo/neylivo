@@ -34,12 +34,12 @@ interface Card {
 }
 
 /**
- * @param inline встроить в страницу настроек вместо окна поверх окна (v1.335.0).
+ * Каталог всегда встроен в страницу: окно поверх окна убрано в v1.336.0.
+ * Параметр inline оставлен, чтобы вызов читался однозначно.
  */
-export function BotCatalog({ serverId, onAdded, onClose, inline }: {
+export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   serverId?: string
   onAdded?: () => void
-  onClose?: () => void
   inline?: boolean
 }) {
   const { user } = useAuth()
@@ -160,22 +160,7 @@ export function BotCatalog({ serverId, onAdded, onClose, inline }: {
         {publishing && <PublishBotModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}
   </>
 
-  if (inline) return <div className="cat-inline">{body}</div>
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal cat-modal" onClick={e => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        <div className="modal-title">Каталог ботов</div>
-        <div className="modal-sub">
-          {serverId
-            ? 'Бот становится обычным участником сервера: права, каналы и запреты у него те же, что у людей.'
-            : 'Открой каталог из настроек сервера, чтобы можно было добавить бота сразу туда.'}
-        </div>
-        {body}
-      </div>
-    </div>
-  )
+  return <div className="cat-inline">{body}</div>
 }
 
 function BotCardView({ c, busy, canAdd, onOpen, onAdd, onRemove }: {

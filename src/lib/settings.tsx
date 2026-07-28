@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { setTime24 } from './ui'
 import { applyLang } from './i18n'
-import { applyAppIcon, DEFAULT_APP_ICON } from './appIcon'
+import { applyAppIcon } from './appIcon'
 import { getUserPrefs, patchUserPrefs } from './userPrefs'
 import { customNickFamily } from './profilePrefs'
 // v1.337.0: сами данные и их запись/чтение — в settingsStore.ts. Там же они и
 // проверяются (npm run test:settings): «сохраняется ли настройка» невозможно
 // проверить, пока это перемешано с React-провайдером.
 import {
-  DEFAULTS, DEFAULT_CUSTOM, ACCOUNT_KEYS, isAccountKey, loadSettings, saveSettings,
+  DEFAULTS, ACCOUNT_KEYS, isAccountKey, loadSettings, saveSettings,
   type Settings, type CustomTheme,
 } from './settingsStore'
 export { DEFAULTS, DEFAULT_CUSTOM } from './settingsStore'

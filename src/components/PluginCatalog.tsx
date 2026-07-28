@@ -58,11 +58,11 @@ function toCard(r: CatalogPlugin): Card {
 }
 
 /**
- * @param inline встроить прямо в страницу настроек, без окна поверх окна.
- *   Модалка внутри модалки — лишний шаг: раздел «Плагины» показывает каталог
- *   сразу, листаешь и ставишь, ничего не открывая (v1.335.0).
+ * Каталог всегда встроен в страницу настроек: окно поверх окна было лишним
+ * шагом, и с v1.336.0 раздел показывает каталог сразу. Параметр inline остался
+ * для читаемости вызывающего кода.
  */
-export function PluginCatalog({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
+export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
   const { user } = useAuth()
   const [rows, setRows] = useState<CatalogPlugin[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -150,18 +150,7 @@ export function PluginCatalog({ onClose, inline }: { onClose?: () => void; inlin
         {publishing && <PublishModal onClose={() => setPublishing(false)} onDone={() => { setPublishing(false); void load() }} />}
   </>
 
-  if (inline) return <div className="cat-inline">{body}</div>
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal cat-modal" onClick={e => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-        <div className="modal-title">Каталог плагинов</div>
-        <div className="modal-sub">Ставится на это устройство. Всё, что просит плагин, показывается до установки.</div>
-        {body}
-      </div>
-    </div>
-  )
+  return <div className="cat-inline">{body}</div>
 }
 
 function CardView({ c, onOpen, onInstall, onRemove }: {

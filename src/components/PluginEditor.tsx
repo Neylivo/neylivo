@@ -70,7 +70,13 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     }))
   }
 
-  /** «Проверить» — настоящий запуск в песочнице, а не разбор шапки. */
+  /**
+   * «Проверить» — настоящий запуск в песочнице, а не разбор шапки.
+   *
+   * Запустить плагин можно только установив его: песочница берёт код из списка
+   * установленных. Значит после проверки он там и останется — и об этом надо
+   * сказать прямо, а не оставить человека думать, что он «просто посмотрел».
+   */
   async function tryRun() {
     if (problem) { toastErr(problem); return }
     setBusy(true); setRan(null)
@@ -78,9 +84,9 @@ export function PluginEditor({ editId, onClose, onSaved }: {
       const m = parsePlugin(file)
       await installPlugin(m, file)
       const err = pluginError(m.id)
-      if (err) setRan('Не запустился: ' + err)
-      else if (isRunning(m.id)) setRan('Запустился и работает.')
-      else setRan('Установлен, но не запущен — включи его в списке ниже.')
+      if (err) setRan('Не запустился: ' + err + ' (плагин установлен — можно править и проверять снова)')
+      else if (isRunning(m.id)) setRan('Запустился и работает — плагин уже установлен.')
+      else setRan('Установлен, но не запущен — включи его во вкладке «Используемые».')
       onSaved?.()
     } catch (e: any) {
       setRan('Не запустился: ' + (e?.message ?? String(e)))
@@ -188,7 +194,8 @@ export function PluginEditor({ editId, onClose, onSaved }: {
           <button className="modal-ghost" onClick={download} title="Сохранить как .ponoi-файл">
             <Icon name="download" size={15} /> Файл
           </button>
-          <button className="modal-ghost" disabled={busy || !!problem} onClick={() => void tryRun()}>
+          <button className="modal-ghost" disabled={busy || !!problem} onClick={() => void tryRun()}
+            title="Поставит плагин и запустит — иначе проверить его нельзя">
             {busy ? '…' : 'Проверить'}
           </button>
           <button className="modal-primary" disabled={busy || !!problem} onClick={() => void save()}>
