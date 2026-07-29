@@ -62,10 +62,6 @@ interface ApkInstallerPlugin {
 }
 const ApkInstaller = registerPlugin<ApkInstallerPlugin>('ApkInstaller')
 
-export function canInstallInApp(): boolean {
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
-}
-
 /**
  * Скачать и открыть установщик. onProgress получает проценты.
  * Бросает — вызывающая сторона в этом случае откатывается на обычную ссылку,

@@ -62,10 +62,6 @@ export function initServerEmoji() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'stickers' }, () => refreshStickers())
     .subscribe()
 }
-export function stopServerEmoji() {
-  if (chan) { supabase.removeChannel(chan); chan = null }
-  started = false
-}
 
 export async function addServerEmoji(serverId: string, name: string, url: string, uid: string): Promise<void> {
   const clean = cleanEmojiName(name)

@@ -22,11 +22,6 @@ async function keysOf(userId: string, force = false): Promise<DeviceKey[]> {
   return keys
 }
 
-/** Сбросить кэш ключей — например, когда пришло уведомление о новом устройстве. */
-export function forgetCachedKeys(userId?: string) {
-  if (userId) keyCache.delete(userId); else keyCache.clear()
-}
-
 export class NoRecipientKeys extends Error {}
 
 // v1.300.0: когда к сообщению приложены файлы, внутри конверта едет не голый текст,
@@ -107,9 +102,4 @@ export async function openIncoming(content: string, senderUserId: string): Promi
   } catch (e) {
     return { text: e instanceof NotForThisDevice ? UNREADABLE_OTHER_DEVICE : UNREADABLE_BROKEN, files: [] }
   }
-}
-
-/** Есть ли у собеседника хоть один ключ — для индикатора «шифрование доступно». */
-export async function peerHasKeys(peerUserId: string): Promise<boolean> {
-  try { return (await keysOf(peerUserId)).length > 0 } catch { return false }
 }

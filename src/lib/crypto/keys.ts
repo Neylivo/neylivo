@@ -232,9 +232,3 @@ export async function restoreMyKey(userId: string, password: string): Promise<Re
     return 'restored'
   } catch { return 'broken' }
 }
-
-/** Есть ли вообще копия — чтобы не предлагать восстановление, когда нечего. */
-export async function hasKeyBackup(userId: string): Promise<boolean> {
-  const { data } = await supabase.from('key_backups').select('user_id').eq('user_id', userId).maybeSingle()
-  return !!data
-}

@@ -114,22 +114,6 @@ export async function mutualServers(aId: string, bId: string): Promise<Server[]>
   return (data ?? []) as Server[]
 }
 
-export async function findServers(q: string): Promise<Server[]> {
-  const term = q.trim()
-  if (!term) return []
-  const byName = await supabase.from('servers').select('*').ilike('name', '%' + term + '%').limit(10)
-  const list = (byName.data ?? []) as Server[]
-  if (list.length === 0 && /^[0-9a-f-]{6,}$/i.test(term)) {
-    const byId = await supabase.from('servers').select('*').eq('id', term).maybeSingle()
-    if (byId.data) return [byId.data as Server]
-  }
-  return list
-}
-
-export async function renameServer(id: string, name: string) {
-  return updateServer(id, { name })
-}
-
 export async function deleteServer(id: string) {
   // v1.274.0: раньше три первых delete() не проверялись вообще (fire-and-forget),
   // а результат последнего (servers) никто не читал у вызывающей стороны —

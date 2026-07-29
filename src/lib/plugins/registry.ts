@@ -161,10 +161,6 @@ export function clearPlugin(pluginId: string) {
 export function commandOwner(name: string): string | null {
   return reg.commands.find(c => c.name === name)?.pluginId ?? null
 }
-
-// ---- Чтение из интерфейса ------------------------------------------------------
-export const getCommands = () => reg.commands
-export const getSettingsPages = () => reg.settingsPages
 export const useComposerButtons = () => useReg(() => reg.composerButtons)
 export const useMessageActions = () => useReg(() => reg.messageActions)
 export const useSlashCommands = () => useReg(() => reg.commands)

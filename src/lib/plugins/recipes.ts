@@ -133,8 +133,6 @@ export const RECIPES: Recipe[] = [
   },
 ]
 
-export const recipeOf = (key: string): Recipe | undefined => RECIPES.find(r => r.key === key)
-
 /** Значения полей рецепта по умолчанию. */
 export function recipeDefaults(r: Recipe): Record<string, string> {
   const out: Record<string, string> = {}

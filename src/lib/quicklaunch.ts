@@ -72,14 +72,6 @@ export async function uploadMissingMods(mods: QlMod[], onProgress?: (p: number) 
   }
 }
 
-// «Поделиться сборкой»: скан -> заливка недостающих модов -> запись пака -> id для карточки в чате.
-export async function shareCurrentPack(hostId: string, serverIp: string, serverPort: number, onProgress?: (p: number) => void): Promise<string> {
-  const manifest = await scanLocalPack()
-  if ('error' in manifest) throw new Error(manifest.error)
-  await uploadMissingMods(manifest.mods, onProgress)
-  return createPack(hostId, manifest, serverIp, serverPort)
-}
-
 // Прогресс шлют и prepareInstance (докачка модов — done/total/filename), и launch
 // (installer/libraries/assets/launch — см. electron/quicklaunch.cjs). Поля опциональны
 // в зависимости от того, какой этап их прислал.
