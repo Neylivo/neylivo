@@ -24,7 +24,7 @@ import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } fro
 import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
 import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
-import { nextTrack } from '../music/nextTrack'
+import { nextTrack, backTarget } from '../music/nextTrack'
 import { personalOrder, recommend, libraryOrder } from '../music/personalQueue'
 import { guardLink } from './linkguard'
 import { contentTypeOf } from './fileType'
@@ -418,6 +418,50 @@ check('проверка заметила бы, что личную очеред�
   // Ровно прежнее поведение: «следующий по складу», что бы ни предлагала очередь.
   const a = nextTrack({ idx: 0, count: 5, repeat: 'off', shuffle: false, personalIdx: 4 })
   return a.kind === 'go' && a.index !== 1
+})
+
+console.log('\n── «Назад» возвращает туда, где был (v1.407.0) ──')
+const всеЕсть = () => true
+
+check('возвращаемся к тому, что играло до этого', () => {
+  const r = backTarget(['a', 'b', 'c'], всеЕсть)
+  return r.target === 'b' && r.hist.join('') === 'ab'
+})
+check('два раза назад — на два трека назад', () => {
+  const r1 = backTarget(['a', 'b', 'c'], всеЕсть)
+  const r2 = backTarget(r1.hist, всеЕсть)
+  return r2.target === 'a'
+})
+check('в самом начале возвращаться некуда', () => {
+  const r = backTarget(['a'], всеЕсть)
+  return r.target === null
+})
+check('пустая история не ломает', () => backTarget([], всеЕсть).target === null)
+check('удалённый из склада трек пропускается', () => {
+  // Слушали a, b, c; b тем временем убрали из Трекотеки.
+  const r = backTarget(['a', 'b', 'c'], id => id !== 'b')
+  return r.target === 'a'
+})
+check('если всё удалено — возвращаться некуда', () => {
+  const r = backTarget(['a', 'b', 'c'], id => id === 'c')
+  return r.target === null
+})
+check('история не портится на месте', () => {
+  const h = ['a', 'b', 'c']
+  backTarget(h, всеЕсть)
+  return h.length === 3
+})
+check('после шага назад наверху стопки — то, куда вернулись', () => {
+  const r = backTarget(['a', 'b', 'c'], всеЕсть)
+  return r.hist[r.hist.length - 1] === r.target
+})
+
+console.log('\n── Ломаем нарочно («назад») ──')
+check('проверка заметила бы возврат к «предыдущему номеру списка»', () => {
+  // При перемешивании порядок склада и порядок прослушивания — разные вещи:
+  // человек слушал c после a, и «назад» обязано вернуть a, а не соседа по складу.
+  const r = backTarget(['a', 'c'], всеЕсть)
+  return r.target === 'a'
 })
 
 console.log('\n── Очередь под человека ──')

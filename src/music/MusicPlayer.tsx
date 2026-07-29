@@ -20,7 +20,7 @@ import { Avatar } from '../components/Avatar'
 import { copyText } from '../lib/copyMedia'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
-import { nextTrack } from './nextTrack'
+import { nextTrack, backTarget } from './nextTrack'
 import { useDragBar } from './useDragBar'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
@@ -730,7 +730,39 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (act.index === idx) { restartCurrent(); return }
     setIdx(act.index)
   }
-  const prev = () => setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
+  // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
+  // склада. При перемешивании это была прямая поломка: человек слушал случайный
+  // порядок, жал «назад» — и попадал не туда, откуда пришёл, а к соседу по
+  // списку, которого не слышал вовсе. То же самое было и после «поставить
+  // следующим», и после выбора трека из Трекотеки.
+  //
+  // Помним последние тридцать: этого хватает, чтобы отмотать сколько угодно
+  // назад в пределах одного прослушивания, и не даёт списку расти вечно.
+  const histRef = useRef<string[]>([])
+  const fromPrevRef = useRef(false)
+  useEffect(() => {
+    const id = cur?.id
+    if (!id) return
+    if (fromPrevRef.current) { fromPrevRef.current = false; return }
+    const h = histRef.current
+    // Тот же трек подряд (перезапуск, повтор одного) в историю не пишем: иначе
+    // «назад» топталось бы на месте.
+    if (h[h.length - 1] === id) return
+    h.push(id)
+    if (h.length > 30) h.splice(0, h.length - 30)
+  }, [cur?.id])
+
+  const prev = () => {
+    const { hist, target } = backTarget(histRef.current, id => tracks.some(t => t.id === id))
+    if (target) {
+      histRef.current = hist
+      fromPrevRef.current = true
+      setIdx(tracks.findIndex(t => t.id === target))
+      return
+    }
+    // Истории ещё нет (первый трек за сеанс) — прежнее поведение: шаг по складу.
+    setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
+  }
   // v1.371.0: системные кнопки («предыдущий» на гарнитуре) вешаются один раз, и
   // без ссылки обработчик держал бы список таким, каким он был на первом рендере
   // — то есть пустым, и кнопка всегда возвращала бы к первому треку.

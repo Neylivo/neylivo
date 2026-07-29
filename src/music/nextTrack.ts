@@ -79,3 +79,21 @@ export function nextTrack(i: NextInput): NextAction {
   if (n < count) return { kind: 'go', index: n }
   return repeat === 'all' ? { kind: 'go', index: 0 } : { kind: 'stop' }
 }
+
+/**
+ * Куда вернуться по «назад» (v1.407.0).
+ *
+ * История — стопка того, что играло, наверху лежит играющее сейчас. Шаг назад
+ * снимает его и берёт следующее сверху. Треки, которых уже нет в складе (их
+ * удалили, пока играла музыка), пропускаются: возвращаться к ним некуда.
+ *
+ * Раньше «назад» просто уменьшал номер в списке. При перемешивании это была
+ * прямая поломка: человек слушал случайный порядок, а возвращался к соседу по
+ * складу, которого не слышал вовсе.
+ */
+export function backTarget(hist: string[], has: (id: string) => boolean): { hist: string[]; target: string | null } {
+  const h = hist.slice()
+  h.pop()                                        // верхний — это то, что играет сейчас
+  while (h.length && !has(h[h.length - 1])) h.pop()
+  return { hist: h, target: h.length ? h[h.length - 1] : null }
+}

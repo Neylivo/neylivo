@@ -79,6 +79,29 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
   } : undefined
   const onReactEnd = () => setReacting(false)
 
+  // v1.407.0: 3D-питомец не отзывался на нажатие. <model-viewer> — целый
+  // отдельный элемент со своей начинкой: нажатия он ловит сам, ради вращения
+  // камеры, и до нашего onClick они просто не доходили. Поэтому слушаем на
+  // обёртке и в фазе перехвата — она срабатывает ДО того, как до нажатия
+  // доберётся модель, и отменить её оттуда уже нельзя.
+  //
+  // Отличаем нажатие от вращения по расстоянию: если палец проехал больше пяти
+  // пикселей, человек крутил модель, а не гладил питомца. Ровно тот же порог,
+  // что у плашки плеера, и по той же причине — рука дрожит у всех.
+  const petDown = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const modelTap = clickable && p.petKind === 'model' ? {
+    onPointerDownCapture: (e: React.PointerEvent) => { petDown.current = { x: e.clientX, y: e.clientY, moved: false } },
+    onPointerMoveCapture: (e: React.PointerEvent) => {
+      const d = petDown.current
+      if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) d.moved = true
+    },
+    onPointerUpCapture: (e: React.PointerEvent) => {
+      const d = petDown.current
+      petDown.current = null
+      if (d && !d.moved) onReactClick?.(e)
+    },
+  } : {}
+
   // v1.298.0: библиотека 3D подтягивается только здесь и только для объёмного
   // питомца — раньше она грузилась с чужого CDN при каждом запуске приложения.
   useEffect(() => { if (p.petKind === 'model') void ensureModelViewer() }, [p.petKind])
@@ -87,9 +110,11 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
   if (p.petKind === 'video') mediaInner = <video className={animClass} style={mediaStyle} src={p.petUrl} autoPlay loop muted playsInline onClick={onReactClick} onAnimationEnd={onReactEnd} />
   else if (p.petKind === 'model') {
     mediaInner = (
-      // @ts-ignore - <model-viewer> is a web component
-      <model-viewer className={animClass} style={mediaStyle as any} src={p.petUrl} auto-rotate camera-controls disable-zoom
-        interaction-prompt="none" onClick={onReactClick} onAnimationEnd={onReactEnd} />
+      <div style={{ width: '100%', height: '100%', cursor: clickable ? 'pointer' : undefined }} {...modelTap}>
+        {/* @ts-ignore - <model-viewer> is a web component */}
+        <model-viewer className={animClass} style={mediaStyle as any} src={p.petUrl} auto-rotate camera-controls disable-zoom
+          interaction-prompt="none" onAnimationEnd={onReactEnd} />
+      </div>
     )
   }
   else mediaInner = <img className={animClass} style={mediaStyle} src={p.petUrl} alt="pet" onClick={onReactClick} onAnimationEnd={onReactEnd} />
