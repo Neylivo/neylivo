@@ -5836,3 +5836,10 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   font-size: 11px; font-weight: 700; line-height: 1.6;
 }
 .mus2-lib-note { color: var(--mut); font-size: 12.5px; margin: -4px 0 12px; }
+
+/* Название трека и игры в активности копируется щелчком (v1.408.0).
+   Выделять его разрешено и раньше, но строка лежит в кликабельном ряду: пока
+   отпускаешь кнопку, поверх выделения открывается мини-профиль, а на телефоне
+   выделять и вовсе нечем. */
+.mag-tx.copyable { cursor: copy; user-select: text; }
+.mag-tx.copyable:hover { text-decoration: underline dotted; text-underline-offset: 2px; }

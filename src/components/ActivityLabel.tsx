@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Activity, Game } from '../lib/presence'
 import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
+import { toastOk } from '../lib/toast'
 
 // «2 ч 34 мин 1 сек» — сколько длится активность.
 export function fmtElapsed(since: number): string {
@@ -43,9 +44,19 @@ export function ClockElapsed({ since }: { since: number }) {
 
 // «Играет в …» с мини-обложкой — строка под ником (участники сервера, сайдбар ЛС).
 export function GameLine({ game }: { game: Game }) {
+  // v1.408.0: название игры копируется тем же щелчком, что и название трека:
+  // причина та же — его хотят забрать, а строка лежит в кликабельном ряду.
+  const full = game.name + (game.mode ? ' — ' + game.mode : '')
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (window.getSelection()?.toString()) return
+    navigator.clipboard?.writeText(full).then(() => toastOk('Название скопировано'), () => {})
+  }
   return <small className="member-act game">
     <span className="mag-ico"><Icon name={gameIconOf(game.name)} size={14} /></span>
-    <span className="mag-tx">{game.name}{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
+    <span className="mag-tx copyable" onClick={copy} title={'Нажми, чтобы скопировать: ' + full}>
+      {game.name}{game.mode && <span className="mag-mode"> — {game.mode}</span>}
+    </span>
   </small>
 }
 
@@ -57,11 +68,26 @@ export function GameLine({ game }: { game: Game }) {
 // ты слушаешь»: данные доходили, показать их было негде.
 export function ListenLine({ l }: { l: { title: string; artist?: string | null } }) {
   const full = l.title + (l.artist ? ' — ' + l.artist : '')
+  // v1.408.0: по названию щёлкают, чтобы его забрать, — и до сих пор из этого
+  // ничего не выходило. Выделять текст разрешено, но строка целиком лежит в
+  // кликабельном ряду: отпускаешь кнопку — и поверх выделения открывается
+  // мини-профиль. На телефоне выделить его и вовсе нечем.
+  //
+  // Поэтому щелчок по названию теперь просто кладёт его в буфер, а до ряда не
+  // доходит. Выделение мышью при этом никуда не делось: оно живёт на нажатии и
+  // протяжке, а копирование срабатывает по щелчку без протяжки.
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (window.getSelection()?.toString()) return   // человек выделял, а не щёлкал
+    navigator.clipboard?.writeText(full).then(() => toastOk('Название скопировано'), () => {})
+  }
   return <small className="member-act listen" title={'Слушает ' + full}>
     <span className="mag-ico"><Icon name="music" size={14} /></span>
-    {/* notr: это чужое название трека, переводить его нельзя. Выделение
-        разрешено намеренно — название хотят скопировать, чтобы найти у себя. */}
-    <span className="mag-tx notr" translate="no">{l.title}{l.artist && <span className="mag-mode"> — {l.artist}</span>}</span>
+    {/* notr: это чужое название трека, переводить его нельзя. */}
+    <span className="mag-tx notr copyable" translate="no" onClick={copy}
+      title={'Нажми, чтобы скопировать: ' + full}>
+      {l.title}{l.artist && <span className="mag-mode"> — {l.artist}</span>}
+    </span>
   </small>
 }
 
