@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
-import { Home } from './components/Home'
 import { Toasts, toastOk, toastErr } from './lib/toast'
 import { openSafely } from './lib/safeUrl'
 import { loadFavs, toggleFav } from './lib/emoji'
@@ -17,7 +16,14 @@ import { useClampToViewport } from './lib/clampPos'
 import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
 import { lazyNamed } from './lib/lazyScreen'
 // Аварийный чат нужен в редкой ситуации «основной сервер лёг» — грузим тогда же.
+// v1.415.0: основной экран грузится после входа, а не вместе с ним.
+//
+// Первое, что человек видит, — окно входа, а в стартовую сборку до сих пор
+// ехало всё приложение целиком: список серверов, каналы, лента сообщений,
+// поле ввода, профили. До входа это не нужно ни одной строчкой, а ждать их
+// загрузки приходилось всем и каждый раз.
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
+const Home = lazyNamed(() => import('./components/Home'), 'Home')
 import { startEnabledPlugins } from './lib/plugins/host'
 import { pluginsDisabled, setPluginsDisabled } from './lib/plugins/registry'
 
@@ -290,6 +296,16 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // v1.415.0: пока человек вводит пароль, основной экран уже подгружается
+  // в фоне. Так вход остаётся быстрым, а паузы после нажатия «Войти» не
+  // появляется: к этому моменту код обычно уже на месте. Ждём немного, чтобы
+  // не отнимать сеть у самой страницы входа с её картинкой и шрифтами.
+  useEffect(() => {
+    if (session) return
+    const t = window.setTimeout(() => { void import('./components/Home') }, 1200)
+    return () => window.clearTimeout(t)
+  }, [session])
 
   const verClicks = useRef<number[]>([])
   function verClick() {
