@@ -71,6 +71,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // трёхсотой не грузит». Показываем порциями, добавка — по кнопке.
   const LIB_PAGE = 60
   const [libShown, setLibShown] = useState(LIB_PAGE)
+  // v1.416.0: подгрузка по прокрутке вместо кнопки. Наблюдатель следит за меткой
+  // в конце списка: показалась на экране — добавляем порцию. Так склад листается
+  // бесконечно, а рисуется по-прежнему кусками, и большие склады не вешают окно.
+  const libEndRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = libEndRef.current
+    if (!showLib || !el) return
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) setLibShown(n => n + LIB_PAGE)
+    }, { rootMargin: '400px' })   // начинаем заранее, чтобы не было рывка
+    io.observe(el)
+    return () => io.disconnect()
+  })
   const [libQ, setLibQ] = useState('')
   // Открыли склад заново или начали искать — снова с первой порции.
   useEffect(() => { setLibShown(LIB_PAGE) }, [showLib, libQ])
@@ -439,7 +452,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     })()
     return () => { ok = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, showLib, libShown])   // v1.413.0: догружаем и при открытии склада, и по «Показать ещё»
+  // v1.416.0: и на смену играющего трека тоже. Это была настоящая причина
+  // задержки: человек выбирал трек из склада, а данные о нём (в том числе
+  // ссылка, по которой он реально играет) не запрашивались вовсе — пока не
+  // изменится список или не откроют склад. То есть выбранное ждало чего-то
+  // постороннего.
+  }, [tracks, showLib, libShown, cur?.id])
 
   // ---- Тема под цвет трека: выжимаем доминирующий цвет из обложки ----
   useEffect(() => {
@@ -1356,13 +1374,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
                           </span>}
                         </div>
-                {all.length > shown.length && (
-                  <div className="mus2-lib-more">
-                    <button className="pqs2-btn" onClick={() => setLibShown(n => n + LIB_PAGE)}>
-                      Показать ещё · осталось {all.length - shown.length}
-                    </button>
-                  </div>
-                )}
                         <div className="mus2-card-t notr" translate="no">{title}</div>
                         <div className="mus2-card-a">
                           <span className="notr" translate="no">{author || ''}</span>
@@ -1372,6 +1383,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     )
                   })}
                 </div>
+                {/* v1.416.0: конец списка. Доехали до него — Трекотека сама
+                    добавляет следующую порцию, поэтому листать можно без конца
+                    и без кнопок. Метка нужна и когда всё уже показано: тогда
+                    она просто ничего не делает. */}
+                {all.length > shown.length && <div ref={libEndRef} className="mus2-lib-end">Загружаю ещё…</div>}
               </>
             })()}
           </div>
