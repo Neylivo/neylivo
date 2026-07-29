@@ -114,13 +114,19 @@ export async function loadLyrics(trackId: string): Promise<string> {
 /**
  * Сохранить текст. Пишем и в базу, и на устройство: база может быть без
  * миграции 102, а терять набранное из-за этого нельзя.
+ *
+ * shared=false — только на это устройство, в общий текст не лезем. Так уходит
+ * найденное в интернете у того, кто трек не выкладывал: себе он текст оставит,
+ * а общий менять не вправе (v1.395.0). База это же правило держит сама, у себя;
+ * здесь мы просто не стучимся туда, где нам заведомо откажут.
  */
-export async function saveLyrics(trackId: string, text: string): Promise<'db' | 'local'> {
+export async function saveLyrics(trackId: string, text: string, shared = true): Promise<'db' | 'local'> {
   if (!trackId) return 'local'
   const all = localAll()
   if (text.trim()) all[trackId] = text; else delete all[trackId]
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(all)) } catch { /* переполнено */ }
 
+  if (!shared) return 'local'
   const { data: u } = await supabase.auth.getUser()
   const uid = u?.user?.id
   if (!uid) return 'local'

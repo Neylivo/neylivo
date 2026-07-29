@@ -17,6 +17,8 @@ export async function fetchTracks(): Promise<Track[]> {
     url: r.url as string,
     name: r.name as string,
     owner: (r.owner_name || r.owner) as string,
+    // owner — как подписать («файл · Вася»), ownerId — кто это на самом деле.
+    ownerId: r.owner as string,
     kind: (r.kind as 'url' | 'file'),
     author: (r.author ?? undefined) as string | undefined,
     art: (r.art ?? null) as string | null,

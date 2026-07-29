@@ -1115,27 +1115,22 @@ await check('избранные эмодзи попали в публикаци�
     `insert into music_tracks (url, name, owner) values ('https://soundcloud.com/l/1','Песня',$1) returning id`,
     [OWNER])).rows[0].id
 
-  await check('добавить текст может не только владелец трека', async () => {
-    await as(USER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'строка',$2)`, [TRACK, USER])
+  await check('кто выложил трек — тот и ставит текст', async () => {
+    await as(OWNER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'строка',$2)`, [TRACK, OWNER])
     return (await db.query('select text from music_lyrics')).rows[0].text === 'строка'
   })
 
-  await check('свой текст можно поправить', async () => {
-    await as(USER, `update music_lyrics set text='другая строка' where track_id=$1`, [TRACK])
+  await check('он же может его поправить', async () => {
+    await as(OWNER, `update music_lyrics set text='другая строка' where track_id=$1`, [TRACK])
     return (await db.query('select text from music_lyrics')).rows[0].text === 'другая строка'
   })
 
-  await check('чужой текст посторонний не перепишет', async () => {
+  await check('посторонний текст не перепишет', async () => {
     await as(OTHER, `update music_lyrics set text='всё стёр' where track_id=$1`, [TRACK])
     return (await db.query('select text from music_lyrics')).rows[0].text === 'другая строка'
   })
 
-  await check('владелец трека поправить может', async () => {
-    await as(OWNER, `update music_lyrics set text='от владельца', updated_by=$2 where track_id=$1`, [TRACK, OWNER])
-    return (await db.query('select text from music_lyrics')).rows[0].text === 'от владельца'
-  })
-
-  await check('чужой текст нельзя стереть, чтобы вставить свой', async () => {
+  await check('посторонний не сотрёт текст, чтобы вставить свой', async () => {
     // Иначе запрет на перезапись обходится в два шага, как было с обложками.
     await as(OTHER, `delete from music_lyrics where track_id=$1`, [TRACK])
     return (await db.query('select 1 from music_lyrics')).rows.length === 1
@@ -1146,8 +1141,15 @@ await check('избранные эмодзи попали в публикаци�
     return r.rows.length === 1
   })
 
+  await refused('посторонний не заведёт текст чужому треку', async () => {
+    const t2 = (await db.query(
+      `insert into music_tracks (url, name, owner) values ('https://soundcloud.com/l/2','Вторая',$1) returning id`,
+      [OWNER])).rows[0].id
+    await as(OTHER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'чужой текст',$2)`, [t2, OTHER])
+  })
+
   await refused('нельзя записать текст от чужого имени', async () => {
-    await as(OTHER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'подделка',$2)`, [TRACK, USER])
+    await as(OWNER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'подделка',$2)`, [TRACK, USER])
   })
 
   await check('текст уходит вместе с треком', async () => {

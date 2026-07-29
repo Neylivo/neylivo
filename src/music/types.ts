@@ -2,6 +2,8 @@
 export interface Track {
   id: string; url: string; name: string; owner: string
   kind?: 'url' | 'file'; author?: string; art?: string | null; dur?: number; play?: string | null
+  /** id того, кто выложил трек. Нужен там, где важно «свой ли это трек», а не как подписать. (v1.395.0) */
+  ownerId?: string
   /** Сколько раз слушали все (v1.377.0). Нет колонки — нет и числа. */
   plays?: number
 }

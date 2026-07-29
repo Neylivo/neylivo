@@ -22,31 +22,36 @@ alter table music_lyrics enable row level security;
 drop policy if exists "ml_read" on music_lyrics;
 create policy "ml_read" on music_lyrics for select to authenticated using (true);
 
--- Добавить текст может любой вошедший: чаще всего его добавляет тот, кто
--- слушает, а не тот, кто когда-то принёс трек.
+-- Ставит текст только тот, кто выложил трек (v1.395.0).
+--
+-- Трекотека общая, но текст — часть карточки трека, а не общая доска: если его
+-- может писать кто угодно, один добавил, второй заменил, третий стёр, и спорить
+-- об этом некому. Хозяин у трека уже есть — он и отвечает за текст.
+--
+-- Это правило живёт здесь, а не в интерфейсе: спрятать кнопку мало, запрос
+-- посылается и мимо приложения.
 drop policy if exists "ml_insert" on music_lyrics;
 create policy "ml_insert" on music_lyrics for insert to authenticated
-  with check (updated_by = auth.uid());
+  with check (
+    updated_by = auth.uid()
+    and exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid())
+  );
 
--- А вот переписывать уже добавленный текст может только тот, кто его добавил,
--- или владелец трека. Иначе любой прохожий заменит чужую работу на что угодно —
--- ровно то же правило, что у найденной обложки (миграция 22).
 drop policy if exists "ml_update" on music_lyrics;
 create policy "ml_update" on music_lyrics for update to authenticated
-  using (
+  using (exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid()))
+  with check (
     updated_by = auth.uid()
-    or exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid())
-  )
-  with check (updated_by = auth.uid());
+    and exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid())
+  );
 
 -- Удаление отдельной строки не нужно: пустой текст — это пустая строка в поле,
 -- и она сохраняется тем же правилом. Строка уходит вместе с треком (cascade).
+-- Но и стирать чужой текст ради своего нельзя — иначе запрет на перезапись
+-- обходится в два шага, как когда-то с обложками игр.
 drop policy if exists "ml_delete" on music_lyrics;
 create policy "ml_delete" on music_lyrics for delete to authenticated
-  using (
-    updated_by = auth.uid()
-    or exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid())
-  );
+  using (exists (select 1 from music_tracks t where t.id = track_id and t.owner = auth.uid()));
 
 -- Время правки ставит база, а не клиент: клиент может прислать что угодно.
 create or replace function music_lyrics_touch() returns trigger

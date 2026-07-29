@@ -205,7 +205,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       if (!found) { setLyrNote('Текст не нашёлся. Кнопка «Текст» — вставить свой.'); return }
       raw = found.text
       setLyr(parseLyrics(raw)); setLyrNote('')
-      void saveLyrics(t.id, raw)
+      void saveLyrics(t.id, raw, t.ownerId === meId)
     })()
     return () => { ok = false }
   }, [cur?.id, lyrCfg.mode, lyrCfg.online])
@@ -214,7 +214,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (!cur) return
     setLyrBusy(true)
     try {
-      const where = await saveLyrics(cur.id, text)
+      const where = await saveLyrics(cur.id, text, lyrMine)
       setLyr(text.trim() ? parseLyrics(text) : null)
       setLyrNote(text.trim() ? '' : 'Текста нет. Кнопка «Текст» — вставить свой.')
       setLyrEdit(null)
@@ -228,6 +228,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     lyrCfg.mode === 'off' || !lyr || lyr.lines.length === 0 ? 'off'
     : lyrCfg.mode === 'karaoke' && lyr.synced ? 'karaoke' : 'back'
   const lyrActive = lyr && lyr.synced ? activeLineIndex(lyr.lines, curT) : -1
+  // v1.395.0: общий текст ставит только тот, кто выложил трек. Трекотека общая,
+  // но текст — часть карточки трека, и переписывать её каждому встречному не за
+  // что: один добавил, второй заменил, третий стёр. Найденное в интернете
+  // остальным достаётся, но только на своё устройство.
+  const lyrMine = !!cur && !!meId && cur.ownerId === meId
 
   // ---- Авто-активность «Слушает…» (как Spotify-статус в Discord) ----
   // Пока трек играет — публикуем название/автора/источник и позицию; на паузе сбрасываем.
@@ -958,8 +963,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-extra">
             <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
             {/* v1.394.0: свой текст песни — без интернета и без чужих серверов. */}
-            <button className={'mus2-inpl' + (lyr ? ' on' : '')} disabled={!cur}
-              title={lyrCfg.mode === 'off' ? 'Показ текста выключен в настройках плеера' : 'Текст песни'}
+            <button className={'mus2-inpl' + (lyr ? ' on' : '')} disabled={!cur || !lyrMine}
+              title={!lyrMine ? 'Текст ставит тот, кто выложил трек'
+                : lyrCfg.mode === 'off' ? 'Показ текста выключен в настройках плеера' : 'Текст песни'}
               onClick={() => setLyrEdit(lyr?.raw ?? '')}><Icon name="music" size={15} /> Текст</button>
             <button className={'mus2-tog' + (together ? ' on' : '')} onClick={() => setTogetherUi(true)}>
               <Icon name="users" size={15} /> Вместе
@@ -1133,7 +1139,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="lyr-hint">
               Обычный текст поплывёт фоном. Для караоке нужны метки времени в формате LRC —
               строка вида <code>[01:23.45] слова строки</code>: по ним видно, когда её поют.
-              Текст сохраняется для всех в Трекотеке.
+              Текст сохраняется для всех в Трекотеке — ставит его тот, кто выложил трек.
             </div>
             <textarea className="lyr-area" autoFocus value={lyrEdit} onChange={e => setLyrEdit(e.target.value)}
               placeholder={'Вставь текст песни сюда. Для караоке — со строками вида [00:12.50] слова'} />
