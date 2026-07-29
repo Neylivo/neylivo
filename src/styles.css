@@ -719,27 +719,12 @@ input[type=range] { accent-color:var(--brand); }
 
 
 /* ===== pass 13: friend codes (add-by-code panel, mini-profile code, settings) ===== */
-.pfr-codebox { background:var(--bg3); border:1px solid rgba(0,0,0,.3); border-radius:var(--r-lg); padding:16px; margin-bottom:16px; }
-.pfr-codeh, .pfr-codeh2 { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; margin-bottom:8px; }
-.pfr-codeh2 { margin-top:16px; }
-.pfr-coderow { display:flex; align-items:center; gap:12px; background:rgba(0,0,0,.25); border-radius:var(--r-md); padding:10px 14px; }
-.pfr-code { font-weight:800; color:#fff; }
-.pfr-codehint { color:var(--mut); font-size:13px; margin-left:auto; }
-.pfr-copy, .pfr-addbtn2 { background:var(--brand); border:none; color:#fff; padding:9px 16px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; white-space:nowrap; }
-.pfr-copy:hover, .pfr-addbtn2:hover { filter:brightness(1.1); }
 .pfr-addcoderow { display:flex; gap:10px; align-items:center; }
 .pfr-addcoderow .pfr-addin { margin-bottom:0; flex:1; }
 .pfr-codemsg { margin-top:10px; color:var(--mut); font-size:13px; }
 .mini-code { color:var(--mut); font-size:13px; margin-top:2px; display:flex; align-items:center; gap:6px; }
-.mini-hash { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--brand); color:#fff; font-size:11px; font-weight:700; }
-.mini-copycode { margin-top:10px; width:100%; background:rgba(0,0,0,.25); border:none; color:var(--tx); padding:9px; border-radius:var(--r-md); font-weight:600; cursor:pointer; }
-.mini-copycode:hover { background:rgba(var(--ov, 255,255,255),.08); }
-.pqs-code-card { background:var(--bg3); border-radius:var(--r-lg); padding:16px; margin-bottom:16px; }
-.pqs-code-h { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); font-weight:700; }
 .pqs-code-sub { color:var(--mut); font-size:13px; margin:4px 0 12px; }
-.pqs-code-row { display:flex; align-items:center; gap:12px; background:rgba(0,0,0,.25); border-radius:var(--r-md); padding:10px 14px; }
 .pqs-code-val { font-weight:800; color:#fff; }
-.pqs-code-hint { color:var(--mut); font-size:13px; margin-left:auto; }
 .pqs-code-copy { background:var(--brand); border:none; color:#fff; padding:9px 16px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; }
 .pqs-email { margin-top:20px; border-top:1px solid rgba(var(--ov, 255,255,255),.08); padding-top:16px; }
 .pqs-email-val { font-family:monospace; color:var(--tx); letter-spacing:1px; }
@@ -1932,7 +1917,6 @@ body.no-anim .member-typing i { animation:none; }
 .mini-addstatus:hover { color:#fff; background:var(--bg2); }
 .mini-addstatus-tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
 /* Юзернейм с зелёным значком, как на фото */
-.mini2 .mini-hash { background:#23a55a; }
 /* Общие друзья: стопка мини-аватарок + подпись */
 .mini-mutuals { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; color:var(--tx); }
 .mini-mutual-avs { display:flex; }
@@ -4102,10 +4086,10 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .pfr-actcard2:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.25); }
 
 /* Кнопки «Друзей»: плавный ховер + утапливание при нажатии */
-.pfr-cbtn, .pfr-add2-send, .pfr-addfriend, .pfr-tab, .pfr-ok, .pfr-no, .pfr-copy, .pfr-addbtn2 {
+.pfr-cbtn, .pfr-add2-send, .pfr-addfriend, .pfr-tab, .pfr-ok, .pfr-no {
   transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
 .pfr-cbtn:active, .pfr-add2-send:active:not(:disabled), .pfr-addfriend:active, .pfr-tab:active,
-.pfr-ok:active, .pfr-no:active, .pfr-copy:active, .pfr-addbtn2:active { transform:scale(.95); }
+.pfr-ok:active, .pfr-no:active { transform:scale(.95); }
 
 /* Строки списков: единая мягкость ховера */
 .member, .pfr-row, .pfr-row2 { transition:background .13s var(--ease-out4, ease); }

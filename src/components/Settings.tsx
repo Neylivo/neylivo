@@ -20,7 +20,6 @@ import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
 import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint } from '../lib/crypto/keys'
-import { friendCode } from '../lib/friendCode'
 import { SignOutModal } from './SignOutModal'
 import { IS_MOBILE } from '../lib/mobile'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
@@ -697,20 +696,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                     <div className="pqs2-row-k">Имя пользователя</div>
                     <div className="pqs2-row-v">{uname || username}</div>
                     <button className="pqs2-btn" onClick={() => setEditUname(v => !v)}>Изменить</button>
-                  </div>
-                  {/* v1.401.0: код друга. Он вычисляется из id и одинаков на всех
-                      устройствах, но показать его было негде — при том, что и
-                      разбор кода, и поиск по нему в приложении уже были. */}
-                  <div className="pqs2-row">
-                    <div className="pqs2-row-k">Код друга</div>
-                    <div className="pqs2-row-v notr" translate="no">{friendCode(uname || username, user?.id ?? '')}</div>
-                    <button className="pqs2-btn" disabled={!user?.id}
-                      onClick={() => { navigator.clipboard?.writeText(friendCode(uname || username, user?.id ?? '')); toastOk('Код скопирован') }}>
-                      Скопировать
-                    </button>
-                  </div>
-                  <div className="pqs2-hint" style={{ marginTop: -6 }}>
-                    По коду тебя найдут, даже если такое же имя занято кем-то ещё: четыре цифры зависят от учётной записи и не меняются.
                   </div>
                   {editUname && <div className="pqs2-editbox">
                     <input className="pqs-in" value={uname} onChange={e => setUname(e.target.value)} />

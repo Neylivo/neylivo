@@ -17,7 +17,6 @@ import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
 import { devMode } from '../lib/settings'
 import { isBotUser } from '../lib/botTag'
-import { friendCode, tagFor } from '../lib/friendCode'
 import { UserTagBadge } from './TagEmoji'
 import { gameIconOf } from '../lib/gameIcon'
 import type { Profile } from '../types'
@@ -234,18 +233,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           <div className="mini-name" style={{ fontFamily: nickFontOf(pp) }} onClick={() => setFull(true)} title="Открыть полный профиль">
             {data.name}{isBot && <span className="bot-badge">БОТ</span>}<UserTagBadge userId={data.userId} />
           </div>
-          {/* v1.401.0: код друга. Он вычисляется из id и всегда одинаков, но до
-              сих пор его не показывали нигде — то есть узнать свой код было
-              неоткуда, а значит, и продиктовать его кому-то тоже. */}
           <div className="mini-code">
             <span className="mini-uname notr" translate="no">{uname || data.name}</span>
-            <span className="mini-hash">#</span>
-            <span className="notr" translate="no">{tagFor(data.userId)}</span>
           </div>
-          {isMe && <button className="mini-copycode"
-            onClick={() => { navigator.clipboard?.writeText(friendCode(uname || data.name, data.userId)); toastOk('Код скопирован') }}>
-            Скопировать код друга
-          </button>}
           {data.roles && data.roles.length > 0 && <div className="mini-roles">
             {data.roles.map(r => (
               <span key={r.name} className="mini-rolechip"><span className="role-dot" style={{ background: r.color ?? '#99aab5' }} />{r.name}</span>
