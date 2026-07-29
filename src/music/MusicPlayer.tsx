@@ -63,7 +63,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [tab, setTab] = useState<'queue' | 'playlists'>('queue')
   const [scUrl, setScUrl] = useState('')
   const [showLib, setShowLib] = useState(false)
+  // v1.410.0: сколько карточек склада показано сейчас.
+  //
+  // Раньше рисовались все разом. На трёх сотнях треков это триста карточек с
+  // обложками в одном кадре — окно просто вставало, и выглядело это как «после
+  // трёхсотой не грузит». Показываем порциями, добавка — по кнопке.
+  const LIB_PAGE = 60
+  const [libShown, setLibShown] = useState(LIB_PAGE)
   const [libQ, setLibQ] = useState('')
+  // Открыли склад заново или начали искать — снова с первой порции.
+  useEffect(() => { setLibShown(LIB_PAGE) }, [showLib, libQ])
   const [uploading, setUploading] = useState(false)
   const [importing, setImporting] = useState('')
   const [shuffle, setShuffle] = useState(false)
@@ -313,7 +322,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       return ch ? n : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks])
+  }, [tracks, showLib, libShown])   // v1.410.0: догружаем и при открытии склада, и по «показать ещё»
 
   useEffect(() => {
     let revoked = ''
@@ -375,7 +384,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const first = cur?.url
     const nextUrl = tracks[personalIdx >= 0 ? personalIdx : (idx + 1) % Math.max(tracks.length, 1)]?.url
     const rank = (u: string) => (u === first ? 0 : u === nextUrl ? 1 : 2)
-    const queue = [...missing].sort((a, b) => rank(a.url) - rank(b.url))
+    // v1.410.0: за раз берём не больше шестидесяти. На складе в три сотни
+    // это триста запросов к чужим сервисам подряд: они начинают
+    // отвечать отказом, а окно всё это время занято. Остальные догрузятся
+    // следующим заходом — когда список изменится или человек откроет склад.
+    const queue = [...missing].sort((a, b) => rank(a.url) - rank(b.url)).slice(0, 60)
     ;(async () => {
       const CONCURRENCY = 4
       let at = 0
@@ -1183,7 +1196,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               // добавления: порядок добавления — это про того, кто когда принёс
               // трек, а зашедшему послушать он не говорит ничего. Сортируется
               // только показ: по порядку самого tracks считается номер играющего.
-              const shown = libraryOrder(tracks).filter(t => {
+              const all = libraryOrder(tracks).filter(t => {
                 if (!q) return true
                 const title = (meta[t.url]?.title || t.name || '').toLowerCase()
                 const author = (meta[t.url]?.author || t.author || '').toLowerCase()
@@ -1192,13 +1205,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               if (tracks.length === 0) {
                 return <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
               }
-              if (shown.length === 0) {
+              const shown = all.slice(0, libShown)
+              if (all.length === 0) {
                 return <div className="mus2-empty center">Ничего не нашлось по запросу «{libQ.trim()}»</div>
               }
               return <>
-                <div className="mus2-lib-count">{shown.length === tracks.length
+                <div className="mus2-lib-count">{all.length === tracks.length
                   ? `Треков: ${tracks.length}`
-                  : `Найдено: ${shown.length} из ${tracks.length}`}</div>
+                  : `Найдено: ${all.length} из ${tracks.length}`}</div>
                 <div className="mus2-grid">
                   {shown.map(t => {
                     const i = tracks.indexOf(t)
@@ -1238,6 +1252,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
                           </span>}
                         </div>
+                {all.length > shown.length && (
+                  <div className="mus2-lib-more">
+                    <button className="pqs2-btn" onClick={() => setLibShown(n => n + LIB_PAGE)}>
+                      Показать ещё · осталось {all.length - shown.length}
+                    </button>
+                  </div>
+                )}
                         <div className="mus2-card-t notr" translate="no">{title}</div>
                         <div className="mus2-card-a">
                           <span className="notr" translate="no">{author || ''}</span>
