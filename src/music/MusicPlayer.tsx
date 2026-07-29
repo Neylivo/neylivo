@@ -1,6 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
-import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed } from './broken'
+import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
@@ -124,6 +124,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const fileRef = useRef<HTMLInputElement>(null)
   const togChan = useRef<any>(null)
   const scRef = useRef<HTMLIFrameElement>(null)
+  /** Сколько раз пробовали продолжить самопроизвольно вставший SC-трек (v1.421.0). */
+  const scResumeRef = useRef(0)
   const ytFrameRef = useRef<HTMLIFrameElement>(null)
   const ytRef = useRef<any>(null)          // YT.Player поверх скрытого iframe
   const ytTimer = useRef<number | null>(null)
@@ -163,13 +165,20 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     toastErr('Трек убрали из Трекотеки')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks])
-  const curSc = !!cur && isSoundcloudUrl(cur.url)
-  // v1.420.0: у запрещённого к встраиванию видео (официальные клипы) появляется
-  // найденная копия — и тогда трек идёт обычным звуком, а не через iframe
-  // YouTube, который для него всё равно откажет.
+  const curScLink = !!cur && isSoundcloudUrl(cur.url)
+  // v1.420.0: у трека, который сервис отказался отдавать (официальные клипы на
+  // YouTube, закрытые для встраивания загрузки на SoundCloud), появляется
+  // найденная копия — и тогда он идёт обычным звуком, а не через чужой виджет,
+  // который для него всё равно откажет.
   const curNoEmbed = !!cur && (ytDenied.includes(cur.id) || isNoEmbed(cur.id))
-  const curYtLink = !!cur && !curSc && isYouTubeUrl(cur.url)
-  const curYt = curYtLink && !(curNoEmbed && !!(meta[cur!.url]?.play || cur!.play))
+  // Копия — это ссылка, по которой играет обычный <audio>. Адрес самого сервиса
+  // копией не считается: у SoundCloud в play_url лежит его же api-ссылка,
+  // которой умеет пользоваться только его виджет.
+  const curPlayRaw = (cur ? (meta[cur.url]?.play || cur.play) : null) ?? null
+  const curCopy = curPlayRaw && !isSoundcloudUrl(curPlayRaw) && !isYouTubeUrl(curPlayRaw) ? curPlayRaw : null
+  const curYtLink = !!cur && !curScLink && isYouTubeUrl(cur.url)
+  const curYt = curYtLink && !(curNoEmbed && !!curCopy)
+  const curSc = curScLink && !(curNoEmbed && !!curCopy)
   const curMeta = cur ? meta[cur.url] : undefined
   const curArt = curMeta?.art ?? cur?.art ?? null
   // URL, который реально отдаём виджету: каноничный из oEmbed, если он уже известен.
@@ -186,10 +195,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const curStreamOnly = !!cur && !curSc && !curYt && !curPlayable && isStreamingUrl(cur.url)
   const curSvc = cur ? serviceOf(cur.url) : null
   // Обычный <audio>: для Audius-ссылок подставляем прямой stream-URL из resolve.
-  // v1.420.0: у запрещённого к встраиванию видео играем НАЙДЕННУЮ КОПИЮ, а не
-  // сам адрес YouTube: страницу <audio> не воспроизведёт и молча замолчит.
+  // v1.420.0: у отказавшего трека играем НАЙДЕННУЮ КОПИЮ, а не адрес сервиса:
+  // страницу YouTube или SoundCloud <audio> не воспроизведёт и молча замолчит —
+  // а это ровно то, что человек видит как «плеер встал».
   const audioSrc = cur && !curSc && !curYt && !curStreamOnly
-    ? (curYtLink ? (curPlayable || undefined) : (curPlayable || cur.url))
+    ? (curYtLink || curScLink ? (curCopy || undefined) : (curPlayable || cur.url))
     : undefined
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
@@ -737,6 +747,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   useEffect(() => {
     setCurT(0); setDur(0)
     if (!curSc || !cur) { widgetRef.current = null; return }
+    scResumeRef.current = 0
     const curUrl = cur.url
     const curTrack = cur
     let disposed = false
@@ -789,8 +800,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
         // Виджет скрыт, но его события всё равно синхронизируем с нашими кнопками.
         w.bind(SC.Widget.Events.PLAY, () => { if (!disposed) setPlaying(true) })
-        w.bind(SC.Widget.Events.PAUSE, () => { if (!disposed) setPlaying(false) })
-        w.bind(SC.Widget.Events.ERROR, () => { if (!disposed) toastErr('SoundCloud: трек не воспроизводится (закрытый или недоступен для встраивания)') })
+        // v1.421.0: пауза бывает двух совершенно разных видов, и раньше мы
+        // считали их одной.
+        //
+        // Своя пауза (человек нажал кнопку) приходит ПОСЛЕ того, как мы уже
+        // выключили воспроизведение сами. А вот виджет, которому не дали трек
+        // (закрытая или недоступная для встраивания загрузка — сплошь и рядом у
+        // официальных релизов), встаёт САМ, при включённом у нас
+        // воспроизведении. Мы послушно выключали плеер, и человек видел ровно
+        // то, о чём говорил: «слушаешь — и резко пауза, дальше ничего».
+        w.bind(SC.Widget.Events.PAUSE, () => {
+          if (disposed) return
+          if (!playingRef.current) { setPlaying(false); return }   // это наша пауза
+          w.getPosition((ms: number) => {
+            if (disposed) return
+            const pos = (ms || 0) / 1000
+            // Само решение — в чистой функции (broken.ts): живой закрытый трек
+            // SoundCloud мне проверить нечем, а ошибка тут либо перескакивает
+            // рабочие треки, либо оставляет плеер стоять.
+            switch (pauseKind(playingRef.current, pos, scResumeRef.current)) {
+              case 'ours': setPlaying(false); return
+              case 'notStarted': void sourceStuckRef.current('SoundCloud не начал играть этот трек'); return
+              case 'retry': scResumeRef.current++; w.play(); return
+              case 'stuck': void sourceStuckRef.current(`SoundCloud остановил трек на ${Math.round(pos)} с`); return
+            }
+          })
+        })
+        w.bind(SC.Widget.Events.ERROR, () => {
+          if (disposed) return
+          void sourceStuckRef.current('SoundCloud не отдал этот трек (закрытый или запрещённый для встраивания)')
+        })
       } catch { toastErr('Не удалось загрузить плеер SoundCloud — проверь блокировщик рекламы') }
     })()
     return () => { disposed = true; clearTimeout(readyTimer); widgetRef.current = null }
@@ -1134,6 +1173,88 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
   const ytEmbedDeniedRef = useRef(ytEmbedDenied)
   ytEmbedDeniedRef.current = ytEmbedDenied
+
+  /**
+   * Трек встал: сервис отказался его отдавать или просто молчит (v1.421.0).
+   *
+   * Дорога та же, что у запрещённых клипов YouTube, и это главное: раньше у
+   * SoundCloud её не было вовсе. Отказ виджета только показывал сообщение — ни
+   * обхода в очереди, ни поиска копии, ни счётчика отказов. Плеер оставался
+   * стоять на этом треке, и со стороны это выглядело именно так: «слушаешь — и
+   * резко пауза, а дальше ничего».
+   *
+   * Порядок: ищем ту же запись там, где её можно играть целиком; нашли — играем
+   * копию (и сохраняем ссылку в общий склад, то есть чиним трек для всех); не
+   * нашли — обходим его, как любой неигравший трек.
+   */
+  async function sourceStuck(reason: string) {
+    const t = cur
+    if (!t || stuckBusyRef.current) return
+    stuckBusyRef.current = true
+    try {
+      const title = meta[t.url]?.title || t.name
+      const author = meta[t.url]?.author || t.author || ''
+      const copy = (() => {
+        const p = meta[t.url]?.play || t.play
+        return p && !isSoundcloudUrl(p) && !isYouTubeUrl(p) ? p : null
+      })()
+      // Копия уже есть и всё равно встало — значит, дело не в запрете сервиса.
+      if (copy) { trackFailed(reason); return }
+      markNoEmbed(t.id)
+      setYtDenied(prev => (prev.includes(t.id) ? prev : [...prev, t.id]))
+      toastErr(`«${title}»: ${reason} — ищу копию`)
+      const found = await findPlayable(title, author)
+      if (curIdRef.current !== t.id) return   // трек уже сменили — не лезем
+      if (found) {
+        setMeta(prev => ({ ...prev, [t.url]: {
+          title: prev[t.url]?.title || title,
+          author: prev[t.url]?.author || author || found.author,
+          art: prev[t.url]?.art || found.art,
+          play: found.play,
+        } }))
+        updateTrackMeta(t.id, { play: found.play, art: t.art ?? found.art, author: t.author || found.author })
+        toastOk(`Нашёл копию «${found.title}» — играю целиком`)
+        setPlaying(true)
+        return
+      }
+      // Копии нет — обходим. Свой трек при этом НЕ удаляем: он цел, его просто
+      // не отдают наружу (см. markNoEmbed в broken.ts).
+      toastErr(`«${title}» можно слушать только на самом сервисе — пропускаю`)
+      next()
+    } finally {
+      stuckBusyRef.current = false
+    }
+  }
+  const stuckBusyRef = useRef(false)
+  const sourceStuckRef = useRef(sourceStuck)
+  sourceStuckRef.current = sourceStuck
+
+  /**
+   * Сторож молчания (v1.421.0).
+   *
+   * Самый вредный случай — не отказ, а тишина: виджет чужого сервиса ничего не
+   * сообщает, позиция не двигается, а приложение считает, что играет. Человек
+   * ждёт и решает, что плеер сломался. Двигается позиция — всё в порядке; стоит
+   * дольше пятнадцати секунд при включённом воспроизведении — трек не играет, и
+   * мы разбираемся с ним как с любым неигравшим.
+   */
+  const moveRef = useRef({ at: Date.now(), t: -1 })
+  useEffect(() => {
+    if (moveRef.current.t !== curT) moveRef.current = { at: Date.now(), t: curT }
+  }, [curT])
+  useEffect(() => { moveRef.current = { at: Date.now(), t: -1 } }, [cur?.id])
+  useEffect(() => {
+    // В лобби «слушаем вместе» гость ничего не переключает сам: очередь ведёт
+    // ведущий, и обход трека у гостя развалил бы совместное слушание.
+    if (!playing || !cur || curStreamOnly || guest) return
+    const id = window.setInterval(() => {
+      if (!silenceStuck(moveRef.current.at, Date.now(), playingRef.current)) return
+      moveRef.current = { at: Date.now(), t: -1 }
+      void sourceStuckRef.current(`трек не играет уже ${Math.round(SILENCE_MS / 1000)} секунд`)
+    }, 3000)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, cur?.id, curStreamOnly, guest])
 
   // v1.417.0: пока плеер открыт, плагины с разрешением music могут делать то же,
   // что человек кнопками. Мост держим в ссылке на свежие значения: он живёт

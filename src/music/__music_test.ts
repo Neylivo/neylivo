@@ -17,7 +17,7 @@ import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './so
 import { boost, lighten, scale, rgb } from './artColor'
 import { searchQuery } from './streaming'
 import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
-import { isEmbedDeniedCode } from './broken'
+import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { mergeTracks } from './mergeTracks'
 
 let pass = 0, fail = 0
@@ -298,6 +298,32 @@ check('проверка заметила бы, что порядок извес�
   const out = mergeTracks([TR('a'), TR('b')], [TR('b', 'иначе')])
   return out[0].id === 'a'
 })
+
+
+console.log('\n-- Трек встал: чья пауза и когда обходить (v1.421.0) --')
+// Живая беда: слушаешь, и «резко пауза, а дальше ничего». Виджет SoundCloud,
+// которому не дали трек (закрытая или запрещённая для встраивания загрузка —
+// сплошь и рядом у официальных релизов), встаёт САМ, а мы послушно выключали
+// плеер и оставались стоять на этом треке.
+check('пауза от человека остаётся паузой', () => pauseKind(false, 30, 0) === 'ours')
+check('встал, не начав играть, — трек не отдали', () => pauseKind(true, 0, 0) === 'notStarted')
+check('позиция меньше секунды — тоже «не начал»', () => pauseKind(true, 0.4, 0) === 'notStarted')
+check('встал посреди трека — один раз пробуем продолжить', () => pauseKind(true, 42, 0) === 'retry')
+check('встал во второй раз — дело в треке', () => pauseKind(true, 42, 1) === 'stuck')
+check('мусорная позиция считается «не начал», а не поводом продолжать', () =>
+  pauseKind(true, NaN, 0) === 'notStarted')
+
+console.log('\n-- Сторож молчания --')
+check('позиция двигается — всё в порядке', () => !silenceStuck(1000, 1000 + 3000, true))
+check('молчит дольше порога — трек не играет', () => silenceStuck(1000, 1000 + SILENCE_MS, true))
+check('на паузе сторож молчит', () => !silenceStuck(0, 999999, false))
+check('порог не меньше десяти секунд', () => SILENCE_MS >= 10000)
+
+console.log('\n-- Ломаем нарочно (вставший трек) --')
+check('проверка заметила бы, что свою паузу перестали отличать от чужой', () =>
+  pauseKind(false, 0, 5) === 'ours')
+check('проверка заметила бы, что сторож срабатывает мгновенно', () =>
+  !silenceStuck(1000, 1001, true))
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

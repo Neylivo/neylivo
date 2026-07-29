@@ -119,6 +119,36 @@ export function isNoEmbed(id: string): boolean {
   return !!id && !!loadNoEmbed()[id]
 }
 
+// ── Трек встал (v1.421.0) ──────────────────────────────────────────────────
+//
+// Решение вынесено в чистые функции нарочно: живой виджет SoundCloud я проверить
+// не могу (нужен аккаунт и закрытый трек), а ошибиться тут значит либо
+// перескакивать рабочие треки, либо оставлять плеер стоять — то самое «слушаешь,
+// и резко пауза».
+
+/** Сколько молчания считаем поломкой, а не задержкой сети. */
+export const SILENCE_MS = 15000
+
+/**
+ * Чья это пауза.
+ *
+ * `ours` — человек нажал кнопку: наше состояние уже выключено, виджет лишь
+ * догоняет. `notStarted` — виджет встал, не начав играть: трек нам не отдали.
+ * `retry` — встал посреди песни, это бывает от сети, и один раз стоит
+ * попробовать продолжить. `stuck` — встал снова: дело в самом треке.
+ */
+export function pauseKind(weWantPlay: boolean, posSec: number, resumeTries: number): 'ours' | 'notStarted' | 'retry' | 'stuck' {
+  if (!weWantPlay) return 'ours'
+  if (!(posSec >= 1)) return 'notStarted'
+  return resumeTries < 1 ? 'retry' : 'stuck'
+}
+
+/** Пора ли считать, что трек не играет: позиция не двигалась слишком долго. */
+export function silenceStuck(lastMoveAt: number, now: number, playing: boolean): boolean {
+  if (!playing) return false
+  return now - lastMoveAt >= SILENCE_MS
+}
+
 export function forgetNoEmbed(id: string) {
   const all = loadNoEmbed()
   if (!(id in all)) return
