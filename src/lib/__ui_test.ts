@@ -25,7 +25,7 @@ import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
 import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
 import { nextTrack } from '../music/nextTrack'
-import { personalOrder } from '../music/personalQueue'
+import { personalOrder, recommend } from '../music/personalQueue'
 import { guardLink } from './linkguard'
 import { contentTypeOf } from './fileType'
 import { isDuplicateTrack } from './musicDupe'
@@ -465,6 +465,100 @@ check('проверка заметила бы очередь из одних л�
   // Если выбросить незнакомое, человек никогда не услышит ничего нового.
   const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10 } })
   return r.length > 1
+})
+
+console.log('\n── Умная очередь: по чему подбирается (v1.399.0) ──')
+// Склад с авторами и названиями: 0 — то, что играет сейчас.
+const M = (id: string, name: string, author: string, plays = 0) => ({ id, name, author, plays })
+const MIX = [
+  M('cur', 'Ночь', 'Кино'),
+  M('same', 'Пачка сигарет', 'Кино'),
+  M('other', 'Совсем другое', 'Другой'),
+  M('third', 'Третье', 'Третий'),
+]
+
+check('тот же исполнитель идёт первым', () =>
+  recommend({ tracks: MIX, idx: 0, plays: {} })[0].track.id === 'same')
+
+check('и объяснение — про исполнителя', () =>
+  recommend({ tracks: MIX, idx: 0, plays: {} })[0].why === 'author')
+
+check('похожее название поднимает трек без общего автора', () => {
+  const t = [M('cur', 'Группа крови', 'Кино'), M('near', 'Группа крови — живой концерт', 'Кто-то'), M('far', 'Постороннее', 'Кто-то')]
+  const r = recommend({ tracks: t, idx: 0, plays: {} })
+  return r[0].track.id === 'near' && r[0].why === 'similar'
+})
+
+check('служебные слова сходством не считаются', () => {
+  // «Official Video» есть в половине названий — по нему нельзя роднить треки.
+  const t = [M('cur', 'Раз (Official Video)', 'А'), M('x', 'Совсем другое (Official Video)', 'Б'), M('y', 'Ещё одно', 'В')]
+  const r = recommend({ tracks: t, idx: 0, plays: {} })
+  return r[0].score === r[1].score
+})
+
+check('один общий автор не перевешивает сотню прослушиваний', () => {
+  const t = [M('cur', 'Ночь', 'Кино'), M('same', 'Пачка сигарет', 'Кино'), M('loved', 'Любимое', 'Другой')]
+  const r = recommend({ tracks: t, idx: 0, plays: { loved: 100 } })
+  return r[0].track.id === 'loved'
+})
+
+check('свои прослушивания важнее общих', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('mine', 'Моё', 'Б', 0), M('hit', 'Хит', 'В', 8)]
+  const r = recommend({ tracks: t, idx: 0, plays: { mine: 8 } })
+  return r[0].track.id === 'mine'
+})
+
+check('общие прослушивания помогают, когда своих нет', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('hit', 'Хит', 'Б', 50), M('quiet', 'Тихое', 'В', 0)]
+  const r = recommend({ tracks: t, idx: 0, plays: {}, freshCount: 0 })
+  return r[0].track.id === 'hit' && r[0].why === 'popular'
+})
+
+check('только что игравшее уходит назад', () => {
+  const t = [M('cur', 'Ночь', 'Кино'), M('same', 'Пачка сигарет', 'Кино'), M('other', 'Другое', 'Другой')]
+  const r = recommend({ tracks: t, idx: 0, plays: {}, recent: ['same'] })
+  return r[0].track.id === 'other'
+})
+
+check('чем свежее сыграло, тем сильнее отодвигается', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('justnow', 'Только что', 'Б'), M('longago', 'Давно', 'В')]
+  const r = recommend({ tracks: t, idx: 0, plays: {}, recent: ['justnow', 'x', 'y', 'z', 'longago'], freshCount: 0 })
+  return r[0].track.id === 'longago'
+})
+
+check('незнакомое всё равно попадает в список', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('known', 'Знакомое', 'Б'), M('new', 'Новое', 'В')]
+  const r = recommend({ tracks: t, idx: 0, plays: { known: 3 } })
+  return r.some(x => x.track.id === 'new')
+})
+
+check('текущий трек в подбор не попадает', () =>
+  recommend({ tracks: MIX, idx: 0, plays: { cur: 99 } }).every(x => x.track.id !== 'cur'))
+
+check('склад из одного трека даёт пустой подбор', () =>
+  recommend({ tracks: [M('a', 'Один', 'А')], idx: 0, plays: {} }).length === 0)
+
+check('выдача устойчива: два вызова подряд дают одно и то же', () => {
+  const a = recommend({ tracks: MIX, idx: 0, plays: {} }).map(x => x.track.id).join('')
+  const b = recommend({ tracks: MIX, idx: 0, plays: {} }).map(x => x.track.id).join('')
+  return a === b
+})
+
+check('без автора и названия подбор не падает', () => {
+  const t = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+  return recommend({ tracks: t, idx: 0, plays: {} }).length === 2
+})
+
+console.log('\n── Ломаем нарочно (умная очередь) ──')
+check('проверка заметила бы, что автора перестали учитывать', () => {
+  // Прежнее поведение: один счётчик прослушиваний, автор ни при чём.
+  const r = recommend({ tracks: MIX, idx: 0, plays: {} })
+  return r[0].track.id !== 'other'
+})
+check('проверка заметила бы, что недавнее перестали отодвигать', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('a', 'Раз', 'Б'), M('b', 'Два', 'В')]
+  const r = recommend({ tracks: t, idx: 0, plays: { a: 5 }, recent: ['a'], freshCount: 0 })
+  return r[0].track.id === 'b'
 })
 
 console.log('\n── Защита переходов по ссылкам ──')

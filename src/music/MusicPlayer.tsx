@@ -1,5 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { personalOrder } from './personalQueue'
+import { recommend, WHY_LABEL } from './personalQueue'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
@@ -756,14 +756,31 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setTracks(ts => ts.map(t => (t.id === cur.id ? { ...t, plays: (t.plays ?? 0) + 1 } : t)))
   }, [cur, playing])
 
-  // v1.398.0: что предлагает личная очередь — то, что человек сам чаще слушает.
-  // Считается один раз на изменение склада и истории, а не на каждый рендер:
-  // список перебирается целиком.
-  const personalIdx = (() => {
-    if (!cur || tracks.length < 2) return -1
-    const first = personalOrder({ tracks, idx, plays: myPlays })[0]
-    return first ? tracks.findIndex(t => t.id === first.id) : -1
+  // v1.399.0: что играло только что — чтобы очередь не гоняла одно и то же по
+  // кругу. Держим короткий хвост: рекомендация смотрит на свежесть, а не на всю
+  // историю прослушиваний.
+  const recentRef = useRef<string[]>([])
+  useEffect(() => {
+    if (!cur) return
+    recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 8)
+  }, [cur?.id])
+
+  // v1.398.0: что предлагает личная очередь.
+  // v1.399.0: это уже не «что чаще слушал», а подбор по нескольким признакам —
+  // тот же исполнитель, похожее название, свои и общие прослушивания, минус то,
+  // что играло только что. Название и автор берутся из метаданных: у трека по
+  // ссылке в самом поле name лежит адрес, а не заголовок, и сходство по нему не
+  // нашлось бы никогда.
+  const reco = (() => {
+    if (!cur || tracks.length < 2) return null
+    const enriched = tracks.map(t => ({
+      ...t,
+      name: meta[t.url]?.title || t.name,
+      author: meta[t.url]?.author || t.author,
+    }))
+    return recommend({ tracks: enriched, idx, plays: myPlays, recent: recentRef.current })[0] ?? null
   })()
+  const personalIdx = reco ? tracks.findIndex(t => t.id === reco.track.id) : -1
   // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому
   // берёт значение через ссылку — иначе там останется номер с первого рендера.
   const personalIdxRef = useRef(-1)
@@ -785,7 +802,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx })
     if (act.kind === 'go') {
       const label = manualIdx >= 0 && act.index === manualIdx ? 'Дальше — поставлен вручную'
-        : act.index === personalIdx ? 'Дальше — ты это часто слушаешь'
+        : act.index === personalIdx && reco ? 'Дальше — ' + WHY_LABEL[reco.why]
         : 'Дальше'
       return { label, t: tracks[act.index] ?? null }
     }
