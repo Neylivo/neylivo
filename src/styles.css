@@ -1198,9 +1198,9 @@ body.chatbg-on .chat::after {
 
 /* ===== Ponoi Music: мини-плеер в углу + виниловая пластинка ===== */
 .mus2-hidden { display:none !important; }
-.mus-mini { position:fixed; right:14px; bottom:14px; z-index:var(--z-over-modal, 130); display:flex; align-items:center; gap:10px;
+.mus-mini { position:fixed; right:14px; bottom:14px; z-index:var(--z-over-modal, 130); display:flex; align-items:center; gap:8px;
   background:var(--bg2); border:1px solid rgba(0,0,0,.35); border-radius:var(--r-2xl); padding:8px 10px;
-  box-shadow:0 12px 32px rgba(0,0,0,.5); width:320px; }
+  box-shadow:0 12px 32px rgba(0,0,0,.5); width:340px; }
 .mus-mini-art { width:40px; height:40px; border-radius:50%; overflow:hidden; flex:none; cursor:pointer;
   background:linear-gradient(150deg,var(--mus-a,#8b5cf6),var(--mus-a2,#5865f2));
   display:flex; align-items:center; justify-content:center; color:#fff; }
@@ -1209,11 +1209,14 @@ body.chatbg-on .chat::after {
 .mus-mini-meta { flex:1; min-width:0; cursor:pointer; }
 .mus-mini-t { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mus-mini-s { color:var(--mut); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mus-mini button { background:none; border:none; color:var(--tx); cursor:pointer; width:28px; height:28px;
+/* v1.391.0: кнопки были 28px и стояли вплотную — в них и без перетаскивания
+   попадать было тесно. 32px, у паузы 36px: это главная кнопка плашки. */
+.mus-mini button { background:none; border:none; color:var(--tx); cursor:pointer; width:32px; height:32px;
   border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; flex:none; }
 .mus-mini button:hover:not(:disabled) { background:var(--c-hover); }
 .mus-mini button:disabled { opacity:.4; cursor:default; }
-.mus-mini .mm-play { background:var(--mus-a,var(--brand)); color:#fff; border-radius:50%; }
+.mus-mini .mm-play { width:36px; height:36px; margin-right:2px; background:var(--mus-a,var(--brand)); color:#fff; border-radius:50%; }
+.mus-mini .mm-play:hover:not(:disabled) { background:var(--mus-a,var(--brand)); filter:brightness(1.12); }
 .mus2-vinyl { position:absolute; top:50%; right:-92px; width:232px; height:232px; margin-top:-116px; border-radius:50%;
   background:radial-gradient(circle at center,#0b0b0b 0 30%,#111 30% 32%,#0d0d0d 32% 100%);
   box-shadow:0 10px 30px rgba(0,0,0,.55), inset 0 0 0 2px rgba(var(--ov, 255,255,255),.05);
@@ -5535,28 +5538,30 @@ body.no-anim .mus2-card-del { transition: none; }
 .mus2-up-t { font-weight: 500; }
 .mus2-up:hover .mus2-up-t { color: var(--tx); }
 
-/* ══ Мини-плашка: тянется и сворачивается в шарик (v1.381.0) ═══════════════
+/* ══ Мини-плашка: тянется (v1.381.0, переделано в v1.391.0) ════════════════
    Висела в правом нижнем углу намертво и закрывала то, что там оказалось.
-   Теперь её можно утащить куда угодно, а на время перетаскивания она
-   сжимается в кружок: полоса шириной в треть экрана, летающая за курсором,
-   закрывает ещё больше, чем стояла на месте. */
+   Теперь её можно утащить куда угодно.
+
+   Сворачивание в кружок на время перетаскивания убрано. Задумано оно было
+   правильно — летающая за курсором полоса закрывает много, — но на деле
+   плашка меняла размер от любого дрогнувшего нажатия: кнопка паузы уезжала
+   из-под пальца ровно в тот миг, когда по ней целились. Размер теперь не
+   меняется вовсе, а что плашку «взяли» — видно по тени и лёгкому уменьшению;
+   от случайного перетаскивания спасает порог в пять пикселей (useDragBar). */
 .mus-mini { touch-action: none; user-select: none; cursor: grab;
-  transition: width .18s var(--ease-out4, ease), height .18s var(--ease-out4, ease),
-              padding .18s var(--ease-out4, ease), border-radius .18s var(--ease-out4, ease); }
+  transition: box-shadow .15s var(--ease-out4, ease), transform .15s var(--ease-out4, ease),
+              opacity .15s var(--ease-out4, ease); }
 .mus-mini.dragging {
-  cursor: grabbing;
-  width: 56px; height: 56px; padding: 0; gap: 0;
-  border-radius: 50%; overflow: hidden;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+  cursor: grabbing; opacity: .94; transform: scale(.98);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55);
 }
-/* В свёрнутом виде остаётся только обложка — по ней и понятно, что тащишь. */
-.mus-mini.dragging .mus-mini-meta,
-.mus-mini.dragging button { display: none; }
-.mus-mini.dragging .mus-mini-art { width: 56px; height: 56px; border-radius: 50%; }
+/* Пока тащат, по кнопкам не целятся — и случайное нажатие на «выключить» на
+   отпускании тут совсем некстати. */
+.mus-mini.dragging .mus-mini-meta, .mus-mini.dragging button { pointer-events: none; }
 /* Крутящаяся обложка под курсором мешает целиться. */
 .mus-mini.dragging .mus-mini-art.spin { animation: none; }
 
-body.no-anim .mus-mini, body.no-anim .mus-mini.dragging .mus-mini-art { transition: none; }
+body.no-anim .mus-mini { transition: none; }
 
 /* Название трека в активности можно выделить и скопировать (v1.381.0).
    Строки активности наследовали общий запрет выделения — а название трека
@@ -5677,6 +5682,35 @@ body.no-anim .pc-av.clickable { transition: none; }
   height: 96px; border-radius: var(--r-md, 10px); margin-top: 10px;
   background-size: cover; background-position: center;
 }
+
+/* v1.391.0: образец шапки — он же место, куда её кладут.
+   Раньше это была просто полоска-образец, а загрузка пряталась в кнопке под
+   ней; сама шапка при этом лежала в самом низу раздела. Теперь по образцу
+   видно, как это выглядит в карточке (аватарка поверх нижнего края), на него
+   можно нажать и на него же можно перетащить картинку. */
+.pcb-drop {
+  position: relative; margin-top: 10px; padding-bottom: 30px; cursor: pointer;
+  border-radius: var(--r-md, 10px);
+  outline: 2px dashed transparent; outline-offset: 2px;
+  transition: outline-color .12s var(--ease-out4, ease);
+}
+.pcb-drop:hover, .pcb-drop.over { outline-color: var(--brand, #5865f2); }
+.pcb-drop .pcb-prev { margin-top: 0; }
+.pcb-av {
+  position: absolute; left: 14px; top: 62px; width: 56px; height: 56px;
+  border-radius: 50%; overflow: hidden; border: 4px solid var(--bg2, #2b2d31);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 20px;
+}
+.pcb-av img { width: 100%; height: 100%; object-fit: cover; }
+.pcb-hint {
+  position: absolute; right: 10px; top: 10px; padding: 4px 9px;
+  border-radius: var(--r-sm, 6px); background: rgba(0, 0, 0, .55);
+  color: #fff; font-size: 12px; font-weight: 600;
+  opacity: 0; transition: opacity .12s var(--ease-out4, ease);
+}
+.pcb-drop:hover .pcb-hint, .pcb-drop.over .pcb-hint { opacity: 1; }
+body.no-anim .pcb-drop, body.no-anim .pcb-hint { transition: none; }
 
 /* Обложку в плашке нельзя утащить как картинку (v1.386.0): браузер по умолчанию
    тащит саму картинку, и вместо плашки за курсором ехала её копия. */

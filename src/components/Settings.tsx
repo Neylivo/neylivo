@@ -27,12 +27,13 @@ import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
 // справа прокручиваемое содержимое секциями со строками «Изменить».
-const NAV: { group: string | null; items: { k: string; label: string; icon: string; subs?: { k: string; label: string }[] }[] }[] = [
+const NAV: { group: string | null; items: { k: string; label: string; icon: string }[] }[] = [
   { group: null, items: [
-    { k: 'account', label: 'Учётная запись', icon: 'user', subs: [
-      { k: 'acc-info', label: 'Информация об учётной записи' },
-      { k: 'acc-security', label: 'Пароль и безопасность' },
-    ] },
+    // v1.391.0: подпунктов «Информация об учётной записи» и «Пароль и безопасность»
+    // больше нет. Они открывали тот же самый раздел и лишь прокручивали его к
+    // заголовку, который и так виден целиком, — два лишних нажатия за то, что
+    // и без них перед глазами.
+    { k: 'account', label: 'Учётная запись', icon: 'user' },
     { k: 'profile', label: 'Профиль', icon: 'edit' },
     { k: 'privacy', label: 'Данные и конфиденциальность', icon: 'shield' },
     { k: 'notifications', label: 'Уведомления', icon: 'bell' },
@@ -189,8 +190,11 @@ function ChatBgCard() {
   )
 }
 
-export function Settings({ username, avatarUrl, onClose, onAvatar }:
-  { username: string; avatarUrl?: string | null; onClose: () => void; onAvatar?: (url: string) => void }) {
+// v1.391.0: initialCat — с каким разделом открыться. «Редактировать профиль» в
+// мини-карточке открывало большую карточку профиля, то есть показывало ровно то,
+// что человек и так видел, вместо места, где профиль правят.
+export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
+  { username: string; avatarUrl?: string | null; onClose: () => void; onAvatar?: (url: string) => void; initialCat?: string }) {
   const { user } = useAuth()
   const { settings, set, themes, accents } = useSettings()
   // v1.63.0: черновик настроек приложения — изменения (масштаб, шрифт, тема и т.д.)
@@ -224,12 +228,20 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     })
   }
   function setProfDPatch(patch: Partial<ProfilePrefs>) { for (const [k, v] of Object.entries(patch)) setProfD(k as keyof ProfilePrefs, v as any) }
-  const [cat, setCat] = useState<string>('account')
+  const [cat, setCat] = useState<string>(initialCat ?? 'account')
   // v1.212.0: на телефоне настройки — одна панель за раз (как в мобильном
   // Discord), а не сжатый в 78vw сайдбар поверх контента. true — список
   // разделов на весь экран; false — открытый раздел на весь экран со стрелкой
   // назад. На десктопе не используется (там обе панели видны одновременно).
-  const [mobNavOpen, setMobNavOpen] = useState(true)
+  // v1.391.0: если раздел задан снаружи («Редактировать профиль» в мини-карточке),
+  // на телефоне открываем сразу его, а не список разделов — иначе кнопка ведёт
+  // не туда, куда обещает.
+  const [mobNavOpen, setMobNavOpen] = useState(!initialCat)
+  // v1.391.0: прокрутка правой половины. Нужна карточке «Редактировать профиль…»:
+  // раздел может быть открыт и пролистан вниз, и тогда нажатие на карточку без
+  // возврата к началу выглядит как «кнопка не работает».
+  const mainRef = useRef<HTMLDivElement>(null)
+  function scrollTop() { mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) }
   const [navQ, setNavQ] = useState('')                        // поиск по разделам в сайдбаре
   const [name, setName] = useState(username)                 // ник (отображаемое имя) — свободный, может повторяться
   const [uname, setUname] = useState('')                      // юзернейм — уникальный, по нему добавляют в друзья
@@ -363,17 +375,26 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
   // не подключена. То есть «шапка профиля» была только в типе данных.
   const bannerRef = useRef<HTMLInputElement>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
-  async function pickBanner(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f || !user) return
-    if (!isImage(f)) { toastErr('Шапка — это картинка: png, jpg, gif или webp'); e.target.value = ''; return }
+  // v1.391.0: картинку сюда можно и перетащить, поэтому загрузка вынесена из
+  // обработчика поля выбора файла — тому же коду теперь два входа.
+  const [bannerOver, setBannerOver] = useState(false)
+  async function uploadBanner(f: File) {
+    if (!user || bannerBusy) return
+    if (!isImage(f)) { toastErr('Шапка — это картинка: png, jpg, gif или webp'); return }
     // Шапку видят все, кто откроет профиль, и грузится она целиком: держим предел.
-    if (f.size > 8 * 1024 * 1024) { toastErr('Картинка больше 8 МБ — её будут долго грузить'); e.target.value = ''; return }
+    if (f.size > 8 * 1024 * 1024) { toastErr('Картинка больше 8 МБ — её будут долго грузить'); return }
     setBannerBusy(true)
     try {
       const url = await uploadTo('avatars', user.id, f)
       await patchProf({ bannerUrl: url })
+      toastOk('Шапка профиля обновлена')
     } catch (err: any) { toastErr(err.message ?? String(err)) }
-    finally { setBannerBusy(false); e.target.value = '' }
+    finally { setBannerBusy(false) }
+  }
+  async function pickBanner(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) await uploadBanner(f)
+    e.target.value = ''
   }
   async function pickAv(e: React.ChangeEvent<HTMLInputElement>) {
     let f = e.target.files?.[0]; if (!f || !user) return
@@ -588,11 +609,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
     } finally { setPwBusy(false) }
   }
 
-  function jumpTo(k: string) {
-    setCat('account')
-    window.setTimeout(() => document.getElementById('pqs2-' + k)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
-  }
-
   const emailMasked = (user?.email ?? '').replace(/^[^@]+/, '**********') || '—'
   const curLabel = NAV.flatMap(g => g.items).find(i => i.k === cat)?.label ?? 'Настройки'
 
@@ -608,7 +624,12 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
         </div>
         <div className="pqs2-body">
           <div className="pqs2-side">
-            <div className="pqs2-me" onClick={() => { setCat('profile'); setMobNavOpen(false) }} title="Редактировать профиль">
+            {/* v1.391.0: было обычным div-ом с onClick — с клавиатуры до него не
+                добраться вовсе, а мышью нажатие могло не дать видимого ответа:
+                если человек уже стоял в «Профиле» и пролистал раздел вниз,
+                менять было нечего и на глаз ничего не происходило. Теперь это
+                настоящая кнопка, и она всегда возвращает раздел к началу. */}
+            <button className="pqs2-me" onClick={() => { setCat('profile'); setMobNavOpen(false); scrollTop() }} title="Редактировать профиль">
               <div className="pqs2-me-av" style={{ background: view.accent }}>
                 {avatarUrl ? <img src={avatarUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
               </div>
@@ -616,7 +637,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                 <b>{name || username}</b>
                 <span>Редактировать профиль… <Icon name="edit" size={11} /></span>
               </div>
-            </div>
+            </button>
             <div className="pqs2-search">
               <Icon name="search" size={15} />
               <input placeholder="Поиск" value={navQ} onChange={e => setNavQ(e.target.value)} />
@@ -635,11 +656,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                           <span className="pqs2-item-ic"><Icon name={i.icon} size={16} /></span>{i.label}
                           {IS_MOBILE && <Icon name="chevron-right" size={16} className="pqs2-item-chev" />}
                         </button>
-                        {i.subs && cat === i.k && <div className="pqs2-subs">
-                          {i.subs.map(s => (
-                            <button key={s.k} className="pqs2-sub" onClick={() => { jumpTo(s.k); setMobNavOpen(false) }}>{s.label}</button>
-                          ))}
-                        </div>}
                       </div>
                     ))}
                   </div>
@@ -651,7 +667,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
               </button>
             </div>
           </div>
-          <div className="pqs2-main">
+          <div className="pqs2-main" ref={mainRef}>
             <div className={'cset-savebar' + (dirty ? '' : ' bye') + (shake ? ' shake' : '')} style={{ zIndex: 1000 }}>
               <span>Есть несохранённые изменения!</span>
               <button className="cset-reset" onClick={resetAll} disabled={busy}>Сбросить</button>
@@ -742,8 +758,39 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   </div>
                   <div className="pqs-code-sub" style={{ margin: '0 16px 12px' }}>Аватар — фото или видео до 5 сек (длинное видео обрежется автоматически). Видео-аватар оживает при наведении мыши.</div>
                 </div>
-                <label className="pqs-lbl">О себе</label>
-                <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
+                {/* v1.384.0: шапка профиля — её видят все, кто откроет карточку.
+                    v1.391.0: стояла в самом низу раздела — после шрифтов, кубика и
+                    питомца, то есть после всего, кроме того, что на карточке видно
+                    первым. Теперь идёт сразу за аватаром, образец показывает её
+                    так же, как в самой карточке (с аватаркой поверх), картинку
+                    можно перетащить прямо на образец, а не искать кнопку. */}
+                <div className="pqs-acc-card2">
+                  <div className="pqs-sec-t" style={{ margin: 0 }}>Шапка профиля</div>
+                  <div className="pet2-sub">Широкая картинка сверху карточки профиля. Её видят все, кто откроет твой профиль. Без неё сверху будет градиент из твоих цветов.</div>
+                  <div className={'pcb-drop' + (bannerOver ? ' over' : '')}
+                    onClick={() => bannerRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setBannerOver(true) }}
+                    onDragLeave={() => setBannerOver(false)}
+                    onDrop={e => { e.preventDefault(); setBannerOver(false); const f = e.dataTransfer.files?.[0]; if (f) void uploadBanner(f) }}
+                    title="Нажмите или перетащите картинку">
+                    <div className="pcb-prev" style={profView.bannerUrl
+                      ? { backgroundImage: `url(${profView.bannerUrl})` }
+                      : { background: `linear-gradient(100deg, ${primary}, ${accent})` }} />
+                    <div className="pcb-av" style={{ background: view.accent }}>
+                      {avUrl && !isVideoUrl(avUrl) ? <img src={avUrl} alt="" /> : (name || username).slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="pcb-hint">{bannerBusy ? 'Загрузка…' : 'Нажмите или перетащите картинку'}</div>
+                  </div>
+                  <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <button className="pqs2-btn primary" onClick={() => bannerRef.current?.click()}>
+                      {bannerBusy ? 'Загрузка…' : (profView.bannerUrl ? 'Заменить шапку' : 'Загрузить шапку')}
+                    </button>
+                    {profView.bannerUrl && <button className="pqs2-btn ghost"
+                      onClick={() => patchProf({ bannerUrl: null }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать</button>}
+                  </div>
+                  <input ref={bannerRef} type="file" accept="image/*" hidden onChange={pickBanner} />
+                </div>
+
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Тема профиля</div>
                   <div className="pqs-code-sub">Два цвета твоей карточки профиля (баннер: основной → акцент). Применяется к мини- и большому профилю после «Сохранить изменения».</div>
@@ -754,6 +801,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                   <div className="pqs-ptheme-preview" style={{ background: `linear-gradient(90deg, ${primary}, ${accent})` }} />
                   <button className="pqs-save" onClick={() => { setPrimary('#5865f2'); setAccent('#5865f2') }}>Сбросить</button>
                 </div>
+
+                <label className="pqs-lbl">О себе</label>
+                <textarea className="pqs-in" rows={3} value={about} onChange={e => setAbout(e.target.value)} placeholder="Расскажи о себе…" />
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Шрифт ника</div>
@@ -814,23 +864,6 @@ export function Settings({ username, avatarUrl, onClose, onAvatar }:
                     {profView.plateOutline && <button className="pqs2-btn ghost" onClick={() => setProfD('plateOutline', null)}>Убрать обводку</button>}
                   </div>
                   <input ref={plateRef} type="file" accept="image/*,video/*" hidden onChange={pickPlate} />
-                </div>
-
-                {/* v1.384.0: шапка профиля — её видят все, кто откроет карточку. */}
-                <div className="pqs-acc-card2">
-                  <div className="pqs-sec-t" style={{ margin: 0 }}>Шапка профиля</div>
-                  <div className="pet2-sub">Широкая картинка сверху карточки профиля. Её видят все, кто откроет твой профиль. Без неё сверху будет градиент из твоих цветов.</div>
-                  <div className="pcb-prev" style={profView.bannerUrl
-                    ? { backgroundImage: `url(${profView.bannerUrl})` }
-                    : { background: `linear-gradient(100deg, ${view.accent}, ${profView.accent})` }} />
-                  <div className="pqs2-editrow" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
-                    <button className="pqs2-btn primary" onClick={() => bannerRef.current?.click()}>
-                      {bannerBusy ? 'Загрузка…' : (profView.bannerUrl ? 'Заменить шапку' : 'Загрузить шапку')}
-                    </button>
-                    {profView.bannerUrl && <button className="pqs2-btn ghost"
-                      onClick={() => patchProf({ bannerUrl: null }).catch(e => toastErr(e?.message ?? String(e)))}>Убрать</button>}
-                  </div>
-                  <input ref={bannerRef} type="file" accept="image/*" hidden onChange={pickBanner} />
                 </div>
 
                 <div className="pqs-acc-card2 pet2">

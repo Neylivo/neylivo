@@ -85,8 +85,11 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     return () => { ok = false }
   }, [data.userId])
   const [sub, setSub] = useState<'acc' | null>(null)   // подменю своего попапа (учётные записи)
-  const [edit, setEdit] = useState(false)          // карточка профиля («Редактировать профиль»)
-  const [accSettings, setAccSettings] = useState(false)  // настройки («Управление учётными записями»)
+  // v1.391.0: настройки открываются отсюда двумя разными кнопками, и раздел у них
+  // разный: «Управление учётными записями» — учётная запись, «Редактировать
+  // профиль» — профиль. Раньше вторая открывала большую карточку профиля, то есть
+  // показывала то же самое, что человек уже видел, а не место, где профиль правят.
+  const [accSettings, setAccSettings] = useState<null | 'acc' | 'profile'>(null)
   const [full, setFull] = useState(false)
   const [msg, setMsg] = useState('')
   const [meName, setMeName] = useState('')
@@ -287,7 +290,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           </div>}
           {isMe && meControls && <>
             <div className="mini-grp">
-              <button className="mini-row" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Редактировать профиль</button>
+              <button className="mini-row" onClick={() => { onClose(); setAccSettings('profile') }}><Icon name="edit" size={16} /> Редактировать профиль</button>
             </div>
             <div className="mini-grp">
               <button className="mini-row" onClick={() => setSub(s => s === 'acc' ? null : 'acc')}>
@@ -308,12 +311,12 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 <span className="mini-acc-check"><Icon name="check" size={13} /></span>
               </div>
               <div className="mini-subsep" />
-              <button className="mini-subrow" onClick={() => { setSub(null); setAccSettings(true) }}>Управление учётными записями</button>
+              <button className="mini-subrow" onClick={() => { setSub(null); setAccSettings('acc') }}>Управление учётными записями</button>
               {onPickAvatar && <button className="mini-subrow" onClick={() => { setSub(null); onPickAvatar() }}>Сменить аватар</button>}
               <button className="mini-subrow" style={{ color: '#ed4245' }} onClick={() => setSignOut(true)}>Выйти из аккаунта</button>
             </div>}
           </>}
-          {isMe && !meControls && <button className="mini-editbtn" onClick={() => setEdit(true)}><Icon name="edit" size={15} /> Редактировать профиль</button>}
+          {isMe && !meControls && <button className="mini-editbtn" onClick={() => setAccSettings('profile')}><Icon name="edit" size={15} /> Редактировать профиль</button>}
           {/* Боту не пишут: он отвечает на команды, а личка с ним никуда не ведёт.
               Поле ввода тут было бы обещанием, которого никто не выполнит. */}
           {!isMe && !isBot && <div className="mini-msgbox">
@@ -324,8 +327,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
               </div>}
         </div>
       </div>
-      {edit && <ProfileCard userId={data.userId} name={data.name} avatarUrl={av} status={data.status} initialTab="board" onClose={() => setEdit(false)} />}
-      {accSettings && <Settings username={data.name} avatarUrl={av} onClose={() => setAccSettings(false)} />}
+      {accSettings && <Settings username={data.name} avatarUrl={av} initialCat={accSettings === 'profile' ? 'profile' : undefined}
+        onClose={() => setAccSettings(null)} />}
       {signOut && <SignOutModal onClose={() => setSignOut(false)} />}
     </>
   )
