@@ -5885,6 +5885,17 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   background: rgba(237, 66, 69, .85); color: #fff;
   font-size: 10.5px; font-weight: 700; line-height: 1.6;
 }
+/* «Попробовать снова» (v1.421.0): снять пометку у трека, который однажды не
+   заиграл. Стоит в правом нижнем углу карточки, рядом с самой пометкой. */
+.mus2-card-retry {
+  position: absolute; right: 6px; bottom: 6px;
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .62);
+  color: #fff; cursor: pointer;
+}
+.mus2-card-retry:hover { border-color: var(--brand); }
+
 /* «Только на YouTube» (v1.420.0): владелец запретил встраивание. Это не
    поломка — трек цел, поэтому и метка не красная, а спокойная. */
 .mus2-card-only {

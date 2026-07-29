@@ -1,6 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
-import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, pauseKind, silenceStuck, SILENCE_MS } from './broken'
+import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, forgetBroken, forgetNoEmbed, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
@@ -1226,6 +1226,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     }
   }
   const stuckBusyRef = useRef(false)
+
+  /**
+   * Играбелен ли трек вообще (v1.421.0).
+   *
+   * Два разных случая, оба означают «не ставь его в очередь»:
+   *   • сломан — два отказа подряд (broken.ts);
+   *   • сервис отказался отдавать, и копии не нашлось.
+   *
+   * Второе раньше не учитывалось нигде: закрытый трек SoundCloud оставался в
+   * очереди, и плеер спотыкался о него каждый круг — пятнадцать секунд тишины,
+   * сообщение, обход, и снова то же самое на следующем круге.
+   */
+  const copyOf = (t: Track): string | null => {
+    const p = meta[t.url]?.play || t.play
+    return p && !isSoundcloudUrl(p) && !isYouTubeUrl(p) ? p : null
+  }
+  const unplayable = (t: Track | undefined): boolean =>
+    !!t && (isBroken(t.id) || (isNoEmbed(t.id) && !copyOf(t)))
   const sourceStuckRef = useRef(sourceStuck)
   sourceStuckRef.current = sourceStuck
 
@@ -1346,7 +1364,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const next = () => {
     // v1.414.0: сломанные треки очередь обходит. Иначе плеер честно переключался
     // бы на битую ссылку, спотыкался и переключался снова — с виду это зависание.
-    const playable = tracks.filter(t => !isBroken(t.id))
+    const playable = tracks.filter(t => !unplayable(t))
     if (playable.length === 0 && tracks.length > 0) { setPlaying(false); toastErr('Ни один трек не играет'); return }
     const first = manualLive.find(id => tracks.some(t => t.id === id))
     const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
@@ -1356,7 +1374,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (act.kind === 'stop') { setPlaying(false); return }
     if (act.index === idx) { restartCurrent(); return }
     let n = act.index
-    for (let step = 0; step < tracks.length && isBroken(tracks[n]?.id ?? ''); step++) n = (n + 1) % tracks.length
+    for (let step = 0; step < tracks.length && unplayable(tracks[n]); step++) n = (n + 1) % tracks.length
     setIdx(n)
   }
   // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
@@ -1901,10 +1919,20 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                           {/* v1.414.0: трек, который не заиграл дважды подряд, помечен —
                               он и в очереди обходится, и притворяться рабочим не должен. */}
                           {isBroken(t.id) && <span className="mus2-card-bad" title="Не играет — плеер пробовал дважды">не играет</span>}
+                          {/* v1.421.0: попробовать снова. Пометка «не играет»
+                              ставилась навсегда, и снять её было нечем вообще
+                              нигде: трек, отказавший из-за минутного сбоя сети
+                              или региона, оставался обойдённым до конца времён.
+                              Функции для этого лежали в broken.ts с самого
+                              начала и не были подключены ни к одной кнопке. */}
+                          {unplayable(t) && <button className="mus2-card-retry" title="Попробовать этот трек снова"
+                            onClick={e => { e.stopPropagation(); forgetBroken(t.id); forgetNoEmbed(t.id); setYtDenied(prev => prev.filter(x => x !== t.id)); toastOk('Попробую этот трек снова') }}>
+                            <Icon name="rotate" size={13} />
+                          </button>}
                           {/* v1.420.0: запрет на встраивание — это НЕ поломка трека, и
                               помечать его как «не играет» было бы неправдой: на самом
                               YouTube он играет прекрасно. Пометка отдельная и мягче. */}
-                          {!isBroken(t.id) && isNoEmbed(t.id) && !(meta[t.url]?.play || t.play) &&
+                          {!isBroken(t.id) && isNoEmbed(t.id) && !copyOf(t) &&
                             <span className="mus2-card-only" title="Владелец запретил встраивание: слушать можно только на YouTube">только на YouTube</span>}
                           {(t.plays ?? 0) > 0 && <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
