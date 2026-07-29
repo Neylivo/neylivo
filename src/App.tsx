@@ -24,8 +24,9 @@ import { lazyNamed } from './lib/lazyScreen'
 // загрузки приходилось всем и каждый раз.
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 const Home = lazyNamed(() => import('./components/Home'), 'Home')
-import { startEnabledPlugins } from './lib/plugins/host'
-import { pluginsDisabled, setPluginsDisabled } from './lib/plugins/registry'
+import { startEnabledPlugins, invokePlugin } from './lib/plugins/host'
+import { pluginsDisabled, setPluginsDisabled, getHotkeys } from './lib/plugins/registry'
+import { comboFromEvent, isComboComplete } from './lib/keybind'
 
 // v1.275.0: через сколько непрерывной деградации предлагать аварийный чат —
 // достаточно долго, чтобы не дёргать на секундный сбой, но не тянуть, если
@@ -292,6 +293,27 @@ export default function App() {
       setSafe(next)
       // Плагины запускаются один раз при старте — обратно поднимаем перезагрузкой.
       if (!next) location.reload()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // v1.419.0: горячие клавиши плагинов.
+  //
+  // Слушатель один на приложение и читает реестр в момент нажатия: плагины
+  // приходят и уходят, и переподписываться на каждое их движение незачем.
+  // Сочетание обязано быть с двумя модификаторами (проверяет okCombo в
+  // registry.ts) — поэтому обычный набор текста сюда не попадает и preventDefault
+  // не отнимает у человека ни одной привычной клавиши.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (pluginsDisabled()) return
+      const combo = comboFromEvent(e)
+      if (!isComboComplete(combo)) return
+      const hit = getHotkeys().find(h => h.combo.toLowerCase() === combo.toLowerCase())
+      if (!hit) return
+      e.preventDefault()
+      void invokePlugin(hit.pluginId, hit.onPress, [])
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

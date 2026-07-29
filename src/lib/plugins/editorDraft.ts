@@ -78,6 +78,32 @@ export const TEMPLATES: Template[] = [
 }`,
   },
   {
+    // v1.419.0. Панели существуют с v1.417.0, и ни одной заготовки с ними не
+    // было: человек, открывший конструктор, о них попросту не узнавал.
+    key: 'panel', label: 'Свой уголок в чате', emoji: '🧩',
+    hint: 'Панель над полем ввода — со своими строками',
+    permissions: ['panel', 'music'],
+    body: `function onLoad(ponoi) {
+  async function draw() {
+    const now = await ponoi.music.now()
+    // Панель обновляется повторным описанием — так делается всё живое.
+    ponoi.ui.addPanel({
+      slot: 'chat',                       // chat | player | library | sidebar
+      title: 'Что играет',
+      rows: [
+        { type: 'label', key: 'now', label: 'Сейчас', value: now ? now.title : 'плеер закрыт' },
+        { type: 'button', key: 'next', label: 'Следующий', onClick: async () => {
+          await ponoi.music.next()
+          draw()
+        } },
+      ],
+    })
+  }
+  draw()
+  ponoi.on('music', draw)
+}`,
+  },
+  {
     key: 'empty', label: 'С нуля', emoji: '📄',
     hint: 'Пустая заготовка',
     permissions: [],
@@ -172,6 +198,28 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   // Действие над сообщением получает само сообщение — поэтому и чтение тоже.
   { re: /\bponoi\s*\.\s*ui\s*\.\s*addMessageAction\s*\(/,    perms: ['ui', 'messages.read'],       what: 'ponoi.ui.addMessageAction' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]message['"`]/,         perms: ['messages.read'],             what: "ponoi.on('message')" },
+  // v1.419.0. Половины списка здесь не было с самого появления определителя:
+  // панель, музыка, буфер обмена и обстановка звались из плагина, а
+  // конструктор молчал — то есть человек узнавал о недостающем разрешении
+  // единственным способом, от которого этот определитель и должен был спасти:
+  // красной строкой на карточке уже установленного плагина.
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addPanel\s*\(/,            perms: ['panel'],                     what: 'ponoi.ui.addPanel' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addHotkey\s*\(/,           perms: ['ui'],                        what: 'ponoi.ui.addHotkey' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*(confirm|prompt)\s*\(/,    perms: ['ui'],                        what: 'ponoi.ui.confirm/prompt' },
+  { re: /\bponoi\s*\.\s*clipboard\s*\./,                      perms: ['ui'],                        what: 'ponoi.clipboard' },
+  { re: /\bponoi\s*\.\s*music\s*\./,                          perms: ['music'],                     what: 'ponoi.music' },
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*recent\s*\(/,        perms: ['messages.read'],             what: 'ponoi.messages.recent' },
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*(react|remove)\s*\(/, perms: ['messages.write'],            what: 'ponoi.messages.react/remove' },
+  { re: /\bponoi\s*\.\s*(me|channel|servers|channels)\s*\(/,  perms: ['context'],                   what: 'ponoi.me/channel/servers/channels' },
+  { re: /\bponoi\s*\.\s*open\s*\(/,                           perms: ['navigate'],                  what: 'ponoi.open' },
+  { re: /\bponoi\s*\.\s*status\s*\./,                         perms: ['status'],                    what: 'ponoi.status' },
+  { re: /\bponoi\s*\.\s*sound\s*\.\s*play\s*\(/,             perms: ['notify'],                    what: 'ponoi.sound.play' },
+  // Событий с разрешением messages.read несколько, и подписка на любое из них
+  // требует того же самого — перечислять их поимённо здесь значит однажды
+  // забыть новое (см. таблицу PLUGIN_EVENTS в types.ts).
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](message\.edit|message\.delete|reaction|typing)['"`]/, perms: ['messages.read'], what: 'подписка на события переписки' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](channel|voice)['"`]/, perms: ['context'],                   what: "ponoi.on('channel'/'voice')" },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]music['"`]/,           perms: ['music'],                     what: "ponoi.on('music')" },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

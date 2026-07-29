@@ -92,6 +92,10 @@ const ponoi = {
     addSettingsPage: (opt) => call('ui.addSettingsPage', [opt]),
     // v1.417.0: своя панель в плеере, Трекотеке или колонке слева.
     addPanel: (opt) => call('ui.addPanel', [opt]),
+    // v1.419.0: горячая клавиша. Сочетание обязано быть с двумя модификаторами
+    // (Ctrl+Shift+K и подобные) — иначе плагин молча отобрал бы у человека
+    // обычную букву.
+    addHotkey: (opt) => call('ui.addHotkey', [opt]),
     // Окно рисует приложение, плагин получает только ответ: своё окно он подделал
     // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
     confirm: (opt) => call('ui.confirm', [opt || {}]),
@@ -102,20 +106,47 @@ const ponoi = {
   },
   me: () => call('me', []),
   channel: () => call('channel', []),
+  // v1.419.0: приложение вокруг. Список серверов и каналов — то же, что в
+  // колонке слева; open — то же, что щёлкнуть по каналу мышью.
+  servers: () => call('servers', []),
+  channels: (serverId) => call('channels', [String(serverId)]),
+  open: (target) => call('open', [target || {}]),
+  status: {
+    get: () => call('status.get', []),
+    set: (text) => call('status.set', [String(text)]),
+  },
+  sound: {
+    play: (name) => call('sound.play', [String(name || 'chime')]),
+  },
   commands: {
     register: (name, description, handler) => call('commands.register', [String(name), String(description), handler]),
   },
   messages: {
     send: (text) => call('messages.send', [String(text)]),
+    // v1.419.0: то, что уже на экране, и то, что человек делает с сообщением
+    // сам. Работает только с открытым чатом — тем же, куда пишет send.
+    recent: (limit) => call('messages.recent', [Number(limit) || 20]),
+    react: (messageId, emoji) => call('messages.react', [String(messageId), String(emoji)]),
+    remove: (messageId) => call('messages.remove', [String(messageId)]),
   },
   storage: {
     get: (key) => call('storage.get', [String(key)]),
     set: (key, value) => call('storage.set', [String(key), value]),
     remove: (key) => call('storage.remove', [String(key)]),
     keys: () => call('storage.keys', []),
+    clear: () => call('storage.clear', []),
   },
   net: {
     fetch: (url, init) => call('net.fetch', [String(url), init || {}]),
+    // Разбор ответа — здесь, в песочнице: JSON.parse на стороне приложения
+    // ничего бы не дал плагину сверх того, что он и так получает, а вот
+    // упавший разбор чужого ответа уронил бы чужой код. Бросает понятную
+    // ошибку вместо «Unexpected token < in JSON».
+    json: async (url, init) => {
+      const r = await call('net.fetch', [String(url), init || {}])
+      try { return { ok: r.ok, status: r.status, data: JSON.parse(r.body) } }
+      catch (e) { throw new Error('Ответ ' + url + ' — не JSON: ' + String(r.body).slice(0, 120)) }
+    },
   },
   // v1.333.0: эффект своего голоса в звонке. Плагин только выбирает — обработка
   // звука целиком в приложении, сюда не попадает ни одного сэмпла.

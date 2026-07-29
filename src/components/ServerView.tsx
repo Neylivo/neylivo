@@ -62,6 +62,7 @@ import { ServerGuideModal } from './ServerGuideModal'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
+import { PluginPanels } from './PluginPanels'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let svRxDeb: number | undefined
@@ -1414,6 +1415,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               })}
             </>
           })()}
+          {/* v1.419.0: панели плагинов под списком каналов.
+              Место было объявлено ещё в v1.417.0 («Колонка слева — под списком
+              каналов») и показывалось человеку при установке плагина — а
+              рисовать его было некому: PluginPanels стоял только в плеере и в
+              Трекотеке. То есть плагин честно ставил панель, приложение честно
+              её принимало, и она не появлялась нигде. */}
+          <PluginPanels slot="sidebar" />
         </div>
         {(voice || connecting) && <div className="vp">
           <div className="vp-info">
@@ -1579,6 +1587,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             наткнуться на отказ базы уже после нажатия «отправить». */}
         {curChannel && canPostHere && verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) &&
           <div className="ch-readonly"><Icon name="lock" size={15} /> {verifyBlockReason()}</div>}
+        {/* v1.419.0: уголок плагина над полем ввода — то место, на которое
+            человек смотрит всё время. Без него панели годились только для
+            музыки, то есть для экрана, где он бывает изредка. */}
+        {curChannel && !isForum(curChannel) && <PluginPanels slot="chat" />}
         {curChannel && !isForum(curChannel) && canPostHere && !verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id} channelName={curChannel.name} serverName={server.name}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}

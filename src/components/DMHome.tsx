@@ -54,6 +54,7 @@ import type { Server } from '../types'
 import { NewConversationModal } from './NewConversationModal'
 import { GroupMembersPanel } from './GroupMembersPanel'
 import { fetchGroupThreads, fetchGroupMembers, groupDisplayName, type GroupThread } from '../lib/groupDm'
+import { PluginPanels } from './PluginPanels'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
@@ -1419,7 +1420,18 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
           <div ref={bottomRef} />
           </div>
           <TypingIndicator typers={typers} />
+          {/* v1.419.0: уголок плагина и в личке тоже — панели не должны быть
+              привилегией серверов. */}
+          <PluginPanels slot="chat" />
+          {/* v1.419.0: плагину нужно знать, ГДЕ он находится. В личке полей
+              channelId/channelName не было вовсе: ponoi.channel() отвечал null,
+              событие о переходе не приходило, и всё, что плагин умеет для
+              открытого чата (прочитать последние сообщения, поставить реакцию),
+              в ЛС просто не работало — без единого слова почему. serverId здесь
+              нет намеренно: у лички его и не бывает. */}
           <Composer placeholder={activeGroup ? 'Написать в ' + groupLabel(activeGroup) : 'Написать @' + active!.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
+            channelId={threadId ?? undefined}
+            channelName={activeGroup ? groupLabel(activeGroup) : ('@' + active!.name)}
             mentionables={activeGroup ? [...groupMembers.map(m => m.display_name || m.username), username] : [active!.name, username]}
             replyingTo={replyTarget ? { author: replyTarget.author, preview: replyTarget.preview, avatarUrl: replyTarget.avatarUrl } : null}
             onCancelReply={() => setReplyTarget(null)} onType={notifyTyping}

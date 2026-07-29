@@ -62,9 +62,15 @@ function onLoad(ponoi) {
 | `messages.read` | Видеть сообщения в открытом канале |
 | `messages.write` | Отправлять сообщения от твоего имени |
 | `storage` | Своё хранилище на этом устройстве |
-| `net` | Запросы к сайтам из `@hosts` (только https, GET и POST) |
+| `net` | Запросы к сайтам из `@hosts` (только https; GET, POST, PUT, PATCH, DELETE) |
 | `settings` | Своя страница настроек |
-| `notify` | Всплывающие уведомления |
+| `notify` | Всплывающие уведомления и звук |
+| `voice` | Эффект своего голоса в звонке (звук плагину недоступен) |
+| `context` | Имя человека, открытый чат, списки серверов и каналов |
+| `panel` | Своя панель в чате, плеере, Трекотеке или колонке слева |
+| `music` | Что играет, управление плеером и Трекотекой |
+| `navigate` | Открывать каналы и диалоги вместо человека |
+| `status` | Менять активность человека, которую видят другие |
 
 `ui.addMessageAction` требует ещё и `messages.read` — обработчик получает текст
 сообщения, и это должно быть видно в списке разрешений честно.
@@ -83,15 +89,37 @@ ponoi.ui.addSettingsPage({ title, rows: [
   { type: 'button', key, label, onClick },
 ]})
 
+ponoi.ui.addPanel({ slot, title, rows })            // slot: chat | player | library | sidebar
+ponoi.ui.addHotkey({ combo, description, onPress }) // combo: Ctrl/Alt + ещё модификатор + клавиша
+ponoi.ui.confirm({ title, text, ok }) / .prompt({ title, placeholder })
+
 ponoi.commands.register(имя, описание, обработчик)   // обработчик(строка-аргументов)
 ponoi.messages.send(текст)
-ponoi.storage.get(ключ) / .set(ключ, значение) / .remove(ключ)
+ponoi.messages.recent(n) / .react(id, эмодзи) / .remove(id)   // открытый чат
+ponoi.storage.get(ключ) / .set(ключ, значение) / .remove(ключ) / .keys() / .clear()
 ponoi.net.fetch(url, { method, headers, body })      // -> { ok, status, body }
-ponoi.notify(текст)
-ponoi.log(...)                                        // в консоль разработчика
+ponoi.net.json(url, init)                            // -> { ok, status, data }
+ponoi.me() / ponoi.channel() / ponoi.servers() / ponoi.channels(serverId)
+ponoi.open({ serverId, channelId } | { dmId } | { userId, userName })
+ponoi.status.get() / .set(текст)
+ponoi.notify(текст) / ponoi.sound.play('message' | 'chime')
+ponoi.clipboard.write(текст)
+ponoi.voice.list() / .current() / .setEffect(id)
+ponoi.music.now() / .library() / .play() / .pause() / .next() / .prev() / .queue(id) / .add(url)
+ponoi.log(...) / ponoi.warn(...) / ponoi.error(...)   // журнал плагина в настройках
 ponoi.on('message', m => ...)                         // новое сообщение в открытом канале
 ponoi.on('settings', s => ...)                        // человек изменил настройку плагина
 ```
+
+Строки панели и страницы настроек: `toggle`, `text`, `select`, `button`, `label`,
+`progress`, `slider`, `color`, `image`. Панель обновляется повторным `addPanel`
+с тем же `slot`.
+
+Полный список событий, разрешений и пределов лежит в `src/lib/plugins/spec.ts` —
+его же приложение отдаёт человеку в справке «Как сделать плагин», чтобы он мог
+попросить плагин у любого ИИ. Он проверяется тестом на полноту
+(`npm run test:plugins`): появился метод в `api.ts` — про него обязано быть
+написано.
 
 Все методы асинхронные — возвращают промис. Если разрешения нет, промис
 отклоняется с понятным текстом, который можно поймать через `try/catch`.
@@ -123,3 +151,6 @@ ponoi.on('settings', s => ...)                        // человек изме
   плагин не может подделать элемент интерфейса.
 - Изменять текст сообщения на лету (перевод, шифрование) пока нельзя — событие
   `message` только уведомляет.
+- Читать и править переписку можно только в ОТКРЫТОМ сейчас чате, и удалять —
+  только свои сообщения: чужие не даст ни приложение, ни база.
+- Своего звука, своей картинки в окне и своего файла на устройстве у плагина нет.

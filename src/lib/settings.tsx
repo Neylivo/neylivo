@@ -138,6 +138,18 @@ export const devMode = (): boolean => _current.devmode
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(load)
   useEffect(() => { apply(settings); _current = settings }, [settings])
+  // v1.419.0: настройки поменяли снаружи — перечитываем их.
+  //
+  // Понадобилось из-за плагинов: ponoi.status.set пишет ту же строку активности,
+  // что и поле в «Настройки → Активность». Без этого экран настроек продолжал бы
+  // показывать старый текст, а людям вокруг был бы виден новый — ровно то
+  // расхождение показа с действием, из-за которого в этом проекте чаще всего
+  // выходит «не работает».
+  useEffect(() => {
+    const h = () => setSettings(load())
+    window.addEventListener('ponoi-settings-external', h)
+    return () => window.removeEventListener('ponoi-settings-external', h)
+  }, [])
   // v1.332.0: своя активность живёт в presence, а presence поднимается выше этого
   // провайдера и настройки читает напрямую из localStorage — сообщаем ему, что
   // текст поменялся, иначе новый статус увидели бы только после перезапуска.

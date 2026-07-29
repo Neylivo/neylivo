@@ -28,12 +28,34 @@ export interface MessageAction { pluginId: string; key: string; icon: string; la
 export interface SlashCommand { pluginId: string; name: string; description: string; handler: FnRef }
 export interface PluginSettingsPage { pluginId: string; title: string; rows: SettingsRow[] }
 
-/** Строка на странице настроек плагина. Плагин описывает её данными, а не разметкой. */
+/**
+ * Строка на странице настроек плагина и в его панели. Плагин описывает её
+ * ДАННЫМИ, а не разметкой: рисует всё приложение своими компонентами.
+ *
+ * v1.419.0: строк стало вдвое больше. Раньше их было четыре — переключатель,
+ * поле, выбор и кнопка, — и это значило, что плагин мог сделать только
+ * настройку. Показать что-нибудь (погоду, счёт, время до конца трека) ему было
+ * нечем: единственным способом сказать хоть слово оставалось всплывающее
+ * уведомление. Отсюда и берётся ощущение, что плагины «почти ничего не могут».
+ *
+ * Ни одна новая строка не даёт плагину разметки: он присылает число, цвет или
+ * ссылку на картинку, а как это выглядит — решает приложение.
+ */
 export type SettingsRow =
   | { type: 'toggle'; key: string; label: string; description?: string; value: boolean }
   | { type: 'text'; key: string; label: string; description?: string; value: string; placeholder?: string }
   | { type: 'select'; key: string; label: string; description?: string; value: string; options: { value: string; label: string }[] }
   | { type: 'button'; key: string; label: string; description?: string; onClick: FnRef }
+  /** Просто текст: слева подпись, справа значение. Плагин обновляет его, прислав панель заново. */
+  | { type: 'label'; key: string; label: string; description?: string; value: string }
+  /** Полоса заполнения, 0–100. Для «сколько осталось», «сколько сделано». */
+  | { type: 'progress'; key: string; label: string; description?: string; value: number }
+  /** Ползунок с числом: min/max/step задаёт плагин, значение хранится у него же. */
+  | { type: 'slider'; key: string; label: string; description?: string; value: number; min: number; max: number; step: number }
+  /** Выбор цвета — #rrggbb. */
+  | { type: 'color'; key: string; label: string; description?: string; value: string }
+  /** Картинка по https-ссылке. Рисуется в рамке фиксированного размера. */
+  | { type: 'image'; key: string; label: string; description?: string; value: string }
 
 /**
  * Куда плагин может поставить свою панель (v1.417.0).
@@ -48,15 +70,34 @@ export type SettingsRow =
  * ОПИСЫВАЕТ панель теми же строками, что и страницу настроек, а рисует её
  * приложение своими руками — подделать чужое окно такой панелью невозможно.
  */
-export type PanelSlot = 'player' | 'library' | 'sidebar'
+export type PanelSlot = 'player' | 'library' | 'sidebar' | 'chat'
 
 export const PANEL_SLOTS: Record<PanelSlot, string> = {
   player: 'Плеер — под обложкой',
   library: 'Трекотека — над списком треков',
   sidebar: 'Колонка слева — под списком каналов',
+  // v1.419.0: самое нужное место и самое очевидное — то, на что человек смотрит
+  // всё время. Без него панели годились только для музыки, то есть для того,
+  // где человек бывает изредка.
+  chat: 'Чат — над полем ввода',
 }
 
 export interface PluginPanel { pluginId: string; slot: PanelSlot; title: string; rows: SettingsRow[] }
+
+/**
+ * Горячая клавиша плагина (v1.419.0).
+ *
+ * Зачем. Плагин мог получить управление тремя способами: команда в чате, кнопка
+ * у поля ввода и пункт меню сообщения — то есть только там, где человек и так
+ * что-то печатает. Всё, что хочется вызвать «прямо сейчас, откуда угодно»
+ * (спрятать окно, отметить время, переключить трек), плагину было недоступно.
+ *
+ * Сочетание обязано содержать Ctrl или Alt вместе ещё с одним модификатором
+ * (см. okCombo): голые буквы и одиночный Ctrl+K забрали бы у человека набор
+ * текста и поиск приложения, причём молча — он не понял бы, какой из плагинов
+ * съел его клавишу.
+ */
+export interface PluginHotkey { pluginId: string; combo: string; description: string; onPress: FnRef }
 
 interface Registry {
   composerButtons: ComposerButton[]
@@ -64,8 +105,9 @@ interface Registry {
   commands: SlashCommand[]
   settingsPages: PluginSettingsPage[]
   panels: PluginPanel[]
+  hotkeys: PluginHotkey[]
 }
-const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [] }
+const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [], hotkeys: [] }
 
 /**
  * Сколько всего один плагин может добавить (v1.345.0).
@@ -75,7 +117,7 @@ const reg: Registry = { composerButtons: [], messageActions: [], commands: [], s
  * этого не нужен злой умысел, хватит цикла с ошибкой. Числа взяты с запасом:
  * ни один осмысленный плагин столько не просит.
  */
-const MAX_PER_PLUGIN = { buttons: 5, actions: 5, commands: 15 }
+const MAX_PER_PLUGIN = { buttons: 5, actions: 5, commands: 15, hotkeys: 5 }
 
 /** Снимок для проверок — приложению он не нужен, оно читает через хуки. */
 export const getRegistry = (): Registry => reg
@@ -98,7 +140,11 @@ export function setPluginsDisabled(on: boolean) {
     // Снимаем всё сразу: и стили, и кнопки, и команды — не дожидаясь, пока
     // плагины остановятся сами.
     for (const [, el] of styleEls) el.textContent = ''
+    // v1.419.0: панели и горячие клавиши тоже. Панели тут не снимались с самого
+    // их появления — аварийный режим гасил стили, кнопки и команды, а уголок
+    // плагина в чате и в плеере оставался на экране, будто ничего не выключали.
     reg.composerButtons = []; reg.messageActions = []; reg.commands = []; reg.settingsPages = []
+    reg.panels = []; reg.hotkeys = []
   }
   notify()
 }
@@ -144,7 +190,9 @@ function guard(kind: keyof typeof MAX_PER_PLUGIN, list: { pluginId: string }[], 
   const mine = list.filter(x => x.pluginId === pluginId).length
   const max = MAX_PER_PLUGIN[kind]
   if (mine >= max) {
-    const what = kind === 'buttons' ? 'кнопок' : kind === 'actions' ? 'действий над сообщением' : 'команд'
+    const what = kind === 'buttons' ? 'кнопок'
+      : kind === 'actions' ? 'действий над сообщением'
+      : kind === 'hotkeys' ? 'горячих клавиш' : 'команд'
     throw new PluginLimit(`Плагин просит слишком много ${what}: больше ${max} нельзя.`)
   }
 }
@@ -180,6 +228,36 @@ export function setPanel(p: PluginPanel) {
   notify()
 }
 
+/**
+ * Проверка сочетания клавиш (v1.419.0).
+ *
+ * Требуем Ctrl или Alt И ещё один модификатор сверх него. Иначе плагин забрал
+ * бы у человека либо саму букву, либо привычное сочетание приложения (Ctrl+K —
+ * переход, Ctrl+F — поиск), и виновника он бы не нашёл: клавиша просто
+ * перестала бы работать.
+ */
+export function okCombo(combo: string): boolean {
+  const parts = combo.split('+').map(s => s.trim()).filter(Boolean)
+  const mods = parts.filter(p => ['Ctrl', 'Meta', 'Alt', 'Shift'].includes(p))
+  const keys = parts.filter(p => !['Ctrl', 'Meta', 'Alt', 'Shift'].includes(p))
+  if (keys.length !== 1) return false
+  if (mods.length < 2) return false
+  return mods.includes('Ctrl') || mods.includes('Alt') || mods.includes('Meta')
+}
+
+export function addHotkey(h: PluginHotkey) {
+  guard('hotkeys', reg.hotkeys, h.pluginId, reg.hotkeys.some(x => x.combo === h.combo && x.pluginId === h.pluginId))
+  // Занятое другим плагином сочетание — ошибка, а не тихая подмена: иначе
+  // второй плагин молча отнял бы клавишу у первого, и оба выглядели бы
+  // сломанными. Ровно как с именами команд.
+  const owner = reg.hotkeys.find(x => x.combo.toLowerCase() === h.combo.toLowerCase())
+  if (owner && owner.pluginId !== h.pluginId) {
+    throw new PluginLimit(`Сочетание ${h.combo} уже занято другим плагином.`)
+  }
+  reg.hotkeys = [...reg.hotkeys.filter(x => x.combo !== h.combo || x.pluginId !== h.pluginId), h]
+  notify()
+}
+
 export function setSettingsPage(p: PluginSettingsPage) {
   if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
   reg.settingsPages = [...reg.settingsPages.filter(x => x.pluginId !== p.pluginId), p]
@@ -193,6 +271,7 @@ export function clearPlugin(pluginId: string) {
   reg.commands = reg.commands.filter(x => x.pluginId !== pluginId)
   reg.settingsPages = reg.settingsPages.filter(x => x.pluginId !== pluginId)
   reg.panels = reg.panels.filter(x => x.pluginId !== pluginId)
+  reg.hotkeys = reg.hotkeys.filter(x => x.pluginId !== pluginId)
   const el = styleEls.get(pluginId)
   if (el) { el.remove(); styleEls.delete(pluginId) }
   notify()
@@ -208,3 +287,6 @@ export const useSlashCommands = () => useReg(() => reg.commands)
 export const useSettingsPages = () => useReg(() => reg.settingsPages)
 /** Панели плагинов в конкретном месте приложения (v1.417.0). */
 export const usePanels = (slot: PanelSlot) => useReg(() => reg.panels.filter(p => p.slot === slot))
+/** Горячие клавиши плагинов (v1.419.0) — слушает App.tsx, показывает окно сочетаний. */
+export const useHotkeys = () => useReg(() => reg.hotkeys)
+export const getHotkeys = (): PluginHotkey[] => reg.hotkeys

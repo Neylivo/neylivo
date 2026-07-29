@@ -1,10 +1,12 @@
 import { PLUGIN_EVENTS, PLUGIN_EVENT_NAMES, type InstalledPlugin, type Permission } from './types'
 import { isFnRef, type FnRef } from './sandbox'
 import {
-  addCommand, addComposerButton, addMessageAction, commandOwner, safeIcon,
+  addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
   setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, type SettingsRow, type PanelSlot,
 } from './registry'
 import { musicBridge } from './musicApi'
+import { chatBridge, MAX_RECENT } from './chatApi'
+import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
 import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
 import { pluginLog } from './host'
 import { VOICE_EFFECTS, activeEffect, isVoiceEffect, applyVoiceEffectSafe, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
@@ -87,8 +89,40 @@ function settingsRow(raw: any): SettingsRow | null {
       return options.length ? { type: 'select', key, label, description, value: String(raw.value ?? ''), options } : null
     }
     case 'button': return isFnRef(raw.onClick) ? { type: 'button', key, label, description, onClick: raw.onClick } : null
+    // v1.419.0: строки, которые ПОКАЗЫВАЮТ. Числа приводятся к своим границам
+    // здесь, а не в разметке: панель с value = 10^9 не должна уметь растянуть
+    // экран, а слайдер с min больше max — стать неподвижным.
+    case 'label': return { type: 'label', key, label, description, value: String(raw.value ?? '').slice(0, 200) }
+    case 'progress': return { type: 'progress', key, label, description, value: num(raw.value, 0, 100, 0) }
+    case 'slider': {
+      const min = num(raw.min, -1e6, 1e6, 0)
+      const max = num(raw.max, -1e6, 1e6, 100)
+      if (!(max > min)) return null
+      const step = Math.min(Math.max(num(raw.step, 0.0001, max - min, 1), 0.0001), max - min)
+      return { type: 'slider', key, label, description, value: num(raw.value, min, max, min), min, max, step }
+    }
+    case 'color': {
+      const v = String(raw.value ?? '').trim()
+      return { type: 'color', key, label, description, value: /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#5865f2' }
+    }
+    case 'image': {
+      // Только https: с data: и javascript: в src плагин рисовал бы в окне уже
+      // не картинку. Тот же разбор, что у @icon в шапке (manifest.ts).
+      const v = String(raw.value ?? raw.url ?? '').trim().slice(0, 500)
+      let u: URL
+      try { u = new URL(v) } catch { return null }
+      if (u.protocol !== 'https:') return null
+      return { type: 'image', key, label, description, value: v }
+    }
     default: return null
   }
+}
+
+/** Число от плагина: не NaN, не бесконечность, всегда в своих границах. */
+function num(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(Math.max(n, min), max)
 }
 
 export function createDispatcher(
@@ -221,6 +255,102 @@ export function createDispatcher(
         return true
       }
 
+      // v1.419.0: горячая клавиша. Единственный способ дать плагину управление
+      // не там, где человек и так печатает.
+      case 'ui.addHotkey': {
+        need('ui')
+        const o = args[0] as any
+        const combo = str(o?.combo, 40, 'сочетание клавиш')
+        if (!okCombo(combo)) {
+          throw new Denied(`Сочетание «${combo}» не годится: нужны Ctrl или Alt и ещё один модификатор, например Ctrl+Shift+K.`)
+        }
+        addHotkey({
+          pluginId: id,
+          combo,
+          description: str(o?.description ?? o?.label ?? combo, 80, 'описание сочетания'),
+          onPress: fnRef(o?.onPress ?? o?.onClick, 'горячая клавиша'),
+        })
+        return null
+      }
+
+      // ── Открытый чат ────────────────────────────────────────────────────
+      // Всё это делает не плагин, а сам экран чата — теми же обработчиками,
+      // что и нажатие мышью, с теми же проверками прав канала (chatApi.ts).
+      case 'messages.recent': {
+        need('messages.read')
+        const b = chatBridge(ctx.channel?.()?.id)
+        if (!b) throw new Denied('Сейчас не открыт ни один чат — читать нечего.')
+        const n = Math.min(Math.max(Math.round(Number(args[0]) || 20), 1), MAX_RECENT)
+        return b.recent(n)
+      }
+      case 'messages.react': {
+        need('messages.write')
+        rateLimit(id + ':react', 10, 10_000, 'ставить реакции')
+        const b = chatBridge(ctx.channel?.()?.id)
+        if (!b) throw new Denied('Сейчас не открыт ни один чат.')
+        const why = await b.react(str(args[0], 60, 'id сообщения'), str(args[1], 16, 'эмодзи'))
+        if (why) throw new Denied(why)
+        return true
+      }
+      case 'messages.remove': {
+        need('messages.write')
+        rateLimit(id + ':remove', 5, 10_000, 'удалять сообщения')
+        const b = chatBridge(ctx.channel?.()?.id)
+        if (!b) throw new Denied('Сейчас не открыт ни один чат.')
+        const why = await b.remove(str(args[0], 60, 'id сообщения'))
+        if (why) throw new Denied(why)
+        return true
+      }
+
+      // ── Приложение вокруг ───────────────────────────────────────────────
+      case 'servers': {
+        need('context')
+        return await pluginServers()
+      }
+      case 'channels': {
+        need('context')
+        return await pluginChannels(str(args[0], 60, 'id сервера'))
+      }
+      case 'open': {
+        need('navigate')
+        // Переход уводит человека с того, на что он смотрит: в цикле это
+        // сделало бы приложение неуправляемым.
+        rateLimit(id + ':open', 5, 10_000, 'открывать каналы')
+        const o = (args[0] ?? {}) as any
+        const ok = pluginOpen({
+          serverId: o.serverId ? String(o.serverId).slice(0, 60) : undefined,
+          channelId: o.channelId ? String(o.channelId).slice(0, 60) : undefined,
+          dmId: o.dmId ? String(o.dmId).slice(0, 60) : undefined,
+          userId: o.userId ? String(o.userId).slice(0, 60) : undefined,
+          userName: o.userName ? String(o.userName).slice(0, 60) : undefined,
+        })
+        if (!ok) throw new Denied('Нечего открывать: нужен serverId, dmId или userId.')
+        return true
+      }
+
+      case 'status.set': {
+        need('status')
+        rateLimit(id + ':status', 5, 60_000, 'менять активность')
+        return await pluginSetStatus(String(args[0] ?? ''))
+      }
+      case 'status.get': {
+        need('status')
+        return await pluginGetStatus()
+      }
+
+      case 'sound.play': {
+        // Звук — то же беспокойство, что и уведомление, поэтому и разрешение то
+        // же самое, и ограничение частоты своё.
+        need('notify')
+        rateLimit(id + ':sound', 5, 10_000, 'играть звук')
+        const name = String(args[0] ?? 'chime')
+        if (!(PLUGIN_SOUND_NAMES as readonly string[]).includes(name)) {
+          throw new Denied(`Нет такого звука «${name}». Есть: ${PLUGIN_SOUND_NAMES.join(', ')}.`)
+        }
+        await pluginPlaySound(name)
+        return true
+      }
+
       case 'commands.register': {
         need('commands')
         const name = str(args[0], 32, 'имя команды').toLowerCase().replace(/^\//, '')
@@ -299,6 +429,12 @@ export function createDispatcher(
       case 'storage.remove': {
         need('storage')
         deleteStorage(id, str(args[0], 100, 'ключ'))
+        return null
+      }
+      case 'storage.clear': {
+        need('storage')
+        // Своё и только своё: listStorage отдаёт ключи этого плагина.
+        for (const k of listStorage(id)) deleteStorage(id, k)
         return null
       }
 
@@ -409,15 +545,27 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
     throw new Denied('Обращаться к самому Ponoi и его серверу плагинам нельзя.')
   }
 
+  // v1.419.0: полный набор методов. Раньше были только GET и POST — то есть
+  // половина обычных API (всё, что правит и удаляет) плагину была недоступна,
+  // хотя ходить он всё равно может только на объявленные в @hosts домены.
   const method = String(init?.method ?? 'GET').toUpperCase()
-  if (!['GET', 'POST'].includes(method)) throw new Denied('Разрешены только GET и POST.')
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    throw new Denied('Разрешены методы GET, POST, PUT, PATCH и DELETE.')
+  }
 
-  // Заголовки — узкий белый список: всё остальное плагину не нужно, а лишнее сюда
-  // попадать не должно (в том числе Authorization и Cookie).
+  // Заголовки — белый список. v1.419.0: в нём появились те, которыми
+  // подписываются у чужих API (Authorization, X-Api-Key и подобные): без них
+  // плагин не мог обратиться ни к одному сервису, где нужен ключ, — а это почти
+  // все. Опасности в этом нет: ключ плагин приносит свой, запрос идёт без куки
+  // (credentials: omit) и только на домен из @hosts, а до самого Ponoi и его
+  // сервера дорога закрыта отдельной проверкой выше.
+  //
+  // Cookie по-прежнему нельзя: это единственный заголовок, который браузер
+  // считает «своим» для сайта, и подставлять его плагину незачем.
   const headers: Record<string, string> = {}
-  const allowed = ['content-type', 'accept']
+  const allowed = ['content-type', 'accept', 'authorization', 'x-api-key', 'x-auth-token', 'user-agent', 'accept-language']
   for (const [k, v] of Object.entries(init?.headers ?? {})) {
-    if (allowed.includes(k.toLowerCase())) headers[k] = String(v).slice(0, 200)
+    if (allowed.includes(k.toLowerCase())) headers[k] = String(v).slice(0, 500)
   }
 
   const ctl = new AbortController()
@@ -426,7 +574,7 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
     const res = await fetch(url.toString(), {
       method,
       headers,
-      body: method === 'POST' ? String(init?.body ?? '').slice(0, NET_MAX_BYTES) : undefined,
+      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? '').slice(0, NET_MAX_BYTES),
       signal: ctl.signal,
       // Без куки и без авторизации — запрос от имени никого.
       credentials: 'omit',

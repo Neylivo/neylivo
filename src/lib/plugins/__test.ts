@@ -9,7 +9,8 @@
 // Запуск: npm run test:plugins
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
-import { ALL_PERMISSIONS } from './types'
+import { ALL_PERMISSIONS, PLUGIN_EVENTS } from './types'
+import { PANEL_SLOTS } from './registry'
 import {
   TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify,
   permissionsFromCode, missingPermissions, unusedPermissions,
@@ -40,6 +41,9 @@ function loadPlugin(code: string) {
   return factory(undefined, mod, mod.exports)
 }
 
+/** Виды строк, которые понимает приложение (см. SettingsRow в registry.ts). */
+const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image']
+
 /** Заглушка ponoi: записывает всё, что плагин попросил, и ничего не делает. */
 function stubPonoi() {
   const calls = {
@@ -49,20 +53,32 @@ function stubPonoi() {
     css: 0,
     sent: [] as string[],
     notified: [] as string[],
+    panels: [] as any[],
+    hotkeys: [] as string[],
   }
   const ponoi: any = {
     css: (t: string) => { calls.css++; if (typeof t !== 'string') throw new Error('css: не строка') },
     ui: {
       addComposerButton: () => {},
       addMessageAction: () => {},
+      // v1.419.0: строк стало девять, а не четыре — заготовка или рецепт с
+      // новой строкой не должны падать здесь на «неизвестном типе».
       addSettingsPage: (o: any) => {
         if (!o?.title || !Array.isArray(o.rows)) throw new Error('addSettingsPage: нет title/rows')
         for (const r of o.rows) {
           if (!r?.key || !r?.label) throw new Error('строка настроек без key/label')
-          if (!['toggle', 'text', 'select', 'button'].includes(r.type)) throw new Error('неизвестный тип строки: ' + r.type)
+          if (!ROW_TYPES.includes(r.type)) throw new Error('неизвестный тип строки: ' + r.type)
           if (r.type === 'select' && !(Array.isArray(r.options) && r.options.length)) throw new Error('select без вариантов')
         }
         calls.settingsPages.push(o)
+      },
+      addPanel: (o: any) => {
+        if (!o?.slot) throw new Error('addPanel: не сказано место (slot)')
+        calls.panels.push(o)
+      },
+      addHotkey: (o: any) => {
+        if (!o?.combo || typeof o.onPress !== 'function') throw new Error('addHotkey: нужны combo и onPress')
+        calls.hotkeys.push(o.combo)
       },
     },
     commands: {
@@ -72,9 +88,29 @@ function stubPonoi() {
         calls.commands.push(name)
       },
     },
-    messages: { send: async (t: string) => { calls.sent.push(String(t)) } },
-    storage: { get: async () => null, set: async () => {}, remove: async () => {} },
-    net: { fetch: async () => ({ ok: true, status: 200, body: '' }) },
+    messages: {
+      send: async (t: string) => { calls.sent.push(String(t)) },
+      recent: async () => [],
+      react: async () => true,
+      remove: async () => true,
+    },
+    storage: { get: async () => null, set: async () => {}, remove: async () => {}, keys: async () => [], clear: async () => {} },
+    net: { fetch: async () => ({ ok: true, status: 200, body: '' }), json: async () => ({ ok: true, status: 200, data: {} }) },
+    // v1.419.0: приложение вокруг — чтобы плагин, который их зовёт, доходил
+    // здесь до конца, а не падал на «ponoi.open не функция».
+    me: async () => ({ id: 'u1', name: 'Проверка' }),
+    channel: async () => ({ id: 'c1', name: 'общий', serverId: 's1', serverName: 'Сервер' }),
+    servers: async () => [{ id: 's1', name: 'Сервер' }],
+    channels: async () => [{ id: 'c1', name: 'общий', serverId: 's1', kind: 'text' }],
+    open: async () => true,
+    status: { get: async () => '', set: async () => '' },
+    sound: { play: async () => true },
+    clipboard: { write: async () => true },
+    music: {
+      now: async () => null, library: async () => [],
+      play: async () => true, pause: async () => true, next: async () => true, prev: async () => true,
+      queue: async () => true, add: async () => true,
+    },
     voice: {
       list: async () => [{ id: 'none', label: 'Обычный' }, { id: 'robot', label: 'Робот' }],
       current: async () => 'none',
@@ -442,6 +478,10 @@ for (const p of OFFICIAL_PLUGINS) {
     // v1.417.0: панель в приложении и музыка.
     'ui.addPanel', 'music.now', 'music.library', 'music.play', 'music.pause',
     'music.next', 'music.prev', 'music.queue', 'music.add',
+    // v1.419.0: горячие клавиши, работа с открытым чатом, приложение вокруг.
+    'ui.addHotkey', 'messages.recent', 'messages.react', 'messages.remove',
+    'servers', 'channels', 'open', 'status.set', 'status.get', 'sound.play',
+    'storage.clear',
   ]
 
   check('в инструкции описано каждое разрешение', () => {
@@ -456,6 +496,10 @@ for (const p of OFFICIAL_PLUGINS) {
       if (m === 'subscribe') return !PLUGIN_SPEC.includes('ponoi.on')
       if (m === 'me') return !PLUGIN_SPEC.includes('ponoi.me')
       if (m === 'channel') return !PLUGIN_SPEC.includes('ponoi.channel')
+      // v1.419.0: снаружи это ponoi.servers()/ponoi.channels(serverId)/ponoi.open().
+      if (m === 'servers') return !PLUGIN_SPEC.includes('ponoi.servers')
+      if (m === 'channels') return !PLUGIN_SPEC.includes('ponoi.channels')
+      if (m === 'open') return !PLUGIN_SPEC.includes('ponoi.open')
       // voice.effects снаружи зовётся ponoi.voice.list — так его и вызывают.
       if (m === 'voice.effects') return !PLUGIN_SPEC.includes('ponoi.voice.list')
       const tail = m.includes('.') ? m : m
@@ -470,9 +514,29 @@ for (const p of OFFICIAL_PLUGINS) {
     // и его отсутствие в инструкции никто не заметит.
     const src = DISPATCHER_SRC
     const inCode = [...src.matchAll(/case '([a-z.]+)':/g)].map(m => m[1])
-    const real = inCode.filter(m => !['toggle', 'text', 'select', 'button'].includes(m))
+    // В том же файле есть switch по видам строк — это не методы API.
+    const real = inCode.filter(m => !ROW_TYPES.includes(m))
     const forgotten = real.filter(m => !SPEC_KNOWN_METHODS.includes(m))
     if (forgotten.length) throw new Error('метод есть в коде, но не в списке проверки: ' + forgotten.join(', '))
+    return true
+  })
+
+  // v1.419.0: строки, места панелей и события — из одного источника с
+  // приложением. Инструкцию читает ИИ, и «строка type: image» из головы
+  // означает панель, которая молча не покажет ничего.
+  check('в инструкции описан каждый вид строки', () => {
+    const missing = ROW_TYPES.filter(t => !PLUGIN_SPEC.includes('| ' + t + ' |'))
+    if (missing.length) throw new Error('не описаны: ' + missing.join(', '))
+    return true
+  })
+  check('в инструкции описано каждое место для панели', () => {
+    const missing = Object.keys(PANEL_SLOTS).filter(s => !PLUGIN_SPEC.includes('| ' + s + ' |'))
+    if (missing.length) throw new Error('не описаны: ' + missing.join(', '))
+    return true
+  })
+  check('в инструкции описано каждое событие', () => {
+    const missing = Object.keys(PLUGIN_EVENTS).filter(e => !PLUGIN_SPEC.includes('| ' + e + ' |'))
+    if (missing.length) throw new Error('не описаны: ' + missing.join(', '))
     return true
   })
 
@@ -499,8 +563,21 @@ for (const p of OFFICIAL_PLUGINS) {
     return missingPermissions(body, man.permissions).length === 0
   })
 
-  check('просьба к ИИ оставляет человеку место для его задумки', () =>
-    AI_PROMPT_PREFIX.includes('[') && AI_PROMPT_PREFIX.length > 80)
+  // v1.419.0: просьба к ИИ — это объяснение системы, а не бланк с пропуском.
+  //
+  // Раньше в ней стояло «[ОПИШИ СВОИМИ СЛОВАМИ]», и проверялось наличие
+  // квадратной скобки. На деле текст копируют и отправляют как есть, скобки
+  // остаются пустыми, и ИИ выдумывает плагин сам. Теперь договор другой:
+  // объяснить устройство, НЕ писать код сразу и спросить у человека задумку —
+  // это и проверяем.
+  check('просьба к ИИ объясняет устройство системы', () => {
+    const must = ['Web Worker', 'document', '@permissions', 'onLoad', 'разрешени', 'панел']
+    const missing = must.filter(m => !AI_PROMPT_PREFIX.includes(m))
+    if (missing.length) throw new Error('не сказано про: ' + missing.join(', '))
+    return AI_PROMPT_PREFIX.length > 1500
+  })
+  check('просьба к ИИ просит сначала спросить задумку, а не писать код', () =>
+    /НЕ пиши код/.test(AI_PROMPT_PREFIX) && /спрос/i.test(AI_PROMPT_PREFIX))
 
   check('в инструкции про ботов сказано главное', () => {
     // Три вещи, без которых бот заведомо не заработает: проверка подписи, адрес
@@ -518,8 +595,8 @@ for (const p of OFFICIAL_PLUGINS) {
     return BOT_SPEC.includes('.ponoi') === false && BOT_SPEC.includes('onLoad') === false
   })
 
-  check('просьба к ИИ про бота тоже оставляет место', () =>
-    AI_BOT_PROMPT_PREFIX.includes('[') && AI_BOT_PROMPT_PREFIX.length > 80)
+  check('просьба к ИИ про бота устроена так же', () =>
+    /НЕ пиши код/.test(AI_BOT_PROMPT_PREFIX) && AI_BOT_PROMPT_PREFIX.includes('X-Ponoi-Signature'))
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

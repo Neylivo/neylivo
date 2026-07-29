@@ -13,6 +13,7 @@ import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameL
 import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
 import { useMessageActions } from '../lib/plugins/registry'
 import { invokePlugin, emitPluginEvent } from '../lib/plugins/host'
+import { setChatBridge } from '../lib/plugins/chatApi'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -398,6 +399,54 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     // Множество виденного не должно расти бесконечно за долгую сессию.
     if (seenMsgIds.current.size > 5000) seenMsgIds.current = new Set(messages.map(m => m.id))
   }, [messages])
+
+  // v1.419.0: мост для плагинов — прочитать то, что уже на экране, поставить
+  // реакцию и убрать своё сообщение.
+  //
+  // Здесь, а не в api.ts, потому что и реакция, и удаление идут теми же
+  // обработчиками, что и нажатие мышью: со всеми проверками прав канала,
+  // подтверждениями и откатами. Плагин ничего не делает с базой сам.
+  //
+  // Ключ — id открытого разговора (канал или диалог), тот же, который плагин
+  // получает в ponoi.channel(). Полей ввода и лент на экране до трёх сразу
+  // (канал, личка, ветка): без ключа плагин читал бы ту, что отрисовалась
+  // последней, а не ту, которую человек видит.
+  const chatKey = linkCtx ? (linkCtx.kind === 'server' ? linkCtx.channelId : linkCtx.dmId) : null
+  const bridgeRef = useRef({ messages, currentUser, canDelete, onReact, onDelete, canReact })
+  bridgeRef.current = { messages, currentUser, canDelete, onReact, onDelete, canReact }
+  useEffect(() => {
+    if (!chatKey) return
+    setChatBridge(chatKey, {
+      recent: (limit: number) => {
+        const b = bridgeRef.current
+        return b.messages.slice(-limit).map(m => ({
+          id: m.id, author: m.author, authorName: m.author_name ?? '',
+          content: m.content ?? '', mine: m.author === b.currentUser,
+          at: m.created_at,
+        }))
+      },
+      react: async (messageId: string, emoji: string) => {
+        const b = bridgeRef.current
+        if (b.canReact === false) return 'В этом канале нельзя ставить реакции.'
+        if (!b.onReact) return 'В этом чате реакции недоступны.'
+        if (!b.messages.some(m => m.id === messageId)) return 'Такого сообщения нет среди открытых.'
+        b.onReact(messageId, emoji)
+        return null
+      },
+      remove: async (messageId: string) => {
+        const b = bridgeRef.current
+        const m = b.messages.find(x => x.id === messageId)
+        if (!m) return 'Такого сообщения нет среди открытых.'
+        // Чужое не трогаем даже у модератора: право «Управление сообщениями»
+        // даётся человеку, а не плагину, который он поставил из чата.
+        if (m.author !== b.currentUser) return 'Плагин может убрать только твоё сообщение.'
+        if (!b.onDelete) return 'В этом чате удаление недоступно.'
+        b.onDelete(messageId, true)
+        return null
+      },
+    })
+    return () => setChatBridge(chatKey, null)
+  }, [chatKey])
 
   // v1.397.0: правка и удаление сообщения — тоже события. Раньше плагин узнавал
   // только о новых: автопереводчик переводил сообщение и не замечал, что его

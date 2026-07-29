@@ -62,6 +62,37 @@ function PanelRows({ pluginId, rows }: { pluginId: string; rows: SettingsRow[] }
           <button key={r.key} className="pqs2-btn ghost plugpanel-btn"
             onClick={() => { void invokePlugin(pluginId, r.onClick, []) }}>{r.label}</button>
         )
+        // v1.419.0: строки, которые показывают. Значение приходит от плагина и
+        // рисуется текстом — никакой разметки от него здесь не появляется.
+        case 'label': return (
+          <div key={r.key} className="plugpanel-row">
+            <span>{r.label}</span>
+            <b className="plugpanel-val notr" translate="no">{r.value}</b>
+          </div>
+        )
+        case 'progress': return (
+          <div key={r.key} className="plugpanel-prow">
+            <div className="plugpanel-row"><span>{r.label}</span><b className="plugpanel-val">{Math.round(r.value)}%</b></div>
+            <div className="plugpanel-bar"><i style={{ width: Math.max(0, Math.min(100, r.value)) + '%' }} /></div>
+          </div>
+        )
+        case 'slider': return (
+          <div key={r.key} className="plugpanel-prow">
+            <div className="plugpanel-row"><span>{r.label}</span><b className="plugpanel-val">{String(valueOf(r) ?? r.value)}</b></div>
+            <input type="range" className="plugpanel-range" min={r.min} max={r.max} step={r.step}
+              value={Number(valueOf(r) ?? r.value)} onChange={e => change(r.key, Number(e.target.value))} />
+          </div>
+        )
+        case 'color': return (
+          <div key={r.key} className="plugpanel-row">
+            <span>{r.label}</span>
+            <input type="color" className="plugpanel-color" value={String(valueOf(r) ?? r.value)}
+              onChange={e => change(r.key, e.target.value)} />
+          </div>
+        )
+        case 'image': return (
+          <img key={r.key} className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
+        )
         default: return null
       }
     })}

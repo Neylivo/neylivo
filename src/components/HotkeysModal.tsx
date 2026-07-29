@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useSettings } from '../lib/settings'
+import { useHotkeys } from '../lib/plugins/registry'
 
 // Окно-шпаргалка горячих клавиш (Ctrl+/), как в Discord.
 // Настраиваемые комбо подтягиваются из настроек.
@@ -34,6 +35,10 @@ export function HotkeysModal({ onClose }: { onClose: () => void }) {
   ]
   if (settings.keyHome) rows.push([settings.keyHome, 'Перейти в личные сообщения'])
   if (settings.keyMusic) rows.push([settings.keyMusic, 'Открыть Ponoi Music'])
+  // v1.419.0: клавиши, которые завели плагины. Без этой строки шпаргалка снова
+  // врала бы умолчанием: сочетание работает, а откуда оно взялось — неизвестно.
+  // Помечаем, чей это плагин: это не клавиша Ponoi, и убирается она вместе с ним.
+  const plugKeys = useHotkeys()
 
   // v1.389.0: было modal-back — класса с таким именем в стилях нет вовсе, и окно
   // выпадало в общий поток: без затемнения, без середины экрана, поверх списка
@@ -52,6 +57,19 @@ export function HotkeysModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+        {plugKeys.length > 0 && <>
+          <h3 style={{ marginTop: 14 }}>От плагинов</h3>
+          <div className="hk-list">
+            {plugKeys.map(h => (
+              <div key={h.pluginId + h.combo} className="hk-row">
+                <span className="hk-what">{h.description} <span className="plugpanel-tag">плагин</span></span>
+                <span className="hk-keys">{h.combo.split('+').map((k, i, a) => (
+                  <span key={i}><kbd>{k}</kbd>{i < a.length - 1 ? ' + ' : ''}</span>
+                ))}</span>
+              </div>
+            ))}
+          </div>
+        </>}
         <div className="hk-hint">Комбо «ЛС» и «Музыка» настраиваются в Настройках</div>
       </div>
     </div>

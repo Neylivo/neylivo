@@ -5883,6 +5883,30 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 .plugpanel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .plugpanel-btn { align-self: flex-start; }
 
+/* v1.419.0: строки, которые ПОКАЗЫВАЮТ, — значение, полоса, ползунок, цвет и
+   картинка. Раньше плагин умел описать только настройку, и сказать человеку
+   хоть слово мог единственным способом: всплывающим уведомлением. */
+/* Поле ввода в панели: обычное modal-in рассчитано на окно и в уголке плагина
+   выглядит вдвое выше соседних строк — видно на первом же снимке стенда. */
+.plugpanel .modal-in { padding: 5px 8px; font-size: 13px; height: auto; min-height: 0; }
+.plugpanel-prow { display: flex; flex-direction: column; gap: 5px; }
+.plugpanel-val { font-size: 13px; color: var(--txt); font-variant-numeric: tabular-nums; }
+.plugpanel-bar {
+  height: 6px; border-radius: 999px; overflow: hidden;
+  background: rgba(var(--ov, 255,255,255), .12);
+}
+.plugpanel-bar > i { display: block; height: 100%; background: var(--brand); border-radius: 999px; transition: width .25s ease; }
+.plugpanel-range { width: 100%; accent-color: var(--brand); }
+.plugpanel-color { width: 34px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
+/* Картинка от плагина: место под неё ограничено, иначе панель растянет экран. */
+.plugpanel-img {
+  width: 100%; max-height: 160px; object-fit: cover;
+  border-radius: var(--r-sm, 8px); display: block;
+}
+/* На странице настроек плагина полоса и картинка идут своей строкой под подписью. */
+.plug-optcol { flex-direction: column; align-items: stretch; gap: 8px; }
+.plug-slider { display: flex; align-items: center; gap: 10px; max-width: 220px; }
+
 /* ══ Гифки по бокам плеера (v1.418.0) ══════════════════════════════════════
    У них не было ни одного правила о том, ГДЕ им быть. Из-за этого они вставали
    обычными элементами в колонку плеера — над обложкой и под ней, распихивая

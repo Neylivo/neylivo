@@ -2,6 +2,7 @@ import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
 import { markFailed, markOk, isBroken, BROKEN_AFTER } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
+import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
@@ -854,6 +855,25 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     })
     return () => setMusicBridge(null)
   })
+
+  // v1.419.0: событие для плагинов — сменился трек, нажали паузу, продолжили.
+  //
+  // Раньше плагин мог только спросить music.now() и потому опрашивал плеер по
+  // таймеру: это единственный способ, каким плагин узнавал хоть что-то, и он
+  // же самый плохой — лишняя работа каждую секунду ради события раз в три
+  // минуты. Шлём отсюда, из плеера: он один знает, что действительно поменялось.
+  const lastMusicRef = useRef('')
+  useEffect(() => {
+    const t = tracks[idx]
+    const sig = t ? `${t.id}:${playing}` : ''
+    if (sig === lastMusicRef.current) return
+    lastMusicRef.current = sig
+    if (!t) return
+    emitPluginEvent('music', {
+      id: t.id, title: meta[t.url]?.title || t.name,
+      author: meta[t.url]?.author || t.author || '', playing,
+    })
+  }, [tracks, idx, playing, meta])
 
   /** Перезапустить то, что играет сейчас, каким бы источником оно ни было. */
   const restartCurrent = () => {
