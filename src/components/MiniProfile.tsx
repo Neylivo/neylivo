@@ -199,7 +199,13 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   return (
     <>
       <div className="mini-overlay" onClick={onClose} />
-      <div key={data.userId} ref={boxRef} className={'mini mini2' + (data.anchor ? ' anchor-' + data.anchor : '')} style={posStyle} onClick={e => e.stopPropagation()}>
+      {/* v1.390.0: цвета профиля красили в мини-карточке одну шапку — всё
+          остальное оставалось общим серым, хотя это тот же профиль того же
+          человека, что и в большой карточке. Отдаём цвета теми же переменными
+          и тем же классом, что и там. */}
+      <div key={data.userId} ref={boxRef} className={'mini mini2 themed' + (data.anchor ? ' anchor-' + data.anchor : '')}
+        style={{ ...posStyle, ['--pc-a' as string]: pp.primary, ['--pc-b' as string]: pp.accent }}
+        onClick={e => e.stopPropagation()}>
         {/* v1.349.0: если задана картинка-шапка — показываем её, иначе прежний
             градиент из двух цветов. Так профиль бота выглядит как настоящий. */}
         <div className="mini-banner" style={pp.bannerUrl
