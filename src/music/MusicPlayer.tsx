@@ -751,24 +751,29 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   //
   // Помним последние тридцать: этого хватает, чтобы отмотать сколько угодно
   // назад в пределах одного прослушивания, и не даёт списку расти вечно.
-  const histRef = useRef<string[]>([])
+  // v1.411.0: история — в состоянии, а не в ссылке. По ней рисуется строка
+  // «Прошлый», и пока она лежала в ссылке, панель не перерисовывалась: кнопка
+  // «назад» уводила к одному треку, а в очереди значился другой. Ровно та же
+  // болезнь, что уже была с «дальше» (v1.398.0) — показ и действие разошлись.
+  const [hist, setHist] = useState<string[]>([])
   const fromPrevRef = useRef(false)
   useEffect(() => {
     const id = cur?.id
     if (!id) return
     if (fromPrevRef.current) { fromPrevRef.current = false; return }
-    const h = histRef.current
-    // Тот же трек подряд (перезапуск, повтор одного) в историю не пишем: иначе
-    // «назад» топталось бы на месте.
-    if (h[h.length - 1] === id) return
-    h.push(id)
-    if (h.length > 30) h.splice(0, h.length - 30)
+    setHist(h => {
+      // Тот же трек подряд (перезапуск, повтор одного) в историю не пишем:
+      // иначе «назад» топталось бы на месте.
+      if (h[h.length - 1] === id) return h
+      const n = [...h, id]
+      return n.length > 30 ? n.slice(n.length - 30) : n
+    })
   }, [cur?.id])
 
   const prev = () => {
-    const { hist, target } = backTarget(histRef.current, id => tracks.some(t => t.id === id))
+    const { hist: rest, target } = backTarget(hist, id => tracks.some(t => t.id === id))
     if (target) {
-      histRef.current = hist
+      setHist(rest)
       fromPrevRef.current = true
       setIdx(tracks.findIndex(t => t.id === target))
       return
@@ -875,7 +880,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // «Дальше» — ответ той же nextTrack, что исполняет кнопка «следующий»: иначе
   // очередь показывала бы одно, а играло бы другое. При перемешивании честно
   // говорим, что трек будет случайным, а не выдумываем конкретный.
-  const qPrev = tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
+  // v1.411.0: то, куда вернёт «назад», — считается той же функцией, что и сам
+  // возврат. Раньше здесь стоял «предыдущий номер по списку», и при
+  // перемешивании очередь показывала одно, а кнопка играла другое.
+  const qPrev = (() => {
+    const { target } = backTarget(hist, id => tracks.some(t => t.id === id))
+    if (target) return tracks.find(t => t.id === target) ?? null
+    return tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
+  })()
   const qNext = (() => {
     if (!cur) return { label: 'Дальше', t: null as typeof cur | null }
     if (repeat === 'one') return { label: 'Дальше — этот же', t: cur }
@@ -982,12 +994,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                   : 'Ничего не играет. Открой трекотеку и выбери трек.'}</div>
               : <div className="mus2-q3">
                   {[
-                    { role: 'prev' as const, label: 'Прошлый', t: qPrev, onClick: prev },
-                    { role: 'now' as const, label: 'Сейчас играет', t: cur, onClick: () => setPlaying(p => !p) },
-                    { role: 'next' as const, label: qNext.label, t: qNext.t, onClick: next },
+                    // v1.411.0: «дальше» нажимается и при перемешивании, когда
+                    // трек заранее не известен — его выбирает случай в момент
+                    // переключения. Раньше строка в этом случае была мёртвой:
+                    // назван «случайный», а нажать нельзя.
+                    { role: 'prev' as const, label: 'Прошлый', t: qPrev, onClick: prev, live: !!qPrev },
+                    { role: 'now' as const, label: 'Сейчас играет', t: cur, onClick: () => setPlaying(p => !p), live: true },
+                    { role: 'next' as const, label: qNext.label, t: qNext.t, onClick: next, live: tracks.length > 1 || repeat !== 'off' },
                   ].map(row => (
-                    <div key={row.role} className={'mus2-q3-row ' + row.role + (row.t ? '' : ' none')}
-                      onClick={() => { if (!row.t) return; if (guest && row.role !== 'now') { toastErr(noGuest); return } row.onClick() }}
+                    <div key={row.role} className={'mus2-q3-row ' + row.role + (row.live ? '' : ' none')}
+                      onClick={() => { if (!row.live) return; if (guest && row.role !== 'now') { toastErr(noGuest); return } row.onClick() }}
                       title={row.t ? (meta[row.t.url]?.title || row.t.name) : undefined}>
                       <div className="mus2-q3-art">
                         {row.t && (meta[row.t.url]?.art || row.t.art)
@@ -997,7 +1013,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                       <div className="mus2-q3-tx">
                         <div className="mus2-q3-lbl">{row.label}</div>
                         <div className="mus2-q3-t notr" translate="no">
-                          {row.t ? (meta[row.t.url]?.title || row.t.name) : '—'}
+                          {row.t ? (meta[row.t.url]?.title || row.t.name)
+                            : row.role === 'next' && shuffle ? 'Выберется случайно'
+                            : row.role === 'prev' ? 'Отсюда начали'
+                            : '—'}
                         </div>
                       </div>
                     </div>
