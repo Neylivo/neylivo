@@ -515,13 +515,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
     const pub = () => setMyListening({
       title: curMeta?.title || cur.name, author: curMeta?.author || cur.author || '',
-      source, pos: curTRef.current, dur: dur || undefined, at: Date.now(),
+      // v1.423.0: обложка. Ссылка и так лежит в общем складе и видна всем — а
+      // другим при этом показывалась нота-заглушка.
+      source, art: curArt || null, pos: curTRef.current, dur: dur || undefined, at: Date.now(),
     })
     pub()
     const t = window.setInterval(pub, 15000)   // периодически освежаем позицию (перемотки и т.п.)
     return () => window.clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, cur?.url, curMeta?.title, curMeta?.author, dur])
+  }, [playing, cur?.url, curMeta?.title, curMeta?.author, curArt, dur])
   useEffect(() => () => { setMyListening(null) }, [])   // размонтирование плеера = слушание кончилось
 
   /**

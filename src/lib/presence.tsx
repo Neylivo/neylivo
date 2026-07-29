@@ -22,7 +22,10 @@ export const STATUS_COLOR: Record<Status, string> = {
 export interface Activity { text: string; since: number }
 // Авто-активность «Слушает…»: публикуется плеером Ponoi Music сама, как Spotify-статус в Discord.
 // pos — позиция трека (сек) на момент at; зрители досчитывают тайминг локально.
-export interface Listening { title: string; author?: string; source?: string; pos: number; dur?: number; at: number }
+// v1.423.0: art — обложка трека. Публикуется вместе с остальным: у себя в
+// плеере обложка есть, а другим показывалась нота-заглушка, хотя ссылка на
+// картинку и так лежит в общем складе и видна всем.
+export interface Listening { title: string; author?: string; source?: string; art?: string | null; pos: number; dur?: number; at: number }
 // Авто-активность «Играет в …»: десктоп присылает только старт/стоп ({ name, since }),
 // тикающий таймер каждый клиент досчитывает сам из разницы часов.
 // mode — режим/плейс (v1.89.0, пока только Roblox); placeId/jobId — числовой id

@@ -10,7 +10,7 @@ import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { ProfilePet } from './ProfilePet'
 import { recentActivity, popularGames, type RecentGame } from '../lib/activity'
 import { resolveCover } from '../lib/gameCovers'
-import { ClockElapsed } from './ActivityLabel'
+import { ClockElapsed, ListenProgress } from './ActivityLabel'
 import { mutualFriends, friendStatus, removeFriendship, sendRequest, respondRequest, type FriendStatus } from '../lib/friends'
 import { supabase } from '../lib/supabase'
 import { mutualServers } from '../lib/servers'
@@ -103,7 +103,7 @@ function WidgetTile({ label, games, covers, isMe, onClick }:
 export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialTab = 'board' }:
   { userId: string; name: string; avatarUrl?: string | null; status: Status; onClose: () => void; initialTab?: ProfileTab }) {
   const { user } = useAuth()
-  const { gameOf, statusOf } = usePresence()
+  const { gameOf, statusOf, listeningOf } = usePresence()
   const isMe = user?.id === userId
   // v1.340.0: у бота карточка та же, но действий с ним нет — ни дружбы, ни лички.
   // Кнопка, которая заведомо ничего не сделает, — та же кнопка-обманка, поэтому
@@ -126,6 +126,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const wish = pp.wishGames
   // Живая «Текущая активность»: только когда игра реально запущена (presence), никакого фейка.
   const curGame = gameOf(userId)
+  // v1.423.0: музыка. В полном профиле её не было вовсе: во вкладке
+  // «Активность» показывалась только игра, и человек, слушающий музыку,
+  // выглядел там как ничем не занятый — хотя в мини-профиле это видно.
+  const curListen = listeningOf(userId)
   const [recent, setRecent] = useState<RecentGame[] | null>(null)
   const [popular, setPopular] = useState<Set<string>>(new Set())
   const [covers, setCovers] = useState<Record<string, string | null>>({})
@@ -462,6 +466,24 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
               </div>
             </>}
             {tab === 'activity' && <>
+              {!curGame && curListen && <>
+                <div className="fp-sect">Текущая активность</div>
+                <div className="act-card fp-cur">
+                  <div className="act-head"><span className="mpg-kind"><Icon name="music" size={14} /></span>Слушает музыку</div>
+                  <div className="act-row">
+                    {curListen.art
+                      ? <img className="act-cover act-cover-lg" src={curListen.art} alt="" />
+                      : <span className="act-cover act-cover-lg act-cover-ph"><Icon name="music" size={30} /></span>}
+                    <div className="act-info">
+                      <div className="act-name act-name-lg notr" translate="no">{curListen.title}</div>
+                      {(curListen.author || curListen.source) && <div className="act-mode notr" translate="no">
+                        {curListen.author ?? ''}{curListen.author && curListen.source ? ' · ' : ''}{curListen.source ?? ''}
+                      </div>}
+                      <ListenProgress l={curListen} />
+                    </div>
+                  </div>
+                </div>
+              </>}
               {curGame && <>
                 <div className="fp-sect">Текущая активность</div>
                 {/* v1.150.0: клик по активности в GSI-отслеживаемой игре открывает статистику за 30 дней.

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { SignOutModal } from './SignOutModal'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
-import { ActivityLabel, ClockElapsed } from './ActivityLabel'
+import { ActivityLabel, ClockElapsed, ListenProgress } from './ActivityLabel'
 import { fetchProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, saveProfile, type ProfilePrefs } from '../lib/profilePrefs'
 import { ProfilePet } from './ProfilePet'
 import { useAuth } from '../auth/AuthProvider'
@@ -274,11 +274,17 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 onClick={() => { navigator.clipboard?.writeText(listening.title); toastOk('Название трека скопировано') }}><Icon name="more" size={16} /></button>
             </div>
             <div className="mpg-row">
-              <span className="mpg-cover mpg-cover-music"><Icon name="music" size={26} /></span>
+              {/* v1.423.0: обложка трека и полоса «прошло / осталось» — как в самом
+                  плеере. Раньше здесь стояла нота-заглушка и тикающий счётчик
+                  «сколько играет»: ни обложки, ни длины трека, ни места в песне,
+                  хотя присутствие всё это уже присылало. */}
+              {listening.art
+                ? <span className="mpg-cover"><img src={listening.art} alt="" loading="lazy" /></span>
+                : <span className="mpg-cover mpg-cover-music"><Icon name="music" size={26} /></span>}
               <div className="mpg-info">
-                <div className="mpg-nm">{listening.title}</div>
+                <div className="mpg-nm notr" translate="no">{listening.title}</div>
                 {(listening.author || listening.source) && <div className="mpg-mode">{listening.author ?? ''}{listening.author && listening.source ? ' · ' : ''}{listening.source ?? ''}</div>}
-                <div className="mpg-time mpg-time-music"><Icon name="music" size={13} /> <ClockElapsed since={listening.at - Math.floor(listening.pos * 1000)} /></div>
+                <ListenProgress l={listening} />
               </div>
             </div>
           </div>}

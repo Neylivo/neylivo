@@ -18,6 +18,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
+import { livePos, leftOver, listenPct, fmtClock } from './listenProgress'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
 import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
@@ -709,6 +710,47 @@ check('проверка заметила бы возврат к «пустой �
   const shot = F('1783783440386.png')
   return oldWay(shot) === 'application/octet-stream' && contentTypeOf(shot) === 'image/png'
 })
+
+
+console.log('\n-- Активность «Слушает»: прошло и осталось (v1.423.0) --')
+// Присутствие публикуется раз в пятнадцать секунд, поэтому позицию приходится
+// досчитывать локально. Ошибка тут видна сразу: полоса либо стоит, либо уезжает
+// за конец песни.
+const L = (pos: number, dur: number | undefined, at: number) => ({ pos, dur, at })
+check('позиция досчитывается от момента публикации', () =>
+  livePos(L(60, 200, 1000), 1000 + 10_000) === 70)
+check('за длину трека не выходим', () =>
+  livePos(L(190, 200, 1000), 1000 + 60_000) === 200)
+check('назад не уходим, даже если часы разошлись', () =>
+  livePos(L(60, 200, 5000), 1000) === 60)
+check('без длины трека позиция всё равно считается', () =>
+  livePos(L(10, undefined, 1000), 1000 + 5000) === 15)
+check('мусорная позиция считается нулём', () =>
+  livePos(L(NaN, 200, 1000), 1000 + 3000) === 3)
+
+check('осталось = длина минус прошло', () =>
+  leftOver(L(60, 200, 1000), 1000 + 10_000) === 130)
+check('в конце трека остаётся ноль, а не минус', () =>
+  leftOver(L(199, 200, 1000), 1000 + 60_000) === 0)
+check('без длины трека «осталось» неизвестно — и мы это говорим', () =>
+  leftOver(L(60, undefined, 1000), 2000) === null)
+
+check('полоса заполняется по доле пройденного', () =>
+  listenPct(L(50, 200, 1000), 1000) === 25)
+check('полоса не выходит за сто процентов', () =>
+  listenPct(L(200, 200, 1000), 1000 + 60_000) === 100)
+check('без длины трека полосы нет', () => listenPct(L(50, undefined, 1000), 1000) === null)
+check('нулевая длина не даёт делить на ноль', () => listenPct(L(50, 0, 1000), 1000) === null)
+
+check('время пишется как в плеере', () =>
+  fmtClock(0) === '0:00' && fmtClock(83) === '1:23' && fmtClock(3723) === '1:02:03')
+check('мусор во времени не ломает подпись', () => fmtClock(NaN) === '0:00' && fmtClock(-5) === '0:00')
+
+console.log('\n-- Ломаем нарочно (полоса прослушивания) --')
+check('проверка заметила бы, что позиция перестала досчитываться', () =>
+  livePos(L(60, 200, 1000), 1000 + 10_000) !== 60)
+check('проверка заметила бы, что длину перестали учитывать', () =>
+  livePos(L(190, 200, 1000), 1000 + 60_000) !== 250)
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

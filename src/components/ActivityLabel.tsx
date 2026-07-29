@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Activity, Game } from '../lib/presence'
+import type { Activity, Game, Listening } from '../lib/presence'
+import { livePos, leftOver, listenPct, fmtClock } from '../lib/listenProgress'
 import { Icon } from './icons'
 import { gameIconOf } from '../lib/gameIcon'
 import { toastOk } from '../lib/toast'
@@ -66,8 +67,18 @@ export function GameLine({ game }: { game: Game }) {
 // одном месте — в мини-профиле, куда надо ещё догадаться зайти. В списке
 // участников её не было, и со стороны это выглядело как «другие не видят, что
 // ты слушаешь»: данные доходили, показать их было негде.
-export function ListenLine({ l }: { l: { title: string; artist?: string | null } }) {
-  const full = l.title + (l.artist ? ' — ' + l.artist : '')
+/**
+ * v1.423.0: поле с исполнителем называется author — как в присутствии.
+ *
+ * Здесь оно всё это время читалось как artist, которого в присутствии нет
+ * вовсе: то есть в списке участников и в списке друзей исполнитель не
+ * показывался НИ РАЗУ с самого появления строки, хотя приходил вместе с
+ * названием. Типы это пропустили: поле было необязательным, лишние поля в
+ * объекте разрешены.
+ */
+export function ListenLine({ l }: { l: { title: string; artist?: string | null; author?: string | null; art?: string | null } }) {
+  const artist = l.artist || l.author || ''
+  const full = l.title + (artist ? ' — ' + artist : '')
   // v1.408.0: по названию щёлкают, чтобы его забрать, — и до сих пор из этого
   // ничего не выходило. Выделять текст разрешено, но строка целиком лежит в
   // кликабельном ряду: отпускаешь кнопку — и поверх выделения открывается
@@ -82,11 +93,15 @@ export function ListenLine({ l }: { l: { title: string; artist?: string | null }
     navigator.clipboard?.writeText(full).then(() => toastOk('Название скопировано'), () => {})
   }
   return <small className="member-act listen" title={'Слушает ' + full}>
-    <span className="mag-ico"><Icon name="music" size={14} /></span>
+    {/* v1.423.0: обложка трека вместо ноты-заглушки — так же, как у игры стоит
+        её картинка. Ссылка приходит вместе с активностью; нет её — остаётся нота. */}
+    {l.art
+      ? <img className="mag-cover" src={l.art} alt="" loading="lazy" />
+      : <span className="mag-ico"><Icon name="music" size={14} /></span>}
     {/* notr: это чужое название трека, переводить его нельзя. */}
     <span className="mag-tx notr copyable" translate="no" onClick={copy}
       title={'Нажми, чтобы скопировать: ' + full}>
-      {l.title}{l.artist && <span className="mag-mode"> — {l.artist}</span>}
+      {l.title}{artist && <span className="mag-mode"> — {artist}</span>}
     </span>
   </small>
 }
@@ -97,4 +112,39 @@ export function GameInline({ game }: { game: Game }) {
     {game.cover ? <img className="mag-cover" src={game.cover} alt="" /> : <span className="mag-ico"><Icon name={gameIconOf(game.name)} size={14} /></span>}
     <span>Играет в <b>{game.name}</b>{game.mode && <span className="mag-mode"> — {game.mode}</span>}</span>
   </span>
+}
+
+/**
+ * Полоса прослушивания — «сколько прошло и сколько осталось» (v1.423.0).
+ *
+ * Раньше в мини-профиле стоял тикающий счётчик «сколько играет»: ни длины
+ * трека, ни места в песне. У себя в плеере это видно, у других — нет, хотя всё
+ * нужное присутствие уже присылало.
+ *
+ * Позиция досчитывается локально (см. lib/listenProgress.ts): присутствие
+ * освежается раз в пятнадцать секунд, и без досчёта полоса дёргалась бы раз в
+ * пятнадцать секунд вместо того, чтобы идти ровно.
+ */
+export function ListenProgress({ l }: { l: Listening }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = window.setInterval(() => setTick(v => v + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  const now = Date.now()
+  const pct = listenPct(l, now)
+  const left = leftOver(l, now)
+  const passed = fmtClock(livePos(l, now))
+  // Длины трека может не быть вовсе (ссылка, у которой её не узнали) — тогда
+  // полосу рисовать нечем, и мы показываем только прошедшее, а не выдумываем шкалу.
+  if (pct === null || left === null) {
+    return <div className="lsn-time"><span>{passed}</span></div>
+  }
+  return <div className="lsn-prog">
+    <div className="lsn-bar"><i style={{ width: pct + '%' }} /></div>
+    <div className="lsn-time">
+      <span className="notr" translate="no">{passed}</span>
+      <span className="notr" translate="no">осталось {fmtClock(left)}</span>
+    </div>
+  </div>
 }
