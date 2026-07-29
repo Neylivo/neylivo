@@ -385,6 +385,41 @@ check('перемешивание не даёт тот же трек подря�
 check('перемешивание из одного трека не зацикливается', () =>
   nextTrack({ idx: 0, count: 1, repeat: 'all', shuffle: true, rnd: () => 0 }).kind === 'restart')
 
+console.log('\n── Личная очередь решает, что дальше (v1.398.0) ──')
+check('дальше играет тот, кого предлагает личная очередь', () => {
+  const a = nextTrack({ idx: 0, count: 5, repeat: 'off', shuffle: false, personalIdx: 3 })
+  return a.kind === 'go' && a.index === 3
+})
+check('поставленное руками всё равно главнее', () => {
+  const a = nextTrack({ idx: 0, count: 5, repeat: 'off', shuffle: false, manualIdx: 1, personalIdx: 3 })
+  return a.kind === 'go' && a.index === 1
+})
+check('повтор одного трека главнее личной очереди', () =>
+  nextTrack({ idx: 0, count: 5, repeat: 'one', shuffle: false, personalIdx: 3 }).kind === 'restart')
+check('перемешивание отменяет личную очередь', () => {
+  const a = nextTrack({ idx: 0, count: 5, repeat: 'off', shuffle: true, personalIdx: 3, rnd: () => 0.9 })
+  return a.kind === 'go' && a.index === 4
+})
+check('личная очередь на текущий трек ничего не меняет', () => {
+  const a = nextTrack({ idx: 2, count: 5, repeat: 'off', shuffle: false, personalIdx: 2 })
+  return a.kind === 'go' && a.index === 3
+})
+check('номер вне списка не ломает переход', () => {
+  const a = nextTrack({ idx: 0, count: 3, repeat: 'off', shuffle: false, personalIdx: 99 })
+  return a.kind === 'go' && a.index === 1
+})
+check('без личной очереди всё как было', () => {
+  const a = nextTrack({ idx: 0, count: 3, repeat: 'off', shuffle: false })
+  return a.kind === 'go' && a.index === 1
+})
+
+console.log('\n── Ломаем нарочно (личная очередь) ──')
+check('проверка заметила бы, что личную очередь снова перестали слушать', () => {
+  // Ровно прежнее поведение: «следующий по складу», что бы ни предлагала очередь.
+  const a = nextTrack({ idx: 0, count: 5, repeat: 'off', shuffle: false, personalIdx: 4 })
+  return a.kind === 'go' && a.index !== 1
+})
+
 console.log('\n── Очередь под человека ──')
 const T = (id: string) => ({ id })
 const LIB = [T('a'), T('b'), T('c'), T('d'), T('e')]

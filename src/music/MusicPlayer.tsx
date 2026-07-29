@@ -1,4 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
+import { personalOrder } from './personalQueue'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
@@ -8,7 +9,6 @@ import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
-import { personalOrder } from './personalQueue'
 
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
@@ -685,7 +685,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const next = () => {
     const first = manualLive.find(id => tracks.some(t => t.id === id))
     const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
-    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx })
+    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx: personalIdxRef.current })
     if (first && act.kind !== 'restart') saveManual(manual.filter(x => x !== first))
     if (act.kind === 'restart') { restartCurrent(); return }
     if (act.kind === 'stop') { setPlaying(false); return }
@@ -741,9 +741,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // Треки могли удалить из трекотеки, пока они стояли в очереди.
   const manualLive = manual.filter(id => tracks.some(t => t.id === id))
 
-  /** Сколько ближайших показываем лентой. Больше не нужно: это подсказка, не список. */
-  const UP_NEXT_SHOWN = 8
-
   // v1.377.0: сколько раз я слушал каждый трек — по этому и строится очередь.
   const [myPlays, setMyPlays] = useState<Record<string, number>>({})
   useEffect(() => { myPlayCounts().then(setMyPlays) }, [])
@@ -759,40 +756,47 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setTracks(ts => ts.map(t => (t.id === cur.id ? { ...t, plays: (t.plays ?? 0) + 1 } : t)))
   }, [cur, playing])
 
-  const upNextAll = (() => {
-    const out: { t: typeof tracks[number]; i: number; manual: boolean }[] = []
-    const seen = new Set<string>()
-    for (const id of manualLive) {
-      const i = tracks.findIndex(t => t.id === id)
-      if (i < 0 || i === idx || seen.has(id)) continue
-      seen.add(id)
-      out.push({ t: tracks[i], i, manual: true })
-    }
-    // v1.377.0: дальше — не «по порядку склада», а то, что слушает сам человек.
-    // Порядок склада — это время, когда трек кто-то добавил, и к слушателю он
-    // отношения не имеет: он слушает пять песен, а очередь предлагала то, что
-    // позавчера выложил сосед.
-    for (const t of personalOrder({ tracks, idx, plays: myPlays })) {
-      if (seen.has(t.id)) continue
-      const i = tracks.findIndex(x => x.id === t.id)
-      if (i < 0) continue
-      seen.add(t.id)
-      out.push({ t, i, manual: false })
-    }
-    return out
+  // v1.398.0: что предлагает личная очередь — то, что человек сам чаще слушает.
+  // Считается один раз на изменение склада и истории, а не на каждый рендер:
+  // список перебирается целиком.
+  const personalIdx = (() => {
+    if (!cur || tracks.length < 2) return -1
+    const first = personalOrder({ tracks, idx, plays: myPlays })[0]
+    return first ? tracks.findIndex(t => t.id === first.id) : -1
   })()
-  const upNext = upNextAll.slice(0, UP_NEXT_SHOWN)
-  const moreAfter = Math.max(0, upNextAll.length - upNext.length)
+  // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому
+  // берёт значение через ссылку — иначе там останется номер с первого рендера.
+  const personalIdxRef = useRef(-1)
+  personalIdxRef.current = personalIdx
+
+  // v1.398.0: соседи текущего трека для очереди.
+  //
+  // «Прошлый» — ровно то, что сделает кнопка «предыдущий» (шаг назад по списку).
+  // «Дальше» — ответ той же nextTrack, что исполняет кнопка «следующий»: иначе
+  // очередь показывала бы одно, а играло бы другое. При перемешивании честно
+  // говорим, что трек будет случайным, а не выдумываем конкретный.
+  const qPrev = tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
+  const qNext = (() => {
+    if (!cur) return { label: 'Дальше', t: null as typeof cur | null }
+    if (repeat === 'one') return { label: 'Дальше — этот же', t: cur }
+    if (shuffle) return { label: 'Дальше — случайный', t: null as typeof cur | null }
+    const firstManual = manualLive.find(id => tracks.some(t => t.id === id))
+    const manualIdx = firstManual ? tracks.findIndex(t => t.id === firstManual) : -1
+    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx })
+    if (act.kind === 'go') {
+      const label = manualIdx >= 0 && act.index === manualIdx ? 'Дальше — поставлен вручную'
+        : act.index === personalIdx ? 'Дальше — ты это часто слушаешь'
+        : 'Дальше'
+      return { label, t: tracks[act.index] ?? null }
+    }
+    if (act.kind === 'restart') return { label: 'Дальше — этот же', t: cur }
+    return { label: 'Дальше ничего', t: null as typeof cur | null }
+  })()
 
   /** Поставить трек следующим. Уже стоящий — переставляем, а не задваиваем. */
   function queueNext(id: string) {
     saveManual([id, ...manual.filter(x => x !== id)])
     toastOk('Заиграет следующим')
-  }
-  /** Убрать из ручной очереди. Обычный порядок склада так не выкинуть — это не очередь. */
-  function dropFromQueue(id: string) {
-    if (!manual.includes(id)) { toastOk('Этот трек идёт по порядку — убрать можно только из трекотеки'); return }
-    saveManual(manual.filter(x => x !== id))
   }
   /** Перейти к треку и снять его с ручной очереди: он уже играет, ждать нечего. */
   function playAt(i: number) {
@@ -845,7 +849,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>}
           <div className="mus2-addrow">
             <button className="mus2-libbtn wide" onClick={() => setShowLib(true)}>
-              <Icon name="music" size={15} /> Трекотека{tracks.length > 0 ? ` · ${tracks.length}` : ''}
+              {/* v1.398.0: без числа треков. Это кнопка «открыть склад», а
+                  число рядом с ней ничего не решало и только шумело. */}
+              <Icon name="music" size={15} /> Трекотека
             </button>
           </div>
 
@@ -859,38 +865,43 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 строку вместо половины панели, и по ней видно, что будет, не
                 листая ничего. Весь склад живёт в трекотеке, отдельной кнопкой. */}
             <div className="mus2-sec">
-              ДАЛЬШЕ В ОЧЕРЕДИ
-              <span className="mus2-qn">{upNext.length > 0 ? upNext.length : ''}</span>
+              ОЧЕРЕДЬ
               <button className="mus2-filebtn" title={guest ? noGuest : 'Добавить файлы'} disabled={guest} onClick={() => fileRef.current?.click()}>{uploading ? '…' : <Icon name="plus" size={16} />}</button>
             </div>
             <input ref={fileRef} type="file" accept="audio/*" multiple hidden onChange={addFiles} />
 
-            {upNext.length === 0
+            {/* v1.398.0: очередь — это три строки: что было, что играет, что дальше.
+                Раньше здесь лежала лента из восьми ближайших с числами и плашкой
+                «+N»: смотреть в неё было незачем, а «дальше» она показывала не то,
+                что заиграет на самом деле — своё «дальше» считала она, а кнопка
+                «следующий» своё. Теперь строка «дальше» считается той же функцией,
+                что и переключение (nextTrack), поэтому показанное и есть будущее. */}
+            {!cur
               ? <div className="mus2-empty">{tracks.length === 0
                   ? 'Пусто. Вставь ссылку — Spotify, YouTube, SoundCloud или прямой .mp3.'
-                  : 'Это последний трек. Открой трекотеку и выбери, что дальше.'}</div>
-              : <div className="mus2-upnext">
-                  {upNext.map(({ t, i, manual }) => {
-                    const art = meta[t.url]?.art || t.art
-                    return (
-                      <div key={'q' + t.id} className={'mus2-up' + (manual ? ' manual' : '')}
-                        title={(meta[t.url]?.title || t.name) + (manual ? ' · добавлен в очередь вручную' : '')}
-                        onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true) }}>
-                        <div className="mus2-up-art">
-                          {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={18} />}
-                          {manual && <span className="mus2-up-mark" title="Добавлен вручную"><Icon name="plus" size={10} /></span>}
-                          <button className="mus2-up-x" title="Убрать из очереди"
-                            onClick={e => { e.stopPropagation(); dropFromQueue(t.id) }}><Icon name="close" size={11} /></button>
-                        </div>
-                        <div className="mus2-up-t notr" translate="no">{meta[t.url]?.title || t.name}</div>
+                  : 'Ничего не играет. Открой трекотеку и выбери трек.'}</div>
+              : <div className="mus2-q3">
+                  {[
+                    { role: 'prev' as const, label: 'Прошлый', t: qPrev, onClick: prev },
+                    { role: 'now' as const, label: 'Сейчас играет', t: cur, onClick: () => setPlaying(p => !p) },
+                    { role: 'next' as const, label: qNext.label, t: qNext.t, onClick: next },
+                  ].map(row => (
+                    <div key={row.role} className={'mus2-q3-row ' + row.role + (row.t ? '' : ' none')}
+                      onClick={() => { if (!row.t) return; if (guest && row.role !== 'now') { toastErr(noGuest); return } row.onClick() }}
+                      title={row.t ? (meta[row.t.url]?.title || row.t.name) : undefined}>
+                      <div className="mus2-q3-art">
+                        {row.t && (meta[row.t.url]?.art || row.t.art)
+                          ? <img src={(meta[row.t.url]?.art || row.t.art) as string} alt="" loading="lazy" />
+                          : <Icon name="music" size={row.role === 'now' ? 20 : 16} />}
                       </div>
-                    )
-                  })}
-                  {moreAfter > 0 && <div className="mus2-up mus2-up-more" title="Открыть трекотеку"
-                    onClick={() => setShowLib(true)}>
-                    <div className="mus2-up-art"><span className="mus2-up-morecnt">+{moreAfter}</span></div>
-                    <div className="mus2-up-t">ещё</div>
-                  </div>}
+                      <div className="mus2-q3-tx">
+                        <div className="mus2-q3-lbl">{row.label}</div>
+                        <div className="mus2-q3-t notr" translate="no">
+                          {row.t ? (meta[row.t.url]?.title || row.t.name) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>}
           </> : <>
             <div className="mus2-sec">ПЛЕЙЛИСТЫ</div>
@@ -912,17 +923,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
         <section className={'mus2-now' + (lyrMode === 'karaoke' ? ' karaoke' : '')}>
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
-          {/* v1.394.0: текст фоном — за обложкой, приглушённо. Строки не
-              перехватывают мышь: под ними живая обложка и кнопки. */}
-          {lyrMode === 'back' && lyr && <div className="mus2-lyrback" aria-hidden="true">
-            <div className="mus2-lyrback-in"
-              style={{ transform: `translateY(calc(-1.05em - ${Math.max(lyrActive, 0) * 2.1}em))` }}>
-              {lyr.lines.map((l, i) => (
-                <div key={i} className={'mus2-lyrback-l' + (i === lyrActive ? ' on' : '')}>{l.text || '\u00a0'}</div>
-              ))}
-            </div>
-          </div>}
           <div className="mus2-artwrap">
+            {/* v1.394.0: текст фоном — за обложкой, приглушённо. Строки не
+                перехватывают мышь: под ними живая обложка и кнопки.
+                v1.398.0: блок лежит внутри обложки, а не в секции. Снаружи его
+                серединой была середина всей секции, а у обложки — своя: ниже
+                неё ещё название, подпись и строка о поиске текста. Из-за этого
+                поющаяся строка стояла ниже центра обложки, и это было видно. */}
+            {lyrMode === 'back' && lyr && <div className="mus2-lyrback" aria-hidden="true">
+              <div className="mus2-lyrback-in"
+                style={{ transform: `translateY(calc(-1.05em - ${Math.max(lyrActive, 0) * 2.1}em))` }}>
+                {lyr.lines.map((l, i) => (
+                  <div key={i} className={'mus2-lyrback-l' + (i === lyrActive ? ' on' : '')}>{l.text || '\u00a0'}</div>
+                ))}
+              </div>
+            </div>}
             {curArt && <div className="mus2-artglow" style={{ backgroundImage: `url(${curArt})` }} />}
             <div className={'mus2-vinyl' + (playing ? ' spin' : '')}>{curArt && <img src={curArt} alt="" />}</div>
             <div className="mus2-art">{curArt ? <img src={curArt} alt="" /> : <Icon name="music" size={72} />}</div>
