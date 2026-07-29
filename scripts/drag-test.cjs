@@ -29,7 +29,12 @@ function check(name, ok, extra) {
 app.disableHardwareAcceleration()
 setTimeout(() => { console.log('ЗАВИС — проверка не завершилась'); process.exit(2) }, 60000)
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ show: false, width: 900, height: 600, backgroundColor: '#313338' })
+  // Раздел памяти без «persist:» — временный: localStorage живёт только пока идёт
+  // прогон. Иначе плашка запоминала бы, куда её утащил прошлый запуск (она для
+  // того и запоминает), и следующий прогон начинал бы с чужого места: нажатия
+  // мимо, половина проверок валится на ровном месте. На этом я и попался.
+  const win = new BrowserWindow({ show: false, width: 900, height: 600, backgroundColor: '#313338',
+    webPreferences: { partition: 'drag-test-' + Date.now() } })
   await win.loadFile(path.join(OUT, 'index.html'))
   await new Promise(r => setTimeout(r, 700))
   const wc = win.webContents
