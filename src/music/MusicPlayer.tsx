@@ -13,7 +13,7 @@ import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
 import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
-import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, type Lyrics } from './lyrics'
+import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
@@ -238,7 +238,23 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const lyrMode: 'off' | 'back' | 'karaoke' =
     lyrCfg.mode === 'off' || !lyr || lyr.lines.length === 0 ? 'off'
     : lyrCfg.mode === 'karaoke' && lyr.synced ? 'karaoke' : 'back'
-  const lyrActive = lyr && lyr.synced ? activeLineIndex(lyr.lines, curT) : -1
+  // v1.404.0: время, по которому ищем строку, — не то же самое, что время
+  // трека. Метки сняты с другой записи: у ускоренной версии песня короче, и
+  // разница копится к концу; плюс ручная поправка и небольшой взгляд вперёд,
+  // потому что об истёкшем времени приложение узнаёт с задержкой в четверть
+  // секунды (у YouTube — полсекунды).
+  const [lyrShift, setLyrShiftState] = useState(0)
+  useEffect(() => { setLyrShiftState(cur ? lyricsShift(cur.id) : 0) }, [cur?.id])
+  const lyrK = lyr && lyr.synced ? lyricsScale(lyr.srcDur, dur || cur?.dur) : 1
+  const lyrActive = lyr && lyr.synced
+    ? activeLineIndex(lyr.lines, lyricsTime(curT, lyrK, lyrShift))
+    : -1
+  function nudgeLyrics(delta: number) {
+    if (!cur) return
+    const v = Math.max(-15, Math.min(15, Math.round((lyrShift + delta) * 10) / 10))
+    setLyricsShift(cur.id, v)
+    setLyrShiftState(v)
+  }
   // v1.395.0: общий текст ставит только тот, кто выложил трек. Трекотека общая,
   // но текст — часть карточки трека, и переписывать её каждому встречному не за
   // что: один добавил, второй заменил, третий стёр. Найденное в интернете
@@ -973,7 +989,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               style={{ transform: `translateY(calc(-1.2em - ${Math.max(lyrActive, 0) * 2.4}em))` }}>
               {lyr.lines.map((l, i) => (
                 <div key={i} className={'mus2-kline' + (i === lyrActive ? ' on' : i < lyrActive ? ' past' : '')}
-                  onClick={() => { const a = audioRef.current; if (a && l.t !== null) { a.currentTime = l.t; setCurT(l.t) } }}
+                  onClick={() => {
+                    const a = audioRef.current
+                    if (!a || l.t === null) return
+                    // Обратный пересчёт: в строке время оригинала, а перемотка
+                    // работает по времени играющей записи.
+                    const t = Math.max(0, (l.t - lyrShift) / (lyrK || 1))
+                    a.currentTime = t; setCurT(t)
+                  }}
                   title={l.t !== null ? 'Перейти к строке' : undefined}>{l.text || '\u00a0'}</div>
               ))}
             </div>
@@ -1195,6 +1218,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 ? '✓ Метки времени найдены — караоке будет работать'
                 : 'Меток времени нет — текст покажется фоном, караоке для него невозможно'}
             </div>}
+            {/* v1.404.0: ручная поправка. Даже верно подобранный текст у одной
+                записи идёт раньше, у другой позже — вступление длиннее, нарезка
+                другая. Угадать это нельзя, поэтому сдвиг задаёт человек, и он
+                помнится для каждого трека отдельно. */}
+            <div className="lyr-shift">
+              <span>Сдвиг текста</span>
+              <button className="pqs2-btn ghost" onClick={() => nudgeLyrics(-0.5)} title="Текст спешит — задержать">−0,5 с</button>
+              <b className="notr" translate="no">{lyrShift > 0 ? '+' : ''}{lyrShift.toFixed(1)} с</b>
+              <button className="pqs2-btn ghost" onClick={() => nudgeLyrics(0.5)} title="Текст опаздывает — поторопить">+0,5 с</button>
+              {lyrShift !== 0 && <button className="pqs2-btn ghost" onClick={() => nudgeLyrics(-lyrShift)}>Сбросить</button>}
+              {lyrK !== 1 && <span className="lyr-shift-note">Текст подогнан под скорость записи (×{lyrK.toFixed(2)})</span>}
+            </div>
             <div className="lyr-btns">
               {lyr && <button className="pqs2-btn ghost danger" disabled={lyrBusy} onClick={() => keepLyrics('')}>Убрать текст</button>}
               <button className="pqs2-btn ghost" onClick={() => setLyrEdit(null)}>Отмена</button>

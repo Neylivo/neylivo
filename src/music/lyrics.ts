@@ -25,6 +25,13 @@ export interface Lyrics {
   /** Есть ли метки времени — только с ними возможно караоке. */
   synced: boolean
   raw: string
+  /**
+   * Длительность записи, с которой сняты метки, в секундах — из строки
+   * [length:03:20] (v1.404.0). Нужна для ускоренных версий: метки сняты с
+   * оригинала, а у «спидапа» та же песня короче, и без пересчёта текст
+   * разъезжается тем сильнее, чем дальше от начала.
+   */
+  srcDur?: number
 }
 
 const LOCAL_KEY = 'ponoi_mus_lyrics_v1'
@@ -40,6 +47,7 @@ export function parseLyrics(raw: string): Lyrics {
   if (!src.trim()) return { lines: [], synced: false, raw: src }
 
   let offset = 0   // [offset:+250] — сдвиг в миллисекундах, бывает в файлах LRC
+  let srcDur: number | undefined
   const lines: LyricLine[] = []
 
   for (const rawLine of src.split('\n')) {
@@ -48,9 +56,17 @@ export function parseLyrics(raw: string): Lyrics {
 
     const meta = line.match(META_RE)
     if (meta) {
-      if (meta[1].toLowerCase() === 'offset') {
+      const tag = meta[1].toLowerCase()
+      if (tag === 'offset') {
         const v = parseInt(meta[2].trim(), 10)
         if (!isNaN(v)) offset = v
+      }
+      if (tag === 'length') {
+        // Пишут и «03:20», и «200», и «3:20.5» — разбираем все три.
+        const raw2 = meta[2].trim()
+        const mm = raw2.match(/^(\d{1,3}):(\d{1,2})(?:[.,](\d+))?$/)
+        if (mm) srcDur = parseInt(mm[1], 10) * 60 + parseInt(mm[2], 10)
+        else { const n = parseFloat(raw2); if (isFinite(n) && n > 0) srcDur = n }
       }
       continue   // служебные строки не поются
     }
@@ -80,7 +96,40 @@ export function parseLyrics(raw: string): Lyrics {
   const synced = timed.length > 0 && timed.length >= Math.max(2, Math.ceil(nonEmpty / 2))
 
   if (synced) lines.sort((a, b) => (a.t ?? 0) - (b.t ?? 0))
-  return { lines, synced, raw: src }
+  return { lines, synced, raw: src, srcDur }
+}
+
+/**
+ * Во сколько раз запись, с которой сняты метки, длиннее играющей (v1.404.0).
+ *
+ * Ускоренная версия — это та же песня, только короче: метки с оригинала на ней
+ * не просто «немного опаздывают», а разъезжаются тем сильнее, чем дальше от
+ * начала, и к середине песни текст уходит на десятки секунд.
+ *
+ * Пересчитываем, только когда обе длительности известны и правдоподобны:
+ * ошибиться тут хуже, чем не трогать. Разница больше чем вдвое — это не
+ * ускорение, а другая запись (концертная, с длинным вступлением, час подряд),
+ * и подгонять под неё нечего.
+ */
+export function lyricsScale(srcDur?: number, trackDur?: number): number {
+  if (!srcDur || !trackDur || !isFinite(srcDur) || !isFinite(trackDur)) return 1
+  if (srcDur < 20 || trackDur < 20) return 1
+  const k = srcDur / trackDur
+  if (k < 0.5 || k > 2) return 1
+  // Разница в пару секунд — это округление длительности, а не ускорение.
+  if (Math.abs(srcDur - trackDur) < 3) return 1
+  return k
+}
+
+/**
+ * Время песни, по которому искать строку: с поправкой на скорость записи, на
+ * ручной сдвиг и на то, что об истёкшем времени приложение узнаёт с задержкой
+ * (v1.404.0). Заглядываем чуть вперёд — иначе строка вспыхивает уже после того,
+ * как её начали петь.
+ */
+export const LYRICS_LOOKAHEAD = 0.25
+export function lyricsTime(cur: number, scale: number, offset: number): number {
+  return cur * scale + offset + LYRICS_LOOKAHEAD
 }
 
 /**
@@ -136,6 +185,29 @@ export async function saveLyrics(trackId: string, text: string, shared = true): 
   return error ? 'local' : 'db'
 }
 
+// ── Ручная поправка (v1.404.0) ────────────────────────────────────────────
+//
+// Даже верно подобранный текст у одной записи идёт на полсекунды раньше, у
+// другой — позже: у неё длиннее вступление, другой мастеринг, другая нарезка.
+// Автоматически это не угадать, поэтому даём человеку сдвинуть текст самому —
+// поправка помнится для каждого трека отдельно.
+
+const SHIFT_KEY = 'ponoi_mus_lyr_shift_v1'
+
+function shiftAll(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(SHIFT_KEY) || '{}') } catch { return {} }
+}
+export function lyricsShift(trackId: string): number {
+  const v = shiftAll()[trackId]
+  return typeof v === 'number' && isFinite(v) ? v : 0
+}
+export function setLyricsShift(trackId: string, v: number) {
+  const all = shiftAll()
+  const clamped = Math.max(-15, Math.min(15, Math.round(v * 10) / 10))
+  if (clamped) all[trackId] = clamped; else delete all[trackId]
+  try { localStorage.setItem(SHIFT_KEY, JSON.stringify(all)) } catch { /* переполнено */ }
+}
+
 // ── Поиск в интернете (по желанию, по умолчанию выключено) ────────────────
 //
 // lrclib.net — открытый каталог текстов, ключа не требует и отдаёт в том числе
@@ -180,6 +252,14 @@ export function pickLyrics(rows: LrcRow[], dur?: number): LrcRow | null {
   return best
 }
 
+/** Дописать [length:мм:сс], если его нет: без него ускоренную версию не подогнать. */
+function withLength(text: string, dur?: number): string {
+  if (!text || !dur || !isFinite(dur) || dur <= 0) return text
+  if (/^\[length:/im.test(text)) return text
+  const m = Math.floor(dur / 60), sec = Math.round(dur % 60)
+  return `[length:${m}:${String(sec).padStart(2, '0')}]\n` + text
+}
+
 export async function searchLyricsOnline(title: string, artist: string, dur?: number): Promise<LyricsSearch> {
   // Два захода: «исполнитель + название» и одно название. Второй нужен, когда
   // автор записан не так, как в каталоге, — а такое сплошь и рядом.
@@ -194,7 +274,10 @@ export async function searchLyricsOnline(title: string, artist: string, dur?: nu
       const rows = await r.json()
       const best = pickLyrics(Array.isArray(rows) ? rows : [], dur)
       if (best) return { ok: true, hit: {
-        text: (best.syncedLyrics || best.plainLyrics || '').trim(),
+        // Длительность записи дописываем строкой [length:...] — по ней потом
+        // подгоняется время для ускоренных версий. lrclib отдаёт её отдельным
+        // полем, а в самом тексте её обычно нет.
+        text: withLength((best.syncedLyrics || best.plainLyrics || '').trim(), best.duration),
         synced: !!(best.syncedLyrics && best.syncedLyrics.trim()),
         by: [best.artistName, best.trackName].filter(Boolean).join(' — '),
       } }

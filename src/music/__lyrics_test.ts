@@ -8,7 +8,7 @@
 // сдвигом [offset], с повторами припева и просто с мусором.
 export {}
 
-import { parseLyrics, activeLineIndex, pickLyrics } from './lyrics'
+import { parseLyrics, activeLineIndex, pickLyrics, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD } from './lyrics'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -107,6 +107,51 @@ check('длительность не перевешивает наличие м�
 check('без известной длительности берём первый с метками', () => {
   const r = pickLyrics([{ trackName: 'один', syncedLyrics: '[00:01.00]a' }, { trackName: 'два', syncedLyrics: '[00:01.00]b' }])
   return r!.trackName === 'один'
+})
+
+console.log('\n── Подгонка под скорость записи (v1.404.0) ──')
+check('длительность записи читается из [length]', () =>
+  parseLyrics('[length:03:20]\n[00:01.00]раз\n[00:02.00]два').srcDur === 200)
+check('[length] числом тоже понимается', () =>
+  parseLyrics('[length:200]\n[00:01.00]раз\n[00:02.00]два').srcDur === 200)
+check('без [length] длительность неизвестна', () =>
+  parseLyrics('[00:01.00]раз\n[00:02.00]два').srcDur === undefined)
+
+check('ускоренная версия: время растягивается обратно', () => {
+  // Оригинал 200 с, спидап 160 с. На 80-й секунде спидапа поют 100-ю оригинала.
+  const k = lyricsScale(200, 160)
+  return Math.abs(80 * k - 100) < 0.001
+})
+check('замедленная версия тоже подгоняется', () => lyricsScale(160, 200) < 1)
+check('без одной из длительностей не трогаем', () =>
+  lyricsScale(undefined, 160) === 1 && lyricsScale(200, undefined) === 1)
+check('разница в пару секунд — это округление, а не ускорение', () =>
+  lyricsScale(200, 198) === 1)
+check('разница больше чем вдвое — это другая запись', () =>
+  lyricsScale(600, 200) === 1 && lyricsScale(100, 300) === 1)
+check('короткие куски не подгоняем', () => lyricsScale(10, 5) === 1)
+
+console.log('\n── Время, по которому ищем строку ──')
+check('без поправок это почти само время трека', () =>
+  Math.abs(lyricsTime(50, 1, 0) - (50 + LYRICS_LOOKAHEAD)) < 0.001)
+check('ручной сдвиг прибавляется', () =>
+  Math.abs(lyricsTime(50, 1, 1.5) - (51.5 + LYRICS_LOOKAHEAD)) < 0.001)
+check('скорость и сдвиг работают вместе', () =>
+  Math.abs(lyricsTime(80, 1.25, -1) - (100 - 1 + LYRICS_LOOKAHEAD)) < 0.001)
+check('взгляд вперёд не больше четверти секунды', () => LYRICS_LOOKAHEAD <= 0.25)
+
+check('на спидапе строка находится верно', () => {
+  const l = parseLyrics('[length:03:20]\n[00:50.00]первая\n[01:40.00]вторая\n[02:30.00]третья')
+  const k = lyricsScale(l.srcDur, 160)   // та же песня, ускоренная до 160 с
+  // 80-я секунда спидапа = 100-я оригинала: это уже вторая строка.
+  return activeLineIndex(l.lines, lyricsTime(80, k, 0)) === 1
+})
+
+console.log('\n── Ломаем нарочно (подгонка) ──')
+check('проверка заметила бы, что подгонку перестали делать', () => {
+  const l = parseLyrics('[length:03:20]\n[00:50.00]первая\n[01:40.00]вторая\n[02:30.00]третья')
+  // Без подгонки на 80-й секунде спидапа нашлась бы ещё первая строка.
+  return activeLineIndex(l.lines, lyricsTime(80, 1, 0)) === 0
 })
 
 console.log('\n── Ломаем нарочно ──')
