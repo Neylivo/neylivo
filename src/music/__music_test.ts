@@ -11,7 +11,7 @@
 export {}
 
 import { nextTrack, backTarget } from './nextTrack'
-import { recommend, libraryOrder, personalOrder, WHY_LABEL } from './personalQueue'
+import { recommend, libraryOrder, personalOrder, WHY_LABEL, banWindow, AUTHOR_STREAK } from './personalQueue'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './sources'
 import { boost, lighten, scale, rgb } from './artColor'
@@ -324,6 +324,103 @@ check('проверка заметила бы, что свою паузу пер
   pauseKind(false, 0, 5) === 'ours')
 check('проверка заметила бы, что сторож срабатывает мгновенно', () =>
   !silenceStuck(1000, 1001, true))
+
+
+console.log('\n-- Волна: не крутить одно и то же (v1.424.0) --')
+// Живая жалоба: «у исполнителя три песни, а очередь крутит их сто раз». Так и
+// было: «тот же исполнитель» давал +100, а отодвигание игравшего было мягким —
+// на четвёртом шаге первая песня снова становилась лучшей.
+type WT = { id: string; name?: string; author?: string; plays?: number }
+const W = (id: string, author: string, plays = 0): WT => ({ id, name: 'песня ' + id, author, plays })
+
+check('окно запрета растёт со складом, но не бесконечно', () =>
+  banWindow(0) === 0 && banWindow(1) === 0 && banWindow(4) === 3 && banWindow(100) === 20)
+
+// Склад: три песни одного автора и двадцать чужих.
+const waveLib: WT[] = [
+  W('a1', 'Автор А'), W('a2', 'Автор А'), W('a3', 'Автор А'),
+  ...Array.from({ length: 20 }, (_, n) => W('x' + n, 'Автор ' + n)),
+]
+
+/** Проигрываем волну шагами: что выберет очередь, то и «играет» дальше. */
+function playWave(lib: WT[], startId: string, steps: number): string[] {
+  const played = [startId]
+  let curId = startId
+  for (let n = 0; n < steps; n++) {
+    const idx = lib.findIndex(t => t.id === curId)
+    const recent = [...played].reverse()
+    const best = recommend({ tracks: lib, idx, plays: {}, recent })[0]
+    if (!best) break
+    curId = best.track.id
+    played.push(curId)
+  }
+  return played
+}
+
+check('три песни одного автора не крутятся по кругу', () => {
+  const played = playWave(waveLib, 'a1', 9)
+  const onlyA = played.filter(id => id.startsWith('a')).length
+  // Два трека автора подряд — можно, весь список из них — нельзя.
+  return onlyA <= 4 && new Set(played).size >= 7
+})
+check('внутри окна запрета трек не повторяется', () => {
+  const played = playWave(waveLib, 'a1', 12)
+  const ban = banWindow(waveLib.length - 1)
+  for (let i = 0; i < played.length; i++) {
+    const before = played.slice(Math.max(0, i - ban), i)
+    if (before.includes(played[i])) return false
+  }
+  return true
+})
+check('больше двух треков одного автора подряд не идёт', () => {
+  const played = playWave(waveLib, 'a1', 12)
+  let streak = 1
+  for (let i = 1; i < played.length; i++) {
+    const same = (id: string) => waveLib.find(t => t.id === id)?.author
+    streak = same(played[i]) === same(played[i - 1]) ? streak + 1 : 1
+    if (streak > AUTHOR_STREAK) return false
+  }
+  return true
+})
+check('волна не встаёт, когда склад из трёх треков', () => {
+  const tiny: WT[] = [W('a1', 'А'), W('a2', 'А'), W('a3', 'А')]
+  const played = playWave(tiny, 'a1', 6)
+  // Играть больше нечего, но остановиться волна не имеет права — и повторяет
+  // самое давнее, а не самое свежее.
+  return played.length === 7 && played[3] === played[0]
+})
+check('за окном запрета повтор снова возможен', () => {
+  const played = playWave(waveLib, 'a1', 40)
+  return played.length === 41 && new Set(played).size < played.length
+})
+
+console.log('\n-- Ломаем нарочно (волна) --')
+check('проверка заметила бы возврат к мягкому отодвиганию', () => {
+  // Ровно то, что было до v1.424.0: минус до 120 против +100 за автора.
+  const soft = (lib: WT[], startId: string, steps: number) => {
+    const played = [startId]
+    let curId = startId
+    for (let n = 0; n < steps; n++) {
+      const idx = lib.findIndex(t => t.id === curId)
+      const recent = [...played].reverse()
+      const rest = lib.filter((_, k) => k !== idx)
+      const curAuthor = lib[idx]?.author
+      let best = rest[0], bestScore = -1e9
+      for (const t of rest) {
+        let sc = t.author === curAuthor ? 100 : 0
+        const r = recent.indexOf(t.id)
+        if (r >= 0) sc -= 120 - Math.min(100, r * 20)
+        if (sc > bestScore) { bestScore = sc; best = t }
+      }
+      curId = best.id
+      played.push(curId)
+    }
+    return played
+  }
+  const played = soft(waveLib, 'a1', 9)
+  // Прежний расчёт крутит ровно те же три песни — на этом и жаловались.
+  return played.filter(id => id.startsWith('a')).length >= 8
+})
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

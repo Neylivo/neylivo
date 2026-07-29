@@ -1483,10 +1483,23 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // v1.399.0: что играло только что — чтобы очередь не гоняла одно и то же по
   // кругу. Держим короткий хвост: рекомендация смотрит на свежесть, а не на всю
   // историю прослушиваний.
-  const recentRef = useRef<string[]>([])
+  // v1.424.0: хвост стал длиннее и переживает закрытие плеера.
+  //
+  // Восемь треков не хватало запрету повтора: окно у волны — до двадцати, а
+  // истории было восемь, и дальше повтор снова считался «свежим». А ещё она
+  // жила только в памяти: закрыл плеер, открыл снова — и волна начинала с тех
+  // же песен, которые только что играли.
+  const RECENT_KEY = 'ponoi_mus_recent_v1'
+  const recentRef = useRef<string[]>((() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+      return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 40) : []
+    } catch { return [] }
+  })())
   useEffect(() => {
     if (!cur) return
-    recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 8)
+    recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 40)
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentRef.current)) } catch { /* переполнено */ }
   }, [cur?.id])
 
   // v1.398.0: что предлагает личная очередь.
@@ -1737,7 +1750,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           {/* v1.417.0: уголок плагинов под обложкой. */}
           <PluginPanels slot="player" />
-          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}
+            {/* v1.424.0: сколько раз этот трек слушали все — как на странице
+                трека в SoundCloud. В складе число было, а у играющего трека нет,
+                хотя именно на него человек и смотрит. */}
+            {cur && <span className="mus2-nowplays" title={'Прослушиваний: ' + (cur.plays ?? 0)}>
+              <Icon name="play" size={11} /> {fmtPlays(cur.plays ?? 0)}
+            </span>}
+          </div>
           {/* v1.396.0: что происходит с текстом — словами. Раньше эти подсказки
               вычислялись и никуда не выводились: человек видел пустой экран и не
               знал, ищут ли текст, не нашли его или поиск вообще выключен. */}
@@ -1936,9 +1956,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                               YouTube он играет прекрасно. Пометка отдельная и мягче. */}
                           {!isBroken(t.id) && isNoEmbed(t.id) && !copyOf(t) &&
                             <span className="mus2-card-only" title="Владелец запретил встраивание: слушать можно только на YouTube">только на YouTube</span>}
-                          {(t.plays ?? 0) > 0 && <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
+                          {/* v1.424.0: число стоит на КАЖДОМ треке, как в SoundCloud.
+                              Раньше оно появлялось только у тех, кого человек уже
+                              слушал сам: у остальных было пусто — и не потому, что
+                              их не слушали, а потому что общее число не читалось из
+                              базы вовсе (см. rowToTrack). */}
+                          <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
-                          </span>}
+                          </span>
                         </div>
                         <div className="mus2-card-t notr" translate="no">{title}</div>
                         <div className="mus2-card-a">
