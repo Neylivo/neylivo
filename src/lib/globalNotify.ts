@@ -3,7 +3,7 @@ import { notifyMessage, msgSound } from './notify'
 import { isDmMuted, isDmIgnored } from './userPrefs'
 import { shouldNotify } from './srvNotify'
 import { chNotifModeOf } from './chNotify'
-import { mentionsUser } from './md'
+import { mentionsUser } from './mentions'
 import { channelInfo, getOpenChannel, getOpenDmThread } from './openChat'
 
 // v1.409.0: уведомления приходят обо ВСЁМ, а не только об открытом чате.

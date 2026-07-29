@@ -110,6 +110,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [meta, setMeta] = useState<Record<string, ScMeta>>({})
   const [color, setColor] = useState<Rgb | null>(null)
 
+  // Ссылки на текущее — для обработчиков, которые живут дольше одного рендера.
+  const idxRef = useRef(0); idxRef.current = idx
+  const tracksRef = useRef(tracks); tracksRef.current = tracks
   const cur = tracks[idx]
   // v1.412.0: играющий трек держится за себя, а не за место в списке.
   //
@@ -343,7 +346,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       return ch ? n : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, showLib, libShown])   // v1.410.0: догружаем и при открытии склада, и по «показать ещё»
+  }, [tracks])
 
   useEffect(() => {
     let revoked = ''
@@ -432,7 +435,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     })()
     return () => { ok = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks])
+  }, [tracks, showLib, libShown])   // v1.413.0: догружаем и при открытии склада, и по «Показать ещё»
 
   // ---- Тема под цвет трека: выжимаем доминирующий цвет из обложки ----
   useEffect(() => {
@@ -561,7 +564,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const ch = supabase.channel('together:' + together.code)
     ch.on('broadcast', { event: 'state' }, ({ payload }) => {
       if (together.host) return
-      if (typeof payload.idx === 'number') setIdx(payload.idx)
+      // v1.413.0: ведущий присылает id трека, а не его номер.
+      //
+      // Номер — это место в списке, а список у слушателя может отличаться:
+      // кто-то добавил трек, кто-то убрал, у кого-то ещё не доехало обновление.
+      // Тогда номер указывал на другую песню, и «слушаем вместе» превращалось
+      // в «слушаем разное». Номер принимаем как запасной вариант — ради тех,
+      // у кого версия старее.
+      if (typeof payload.id === 'string') {
+        const i = tracks.findIndex(t => t.id === payload.id)
+        if (i >= 0) setIdx(i)
+      } else if (typeof payload.idx === 'number') setIdx(payload.idx)
       setPlaying(!!payload.playing)
       const a = audioRef.current
       if (a && typeof payload.t === 'number' && Math.abs(a.currentTime - payload.t) > 2) a.currentTime = payload.t
@@ -580,6 +593,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         }
       }
       setLobby([...seen.values()].sort((a, b) => Number(b.host) - Number(a.host)))
+      // v1.413.0: гостю, зашедшему посреди песни, ведущий досылает состояние.
+      // Раньше оно уходило только при смене трека или паузе: человек входил
+      // в лобби и сидел в тишине, пока ведущий чего-нибудь не нажмёт.
+      if (together.host) {
+        ch.send({ type: 'broadcast', event: 'state', payload: {
+          id: tracksRef.current[idxRef.current]?.id, idx: idxRef.current,
+          playing: playingRef.current, t: audioRef.current?.currentTime ?? 0,
+        } })
+      }
     })
     ch.subscribe(st => {
       if (st !== 'SUBSCRIBED' || !meId) return
@@ -591,7 +613,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   useEffect(() => {
     if (together?.host && togChan.current) {
-      togChan.current.send({ type: 'broadcast', event: 'state', payload: { idx, playing, t: audioRef.current?.currentTime ?? 0 } })
+      togChan.current.send({ type: 'broadcast', event: 'state', payload: {
+        // id — главное, номер оставлен для старых версий (v1.413.0).
+        id: tracks[idx]?.id, idx, playing, t: audioRef.current?.currentTime ?? 0,
+      } })
     }
   }, [idx, playing, together])
 
