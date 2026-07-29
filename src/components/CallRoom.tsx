@@ -12,6 +12,7 @@ import { CallRecorder } from '../lib/callAudio'
 import { saveMoment } from '../lib/soundboard'
 import { VOICE_EFFECTS, activeEffect, subscribeVoiceFx, rememberVoiceEffect, type VoiceEffect } from '../lib/voiceFx'
 import { voiceFxAvailable } from '../lib/plugins/store'
+import { emitPluginEvent } from '../lib/plugins/host'
 import { applyVoiceEffect } from '../lib/livekit'
 import { matchCombo } from '../lib/keybind'
 import { useClampToViewport } from '../lib/clampPos'
@@ -397,6 +398,12 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
     // (у него уже есть MiniProfile) — CallRoom только сообщает, кого открыть.
     onProfile?: (userId: string, name: string, avatarUrl: string | null | undefined, x: number, y: number) => void }) {
   const { settings } = useSettings()
+  // v1.397.0: зашёл в разговор и вышел — событие для плагинов. Слышать
+  // разговор плагин по-прежнему не может: сюда уходит только имя комнаты.
+  useEffect(() => {
+    emitPluginEvent('voice', { room: room.name, joined: true })
+    return () => emitPluginEvent('voice', { room: room.name, joined: false })
+  }, [room])
   const [pctx, setPctx] = useState<{ p: any; name: string; avatar: string | null | undefined; x: number; y: number } | null>(null)
   const [mic, setMic] = useState(true)
   const pttHeldRef = useRef(false)   // v1.246.0: клавиша push-to-talk сейчас зажата — переживает ре-рендеры

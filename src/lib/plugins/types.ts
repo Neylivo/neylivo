@@ -55,6 +55,71 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
  */
 export const SENSITIVE_PERMISSIONS: Permission[] = ['messages.read', 'messages.write', 'net']
 
+/**
+ * События, на которые плагин может подписаться (v1.397.0).
+ *
+ * Раньше событие было ровно одно — «пришло сообщение». Всё остальное, что
+ * происходит в приложении, плагину было не видно: он не мог узнать даже о том,
+ * что человек перешёл в другой канал. Отсюда и брались плагины, которые
+ * опрашивают всё подряд по таймеру.
+ *
+ * Таблица — единственный источник правды: по ней и выдаётся разрешение при
+ * подписке (api.ts), и пишется документация (spec.ts), и проверяется, что ни
+ * одно событие не завелось мимо разрешения (__attack_test.ts). Ставить событие
+ * без строки в этой таблице нельзя: подписка на неизвестное имя отвергается.
+ */
+export interface PluginEventSpec {
+  /** Без какого разрешения подписка отвергается. null — событие безобидно. */
+  permission: Permission | null
+  /** Что приходит в обработчик — эта же строка идёт в документацию. */
+  payload: string
+  /** Когда случается — человеческим языком, для документации. */
+  when: string
+}
+
+export const PLUGIN_EVENTS: Record<string, PluginEventSpec> = {
+  'message': {
+    permission: 'messages.read',
+    payload: '{ id, author, authorName, content, mine, mentionsMe }',
+    when: 'пришло новое сообщение в открытом канале',
+  },
+  'message.edit': {
+    permission: 'messages.read',
+    payload: '{ id, author, content }',
+    when: 'сообщение в открытом канале поправили',
+  },
+  'message.delete': {
+    // Уходит только id: содержимое удалённого сообщения плагину не нужно, а
+    // отдавать его — значит отдавать ровно то, что человек только что убрал.
+    permission: 'messages.read',
+    payload: '{ id }',
+    when: 'сообщение в открытом канале удалили',
+  },
+  'reaction': {
+    permission: 'messages.read',
+    payload: '{ messageId, emoji, userId, added }',
+    when: 'на сообщение поставили или сняли реакцию',
+  },
+  'channel': {
+    permission: 'context',
+    payload: '{ id, name, serverId, kind }',
+    when: 'человек перешёл в другой канал или личку',
+  },
+  'voice': {
+    permission: 'context',
+    payload: '{ room, joined }',
+    when: 'ты зашёл в разговор или вышел из него — сам звук плагину недоступен',
+  },
+  'typing': {
+    permission: 'messages.read',
+    payload: '{ name }',
+    when: 'кто-то печатает в открытом канале',
+  },
+}
+
+/** Имена событий — для проверок и подсказок. */
+export const PLUGIN_EVENT_NAMES = Object.keys(PLUGIN_EVENTS)
+
 export interface PluginManifest {
   id: string            // латиница/цифры/дефис, уникален — по нему хранится и обновляется
   name: string

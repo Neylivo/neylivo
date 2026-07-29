@@ -28,6 +28,32 @@ function notify() { listeners.forEach(fn => { try { fn() } catch {} }) }
 export function pluginError(id: string): string | null { return errors.get(id) ?? null }
 export function isRunning(id: string): boolean { return running.has(id) }
 
+/**
+ * Журнал плагина (v1.397.0).
+ *
+ * ponoi.log уходил только в консоль браузера. В приложении на телефоне и в
+ * десктопной сборке её нет вовсе, а значит, и отладки не было: плагин молчит, а
+ * почему — неизвестно. Держим последние строки у себя и показываем в настройках
+ * плагина, рядом с ним самим.
+ *
+ * Кольцо на 200 строк: журнал не должен расти вечно, а тому, кто отлаживает,
+ * нужен хвост, а не вся история.
+ */
+export type LogLevel = 'log' | 'warn' | 'error'
+export interface LogLine { at: number; level: LogLevel; text: string }
+const LOG_MAX = 200
+const logs = new Map<string, LogLine[]>()
+
+export function pluginLog(id: string, level: LogLevel, text: string) {
+  const arr = logs.get(id) ?? []
+  arr.push({ at: Date.now(), level, text })
+  if (arr.length > LOG_MAX) arr.splice(0, arr.length - LOG_MAX)
+  logs.set(id, arr)
+  notify()
+}
+export function pluginLogs(id: string): LogLine[] { return logs.get(id) ?? [] }
+export function clearPluginLog(id: string) { logs.delete(id); notify() }
+
 // Контекст подставляет приложение: он зависит от того, какой канал открыт сейчас,
 // поэтому живёт изменяемой ссылкой, а не копируется в каждый плагин при старте.
 let ctx: HostContext = {
@@ -78,6 +104,9 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
     // Убиваем только за провал загрузки — там плагин заведомо не в рабочем состоянии.
     onError: msg => {
       errors.set(plugin.manifest.id, msg)
+      // Ошибка попадает и в журнал: там она встаёт по времени между строками
+      // самого плагина, и видно, на чём именно он споткнулся.
+      pluginLog(plugin.manifest.id, 'error', msg)
       notify()
     },
   })
@@ -94,6 +123,7 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
 
 function fail(id: string, message: string) {
   errors.set(id, message)
+  pluginLog(id, 'error', message)
   const r = running.get(id)
   if (r) { r.sandbox.kill(); running.delete(id) }
   clearPlugin(id)

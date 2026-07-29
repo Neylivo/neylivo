@@ -5,7 +5,7 @@ import { confirmUi } from '../lib/confirm'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
-import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin } from '../lib/plugins/host'
+import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin, pluginLogs, clearPluginLog } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
 import { PermissionGate } from './PluginPermissionGate'
@@ -77,6 +77,7 @@ export function PluginsSettings() {
   const [, setVer] = useState(0)
   const [pending, setPending] = useState<{ manifest: PluginManifest; code: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const [logOpen, setLogOpen] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [help, setHelp] = useState(false)
   // v1.336.0: три вкладки вместо одной ленты. Каталог, то что уже стоит, и своё —
@@ -229,6 +230,13 @@ export function PluginsSettings() {
                     <Icon name="gear" size={15} /> Настройки
                   </button>
                 )}
+                {/* v1.397.0: журнал плагина. В документации было написано, что
+                    ponoi.log «видно в настройках плагина», — а видно его не было
+                    нигде, кроме консоли браузера, которой в приложении нет. */}
+                <button className={'pqs2-btn ghost' + (logOpen === p.manifest.id ? ' on' : '')}
+                  title="Журнал плагина" onClick={() => setLogOpen(logOpen === p.manifest.id ? null : p.manifest.id)}>
+                  <Icon name="code" size={15} />
+                </button>
                 {isMine(p) && (
                   <button className="pqs2-btn ghost" title="Изменить код" onClick={() => setEditing({ id: p.manifest.id })}>
                     <Icon name="edit" size={15} />
@@ -251,6 +259,29 @@ export function PluginsSettings() {
               </div>
             )}
             {err && <div className="plug-err"><Icon name="flag" size={14} /> {err}</div>}
+            {logOpen === p.manifest.id && (() => {
+              const lines = pluginLogs(p.manifest.id)
+              return (
+                <div className="plug-log">
+                  <div className="plug-log-head">
+                    <b>Журнал</b>
+                    <span>{lines.length ? 'строк: ' + lines.length : 'пусто'}</span>
+                    <button className="pqs2-btn ghost" disabled={!lines.length}
+                      onClick={() => { clearPluginLog(p.manifest.id); setVer(v => v + 1) }}>Очистить</button>
+                  </div>
+                  {lines.length === 0
+                    ? <div className="plug-log-empty">Плагин ничего не писал. Вывод делается через ponoi.log, ponoi.warn и ponoi.error.</div>
+                    : <div className="plug-log-body">
+                        {lines.map((l, i) => (
+                          <div key={i} className={'plug-log-l ' + l.level}>
+                            <span className="plug-log-t">{new Date(l.at).toLocaleTimeString()}</span>
+                            {l.text}
+                          </div>
+                        ))}
+                      </div>}
+                </div>
+              )
+            })()}
             {isOpen && page && (
               <div className="plug-settings">
                 <PluginSettingsRows pluginId={p.manifest.id} rows={page.rows} />

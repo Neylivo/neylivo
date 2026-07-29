@@ -29,7 +29,7 @@ const store = new Map<string, string>()
 const { createDispatcher } = await import('./api')
 const registry = await import('./registry')
 const { upsertPlugin, loadPlugins } = await import('./store')
-const { ALL_PERMISSIONS } = await import('./types')
+const { ALL_PERMISSIONS, PLUGIN_EVENTS } = await import('./types')
 
 let pass = 0, fail = 0
 const ok = (n: string) => { pass++; console.log('OK   ' + n) }
@@ -42,6 +42,12 @@ async function check(name: string, fn: () => boolean | Promise<boolean>) {
 async function blocked(name: string, fn: () => Promise<unknown>) {
   try { await fn(); bad(name, 'прошло, хотя должно быть отвергнуто') }
   catch { ok(name) }
+}
+
+/** Действие, наоборот, должно пройти: иначе проверка «всё запрещено» ничего не значит. */
+async function allowed(name: string, fn: () => Promise<unknown>) {
+  try { await fn(); ok(name) }
+  catch (e: any) { bad(name, 'отвергнуто, хотя должно проходить: ' + (e?.message ?? e)) }
 }
 
 const sent: string[] = []
@@ -73,6 +79,33 @@ console.log('── Разрешения ──')
   await blocked('без права нет уведомлений', () => d('notify', ['бум']))
   await blocked('без права нет хранилища', () => d('storage.set', ['k', 'v']))
   await blocked('несуществующий метод отвергается', () => d('внутренности.дай', []))
+}
+
+console.log('\n── События ──')
+{
+  // v1.397.0: событий стало семь вместо одного. Опасность ровно в том, что новое
+  // событие легко завести мимо разрешения — тогда «плагин без прав» тихо начнёт
+  // получать переписку. Поэтому проверяется КАЖДОЕ событие из таблицы, а не
+  // список, переписанный сюда руками: допишут восьмое — оно проверится само.
+  const none = attacker([], 'no-perms-ev')
+  for (const [name, spec] of Object.entries(PLUGIN_EVENTS)) {
+    if (!spec.permission) continue
+    await blocked(`без права нельзя подписаться на «${name}»`, () => none('subscribe', [name]))
+  }
+
+  const all = attacker([...ALL_PERMISSIONS], 'all-perms-ev')
+  for (const name of Object.keys(PLUGIN_EVENTS)) {
+    await allowed(`с правами подписка на «${name}» проходит`, () => all('subscribe', [name]))
+  }
+
+  await blocked('на выдуманное событие подписаться нельзя', () => all('subscribe', ['всё.подряд']))
+  await blocked('пустое имя события тоже не проходит', () => all('subscribe', ['']))
+
+  // Разрешение у события должно быть то самое, а не «любое из выданных»: с одним
+  // лишь context нельзя подписаться на сообщения.
+  const ctxOnly = attacker(['context'], 'ctx-only')
+  await blocked('context не открывает сообщения', () => ctxOnly('subscribe', ['message']))
+  await allowed('context открывает смену канала', () => ctxOnly('subscribe', ['channel']))
 }
 
 console.log('\n── Сеть ──')

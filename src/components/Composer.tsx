@@ -24,7 +24,7 @@ import { ShareBuildModal, type ShareCardCustom } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
-import { invokePlugin, claimHostContext, releaseHostContext } from '../lib/plugins/host'
+import { invokePlugin, claimHostContext, releaseHostContext, emitPluginEvent } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { slashPrefix, parseSlash, buildArgs } from '../lib/slashCmd'
@@ -395,6 +395,21 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     return () => releaseHostContext(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // v1.397.0: событие о переходе в другой канал. Плагин и раньше мог спросить
+  // ponoi.channel(), но узнать, что канал сменился, было неоткуда — оставалось
+  // опрашивать по таймеру, чего никто делать не должен.
+  const lastChanRef = useRef<string | null>(null)
+  useEffect(() => {
+    const id = channelId ?? null
+    if (lastChanRef.current === id) return
+    lastChanRef.current = id
+    if (!id) return
+    emitPluginEvent('channel', {
+      id, name: channelName ?? '', serverId: serverId ?? null,
+      kind: serverId ? 'channel' : 'dm',
+    })
+  }, [channelId, channelName, serverId])
 
   // v1.356.0: и боты, и плагины разбираются одной регуляркой с \p{L}. Раньше у
   // ботов стояла \w — только латиница, — и ни одна русская команда готового бота

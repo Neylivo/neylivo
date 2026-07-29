@@ -1,10 +1,11 @@
-import type { InstalledPlugin, Permission } from './types'
+import { PLUGIN_EVENTS, PLUGIN_EVENT_NAMES, type InstalledPlugin, type Permission } from './types'
 import { isFnRef, type FnRef } from './sandbox'
 import {
   addCommand, addComposerButton, addMessageAction, commandOwner, safeIcon,
   setPluginCss, setSettingsPage, type SettingsRow,
 } from './registry'
 import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
+import { pluginLog } from './host'
 import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
 
 // v1.286.0: хостовая реализация всего, что плагин может вызвать. Единственное место,
@@ -105,10 +106,17 @@ export function createDispatcher(
 
   return async function dispatch(method: string, args: unknown[]): Promise<unknown> {
     switch (method) {
-      case 'log':
+      case 'log': {
         // Всегда можно: это отладочный вывод плагина, наружу он не уходит.
-        console.info(`[плагин ${id}]`, String(args[0] ?? '').slice(0, 2000))
+        // v1.397.0: и в журнал приложения тоже — консоль браузера есть не везде,
+        // а на телефоне и в десктопной сборке её нет вовсе, то есть отладки не
+        // было совсем.
+        const lvl = args[1] === 'warn' || args[1] === 'error' ? args[1] : 'log'
+        const text = String(args[0] ?? '').slice(0, 2000)
+        console.info(`[плагин ${id}]`, text)
+        pluginLog(id, lvl, text)
         return null
+      }
 
       case 'css': {
         need('css')
@@ -299,8 +307,17 @@ export function createDispatcher(
 
       case 'subscribe': {
         const ev = String(args[0] ?? '')
-        // Событие о сообщениях — это чтение переписки, отдельное разрешение.
-        if (ev === 'message') need('messages.read')
+        // v1.397.0: разрешение берётся из таблицы событий (types.ts), а не из
+        // списка условий здесь. Раньше проверка знала одно имя — 'message', — и
+        // любое другое подписывалось молча и без всякого разрешения; сейчас
+        // событий много, и такой список рано или поздно разошёлся бы с жизнью.
+        // Неизвестное имя — отказ, а не тихая подписка в никуда: молчащий
+        // обработчик разработчик ищет часами.
+        const spec = PLUGIN_EVENTS[ev]
+        if (!spec) {
+          throw new Denied(`Неизвестное событие «${ev}». Есть: ${PLUGIN_EVENT_NAMES.join(', ')}.`)
+        }
+        if (spec.permission) need(spec.permission)
         onSubscribe(ev)
         return null
       }

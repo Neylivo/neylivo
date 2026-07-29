@@ -80,6 +80,10 @@ function call(method, args) {
 // нечего было обходить.
 const listeners = new Map()      // имя события -> [обработчики]
 
+const fmt = (a) => a.map(x => {
+  try { return typeof x === 'string' ? x : JSON.stringify(x) } catch (e) { return String(x) }
+}).join(' ')
+
 const ponoi = {
   css: (text) => call('css', [String(text)]),
   ui: {
@@ -129,7 +133,11 @@ const ponoi = {
     listeners.set(name, arr)
     return call('subscribe', [String(name)])
   },
-  log: (...a) => call('log', [a.map(x => { try { return typeof x === 'string' ? x : JSON.stringify(x) } catch (e) { return String(x) } }).join(' ')]),
+  // v1.397.0: три уровня. Строки видны в настройках плагина, в его журнале:
+  // предупреждение и ошибку там видно отдельно от обычного вывода.
+  log: (...a) => call('log', [fmt(a), 'log']),
+  warn: (...a) => call('log', [fmt(a), 'warn']),
+  error: (...a) => call('log', [fmt(a), 'error']),
 }
 
 // ---- 4. Приём сообщений от приложения ------------------------------------------

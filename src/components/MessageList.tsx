@@ -399,6 +399,34 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
     if (seenMsgIds.current.size > 5000) seenMsgIds.current = new Set(messages.map(m => m.id))
   }, [messages])
 
+  // v1.397.0: правка и удаление сообщения — тоже события. Раньше плагин узнавал
+  // только о новых: автопереводчик переводил сообщение и не замечал, что его
+  // тут же поправили, а модерации нечего было ловить.
+  //
+  // Осторожно со сменой канала: там список заменяется целиком, и если считать
+  // «пропал из списка» удалением, при каждом переходе плагину прилетала бы
+  // «удалена» вся прошлая переписка. Поэтому сверяем списки только когда это
+  // один и тот же разговор — хоть одно сообщение осталось на месте.
+  const prevMsgs = useRef<Map<string, { content: string; author: string }>>(new Map())
+  useEffect(() => {
+    const now = new Map<string, { content: string; author: string }>()
+    for (const m of messages) now.set(m.id, { content: m.content ?? '', author: m.author })
+    const prev = prevMsgs.current
+    const sameThread = prev.size > 0 && [...now.keys()].some(id => prev.has(id))
+    if (sameThread) {
+      for (const [id, cur] of now) {
+        const before = prev.get(id)
+        if (before && before.content !== cur.content) {
+          emitPluginEvent('message.edit', { id, author: cur.author, content: cur.content })
+        }
+      }
+      for (const id of prev.keys()) {
+        if (!now.has(id)) emitPluginEvent('message.delete', { id })
+      }
+    }
+    prevMsgs.current = now
+  }, [messages])
+
   // Re-render message bodies when the shared custom-emoji cache updates.
   useEffect(() => {
     const h = () => setEmojiVer(v => v + 1)

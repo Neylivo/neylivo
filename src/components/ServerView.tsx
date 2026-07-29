@@ -20,6 +20,7 @@ import { MessageList, jumpToMessage } from './MessageList'
 import { GameLine, ListenLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
+import { emitPluginEvent } from '../lib/plugins/host'
 import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer, rulesAccepted, acceptRules } from '../lib/servers'
 import { uploadWithProgress } from '../lib/storage'
@@ -233,6 +234,15 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const prevTop = useRef(0)
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
+  // v1.397.0: «кто печатает» — событие для плагинов. Шлём только про новых:
+  // список меняется на каждое нажатие, и без сравнения плагин получал бы
+  // десяток событий на одно слово.
+  const typedRef = useRef<string[]>([])
+  useEffect(() => {
+    const fresh = typers.filter(t => !typedRef.current.includes(t))
+    typedRef.current = typers
+    for (const name of fresh) emitPluginEvent('typing', { name })
+  }, [typers])
 
   // Цветные роли: id -> роль. С v1.96.0 у участника может быть сколько угодно
   // ролей (member_roles); до миграции 25 — старое одиночное server_members.role_id.
@@ -784,7 +794,19 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     if (!curChannel) return
     const ch = supabase.channel('rx:' + curChannel.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' },
-        () => { window.clearTimeout(svRxDeb); svRxDeb = window.setTimeout(() => loadRx(msgsRef.current.map(m => m.id)), 250) })
+        (p: any) => {
+          window.clearTimeout(svRxDeb); svRxDeb = window.setTimeout(() => loadRx(msgsRef.current.map(m => m.id)), 250)
+          // v1.397.0: событие плагинам. Подписка сюда идёт без фильтра по каналу,
+          // поэтому отдаём только реакции на сообщения открытого канала: плагин
+          // просил «видеть открытый канал», а не всю базу реакций.
+          const row = p?.new ?? p?.old
+          const mid = row?.message_id
+          if (!mid || !msgsRef.current.some(m => m.id === mid)) return
+          emitPluginEvent('reaction', {
+            messageId: mid, emoji: String(row?.emoji ?? ''),
+            userId: String(row?.user_id ?? ''), added: p?.eventType !== 'DELETE',
+          })
+        })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [curChannel])
