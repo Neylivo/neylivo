@@ -5416,11 +5416,6 @@ body.no-anim .mus2-card-del { transition: none; }
 
 /* Трекотека прокручивается, а не обрезается (v1.377.0). */
 .mus2-lib-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 24px 40px; }
-.mus2-card-p {
-  display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
-  color: var(--mut); font-size: 11.5px; white-space: nowrap;
-}
-
 /* ══ Лобби «слушать вместе» (v1.379.0) ═════════════════════════════════════
    Прежнее меню было выпадашкой, закрывавшейся от увода мыши, и помещался в неё
    только код. С кем ты слушаешь — не было видно нигде, и даже дошло ли
@@ -5829,3 +5824,15 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 .mus2-card { padding: 10px; }
 .mus2-card:hover { transform: translateY(-2px); }
 .mus2-card-t { font-size: 13.5px; }
+
+/* Прослушивания на обложке и порядок склада (v1.406.0). Число пряталось в строке
+   автора мелким шрифтом — а теперь по нему выложен весь склад, и его надо видеть
+   сразу, не вчитываясь. */
+.mus2-card-pl {
+  position: absolute; left: 6px; top: 6px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px 2px 5px; border-radius: 999px;
+  background: rgba(0, 0, 0, .62); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1.6;
+}
+.mus2-lib-note { color: var(--mut); font-size: 12.5px; margin: -4px 0 12px; }

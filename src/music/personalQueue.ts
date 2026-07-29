@@ -148,3 +148,20 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
 export function personalOrder<T extends QueueTrack>(i: PersonalInput<T>): T[] {
   return recommend(i).map(s => s.track)
 }
+
+/**
+ * Порядок склада: сначала то, что слушают чаще всего (v1.406.0).
+ *
+ * Раньше склад выкладывался по времени добавления — это про того, кто когда
+ * принёс трек, и человеку, зашедшему послушать, не говорит ничего.
+ *
+ * При равных числах остаётся прежний порядок: иначе выдача прыгала бы при
+ * каждом открытии, а искать глазами в прыгающем списке невозможно.
+ */
+export function libraryOrder<T extends QueueTrack>(tracks: T[]): T[] {
+  const at = new Map(tracks.map((t, n) => [t.id, n]))
+  return [...tracks].sort((a, b) => {
+    const d = (b.plays ?? 0) - (a.plays ?? 0)
+    return d !== 0 ? d : (at.get(a.id) ?? 0) - (at.get(b.id) ?? 0)
+  })
+}

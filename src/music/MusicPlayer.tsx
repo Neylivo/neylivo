@@ -1,5 +1,5 @@
 import { toastErr, toastOk } from '../lib/toast'
-import { recommend, WHY_LABEL } from './personalQueue'
+import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
@@ -1142,9 +1142,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               Кто выложил трек — убрано: в списке из сотни записей это ничего не
               говорит и только занимает место, а обложка узнаётся мгновенно. */}
           <div className="mus2-lib-body">
+            {tracks.length > 1 && !libQ.trim() && (
+              <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
+            )}
             {(() => {
               const q = libQ.trim().toLowerCase()
-              const shown = tracks.filter(t => {
+              // v1.406.0: склад выкладывается по прослушиваниям, а не по времени
+              // добавления: порядок добавления — это про того, кто когда принёс
+              // трек, а зашедшему послушать он не говорит ничего. Сортируется
+              // только показ: по порядку самого tracks считается номер играющего.
+              const shown = libraryOrder(tracks).filter(t => {
                 if (!q) return true
                 const title = (meta[t.url]?.title || t.name || '').toLowerCase()
                 const author = (meta[t.url]?.author || t.author || '').toLowerCase()
@@ -1192,16 +1199,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             <Icon name="trash" size={14} />
                           </button>}
                           {t.dur ? <span className="mus2-card-d">{fmt(t.dur)}</span> : null}
+                          {/* v1.406.0: сколько раз слушали — на самой обложке. Раньше
+                              число стояло мелким шрифтом в строке автора, разглядеть
+                              его было почти нельзя, а теперь по нему выложен весь склад. */}
+                          {(t.plays ?? 0) > 0 && <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
+                            <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
+                          </span>}
                         </div>
                         <div className="mus2-card-t notr" translate="no">{title}</div>
                         <div className="mus2-card-a">
                           <span className="notr" translate="no">{author || ''}</span>
-                          {/* v1.377.0: сколько раз слушали все. Ноль не пишем: «0
-                              прослушиваний» ничего не сообщает, только шумит. */}
-                          {(t.plays ?? 0) > 0 && <span className="mus2-card-p" title="Прослушиваний">
-                            <Icon name="play" size={10} />{fmtPlays(t.plays ?? 0)}
-                          </span>}
-                          {!author && !(t.plays ?? 0) ? '\u00a0' : null}
+                          {!author ? '\u00a0' : null}
                         </div>
                       </div>
                     )

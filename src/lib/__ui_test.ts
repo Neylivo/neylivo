@@ -25,7 +25,7 @@ import { isSoundcloudUrl, cleanScUrl } from '../music/soundcloud'
 import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
 import { nextTrack } from '../music/nextTrack'
-import { personalOrder, recommend } from '../music/personalQueue'
+import { personalOrder, recommend, libraryOrder } from '../music/personalQueue'
 import { guardLink } from './linkguard'
 import { contentTypeOf } from './fileType'
 import { isDuplicateTrack } from './musicDupe'
@@ -559,6 +559,32 @@ check('проверка заметила бы, что недавнее пере�
   const t = [M('cur', 'Ночь', 'А'), M('a', 'Раз', 'Б'), M('b', 'Два', 'В')]
   const r = recommend({ tracks: t, idx: 0, plays: { a: 5 }, recent: ['a'], freshCount: 0 })
   return r[0].track.id === 'b'
+})
+
+console.log('\n── Порядок Трекотеки (v1.406.0) ──')
+check('чаще слушаемое идёт первым', () => {
+  const r = libraryOrder([{ id: 'a', plays: 2 }, { id: 'b', plays: 40 }, { id: 'c', plays: 9 }])
+  return r.map(t => t.id).join('') === 'bca'
+})
+check('при равных числах порядок склада сохраняется', () => {
+  const r = libraryOrder([{ id: 'a', plays: 5 }, { id: 'b', plays: 5 }, { id: 'c', plays: 5 }])
+  return r.map(t => t.id).join('') === 'abc'
+})
+check('трек без числа не выбрасывается, а уходит в конец', () => {
+  const r = libraryOrder([{ id: 'a' }, { id: 'b', plays: 3 }])
+  return r.map(t => t.id).join('') === 'ba'
+})
+check('исходный список не портится', () => {
+  const src = [{ id: 'a', plays: 1 }, { id: 'b', plays: 9 }]
+  libraryOrder(src)
+  return src[0].id === 'a'
+})
+check('пустой склад не ломает', () => libraryOrder([]).length === 0)
+
+console.log('\n── Ломаем нарочно (порядок Трекотеки) ──')
+check('проверка заметила бы возврат к порядку добавления', () => {
+  const r = libraryOrder([{ id: 'a', plays: 2 }, { id: 'b', plays: 40 }])
+  return r[0].id !== 'a'
 })
 
 console.log('\n── Защита переходов по ссылкам ──')
