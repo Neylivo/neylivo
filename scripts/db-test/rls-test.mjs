@@ -137,7 +137,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -185,6 +185,8 @@ await db.exec(`create table if not exists music_tracks (
   kind text not null default 'url', created_at timestamptz not null default now());`)
 await db.exec(SRC[99])
 await db.exec(SRC[100])
+// 102 — текст песни; применяем тут же, до выдачи прав ниже по файлу.
+await db.exec(SRC[102])
 // game_covers заводится в 13, которую песочница целиком не применяет.
 await db.exec(`create table if not exists game_covers (
   name text primary key, cover_url text,
@@ -1098,6 +1100,59 @@ await check('избранные эмодзи попали в публикаци�
     // Иначе запрет на перезапись обходится в два шага.
     await as(USER, `delete from game_covers where name='CS2'`)
     return (await db.query(`select 1 from game_covers where name='CS2'`)).rows.length === 1
+  })
+}
+
+
+// ── Текст песни: общий, но не проходной двор (102, v1.394.0) ─────────────
+//
+// Текст один на всю Трекотеку — значит, добавить его может любой, кто слушает,
+// а не только тот, кто когда-то принёс трек. Ровно поэтому важно, чтобы уже
+// добавленный текст не мог переписать кто угодно: иначе чужую работу затирают
+// одной строкой. Здесь проверяется и то, и другое.
+{
+  const TRACK = (await db.query(
+    `insert into music_tracks (url, name, owner) values ('https://soundcloud.com/l/1','Песня',$1) returning id`,
+    [OWNER])).rows[0].id
+
+  await check('добавить текст может не только владелец трека', async () => {
+    await as(USER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'строка',$2)`, [TRACK, USER])
+    return (await db.query('select text from music_lyrics')).rows[0].text === 'строка'
+  })
+
+  await check('свой текст можно поправить', async () => {
+    await as(USER, `update music_lyrics set text='другая строка' where track_id=$1`, [TRACK])
+    return (await db.query('select text from music_lyrics')).rows[0].text === 'другая строка'
+  })
+
+  await check('чужой текст посторонний не перепишет', async () => {
+    await as(OTHER, `update music_lyrics set text='всё стёр' where track_id=$1`, [TRACK])
+    return (await db.query('select text from music_lyrics')).rows[0].text === 'другая строка'
+  })
+
+  await check('владелец трека поправить может', async () => {
+    await as(OWNER, `update music_lyrics set text='от владельца', updated_by=$2 where track_id=$1`, [TRACK, OWNER])
+    return (await db.query('select text from music_lyrics')).rows[0].text === 'от владельца'
+  })
+
+  await check('чужой текст нельзя стереть, чтобы вставить свой', async () => {
+    // Иначе запрет на перезапись обходится в два шага, как было с обложками.
+    await as(OTHER, `delete from music_lyrics where track_id=$1`, [TRACK])
+    return (await db.query('select 1 from music_lyrics')).rows.length === 1
+  })
+
+  await check('текст виден всем, кто вошёл', async () => {
+    const r = await as(OTHER, `select text from music_lyrics where track_id=$1`, [TRACK])
+    return r.rows.length === 1
+  })
+
+  await refused('нельзя записать текст от чужого имени', async () => {
+    await as(OTHER, `insert into music_lyrics (track_id, text, updated_by) values ($1,'подделка',$2)`, [TRACK, USER])
+  })
+
+  await check('текст уходит вместе с треком', async () => {
+    await db.query(`delete from music_tracks where id=$1`, [TRACK])
+    return (await db.query('select 1 from music_lyrics')).rows.length === 0
   })
 }
 

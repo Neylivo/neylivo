@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react'
-import type { GifCfg, BgCfg, GifPos } from './types'
-import { GIF_KEY, BG_KEY, BG_IDB_KEY } from './types'
+import type { GifCfg, BgCfg, GifPos, LyricsCfg, LyricsMode } from './types'
+import { GIF_KEY, BG_KEY, BG_IDB_KEY, LYRICS_KEY } from './types'
 import { idbSet, idbDel } from '../lib/idb'
 import { videoDuration } from './videoDuration'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 
 export function loadGif(): GifCfg { try { return JSON.parse(localStorage.getItem(GIF_KEY) || '') } catch { return { url: '', pos: 'both' } } }
+// v1.394.0: показ текста песни. По умолчанию — фоном за обложкой, поиск в
+// интернете выключен: он уносит название трека и IP на чужой сервер.
+export function loadLyricsCfg(): LyricsCfg {
+  try {
+    const v = JSON.parse(localStorage.getItem(LYRICS_KEY) || '')
+    return { mode: v.mode === 'off' || v.mode === 'karaoke' ? v.mode : 'back', online: !!v.online }
+  } catch { return { mode: 'back', online: false } }
+}
+
 export function loadBg(): BgCfg { try { return JSON.parse(localStorage.getItem(BG_KEY) || '') } catch { return { type: 'none', mode: 'url', url: '', dim: 40, ver: 0 } } }
 
 export function MusicSettings({ onClose, onChange }: { onClose: () => void; onChange: () => void }) {
   const [gif, setGif] = useState<GifCfg>(loadGif())
   const [bg, setBg] = useState<BgCfg>(loadBg())
+  const [lyr, setLyr] = useState<LyricsCfg>(loadLyricsCfg())
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
@@ -22,6 +32,7 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
 
   useEffect(() => { localStorage.setItem(GIF_KEY, JSON.stringify(gif)); onChange() }, [gif])
   useEffect(() => { localStorage.setItem(BG_KEY, JSON.stringify(bg)); onChange() }, [bg])
+  useEffect(() => { localStorage.setItem(LYRICS_KEY, JSON.stringify(lyr)); onChange() }, [lyr])
 
   async function pickBgFile(e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'video') {
     const f = e.target.files?.[0]; if (!f) return
@@ -79,6 +90,29 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
           </div>
           <button className="ms-clear" onClick={clearBg}>Убрать фон</button>
         </>}
+        {/* v1.394.0: текст песни. Стоит выше фона плеера намеренно: это то, на что
+            смотрят, пока играет музыка, а фон — украшение. */}
+        <div className="ms-sec"><Icon name="music" size={15} /> Текст песни</div>
+        <div className="ms-row">
+          {([['off', 'Не показывать'], ['back', 'Фоном за обложкой'], ['karaoke', 'Караоке']] as [LyricsMode, string][]).map(([m, label]) => (
+            <button key={m} className={'ms-chip' + (lyr.mode === m ? ' on' : '')} onClick={() => setLyr({ ...lyr, mode: m })}>{label}</button>
+          ))}
+        </div>
+        <div className="ms-note">
+          {lyr.mode === 'off' ? 'Текст не показывается нигде.'
+            : lyr.mode === 'back' ? 'Текст плывёт приглушённым фоном за обложкой — обложка остаётся главной.'
+            : 'Текст вместо обложки, строку за строкой, поющаяся строка подсвечена. Караоке возможно только с метками времени (формат LRC): без них угадать, когда какая строка звучит, нельзя — такой текст показывается фоном.'}
+        </div>
+        <label className="ms-check">
+          <input type="checkbox" checked={lyr.online} onChange={e => setLyr({ ...lyr, online: e.target.checked })} />
+          Искать текст в интернете (lrclib.net)
+        </label>
+        <div className="ms-note">
+          Выключено по умолчанию. При поиске на чужой сервер уходит название трека и исполнитель, и ему виден твой IP —
+          то есть видно, что ты слушаешь. Свой текст можно вставить прямо в плеере кнопкой «Текст», ничего никуда не отправляя;
+          он сохранится для всех в Трекотеке.
+        </div>
+
         {msg && <div className="ms-msg">{msg}</div>}
       </div>
     </div></Portal>

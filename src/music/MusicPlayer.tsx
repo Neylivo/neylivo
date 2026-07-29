@@ -12,7 +12,8 @@ import { personalOrder } from './personalQueue'
 
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
-import { MusicSettings, loadGif, loadBg } from './MusicSettings'
+import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
+import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
@@ -49,6 +50,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [full, setFull] = useState(false)  // панель справа <-> на весь экран
   const [gif, setGif] = useState(loadGif())
   const [bg, setBg] = useState<BgCfg>(loadBg())
+  // v1.394.0: текст песни.
+  const [lyrCfg, setLyrCfg] = useState(loadLyricsCfg())
+  const [lyr, setLyr] = useState<Lyrics | null>(null)
+  const [lyrEdit, setLyrEdit] = useState<string | null>(null)   // не null — открыто окно правки
+  const [lyrBusy, setLyrBusy] = useState(false)
+  const [lyrNote, setLyrNote] = useState('')
   const [bgUrl, setBgUrl] = useState<string>('')
   const [curT, setCurT] = useState(0)
   const [dur, setDur] = useState(0)
@@ -177,7 +184,50 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return () => window.removeEventListener('keydown', h)
   }, [showLib])
 
-  function refreshCfg() { setGif(loadGif()); setBg(loadBg()) }
+  function refreshCfg() { setGif(loadGif()); setBg(loadBg()); setLyrCfg(loadLyricsCfg()) }
+
+  // v1.394.0: текст текущего трека. Сначала общий (Трекотека), потом — если
+  // человек сам разрешил — поиск в интернете, и найденное складывается обратно,
+  // чтобы второй раз никуда не ходить и чтобы текст был у всех.
+  useEffect(() => {
+    let ok = true
+    setLyr(null); setLyrNote('')
+    const t = cur
+    if (!t || lyrCfg.mode === 'off') return
+    ;(async () => {
+      let raw = await loadLyrics(t.id)
+      if (!ok) return
+      if (raw) { setLyr(parseLyrics(raw)); return }
+      if (!lyrCfg.online) { setLyrNote('Текста нет. Кнопка «Текст» — вставить свой.'); return }
+      setLyrNote('Ищу текст…')
+      const found = await searchLyricsOnline(curMeta?.title || t.name, curMeta?.author || t.author || '', dur || t.dur)
+      if (!ok) return
+      if (!found) { setLyrNote('Текст не нашёлся. Кнопка «Текст» — вставить свой.'); return }
+      raw = found.text
+      setLyr(parseLyrics(raw)); setLyrNote('')
+      void saveLyrics(t.id, raw)
+    })()
+    return () => { ok = false }
+  }, [cur?.id, lyrCfg.mode, lyrCfg.online])
+
+  async function keepLyrics(text: string) {
+    if (!cur) return
+    setLyrBusy(true)
+    try {
+      const where = await saveLyrics(cur.id, text)
+      setLyr(text.trim() ? parseLyrics(text) : null)
+      setLyrNote(text.trim() ? '' : 'Текста нет. Кнопка «Текст» — вставить свой.')
+      setLyrEdit(null)
+      toastOk(where === 'db' ? 'Текст сохранён — его увидят все' : 'Текст сохранён на этом устройстве')
+    } finally { setLyrBusy(false) }
+  }
+
+  // Караоке возможно только с метками времени. Без них не притворяемся: текст
+  // показываем фоном, а в окне правки объясняем, чего не хватает.
+  const lyrMode: 'off' | 'back' | 'karaoke' =
+    lyrCfg.mode === 'off' || !lyr || lyr.lines.length === 0 ? 'off'
+    : lyrCfg.mode === 'karaoke' && lyr.synced ? 'karaoke' : 'back'
+  const lyrActive = lyr && lyr.synced ? activeLineIndex(lyr.lines, curT) : -1
 
   // ---- Авто-активность «Слушает…» (как Spotify-статус в Discord) ----
   // Пока трек играет — публикуем название/автора/источник и позицию; на паузе сбрасываем.
@@ -844,8 +894,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </>}
         </aside>
 
-        <section className="mus2-now">
+        <section className={'mus2-now' + (lyrMode === 'karaoke' ? ' karaoke' : '')}>
           {showLeft && <img className="mus-gif l" src={gif.url} alt="" />}
+          {/* v1.394.0: текст фоном — за обложкой, приглушённо. Строки не
+              перехватывают мышь: под ними живая обложка и кнопки. */}
+          {lyrMode === 'back' && lyr && <div className="mus2-lyrback" aria-hidden="true">
+            <div className="mus2-lyrback-in"
+              style={{ transform: `translateY(calc(-1.05em - ${Math.max(lyrActive, 0) * 2.1}em))` }}>
+              {lyr.lines.map((l, i) => (
+                <div key={i} className={'mus2-lyrback-l' + (i === lyrActive ? ' on' : '')}>{l.text || '\u00a0'}</div>
+              ))}
+            </div>
+          </div>}
           <div className="mus2-artwrap">
             {curArt && <div className="mus2-artglow" style={{ backgroundImage: `url(${curArt})` }} />}
             <div className={'mus2-vinyl' + (playing ? ' spin' : '')}>{curArt && <img src={curArt} alt="" />}</div>
@@ -860,6 +920,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               </button>
             </div>}
           </div>
+          {lyrMode === 'karaoke' && lyr && <div className="mus2-karaoke">
+            <div className="mus2-karaoke-in"
+              style={{ transform: `translateY(calc(-1.2em - ${Math.max(lyrActive, 0) * 2.4}em))` }}>
+              {lyr.lines.map((l, i) => (
+                <div key={i} className={'mus2-kline' + (i === lyrActive ? ' on' : i < lyrActive ? ' past' : '')}
+                  onClick={() => { const a = audioRef.current; if (a && l.t !== null) { a.currentTime = l.t; setCurT(l.t) } }}
+                  title={l.t !== null ? 'Перейти к строке' : undefined}>{l.text || '\u00a0'}</div>
+              ))}
+            </div>
+          </div>}
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
@@ -887,6 +957,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>
           <div className="mus2-extra">
             <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
+            {/* v1.394.0: свой текст песни — без интернета и без чужих серверов. */}
+            <button className={'mus2-inpl' + (lyr ? ' on' : '')} disabled={!cur}
+              title={lyrCfg.mode === 'off' ? 'Показ текста выключен в настройках плеера' : 'Текст песни'}
+              onClick={() => setLyrEdit(lyr?.raw ?? '')}><Icon name="music" size={15} /> Текст</button>
             <button className={'mus2-tog' + (together ? ' on' : '')} onClick={() => setTogetherUi(true)}>
               <Icon name="users" size={15} /> Вместе
               {together && lobby.length > 0 ? <span className="mus2-tog-n">{lobby.length}</span> : null}
@@ -1048,6 +1122,34 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}
+      {/* v1.394.0: окно текста песни. Через портал, как и остальные окна плеера:
+          изнутри .mus2 со своим слоем окно не выбирается и прижимается к низу. */}
+      {lyrEdit !== null && cur && <Portal>
+        <div className="modal-overlay" onClick={() => setLyrEdit(null)}>
+          <div className="modal lyr-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-x" onClick={() => setLyrEdit(null)}><Icon name="close" size={18} /></button>
+            <div className="modal-title">Текст песни</div>
+            <div className="lyr-sub">{curMeta?.title || cur.name}</div>
+            <div className="lyr-hint">
+              Обычный текст поплывёт фоном. Для караоке нужны метки времени в формате LRC —
+              строка вида <code>[01:23.45] слова строки</code>: по ним видно, когда её поют.
+              Текст сохраняется для всех в Трекотеке.
+            </div>
+            <textarea className="lyr-area" autoFocus value={lyrEdit} onChange={e => setLyrEdit(e.target.value)}
+              placeholder={'Вставь текст песни сюда. Для караоке — со строками вида [00:12.50] слова'} />
+            {lyrEdit.trim() && <div className="lyr-state">
+              {parseLyrics(lyrEdit).synced
+                ? '✓ Метки времени найдены — караоке будет работать'
+                : 'Меток времени нет — текст покажется фоном, караоке для него невозможно'}
+            </div>}
+            <div className="lyr-btns">
+              {lyr && <button className="pqs2-btn ghost danger" disabled={lyrBusy} onClick={() => keepLyrics('')}>Убрать текст</button>}
+              <button className="pqs2-btn ghost" onClick={() => setLyrEdit(null)}>Отмена</button>
+              <button className="pqs2-btn primary" disabled={lyrBusy} onClick={() => keepLyrics(lyrEdit)}>{lyrBusy ? 'Сохраняю…' : 'Сохранить'}</button>
+            </div>
+          </div>
+        </div>
+      </Portal>}
     </main>
     {!visible && cur && (
       // v1.381.0: плашку можно утащить куда угодно, пока тащишь — она сворачивается

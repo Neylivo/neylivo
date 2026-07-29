@@ -5726,3 +5726,78 @@ body.no-anim .pcb-drop, body.no-anim .pcb-hint { transition: none; }
 /* Обложку в плашке нельзя утащить как картинку (v1.386.0): браузер по умолчанию
    тащит саму картинку, и вместо плашки за курсором ехала её копия. */
 .mus-mini img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+
+/* ══ Текст песни в полноэкранном плеере (v1.394.0) ═════════════════════════
+   Два вида, оба по выбору человека в настройках плеера.
+
+   «Фоном за обложкой» — текст живёт позади обложки, приглушённый до едва
+   заметного: смотреть по-прежнему на обложку, а слова просто есть. Мышь он не
+   перехватывает (pointer-events), иначе накрыл бы собой кнопки под ним.
+
+   «Караоке» — текст вместо обложки, поющаяся строка яркая, спетые притушены,
+   по строке можно щёлкнуть и перескочить к ней. Возможно только с метками
+   времени; без них плеер сам откатывается на «фоном» и говорит об этом в окне
+   текста, а не притворяется, что попадает в такт. */
+.mus2-lyrback {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
+          mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
+}
+.mus2-lyrback-in {
+  position: absolute; left: 0; right: 0; top: 50%;
+  width: min(760px, 88%); margin: 0 auto; text-align: center;
+  transition: transform .5s var(--ease-out4, ease);
+}
+.mus2-lyrback-l {
+  font-size: 19px; line-height: 2.1em; font-weight: 700;
+  color: rgba(var(--ov, 255,255,255), .1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mus2-lyrback-l.on { color: rgba(var(--ov, 255,255,255), .22); }
+
+.mus2-karaoke {
+  position: relative; z-index: 1;
+  width: min(820px, 92%); height: min(420px, 52vh); overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+          mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+}
+.mus2-karaoke-in {
+  /* Строку ставит в середину сдвиг, а не отступ: проценты в padding считаются
+     от ШИРИНЫ, и на этом я уже попался — текст уезжал ниже нижнего края, а
+     экран выглядел просто пустым. */
+  position: absolute; left: 0; right: 0; top: 50%; text-align: center;
+  transition: transform .45s var(--ease-out4, ease);
+}
+.mus2-kline {
+  font-size: 26px; line-height: 2.4em; font-weight: 800; cursor: pointer;
+  color: rgba(var(--ov, 255,255,255), .34);
+  transition: color .25s var(--ease-out4, ease), transform .25s var(--ease-out4, ease);
+}
+.mus2-kline:hover { color: rgba(var(--ov, 255,255,255), .6); }
+.mus2-kline.past { color: rgba(var(--ov, 255,255,255), .22); }
+.mus2-kline.on { color: var(--tx-hi, #fff); transform: scale(1.04); }
+/* В караоке обложка уходит с середины: две крупные вещи разом читаются хуже,
+   чем одна. Пластинка и свечение остаются — по ним видно, что играет. */
+.mus2-now.karaoke .mus2-artwrap { display: none; }
+body.no-anim .mus2-lyrback-in, body.no-anim .mus2-karaoke-in, body.no-anim .mus2-kline { transition: none; }
+
+/* Окно «Текст песни» */
+.lyr-modal { width: 560px; max-width: calc(100vw - 32px); }
+.lyr-sub { color: var(--mut); font-size: 13px; margin: -6px 0 10px; }
+.lyr-hint { color: var(--mut); font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.lyr-hint code { background: rgba(var(--ov, 255,255,255), .08); border-radius: var(--r-xs, 4px); padding: 1px 5px; }
+.lyr-area {
+  width: 100%; min-height: 220px; resize: vertical; box-sizing: border-box;
+  background: var(--bg3); border: 1px solid rgba(0, 0, 0, .3); border-radius: var(--r-md, 10px);
+  color: var(--tx); font-family: inherit; font-size: 14px; line-height: 1.6; padding: 10px 12px; outline: none;
+}
+.lyr-area:focus { border-color: var(--brand, #5865f2); }
+.lyr-state { margin-top: 8px; font-size: 13px; color: var(--mut); }
+.lyr-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.lyr-btns .danger { margin-right: auto; }
+
+/* Настройки плеера: пояснение под переключателями и галочка. */
+.ms-note { color: var(--mut); font-size: 12.5px; line-height: 1.5; margin: 6px 0 2px; }
+.ms-check { display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer; font-size: 14px; }
+.ms-check input { accent-color: var(--brand, #5865f2); width: 16px; height: 16px; cursor: pointer; }

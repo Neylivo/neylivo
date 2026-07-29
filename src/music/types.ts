@@ -14,7 +14,22 @@ export interface BgCfg {
   dim: number        // 0..80 (%)
   ver: number        // bump to force reload of the file blob
 }
+// v1.394.0: текст песни в полноэкранном плеере.
+//   off     — не показывать вовсе;
+//   back    — фоном за обложкой, приглушённо;
+//   karaoke — вместо обложки, строку за строкой, с подсветкой поющейся.
+// Караоке работает только на тексте с метками времени (LRC): без них угадать,
+// когда какая строка звучит, нельзя — тогда показываем текст фоном и говорим,
+// почему.
+export type LyricsMode = 'off' | 'back' | 'karaoke'
+export interface LyricsCfg {
+  mode: LyricsMode
+  /** Искать текст на lrclib.net. Выключено по умолчанию: запрос уходит наружу. */
+  online: boolean
+}
+
 export const GIF_KEY = 'ponoi_mus_gif_v1'
+export const LYRICS_KEY = 'ponoi_mus_lyrics_cfg_v1'
 export const BG_KEY = 'ponoi_mus_bg_v1'
 export const BG_IDB_KEY = 'musbg'
 export const TRACKS_KEY = 'ponoi_mus_tracks_v1'  // persisted URL-tracks only (file tracks are object-URL, not persisted)
