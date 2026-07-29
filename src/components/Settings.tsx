@@ -849,7 +849,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
 
                 <div className="pqs-acc-card2">
                   <div className="pqs-sec-t">Кубик профиля</div>
-                  <div className="pqs-code-sub">Оформи «кубик» с ником и аватаркой (панель внизу слева и твоя строка в списке участников): фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Видно всем.</div>
+                  <div className="pqs-code-sub">Оформи «кубик» с ником и аватаркой: фон — фото или видео до 5 сек (крутится при наведении), и/или цветная обводка. Где его видно: твоя панель внизу слева, твоя строка в списке участников сервера и твоя строка в списке личных сообщений у собеседника.</div>
                   <div className={'plate-prev' + (profView.plateOutline ? ' plate-outline' : '')} style={profView.plateOutline ? { ['--plate-oc' as any]: profView.plateOutline } : undefined}>
                     {profView.plateUrl && profView.plateKind !== 'none' && <PlateBg url={profView.plateUrl} kind={profView.plateKind} />}
                     <div className="pqs-acc-av" style={{ background: view.accent }}>

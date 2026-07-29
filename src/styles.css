@@ -3393,7 +3393,12 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-x:hover { background:rgba(var(--ov, 255,255,255),.08); color:var(--tx-hi, #fff); }
 .pqs2-body { flex:1; min-height:0; display:flex; }
 .pqs2-side { flex:none; width:272px; background:rgba(var(--ov, 255,255,255),.045); padding:14px 10px 18px; overflow-y:auto; }
-.pqs2-me { display:flex; align-items:center; gap:10px; padding:8px; border-radius:var(--r-md); cursor:pointer; transition:background .12s var(--ease-out4, ease); }
+/* v1.393.0: карточка стала кнопкой (до неё не добраться было с клавиатуры), и на
+   ней тут же вылезли собственные умолчания кнопки — своя рамка, своя серая
+   заливка, свой шрифт и текст по центру. Гасим их: на вид это по-прежнему
+   строка с аватаркой, а не кнопка. */
+.pqs2-me { display:flex; align-items:center; gap:10px; padding:8px; border-radius:var(--r-md); cursor:pointer; transition:background .12s var(--ease-out4, ease);
+  width:100%; text-align:left; background:none; border:0; color:inherit; font:inherit; }
 .pqs2-me:hover { background:rgba(var(--ov, 255,255,255),.05); }
 .pqs2-me-av { width:40px; height:40px; border-radius:50%; overflow:hidden; flex:none; color:#fff; font-weight:800;
   display:flex; align-items:center; justify-content:center; }
@@ -4004,6 +4009,10 @@ input, textarea { caret-color:var(--brand,#5865f2); }
   mask-image:linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.85) 55%, #000); }
 .member { position:relative; overflow:hidden; }
 .member > :not(.plate-bg) { position:relative; z-index:1; }
+/* v1.393.0: кубик виден и в списке личных сообщений — тому, с кем переписываешься,
+   иначе украшение было видно только соседям по серверу. */
+.dm-item { position:relative; }
+.dm-item > :not(.plate-bg) { position:relative; z-index:1; }
 .me-lift { position:relative; z-index:1; }
 .plate-outline { position:relative; }
 .plate-outline::after { content:''; position:absolute; inset:0; border:2px solid var(--plate-oc, #5865f2); border-radius:inherit; pointer-events:none; z-index:2; }
@@ -5632,9 +5641,11 @@ body.no-anim .mus-mini { transition: none; }
    сырой цвет на 62%, и вокруг аватарки повисало бледное кольцо. */
 .pc-card.themed .pc-av { border-color: var(--pc-a-d); background: var(--pc-a-d); }
 .pc-card.themed .pc-av-status { background: var(--pc-a-d); }
-/* .pc-sech — подписи разделов. Класса .pc-lbl в разметке нет: сначала я покрасил
-   его, и правило было бы мёртвым. */
-.pc-card.themed .pc-sech { color: color-mix(in srgb, var(--pc-b) 62%, var(--mut)); }
+/* v1.393.0: подписи разделов («Подключения», «В числе участников с», «Заметка»)
+   больше не красятся цветом профиля. Задумано это было как «тема везде», а на
+   деле каждая подпись становилась цветной надписью на цветном фоне: читать
+   тяжелее, а вида это не прибавляло. Тема — это фон карточки, текст на ней
+   остаётся обычным. */
 .pc-card.themed .pc-right {
   /* Своей заливки у колонки больше нет — она просто чуть притемняет общий фон
      карточки. Со своим градиентом она читалась как отдельная поверхность:

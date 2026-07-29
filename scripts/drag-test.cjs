@@ -17,7 +17,10 @@ if (!fs.existsSync(path.join(OUT, 't.js'))) {
 fs.writeFileSync(path.join(OUT, 'index.html'),
   '<!doctype html><meta charset=utf-8>' +
   '<link rel=stylesheet href="../src/styles.css">' +
-  '<style>*{animation:none!important}html,body{margin:0;height:100%;background:#313338}</style>' +
+  // Переходы гасим вместе с анимациями: плашка на время перетаскивания слегка
+  // уменьшается, и мерка размера, снятая пока она возвращается обратно, давала
+  // то 340, то 333 — проверка падала через раз на ровном месте.
+  '<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}</style>' +
   '<div id=root></div><script src="t.js"></script>')
 
 let failed = 0

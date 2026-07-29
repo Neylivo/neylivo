@@ -12,6 +12,8 @@ import { netOk, netFail } from '../lib/netStatus'
 import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
+import { PlateBg } from './PlateBg'
+import { useUserPlates } from '../lib/userPlates'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { notifyMessage, msgSound, closeNotif } from '../lib/notify'
 import { sendPush } from '../lib/push'
@@ -1249,6 +1251,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const sidebarFriends = dmPeople.filter(f => !isDmClosed(f.id))
   const pinnedFriends = sidebarFriends.filter(f => isDmPinned(f.id))
   const restFriends = sidebarFriends.filter(f => !isDmPinned(f.id))
+  // v1.393.0: «кубик» собеседника в списке ЛС. Настройка обещала «Видно всем», а
+  // рисовался он только в списке участников сервера — человек, с которым просто
+  // переписываешься, не видел его нигде.
+  const platesOf = useUserPlates(sidebarFriends.map(f => f.id))
 
   return (
     <>
@@ -1273,8 +1279,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         </div>
         <div className="ch-list">
           {[...pinnedFriends, ...restFriends].map(f => (
-            <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '')} onClick={() => openChat(f)}
+            <div key={f.id} className={'dm-item' + (active?.id === f.id ? ' on' : '') + (platesOf(f.id).outline ? ' plate-outline' : '')}
+              style={platesOf(f.id).outline ? { ['--plate-oc' as any]: platesOf(f.id).outline } : undefined}
+              onClick={() => openChat(f)}
               onContextMenu={e => { e.preventDefault(); setDmCtx({ friend: f, x: e.clientX, y: e.clientY }) }}>
+              {platesOf(f.id).url && <PlateBg url={platesOf(f.id).url!} kind={platesOf(f.id).kind === 'video' ? 'video' : 'image'} />}
               <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
               <span className="me-nm">{friendNickOf(f.id) ?? f.name}
                 {isDmPinned(f.id) && <Icon name="pin" size={12} />}

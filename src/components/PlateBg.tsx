@@ -8,7 +8,7 @@ export function PlateBg({ url, kind }: { url: string; kind: string }) {
   useEffect(() => {
     const v = vref.current
     if (!v) return
-    const host = (v.closest('.member, .me, .plate-prev') as HTMLElement) ?? v
+    const host = (v.closest('.member, .me, .plate-prev, .dm-item') as HTMLElement) ?? v
     const play = () => { v.play().catch(() => {}) }
     const stop = () => { v.pause(); try { v.currentTime = 0 } catch {} }
     host.addEventListener('mouseenter', play)
