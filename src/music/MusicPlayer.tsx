@@ -1,5 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
+import { markFailed, markOk, isBroken, BROKEN_AFTER } from './broken'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
@@ -111,6 +112,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [color, setColor] = useState<Rgb | null>(null)
 
   // Ссылки на текущее — для обработчиков, которые живут дольше одного рендера.
+  // Обработчик отказа тоже нужен через ссылку: плеер YouTube создаётся один
+  // раз, и в его замыкании иначе застынет функция с первого рендера.
+  const trackFailedRef = useRef<(reason: string) => void>(() => {})
   const idxRef = useRef(0); idxRef.current = idx
   const tracksRef = useRef(tracks); tracksRef.current = tracks
   const cur = tracks[idx]
@@ -534,7 +538,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               try { const d = e.target.getDuration(); if (d > 0) setDur(d) } catch {}
               if (e.data === 0) nextRef.current()
             },
-            onError: () => { if (!disposed) toastErr('YouTube: видео закрыто для встраивания — попробуй другую ссылку') },
+            onError: () => { if (!disposed) trackFailedRef.current('YouTube не отдал это видео') },
           },
         })
         ytTimer.current = window.setInterval(() => {
@@ -766,6 +770,32 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     saveManual(manual.filter(x => x !== id))
   }
 
+  /**
+   * Трек не заиграл (v1.414.0).
+   *
+   * Первый отказ прощаем: так выглядит и оборванная сеть, и сервис, прилёгший
+   * на минуту. Второй подряд — это уже про сам трек: очередь его обходит, а
+   * если он твой, из общего склада он убирается сам. Чужой не трогаем: его и
+   * база не даст удалить, и удалять чужое из-за своей сети неправильно.
+   */
+  function trackFailed(reason: string) {
+    const t = cur
+    if (!t) return
+    const fails = markFailed(t.id)
+    if (fails < BROKEN_AFTER) { toastErr(reason + ' — пробую следующий'); next(); return }
+    if (t.ownerId && t.ownerId === meId) {
+      void removeTrackDb(t.id).then(() => {
+        setTracks(ts => ts.filter(x => x.id !== t.id))
+        toastErr(`«${meta[t.url]?.title || t.name}» не играет — убрал из Трекотеки`)
+      })
+    } else {
+      toastErr(`«${meta[t.url]?.title || t.name}» не играет — пропускаю. Убрать может тот, кто его выложил`)
+    }
+    next()
+  }
+
+  trackFailedRef.current = trackFailed
+
   /** Перезапустить то, что играет сейчас, каким бы источником оно ни было. */
   const restartCurrent = () => {
     const w = widgetRef.current
@@ -780,6 +810,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // только исполнение: раньше вся логика жила тут и потому не проверялась ничем —
   // повтор списка из одного трека молча превращался в тишину.
   const next = () => {
+    // v1.414.0: сломанные треки очередь обходит. Иначе плеер честно переключался
+    // бы на битую ссылку, спотыкался и переключался снова — с виду это зависание.
+    const playable = tracks.filter(t => !isBroken(t.id))
+    if (playable.length === 0 && tracks.length > 0) { setPlaying(false); toastErr('Ни один трек не играет'); return }
     const first = manualLive.find(id => tracks.some(t => t.id === id))
     const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
     const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx: personalIdxRef.current })
@@ -787,7 +821,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (act.kind === 'restart') { restartCurrent(); return }
     if (act.kind === 'stop') { setPlaying(false); return }
     if (act.index === idx) { restartCurrent(); return }
-    setIdx(act.index)
+    let n = act.index
+    for (let step = 0; step < tracks.length && isBroken(tracks[n]?.id ?? ''); step++) n = (n + 1) % tracks.length
+    setIdx(n)
   }
   // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
   // склада. При перемешивании это была прямая поломка: человек слушал случайный
@@ -1286,7 +1322,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     const title = meta[t.url]?.title || t.name
                     const on = i === idx
                     return (
-                      <div key={t.id} className={'mus2-card' + (on ? ' on' : '')}
+                      <div key={t.id} className={'mus2-card' + (on ? ' on' : '') + (isBroken(t.id) ? ' broken' : '')}
                         title={title + (author ? ' — ' + author : '')}
                         onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true); setShowLib(false) }}>
                         <div className="mus2-card-art">
@@ -1313,6 +1349,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                           {/* v1.406.0: сколько раз слушали — на самой обложке. Раньше
                               число стояло мелким шрифтом в строке автора, разглядеть
                               его было почти нельзя, а теперь по нему выложен весь склад. */}
+                          {/* v1.414.0: трек, который не заиграл дважды подряд, помечен —
+                              он и в очереди обходится, и притворяться рабочим не должен. */}
+                          {isBroken(t.id) && <span className="mus2-card-bad" title="Не играет — плеер пробовал дважды">не играет</span>}
                           {(t.plays ?? 0) > 0 && <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
                           </span>}
@@ -1343,6 +1382,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         src={'https://www.youtube.com/embed/' + ytId + '?enablejsapi=1&playsinline=1&controls=0&rel=0'} />}
       <audio ref={audioRef} src={audioSrc}
         onEnded={next}
+        // v1.414.0: раньше отказ <audio> не обрабатывался вовсе — плеер молча
+        // замолкал на битой ссылке, и это выглядело как «сломался плеер».
+        onError={() => trackFailed('Трек не открылся')}
+        onPlaying={() => { if (cur) markOk(cur.id) }}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}

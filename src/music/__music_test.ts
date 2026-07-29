@@ -16,6 +16,7 @@ import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './sources'
 import { boost, lighten, scale, rgb } from './artColor'
 import { searchQuery } from './streaming'
+import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -210,6 +211,32 @@ check('строка цвета собирается верно', () => rgb({ r: 
 check('строка цвета с прозрачностью', () => rgb({ r: 1, g: 2, b: 3 }, 0.5) === 'rgba(1,2,3,0.5)')
 
 // ── Ломаем нарочно ───────────────────────────────────────────────────────
+console.log('\n── Треки, которые не играют ──')
+check('первый отказ не делает трек сломанным', () => !brokenIn(countAfterFail({}, 'a'), 'a'))
+check('второй отказ подряд — сломан', () => brokenIn(countAfterFail(countAfterFail({}, 'a'), 'a'), 'a'))
+check('порог именно два', () => BROKEN_AFTER === 2)
+check('успешное воспроизведение обнуляет счёт', () => {
+  const c = countAfterOk(countAfterFail({ a: 1 }, 'a'), 'a')
+  return !brokenIn(c, 'a') && !('a' in c)
+})
+check('отказ одного трека не трогает другой', () => {
+  const c = countAfterFail(countAfterFail({}, 'a'), 'a')
+  return brokenIn(c, 'a') && !brokenIn(c, 'b')
+})
+check('счётчики не портятся на месте', () => {
+  const src: Record<string, number> = { a: 1 }
+  countAfterFail(src, 'a')
+  return src.a === 1
+})
+check('пустое имя не заводит запись', () => Object.keys(countAfterFail({}, '')).length === 0)
+check('успех у незнакомого трека ничего не ломает', () =>
+  Object.keys(countAfterOk({}, 'нет-такого')).length === 0)
+check('после починки трек снова считается рабочим', () => {
+  let c = countAfterFail(countAfterFail({}, 'a'), 'a')
+  c = countAfterOk(c, 'a')
+  return !brokenIn(c, 'a')
+})
+
 console.log('\n── Ломаем нарочно ──')
 check('проверка заметила бы, что «дальше» перестало слушать ручную очередь', () => {
   const a = N({ idx: 0, count: 5, manualIdx: 3 }); return a.kind === 'go' && a.index !== 1
