@@ -50,6 +50,8 @@ export interface Settings {
   notifFriendRequests: boolean
   micVol: number
   spkVol: number
+  /** ИИ-шумоподавление (Krisp) в звонке. v1.409.0 */
+  krisp: boolean
   lang: string
   hideLastSeen: boolean
   e2ee: boolean
@@ -94,7 +96,7 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
-  micVol: 100, spkVol: 100, lang: 'ru', hideLastSeen: false,
+  micVol: 100, spkVol: 100, krisp: true, lang: 'ru', hideLastSeen: false,
   // v1.387.0: всё шифрование выключено по умолчанию — решение владельца.
   //
   // Что это значит по-честному: содержимое личной переписки, вложений и звонков

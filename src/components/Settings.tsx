@@ -1151,6 +1151,12 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 <Row title="Громкость микрофона" desc={view.micVol + '%'}>
                   <input type="range" min={0} max={100} value={view.micVol} onChange={e => setD('micVol', Number(e.target.value))} />
                 </Row>
+                {/* v1.409.0: шумоподавление было, но узнать о нём было неоткуда,
+                    и выключить его было нельзя — а иногда именно оно и мешает
+                    (музыка в микрофон, тихий голос). */}
+                <Row title="ИИ-шумоподавление" desc="Отсекает клавиатуру, вентилятор и улицу — тот же движок, что в Discord. Если голос звучит глухо или ты играешь в микрофон музыку, выключи.">
+                  <Toggle on={view.krisp} onChange={v => setD('krisp', v)} />
+                </Row>
                 <Row title="Громкость динамика" desc={view.spkVol + '%'}>
                   <input type="range" min={0} max={100} value={view.spkVol} onChange={e => setD('spkVol', Number(e.target.value))} />
                 </Row>

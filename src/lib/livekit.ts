@@ -1,7 +1,7 @@
 import type { Room, LocalTrackPublication } from 'livekit-client'
 import { supabase } from './supabase'
 import { getSettings } from './settings'
-import { setActiveChain, savedVoiceEffect, type VoiceEffect } from './voiceFx'
+import { setActiveChain, setVoiceApplier, savedVoiceEffect, type VoiceEffect } from './voiceFx'
 import { VoiceChain } from './voiceFxChain'
 import { RoomEvent, Track, verifyLivekitConstants } from './livekitConst'
 
@@ -56,17 +56,48 @@ export function preloadCallStack(): void {
 // v1.150.0: импорт сделан динамическим — раньше это был статический import,
 // и когда пакет однажды не резолвился (см. build_environment_issue), падал
 // не только Krisp, а ВЕСЬ этот файл и, соответственно, все звонки целиком.
+/**
+ * Что с шумоподавлением на самом деле (v1.409.0).
+ *
+ * Раньше узнать это было нельзя никак: Krisp либо подключался, либо молча не
+ * подключался, и человек оставался с вопросом «а шум-то давится?». Теперь
+ * состояние видно в самом звонке, а «выключено» — это выбор человека, а не
+ * тихий отказ.
+ *
+ *   'ai'      — работает Krisp, тот же, что в Discord;
+ *   'browser' — только браузерный шумодав (Krisp не поддержан или не загрузился);
+ *   'off'     — человек сам выключил ИИ-шумодав в настройках.
+ */
+export type NoiseMode = 'ai' | 'browser' | 'off'
+let noiseMode: NoiseMode = 'browser'
+const noiseListeners = new Set<() => void>()
+export function noiseSuppression(): NoiseMode { return noiseMode }
+export function subscribeNoise(fn: () => void): () => void {
+  noiseListeners.add(fn)
+  return () => { noiseListeners.delete(fn) }
+}
+function setNoise(m: NoiseMode) {
+  if (noiseMode === m) return
+  noiseMode = m
+  noiseListeners.forEach(f => { try { f() } catch {} })
+}
+
 function attachKrisp(room: Room, lk: typeof import('livekit-client')) {
   room.on(RoomEvent.LocalTrackPublished, async (pub: LocalTrackPublication) => {
     if (pub.source !== Track.Source.Microphone) return
     const track = pub.track
     // Класс берём из уже загруженного модуля: статического импорта больше нет.
     if (!(track instanceof lk.LocalAudioTrack)) return
+    if (!getSettings().krisp) { setNoise('off'); return }
     try {
       const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter')
-      if (!isKrispNoiseFilterSupported()) return
+      if (!isKrispNoiseFilterSupported()) { setNoise('browser'); return }
       await track.setProcessor(KrispNoiseFilter())
-    } catch { /* пакет недоступен или процессор не завёлся — остаёмся на браузерном шумодаве */ }
+      setNoise('ai')
+    } catch {
+      // Пакет недоступен или процессор не завёлся — остаёмся на браузерном.
+      setNoise('browser')
+    }
   })
 }
 
@@ -153,6 +184,7 @@ function buildChain(track: { mediaStreamTrack: MediaStreamTrack }, effect: Voice
 }
 
 function releaseMicChain() {
+  setVoiceApplier(null)
   if (curChain) { setActiveChain(null); curChain.close(); curChain = null }
   try { curMic?.stop() } catch {}
   curMic = null
@@ -258,6 +290,12 @@ export async function joinRoom(roomName: string, identity: string, name: string,
   releaseMicChain()
   curRoom = room
   curMic = rawMic
+  // v1.409.0: с этой минуты плагин с разрешением voice меняет голос той же
+  // дорогой, что и кнопка в звонке: applyVoiceEffect при необходимости
+  // соберёт цепочку обработки и перепубликует дорожку. Раньше плагин звал
+  // переключатель уже собранной цепочки — и, если человек не трогал эффекты
+  // руками, не делал ровно ничего.
+  setVoiceApplier(applyVoiceEffect)
   room.once(RoomEvent.Disconnected as any, releaseMicChain)
   const wantEffect = savedVoiceEffect()
   const chain = rawMic && (getSettings().micVol !== 100 || wantEffect !== 'none')

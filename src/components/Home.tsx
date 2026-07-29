@@ -15,6 +15,7 @@ import { PresenceProvider } from '../lib/presence'
 import { initCustomEmoji } from '../lib/emoji'
 import { initServerEmoji, setMyServers } from '../lib/serverEmoji'
 import { initNotifications } from '../lib/notify'
+import { startGlobalNotify } from '../lib/globalNotify'
 import { registerPush } from '../lib/push'
 import { Icon } from './icons'
 import { useSettings } from '../lib/settings'
@@ -65,6 +66,7 @@ export function Home() {
   // v1.272.0: рисуем список серверов из локального кэша СРАЗУ (до первого
   // сетевого ответа) — если Supabase сейчас недоступен, сайдбар не выглядит
   // как «у тебя нет серверов», а показывает последний известный снимок.
+  const notifyStopRef = useRef<null | (() => void)>(null)
   const [servers, setServers] = useState<Server[]>(() => cacheGet<Server[]>('servers') ?? [])
   const [view, setView] = useState<View>({ kind: 'dm' })
   const [showCreate, setShowCreate] = useState(false)
@@ -330,6 +332,14 @@ export function Home() {
     initCustomEmoji(user.id)   // load + realtime-subscribe the shared custom-emoji cache
     initServerEmoji()   // v1.250.0: то же самое для эмодзи/стикеров серверов
     initNotifications() // ask once for desktop-notification permission
+    // v1.409.0: слушатель уведомлений — один на всё приложение. Раньше они
+    // висели внутри открытого чата и приходили только про него.
+    const stopNotify = startGlobalNotify({
+      meId: user.id,
+      myName: () => username,
+      avatarOf: () => null,
+    })
+    notifyStopRef.current = stopNotify
     registerPush(user.id) // subscribe to real web-push (works even when app closed)
     // v1.39.0: ник (display_name) — отображаемое имя, показывается везде, если задан;
     // юзернейм — уникальный идентификатор. До миграции 21 колонки display_name нет — откатываемся.
@@ -350,6 +360,7 @@ export function Home() {
         if (d?.avatar_url) setAvatarUrl(d.avatar_url)
       })
     refresh()
+    return () => { notifyStopRef.current?.(); notifyStopRef.current = null }
     // eslint-disable-next-line
   }, [user])
 

@@ -52,6 +52,27 @@ export function rememberVoiceEffect(e: VoiceEffect) {
 let active: { current: VoiceEffect; setEffect: (e: VoiceEffect) => void } | null = null
 const listeners = new Set<() => void>()
 
+/**
+ * Кто умеет включить эффект по-настоящему (v1.409.0).
+ *
+ * Беда была вот в чём. setVoiceEffect ниже работает только когда цепочка
+ * обработки уже построена — а строится она, лишь когда человек сам полез в
+ * эффекты или громкость. Плагин с разрешением voice звал именно её, получал
+ * false и молча ничего не делал: разрешение есть, кнопка нажимается, голос
+ * прежний. Кнопка в самом звонке при этом работала, потому что звала другую
+ * функцию — ту, что при необходимости построит цепочку и перепубликует дорожку.
+ *
+ * Теперь эту «настоящую» функцию регистрирует звонок, и плагин ходит через неё.
+ */
+let applier: ((e: VoiceEffect) => Promise<boolean>) | null = null
+export function setVoiceApplier(fn: ((e: VoiceEffect) => Promise<boolean>) | null) { applier = fn }
+
+/** Включить эффект так же, как это делает кнопка в звонке. */
+export async function applyVoiceEffectSafe(e: VoiceEffect): Promise<boolean> {
+  if (applier) return applier(e)
+  return setVoiceEffect(e)
+}
+
 export function setActiveChain(c: { current: VoiceEffect; setEffect: (e: VoiceEffect) => void } | null) {
   active = c
   listeners.forEach(l => { try { l() } catch {} })

@@ -4865,9 +4865,13 @@ body.no-anim .cat-tile:hover { transform: none; }
    двух десятках сегментов это давало заметные подтормаживания. */
 .mic-bar { flex: 1; border-radius: 2px; background-color: var(--c-hover); transition: background-color .08s linear; }
 .mic-bars.live .mic-bar { background-color: rgba(var(--ov), .10); }
-.mic-bar.on { background-color: #3ba55d; }
-.mic-bar.on.warm { background-color: #faa61a; }
-.mic-bar.on.hot { background-color: #ed4245; }
+/* v1.409.0: сегменты гасли ровно во время проверки. Правило выше
+   (.mic-bars.live .mic-bar) — это три класса, а .mic-bar.on было два, и в
+   работе серое перебивало зелёное: полоска не двигалась никогда, хотя
+   микрофон слушался и уровень считался верно. Уравниваем вес. */
+.mic-bars .mic-bar.on { background-color: #3ba55d; }
+.mic-bars .mic-bar.on.warm { background-color: #faa61a; }
+.mic-bars .mic-bar.on.hot { background-color: #ed4245; }
 /* Без анимаций (настройка «Анимации») цвет меняется мгновенно. */
 body.no-anim .mic-bar { transition: none; }
 

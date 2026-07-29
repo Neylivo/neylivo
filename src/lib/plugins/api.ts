@@ -6,7 +6,7 @@ import {
 } from './registry'
 import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
 import { pluginLog } from './host'
-import { VOICE_EFFECTS, activeEffect, isVoiceEffect, setVoiceEffect, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
+import { VOICE_EFFECTS, activeEffect, isVoiceEffect, applyVoiceEffectSafe, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
 
 // v1.286.0: хостовая реализация всего, что плагин может вызвать. Единственное место,
 // где решается «можно или нельзя»: в самой песочнице (bootstrap.ts) никаких проверок
@@ -200,9 +200,13 @@ export function createDispatcher(
         // записывалось, и следующий звонок начинался с прежнего голоса —
         // настройка выглядела нерабочей.
         rememberVoiceEffect(raw)
+        // v1.409.0: через ту же дорогу, что и кнопка в звонке. Раньше здесь
+        // стояла setVoiceEffect, которая умеет только переключить УЖЕ собранную
+        // цепочку обработки: если человек не трогал эффекты руками, цепочки не
+        // было, и плагин получал false, не сделав ничего.
         // false — звонка сейчас нет; это не ошибка плагина, поэтому возвращаем
         // ответ, а не исключение: пусть сам решит, ругаться или промолчать.
-        return setVoiceEffect(raw)
+        return await applyVoiceEffectSafe(raw)
       }
       case 'voice.effects': {
         need('voice')

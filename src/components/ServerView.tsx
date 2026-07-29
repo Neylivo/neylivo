@@ -21,6 +21,7 @@ import { GameLine, ListenLine } from './ActivityLabel'
 import { PlateBg } from './PlateBg'
 import { useUserFonts } from '../lib/userFonts'
 import { emitPluginEvent } from '../lib/plugins/host'
+import { setOpenChannel } from '../lib/openChat'
 import { chNameStyle } from '../lib/chStyle'
 import { listMembers, updateServer, rulesAccepted, acceptRules } from '../lib/servers'
 import { uploadWithProgress } from '../lib/storage'
@@ -234,6 +235,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   const prevTop = useRef(0)
   const msgsRef = useRef<Message[]>([])
   const { typers, notifyTyping } = useTyping(curChannel?.id ?? null, username)
+  // v1.409.0: общий слушатель уведомлений должен знать, что открыто, —
+  // иначе он звенел бы о сообщении, которое человек и так видит.
+  useEffect(() => {
+    setOpenChannel(curChannel?.id ?? null)
+    return () => setOpenChannel(null)
+  }, [curChannel?.id])
   // v1.397.0: «кто печатает» — событие для плагинов. Шлём только про новых:
   // список меняется на каждое нажатие, и без сравнения плагин получал бы
   // десяток событий на одно слово.
@@ -602,20 +609,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           if (msg.thread_id) return   // v1.268.0: сообщения веток — не в основную ленту канала
           setMessages(m => mergeIncoming(m, msg))
           setChRead(curChannel.id, Date.now())
-          if (msg.author !== user?.id && !parseSys(msg.content)) {
-            // v1.259.0: режим канала может переопределять режим сервера (chNotifModeOf) —
-            // раньше заглушение канала и режим all/mentions сервера проверялись отдельно,
-            // теперь канал с явным «Все сообщения» звучит, даже если сервер на «упоминаниях».
-            const mode = chNotifModeOf(curChannel.id, server.id)
-            // v1.242.0: звук/тост «только за упоминания» раньше не срабатывал на упоминание
-            // РОЛИ (только личное @ник) — рассинхрон с подсветкой сообщения и бейджем
-            // непрочитанного (Home.tsx/MessageList.tsx), которые роль уже учитывали (v1.239.0).
-            const mentioned = !!msg.content && (mentionsUser(msg.content, username) || myRoleNameList.some(rn => mentionsRoleName(msg.content!, rn)))
-            if (shouldNotify(mode, mentioned)) {
-              msgSound()
-              notifyMessage(msg.author_name + ' \u2014 #' + curChannel.name, msg.content ?? '', (msg as any).author_avatar, 'ch:' + curChannel.id)
-            }
-          }
+          // v1.409.0: решение «звенеть или нет» переехало в общий слушатель
+          // (lib/globalNotify): здесь оно принималось только для открытого
+          // канала, а про остальные приложение молчало вовсе.
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'channel_id=eq.' + curChannel.id },

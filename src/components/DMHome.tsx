@@ -13,6 +13,7 @@ import { MeBar } from './MeBar'
 import { Avatar } from './Avatar'
 import { AvatarWithStatus } from './AvatarWithStatus'
 import { PlateBg } from './PlateBg'
+import { setOpenDmThread } from '../lib/openChat'
 import { useUserPlates } from '../lib/userPlates'
 import { usePresence, STATUS_LABEL } from '../lib/presence'
 import { notifyMessage, msgSound, closeNotif } from '../lib/notify'
@@ -140,6 +141,12 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // заполненным — и вложения не расшифровались бы уже никогда.
     setAttach({})
     setPlain({})
+  }, [threadId])
+
+  // v1.409.0: какой разговор открыт — для общего слушателя уведомлений.
+  useEffect(() => {
+    setOpenDmThread(threadId)
+    return () => setOpenDmThread(null)
   }, [threadId])
   useEffect(() => {
     let alive = true
@@ -909,12 +916,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
           if (!activeGroup && isDmClosed(msg.author)) reopenDm(msg.author)
           setMessages(m => mergeIncoming(m, { ...msg, _ignoredAuthor: isDmIgnored(msg.author) } as any))
           setDmRead(threadId, Date.now())
-          if (msg.author !== meId && !parseSys(msg.content) && !isDmMuted(msg.author)) {
-            msgSound()
-            // v1.223.0: в группе activeAvatar (аватар «активного друга») не подходит —
-            // сообщение может быть от любого из участников, берём его аватар из общего кэша.
-            notifyMessage(msg.author_name, msg.content ?? '', activeGroup ? avatarOf(msg.author) : activeAvatar, 'dm:' + threadId)
-          }
+          // v1.409.0: звук и уведомление больше не здесь. Эта подписка знает
+          // только про открытый тред, поэтому и уведомления получались только
+          // про него — про остальные беседы приложение молчало. Теперь этим
+          // занимается общий слушатель (lib/globalNotify), а тут остаётся
+          // только показ самого сообщения.
         })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: 'thread_id=eq.' + threadId },
