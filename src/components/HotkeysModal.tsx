@@ -35,8 +35,11 @@ export function HotkeysModal({ onClose }: { onClose: () => void }) {
   if (settings.keyHome) rows.push([settings.keyHome, 'Перейти в личные сообщения'])
   if (settings.keyMusic) rows.push([settings.keyMusic, 'Открыть Ponoi Music'])
 
+  // v1.389.0: было modal-back — класса с таким именем в стилях нет вовсе, и окно
+  // выпадало в общий поток: без затемнения, без середины экрана, поверх списка
+  // сообщений. Все остальные окна приложения закрываются modal-overlay.
   return (
-    <div className="modal-back" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose}>
       <div className="modal hk-modal" onClick={e => e.stopPropagation()}>
         <h3>Горячие клавиши</h3>
         <div className="hk-list">
