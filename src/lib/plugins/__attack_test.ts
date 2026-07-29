@@ -81,6 +81,60 @@ console.log('── Разрешения ──')
   await blocked('несуществующий метод отвергается', () => d('внутренности.дай', []))
 }
 
+console.log('\n── Панель в приложении и музыка (v1.417.0) ──')
+{
+  const none = attacker([], 'no-perms-new')
+  await blocked('без права нельзя поставить панель', () =>
+    none('ui.addPanel', [{ slot: 'player', title: 'Т', rows: [] }]))
+  await blocked('без права нельзя узнать, что играет', () => none('music.now', []))
+  await blocked('без права нельзя увидеть Трекотеку', () => none('music.library', []))
+  await blocked('без права нельзя нажать паузу', () => none('music.pause', []))
+  await blocked('без права нельзя добавить трек', () => none('music.add', ['https://example.com/a.mp3']))
+
+  const all = attacker([...ALL_PERMISSIONS], 'all-perms-new')
+  await blocked('панель в выдуманном месте не ставится', () =>
+    all('ui.addPanel', [{ slot: 'везде', title: 'Т', rows: [] }]))
+  await blocked('панель без места не ставится', () => all('ui.addPanel', [{ title: 'Т', rows: [] }]))
+  await allowed('панель в известном месте ставится', () =>
+    all('ui.addPanel', [{ slot: 'player', title: 'Мой уголок', rows: [] }]))
+
+  await check('в панель попадают только известные строки', async () => {
+    // Всё лишнее пересобирается поштучно, а не пропускается как есть: строка с
+    // чужим типом — это попытка нарисовать в окне что-то своё.
+    await all('ui.addPanel', [{ slot: 'library', title: 'Т', rows: [
+      { type: 'toggle', key: 'a', label: 'Норм', value: true },
+      { type: 'html', key: 'b', label: '<img src=x onerror=alert(1)>' },
+      { type: 'button', key: 'c', label: 'Кнопка' },
+    ] }] )
+    const reg2 = await import('./registry')
+    const panel = reg2.getRegistry().panels.find((x: any) => x.slot === 'library')
+    // Осталась одна строка: у 'html' нет такого вида, у кнопки нет обработчика.
+    return !!panel && panel.rows.length === 1 && panel.rows[0].type === 'toggle'
+  })
+
+  await check('одно место — не больше трёх панелей', async () => {
+    const a1 = attacker([...ALL_PERMISSIONS], 'p1')
+    const a2 = attacker([...ALL_PERMISSIONS], 'p2')
+    const a3 = attacker([...ALL_PERMISSIONS], 'p3')
+    const a4 = attacker([...ALL_PERMISSIONS], 'p4')
+    for (const [i, d] of [a1, a2, a3].entries()) {
+      await d('ui.addPanel', [{ slot: 'sidebar', title: 'П' + i, rows: [] }])
+    }
+    try { await a4('ui.addPanel', [{ slot: 'sidebar', title: 'П4', rows: [] }]); return false }
+    catch { return true }
+  })
+
+  await check('чужую панель своим id не подменить', async () => {
+    const мой = attacker([...ALL_PERMISSIONS], 'мой')
+    const чужой = attacker([...ALL_PERMISSIONS], 'чужой')
+    await мой('ui.addPanel', [{ slot: 'player', title: 'Моя', rows: [] }])
+    await чужой('ui.addPanel', [{ slot: 'player', title: 'Чужая', rows: [] }])
+    const reg2 = await import('./registry')
+    const мои = reg2.getRegistry().panels.filter((x: any) => x.pluginId === 'мой' && x.slot === 'player')
+    return мои.length === 1 && мои[0].title === 'Моя'
+  })
+}
+
 console.log('\n── События ──')
 {
   // v1.397.0: событий стало семь вместо одного. Опасность ровно в том, что новое

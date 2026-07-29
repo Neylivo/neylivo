@@ -2,8 +2,9 @@ import { PLUGIN_EVENTS, PLUGIN_EVENT_NAMES, type InstalledPlugin, type Permissio
 import { isFnRef, type FnRef } from './sandbox'
 import {
   addCommand, addComposerButton, addMessageAction, commandOwner, safeIcon,
-  setPluginCss, setSettingsPage, type SettingsRow,
+  setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, type SettingsRow, type PanelSlot,
 } from './registry'
+import { musicBridge } from './musicApi'
 import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
 import { pluginLog } from './host'
 import { VOICE_EFFECTS, activeEffect, isVoiceEffect, applyVoiceEffectSafe, rememberVoiceEffect, savedVoiceEffect } from '../voiceFx'
@@ -162,6 +163,62 @@ export function createDispatcher(
         const rows = (Array.isArray(o?.rows) ? o.rows : []).slice(0, 50).map(settingsRow).filter(Boolean) as SettingsRow[]
         setSettingsPage({ pluginId: id, title: str(o?.title ?? plugin.manifest.name, 60, 'заголовок настроек'), rows })
         return null
+      }
+
+      // v1.417.0: своя панель в приложении. Строки те же, что у страницы
+      // настроек, и рисует их приложение: плагин описывает, что показать, но
+      // сам в окно не попадает — иначе песочница потеряла бы смысл.
+      case 'ui.addPanel': {
+        need('panel')
+        const o = args[0] as any
+        const slot = String(o?.slot ?? '') as PanelSlot
+        if (!(slot in PANEL_SLOTS)) {
+          throw new Denied(`Неизвестное место «${slot}». Есть: ${Object.keys(PANEL_SLOTS).join(', ')}.`)
+        }
+        const rows = (Array.isArray(o?.rows) ? o.rows : []).slice(0, 20).map(settingsRow).filter(Boolean) as SettingsRow[]
+        setPanel({ pluginId: id, slot, title: str(o?.title ?? plugin.manifest.name, 40, 'заголовок панели'), rows })
+        return null
+      }
+
+      // ── Музыка ──────────────────────────────────────────────────────────
+      // Всё, что здесь есть, человек и так делает кнопками, а список Трекотеки
+      // и так у него на экране. Самого звука плагину не достаётся: сюда не
+      // попадает ни одна дорожка.
+      case 'music.now': {
+        need('music')
+        return musicBridge()?.now() ?? null
+      }
+      case 'music.library': {
+        need('music')
+        return musicBridge()?.library() ?? []
+      }
+      case 'music.play': case 'music.pause': case 'music.next': case 'music.prev': {
+        need('music')
+        const b = musicBridge()
+        if (!b) return false
+        rateLimit(id + ':music', 20, 10_000, 'управлять плеером')
+        if (method === 'music.play') b.play()
+        else if (method === 'music.pause') b.pause()
+        else if (method === 'music.next') b.next()
+        else b.prev()
+        return true
+      }
+      case 'music.queue': {
+        need('music')
+        const b = musicBridge()
+        if (!b) return false
+        return b.queue(str(args[0], 60, 'номер трека'))
+      }
+      case 'music.add': {
+        need('music')
+        // Добавление ссылки — запись в общий склад, поэтому отдельно и редко:
+        // плагин с ошибкой в цикле иначе завалил бы Трекотеку у всех.
+        rateLimit(id + ':music.add', 5, 60_000, 'добавлять треки')
+        const b = musicBridge()
+        if (!b) throw new Denied('Плеер сейчас не открыт — добавлять некуда.')
+        const why = await b.add(str(args[0], 500, 'ссылка на трек'))
+        if (why) throw new Denied(why)
+        return true
       }
 
       case 'commands.register': {

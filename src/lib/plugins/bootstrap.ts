@@ -90,6 +90,8 @@ const ponoi = {
     addComposerButton: (opt) => call('ui.addComposerButton', [opt]),
     addMessageAction: (opt) => call('ui.addMessageAction', [opt]),
     addSettingsPage: (opt) => call('ui.addSettingsPage', [opt]),
+    // v1.417.0: своя панель в плеере, Трекотеке или колонке слева.
+    addPanel: (opt) => call('ui.addPanel', [opt]),
     // Окно рисует приложение, плагин получает только ответ: своё окно он подделал
     // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
     confirm: (opt) => call('ui.confirm', [opt || {}]),
@@ -122,6 +124,18 @@ const ponoi = {
     current: () => call('voice.current', []),
     // Отвечает false, если звонка сейчас нет: менять нечего.
     setEffect: (id) => call('voice.setEffect', [String(id)]),
+  },
+  // v1.417.0: музыка. Плагин видит, что играет, и нажимает те же кнопки, что и
+  // человек. Звука ему не достаётся.
+  music: {
+    now: () => call('music.now', []),
+    library: () => call('music.library', []),
+    play: () => call('music.play', []),
+    pause: () => call('music.pause', []),
+    next: () => call('music.next', []),
+    prev: () => call('music.prev', []),
+    queue: (trackId) => call('music.queue', [String(trackId)]),
+    add: (url) => call('music.add', [String(url)]),
   },
   notify: (text) => call('notify', [String(text)]),
   // Промис ОБЯЗАТЕЛЬНО возвращается наружу: подписка может быть отклонена (нет

@@ -439,6 +439,9 @@ for (const p of OFFICIAL_PLUGINS) {
     'voice.setEffect', 'voice.effects', 'voice.current', 'notify',
     'storage.get', 'storage.set', 'storage.remove', 'storage.keys',
     'net.fetch', 'subscribe', 'me', 'channel',
+    // v1.417.0: панель в приложении и музыка.
+    'ui.addPanel', 'music.now', 'music.library', 'music.play', 'music.pause',
+    'music.next', 'music.prev', 'music.queue', 'music.add',
   ]
 
   check('в инструкции описано каждое разрешение', () => {

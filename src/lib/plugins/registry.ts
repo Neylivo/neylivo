@@ -35,13 +35,37 @@ export type SettingsRow =
   | { type: 'select'; key: string; label: string; description?: string; value: string; options: { value: string; label: string }[] }
   | { type: 'button'; key: string; label: string; description?: string; onClick: FnRef }
 
+/**
+ * Куда плагин может поставить свою панель (v1.417.0).
+ *
+ * Раньше плагину были доступны ровно три места: кнопка у поля ввода, пункт в
+ * меню сообщения и своя страница в настройках. Всё остальное приложение для
+ * него не существовало — ни плеер, ни Трекотека, ни колонка со списком.
+ *
+ * Список мест намеренно закрытый. «Рисуй где хочешь» означало бы отдать
+ * плагину саму страницу, а этого нельзя: он выполняется в песочнице ровно для
+ * того, чтобы его код никогда не оказался в окне приложения. Поэтому плагин
+ * ОПИСЫВАЕТ панель теми же строками, что и страницу настроек, а рисует её
+ * приложение своими руками — подделать чужое окно такой панелью невозможно.
+ */
+export type PanelSlot = 'player' | 'library' | 'sidebar'
+
+export const PANEL_SLOTS: Record<PanelSlot, string> = {
+  player: 'Плеер — под обложкой',
+  library: 'Трекотека — над списком треков',
+  sidebar: 'Колонка слева — под списком каналов',
+}
+
+export interface PluginPanel { pluginId: string; slot: PanelSlot; title: string; rows: SettingsRow[] }
+
 interface Registry {
   composerButtons: ComposerButton[]
   messageActions: MessageAction[]
   commands: SlashCommand[]
   settingsPages: PluginSettingsPage[]
+  panels: PluginPanel[]
 }
-const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [] }
+const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [] }
 
 /**
  * Сколько всего один плагин может добавить (v1.345.0).
@@ -140,6 +164,22 @@ export function addCommand(c: SlashCommand) {
   reg.commands = [...reg.commands.filter(x => x.name !== c.name || x.pluginId !== c.pluginId), c]
   notify()
 }
+/**
+ * Панель плагина в одном из мест приложения. Одна панель на место на плагин:
+ * иначе один плагин застроит собой весь угол.
+ */
+export function setPanel(p: PluginPanel) {
+  if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
+  const others = reg.panels.filter(x => !(x.pluginId === p.pluginId && x.slot === p.slot))
+  // Панелей в одном месте от всех плагинов — не больше трёх: дальше это уже не
+  // «свой уголок», а свалка поверх приложения.
+  if (others.filter(x => x.slot === p.slot).length >= 3) {
+    throw new PluginLimit('В этом месте уже три панели от плагинов')
+  }
+  reg.panels = [...others, p]
+  notify()
+}
+
 export function setSettingsPage(p: PluginSettingsPage) {
   if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
   reg.settingsPages = [...reg.settingsPages.filter(x => x.pluginId !== p.pluginId), p]
@@ -152,6 +192,7 @@ export function clearPlugin(pluginId: string) {
   reg.messageActions = reg.messageActions.filter(x => x.pluginId !== pluginId)
   reg.commands = reg.commands.filter(x => x.pluginId !== pluginId)
   reg.settingsPages = reg.settingsPages.filter(x => x.pluginId !== pluginId)
+  reg.panels = reg.panels.filter(x => x.pluginId !== pluginId)
   const el = styleEls.get(pluginId)
   if (el) { el.remove(); styleEls.delete(pluginId) }
   notify()
@@ -165,3 +206,5 @@ export const useComposerButtons = () => useReg(() => reg.composerButtons)
 export const useMessageActions = () => useReg(() => reg.messageActions)
 export const useSlashCommands = () => useReg(() => reg.commands)
 export const useSettingsPages = () => useReg(() => reg.settingsPages)
+/** Панели плагинов в конкретном месте приложения (v1.417.0). */
+export const usePanels = (slot: PanelSlot) => useReg(() => reg.panels.filter(p => p.slot === slot))

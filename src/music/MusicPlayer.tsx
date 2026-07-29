@@ -1,6 +1,8 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
 import { markFailed, markOk, isBroken, BROKEN_AFTER } from './broken'
+import { setMusicBridge } from '../lib/plugins/musicApi'
+import { PluginPanels } from '../components/PluginPanels'
 import { promptUi, confirmUi } from '../lib/confirm'
 import { useEffect, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
@@ -814,6 +816,45 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   trackFailedRef.current = trackFailed
 
+  // v1.417.0: пока плеер открыт, плагины с разрешением music могут делать то же,
+  // что человек кнопками. Мост держим в ссылке на свежие значения: он живёт
+  // дольше одного рендера, а обращаются к нему в произвольный момент.
+  useEffect(() => {
+    setMusicBridge({
+      now: () => {
+        const t = tracksRef.current[idxRef.current]
+        if (!t) return null
+        return {
+          id: t.id, title: meta[t.url]?.title || t.name, author: meta[t.url]?.author || t.author || '',
+          playing: playingRef.current, at: curTRef.current, duration: dur || t.dur || 0,
+        }
+      },
+      library: () => tracksRef.current.map(t => ({
+        id: t.id, title: meta[t.url]?.title || t.name,
+        author: meta[t.url]?.author || t.author || '', plays: t.plays ?? 0,
+      })),
+      play: () => setPlaying(true),
+      pause: () => setPlaying(false),
+      next: () => nextRef.current(),
+      prev: () => prevRef.current(),
+      queue: (trackId: string) => {
+        if (!tracksRef.current.some(t => t.id === trackId)) return false
+        queueNext(trackId)
+        return true
+      },
+      add: async (url: string) => {
+        // Тем же путём, что и поле «вставь ссылку»: проверки, разбор плейлиста
+        // и защита от повторов там уже есть, и второй такой путь развёл бы их.
+        if (!/^https?:\/\//i.test(url)) return 'Нужна полная ссылка (https://…)'
+        setScUrl(url)
+        await new Promise(r => setTimeout(r, 0))
+        await addSoundcloud()
+        return null
+      },
+    })
+    return () => setMusicBridge(null)
+  })
+
   /** Перезапустить то, что играет сейчас, каким бы источником оно ни было. */
   const restartCurrent = () => {
     const w = widgetRef.current
@@ -1188,6 +1229,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             </div>
           </div>}
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
+          {/* v1.417.0: уголок плагинов под обложкой. */}
+          <PluginPanels slot="player" />
           <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
           {/* v1.396.0: что происходит с текстом — словами. Раньше эти подсказки
               вычислялись и никуда не выводились: человек видел пустой экран и не
@@ -1306,6 +1349,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               Кто выложил трек — убрано: в списке из сотни записей это ничего не
               говорит и только занимает место, а обложка узнаётся мгновенно. */}
           <div className="mus2-lib-body">
+            {/* v1.417.0: уголок плагинов над списком треков. */}
+            <PluginPanels slot="library" />
             {tracks.length > 1 && !libQ.trim() && (
               <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
             )}

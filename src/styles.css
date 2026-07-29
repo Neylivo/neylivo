@@ -5863,3 +5863,22 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   background: rgba(237, 66, 69, .85); color: #fff;
   font-size: 10.5px; font-weight: 700; line-height: 1.6;
 }
+
+/* ══ Панели плагинов (v1.417.0) ════════════════════════════════════════════
+   Свой уголок плагина в готовом экране. Разметку рисует приложение — от
+   плагина приходит только описание строк, поэтому подделать чужое окно этим
+   нельзя. Пометка «плагин» обязательна: человек должен видеть, что этот кусок
+   поставил не Ponoi, а то, что он сам установил. */
+.plugpanels { display: flex; flex-direction: column; gap: 8px; margin: 10px 12px; }
+.plugpanel {
+  background: rgba(var(--ov, 255,255,255), .05); border-radius: var(--r-md, 10px);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.plugpanel-h { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.plugpanel-tag {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--mut); border: 1px solid rgba(var(--ov, 255,255,255), .18);
+  border-radius: 999px; padding: 1px 6px;
+}
+.plugpanel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+.plugpanel-btn { align-self: flex-start; }
