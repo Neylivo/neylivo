@@ -5789,3 +5789,43 @@ body.no-anim .mus2-q3-row { transition: none; }
 .lyr-shift { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; font-size: 13px; color: var(--mut); }
 .lyr-shift b { min-width: 56px; text-align: center; color: var(--tx); }
 .lyr-shift-note { flex-basis: 100%; color: var(--mut); font-size: 12.5px; }
+
+/* ══ Трекотека: кнопка и сам склад (v1.405.0) ══════════════════════════════
+   Кнопка была серой полосой во всю ширину — по ней не читалось, что это вход
+   в склад, а не подпись. Сам склад встречал рядом пустых тёмных квадратов:
+   у трека без обложки не было ничего, кроме дыры под ней. */
+.mus2-libbtn.wide {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; height: 44px; padding: 0 12px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--mus-a, var(--brand, #5865f2)) 26%, transparent),
+    color-mix(in srgb, var(--mus-a2, var(--brand, #5865f2)) 14%, transparent));
+  border: 1px solid color-mix(in srgb, var(--mus-a, var(--brand, #5865f2)) 34%, transparent);
+  border-radius: var(--r-lg, 12px);
+  font-size: 14.5px; font-weight: 700; text-align: left;
+  transition: transform .14s var(--ease-out4, ease), border-color .14s var(--ease-out4, ease);
+}
+.mus2-libbtn.wide::after {
+  content: '›'; margin-left: auto; font-size: 20px; line-height: 1; color: var(--mut);
+}
+.mus2-libbtn.wide:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--mus-a, var(--brand, #5865f2)) 60%, transparent);
+}
+body.no-anim .mus2-libbtn.wide { transition: none; }
+
+/* Заголовок склада: название крупнее, поиск со значком, всё в одну линию. */
+.mus2-lib-head { padding: 18px 24px 16px; }
+.mus2-lib-head b { font-size: 20px; font-weight: 800; }
+.mus2-lib-head .mus2-in { flex: 1; max-width: 520px; height: 38px; }
+
+/* Место обложки у трека, у которого её нет: мягкая заливка вместо тёмной дыры. */
+.mus2-card-art {
+  background: linear-gradient(150deg,
+    color-mix(in srgb, var(--mus-a, #8b5cf6) 30%, var(--bg3)),
+    color-mix(in srgb, var(--mus-a2, #5865f2) 16%, var(--bg3)));
+  color: rgba(var(--ov, 255,255,255), .5);
+}
+.mus2-card { padding: 10px; }
+.mus2-card:hover { transform: translateY(-2px); }
+.mus2-card-t { font-size: 13.5px; }

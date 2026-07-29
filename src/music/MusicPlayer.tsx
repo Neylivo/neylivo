@@ -360,19 +360,41 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // обложки: у SoundCloud без неё трек играет через адрес страницы.
     const missing = tracks.filter(t => !meta[t.url] && (!t.art || !t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
+    // v1.405.0: чем больше склад, тем дольше начиналась песня — и вот почему.
+    //
+    // Метаданные (в том числе ссылка, по которой трек реально играет) тянулись
+    // строго по одному и строго в порядке склада. Тот трек, который человек
+    // включил, оказывался в этой очереди где придётся: при сотне записей он мог
+    // ждать сотню чужих запросов. Играть без своей ссылки SoundCloud умеет, но
+    // через адрес страницы — то есть медленно и не всегда.
+    //
+    // Правим две вещи: включённое идёт первым (и следующее за ним — вторым), а
+    // остальные тянутся по нескольку сразу, а не гуськом. Больше четырёх зараз
+    // не берём: это чужие сервисы, и заваливать их пачкой запросов невежливо, да
+    // и отвечать они начнут отказом.
+    const first = cur?.url
+    const nextUrl = tracks[personalIdx >= 0 ? personalIdx : (idx + 1) % Math.max(tracks.length, 1)]?.url
+    const rank = (u: string) => (u === first ? 0 : u === nextUrl ? 1 : 2)
+    const queue = [...missing].sort((a, b) => rank(a.url) - rank(b.url))
     ;(async () => {
-      for (const t of missing) {
-        const m = isSoundcloudUrl(t.url) ? await scMeta(t.url) : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
-        if (!ok) return
-        if (m) {
-          setMeta(prev => ({ ...prev, [t.url]: m }))
-          // v1.79.0: дозаписываем в базу — обложка/название появятся у всех.
-          // v1.369.0: заодно и ссылку воспроизведения, если её у трека не было:
-          // без неё SoundCloud-трек играет через адрес страницы, что медленнее и
-          // не всегда срабатывает. Пустые поля не перезаписываются (см. metaPatch).
-          if (!t.art || !t.play) updateTrackMeta(t.id, m)
+      const CONCURRENCY = 4
+      let at = 0
+      const worker = async () => {
+        while (ok && at < queue.length) {
+          const t = queue[at++]
+          const m = isSoundcloudUrl(t.url) ? await scMeta(t.url) : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
+          if (!ok) return
+          if (m) {
+            setMeta(prev => ({ ...prev, [t.url]: m }))
+            // v1.79.0: дозаписываем в базу — обложка/название появятся у всех.
+            // v1.369.0: заодно и ссылку воспроизведения, если её у трека не было:
+            // без неё SoundCloud-трек играет через адрес страницы, что медленнее и
+            // не всегда срабатывает. Пустые поля не перезаписываются (см. metaPatch).
+            if (!t.art || !t.play) updateTrackMeta(t.id, m)
+          }
         }
       }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker))
     })()
     return () => { ok = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
