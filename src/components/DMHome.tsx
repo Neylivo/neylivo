@@ -6,7 +6,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '../lib/settings'
 import type { FriendRequest, DMMessage, Profile, DMThread } from '../types'
-import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, fetchDmPartnerIds, fetchDmThreadMap, canCallUser } from '../lib/friends'
+import { searchUsers, sendRequest, respondRequest, openThread, findByUsername, findByCode, fetchDmPartnerIds, fetchDmThreadMap, canCallUser } from '../lib/friends'
+import { friendCode, parseFriendCode } from '../lib/friendCode'
 import { cacheGet, cacheSet } from '../lib/offlineCache'
 import { netOk, netFail } from '../lib/netStatus'
 import { MeBar } from './MeBar'
@@ -601,10 +602,21 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // Добавление по юзернейму, как в новом Discord (без #цифр).
   // Старый формат «Имя#1234» тоже принимаем — цифры просто отбрасываем.
   async function addByName() {
-    const name = code.trim().replace(/^@/, '').replace(/#\d+$/, '').trim()
+    const raw = code.trim().replace(/^@/, '')
+    const name = raw.replace(/#\d+$/, '').trim()
     if (!name) return
-    const p = await findByUsername(name)
-    if (!p) { setCodeOk(false); setCodeMsg('Хм, не получилось. Проверь, что имя пользователя введено правильно.'); return }
+    // v1.401.0: код друга («Имя#7401») наконец работает. Он и был написан для
+    // того, чтобы отличать людей с одинаковым именем, — а до сих пор хвост #7401
+    // просто отрезался, и заявка уходила первому попавшемуся тёзке.
+    const parsed = parseFriendCode(raw)
+    const p = parsed ? await findByCode(raw) : await findByUsername(name)
+    if (!p) {
+      setCodeOk(false)
+      setCodeMsg(parsed
+        ? 'Никого с таким кодом. Проверь и имя, и четыре цифры после решётки.'
+        : 'Хм, не получилось. Проверь, что имя пользователя введено правильно.')
+      return
+    }
     if (p.id === meId) { setCodeOk(false); setCodeMsg('Это твой собственный юзернейм :)'); return }
     const why = await precheck(p)
     if (why === 'ACCEPTED') { setCode(''); setResults([]); setCodeOk(true); setCodeMsg('У вас уже была входящая заявка от ' + (p.display_name || p.username) + ' — теперь вы друзья!'); return }
@@ -1436,12 +1448,25 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 </div>
               </div>
               <div className={'pfr-add2-inwrap' + (codeMsg ? (codeOk ? ' ok' : ' err') : '')}>
-                <input placeholder="Введите имя пользователя" value={code}
+                <input placeholder="Имя пользователя или код: Имя#7401" value={code}
                   onChange={e => { setCode(e.target.value); setCodeMsg(''); doSearch(e.target.value) }}
                   onKeyDown={e => { if (e.key === 'Enter') addByName() }} />
                 <button className="pfr-add2-send" disabled={!code.trim()} onClick={addByName}>Отправить запрос дружбы</button>
               </div>
               {codeMsg && <div className={'pfr-add2-msg' + (codeOk ? ' ok' : ' err')}>{codeMsg}</div>}
+              {/* v1.401.0: свой код — рядом с полем, куда вводят чужой. Раньше код
+                  нельзя было ни узнать, ни ввести: вся его начинка лежала в
+                  библиотеке и в стилях, а на экране его не было нигде. */}
+              <div className="pfr-codebox">
+                <div className="pfr-codeh">Твой код друга</div>
+                <div className="pfr-coderow">
+                  <span className="pfr-code notr" translate="no">{friendCode(username, meId)}</span>
+                  <span className="pfr-codehint">Имя и четыре цифры — по ним тебя найдут, даже если имя занято ещё кем-то</span>
+                  <button className="pfr-copy" onClick={() => { navigator.clipboard?.writeText(friendCode(username, meId)); toastOk('Код скопирован') }}>
+                    Скопировать
+                  </button>
+                </div>
+              </div>
               {!codeMsg && <div className="pfr-add2-hint">Твой юзернейм — <b title="Скопировать" onClick={() => { navigator.clipboard?.writeText(handle || username); setCopied(true); setTimeout(() => setCopied(false), 1200) }}>{handle || username}</b>{copied ? ' — скопировано \u2713' : '. Нажми на него, чтобы скопировать и поделиться.'}</div>}
               {q.trim().length > 1 && results.filter(p => p.id !== meId).length > 0 && <div className="pfr-add2-results">
                 <div className="pfr-sec">Похожие пользователи</div>

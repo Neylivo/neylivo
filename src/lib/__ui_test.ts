@@ -26,6 +26,7 @@ import { metaPatch } from './musicMeta'
 import { normalizeTrackUrl, sameTrack } from '../music/trackUrl'
 import { nextTrack } from '../music/nextTrack'
 import { personalOrder, recommend } from '../music/personalQueue'
+import { tagFor, friendCode, parseFriendCode } from './friendCode'
 import { guardLink } from './linkguard'
 import { contentTypeOf } from './fileType'
 import { isDuplicateTrack } from './musicDupe'
@@ -559,6 +560,43 @@ check('проверка заметила бы, что недавнее пере�
   const t = [M('cur', 'Ночь', 'А'), M('a', 'Раз', 'Б'), M('b', 'Два', 'В')]
   const r = recommend({ tracks: t, idx: 0, plays: { a: 5 }, recent: ['a'], freshCount: 0 })
   return r[0].track.id === 'b'
+})
+
+console.log('\n── Код друга (доделан в v1.401.0) ──')
+const UID_A = '2f1c9f0e-1111-4bbb-8ccc-000000000001'
+const UID_B = '2f1c9f0e-2222-4bbb-8ccc-000000000002'
+
+check('код у одного и того же человека не меняется', () => tagFor(UID_A) === tagFor(UID_A))
+check('у разных людей коды разные', () => tagFor(UID_A) !== tagFor(UID_B))
+check('код — всегда четыре цифры', () => /^\d{4}$/.test(tagFor(UID_A)))
+check('пустой id не роняет разбор', () => /^\d{4}$/.test(tagFor('')))
+check('код собирается из имени и цифр', () => friendCode('вася', UID_A) === 'вася#' + tagFor(UID_A))
+
+check('код разбирается обратно', () => {
+  const r = parseFriendCode(friendCode('вася', UID_A))
+  return !!r && r.name === 'вася' && r.tag === tagFor(UID_A)
+})
+check('пробелы вокруг не мешают', () => {
+  const r = parseFriendCode('  вася#1234  ')
+  return !!r && r.name === 'вася' && r.tag === '1234'
+})
+check('имя с решёткой внутри разбирается по последней', () => {
+  const r = parseFriendCode('ва#ся#1234')
+  return !!r && r.name === 'ва#ся' && r.tag === '1234'
+})
+check('без решётки — это не код', () => parseFriendCode('вася') === null)
+check('решётка без цифр — не код', () => parseFriendCode('вася#') === null)
+check('буквы после решётки — не код', () => parseFriendCode('вася#абвг') === null)
+check('слишком длинный хвост — не код', () => parseFriendCode('вася#1234567') === null)
+
+console.log('\n── Ломаем нарочно (код друга) ──')
+check('проверка заметила бы, что код перестал зависеть от учётной записи', () =>
+  tagFor(UID_A) !== tagFor(UID_B))
+check('проверка заметила бы, что хвост снова просто отрезают', () => {
+  // Ровно прежнее поведение: «Имя#7401» превращалось в «Имя», и заявка уходила
+  // первому попавшемуся тёзке.
+  const r = parseFriendCode('вася#7401')
+  return !!r && r.tag === '7401'
 })
 
 console.log('\n── Защита переходов по ссылкам ──')

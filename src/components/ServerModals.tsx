@@ -375,69 +375,11 @@ export function ServerCtxMenu({ x, y, isOwner, muted, onClose, onAction }:
   )
 }
 
-export function ServerSettingsModal({ server, uid, onClose, onRename, onDelete, onChanged }:
-  { server: Server; uid: string; onClose: () => void; onRename: (name: string) => void; onDelete: () => void; onChanged?: () => void }) {
-  const [tab, setTab] = useState<'main' | 'roles' | 'channels'>('main')
-  const [accent, setAccent] = useState(server.accent || '#5865f2')
-  const [avatar, setAvatar] = useState<string | null>(server.avatar_url ?? null)
-  const [name, setName] = useState(server.name)
-  const [busy, setBusy] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const initials = (server.name || 'S').slice(0, 2).toUpperCase()
-  async function pick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f || !uid) return
-    setBusy(true)
-    try {
-      const url = await uploadTo('avatars', uid, f)
-      setAvatar(url)
-      await updateServer(server.id, { avatar_url: url })
-      onChanged?.()
-    } catch (err: any) { toastErr(err.message ?? String(err)) }
-    finally { setBusy(false) }
-  }
-  return (
-    <Overlay onClose={onClose}>
-      <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
-      <div className="modal-title">Настройки сервера — {server.name}</div>
-      <div className="modal-tabs">
-        <button className={'modal-tab' + (tab === 'main' ? ' on' : '')} onClick={() => setTab('main')}>Основное</button>
-        <button className={'modal-tab' + (tab === 'roles' ? ' on' : '')} onClick={() => setTab('roles')}>Роли и права</button>
-        <button className={'modal-tab' + (tab === 'channels' ? ' on' : '')} onClick={() => setTab('channels')}>Каналы</button>
-      </div>
-
-      {tab === 'main' && <>
-        <div className="modal-sect">Аватарка сервера</div>
-        <div className="modal-avwrap left">
-          <div className="modal-av sq" style={{ backgroundImage: avatar ? `url(${avatar})` : undefined }}>{!avatar && initials}</div>
-          <button className="modal-avbtn" onClick={() => fileRef.current?.click()}>{busy ? '…' : <><Icon name="image" size={16} /> Сменить</>}</button>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
-        </div>
-        <label className="modal-lbl">Название сервера</label>
-        <div className="modal-inline">
-          <input className="modal-in" value={name} onChange={e => setName(e.target.value)} />
-          <button className="modal-primary" disabled={!name.trim() || name === server.name} onClick={() => onRename(name.trim())}>Сохранить</button>
-        </div>
-        <div className="modal-sect">Тема сервера (акцент)</div>
-        <div className="modal-inline">
-          <input type="color" className="modal-color" value={accent} onChange={e => setAccent(e.target.value)} />
-          <button className="modal-primary" onClick={async () => { await updateServer(server.id, { accent }); onChanged?.() }}>Применить</button>
-          <button className="modal-ghost" onClick={async () => { setAccent('#5865f2'); await updateServer(server.id, { accent: null }); onChanged?.() }}>Сбросить</button>
-          <span className="modal-hint">акцент применяется, когда открыт этот сервер</span>
-        </div>
-      </>}
-
-      {tab === 'roles' && <div className="modal-note">Роли и права настраиваются в «Настройках сервера» → вкладка «Роли»: там можно создавать роли, менять цвета и права, выдавать роли участникам.</div>}
-      {tab === 'channels' && <div className="modal-note">Каналы создаются и удаляются на боковой панели сервера (＋ канал).</div>}
-
-      <div className="modal-foot">
-        {/* v1.325.0: удаление отсюда убрано — одно окно подтверждения слишком легко
-            проскочить. Оно осталось в «Настройках сервера», где нужно вписать
-            название сервера и подтвердить ещё раз. */}
-        <button className="modal-ghost" onClick={onClose}>Закрыть</button>
-      </div>
-    </Overlay>
-  )
-}
+// v1.401.0: здесь лежало второе окно настроек сервера — на 63 строки, со
+// своими вкладками, загрузкой аватарки и переименованием. Оно не было
+// подключено ни к чему: настоящие настройки сервера живут в
+// ServerSettings.tsx. Опасно это не весом, а тем, что правку легко внести
+// в мёртвую копию и потом искать, почему она ничего не изменила.
 
 export function ServerNotifModal({ server, onClose }: { server: Server; onClose: () => void }) {
   const [mode, setMode] = useState<NotifMode>(notifModeOf(server.id))
