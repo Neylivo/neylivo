@@ -11,8 +11,26 @@ import { metaPatch, type TrackMeta } from './musicMeta'
 import type { Track } from '../music/types'
 
 export async function fetchTracks(): Promise<Track[]> {
-  const { data } = await supabase.from('music_tracks').select('*').order('created_at')
-  return ((data ?? []) as any[]).map(r => ({
+  // v1.418.0: забираем склад страницами.
+  //
+  // База отдаёт за один запрос не больше тысячи строк — это её собственный
+  // потолок, и молчаливый: тысяча первая песня просто не приезжала. Со стороны
+  // это выглядело как «после тысячи треки перестали добавляться», хотя
+  // добавлялись они прекрасно, а вот показать их было нечем.
+  const PAGE = 1000
+  const rows: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from('music_tracks').select('*')
+      .order('created_at').range(from, from + PAGE - 1)
+    if (error) break
+    const chunk = (data ?? []) as any[]
+    rows.push(...chunk)
+    // Пришло меньше страницы — значит, это была последняя.
+    if (chunk.length < PAGE) break
+    // Предохранитель от бесконечного круга, если база вдруг отдаёт одно и то же.
+    if (from > 100_000) break
+  }
+  return rows.map(r => ({
     id: r.id as string,
     url: r.url as string,
     name: r.name as string,

@@ -60,16 +60,30 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
         <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
 
         <div className="ms-sec"><Icon name="film" size={15} /> Гифки по бокам</div>
-        <input className="ms-in" placeholder="URL гифки" value={gif.url} onChange={e => setGif({ ...gif, url: e.target.value })} />
+        {/* v1.418.0: раньше здесь было голое поле «URL гифки» и три кнопки без
+            единого слова о том, что произойдёт. Теперь сказано, где гифка
+            появится, и показано это образцом — по нему сразу видно, что она
+            встаёт по краям сцены, а не поверх обложки. */}
+        <div className="ms-note">Картинка или гифка по краям большого плеера, рядом с обложкой. На узком окне не показывается — там для неё нет места.</div>
+        <input className="ms-in" placeholder="Ссылка на картинку или гифку (https://…)" value={gif.url}
+          onChange={e => setGif({ ...gif, url: e.target.value })} />
         <div className="ms-row">
           {(['left', 'right', 'both'] as GifPos[]).map(p => (
             <button key={p} className={'ms-chip' + (gif.pos === p ? ' on' : '')} onClick={() => setGif({ ...gif, pos: p })}>
-              {p === 'left' ? 'Слева' : p === 'right' ? 'Справа' : 'С обеих'}</button>
+              {p === 'left' ? 'Слева' : p === 'right' ? 'Справа' : 'С обеих сторон'}</button>
           ))}
         </div>
-        {gif.url && <img className="ms-prev" src={gif.url} alt="gif" />}
+        {gif.url && <>
+          <div className="ms-gifprev">
+            {(gif.pos === 'left' || gif.pos === 'both') && <img src={gif.url} alt="" />}
+            <span className="ms-gifprev-art">обложка</span>
+            {(gif.pos === 'right' || gif.pos === 'both') && <img src={gif.url} alt="" />}
+          </div>
+          <button className="ms-clear" onClick={() => setGif({ ...gif, url: '' })}>Убрать гифку</button>
+        </>}
 
         <div className="ms-sec"><Icon name="image" size={15} /> Фон плеера</div>
+        <div className="ms-note">Своя картинка или видео на весь плеер, за обложкой и текстом. Затемнение ниже делает надписи читаемыми — на светлом фоне без него текст пропадает.</div>
         <div className="ms-row">
           <button className={'ms-chip' + (bg.type === 'none' ? ' on' : '')} onClick={() => setBg({ ...bg, type: 'none' })}>Нет</button>
           <button className={'ms-chip' + (bg.type === 'photo' ? ' on' : '')} onClick={() => setBg({ ...bg, type: 'photo' })}>Фото</button>

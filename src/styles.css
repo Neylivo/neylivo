@@ -5882,3 +5882,32 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 }
 .plugpanel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .plugpanel-btn { align-self: flex-start; }
+
+/* ══ Гифки по бокам плеера (v1.418.0) ══════════════════════════════════════
+   У них не было ни одного правила о том, ГДЕ им быть. Из-за этого они вставали
+   обычными элементами в колонку плеера — над обложкой и под ней, распихивая
+   всё остальное. Место у них по краям сцены, по вертикали — по центру. */
+.mus2-now .mus-gif {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  z-index: 2; pointer-events: none; user-select: none;
+  max-width: 22%; max-height: 62%;
+}
+.mus2-now .mus-gif.l { left: 24px; }
+.mus2-now .mus-gif.r { right: 24px; }
+/* На узком окне бокам места нет: там гифка залезла бы на обложку и на текст. */
+@media (max-width: 1100px) { .mus2-now .mus-gif { display: none; } }
+
+/* Образец расположения гифок в настройках плеера (v1.418.0): по нему сразу
+   видно, что гифка встаёт по краям сцены, а не поверх обложки. */
+.ms-gifprev {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 10px; padding: 10px; border-radius: var(--r-md, 10px);
+  background: rgba(0, 0, 0, .25);
+}
+.ms-gifprev img { max-width: 56px; max-height: 56px; border-radius: var(--r-sm, 6px); object-fit: contain; }
+.ms-gifprev-art {
+  width: 72px; height: 72px; border-radius: var(--r-md, 10px);
+  background: linear-gradient(150deg, var(--mus-a, #8b5cf6), var(--mus-a2, #5865f2));
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, .85); font-size: 10.5px; font-weight: 700;
+}
