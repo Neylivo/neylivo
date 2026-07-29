@@ -12,8 +12,8 @@ export function loadGif(): GifCfg { try { return JSON.parse(localStorage.getItem
 export function loadLyricsCfg(): LyricsCfg {
   try {
     const v = JSON.parse(localStorage.getItem(LYRICS_KEY) || '')
-    return { mode: v.mode === 'off' || v.mode === 'karaoke' ? v.mode : 'back', online: !!v.online }
-  } catch { return { mode: 'back', online: false } }
+    return { mode: v.mode === 'off' || v.mode === 'karaoke' ? v.mode : 'back', online: !!v.online, ai: !!v.ai }
+  } catch { return { mode: 'back', online: false, ai: false } }
 }
 
 export function loadBg(): BgCfg { try { return JSON.parse(localStorage.getItem(BG_KEY) || '') } catch { return { type: 'none', mode: 'url', url: '', dim: 40, ver: 0 } } }
@@ -125,6 +125,23 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
           Выключено по умолчанию. При поиске на чужой сервер уходит название трека и исполнитель, и ему виден твой IP —
           то есть видно, что ты слушаешь. Свой текст можно вставить прямо в плеере кнопкой «Текст», ничего никуда не отправляя, — у треков, которые выложил ты;
           он сохранится для всех в Трекотеке. У чужих треков текст ставит тот, кто их выложил: найденное в интернете останется только у тебя.
+        </div>
+
+        {/* v1.420.0: внутренний ИИ. Стоит рядом с поиском в интернете намеренно:
+            это второй способ добыть текст, и человек должен видеть их вместе —
+            сначала спросить каталог, а чего там нет, распознать самим. */}
+        <label className="ms-check">
+          <input type="checkbox" checked={lyr.ai} onChange={e => setLyr({ ...lyr, ai: e.target.checked })} />
+          Распознавать текст на слух, если его нигде нет (ИИ на этом устройстве)
+        </label>
+        <div className="ms-note">
+          Ponoi слушает сам трек и расставляет строки с метками времени — так караоке получается даже у песни,
+          которой нет ни в одном каталоге текстов. Работает на этом устройстве: сам звук никуда не уходит, но при
+          первом запуске из интернета скачивается модель распознавания (около 40 МБ, дальше берётся из кэша).
+          Занимает минуту-две и заметно нагружает процессор, поэтому по умолчанию выключено.
+          Слова могут быть с ошибками — модель обучена на речи, а не на пении; если текст уже известен, ИИ берёт из
+          записи только время и слова не меняет. У треков с YouTube и SoundCloud сам звук приложению недоступен —
+          там распознавать нечего. Отдельной кнопкой это же есть в окне «Текст».
         </div>
 
         {msg && <div className="ms-msg">{msg}</div>}

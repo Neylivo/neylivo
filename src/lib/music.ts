@@ -10,27 +10,14 @@ export { isDuplicateTrack } from './musicDupe'
 import { metaPatch, type TrackMeta } from './musicMeta'
 import type { Track } from '../music/types'
 
-export async function fetchTracks(): Promise<Track[]> {
-  // v1.418.0: забираем склад страницами.
-  //
-  // База отдаёт за один запрос не больше тысячи строк — это её собственный
-  // потолок, и молчаливый: тысяча первая песня просто не приезжала. Со стороны
-  // это выглядело как «после тысячи треки перестали добавляться», хотя
-  // добавлялись они прекрасно, а вот показать их было нечем.
-  const PAGE = 1000
-  const rows: any[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase.from('music_tracks').select('*')
-      .order('created_at').range(from, from + PAGE - 1)
-    if (error) break
-    const chunk = (data ?? []) as any[]
-    rows.push(...chunk)
-    // Пришло меньше страницы — значит, это была последняя.
-    if (chunk.length < PAGE) break
-    // Предохранитель от бесконечного круга, если база вдруг отдаёт одно и то же.
-    if (from > 100_000) break
-  }
-  return rows.map(r => ({
+/**
+ * Строка базы — в трек. Отдельно и наружу (v1.420.0), потому что теперь ровно
+ * те же поля приходят три разными путями: страницей склада, ответом на
+ * добавление и живым событием о чужом треке. Три разных разбора одного и того
+ * же — это три места, где однажды разойдутся поля.
+ */
+export function rowToTrack(r: any): Track {
+  return {
     id: r.id as string,
     url: r.url as string,
     name: r.name as string,
@@ -42,7 +29,63 @@ export async function fetchTracks(): Promise<Track[]> {
     art: (r.art ?? null) as string | null,
     dur: typeof r.duration === 'number' && r.duration > 0 ? r.duration : undefined,
     play: (r.play_url ?? null) as string | null,
-  }))
+    at: (r.created_at ?? undefined) as string | undefined,
+  }
+}
+
+/**
+ * Сколько треков забирается за один заход (v1.420.0).
+ *
+ * Раньше страница была в тысячу строк и склад выкачивался ЦЕЛИКОМ, прежде чем
+ * человек видел хоть что-нибудь: на нескольких тысячах треков это несколько
+ * запросов подряд и заметное ожидание перед первой песней, причём каждый раз.
+ * Меньшая страница приезжает быстро, показывается сразу, а остальное
+ * догружается следом и незаметно.
+ */
+export const TRACKS_PAGE = 300
+
+/** Одна страница склада. done — дальше ничего нет. */
+export async function fetchTracksPage(from: number, size = TRACKS_PAGE): Promise<{ tracks: Track[]; done: boolean }> {
+  const { data, error } = await supabase.from('music_tracks').select('*')
+    .order('created_at').range(from, from + size - 1)
+  if (error) return { tracks: [], done: true }
+  const rows = (data ?? []) as any[]
+  // Пришло меньше страницы — значит, это была последняя.
+  return { tracks: rows.map(rowToTrack), done: rows.length < size }
+}
+
+/**
+ * Треки, добавленные после указанного момента (v1.420.0).
+ *
+ * Нужны на случай, когда живая подписка молчала: вкладку свернули, сеть
+ * отвалилась, канал не поднялся. Дешёвый способ догнать — спросить только
+ * новое, а не выкачивать склад заново.
+ */
+export async function fetchTracksAfter(sinceIso: string, limit = TRACKS_PAGE): Promise<Track[]> {
+  const { data, error } = await supabase.from('music_tracks').select('*')
+    .gt('created_at', sinceIso).order('created_at').limit(limit)
+  if (error) return []
+  return ((data ?? []) as any[]).map(rowToTrack)
+}
+
+/**
+ * Весь склад целиком. Осталось для мест, где иначе нельзя, но начальную
+ * загрузку плеер делает страницами (см. fetchTracksPage): выкачивать тысячи
+ * строк ради того, чтобы показать первую песню, незачем.
+ *
+ * v1.418.0: база отдаёт за один запрос не больше тысячи строк — это её
+ * собственный потолок, и молчаливый: тысяча первая песня просто не приезжала.
+ */
+export async function fetchTracks(): Promise<Track[]> {
+  const all: Track[] = []
+  for (let from = 0; ; from += 1000) {
+    const { tracks, done } = await fetchTracksPage(from, 1000)
+    all.push(...tracks)
+    if (done) break
+    // Предохранитель от бесконечного круга, если база вдруг отдаёт одно и то же.
+    if (from > 100_000) break
+  }
+  return all
 }
 
 export interface NewTrack {

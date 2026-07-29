@@ -77,3 +77,51 @@ export function brokenCount(): number {
   const c = load()
   return Object.keys(c).filter(id => brokenIn(c, id)).length
 }
+
+// ── Видео, которое нельзя встроить (v1.420.0) ──────────────────────────────
+//
+// Отдельный список, и вот почему это НЕ то же самое, что «сломан».
+//
+// Официальные клипы — как раз те, что человек ищет первым делом, — владелец
+// часто закрывает для встраивания: на самом YouTube они играют прекрасно, а в
+// чужом окне отказываются, и YouTube отвечает об этом кодом 101 или 150. Раньше
+// такой отказ шёл в общий счётчик отказов: «трек не играет — пробую следующий»,
+// а на втором заходе СВОЙ трек ещё и удалялся из общей Трекотеки. То есть
+// рабочая песня пропадала у всех из-за запрета на встраивание.
+//
+// Правильный разбор другой: это не поломка трека, это запрет на встраивание.
+// Отказ такой окончательный (пересчитывать нечего, сеть тут ни при чём), поэтому
+// хватает одного раза, и трек не удаляется никогда. Дальше мы ищем ту же запись
+// там, где её играть можно, — а если не нашли, честно говорим и обходим.
+const EMBED_KEY = 'ponoi_mus_noembed_v1'
+
+function loadNoEmbed(): Record<string, true> {
+  try {
+    const v = JSON.parse(localStorage.getItem(EMBED_KEY) || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch { return {} }
+}
+
+/** Коды YouTube 101 и 150 значат ровно одно: владелец запретил встраивание. */
+export function isEmbedDeniedCode(code: unknown): boolean {
+  const n = Number(code)
+  return n === 101 || n === 150
+}
+
+export function markNoEmbed(id: string) {
+  if (!id) return
+  const all = loadNoEmbed()
+  all[id] = true
+  try { localStorage.setItem(EMBED_KEY, JSON.stringify(all)) } catch { /* переполнено */ }
+}
+
+export function isNoEmbed(id: string): boolean {
+  return !!id && !!loadNoEmbed()[id]
+}
+
+export function forgetNoEmbed(id: string) {
+  const all = loadNoEmbed()
+  if (!(id in all)) return
+  delete all[id]
+  try { localStorage.setItem(EMBED_KEY, JSON.stringify(all)) } catch { /* переполнено */ }
+}

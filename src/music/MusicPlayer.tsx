@@ -1,6 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
-import { markFailed, markOk, isBroken, BROKEN_AFTER } from './broken'
+import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
@@ -12,12 +12,15 @@ import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
-import { fetchTracks, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
+import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
+import { mergeTracks } from './mergeTracks'
+import { chunksToLrc, alignPlainToChunks, whyCantRecognize, type AiProgress } from './aiLyrics'
+import { listenToTrack } from './aiListen'
 
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
 import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
-import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, type Lyrics } from './lyrics'
+import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
@@ -59,6 +62,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [lyr, setLyr] = useState<Lyrics | null>(null)
   const [lyrEdit, setLyrEdit] = useState<string | null>(null)   // не null — открыто окно правки
   const [lyrBusy, setLyrBusy] = useState(false)
+  // v1.420.0: треки, которым YouTube отказал во встраивании прямо сейчас.
+  // Список в состоянии нужен, чтобы плеер тут же перерисовался и пошёл через
+  // копию; на диске это же помнится отдельно (isNoEmbed), чтобы в следующий раз
+  // не биться в тот же отказ.
+  const [ytDenied, setYtDenied] = useState<string[]>([])
   const [lyrNote, setLyrNote] = useState('')
   const [bgUrl, setBgUrl] = useState<string>('')
   const [curT, setCurT] = useState(0)
@@ -156,7 +164,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks])
   const curSc = !!cur && isSoundcloudUrl(cur.url)
-  const curYt = !!cur && !curSc && isYouTubeUrl(cur.url)
+  // v1.420.0: у запрещённого к встраиванию видео (официальные клипы) появляется
+  // найденная копия — и тогда трек идёт обычным звуком, а не через iframe
+  // YouTube, который для него всё равно откажет.
+  const curNoEmbed = !!cur && (ytDenied.includes(cur.id) || isNoEmbed(cur.id))
+  const curYtLink = !!cur && !curSc && isYouTubeUrl(cur.url)
+  const curYt = curYtLink && !(curNoEmbed && !!(meta[cur!.url]?.play || cur!.play))
   const curMeta = cur ? meta[cur.url] : undefined
   const curArt = curMeta?.art ?? cur?.art ?? null
   // URL, который реально отдаём виджету: каноничный из oEmbed, если он уже известен.
@@ -173,7 +186,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const curStreamOnly = !!cur && !curSc && !curYt && !curPlayable && isStreamingUrl(cur.url)
   const curSvc = cur ? serviceOf(cur.url) : null
   // Обычный <audio>: для Audius-ссылок подставляем прямой stream-URL из resolve.
-  const audioSrc = cur && !curSc && !curYt && !curStreamOnly ? (curPlayable || cur.url) : undefined
+  // v1.420.0: у запрещённого к встраиванию видео играем НАЙДЕННУЮ КОПИЮ, а не
+  // сам адрес YouTube: страницу <audio> не воспроизведёт и молча замолчит.
+  const audioSrc = cur && !curSc && !curYt && !curStreamOnly
+    ? (curYtLink ? (curPlayable || undefined) : (curPlayable || cur.url))
+    : undefined
   const acc = color ? boost(color) : null
   const musStyle = acc ? ({
     '--mus-a': rgb(acc),
@@ -255,6 +272,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // Разные причины пустоты — разные подсказки: «текста нет» и «его даже не
         // искали» это не одно и то же, а раньше человек видел одну фразу на оба.
         setLyrNote('Текста нет. Поиск в интернете выключен в настройках плеера; свой текст можно вставить кнопкой «Текст».')
+        void autoRecognize(t, '')
         return
       }
       setLyrNote('Ищу текст…')
@@ -264,12 +282,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         setLyrNote(found.why === 'net'
           ? 'Не получилось спросить lrclib.net — нет сети или сервис молчит.'
           : 'Текст не нашёлся в каталоге. Кнопка «Текст» — вставить свой.')
+        void autoRecognize(t, '')
         return
       }
       raw = found.hit.text
       setLyr(parseLyrics(raw))
       setLyrNote('Текст найден: ' + found.hit.by)
       void saveLyrics(t.id, raw, t.ownerId === meId)
+      // v1.420.0: слова нашлись, а меток времени в каталоге нет — караоке
+      // невозможно. Ровно тот случай, где ИИ полезнее всего: слова остаются
+      // выверенными, а время берётся из самой записи.
+      if (!found.hit.synced) void autoRecognize(t, raw)
     })()
     return () => { ok = false }
   }, [cur?.id, lyrCfg.mode, lyrCfg.online])
@@ -288,9 +311,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   // Караоке возможно только с метками времени. Без них не притворяемся: текст
   // показываем фоном, а в окне правки объясняем, чего не хватает.
+  // v1.420.0: караоке показывается и без меток времени. Раньше текст без них
+  // уезжал в фон за обложку — то есть прочитать его было нельзя, а пролистать
+  // и вовсе: фон мышь не перехватывает. Подсветки без меток по-прежнему нет и
+  // выдумывать её никто не будет, но САМ ТЕКСТ человек видит и листает.
   const lyrMode: 'off' | 'back' | 'karaoke' =
     lyrCfg.mode === 'off' || !lyr || lyr.lines.length === 0 ? 'off'
-    : lyrCfg.mode === 'karaoke' && lyr.synced ? 'karaoke' : 'back'
+    : lyrCfg.mode === 'karaoke' ? 'karaoke' : 'back'
   // v1.404.0: время, по которому ищем строку, — не то же самое, что время
   // трека. Метки сняты с другой записи: у ускоренной версии песня короче, и
   // разница копится к концу; плюс ручная поправка и небольшой взгляд вперёд,
@@ -302,6 +329,154 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const lyrActive = lyr && lyr.synced
     ? activeLineIndex(lyr.lines, lyricsTime(curT, lyrK, lyrShift))
     : -1
+  /**
+   * Поющаяся строка всегда посередине, а текст можно листать (v1.420.0).
+   *
+   * Раньше список сдвигался расчётом «номер строки × высота строки». На
+   * коротких строках это совпадало, а первая же длинная переносилась на два
+   * ряда — и дальше весь текст съезжал вниз тем сильнее, чем больше таких
+   * строк было выше. К середине песни поющаяся строка уходила из центра, а
+   * иногда и за край: выглядело это как «текст отстал».
+   *
+   * Теперь центр считается по измеренной строке (centerScrollTop), а сам блок
+   * стал обычным прокручиваемым списком: его можно листать руками, и на время
+   * этого мы уступаем — вырывать текст из-под пальца на следующей же строке
+   * нельзя. Через LYRICS_HOLD_MS ведём снова сами; кнопка «К этой строке»
+   * возвращает сразу.
+   */
+  const kBoxRef = useRef<HTMLDivElement>(null)
+  const kLineRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const lyrTouchRef = useRef(0)
+  const [lyrHeld, setLyrHeld] = useState(false)
+
+  const centerLyrLine = (i: number, smooth = true) => {
+    const box = kBoxRef.current
+    const el = kLineRefs.current.get(i)
+    if (!box || !el) return
+    const top = centerScrollTop(el.offsetTop, el.offsetHeight, box.clientHeight, box.scrollHeight - box.clientHeight)
+    box.scrollTo({ top, behavior: smooth && !document.body.classList.contains('no-anim') ? 'smooth' : 'auto' })
+  }
+
+  useEffect(() => {
+    if (lyrMode !== 'karaoke' || lyrActive < 0) return
+    if (!autoScrollOk(lyrTouchRef.current, Date.now())) return
+    centerLyrLine(lyrActive)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lyrActive, lyrMode])
+
+  // Открыли трек заново — начинаем с начала и снова ведём сами.
+  useEffect(() => { lyrTouchRef.current = 0; setLyrHeld(false) }, [cur?.id, lyrMode])
+
+  // Человек листает — уступаем. Ловим именно ЕГО действия (колесо, палец,
+  // клавиши), а не событие прокрутки: последнее приходит и от наших собственных
+  // сдвигов, и отличить их надёжно нельзя.
+  const lyrTouched = () => {
+    lyrTouchRef.current = Date.now()
+    setLyrHeld(true)
+    window.setTimeout(() => {
+      if (autoScrollOk(lyrTouchRef.current, Date.now())) setLyrHeld(false)
+    }, LYRICS_HOLD_MS + 50)
+  }
+
+  /**
+   * Распознать текст на слух (v1.420.0).
+   *
+   * Два случая, и они разные по смыслу:
+   *   • в поле уже есть слова — распознанное идёт ТОЛЬКО как источник времени,
+   *     слова остаются те, что вписал человек или нашлись в каталоге;
+   *   • поля пусты — берём и слова, и время, и подписываем в самом тексте, что
+   *     они услышаны, а не выверены.
+   *
+   * Не получилось — говорим, что именно: молчащая кнопка на минутной операции
+   * это худшее из возможного.
+   */
+  const [aiRun, setAiRun] = useState<AiProgress | null>(null)
+  const aiWhy = whyCantRecognize(audioSrc, curSc || curYt)
+
+  /**
+   * Распознать самому, когда текста нигде не нашлось (v1.420.0).
+   *
+   * Запускается только при включённой настройке и только раз на трек за сессию:
+   * работа занимает процессор на минуту-две, и повторять её на каждый повтор
+   * песни было бы издевательством. Тихо ничего не делает там, где звук
+   * недоступен (YouTube, SoundCloud) — обещать распознавание на встроенном
+   * проигрывателе нельзя, его звука у нас нет.
+   *
+   * known — уже известные слова: тогда из записи берётся ТОЛЬКО время.
+   */
+  const aiTriedRef = useRef<Set<string>>(new Set())
+  async function autoRecognize(t: Track, known: string) {
+    if (!lyrCfgRef.current.ai || aiRunRef.current) return
+    if (aiTriedRef.current.has(t.id)) return
+    // Источник звука берём из ссылки: состояние могло ещё не обновиться, а
+    // решение зависит именно от трека, для которого нас позвали.
+    const src = srcOfRef.current(t)
+    if (whyCantRecognize(src, false) || !src) return
+    aiTriedRef.current.add(t.id)
+    setLyrNote(known ? 'Меток времени нет — слушаю запись и расставляю их…' : 'Текста нигде нет — слушаю запись…')
+    setAiRun({ stage: 'audio', percent: 0, note: 'Начинаю' })
+    try {
+      const chunks = await listenToTrack(src, p => setAiRun(p))
+      // Трек мог уже смениться — тогда результат не наш, и лезть с ним в
+      // чужую песню нельзя.
+      if (curIdRef.current !== t.id) return
+      const built = known ? alignPlainToChunks(known, chunks, dur || t.dur) : chunksToLrc(chunks, dur || t.dur)
+      if (!built) {
+        setLyrNote(known
+          ? 'Распознанное не похоже на этот текст — метки времени не расставил.'
+          : 'Ничего разборчивого не услышал — текста нет.')
+        return
+      }
+      setLyr(parseLyrics(built))
+      setLyrNote(known ? 'Метки времени расставлены на слух' : 'Текст распознан на слух — слова могут быть с ошибками')
+      // Сохраняем как и найденный в интернете: свой трек — для всех, чужой — себе.
+      void saveLyrics(t.id, built, t.ownerId === meId)
+    } catch (err: any) {
+      setLyrNote('Распознать не удалось: ' + (err?.message ?? String(err)))
+    } finally {
+      setAiRun(null)
+    }
+  }
+  // Ссылки на свежие значения: автозапуск живёт внутри эффекта поиска текста,
+  // который нарочно не перезапускается на каждое изменение настроек и плеера.
+  const lyrCfgRef = useRef(lyrCfg); lyrCfgRef.current = lyrCfg
+  const aiRunRef = useRef(aiRun); aiRunRef.current = aiRun
+  const srcOfRef = useRef<(t: Track) => string>(() => '')
+  srcOfRef.current = (t: Track) => {
+    if (isSoundcloudUrl(t.url)) return ''
+    const play = meta[t.url]?.play || t.play || ''
+    if (isYouTubeUrl(t.url)) return play   // само видео нам недоступно, только найденная копия
+    return play || t.url
+  }
+
+  async function recognizeLyricsNow() {
+    if (!cur || aiRun) return
+    const why = whyCantRecognize(audioSrc, curSc || curYt)
+    if (why) { toastErr(why); return }
+    setAiRun({ stage: 'audio', percent: 0, note: 'Начинаю' })
+    try {
+      const chunks = await listenToTrack(audioSrc!, p => setAiRun(p))
+      const known = (lyrEdit ?? '').trim()
+      const built = known
+        ? alignPlainToChunks(known, chunks, dur || cur.dur)
+        : chunksToLrc(chunks, dur || cur.dur)
+      if (!built) {
+        toastErr(known
+          ? 'Не удалось привязать слова к записи: распознанное на неё не похоже (инструментал, шум или другой язык). Текст оставил как был.'
+          : 'Ничего разборчивого не услышал — похоже, в записи нет пения или оно неразборчиво.')
+        return
+      }
+      // В поле, а не сразу в базу: человек должен увидеть, что получилось, и
+      // при желании поправить слова перед сохранением.
+      setLyrEdit(built)
+      toastOk(known ? 'Метки времени расставлены — проверь и сохрани' : 'Текст распознан — проверь слова и сохрани')
+    } catch (err: any) {
+      toastErr('Распознать не удалось: ' + (err?.message ?? String(err)))
+    } finally {
+      setAiRun(null)
+    }
+  }
+
   function nudgeLyrics(delta: number) {
     if (!cur) return
     const v = Math.max(-15, Math.min(15, Math.round((lyrShift + delta) * 10) / 10))
@@ -339,16 +514,102 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }, [playing, cur?.url, curMeta?.title, curMeta?.author, dur])
   useEffect(() => () => { setMyListening(null) }, [])   // размонтирование плеера = слушание кончилось
 
-  // Initial load + realtime subscription so new tracks appear for everyone live.
+  /**
+   * Склад приезжает страницами, а чужие треки — по одному (v1.420.0).
+   *
+   * Что было не так, и это две беды сразу.
+   *
+   * Первая: перед тем как показать хоть что-нибудь, приложение выкачивало склад
+   * ЦЕЛИКОМ — тысячами строк, подряд, каждый раз при открытии плеера. Пока это
+   * шло, не было ни списка, ни первой песни.
+   *
+   * Вторая, злее: на ЛЮБОЕ изменение таблицы — то есть на каждый чужой трек —
+   * склад выкачивался заново, весь. Когда кто-то заливал плейлист, это
+   * означало сотню полных перезагрузок подряд у всех, кто в этот момент
+   * слушал: список перестраивался, метаданные запрашивались снова, окно
+   * заметно спотыкалось. Ровно это и выглядит как «ломается, когда другие
+   * загружают музыку».
+   *
+   * Теперь: первая страница показывается сразу, остальные догружаются следом, а
+   * живое событие ПРИМЕНЯЕТСЯ (добавили — дописали строку, поправили — поправили
+   * её же, убрали — убрали), и ни одного лишнего запроса при этом нет: все поля
+   * приходят в самом событии.
+   */
   useEffect(() => {
     let ok = true
-    fetchTracks().then(t => { if (ok) setTracks(t) })
+
+    ;(async () => {
+      for (let from = 0; ok; from += TRACKS_PAGE) {
+        const { tracks: page, done } = await fetchTracksPage(from)
+        if (!ok) return
+        if (page.length) setTracks(prev => mergeTracks(prev, page))
+        if (done) break
+        if (from > 100_000) break
+        // Пауза между страницами: склад догружается фоном и не должен мешать
+        // ни первой песне, ни прокрутке списка.
+        await new Promise(r => setTimeout(r, 120))
+      }
+    })()
+
     const ch = supabase.channel('music_tracks_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'music_tracks' }, () => {
-        fetchTracks().then(t => { if (ok) setTracks(t) })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'music_tracks' }, (p: any) => {
+        if (!ok || !p.new?.id) return
+        setTracks(prev => mergeTracks(prev, [rowToTrack(p.new)]))
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'music_tracks' }, (p: any) => {
+        if (!ok || !p.new?.id) return
+        const t = rowToTrack(p.new)
+        setTracks(prev => prev.map(x => (x.id === t.id ? t : x)))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'music_tracks' }, (p: any) => {
+        const id = p.old?.id
+        if (!ok || !id) return
+        setTracks(prev => prev.filter(x => x.id !== id))
       })
       .subscribe()
+
     return () => { ok = false; supabase.removeChannel(ch) }
+  }, [])
+
+  /**
+   * Дописать только что добавленное, не выкачивая склад заново (v1.420.0).
+   *
+   * Раньше после каждого добавления — своего файла, плейлиста, ссылки — склад
+   * запрашивался целиком. На тысячах треков это заметная пауза ровно в тот
+   * момент, когда человек ждёт свою песню, а при импорте плейлиста таких пауз
+   * было столько же, сколько треков. Строка уже пришла ответом на добавление:
+   * её и берём.
+   */
+  const appendAdded = (rows: any[]) => {
+    const list = rows.filter(Boolean).map(rowToTrack)
+    if (list.length) setTracks(prev => mergeTracks(prev, list))
+  }
+
+  /**
+   * Догнать пропущенное (v1.420.0).
+   *
+   * Живая подписка не вечная: вкладку свернули, ноутбук уснул, сеть моргнула —
+   * канал молчит, и о чужих треках за это время никто не узнает. Возвращаемся к
+   * окну — спрашиваем только то, что появилось после самого свежего известного
+   * трека. Это один короткий запрос, а не склад заново.
+   */
+  useEffect(() => {
+    const catchUp = async () => {
+      if (document.visibilityState !== 'visible') return
+      const known = tracksRef.current
+      if (!known.length) return
+      let newest = ''
+      for (const t of known) if (t.at && t.at > newest) newest = t.at
+      if (!newest) return
+      const fresh = await fetchTracksAfter(newest)
+      if (fresh.length) setTracks(prev => mergeTracks(prev, fresh))
+    }
+    window.addEventListener('focus', catchUp)
+    document.addEventListener('visibilitychange', catchUp)
+    return () => {
+      window.removeEventListener('focus', catchUp)
+      document.removeEventListener('visibilitychange', catchUp)
+    }
   }, [])
 
   // Метаданные из базы (автор/обложка/play-URL) — видны всем сразу, без oEmbed.
@@ -559,7 +820,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               try { const d = e.target.getDuration(); if (d > 0) setDur(d) } catch {}
               if (e.data === 0) nextRef.current()
             },
-            onError: () => { if (!disposed) trackFailedRef.current('YouTube не отдал это видео') },
+            // v1.420.0: код отказа разбираем, а не считаем любой отказ поломкой
+            // трека. 101 и 150 — «владелец запретил встраивание»: именно так
+            // ведут себя официальные клипы, и раньше они попадали в общий
+            // счётчик отказов, а свой такой трек на втором заходе удалялся из
+            // общей Трекотеки. Рабочая песня пропадала у всех из-за запрета.
+            onError: (e: any) => {
+              if (disposed) return
+              if (isEmbedDeniedCode(e?.data)) { void ytEmbedDeniedRef.current() ; return }
+              trackFailedRef.current('YouTube не отдал это видео')
+            },
           },
         })
         ytTimer.current = window.setInterval(() => {
@@ -651,9 +921,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setUploading(true)
     try {
       let dupes = 0
+      const свежие: any[] = []
       for (const f of fs) {
         const url = await uploadTo('attachments', meId, f)   // shared public URL
         const r = await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
+        if (r.data) свежие.push(r.data)
         // v1.373.0: у файлов проверки не было вовсе — один и тот же трек заливался
         // сколько угодно раз. Теперь отказ приходит из базы, и мы его показываем,
         // а не глотаем: человек должен понимать, почему добавилось не всё.
@@ -665,7 +937,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           ? (dupes === 1 ? 'Такой трек уже есть в трекотеке' : 'Все эти треки уже есть в трекотеке')
           : `Уже были в трекотеке: ${dupes}`)
       }
-      setTracks(await fetchTracks())
+      appendAdded(свежие)
     } catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
@@ -685,17 +957,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // v1.373.0: сравниваем приведённые адреса. Один и тот же трек приезжает
         // с разными хвостами (?si=, ?in=…/sets/…), и по строкам это разные ссылки.
         const have = new Set(tracks.map(x => normalizeTrackUrl(x.url)))
+        const свежиеИз: any[] = []
         let added = 0, dupes = 0
         for (const s of list) {
           const key = normalizeTrackUrl(s.url)
           if (have.has(key)) { dupes++; continue }
           have.add(key)
           setMeta(prev => ({ ...prev, [s.url]: { title: s.title, author: s.author, art: s.art, play: s.play } }))
-          await addTrack({ url: s.url, name: s.title, ownerId: meId, ownerName: me, kind: 'url', author: s.author, art: s.art, dur: s.dur, play: s.play })
+          const r = await addTrack({ url: s.url, name: s.title, ownerId: meId, ownerName: me, kind: 'url', author: s.author, art: s.art, dur: s.dur, play: s.play })
+          if (r.data) свежиеИз.push(r.data)
           added++
         }
         setScUrl('')
-        setTracks(await fetchTracks())
+        appendAdded(свежиеИз)
         // v1.370.0: если SoundCloud отдал не весь плейлист — говорим, сколько
         // недостаёт. Раньше пропущенные исчезали молча, и человек видел «добавлено
         // 47» вместо 52, не зная, что чего-то не хватает.
@@ -716,8 +990,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           else {
             const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
             if (m) setMeta(prev => ({ ...prev, [url]: m }))
-            await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
-            setTracks(await fetchTracks())
+            const r = await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
+            appendAdded([r.data])
             toastOk('Трек добавлен в трекотеку' + (m ? '' : ' (название уточнится при воспроизведении)'))
           }
           setScUrl('')
@@ -753,7 +1027,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         })
         if (isDuplicateTrack(r.error)) { toastErr('Этот трек уже есть в трекотеке'); return }
         setScUrl('')
-        setTracks(await fetchTracks())
+        appendAdded([r.data])
         toastOk(found
           ? 'Трек добавлен и играет целиком'
           : `«${meta2.title}» добавлен. ${SERVICE_NAME[svc]} не даёт играть свои треки снаружи, а копии в открытых каталогах не нашлось — карточка откроется в сервисе`)
@@ -768,9 +1042,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (!m && isAudiusUrl(url)) { toastErr('Не удалось прочитать ссылку Audius — проверь её'); return }
     const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
     if (m) setMeta(prev => ({ ...prev, [url]: m }))
-    await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
+    const добавлен = await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
     setScUrl('')
-    setTracks(await fetchTracks())
+    appendAdded([добавлен.data])
   }
 
   async function removeTrack(id: string, name?: string) {
@@ -816,6 +1090,50 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
 
   trackFailedRef.current = trackFailed
+
+  /**
+   * YouTube запретил встраивать это видео (v1.420.0).
+   *
+   * Это самая частая причина, по которой «официальные песни не работают»:
+   * официальный клип на самом YouTube играет, а в чужом окне — нет, и владелец
+   * канала выставил это нарочно. Поломкой трека это не является, поэтому:
+   *
+   *   • трек не удаляется НИКОГДА, даже свой, и в счётчик отказов не попадает;
+   *   • сначала ищем ту же запись там, где её можно играть целиком (Audius,
+   *     открытый каталог) — нашли, играем, и ссылка сохраняется в общий склад,
+   *     то есть трек починен для всех и навсегда, а не только у меня;
+   *   • не нашли — говорим прямо, чем дело, и обходим его в очереди: молчащий
+   *     плеер человек считает сломанным приложением.
+   */
+  async function ytEmbedDenied() {
+    const t = cur
+    if (!t) return
+    markNoEmbed(t.id)
+    const title = meta[t.url]?.title || t.name
+    const author = meta[t.url]?.author || t.author || ''
+    setYtDenied(prev => (prev.includes(t.id) ? prev : [...prev, t.id]))
+    // Копия могла быть найдена раньше — тогда искать нечего, плеер сам
+    // переключится на неё (см. curYt: запрещённое видео с копией идёт через audio).
+    if (meta[t.url]?.play || t.play) { toastOk(`«${title}»: официальный клип нельзя встроить — играю найденную копию`); return }
+    toastErr(`«${title}»: YouTube запретил встраивать этот клип — ищу копию`)
+    const found = await findPlayable(title, author)
+    if (found) {
+      setMeta(prev => ({ ...prev, [t.url]: {
+        title: prev[t.url]?.title || title,
+        author: prev[t.url]?.author || author || found.author,
+        art: prev[t.url]?.art || found.art,
+        play: found.play,
+      } }))
+      // В общий склад: у остальных этот трек тоже перестанет молчать.
+      updateTrackMeta(t.id, { play: found.play, art: t.art ?? found.art, author: t.author || found.author })
+      toastOk(`Нашёл копию «${found.title}» — играю целиком`)
+      return
+    }
+    toastErr(`«${title}» можно слушать только на YouTube — копии в открытых каталогах нет. Пропускаю`)
+    next()
+  }
+  const ytEmbedDeniedRef = useRef(ytEmbedDenied)
+  ytEmbedDeniedRef.current = ytEmbedDenied
 
   // v1.417.0: пока плеер открыт, плагины с разрешением music могут делать то же,
   // что человек кнопками. Мост держим в ссылке на свежие значения: он живёт
@@ -874,6 +1192,22 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       author: meta[t.url]?.author || t.author || '', playing,
     })
   }, [tracks, idx, playing, meta])
+
+  /**
+   * Перемотать на секунду t — каким бы источником трек ни играл (v1.420.0).
+   *
+   * Раньше это умела только полоса перемотки, прямо у себя в разметке, тремя
+   * ветками подряд. Строка караоке умела перемотать один обычный audio — то
+   * есть щелчок по строке на треке с YouTube или SoundCloud не делал ничего, и
+   * понять почему было нельзя. Одно действие — одно место.
+   */
+  const seekTo = (t: number) => {
+    const v = Math.max(0, t)
+    if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v); return }
+    if (curYt) { try { ytRef.current?.seekTo(v, true) } catch {}; setCurT(v); return }
+    const a = audioRef.current
+    if (a) { a.currentTime = v; setCurT(v) }
+  }
 
   /** Перезапустить то, что играет сейчас, каким бы источником оно ни было. */
   const restartCurrent = () => {
@@ -1231,22 +1565,33 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               </button>
             </div>}
           </div>
-          {lyrMode === 'karaoke' && lyr && <div className="mus2-karaoke">
-            <div className="mus2-karaoke-in"
-              style={{ transform: `translateY(calc(-1.2em - ${Math.max(lyrActive, 0) * 2.4}em))` }}>
-              {lyr.lines.map((l, i) => (
-                <div key={i} className={'mus2-kline' + (i === lyrActive ? ' on' : i < lyrActive ? ' past' : '')}
-                  onClick={() => {
-                    const a = audioRef.current
-                    if (!a || l.t === null) return
-                    // Обратный пересчёт: в строке время оригинала, а перемотка
-                    // работает по времени играющей записи.
-                    const t = Math.max(0, (l.t - lyrShift) / (lyrK || 1))
-                    a.currentTime = t; setCurT(t)
-                  }}
-                  title={l.t !== null ? 'Перейти к строке' : undefined}>{l.text || '\u00a0'}</div>
-              ))}
+          {lyrMode === 'karaoke' && lyr && <div className="mus2-karaokewrap">
+            <div className="mus2-karaoke" ref={kBoxRef}
+              onWheel={lyrTouched} onTouchMove={lyrTouched} onPointerDown={lyrTouched}>
+              <div className="mus2-karaoke-in">
+                {lyr.lines.map((l, i) => (
+                  <div key={i} ref={el => { if (el) kLineRefs.current.set(i, el); else kLineRefs.current.delete(i) }}
+                    className={'mus2-kline' + (i === lyrActive ? ' on' : lyrActive >= 0 && i < lyrActive ? ' past' : '')
+                      + (l.t === null ? ' plain' : '')}
+                    onClick={() => {
+                      if (l.t === null) return
+                      // Обратный пересчёт: в строке время оригинала, а перемотка идёт
+                      // по времени играющей записи и через тот источник, который
+                      // сейчас звучит: раньше здесь стоял только audio, и в караоке
+                      // на YouTube или SoundCloud щелчок по строке не делал ничего.
+                      seekTo(Math.max(0, (l.t - lyrShift) / (lyrK || 1)))
+                    }}
+                    title={l.t !== null ? 'Перейти к строке' : undefined}>{l.text || ' '}</div>
+                ))}
+              </div>
             </div>
+            {/* Пролистал руками — кнопка возвращает к поющейся строке. Без неё
+                человек оставался в пролистанном тексте и решал, что подсветка отстала. */}
+            {lyrHeld && lyrActive >= 0 && (
+              <button className="mus2-kback" onClick={() => { lyrTouchRef.current = 0; setLyrHeld(false); centerLyrLine(lyrActive) }}>
+                <Icon name="chevron-down" size={14} /> К этой строке
+              </button>
+            )}
           </div>}
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           {/* v1.417.0: уголок плагинов под обложкой. */}
@@ -1267,7 +1612,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-seek">
           <span>{fmt(curT)}</span>
           <input type="range" min={0} max={dur || 0} step={0.1} value={curT}
-            onChange={e => { const v = +e.target.value; if (curSc) { widgetRef.current?.seekTo(v * 1000); setCurT(v) } else if (curYt) { try { ytRef.current?.seekTo(v, true) } catch {}; setCurT(v) } else { const a = audioRef.current; if (a) { a.currentTime = v; setCurT(v) } } }} disabled={!cur || guest} title={guest ? noGuest : undefined} />
+            onChange={e => seekTo(+e.target.value)} disabled={!cur || guest} title={guest ? noGuest : undefined} />
           <span>{fmt(dur)}</span>
         </div>
         <div className="mus2-ctlrow">
@@ -1435,6 +1780,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                           {/* v1.414.0: трек, который не заиграл дважды подряд, помечен —
                               он и в очереди обходится, и притворяться рабочим не должен. */}
                           {isBroken(t.id) && <span className="mus2-card-bad" title="Не играет — плеер пробовал дважды">не играет</span>}
+                          {/* v1.420.0: запрет на встраивание — это НЕ поломка трека, и
+                              помечать его как «не играет» было бы неправдой: на самом
+                              YouTube он играет прекрасно. Пометка отдельная и мягче. */}
+                          {!isBroken(t.id) && isNoEmbed(t.id) && !(meta[t.url]?.play || t.play) &&
+                            <span className="mus2-card-only" title="Владелец запретил встраивание: слушать можно только на YouTube">только на YouTube</span>}
                           {(t.plays ?? 0) > 0 && <span className="mus2-card-pl" title={'Прослушиваний: ' + (t.plays ?? 0)}>
                             <Icon name="play" size={11} />{fmtPlays(t.plays ?? 0)}
                           </span>}
@@ -1501,6 +1851,31 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               <button className="pqs2-btn ghost" onClick={() => nudgeLyrics(0.5)} title="Текст опаздывает — поторопить">+0,5 с</button>
               {lyrShift !== 0 && <button className="pqs2-btn ghost" onClick={() => nudgeLyrics(-lyrShift)}>Сбросить</button>}
               {lyrK !== 1 && <span className="lyr-shift-note">Текст подогнан под скорость записи (×{lyrK.toFixed(2)})</span>}
+            </div>
+            {/* v1.420.0: внутренний ИИ. Слушает сам звук трека и расставляет
+                метки времени: если слова уже вписаны — только время (слова
+                остаются правильными), если нет — и слова тоже, с честной
+                подписью, что они распознаны на слух. */}
+            <div className="lyr-ai">
+              <div className="lyr-ai-h"><Icon name="zap" size={14} /> Распознать на слух</div>
+              <div className="lyr-ai-d">
+                {aiWhy
+                  ? aiWhy
+                  : lyrEdit.trim()
+                    ? 'Слова в поле выше останутся как есть — ИИ послушает трек и расставит им метки времени. Так караоке получается у песни, которой нет ни в одном каталоге.'
+                    : 'ИИ послушает трек и напишет текст сам. Слова могут быть с ошибками — модель обучена на речи, а не на пении; поправить их можно тут же.'}
+              </div>
+              {!aiWhy && <div className="lyr-ai-d">
+                При первом запуске скачивается модель распознавания (около 40 МБ, дальше берётся из кэша) — нужен интернет.
+              </div>}
+              {aiRun
+                ? <div className="lyr-ai-run">
+                    <div className="lyr-ai-bar"><i style={{ width: aiRun.percent + '%' }} /></div>
+                    <span>{aiRun.note} · {aiRun.percent}%</span>
+                  </div>
+                : <button className="pqs2-btn" disabled={!!aiWhy || lyrBusy} onClick={() => { void recognizeLyricsNow() }}>
+                    <Icon name="zap" size={15} /> {lyrEdit.trim() ? 'Расставить метки времени' : 'Распознать текст'}
+                  </button>}
             </div>
             <div className="lyr-btns">
               {lyr && <button className="pqs2-btn ghost danger" disabled={lyrBusy} onClick={() => keepLyrics('')}>Убрать текст</button>}

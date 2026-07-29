@@ -17,6 +17,8 @@ import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './so
 import { boost, lighten, scale, rgb } from './artColor'
 import { searchQuery } from './streaming'
 import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
+import { isEmbedDeniedCode } from './broken'
+import { mergeTracks } from './mergeTracks'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -245,6 +247,57 @@ check('проверка заметила бы, что ссылки перест�
   sameTrack(Y + '&si=1', Y))
 check('проверка заметила бы, что склад снова по времени добавления', () =>
   libraryOrder([T('a', '', '', 1), T('b', '', '', 50)])[0].id === 'b')
+
+
+console.log('\n-- Склад приезжает частями (v1.420.0) --')
+// Раньше на любое изменение таблицы склад выкачивался ЦЕЛИКОМ и заменялся
+// целиком: когда кто-то заливал плейлист, у всех слушающих это была сотня
+// полных перезагрузок подряд. Теперь порция ПРИМЕНЯЕТСЯ к тому, что уже есть,
+// и правила ниже — ровно то, из-за чего это безопасно.
+const TR = (id: string, name = id, extra: any = {}) => ({ id, url: 'https://x/' + id, name, owner: 'кто-то', ...extra })
+
+check('новая порция дописывается в конец', () => {
+  const out = mergeTracks([TR('a'), TR('b')], [TR('c')])
+  return out.length === 3 && out[2].id === 'c'
+})
+check('известный трек остаётся на своём месте', () => {
+  // Место важнее всего: номер играющего считается по этому же массиву.
+  const out = mergeTracks([TR('a'), TR('b'), TR('c')], [TR('b', 'новое имя')])
+  return out.length === 3 && out[1].id === 'b' && out[1].name === 'новое имя'
+})
+check('повторы внутри порции схлопываются', () => {
+  const out = mergeTracks([], [TR('a'), TR('a', 'второй раз'), TR('b')])
+  return out.length === 2 && out[0].name === 'второй раз'
+})
+check('порция без изменений не создаёт новый список', () => {
+  // Иначе каждое чужое обновление метаданных перерисовывало бы весь склад.
+  const was = [TR('a'), TR('b')]
+  return mergeTracks(was, [TR('a'), TR('b')]) === was
+})
+check('пустая порция ничего не меняет', () => {
+  const was = [TR('a')]
+  return mergeTracks(was, []) === was
+})
+check('строка без id не попадает в склад', () => {
+  const out = mergeTracks([TR('a')], [{ id: '', url: 'x', name: 'мусор', owner: 'к' } as any])
+  return out.length === 1
+})
+check('обновление метаданных доезжает', () => {
+  const out = mergeTracks([TR('a')], [TR('a', 'a', { art: 'https://art', play: 'https://play' })])
+  return out[0].art === 'https://art' && out[0].play === 'https://play'
+})
+
+console.log('\n-- Запрет на встраивание — не поломка трека --')
+check('коды 101 и 150 — это запрет встраивания', () =>
+  isEmbedDeniedCode(101) && isEmbedDeniedCode(150) && isEmbedDeniedCode('150'))
+check('остальные коды отказа так не считаются', () =>
+  !isEmbedDeniedCode(2) && !isEmbedDeniedCode(5) && !isEmbedDeniedCode(100) && !isEmbedDeniedCode(undefined))
+
+console.log('\n-- Ломаем нарочно (склад) --')
+check('проверка заметила бы, что порядок известных треков перестал держаться', () => {
+  const out = mergeTracks([TR('a'), TR('b')], [TR('b', 'иначе')])
+  return out[0].id === 'a'
+})
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

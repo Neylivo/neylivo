@@ -8,7 +8,8 @@
 // сдвигом [offset], с повторами припева и просто с мусором.
 export {}
 
-import { parseLyrics, activeLineIndex, pickLyrics, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD } from './lyrics'
+import { parseLyrics, activeLineIndex, pickLyrics, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS } from './lyrics'
+import { stamp, words, chunksToLrc, alignPlainToChunks, fillGaps, whyCantRecognize, type SpeechChunk } from './aiLyrics'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -161,6 +162,137 @@ check('проверка заметила бы, что метки времени 
   return l.lines.every(x => typeof x.t === 'number')
 })
 check('проверка заметила бы, что synced ставится всегда', () => !parseLyrics('просто текст\nбез меток').synced)
+
+
+console.log('\n-- Строка посередине (v1.420.0) --')
+// Раньше положение считалось арифметикой «номер строки x высота строки»: на
+// первой же длинной строке, которая переносится на два ряда, весь текст ниже
+// съезжал, и поющаяся строка уходила из центра. Считаем по измеренной строке.
+check('строка встаёт ровно по середине окна', () =>
+  centerScrollTop(300, 60, 400, 10000) === 130)
+check('первую строку не тянет в минус', () => centerScrollTop(0, 60, 400, 10000) === 0)
+check('последнюю строку не тянет за предел прокрутки', () =>
+  centerScrollTop(5000, 60, 400, 700) === 700)
+check('высота строки учитывается, а не берётся средняя', () =>
+  centerScrollTop(300, 120, 400, 10000) > centerScrollTop(300, 60, 400, 10000))
+check('мусорные размеры не ломают счёт', () =>
+  centerScrollTop(NaN, 60, 400, 1000) === 0 && centerScrollTop(100, 60, 400, -5) === 0)
+
+console.log('\n-- Уступаем, когда листают руками --')
+check('сразу после прокрутки сами не ведём', () => !autoScrollOk(1000, 1500))
+check('через паузу ведём снова', () => autoScrollOk(1000, 1000 + LYRICS_HOLD_MS))
+check('никто не листал — ведём сами', () => autoScrollOk(0, 999999))
+
+console.log('\n-- ИИ: метки времени --')
+check('метка времени пишется в формате LRC', () =>
+  stamp(0) === '[00:00.00]' && stamp(83.45) === '[01:23.45]')
+check('округление сотых не даёт 100', () => stamp(9.999) === '[00:10.00]')
+check('слова сравниваются без знаков и регистра', () =>
+  words('Привет, МИР! (2 раза)').join('|') === 'привет|мир|2|раза')
+
+const chunks: SpeechChunk[] = [
+  { start: 10, end: 13, text: 'первая строка песни' },
+  { start: 14, end: 17, text: 'вторая строка песни' },
+  { start: 18, end: 21, text: 'третья строка песни' },
+]
+
+console.log('\n-- ИИ: распознанное в текст --')
+check('из распознанного собирается LRC с метками', () => {
+  const lrc = chunksToLrc(chunks, 200)
+  if (!lrc) return false
+  const l = parseLyrics(lrc)
+  return l.synced && l.lines.length === 3 && l.lines[0].t === 10 && l.srcDur === 200
+})
+check('в тексте есть честная подпись, откуда он', () => {
+  const lrc = chunksToLrc(chunks, 200) ?? ''
+  return /Ponoi/.test(lrc) && /на слух/.test(lrc)
+})
+check('пустое и мусорное не попадает в текст', () => {
+  const lrc = chunksToLrc([...chunks, { start: 30, end: 31, text: '(музыка)' }, { start: 40, end: 41, text: '  ' }], 200) ?? ''
+  return !/музыка/.test(lrc) && parseLyrics(lrc).lines.filter(x => x.text.trim()).length === 3
+})
+check('двух строк для текста песни недостаточно', () =>
+  chunksToLrc(chunks.slice(0, 2), 200) === null)
+check('метки не идут назад, даже если модель их перепутала', () => {
+  const lrc = chunksToLrc([
+    { start: 10, end: 12, text: 'раз слова песни' },
+    { start: 9, end: 11, text: 'два слова песни' },
+    { start: 20, end: 22, text: 'три слова песни' },
+  ], 100) ?? ''
+  const ts = parseLyrics(lrc).lines.map(x => x.t ?? -1)
+  return ts.every((t, i) => i === 0 || t > ts[i - 1])
+})
+
+console.log('\n-- ИИ: известные слова + услышанное время --')
+const known = 'первая строка песни\nсередина без совпадений\nвторая строка песни\nтретья строка песни'
+check('слова остаются свои, а время берётся распознанное', () => {
+  const lrc = alignPlainToChunks(known, chunks, 200)
+  if (!lrc) return false
+  const l = parseLyrics(lrc)
+  const texts = l.lines.filter(x => x.text.trim()).map(x => x.text)
+  return l.synced && texts[0] === 'первая строка песни' && texts[1] === 'середина без совпадений'
+    && l.lines[0].t === 10
+})
+check('строке без совпадения время достаётся между соседями', () => {
+  const l = parseLyrics(alignPlainToChunks(known, chunks, 200) ?? '')
+  const t = l.lines.map(x => x.t ?? -1)
+  return t[1] > t[0] && t[1] < t[2]
+})
+check('чужое распознанное не притворяется разметкой', () => {
+  const alien: SpeechChunk[] = [
+    { start: 5, end: 6, text: 'completely different words here' },
+    { start: 9, end: 10, text: 'nothing in common at all' },
+    { start: 15, end: 16, text: 'another unrelated phrase' },
+  ]
+  return alignPlainToChunks(known, alien, 200) === null
+})
+check('короткие слова не склеивают что попало', () => {
+  const short: SpeechChunk[] = [
+    { start: 5, end: 6, text: 'и не на' }, { start: 8, end: 9, text: 'но и' }, { start: 12, end: 13, text: 'на не' },
+  ]
+  return alignPlainToChunks('и не на\nно и\nна не', short, 100) === null
+})
+check('уже проставленные метки в известных словах не мешают', () => {
+  const l = alignPlainToChunks('[00:01.00]первая строка песни\n[00:02.00]вторая строка песни\n[00:03.00]третья строка песни', chunks, 200)
+  return !!l && parseLyrics(l).lines[0].t === 10
+})
+
+console.log('\n-- ИИ: достройка пропусков --')
+check('пропуски между известными заполняются ровно', () => {
+  const t: (number | null)[] = [10, null, null, 40]
+  fillGaps(t, 100)
+  return t[1] === 20 && t[2] === 30
+})
+check('до первой известной метки идут назад, но не в минус', () => {
+  const t: (number | null)[] = [null, null, 5, 10]
+  fillGaps(t, 100)
+  return (t[0] as number) >= 0 && (t[0] as number) < (t[1] as number) && (t[1] as number) < 5
+})
+check('после последней не уезжают за конец записи', () => {
+  const t: (number | null)[] = [10, 20, null, null]
+  fillGaps(t, 25)
+  return (t[3] as number) <= 25
+})
+
+console.log('\n-- ИИ: когда распознавать нечего --')
+check('у встроенных проигрывателей звука нет — говорим прямо', () =>
+  (whyCantRecognize('https://x/a.mp3', true) ?? '').includes('YouTube'))
+check('без ссылки на звук распознавать нечего', () => whyCantRecognize(undefined, false) !== null)
+check('обычный файл распознать можно', () => whyCantRecognize('https://x/a.mp3', false) === null)
+
+console.log('\n-- Ломаем нарочно (ИИ) --')
+check('проверка заметила бы, что мусор перестали отбрасывать', () => {
+  const lrc = chunksToLrc([...chunks, { start: 30, end: 31, text: 'обычные слова тут' }], 200) ?? ''
+  return /обычные слова тут/.test(lrc)
+})
+check('проверка заметила бы, что порог совпадений убрали', () => {
+  const half: SpeechChunk[] = [
+    { start: 5, end: 6, text: 'первая строка песни' },
+    { start: 9, end: 10, text: 'вторая строка песни' },
+    { start: 15, end: 16, text: 'третья строка песни' },
+  ]
+  return alignPlainToChunks(known, half, 100) !== null
+})
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

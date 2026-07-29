@@ -5678,25 +5678,47 @@ body.no-anim .pcb-drop, body.no-anim .pcb-hint { transition: none; }
 }
 .mus2-lyrback-l.on { color: rgba(var(--ov, 255,255,255), .22); }
 
+/* v1.420.0: караоке стало обычным прокручиваемым списком.
+   Было: блок сдвигался вверх на «номер строки × высоту строки». Верно ровно до
+   первой длинной строки — она переносится на два ряда, и дальше весь текст
+   съезжает тем сильнее, чем больше таких строк выше. Поющаяся строка уходила из
+   центра, а к концу песни за край.
+   Стало: прокрутка по измеренной строке (centerScrollTop в lyrics.ts), и текст
+   можно листать руками. */
+.mus2-karaokewrap { position: relative; z-index: 1; width: min(820px, 92%); }
 .mus2-karaoke {
-  position: relative; z-index: 1;
-  width: min(820px, 92%); height: min(420px, 52vh); overflow: hidden;
+  height: min(420px, 52vh); overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: none; overscroll-behavior: contain;
   -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
           mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
 }
-.mus2-karaoke-in {
-  /* Строку ставит в середину сдвиг, а не отступ: проценты в padding считаются
-     от ШИРИНЫ, и на этом я уже попался — текст уезжал ниже нижнего края, а
-     экран выглядел просто пустым. */
-  position: absolute; left: 0; right: 0; top: 50%; text-align: center;
-  transition: transform .45s var(--ease-out4, ease);
+.mus2-karaoke::-webkit-scrollbar { width: 0; height: 0; }
+.mus2-karaoke-in { text-align: center; }
+/* Пустое место сверху и снизу, чтобы первая и последняя строки тоже могли
+   встать ровно посередине. Высота в процентах от самого блока прокрутки — у
+   него она задана, поэтому считается правильно. С padding в процентах так
+   нельзя: он считается от ШИРИНЫ, и на этом я тут уже попадался. */
+.mus2-karaoke-in::before, .mus2-karaoke-in::after { content: ''; display: block; height: 50%; }
+/* Кнопка возврата к поющейся строке — поверх текста, у нижнего края. */
+.mus2-kback {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(var(--ov, 255,255,255), .16);
+  background: rgba(0, 0, 0, .55); color: var(--tx-hi, #fff);
+  font-size: 12.5px; font-weight: 700; backdrop-filter: blur(6px);
 }
+.mus2-kback:hover { border-color: var(--brand); }
 .mus2-kline {
   font-size: 26px; line-height: 2.4em; font-weight: 800; cursor: pointer;
   color: rgba(var(--ov, 255,255,255), .34);
   transition: color .25s var(--ease-out4, ease), transform .25s var(--ease-out4, ease);
 }
 .mus2-kline:hover { color: rgba(var(--ov, 255,255,255), .6); }
+/* Строка без метки времени: перематывать по ней некуда, поэтому и вид не
+   обещает нажатия (v1.420.0 — текст без меток теперь тоже показывается
+   списком, а не только фоном за обложкой). */
+.mus2-kline.plain { cursor: default; }
 .mus2-kline.past { color: rgba(var(--ov, 255,255,255), .22); }
 .mus2-kline.on { color: var(--tx-hi, #fff); transform: scale(1.04); }
 /* В караоке обложка уходит с середины: две крупные вещи разом читаются хуже,
@@ -5863,6 +5885,16 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   background: rgba(237, 66, 69, .85); color: #fff;
   font-size: 10.5px; font-weight: 700; line-height: 1.6;
 }
+/* «Только на YouTube» (v1.420.0): владелец запретил встраивание. Это не
+   поломка — трек цел, поэтому и метка не красная, а спокойная. */
+.mus2-card-only {
+  position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(0, 0, 0, .62); color: #fff;
+  border: 1px solid rgba(255, 255, 255, .22);
+  font-size: 10px; font-weight: 700; line-height: 1.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ══ Панели плагинов (v1.417.0) ════════════════════════════════════════════
    Свой уголок плагина в готовом экране. Разметку рисует приложение — от
@@ -5935,3 +5967,19 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   display: flex; align-items: center; justify-content: center;
   color: rgba(255, 255, 255, .85); font-size: 10.5px; font-weight: 700;
 }
+
+/* ══ Распознавание текста на слух (v1.420.0) ═══════════════════════════════
+   Внутренний ИИ Ponoi Music: слушает трек и расставляет метки времени. Блок
+   живёт в окне текста песни — рядом с полем, куда попадёт результат, чтобы
+   человек видел, что именно изменилось, и мог поправить слова до сохранения. */
+.lyr-ai {
+  margin: 10px 0 2px; padding: 10px 12px;
+  border: 1px solid rgba(var(--ov, 255,255,255), .12); border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255,255,255), .04);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.lyr-ai-h { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 13.5px; }
+.lyr-ai-d { color: var(--mut); font-size: 12.5px; line-height: 1.5; }
+.lyr-ai-run { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--mut); }
+.lyr-ai-bar { height: 6px; border-radius: 999px; overflow: hidden; background: rgba(var(--ov, 255,255,255), .12); }
+.lyr-ai-bar > i { display: block; height: 100%; background: var(--brand); border-radius: 999px; transition: width .3s ease; }
