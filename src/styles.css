@@ -5782,6 +5782,12 @@ body.no-anim .pcb-drop, body.no-anim .pcb-hint { transition: none; }
 .mus2-now.karaoke .mus2-artwrap { display: none; }
 body.no-anim .mus2-lyrback-in, body.no-anim .mus2-karaoke-in, body.no-anim .mus2-kline { transition: none; }
 
+/* Что происходит с текстом — словами, под названием трека (v1.396.0). */
+.mus2-lyrnote {
+  position: relative; z-index: 1; max-width: 460px; text-align: center;
+  color: var(--mut); font-size: 12.5px; line-height: 1.5; margin-top: -6px;
+}
+
 /* Окно «Текст песни» */
 .lyr-modal { width: 560px; max-width: calc(100vw - 32px); }
 .lyr-sub { color: var(--mut); font-size: 13px; margin: -6px 0 10px; }

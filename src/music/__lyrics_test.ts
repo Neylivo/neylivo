@@ -8,7 +8,7 @@
 // сдвигом [offset], с повторами припева и просто с мусором.
 export {}
 
-import { parseLyrics, activeLineIndex } from './lyrics'
+import { parseLyrics, activeLineIndex, pickLyrics } from './lyrics'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -82,6 +82,32 @@ check('ровно на метке — уже её строка', () => activeLin
 check('между метками — предыдущая', () => activeLineIndex(L, 19.9) === 0)
 check('после последней — последняя', () => activeLineIndex(L, 500) === 2)
 check('на пустом тексте не падает', () => activeLineIndex([], 10) === -1)
+
+console.log('\n── Какую запись из каталога брать ──')
+check('без текста запись не берём', () => pickLyrics([{ trackName: 'A', syncedLyrics: '', plainLyrics: '' }]) === null)
+check('из пустого списка — ничего', () => pickLyrics([]) === null)
+check('с метками времени важнее, чем без', () => {
+  const r = pickLyrics([{ trackName: 'простой', plainLyrics: 'текст' }, { trackName: 'с метками', syncedLyrics: '[00:01.00]текст' }])
+  return r!.trackName === 'с метками'
+})
+check('при равенстве берём ближе по длительности', () => {
+  const r = pickLyrics([
+    { trackName: 'концерт', syncedLyrics: '[00:01.00]a', duration: 400 },
+    { trackName: 'студия', syncedLyrics: '[00:01.00]a', duration: 210 },
+  ], 205)
+  return r!.trackName === 'студия'
+})
+check('длительность не перевешивает наличие меток', () => {
+  const r = pickLyrics([
+    { trackName: 'простой', plainLyrics: 'текст', duration: 205 },
+    { trackName: 'с метками', syncedLyrics: '[00:01.00]a', duration: 400 },
+  ], 205)
+  return r!.trackName === 'с метками'
+})
+check('без известной длительности берём первый с метками', () => {
+  const r = pickLyrics([{ trackName: 'один', syncedLyrics: '[00:01.00]a' }, { trackName: 'два', syncedLyrics: '[00:01.00]b' }])
+  return r!.trackName === 'один'
+})
 
 console.log('\n── Ломаем нарочно ──')
 check('проверка заметила бы, что метки времени перестали разбираться', () => {

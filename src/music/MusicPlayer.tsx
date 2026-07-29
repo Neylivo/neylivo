@@ -198,13 +198,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       let raw = await loadLyrics(t.id)
       if (!ok) return
       if (raw) { setLyr(parseLyrics(raw)); return }
-      if (!lyrCfg.online) { setLyrNote('Текста нет. Кнопка «Текст» — вставить свой.'); return }
+      if (!lyrCfg.online) {
+        // Разные причины пустоты — разные подсказки: «текста нет» и «его даже не
+        // искали» это не одно и то же, а раньше человек видел одну фразу на оба.
+        setLyrNote('Текста нет. Поиск в интернете выключен в настройках плеера; свой текст можно вставить кнопкой «Текст».')
+        return
+      }
       setLyrNote('Ищу текст…')
       const found = await searchLyricsOnline(curMeta?.title || t.name, curMeta?.author || t.author || '', dur || t.dur)
       if (!ok) return
-      if (!found) { setLyrNote('Текст не нашёлся. Кнопка «Текст» — вставить свой.'); return }
-      raw = found.text
-      setLyr(parseLyrics(raw)); setLyrNote('')
+      if (!found.ok) {
+        setLyrNote(found.why === 'net'
+          ? 'Не получилось спросить lrclib.net — нет сети или сервис молчит.'
+          : 'Текст не нашёлся в каталоге. Кнопка «Текст» — вставить свой.')
+        return
+      }
+      raw = found.hit.text
+      setLyr(parseLyrics(raw))
+      setLyrNote('Текст найден: ' + found.hit.by)
       void saveLyrics(t.id, raw, t.ownerId === meId)
     })()
     return () => { ok = false }
@@ -937,6 +948,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           </div>}
           <div className="mus2-nowt">{cur ? (curMeta?.title || cur.name) : 'Ничего не играет'}</div>
           <div className="mus2-nowsub">{cur ? (curSc ? (curMeta?.author || cur.author || 'Трекотека') : curYt ? (curMeta?.author ? curMeta.author + ' · YouTube' : 'YouTube') : cur.kind === 'url' ? (curMeta?.author || cur.author || 'по ссылке') : 'файл · ' + cur.owner) : 'Добавь трек, чтобы начать'}</div>
+          {/* v1.396.0: что происходит с текстом — словами. Раньше эти подсказки
+              вычислялись и никуда не выводились: человек видел пустой экран и не
+              знал, ищут ли текст, не нашли его или поиск вообще выключен. */}
+          {lyrCfg.mode !== 'off' && lyrNote && <div className="mus2-lyrnote">{lyrNote}</div>}
           {curSc && cur && <iframe key={scPlayUrl} ref={scRef} className="mus2-scframe" title="SoundCloud" allow="autoplay"
             src={widgetSrc(scPlayUrl)} />}
           {together && <div className="mus2-together-badge"><Icon name="users" size={14} /> Вместе · код {together.code} {together.host ? '(хост)' : ''}</div>}

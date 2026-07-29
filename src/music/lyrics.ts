@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { searchQuery } from './streaming'
 
 // v1.394.0: текст песни в полноэкранном плеере.
 //
@@ -141,18 +142,63 @@ export async function saveLyrics(trackId: string, text: string, shared = true): 
 // LRC с метками времени. Запрос уходит с устройства человека: сервису видно
 // название трека и IP. Поэтому настройка выключена по умолчанию, а рядом с ней
 // это прямо написано — молчать о таком нельзя.
+//
+// v1.396.0: искали через /api/get — а он требует ТОЧНОГО названия и обязательно
+// исполнителя: без исполнителя сервер отвечает 400, а у нас в Трекотеке автор
+// известен далеко не всегда (файл, ссылка, свой заголовок с YouTube). В итоге
+// «не нашлось» получали вообще все треки, и выглядело это как сломанная
+// настройка. Теперь спрашиваем /api/search: он ищет по обрывку названия и
+// прощает «(Official Video)» в заголовке.
 
-export interface OnlineLyrics { text: string; synced: boolean }
+export interface LyricsHit { text: string; synced: boolean; by: string }
+export type LyricsSearch = { ok: true; hit: LyricsHit } | { ok: false; why: 'none' | 'net' }
 
-export async function searchLyricsOnline(title: string, artist: string, dur?: number): Promise<OnlineLyrics | null> {
-  const q = new URLSearchParams({ track_name: title, artist_name: artist || '' })
-  if (dur && isFinite(dur)) q.set('duration', String(Math.round(dur)))
-  try {
-    const r = await fetch('https://lrclib.net/api/get?' + q.toString(), { headers: { Accept: 'application/json' } })
-    if (!r.ok) return null
-    const j: any = await r.json()
-    const text: string = j?.syncedLyrics || j?.plainLyrics || ''
-    if (!text.trim()) return null
-    return { text, synced: !!j?.syncedLyrics }
-  } catch { return null }
+/** Строка каталога, как её отдаёт lrclib. Берём только то, чем пользуемся. */
+export interface LrcRow {
+  trackName?: string; artistName?: string; duration?: number
+  syncedLyrics?: string | null; plainLyrics?: string | null
+}
+
+/**
+ * Какую из найденных записей брать.
+ *
+ * Сначала те, где есть текст вообще. Дальше — с метками времени: ради караоке
+ * всё и затевалось. При равенстве ближе та, у которой длительность совпадает с
+ * нашей: у одной песни в каталоге бывает и студийная запись, и концертная, и
+ * час «расширенной версии», а текст к ним разъезжается.
+ */
+export function pickLyrics(rows: LrcRow[], dur?: number): LrcRow | null {
+  const withText = (rows ?? []).filter(r => (r.syncedLyrics || r.plainLyrics || '').trim())
+  if (!withText.length) return null
+  const score = (r: LrcRow) => {
+    let v = r.syncedLyrics && r.syncedLyrics.trim() ? 1000 : 0
+    if (dur && isFinite(dur) && r.duration) v -= Math.min(200, Math.abs(r.duration - dur))
+    return v
+  }
+  let best = withText[0]
+  for (const r of withText) if (score(r) > score(best)) best = r
+  return best
+}
+
+export async function searchLyricsOnline(title: string, artist: string, dur?: number): Promise<LyricsSearch> {
+  // Два захода: «исполнитель + название» и одно название. Второй нужен, когда
+  // автор записан не так, как в каталоге, — а такое сплошь и рядом.
+  const queries = [searchQuery(title, artist), searchQuery(title, '')]
+    .map(q => q.trim()).filter((q, i, a) => q && a.indexOf(q) === i)
+  let netFail = false
+  for (const q of queries) {
+    try {
+      const r = await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(q),
+        { headers: { Accept: 'application/json' } })
+      if (!r.ok) { if (r.status >= 500) netFail = true; continue }
+      const rows = await r.json()
+      const best = pickLyrics(Array.isArray(rows) ? rows : [], dur)
+      if (best) return { ok: true, hit: {
+        text: (best.syncedLyrics || best.plainLyrics || '').trim(),
+        synced: !!(best.syncedLyrics && best.syncedLyrics.trim()),
+        by: [best.artistName, best.trackName].filter(Boolean).join(' — '),
+      } }
+    } catch { netFail = true }
+  }
+  return { ok: false, why: netFail ? 'net' : 'none' }
 }
