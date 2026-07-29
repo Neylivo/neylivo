@@ -111,6 +111,27 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [color, setColor] = useState<Rgb | null>(null)
 
   const cur = tracks[idx]
+  // v1.412.0: играющий трек держится за себя, а не за место в списке.
+  //
+  // Трекотека общая и живая: пока идёт песня, кто-то с другого устройства
+  // может убрать трек, стоящий выше по списку. Номер при этом оставался
+  // прежним, список сдвигался — и плеер молча начинал играть соседнюю песню.
+  // Удаление со СВОЕГО устройства такой случай уже разбирало (v1.376.0), а
+  // чужое — нет, хотя оно ровно то же самое.
+  const curIdRef = useRef<string | null>(null)
+  useEffect(() => { if (cur?.id) curIdRef.current = cur.id }, [cur?.id])
+  useEffect(() => {
+    const id = curIdRef.current
+    if (!id || tracks.length === 0) return
+    if (tracks[idx]?.id === id) return
+    const i = tracks.findIndex(t => t.id === id)
+    if (i >= 0) { setIdx(i); return }
+    // Трек убрали у всех — молча играть вместо него соседний нельзя.
+    curIdRef.current = null
+    setPlaying(false)
+    toastErr('Трек убрали из Трекотеки')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks])
   const curSc = !!cur && isSoundcloudUrl(cur.url)
   const curYt = !!cur && !curSc && isYouTubeUrl(cur.url)
   const curMeta = cur ? meta[cur.url] : undefined

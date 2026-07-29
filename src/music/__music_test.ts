@@ -1,0 +1,223 @@
+// v1.412.0: проверка всей логики Ponoi Music. Запуск: npm run test:music
+//
+// Зачем отдельный набор. Плеер оброс решениями, которые видно только на краях:
+// что считать одной и той же песней, что играть дальше, куда возвращает
+// «назад», в каком порядке выкладывать склад, как разбирать чужие ссылки. Всё
+// это чистые функции, и проверять их надо на настоящих строках и числах, а не
+// глазами по экрану — глазами такие вещи не видно, пока не сломается у людей.
+//
+// Разбор текста песни живёт отдельно (npm run test:lyrics), перетаскивание
+// плашки — в окне (npm run test:drag): там нужен настоящий DOM.
+export {}
+
+import { nextTrack, backTarget } from './nextTrack'
+import { recommend, libraryOrder, personalOrder, WHY_LABEL } from './personalQueue'
+import { normalizeTrackUrl, sameTrack } from './trackUrl'
+import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './sources'
+import { boost, lighten, scale, rgb } from './artColor'
+import { searchQuery } from './streaming'
+
+let pass = 0, fail = 0
+function check(name: string, fn: () => boolean) {
+  let ok = false, err = ''
+  try { ok = fn() } catch (e: any) { err = e?.message ?? String(e) }
+  if (ok) { pass++; console.log('  ok   ' + name) }
+  else { fail++; console.log('  ПРОВАЛ ' + name + (err ? ' — ' + err : '')) }
+}
+
+// ── Что играть дальше ────────────────────────────────────────────────────
+console.log('── Переход к следующему треку ──')
+const N = (o: any) => nextTrack({ repeat: 'off', shuffle: false, ...o })
+
+check('по порядку', () => { const a = N({ idx: 0, count: 3 }); return a.kind === 'go' && a.index === 1 })
+check('последний без повтора — остановка', () => N({ idx: 2, count: 3 }).kind === 'stop')
+check('последний с повтором всего — на первый', () => {
+  const a = N({ idx: 2, count: 3, repeat: 'all' }); return a.kind === 'go' && a.index === 0
+})
+check('повтор одного — тот же трек сначала', () => N({ idx: 1, count: 3, repeat: 'one' }).kind === 'restart')
+check('пустой склад — остановка', () => N({ idx: 0, count: 0 }).kind === 'stop')
+check('единственный трек без повтора — остановка', () => N({ idx: 0, count: 1 }).kind === 'stop')
+check('единственный трек с повтором всего — сначала', () => N({ idx: 0, count: 1, repeat: 'all' }).kind === 'restart')
+check('поставленный вручную идёт вперёд очереди', () => {
+  const a = N({ idx: 0, count: 5, manualIdx: 3 }); return a.kind === 'go' && a.index === 3
+})
+check('поставленный вручную и есть текущий — играем сначала', () =>
+  N({ idx: 2, count: 5, manualIdx: 2 }).kind === 'restart')
+check('номер вручную вне склада не ломает', () => {
+  const a = N({ idx: 0, count: 3, manualIdx: 99 }); return a.kind === 'go' && a.index === 1
+})
+check('повтор одного главнее поставленного вручную', () =>
+  N({ idx: 0, count: 5, repeat: 'one', manualIdx: 3 }).kind === 'restart')
+check('перемешивание не даёт тот же трек', () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const a = N({ idx: 2, count: 5, shuffle: true, rnd: () => seed / 30 })
+    if (a.kind !== 'go' || a.index === 2) return false
+  }
+  return true
+})
+check('перемешивание из одного трека не зацикливается', () =>
+  N({ idx: 0, count: 1, repeat: 'all', shuffle: true, rnd: () => 0 }).kind === 'restart')
+check('личная очередь важнее порядка склада', () => {
+  const a = N({ idx: 0, count: 5, personalIdx: 4 }); return a.kind === 'go' && a.index === 4
+})
+check('перемешивание отменяет личную очередь', () => {
+  const a = N({ idx: 0, count: 5, shuffle: true, personalIdx: 4, rnd: () => 0.4 })
+  return a.kind === 'go' && a.index === 2
+})
+check('вручную важнее личной очереди', () => {
+  const a = N({ idx: 0, count: 5, manualIdx: 1, personalIdx: 4 }); return a.kind === 'go' && a.index === 1
+})
+
+// ── «Назад» ──────────────────────────────────────────────────────────────
+console.log('\n── Возврат к прошлому треку ──')
+const yes = () => true
+check('возвращает к предыдущему прослушанному', () => backTarget(['a', 'b', 'c'], yes).target === 'b')
+check('дважды подряд — на два назад', () => {
+  const r = backTarget(backTarget(['a', 'b', 'c'], yes).hist, yes); return r.target === 'a'
+})
+check('в самом начале возвращаться некуда', () => backTarget(['a'], yes).target === null)
+check('пустая история не ломает', () => backTarget([], yes).target === null)
+check('удалённый трек пропускается', () => backTarget(['a', 'b', 'c'], id => id !== 'b').target === 'a')
+check('всё удалено — некуда', () => backTarget(['a', 'b', 'c'], id => id === 'c').target === null)
+check('исходная история не портится', () => {
+  const h = ['a', 'b', 'c']; backTarget(h, yes); return h.length === 3
+})
+check('наверху остаётся тот, куда вернулись', () => {
+  const r = backTarget(['a', 'b', 'c'], yes); return r.hist[r.hist.length - 1] === r.target
+})
+
+// ── Подбор следующего ────────────────────────────────────────────────────
+console.log('\n── Умная очередь ──')
+const T = (id: string, name = '', author = '', plays = 0) => ({ id, name, author, plays })
+const MIX = [T('cur', 'Ночь', 'Кино'), T('same', 'Пачка сигарет', 'Кино'), T('other', 'Другое', 'Кто-то')]
+
+check('тот же исполнитель первым', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].track.id === 'same')
+check('и причина названа верно', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].why === 'author')
+check('у каждой причины есть человеческая подпись', () =>
+  (['author', 'similar', 'mine', 'popular', 'fresh', 'order'] as const).every(w => !!WHY_LABEL[w]))
+check('текущий трек не предлагается', () =>
+  recommend({ tracks: MIX, idx: 0, plays: { cur: 99 } }).every(s => s.track.id !== 'cur'))
+check('склад из одного трека — пустой подбор', () =>
+  recommend({ tracks: [T('a')], idx: 0, plays: {} }).length === 0)
+check('пустой склад — пустой подбор', () => recommend({ tracks: [], idx: 0, plays: {} }).length === 0)
+check('подбор устойчив между вызовами', () => {
+  const a = recommend({ tracks: MIX, idx: 0, plays: {} }).map(s => s.track.id).join('')
+  const b = recommend({ tracks: MIX, idx: 0, plays: {} }).map(s => s.track.id).join('')
+  return a === b
+})
+check('без названий и авторов не падает', () =>
+  recommend({ tracks: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], idx: 0, plays: {} }).length === 2)
+check('только что игравшее уходит назад', () => {
+  const r = recommend({ tracks: MIX, idx: 0, plays: {}, recent: ['same'] })
+  return r[0].track.id === 'other'
+})
+check('незнакомое не выбрасывается', () => {
+  const t = [T('cur'), T('known'), T('new')]
+  const r = recommend({ tracks: t, idx: 0, plays: { known: 5 } })
+  return r.some(s => s.track.id === 'new')
+})
+check('personalOrder отдаёт то же, что recommend', () => {
+  const a = personalOrder({ tracks: MIX, idx: 0, plays: {} }).map(t => t.id).join('')
+  const b = recommend({ tracks: MIX, idx: 0, plays: {} }).map(s => s.track.id).join('')
+  return a === b
+})
+
+// ── Порядок склада ───────────────────────────────────────────────────────
+console.log('\n── Порядок Трекотеки ──')
+check('чаще слушаемое первым', () =>
+  libraryOrder([T('a', '', '', 2), T('b', '', '', 40)]).map(t => t.id).join('') === 'ba')
+check('ничьи не переставляются', () =>
+  libraryOrder([T('a', '', '', 5), T('b', '', '', 5), T('c', '', '', 5)]).map(t => t.id).join('') === 'abc')
+check('без числа — в конец', () =>
+  libraryOrder([{ id: 'a' }, T('b', '', '', 1)]).map(t => t.id).join('') === 'ba')
+check('исходный список не портится', () => {
+  const src = [T('a', '', '', 1), T('b', '', '', 9)]
+  libraryOrder(src); return src[0].id === 'a'
+})
+check('пустой склад не ломает', () => libraryOrder([]).length === 0)
+check('порядок не зависит от того, сколько раз позвали', () => {
+  const l = [T('a', '', '', 3), T('b', '', '', 3), T('c', '', '', 7)]
+  return libraryOrder(l).map(t => t.id).join('') === libraryOrder(libraryOrder(l)).map(t => t.id).join('')
+})
+
+// ── Одна ли это песня ────────────────────────────────────────────────────
+console.log('\n── Приведение ссылок ──')
+const Y = 'https://www.youtube.com/watch?v=abc12345678'
+check('www и http не делают песню другой', () =>
+  sameTrack('http://www.youtube.com/watch?v=abc12345678', Y))
+check('хвост «поделиться» отбрасывается', () =>
+  sameTrack(Y + '&si=xyz', Y))
+check('метка времени отбрасывается', () => sameTrack(Y + '&t=42', Y))
+check('рекламные хвосты отбрасываются', () => sameTrack(Y + '&utm_source=vk&utm_medium=post', Y))
+check('якорь отбрасывается', () => sameTrack(Y + '#t=10', Y))
+check('порядок доводов не важен', () =>
+  sameTrack('https://youtube.com/watch?v=abc12345678&list=RD', 'https://youtube.com/watch?list=RD&v=abc12345678'))
+check('сам идентификатор видео не выбрасывается', () =>
+  normalizeTrackUrl(Y).includes('v=abc12345678'))
+check('разные видео остаются разными', () =>
+  !sameTrack(Y, 'https://youtube.com/watch?v=zzz99999999'))
+check('хвостовая косая ничего не меняет', () =>
+  sameTrack('https://soundcloud.com/a/b/', 'https://soundcloud.com/a/b'))
+check('плейлист в ссылке SoundCloud не делает трек другим', () =>
+  sameTrack('https://soundcloud.com/a/b?in=a/sets/c', 'https://soundcloud.com/a/b'))
+check('непонятная строка возвращается как есть', () =>
+  normalizeTrackUrl('просто текст') === 'просто текст')
+check('пустая строка не ломает', () => normalizeTrackUrl('') === '')
+check('файловая ссылка не трогается', () =>
+  normalizeTrackUrl('blob:abc-123') === 'blob:abc-123')
+
+// ── Разбор ссылок ────────────────────────────────────────────────────────
+console.log('\n── Ссылки на источники ──')
+check('обычная ссылка YouTube', () => parseYouTubeId(Y) === 'abc12345678')
+check('короткая youtu.be', () => parseYouTubeId('https://youtu.be/abc12345678') === 'abc12345678')
+check('shorts', () => parseYouTubeId('https://youtube.com/shorts/abc12345678') === 'abc12345678')
+check('embed', () => parseYouTubeId('https://youtube.com/embed/abc12345678') === 'abc12345678')
+check('music.youtube.com', () => parseYouTubeId('https://music.youtube.com/watch?v=abc12345678') === 'abc12345678')
+check('мобильная m.youtube.com', () => parseYouTubeId('https://m.youtube.com/watch?v=abc12345678') === 'abc12345678')
+check('не YouTube — не id', () => parseYouTubeId('https://soundcloud.com/a/b') === null)
+check('мусор не ломает разбор', () => parseYouTubeId('не ссылка') === null)
+check('isYouTubeUrl согласован с разбором', () => isYouTubeUrl(Y) && !isYouTubeUrl('https://audius.co/a/b'))
+check('ссылка находится в тексте сообщения', () =>
+  findYouTubeLink('смотри ' + Y + ' вот') === Y)
+check('в тексте без ссылки — ничего', () => findYouTubeLink('просто слова') === null)
+check('пустой текст не ломает', () => findYouTubeLink(null) === null)
+check('audius узнаётся', () => isAudiusUrl('https://audius.co/artist/track') && !isAudiusUrl(Y))
+
+// ── Поисковый запрос для замены и текста ────────────────────────────────
+console.log('\n── Запрос для поиска ──')
+check('автор и название вместе', () => searchQuery('Numb', 'Linkin Park') === 'Linkin Park Numb')
+check('скобки выбрасываются', () => searchQuery('Numb (Official Video)', 'Linkin Park') === 'Linkin Park Numb')
+check('квадратные скобки тоже', () => searchQuery('Numb [Remastered]', 'Linkin Park') === 'Linkin Park Numb')
+check('автор внутри названия не повторяется', () =>
+  searchQuery('Linkin Park - Numb', 'Linkin Park') === 'Linkin Park Numb')
+check('пустой автор не оставляет пробела', () => searchQuery('Numb', '') === 'Numb')
+check('лишние пробелы схлопываются', () => !/ {2}/.test(searchQuery('  Numb   x  ', ' Linkin  Park ')))
+
+// ── Цвета обложки ────────────────────────────────────────────────────────
+console.log('\n── Цвет из обложки ──')
+check('тёмный цвет поднимается до видимого', () => boost({ r: 10, g: 10, b: 10 }).r >= 96)
+check('яркий цвет не трогается', () => {
+  const c = { r: 200, g: 10, b: 10 }; return boost(c).r === 200
+})
+check('поднятие не выходит за 255', () => {
+  const c = boost({ r: 1, g: 1, b: 255 }); return c.r <= 255 && c.g <= 255 && c.b <= 255
+})
+check('осветление идёт к белому', () => lighten({ r: 0, g: 0, b: 0 }, 0.5).r === 128)
+check('осветление на ноль ничего не меняет', () => lighten({ r: 50, g: 60, b: 70 }, 0).g === 60)
+check('затемнение идёт к чёрному', () => scale({ r: 100, g: 100, b: 100 }, 0.5).r === 50)
+check('чёрный цвет не ломает поднятие', () => boost({ r: 0, g: 0, b: 0 }).r >= 0)
+check('строка цвета собирается верно', () => rgb({ r: 1, g: 2, b: 3 }) === 'rgb(1,2,3)')
+check('строка цвета с прозрачностью', () => rgb({ r: 1, g: 2, b: 3 }, 0.5) === 'rgba(1,2,3,0.5)')
+
+// ── Ломаем нарочно ───────────────────────────────────────────────────────
+console.log('\n── Ломаем нарочно ──')
+check('проверка заметила бы, что «дальше» перестало слушать ручную очередь', () => {
+  const a = N({ idx: 0, count: 5, manualIdx: 3 }); return a.kind === 'go' && a.index !== 1
+})
+check('проверка заметила бы, что ссылки перестали приводиться к одному виду', () =>
+  sameTrack(Y + '&si=1', Y))
+check('проверка заметила бы, что склад снова по времени добавления', () =>
+  libraryOrder([T('a', '', '', 1), T('b', '', '', 50)])[0].id === 'b')
+
+console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
+if (fail) process.exit(1)
