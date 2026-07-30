@@ -616,5 +616,99 @@ check('проверка заметила бы отказ при неизвест
   return наВсякийСлучай(undefined) === true && tooShortWhy(undefined) === null
 })
 
+
+/** Та же арифметика, что в lib/listenProgress.ts — здесь только для проверки паузы. */
+function livePosLocal(l: { pos: number; dur?: number; at: number }, now: number): number {
+  const base = l.pos > 0 ? l.pos : 0
+  const t = base + Math.max(0, (now - l.at) / 1000)
+  return l.dur ? Math.min(t, l.dur) : t
+}
+
+console.log('\n-- Проверка последних добавлений (v1.432.0) --')
+// Владелец просил пройтись по всему, что я насыпал за последние версии, и
+// поискать поломки. Ниже — сценарии, которые ловят именно взаимодействие
+// нового: волна против неиграбельных треков, плейлист против склада, подсчёт
+// прослушивания против перемотки, склейка склада против номера играющего.
+
+type AT = { id: string; name?: string; author?: string; plays?: number }
+const A = (id: string, author = 'А', plays = 0): AT => ({ id, name: 'песня ' + id, author, plays })
+
+console.log('\n   волна и то, что играть нечем:')
+check('волна не предлагает неиграбельный трек', () => {
+  // Играет первый; второй играть нечем — значит остаётся ровно один.
+  const lib = [A('a'), A('плохой', 'Б'), A('b', 'В')]
+  const s1 = recommend({ tracks: lib, idx: 0, plays: {}, skip: t => t.id === 'плохой' })
+  return s1.length === 1 && s1[0].track.id === 'b'
+})
+check('если играть нечего вовсе — волна честно пуста', () => {
+  const lib = [A('a'), A('плохой1', 'Б'), A('плохой2', 'В')]
+  return recommend({ tracks: lib, idx: 0, plays: {}, skip: t => t.id.startsWith('плохой') }).length === 0
+})
+check('без правила отбора волна работает как раньше', () => {
+  const lib = [A('a'), A('b'), A('c')]
+  return recommend({ tracks: lib, idx: 0, plays: {} }).length === 2
+})
+check('запрет повтора считается по тому, что осталось', () => {
+  // Пять треков, три из них играть нечем: окно запрета не должно запретить всё.
+  const lib = [A('1'), A('2'), A('3'), A('4'), A('5')]
+  const s2 = recommend({
+    tracks: lib, idx: 0, plays: {}, recent: ['1'],
+    skip: t => ['3', '4', '5'].includes(t.id),
+  })
+  return s2.length === 1 && s2[0].track.id === '2'
+})
+
+console.log('\n   плейлист и склад:')
+check('плейлист играет в своём порядке, а не в порядке склада', () => {
+  const pl = { id: 'p', name: 'п', trackIds: ['c', 'a', 'b'] }
+  const lib = [A('a'), A('b'), A('c')]
+  return playlistTracks(pl, lib).map(t => t.id).join() === 'c,a,b'
+})
+check('трек, которого нет в складе, не мешает включить плейлист', () => {
+  const pl = { id: 'p', name: 'п', trackIds: ['a', 'нет', 'b'] }
+  const lib = [A('a'), A('b')]
+  const list = playlistTracks(pl, lib)
+  return list.length === 2 && playlistSize(pl, lib) === 2
+})
+check('порядок плейлиста не рушится добавлением того же трека', () => {
+  let pl = [{ id: 'p', name: 'п', trackIds: ['a', 'b'], at: 1 }]
+  pl = addToPlaylist(pl, 'p', 'a')
+  return pl[0].trackIds.join() === 'a,b'
+})
+
+console.log('\n   подсчёт прослушивания против перемотки:')
+check('перемотка вперёд-назад не набирает время', () => {
+  let st = freshListened(0)
+  for (const p of [0.5, 1, 1.5, 60, 60.5, 61, 2, 2.5]) st = advance(st, p)
+  // Настоящего слушания тут три секунды (шесть шагов по половине), а не
+  // шестьдесят: два прыжка не прибавили ничего.
+  return Math.abs(st.sec - 3) < 1e-9 && !credited(st, 200)
+})
+check('склейка длинных пауз не даёт зачёт', () => {
+  let st = freshListened(0)
+  // Плеер стоял: позиция не двигалась вовсе.
+  for (let i = 0; i < 100; i++) st = advance(st, 10)
+  return st.sec === 0
+})
+
+console.log('\n   склейка склада и номер играющего:')
+check('дописанная страница не сдвигает известные треки', () => {
+  const было = [{ id: 'a', url: 'u', name: 'a', owner: 'o' }, { id: 'b', url: 'u2', name: 'b', owner: 'o' }]
+  const out = mergeTracks(было as any, [{ id: 'c', url: 'u3', name: 'c', owner: 'o' } as any])
+  return out[0].id === 'a' && out[1].id === 'b' && out[2].id === 'c'
+})
+check('чужое обновление не меняет порядок', () => {
+  const было = [{ id: 'a', url: 'u', name: 'a', owner: 'o' }, { id: 'b', url: 'u2', name: 'b', owner: 'o' }]
+  const out = mergeTracks(было as any, [{ id: 'a', url: 'u', name: 'a2', owner: 'o' } as any])
+  return out[0].id === 'a' && out[0].name === 'a2' && out.length === 2
+})
+
+console.log('\n   активность на паузе:')
+check('на паузе время не бежит', () => {
+  // Позиция на паузе публикуется как есть, и зрителю показывается она же.
+  const l = { pos: 42, dur: 200, at: 1000 }
+  return livePosLocal(l, 1000 + 60_000) === 102 && l.pos === 42
+})
+
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

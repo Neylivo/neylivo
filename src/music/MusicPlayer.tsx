@@ -1535,11 +1535,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
     const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx: personalIdxRef.current })
     if (first && act.kind !== 'restart') saveManual(manual.filter(x => x !== first))
-    if (act.kind === 'restart') { restartCurrent(); return }
+    if (act.kind === 'restart') {
+      // v1.432.0: повторять нечего, если играть нечем. Раньше «повтор» на
+      // неиграбельном треке крутил его бесконечно: плеер молчал, а кнопка
+      // «дальше» выглядела сломанной.
+      if (unplayable(tracks[idx])) { setPlaying(false); toastErr('Этот трек играть нечем — повторять нечего'); return }
+      restartCurrent(); return
+    }
     if (act.kind === 'stop') { setPlaying(false); return }
-    if (act.index === idx) { restartCurrent(); return }
+    if (act.index === idx) {
+      if (unplayable(tracks[idx])) { setPlaying(false); toastErr('Больше нет треков, которые можно играть'); return }
+      restartCurrent(); return
+    }
     let n = act.index
     for (let step = 0; step < tracks.length && unplayable(tracks[n]); step++) n = (n + 1) % tracks.length
+    // Обошли весь склад и ничего не нашли — честно останавливаемся, а не встаём
+    // на трек, который всё равно не заиграет. Раньше в этом месте плеер выбирал
+    // неиграбельный трек и замолкал без объяснений.
+    if (unplayable(tracks[n])) { setPlaying(false); toastErr('Ни один трек не играет'); return }
     setIdx(n)
   }
   // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
@@ -1658,7 +1671,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     try { localStorage.setItem(MANUAL_KEY, JSON.stringify(v)) } catch { /* переполнено — переживём */ }
   }
   // Треки могли удалить из трекотеки, пока они стояли в очереди.
-  const manualLive = manual.filter(id => tracks.some(t => t.id === id))
+  // v1.432.0: и в ручной очереди тоже. Плейлист мог содержать трек, который
+  // сервис не отдаёт наружу: очередь показывала «дальше — вот он», плеер до него
+  // доходил и упирался.
+  const manualLive = manual.filter(id => {
+    const t = tracks.find(x => x.id === id)
+    return !!t && !unplayable(t)
+  })
 
   // v1.377.0: сколько раз я слушал каждый трек — по этому и строится очередь.
   const [myPlays, setMyPlays] = useState<Record<string, number>>({})
@@ -1729,7 +1748,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       name: meta[t.url]?.title || t.name,
       author: meta[t.url]?.author || t.author,
     }))
-    return recommend({ tracks: enriched, idx, plays: myPlays, recent: recentRef.current })[0] ?? null
+    // v1.432.0: волна не предлагает то, что играть нечем — иначе очередь
+    // показывала одно, а плеер играл другое (он такие треки обходит сам).
+    return recommend({
+      tracks: enriched, idx, plays: myPlays, recent: recentRef.current,
+      skip: t => unplayable(tracks.find(x => x.id === t.id)),
+    })[0] ?? null
   })()
   const personalIdx = reco ? tracks.findIndex(t => t.id === reco.track.id) : -1
   // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому

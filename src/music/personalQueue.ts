@@ -86,6 +86,17 @@ export interface PersonalInput<T extends QueueTrack> {
    * волна не встаёт, а на большом не повторяется.
    */
   noRepeat?: number
+  /**
+   * Трек, который играть НЕЧЕМ (v1.432.0): сломанный, запрещённый сервисом,
+   * стриминговый без копии.
+   *
+   * Зачем это здесь. Волна раньше предлагала такие треки наравне со всеми: в
+   * очереди человек видел «дальше — вот эта песня», а плеер, дойдя до неё,
+   * обходил её другим правилом — и играло совсем другое. То есть показ и
+   * действие расходились, а это в этом проекте самая частая поломка вообще.
+   * Теперь одно правило на оба: чего нельзя играть, того волна не предлагает.
+   */
+  skip?: (t: T) => boolean
 }
 
 /**
@@ -143,7 +154,10 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
   const recent = i.recent ?? []
   const fresh = i.freshCount ?? 3
   const cur = tracks[idx]
-  const rest = tracks.filter((_, n) => n !== idx)
+  const skip = i.skip ?? (() => false)
+  // Играть нечем — значит и предлагать нечего. Если после отбора не осталось
+  // ничего, честно возвращаем пустоту: пусть решает тот, кто спрашивал.
+  const rest = tracks.filter((t, n) => n !== idx && !skip(t))
   if (rest.length === 0) return []
 
   const curAuthor = norm(cur?.author)

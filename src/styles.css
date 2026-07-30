@@ -6549,3 +6549,18 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   /* Метка масштаба ниже панели инструментов: наверху её место уже занято. */
   .lightbox-zoom { top: calc(58px + env(safe-area-inset-top)); }
 }
+
+/* ══ v1.432.0: карточка активности не раздувает мини-профиль ══════════════════
+   На снимке владельца название трека «МЕЛЛСТРОЙ АМ АМ АМ МЕМ ТРЕЧОК ПЕСНЯ А ТЫ
+   ЗНАЕШ ТОЛК В МЕМАСИКАХ» встало в четыре строки капсом, и карточка выросла так,
+   что мини-профиль занял почти всё окно. Название трека — не заголовок статьи:
+   двух строк достаточно, остальное многоточием. */
+.mpg-nm, .act-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: normal; word-break: break-word;
+}
+/* Обложка и строки — компактнее: карточка «Слушает музыку» в мини-профиле стоит
+   рядом с кнопками профиля, и ей незачем быть выше их всех вместе. */
+.mpg-music .mpg-cover { width: 52px; height: 52px; }
+.mpg-music .mpg-nm { font-size: 15px; line-height: 1.25; }
+.mpg-music .mpg-mode { font-size: 12.5px; }
