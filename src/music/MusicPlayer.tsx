@@ -5,7 +5,7 @@ import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
 import { promptUi, confirmUi } from '../lib/confirm'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Track, BgCfg } from './types'
 import { BG_IDB_KEY } from './types'
 import { idbGet } from '../lib/idb'
@@ -1752,10 +1752,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 40) : []
     } catch { return [] }
   })())
+  const [recentAt, setRecentAt] = useState(0)
   useEffect(() => {
     if (!cur) return
     recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 40)
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentRef.current)) } catch { /* переполнено */ }
+    // v1.434.0: список «только что игравшего» живёт в ссылке, а волна с этой
+    // версии считается не на каждой отрисовке, а по списку зависимостей — из
+    // ссылки она изменения не увидит. Поэтому о нём сообщается отдельно: без
+    // этого волна осталась бы с тем списком, каким он был до смены трека.
+    setRecentAt(Date.now())
   }, [cur?.id])
 
   // v1.398.0: что предлагает личная очередь.
@@ -1764,7 +1770,39 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // что играло только что. Название и автор берутся из метаданных: у трека по
   // ссылке в самом поле name лежит адрес, а не заголовок, и сходство по нему не
   // нашлось бы никогда.
-  const reco = (() => {
+  // v1.434.0: считается ТОЛЬКО когда меняется то, из чего считается.
+  //
+  // Раньше подбор шёл на каждой отрисовке плеера, а плеер перерисовывается по
+  // два-четыре раза в секунду — от одного лишь бега полосы времени. Замер на
+  // складе в 2000 треков: 6 мс, на 5000 — 15 мс, и это только волна. То есть
+  // при играющей музыке приложение отдавало заметную часть каждой секунды
+  // пересчёту одного и того же ответа. Именно так и выглядят «лаги»: ничего не
+  // виснет, но всё чуть-чуть не поспевает.
+  //
+  // Поиск по id внутри skip был вторым таким местом: перебор всего склада на
+  // каждый рассматриваемый трек. Теперь номера берутся из карты.
+  const byId = useMemo(() => {
+    const m = new Map<string, number>()
+    tracks.forEach((t, i) => m.set(t.id, i))
+    return m
+  }, [tracks])
+  // Порядок и поиск по складу — тоже не на каждый тик полосы времени, а только
+  // когда меняется склад, метаданные или строка поиска.
+  const libAll = useMemo(() => {
+    const q = libQ.trim().toLowerCase()
+    // v1.406.0: склад выкладывается по прослушиваниям, а не по времени
+    // добавления: порядок добавления — это про того, кто когда принёс трек, а
+    // зашедшему послушать он не говорит ничего. Сортируется только показ: по
+    // порядку самого tracks считается номер играющего.
+    const ordered = libraryOrder(tracks)
+    if (!q) return ordered
+    return ordered.filter(t => {
+      const title = (meta[t.url]?.title || t.name || '').toLowerCase()
+      const author = (meta[t.url]?.author || t.author || '').toLowerCase()
+      return title.includes(q) || author.includes(q)
+    })
+  }, [tracks, meta, libQ])
+  const reco = useMemo(() => {
     if (!cur || tracks.length < 2) return null
     const enriched = tracks.map(t => ({
       ...t,
@@ -1775,10 +1813,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // показывала одно, а плеер играл другое (он такие треки обходит сам).
     return recommend({
       tracks: enriched, idx, plays: myPlays, recent: recentRef.current,
-      skip: t => unplayable(tracks.find(x => x.id === t.id)),
+      skip: t => unplayable(tracks[byId.get(t.id) ?? -1]),
     })[0] ?? null
-  })()
-  const personalIdx = reco ? tracks.findIndex(t => t.id === reco.track.id) : -1
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, byId, idx, myPlays, meta, cur?.id, ytDenied, recentAt])
+  const personalIdx = reco ? byId.get(reco.track.id) ?? -1 : -1
   // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому
   // берёт значение через ссылку — иначе там останется номер с первого рендера.
   const personalIdxRef = useRef(-1)
@@ -1949,7 +1988,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     <span className="mus2-li-del" title="Удалить" onClick={() => { const n = playlists.filter(x => x.id !== p.id); setPlaylists(n); savePlaylists(n) }}><Icon name="close" size={13} /></span>
                   </div>
                   {p.trackIds.map(tid => { const t = tracks.find(x => x.id === tid); if (!t) return null
-                    return <div key={tid} className="mus2-pl-t" onClick={() => { const i = tracks.indexOf(t); setIdx(i); setPlaying(true) }}>{t.name}</div> })}
+                    return <div key={tid} className="mus2-pl-t" onClick={() => { setIdx(byId.get(t.id) ?? 0); setPlaying(true) }}>{t.name}</div> })}
                 </div>
               ))}
             </div>
@@ -2301,17 +2340,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
             )}
             {(() => {
-              const q = libQ.trim().toLowerCase()
-              // v1.406.0: склад выкладывается по прослушиваниям, а не по времени
-              // добавления: порядок добавления — это про того, кто когда принёс
-              // трек, а зашедшему послушать он не говорит ничего. Сортируется
-              // только показ: по порядку самого tracks считается номер играющего.
-              const all = libraryOrder(tracks).filter(t => {
-                if (!q) return true
-                const title = (meta[t.url]?.title || t.name || '').toLowerCase()
-                const author = (meta[t.url]?.author || t.author || '').toLowerCase()
-                return title.includes(q) || author.includes(q)
-              })
+              const all = libAll   // v1.434.0: посчитано выше и только при нужде
               if (tracks.length === 0) {
                 return <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
               }
@@ -2325,7 +2354,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                   : `Найдено: ${all.length} из ${tracks.length}`}</div>
                 <div className="mus2-grid">
                   {shown.map(t => {
-                    const i = tracks.indexOf(t)
+                    // v1.434.0: номер из карты. Перебор всего склада на КАЖДУЮ
+                    // карточку — это на пяти тысячах треков полмиллиона сравнений
+                    // за одну отрисовку, а отрисовок две-четыре в секунду.
+                    const i = byId.get(t.id) ?? -1
                     const art = meta[t.url]?.art || t.art
                     const author = meta[t.url]?.author || t.author
                     const title = meta[t.url]?.title || t.name

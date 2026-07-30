@@ -98,6 +98,38 @@ app.whenReady().then(async () => {
   const mem = await pad('.members')
   check('список участников ниже часов и выше кнопок', mem.t > TOP && mem.b > BOT, mem.t + '/' + mem.b)
 
+  // ── Большой экран: нижняя полоса ────────────────────────────────────────────
+  // v1.434.0. Владелец дважды приносил одно и то же: внизу окна полоса пустоты,
+  // приложение кончается раньше края. В v1.430.0 я «закрыл класс» вслепую, не
+  // воспроизведя, — и не закрыл: полосу давал нижний отступ самого поля ввода.
+  // Проверяется то, что видно глазом: низ поля ввода, низ панели с аватаркой и
+  // низ окна — это одна линия.
+  fs.writeFileSync(path.join(OUT, 'wide.html'), `<!doctype html><meta charset=utf-8>
+<link rel=stylesheet href="styles-safe.css">
+<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}</style>
+<div id="root"><div class="app-viewport"><div class="app">
+  <div class="dm-side"><div style="flex:1"></div>
+    <div class="me"><span class="me-nm">я</span><button class="me-ic">m</button></div></div>
+  <div class="chat"><div class="chat-head">ч</div><div class="msgs"></div>
+    <form class="composer cstyle-default"><textarea></textarea><button class="send-tg">↑</button></form></div>
+</div></div></div>
+<script>window.__b = s => { const b = document.querySelector(s).getBoundingClientRect()
+  return JSON.stringify({ top: Math.round(b.top), bottom: Math.round(b.bottom) }) }</script>`)
+  const wide = new BrowserWindow({ show: false, useContentSize: true, width: 1600, height: 900,
+    backgroundColor: '#313338', webPreferences: { partition: 'safe-wide-' + Date.now() } })
+  await wide.loadFile(path.join(OUT, 'wide.html'))
+  await new Promise(r => setTimeout(r, 400))
+  const box = async s => JSON.parse(await wide.webContents.executeJavaScript(`window.__b(${JSON.stringify(s)})`))
+  const winH = await wide.webContents.executeJavaScript('window.innerHeight')
+  const meW = await box('.me'), compW = await box('.composer'), chatW = await box('.chat')
+
+  console.log('\n── Большой экран: низ окна ──')
+  check('панель с аватаркой доходит до края окна', meW.bottom === winH, 'низ ' + meW.bottom + ' при окне ' + winH)
+  check('колонка чата доходит до края окна', chatW.bottom === winH, 'низ ' + chatW.bottom)
+  check('поле ввода доходит до края окна', compW.bottom === winH, 'низ ' + compW.bottom)
+  check('низ поля и низ панели — одна линия', compW.bottom === meW.bottom,
+    'поле ' + compW.bottom + ', панель ' + meW.bottom)
+
   console.log(failed ? '\nПРОВАЛЕНО: ' + failed : '\nИТОГ: все проверки пройдены')
   process.exit(failed ? 1 : 0)
 })
