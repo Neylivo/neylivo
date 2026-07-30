@@ -1,5 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
+import { useBackClose } from '../lib/mobileBack'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
@@ -195,6 +196,10 @@ function ChatBgCard() {
 // что человек и так видел, вместо места, где профиль правят.
 export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
   { username: string; avatarUrl?: string | null; onClose: () => void; onAvatar?: (url: string) => void; initialCat?: string }) {
+  // v1.427.0: на телефоне настройки открываются во весь экран, и закрыть их
+  // системной «назад» — первое, что человек пробует. Раньше она закрывала
+  // приложение целиком.
+  useBackClose(true, onClose)
   const { user } = useAuth()
   const { settings, set, themes, accents } = useSettings()
   // v1.63.0: черновик настроек приложения — изменения (масштаб, шрифт, тема и т.д.)

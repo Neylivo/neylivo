@@ -33,6 +33,7 @@ import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
+import { pushBackTrap } from '../lib/mobileBack'
 import { preloadCallStack } from '../lib/livekit'
 import { ServerTagModal } from './ServerTagModal'
 import { ProfileCard } from './ProfileCard'
@@ -55,6 +56,26 @@ function SrvPingBadge({ serverId }: { serverId: string }) {
   const n = useBadgeCount('srv:' + serverId)
   if (!n) return null
   return <span className="srv-ping-badge">{n > 99 ? '99+' : n}</span>
+}
+
+/**
+ * v1.427.0: пока открыта мобильная шторка навигации, системная «назад» её
+ * закрывает. Шторка живёт классом на body (см. lib/mobile.ts), поэтому и следим
+ * за body: перекладывать её состояние в React только ради этого — значит
+ * переписать половину переходов между экранами.
+ */
+function MobNavBack() {
+  const [open, setOpen] = useState(() => document.body.classList.contains('mob-nav-open'))
+  useEffect(() => {
+    const mo = new MutationObserver(() => setOpen(document.body.classList.contains('mob-nav-open')))
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+    return () => mo.disconnect()
+  }, [])
+  useEffect(() => {
+    if (!open || !IS_MOBILE) return
+    return pushBackTrap(() => closeMobNav())
+  }, [open])
+  return null
 }
 
 export function Home() {
@@ -609,6 +630,9 @@ export function Home() {
           </RailTip>
         </div>
       </nav>
+      {/* v1.427.0: системная «назад» закрывает шторку навигации, а не приложение.
+          Слушаем её здесь, а не в mobile.ts: ловушка живёт ровно пока шторка открыта. */}
+      <MobNavBack />
       <div className="mob-backdrop" onClick={closeMobNav} />
       {(() => { const bv = view.kind === 'music' ? lastView.current : view
         const srv = bv.kind === 'server' ? bv.server : lastServer

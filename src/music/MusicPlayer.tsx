@@ -16,6 +16,7 @@ import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE
 import { mergeTracks } from './mergeTracks'
 import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
+import { useBackClose } from '../lib/mobileBack'
 import { bindMediaKeys, setMediaNow, updateMediaPosition } from './mediaSession'
 import { needRepublish } from '../lib/listenProgress'
 import { chunksToLrc, alignPlainToChunks, whyCantRecognize, type AiProgress } from './aiLyrics'
@@ -238,6 +239,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // было нечем, а метаданные пересобирались на каждое изменение — карточка
   // мигала обложкой. Сама подписка и обновление — ниже, рядом с активностью:
   // там же считается всё, что нужно системе.
+
+  // v1.427.0: на телефоне то же делает системная «назад» — иначе она закрывала
+  // приложение вместе с музыкой.
+  useBackClose(showLib, () => setShowLib(false))
+  useBackClose(lyrEdit !== null, () => setLyrEdit(null))
+  useBackClose(!!cardMenu, () => setCardMenu(null))
+  // Сам плеер: «назад» сворачивает его в плашку, а не выходит из приложения.
+  useBackClose(visible, onClose)
 
   // Esc закрывает трекотеку — как любое другое окно приложения.
   useEffect(() => {

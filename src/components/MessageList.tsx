@@ -14,6 +14,7 @@ import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
 import { useMessageActions } from '../lib/plugins/registry'
 import { invokePlugin, emitPluginEvent } from '../lib/plugins/host'
 import { setChatBridge } from '../lib/plugins/chatApi'
+import { useBackClose } from '../lib/mobileBack'
 import { QuickLaunchCard } from './QuickLaunchCard'
 import { copyMedia, copyGif, saveMedia, copyText } from '../lib/copyMedia'
 import { findGifLink, resolveGif, cachedGif } from '../lib/gifUrl'
@@ -378,6 +379,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   // messages.read. Два фильтра сразу: id не должен быть уже виденным (перерисовки,
   // подгрузка истории) И сообщение должно быть свежим — иначе при каждом
   // переключении канала плагину прилетала бы вся его переписка как «новая».
+  // v1.427.0: «назад» на телефоне закрывает меню сообщения. Оно теперь
+  // открывается долгим нажатием, то есть встречается там постоянно.
+  useBackClose(!!menu, () => setMenu(null))
+
   const seenMsgIds = useRef<Set<string>>(new Set())
   useEffect(() => {
     for (const m of messages) {

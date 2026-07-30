@@ -6237,3 +6237,114 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   .msg { -webkit-touch-callout: none; }
   .msg-txt, .msg-txt * { -webkit-touch-callout: default; }
 }
+
+/* ══ v1.427.0: телефон — третий проход, всё остальное ══════════════════════════
+   Пройдено по экранам, до которых мобильные правила не доходили ни разу.
+
+   Главное, что нашлось: маленьких всплывающих меню в приложении полтора десятка
+   (профиль, статус, «плюс», меню участника, меню картинки, меню звонка, меню
+   форума, меню эмодзи…). Каждое — окошко на 160–270 пикселей, которое
+   раскрывается ровно там, где ткнули пальцем: под самим пальцем, у края экрана,
+   иногда наполовину за ним. На компьютере это правильно, на телефоне — нет:
+   там для такого есть нижняя шторка, и одно меню (.ctxmenu) её уже получило в
+   v1.121.0, а остальные остались как были.
+
+   Здесь шторкой становятся все. Плюс панели, которые открываются поверх чата
+   (закреплённое, поиск, ветки, саундпад), звонок и окна выбора эмодзи и GIF. */
+@media (max-width: 768px) {
+  /* ── Все всплывающие меню — нижней шторкой ────────────────────────────────
+     Порядок правил тот же, что у .ctxmenu: прижать к низу, растянуть по ширине,
+     скруглить только верх, добавить отступ под системную полосу и выехать
+     снизу. !important нужен потому, что позиция этим меню задаётся инлайном по
+     месту нажатия — иначе она перебила бы любое правило. */
+  .mini-more, .mini-sub, .status-menu, .plus-menu, .pfr-rowmenu, .forum-menu,
+  .lb-ctx, .lb-more, .ep2-ctx, .cfc-more, .c2-menu, .pc-friendic-menu, .ctx-menu,
+  .mus2-cardmenu, .mus2-tog-pop {
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; top: auto !important;
+    bottom: 0 !important; transform: none !important;
+    width: 100% !important; min-width: 0 !important; max-width: none !important;
+    max-height: 70vh; overflow-y: auto;
+    border-radius: var(--r-2xl, 16px) var(--r-2xl, 16px) 0 0;
+    border: none; box-shadow: 0 -12px 40px rgba(0, 0, 0, .55);
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
+    z-index: var(--z-over-modal, 130);
+  }
+  /* Пункты в шторке — по-настоящему пальцем: 46 пикселей высоты. */
+  .mini-more > *, .mini-sub > *, .status-menu > *, .plus-menu > *,
+  .pfr-rowmenu > *, .forum-menu > *, .lb-ctx > *, .lb-more > *, .ep2-ctx > *,
+  .cfc-more > *, .c2-menu > *, .pc-friendic-menu > *, .ctx-menu > * {
+    min-height: 46px; display: flex; align-items: center; gap: 12px; font-size: 15px;
+  }
+  /* Шторке нужна ручка сверху: по ней сразу видно, что это выдвижная штука. */
+  .mini-more::before, .status-menu::before, .plus-menu::before, .ctx-menu::before,
+  .lb-more::before, .c2-menu::before, .mus2-cardmenu::before {
+    content: ''; display: block; width: 40px; height: 4px; border-radius: 999px;
+    background: rgba(var(--ov, 255,255,255), .25); margin: 8px auto 10px;
+  }
+
+  /* ── Панели поверх чата — во всю ширину, а не окошком в углу ──────────── */
+  .thr-panel, .search-panel {
+    position: fixed; left: 0; right: 0; top: auto; bottom: 0;
+    width: 100%; max-width: none; max-height: 78vh; overflow-y: auto;
+    border-radius: var(--r-2xl, 16px) var(--r-2xl, 16px) 0 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    z-index: var(--z-over-modal, 130);
+    animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
+  }
+  .thr-top { flex-wrap: wrap; }
+  .thr-top .thr-in { flex: 1 0 100%; order: 3; }
+  .pins-panel { max-height: 40vh; }
+
+  /* Саундпад в звонке: окошко 340 пикселей у правого края превращается в
+     шторку — иначе половина клипов оказывалась за краем экрана. */
+  .sb {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; max-height: 60vh; border-radius: var(--r-2xl, 16px) var(--r-2xl, 16px) 0 0;
+    border-left: none; border-right: none; border-bottom: none;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    z-index: var(--z-over-modal, 130);
+  }
+
+  /* ── Эмодзи и GIF: окно по ширине экрана ──────────────────────────────── */
+  .emoji-pop, .gif-pop { width: calc(100vw - 12px); max-width: none; }
+  .emoji-pop .emoji-scroll { max-height: 46vh; }
+
+  /* ── Звонок ───────────────────────────────────────────────────────────────
+     Видео занимало 290 пикселей высоты — на телефоне это полоска посреди
+     экрана. Отдаём ему всё, что есть, а кнопки делаем такими, чтобы по ним
+     попадали пальцем на ходу. */
+  .c2-wrap { height: auto; flex: 1; min-height: 42vh; }
+  .c2-wrap:has(.c2-board) { height: auto; min-height: 52vh; }
+  .c2-grid { grid-template-columns: 1fr; gap: 6px; }
+  .c2-bar, .call-bar { padding-bottom: calc(8px + env(safe-area-inset-bottom)); gap: 10px; }
+  .c2-bar button, .call-bar button { width: 52px; height: 52px; }
+  .c2-name { font-size: 13px; }
+
+  /* ── Лайтбокс: картинка во весь экран и кнопки не у самого края ───────── */
+  .lightbox img { max-width: 100vw; max-height: 76vh; border-radius: 0; }
+  .lightbox-bar {
+    bottom: calc(14px + env(safe-area-inset-bottom)); gap: 10px;
+    left: 8px; right: 8px; transform: none; justify-content: center;
+  }
+  .lightbox-bar button { width: 48px; height: 48px; }
+
+  /* ── Мелочи, которые чувствуются каждым нажатием ──────────────────────── */
+  /* Список серверов: рейка узкая, а кружки маленькие — палец промахивается. */
+  .servers { width: 76px; }
+  .srv { width: 52px; height: 52px; }
+  /* Панель с аватаркой снизу: сама панель выше, значки крупнее. */
+  .me { height: 60px; }
+  .me-ic, .me-out { width: 40px; height: 40px; }
+  /* Каналы и диалоги: строки выше — по ним чаще всего и тыкают. */
+  .ch { padding: 11px 12px; }
+  .dm-item { min-height: 56px; }
+}
+
+/* Полноэкранность в приложении: настоящая высота окна и никаких «резинок» за
+   пределами прокручиваемых списков. dvh вне медиазапроса намеренно: на планшете
+   шириной больше 768 та же беда с панелями браузера. */
+@supports (height: 100dvh) {
+  html, body, #root { height: 100dvh; }
+}

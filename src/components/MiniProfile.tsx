@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
+import { useBackClose } from '../lib/mobileBack'
 import { SignOutModal } from './SignOutModal'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence, type Activity } from '../lib/presence'
@@ -101,6 +102,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // экрана, сдвигается так, чтобы поместиться целиком с отступом MARGIN.
   const boxRef = useRef<HTMLDivElement>(null)
   const [adj, setAdj] = useState<{ top: number; left: number } | null>(null)
+
+  // v1.427.0: системная «назад» закрывает карточку, а не приложение.
+  useBackClose(true, onClose)
 
   // Для офлайн-пользователя подтягиваем время последнего визита (если миграция 11 применена).
   useEffect(() => {

@@ -5,6 +5,7 @@ import { Avatar } from './Avatar'
 import { Lightbox } from './Lightbox'
 import { StatusDot } from './StatusDot'
 import { Status, usePresence } from '../lib/presence'
+import { useBackClose } from '../lib/mobileBack'
 import { fetchProfile, saveProfile, cachedProfile, DEFAULT_PROFILE, nickFontOf, type ProfilePrefs } from '../lib/profilePrefs'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { ProfilePet } from './ProfilePet'
@@ -102,6 +103,8 @@ function WidgetTile({ label, games, covers, isMe, onClick }:
 // вкладки. Чужой профиль дополнительно получает «Общие сервера» и «Общие друзья».
 export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialTab = 'board' }:
   { userId: string; name: string; avatarUrl?: string | null; status: Status; onClose: () => void; initialTab?: ProfileTab }) {
+  // v1.427.0: «назад» закрывает карточку профиля — на телефоне она во весь экран.
+  useBackClose(true, onClose)
   const { user } = useAuth()
   const { gameOf, statusOf, listeningOf } = usePresence()
   const isMe = user?.id === userId
