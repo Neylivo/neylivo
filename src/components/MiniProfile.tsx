@@ -102,8 +102,6 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // экрана, сдвигается так, чтобы поместиться целиком с отступом MARGIN.
   const boxRef = useRef<HTMLDivElement>(null)
   const [adj, setAdj] = useState<{ top: number; left: number } | null>(null)
-  // v1.435.0: поправленный отступ снизу для своей карточки — см. useLayoutEffect.
-  const [adjBottom, setAdjBottom] = useState<number | null>(null)
 
   // v1.427.0: системная «назад» закрывает карточку, а не приложение.
   useBackClose(true, onClose)
@@ -130,21 +128,13 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     // измеренной высоте не нужно, а именно эта подгонка и оставляла её висеть
     // в воздухе, когда содержимое становилось короче.
     //
-    // v1.435.0: но за низ она держится по числу, снятому в момент открытия, и
-    // это число подводило: карточка накрывала собой ту самую панель, над
-    // которой должна стоять — видны оставались только наушники и шестерёнка
-    // справа. Поэтому меряем панель ЖИВЬЁМ, из разметки, и если карточка всё же
-    // заходит на неё — поднимаем. Это дешевле, чем гадать, откуда приехал
-    // неверный отступ, и не сломается, когда панель снова переедет.
-    if (data.anchor === 'me') {
-      const panel = document.querySelector('.me')
-      if (!panel) return
-      const pr = panel.getBoundingClientRect()
-      const r = el.getBoundingClientRect()
-      const GAP = 8
-      if (r.bottom > pr.top - GAP) setAdjBottom(Math.round(window.innerHeight - pr.top + GAP))
-      return
-    }
+    // v1.436.0: позицию своей карточки не считаем ВООБЩЕ. Дважды пробовал
+    // числом — снимком в момент открытия (v1.140.0) и живым замером панели
+    // (v1.435.0), и оба раза карточка всё равно наезжала на панель: между
+    // замером и отрисовкой панель успевает переехать. Теперь её держит CSS
+    // относительно самой панели (.mini.anchor-me: bottom: calc(100% + 8px)) —
+    // пересчитывать нечего и промахнуться нечем.
+    if (data.anchor === 'me') return
     const M = 20
     const r = el.getBoundingClientRect()
     let top = r.top, left = r.left, changed = false
@@ -215,7 +205,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // Первая (грубая) прикидка — на ней рисуется самый первый кадр; useLayoutEffect
   // выше тут же поправит её по-настоящему, если карточка не влезла в экран.
   const basePos: React.CSSProperties = data.anchor === 'me'
-    ? { left: Math.max(8, data.x), bottom: Math.max(8, window.innerHeight - data.y + 8) }   // v1.140.0: ровно над нижней панелькой
+    ? {}                                   // v1.436.0: позицию своей карточки задаёт CSS
     : data.anchor === 'member-list'
     ? { right: 252, top: Math.max(12, Math.min(data.y - 60, window.innerHeight - 540)) }
     : { left: data.x, top: data.y }
@@ -235,9 +225,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // adj — уже измеренная и гарантированно влезающая позиция; когда она есть,
   // полностью заменяет грубую прикидку (top+bottom одновременно не задаём —
   // иначе position:fixed без явной height растянет карточку между ними).
-  const bottomMe = adjBottom ?? Math.max(8, window.innerHeight - data.y + 8)
   const posStyle: React.CSSProperties = data.anchor === 'me'
-    ? { ...basePos, bottom: bottomMe, maxHeight: `calc(100vh - ${bottomMe + 20}px)` }
+    ? {}                                   // v1.436.0: всё делает CSS, см. .mini.anchor-me
     : adj ? { top: adj.top, left: adj.left } : basePos
 
   return (

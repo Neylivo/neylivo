@@ -27,6 +27,10 @@ export const RoomEvent = {
   TrackUnsubscribed: 'trackUnsubscribed',
   LocalTrackPublished: 'localTrackPublished',
   LocalTrackUnpublished: 'localTrackUnpublished',
+  // v1.436.0: по этому каналу участники сообщают друг другу, что заглушили всех.
+  // Значение сверено с пакетом (RoomEvent["DataReceived"] = "dataReceived") и
+  // ещё раз проверяется verifyLivekitConstants при первой загрузке библиотеки.
+  DataReceived: 'dataReceived',
   // Внимание: значение НЕ совпадает с именем ключа (audioPlaybackChanged, не
   // audioPlaybackStatusChanged) — поэтому все константы здесь сверены с пакетом,
   // а не выведены из названий.

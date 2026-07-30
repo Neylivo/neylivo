@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { RoomEvent, DisconnectReason, getLocalDevices } from '../lib/livekit'
 import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
+import { ClockElapsed } from './ActivityLabel'
+import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon, type CallFlags } from '../lib/callState'
 import { SHARE_RES, SHARE_FPS, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources, type ShareQuality, type ShareSource } from '../lib/shareOpts'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
@@ -31,6 +33,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // v1.436.0: настройки демонстрации живут отдельным файлом и проверяются
 // (lib/shareOpts.ts) — раньше это была одна длинная строка прямо в обработчике.
+
+// ---- v1.436.0: кто заглушил всех — общий реестр по identity ----
+// Плитки рисуются в разных компонентах, а состояние приходит одним потоком
+// сообщений звонка, поэтому реестр общий, как и у громкости ниже.
+let flagsMap: Record<string, CallFlags> = {}
+const flagsListeners = new Set<() => void>()
+function setFlags(next: Record<string, CallFlags>) {
+  if (next === flagsMap) return
+  flagsMap = next
+  flagsListeners.forEach(f => f())
+}
+function useCallFlags(): Record<string, CallFlags> {
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const l = () => bump(v => v + 1)
+    flagsListeners.add(l)
+    return () => { flagsListeners.delete(l) }
+  }, [])
+  return flagsMap
+}
 
 // ---- Громкость собеседников: WebAudio-гейны в общем реестре по identity ----
 const gainReg = new Map<string, Set<GainNode>>()
@@ -262,6 +284,8 @@ function Tile({ p, isLocal, avatar, color, small, meName, onCtx, sharing, onWatc
   const [hasCam, setHasCam] = useState(false)
   const [vidHidden, setVidHidden] = useState(() => isVideoHidden(p.identity))
   const { speaking, micOn } = useSpeakMic(p)
+  const flags = useCallFlags()
+  const icon = tileIcon(flags[p.identity], micOn)
   useEffect(() => {
     const l = () => setVidHidden(isVideoHidden(p.identity))
     hiddenVideoListeners.add(l)
@@ -305,7 +329,14 @@ function Tile({ p, isLocal, avatar, color, small, meName, onCtx, sharing, onWatc
           <Icon name="screen-share" size={14} /> Смотреть
         </button>
       )}
-      <div className="c2-cap">{!micOn && <Icon name="mic-off" size={11} />} {name}</div>
+      {/* v1.436.0: «не слышит никого» — отдельный значок, как в Discord. Раньше
+          заглушивший всех выглядел как обычный человек с выключенным микрофоном,
+          и с ним продолжали разговаривать. */}
+      <div className="c2-cap">
+        {icon === 'deaf' && <Icon name="headphones-off" size={11} />}
+        {icon === 'muted' && <Icon name="mic-off" size={11} />}
+        {' '}{name}
+      </div>
     </div>
   )
 }
@@ -434,6 +465,11 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
     try { setSources(orderSources(await d.shareSources())) } catch { setSources([]) }
   }
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
+  // v1.436.0: с какого момента идёт разговор. Считаем от первого 'connected', а
+  // не от монтирования: переподключение не должно обнулять счётчик — в Discord
+  // он тоже продолжает идти.
+  const [startedAt, setStartedAt] = useState(0)
+  useEffect(() => { if (status === 'connected' && !startedAt) setStartedAt(Date.now()) }, [status, startedAt])
   const [count, setCount] = useState(1)
   const [showSb, setShowSb] = useState(false)
   const [fxMenu, setFxMenu] = useState(false)
@@ -660,6 +696,36 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   }
   function leave() { room.disconnect(); onLeave() }
 
+  /**
+   * Рассказать остальным, слышу ли я их (v1.436.0).
+   *
+   * Шлём при каждой смене и ещё раз, когда кто-то входит: вошедший не мог
+   * слышать того, что рассылалось до него, и увидел бы всех «слышащими».
+   */
+  useEffect(() => {
+    const send = () => {
+      try { void (room.localParticipant as any).publishData(encodeFlags({ deaf, mic }), { reliable: true }) } catch {}
+    }
+    send()
+    room.on(RoomEvent.ParticipantConnected, send)
+    return () => { room.off(RoomEvent.ParticipantConnected, send) }
+  }, [room, deaf, mic])
+
+  useEffect(() => {
+    const onData = (payload: Uint8Array, participant?: any) => {
+      const id = participant?.identity
+      if (!id) return
+      setFlags(mergeFlags(flagsMap, String(id), decodeFlags(payload)))
+    }
+    const onLeft = (participant: any) => { setFlags(forgetFlags(flagsMap, String(participant?.identity ?? ''))) }
+    room.on(RoomEvent.DataReceived, onData as any)
+    room.on(RoomEvent.ParticipantDisconnected, onLeft as any)
+    return () => {
+      room.off(RoomEvent.DataReceived, onData as any)
+      room.off(RoomEvent.ParticipantDisconnected, onLeft as any)
+    }
+  }, [room])
+
   // ---- v1.43.0: состояние звонка наружу (панель в сайдбаре, MeBar) + команды оттуда. ----
   // v1.436.0: сюда добавилось «где» — название сервера или имя собеседника. Это
   // же событие теперь слушает присутствие (см. lib/presence.tsx), и у людей
@@ -777,6 +843,9 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
       <Sinks room={room} meName={meName} />
       <div className="c2-top">
         <span className={'c2-status ' + (alone && peer ? 'connecting' : status)}><i />{statusLabel}</span>
+        {/* v1.436.0: сколько идёт разговор — как в Discord. Раньше время звонка
+            было видно только в системном сообщении ПОСЛЕ него. */}
+        {status === 'connected' && <span className="c2-dur"><ClockElapsed since={startedAt} /></span>}
         <span className="c2-cnt"><Icon name="users" size={14} /> {count}</span>
         {flash && <span className="c2-flashtag"><Icon name="soundboard" size={13} /> Момент сохранён</span>}
         <div className="c2-topbtns">

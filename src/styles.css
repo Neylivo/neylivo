@@ -1932,7 +1932,20 @@ body.no-anim .member-typing i { animation:none; }
 .mini-editbtn:hover { filter:brightness(1.1); }
 
 /* ===== Мини-профиль: якоря + свой попап с управлением; фулл-профиль (v1.10.0) ===== */
-.mini.anchor-me { transform-origin: bottom left; }
+/* v1.436.0: своя карточка стоит НА панели, а не там, где её посчитали.
+   Дважды до этого позиция бралась числом: сначала снимком в момент открытия,
+   потом живым замером в useLayoutEffect — и оба раза карточка всё равно
+   наезжала на панель (владелец прислал третий снимок, замер по нему: заход на
+   34 пикселя). Числу тут верить нечему: между замером и отрисовкой панель
+   успевает переехать.
+   Карточка лежит ВНУТРИ .me (см. MeBar.tsx), а .me — position: relative.
+   Значит «низ карточки = верх панели плюс восемь» выражается прямо в CSS:
+   bottom: calc(100% + 8px). Пересчитывать нечего, промахнуться нечем. */
+.mini.anchor-me {
+  transform-origin: bottom left;
+  position: absolute; left: 0; bottom: calc(100% + 8px); top: auto;
+  max-height: calc(100vh - 96px);
+}
 .mini-statuses { display:flex; flex-direction:column; gap:2px; margin-top:4px; }
 .mini-statuses .status-opt.on { background:rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-sm); }
 .mini-ctl { width:100%; background:none; border:0; color:var(--tx); text-align:left; padding:8px; border-radius:var(--r-sm); cursor:pointer; font-size:13.5px; display:flex; align-items:center; gap:8px; }
@@ -2834,6 +2847,9 @@ body.no-anim .member-typing i { animation:none; }
 .c2-status.connecting i, .c2-status.reconnecting i { background:#faa61a; animation:c2blink 1s ease infinite; }
 @keyframes c2blink { 50% { opacity:.3; } }
 .c2-cnt { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; color:#80848e; }
+/* v1.436.0: сколько идёт разговор — цифры не должны «дышать» шириной на каждой
+   секунде, поэтому моноширинные. */
+.c2-dur { font-size:12.5px; color:#b5bac1; font-weight:600; font-variant-numeric:tabular-nums; }
 .c2-flashtag { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#8b8ff5; font-weight:700; }
 .c2-topbtns { margin-left:auto; display:flex; gap:4px; }
 .c2-topbtns button { border:none; background:transparent; color:#b5bac1; width:30px; height:30px; border-radius:var(--r-md);
@@ -4076,7 +4092,12 @@ input, textarea { caret-color:var(--brand,#5865f2); }
   -webkit-mask-image:linear-gradient(90deg, transparent, rgba(0,0,0,.45) 50%, rgba(0,0,0,.8));
   mask-image:linear-gradient(90deg, transparent, rgba(0,0,0,.45) 50%, rgba(0,0,0,.8));
 }
-.member { position:relative; overflow:hidden; }
+/* v1.436.0: строки списка участников не слипаются и углы мягче.
+   На снимке владельца строки стояли впритык друг к другу, а с «кубиком»
+   (картинкой за строкой) это читалось как одно сплошное полотно: где кончается
+   один человек и начинается другой, видно не было. Небольшой зазор и заметное
+   скругление разделяют их сами, без разделительных линий. */
+.member { position:relative; overflow:hidden; margin-bottom:3px; border-radius:var(--r-md, 8px); }
 .member > :not(.plate-bg) { position:relative; z-index:1; }
 /* v1.393.0: кубик виден и в списке личных сообщений — тому, с кем переписываешься,
    иначе украшение было видно только соседям по серверу. */

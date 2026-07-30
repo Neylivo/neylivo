@@ -21,6 +21,7 @@ import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
 import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
 import { SHARE_RES, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources } from './shareOpts'
+import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon } from './callState'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -888,6 +889,59 @@ check('проверка заметила бы пропажу границ', () =
   const без = { zoom: 2, x: 9999, y: 0 }
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
+
+console.log('\n-- Звонок: кто заглушил всех (v1.436.0) --')
+{
+  check('своё состояние уезжает и возвращается тем же', () => {
+    const f = decodeFlags(encodeFlags({ deaf: true, mic: false }))
+    return !!f && f.deaf === true && f.mic === false
+  })
+  check('чужие сообщения в том же канале не путаются с нашими', () =>
+    decodeFlags(new TextEncoder().encode(JSON.stringify({ t: 'саундпад', clip: 'x' }))) === null)
+  check('мусор не ломает звонок', () =>
+    decodeFlags(new TextEncoder().encode('не json')) === null && decodeFlags(null) === null)
+
+  check('новое состояние попадает в таблицу', () => {
+    const m = mergeFlags({}, 'вася', { deaf: true, mic: false })
+    return m['вася'].deaf === true
+  })
+  check('то же самое второй раз не перерисовывает звонок', () => {
+    const m1 = mergeFlags({}, 'вася', { deaf: true, mic: false })
+    const m2 = mergeFlags(m1, 'вася', { deaf: true, mic: false })
+    return m1 === m2
+  })
+  check('изменение состояния таблицу обновляет', () => {
+    const m1 = mergeFlags({}, 'вася', { deaf: true, mic: false })
+    const m2 = mergeFlags(m1, 'вася', { deaf: false, mic: true })
+    return m1 !== m2 && m2['вася'].deaf === false
+  })
+  check('вышедший из звонка забывается', () => {
+    const m1 = mergeFlags({}, 'вася', { deaf: true, mic: false })
+    const m2 = forgetFlags(m1, 'вася')
+    return !('вася' in m2) && forgetFlags(m2, 'вася') === m2
+  })
+
+  console.log('\n   какой значок на плитке:')
+  check('заглушил всех — перечёркнутые наушники', () =>
+    tileIcon({ deaf: true, mic: false }, false) === 'deaf')
+  check('наушники важнее микрофона', () =>
+    tileIcon({ deaf: true, mic: true }, true) === 'deaf')
+  check('просто выключил микрофон — перечёркнутый микрофон', () =>
+    tileIcon({ deaf: false, mic: false }, false) === 'muted')
+  check('микрофон, выключенный по данным сервера, тоже виден', () =>
+    tileIcon(undefined, false) === 'muted')
+  check('обычный участник — без значка', () =>
+    tileIcon({ deaf: false, mic: true }, true) === 'none' && tileIcon(undefined, true) === 'none')
+
+  console.log('\n-- Ломаем нарочно (звонок) --')
+  check('проверка заметила бы, что «не слышит» снова стало невидимым', () => {
+    // Прежнее поведение: о заглушившем известен только микрофон, и он выглядит
+    // как обычный участник с выключенным микрофоном.
+    const прежнее = tileIcon(undefined, false)
+    const теперь = tileIcon({ deaf: true, mic: false }, false)
+    return прежнее === 'muted' && теперь === 'deaf'
+  })
+}
 
 console.log('\n-- Демонстрация экрана: настройки (v1.436.0) --')
 {
