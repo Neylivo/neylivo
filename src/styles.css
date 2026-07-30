@@ -2921,6 +2921,54 @@ body.no-anim .member-typing i { animation:none; }
   padding:10px 0; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:filter .15s var(--ease-out4, ease); }
 .c2-go:hover { filter:brightness(1.1); }
 
+/* ══ v1.436.0: выбор того, ЧТО показывать в демонстрации ══════════════════════
+   Раньше отдавался только весь экран: список источников брался с типом
+   'screen', и одно окно игры отдать было нельзя вовсе. Теперь список
+   спрашивается у оболочки с картинками предпросмотра — как в Discord. */
+.c2-sharemenu { width:340px; max-height:min(70vh, 560px); overflow-y:auto; }
+.c2-srcgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.c2-src {
+  position:relative; padding:0; border:2px solid transparent; border-radius:var(--r-md);
+  background:var(--bg3); color:#b5bac1; cursor:pointer; overflow:hidden; text-align:left;
+  transition:border-color .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease);
+}
+.c2-src:hover { background:#26272b; }
+.c2-src.on { border-color:#6366f1; }
+.c2-src img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#000; }
+.c2-src-no { display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:16/9; background:#000; color:#4e5058; }
+.c2-src-nm {
+  display:flex; align-items:center; gap:5px; padding:6px 7px; font-size:11.5px; font-weight:600; line-height:1.25;
+}
+/* Название окна бывает длиннее карточки — одна строка с многоточием. Обрезка
+   двумя строками тут не годится: карточки в ряду становятся разной высоты, а
+   третья строка всё равно вылезала за край (проверено снимком стенда). */
+.c2-src-t { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c2-src.on .c2-src-nm { color:#fff; }
+.c2-src-ico { width:14px; height:14px; flex:none; border-radius:3px; aspect-ratio:auto; }
+.c2-audio-sw {
+  display:flex; align-items:center; gap:8px; width:100%; margin-bottom:8px; cursor:pointer;
+  border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-md); background:var(--bg3);
+  color:#b5bac1; font-size:12.5px; font-weight:600; padding:8px 10px;
+}
+.c2-audio-sw.on { background:rgba(99,102,241,.18); border-color:#6366f1; color:#fff; }
+.c2-sharehint { font-size:11.5px; color:#80848e; margin:0 0 8px; }
+/* «В эфир» не уезжает под нижний край: список окон бывает длинным, и кнопка,
+   до которой надо прокручивать, — это кнопка, которую не находят. */
+.c2-sharemenu .c2-go { position:sticky; bottom:0; }
+
+/* «В ЭФИРЕ» на плитке человека и кнопка «Смотреть» — чтобы чужую демонстрацию
+   можно было открыть в любой момент, а не только когда она сама развернулась. */
+.c2-live.tile { top:6px; left:6px; display:inline-flex; align-items:center; gap:5px; }
+.c2-live.tile i { width:6px; height:6px; border-radius:50%; background:#fff; animation:pulse 1.6s ease-in-out infinite; }
+.c2-watch {
+  position:absolute; left:50%; bottom:30px; transform:translateX(-50%); z-index:3;
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  border:none; border-radius:999px; background:#6366f1; color:#fff;
+  font-size:12.5px; font-weight:700; padding:7px 14px; cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.45); transition:filter .15s var(--ease-out4, ease);
+}
+.c2-watch:hover { filter:brightness(1.12); }
+
 .c2-wrap.sb-flash::after { content:''; position:absolute; inset:0; z-index:6; pointer-events:none;
   border:2px solid #6366f1; animation:c2flash 1.2s ease both; }
 @keyframes c2flash { from { opacity:1; } to { opacity:0; } }
@@ -6389,6 +6437,12 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   .cfc-more > *, .c2-menu > *, .pc-friendic-menu > *, .ctx-menu > * {
     min-height: 46px; display: flex; align-items: center; gap: 12px; font-size: 15px;
   }
+  /* v1.436.0: сетка источников — не пункт меню. Правило «> *» выше делает всех
+     прямых детей флекс-рядом, и четыре карточки выстраивались в узкую полоску
+     по 76 пикселей с обрезанными названиями (поймано снимком стенда). Ровно та
+     же ловушка, что была с пометками на обложке трека — там она описана рядом. */
+  .c2-menu > .c2-srcgrid { display: grid; min-height: 0; }
+  .c2-sharemenu { width: auto; max-height: 72vh; }
   /* Шторке нужна ручка сверху: по ней сразу видно, что это выдвижная штука. */
   .mini-more::before, .status-menu::before, .plus-menu::before, .ctx-menu::before,
   .lb-more::before, .c2-menu::before, .mus2-cardmenu::before {

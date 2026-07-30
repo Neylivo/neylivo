@@ -9,6 +9,7 @@ import { DEVICE } from './mobile'
 import { toast } from './toast'
 import { isKnownBot, primeBotUsers } from './botTag'
 import { openThread } from './friends'
+import { buildMeta, metaChanged, type Voice, type PresenceMeta } from './presenceMeta'
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline'
 export const STATUS_LABEL: Record<Status, string> = {
@@ -34,7 +35,7 @@ export interface Listening { title: string; author?: string; source?: string; ar
 // плейса и guid конкретного сервера Roblox (v1.184.0, «Поделиться игрой» —
 // нужны для join-диплинка, см. src/lib/gameShare.ts).
 export interface Game { name: string; since: number; cover?: string | null; mode?: string | null; placeId?: string | null; jobId?: string | null }
-interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; device?: 'mobile' | 'desktop' }
+interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; voice?: Voice | null; device?: 'mobile' | 'desktop' }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
   myStatus: Status
@@ -43,9 +44,10 @@ interface PresenceCtx {
   setMyListening: (l: Listening | null) => void
   gameOf: (userId: string) => Game | null
   listeningOf: (userId: string) => Listening | null
+  voiceOf: (userId: string) => Voice | null
   deviceOf: (userId: string) => 'mobile' | 'desktop'
 }
-const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, listeningOf: () => null, deviceOf: () => 'desktop' })
+const Ctx = createContext<PresenceCtx>({ online: {}, myStatus: 'online', statusOf: () => 'offline', activityOf: () => null, setMyListening: () => {}, gameOf: () => null, listeningOf: () => null, voiceOf: () => null, deviceOf: () => 'desktop' })
 
 // Читаем настройку напрямую: presence поднимается выше провайдера настроек, а
 // заводить ради одного флага ещё один контекст — лишняя связанность.
@@ -93,6 +95,26 @@ export function PresenceProvider({ username, avatarUrl, children }:
   const gameRef = useRef<Game | null>(null)
   const sessRef = useRef<string | null>(null)   // id открытой игровой сессии в activity_sessions
   const propRef = useRef({ username, avatarUrl })
+  const voiceRef = useRef<Voice | null>(null)
+  const lastMetaRef = useRef<PresenceMeta | null>(null)
+
+  /**
+   * Единственное место, откуда о себе рассказывают (v1.436.0).
+   *
+   * Было пять таких мест, и каждое собирало объект руками — см. presenceMeta.ts.
+   * Ничего не изменилось со прошлого раза — не дёргаем канал: присутствие
+   * рассылается всем, кто в сети, и лишние рассылки бьют по каждому.
+   */
+  const publishNow = async (force = false) => {
+    const meta = buildMeta({
+      username: propRef.current.username, avatarUrl: propRef.current.avatarUrl,
+      activity: customActivity(), listening: lisRef.current, game: gameRef.current,
+      voice: voiceRef.current, device: DEVICE,
+    })
+    if (!force && !metaChanged(lastMetaRef.current, meta)) return
+    lastMetaRef.current = meta
+    try { await chanRef.current?.track(meta) } catch { lastMetaRef.current = null }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -114,13 +136,20 @@ export function PresenceProvider({ username, avatarUrl, children }:
           activity: metas.find(m => m.activity)?.activity ?? null,
           listening: metas.find(m => m.listening)?.listening ?? null,
           game: metas.find(m => m.game)?.game ?? null,
+          // v1.436.0: голос — из той сессии, где он есть: звонок обычно на одном
+          // устройстве, а сидеть человек может сразу с двух.
+          voice: metas.find(m => m.voice)?.voice ?? null,
           device: metas.some(m => (m.device ?? 'desktop') === 'desktop') ? 'desktop' : 'mobile',
         }
       }
       setOnline(map)
     })
     ch.subscribe(async (st) => {
-      if (st === 'SUBSCRIBED') await ch.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: lisRef.current, game: gameRef.current, activity: customActivity(), device: DEVICE })
+      // v1.436.0: и при первом входе, и при КАЖДОМ восстановлении канала. Раньше
+      // после обрыва связи присутствие оставалось таким, каким было до обрыва:
+      // человек выходил из игры, канал в это время лежал — и «играет» висело у
+      // всех, пока он не сделает что-нибудь ещё.
+      if (st === 'SUBSCRIBED') { lastMetaRef.current = null; await publishNow() }
     })
     chanRef.current = ch
     return () => { supabase.removeChannel(ch) }
@@ -130,15 +159,56 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // Свою активность поменяли в настройках — перевыкладываем присутствие, чтобы
   // строка появилась у всех сразу, а не после перезапуска приложения.
   useEffect(() => {
-    const h = () => {
-      chanRef.current?.track({
-        username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null,
-        listening: lisRef.current, game: gameRef.current, activity: customActivity(), device: DEVICE,
-      })
-      setOnline(o => ({ ...o }))   // своя строка рисуется из настроек, а не из online
-    }
+    const h = () => { void publishNow(); setOnline(o => ({ ...o })) }   // своя строка рисуется из настроек
     window.addEventListener('ponoi-activity', h)
     return () => window.removeEventListener('ponoi-activity', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /**
+   * Голос и демонстрация экрана в присутствии (v1.436.0).
+   *
+   * CallRoom и панель звонка уже рассылают своё состояние событием
+   * 'ponoi-call-state' — раньше его слушала только своя же панель с кнопками.
+   * Теперь оно доезжает и до присутствия, то есть до всех: «В голосовом канале»
+   * и «Демонстрирует экран» появляются у людей мгновенно, как в Discord, и так
+   * же мгновенно исчезают. Момент входа запоминаем свой: пока человек в звонке,
+   * он не должен сбрасываться от каждого нажатия на микрофон.
+   */
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail ?? {}
+      if (!d.connected) { voiceRef.current = null; void publishNow(); return }
+      const since = voiceRef.current?.since ?? Date.now()
+      voiceRef.current = {
+        where: d.where ?? voiceRef.current?.where ?? null,
+        screen: !!d.screen, cam: !!d.cam, muted: !d.mic, since,
+      }
+      void publishNow()
+    }
+    window.addEventListener('ponoi-call-state', h)
+    return () => window.removeEventListener('ponoi-call-state', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /**
+   * Догнать после сна и обрыва (v1.436.0).
+   *
+   * Вкладку свернули, ноутбук уснул, сеть моргнула — канал молчит, и у всех
+   * остаётся последнее, что мы успели сказать о себе. Возвращаемся к окну —
+   * публикуем заново, безусловно.
+   */
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') { lastMetaRef.current = null; void publishNow() } }
+    window.addEventListener('focus', again)
+    window.addEventListener('online', again)
+    document.addEventListener('visibilitychange', again)
+    return () => {
+      window.removeEventListener('focus', again)
+      window.removeEventListener('online', again)
+      document.removeEventListener('visibilitychange', again)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // «Был в сети»: раз в минуту отмечаемся в profiles.last_seen.
@@ -297,7 +367,8 @@ export function PresenceProvider({ username, avatarUrl, children }:
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)
-        chanRef.current?.track({ username: propRef.current.username, status: 'online', avatar_url: propRef.current.avatarUrl ?? null, listening: lisRef.current, game: val, activity: customActivity(), device: DEVICE })
+        gameRef.current = val
+        void publishNow()
       }
       if ((g?.name ?? null) === (gameRef.current?.name ?? null)) {
         // v1.89.0: та же игра, но сменился режим (плейс Roblox) — обновляем на лету,
@@ -338,13 +409,21 @@ export function PresenceProvider({ username, avatarUrl, children }:
     if (!l && !lisRef.current) return   // нечего сбрасывать — не дёргаем канал
     lisRef.current = l
     setMyListeningState(l)
-    chanRef.current?.track({ username, status: 'online', avatar_url: avatarUrl ?? null, listening: l, game: gameRef.current, activity: customActivity(), device: DEVICE })
+    // v1.436.0: имя и аватарка берутся из свежих значений, а не из замыкания.
+    // Здесь была настоящая рассинхронизация: сменил ник — и музыка продолжала
+    // публиковаться со старым именем до следующего входа.
+    void publishNow()
   }
 
   // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
   // since подобран так, что бегущее время = позиция трека.
   function activityOf(userId: string): Activity | null {
-    // Приоритет как в Discord: игра > музыка > ручная активность.
+    // Приоритет как в Discord: демонстрация экрана > голос > игра > музыка >
+    // ручная активность. Голос добавлен в v1.436.0 — до этого человек мог сидеть
+    // в звонке и делиться экраном, а у всех значилась вчерашняя игра.
+    const v = userId === user?.id ? voiceRef.current : online[userId]?.voice
+    if (v?.screen) return { text: '🖥 Демонстрирует экран' + (v.where ? ' · ' + v.where : ''), since: v.since }
+    if (v) return { text: '🔊 В голосовом канале' + (v.where ? ' · ' + v.where : ''), since: v.since }
     const g = userId === user?.id ? myGame : online[userId]?.game
     if (g) return { text: '🎮 Играет в ' + g.name + (g.mode ? ': ' + g.mode : ''), since: g.since }
     const l = userId === user?.id ? myListening : online[userId]?.listening
@@ -369,6 +448,11 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.listening ?? null
   }
 
+  function voiceOf(userId: string): Voice | null {
+    if (userId === user?.id) return voiceRef.current
+    return online[userId]?.voice ?? null
+  }
+
   function statusOf(userId: string): Status {
     if (userId === user?.id) return myStatus
     // v1.356.0: бот всегда в сети. Он не «сидит» в приложении и в presence не
@@ -384,7 +468,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     return online[userId]?.device ?? 'desktop'
   }
 
-  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf, listeningOf, deviceOf }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ online, myStatus, statusOf, activityOf, setMyListening, gameOf, listeningOf, voiceOf, deviceOf }}>{children}</Ctx.Provider>
 }
 
 export const usePresence = () => useContext(Ctx)

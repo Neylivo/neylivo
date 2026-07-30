@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { RoomEvent, DisconnectReason, getLocalDevices } from '../lib/livekit'
 import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
+import { SHARE_RES, SHARE_FPS, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources, type ShareQuality, type ShareSource } from '../lib/shareOpts'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { useSettings, devMode } from '../lib/settings'
@@ -28,15 +29,8 @@ import { audioCtx, master, fadeInCall, sndJoin, sndLeave, sndMute, sndUnmute } f
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Качества демонстрации экрана — как «Качество стрима» в Discord.
-// v1.113.0: битрейты подняты — 4K теперь действительно 4K (40 Мбит/с), а не мыло.
-const SHARE_RES = [
-  { label: '720p', w: 1280, h: 720, br: 4_000_000 },
-  { label: '1080p', w: 1920, h: 1080, br: 10_000_000 },
-  { label: '1440p', w: 2560, h: 1440, br: 20_000_000 },
-  { label: '4K', w: 3840, h: 2160, br: 40_000_000 },
-]
-const SHARE_FPS = [15, 30, 60]
+// v1.436.0: настройки демонстрации живут отдельным файлом и проверяются
+// (lib/shareOpts.ts) — раньше это была одна длинная строка прямо в обработчике.
 
 // ---- Громкость собеседников: WebAudio-гейны в общем реестре по identity ----
 const gainReg = new Map<string, Set<GainNode>>()
@@ -261,7 +255,9 @@ function Bubble({ p, isLocal, avatar, meName, onCtx }: { p: any; isLocal: boolea
 }
 
 /** Плитка участника — видео-режим: камера или аватар на тёмном фоне. */
-function Tile({ p, isLocal, avatar, color, small, meName, onCtx }: { p: any; isLocal: boolean; avatar?: string | null; color?: string | null; small?: boolean; meName?: string; onCtx?: CtxOpener }) {
+function Tile({ p, isLocal, avatar, color, small, meName, onCtx, sharing, onWatch }:
+  { p: any; isLocal: boolean; avatar?: string | null; color?: string | null; small?: boolean; meName?: string; onCtx?: CtxOpener
+    sharing?: boolean; onWatch?: () => void }) {
   const vidRef = useRef<HTMLDivElement>(null)
   const [hasCam, setHasCam] = useState(false)
   const [vidHidden, setVidHidden] = useState(() => isVideoHidden(p.identity))
@@ -300,6 +296,15 @@ function Tile({ p, isLocal, avatar, color, small, meName, onCtx }: { p: any; isL
       <div className="c2-vid" ref={vidRef} />
       {!showCam && <div className="c2-tile-av"><Avatar name={String(name)} url={avatar} size={small ? 44 : 72} /></div>}
       {!isLocal && <VolCtl identity={p.identity} />}
+      {/* v1.436.0: демонстрацию видно и её можно ОТКРЫТЬ. Раньше чужой экран
+          просто появлялся главной сценой сам — а если человек её свернул или
+          смотрел другого, вернуться к ней было нечем: кнопки не было нигде. */}
+      {sharing && <span className="c2-live tile"><i />В ЭФИРЕ</span>}
+      {sharing && onWatch && !small && (
+        <button className="c2-watch" onClick={e => { e.stopPropagation(); onWatch() }}>
+          <Icon name="screen-share" size={14} /> Смотреть
+        </button>
+      )}
       <div className="c2-cap">{!micOn && <Icon name="mic-off" size={11} />} {name}</div>
     </div>
   )
@@ -340,17 +345,21 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
   const remotes: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
   const all = [{ p: room.localParticipant as any, local: true }, ...remotes.map(p => ({ p, local: false }))]
 
-  const shares: { pub: any; who: string; key: string }[] = []
+  const shares: { pub: any; owner: string; who: string; key: string }[] = []
   let anyCam = false
   all.forEach(({ p, local }) => {
     p.trackPublications.forEach((pub: any) => {
-      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, who: local ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
+      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, owner: String(p.identity ?? ''), who: local ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
       if (pub.source === 'camera' && pub.track) anyCam = true
     })
   })
 
   const av = (p: any) => avatars[p.identity] ?? null
   const col = (p: any) => colors[p.identity] ?? null
+  // v1.436.0: чья демонстрация сейчас идёт — по этому рисуется «В ЭФИРЕ» и
+  // кнопка «Смотреть» на плитке самого человека.
+  const shareOf = (p: any) => shares.find(x => x.owner === p.identity) ?? null
+  const watch = (p: any) => { const sh = shareOf(p); if (sh) setFocus(sh.key) }
 
   // Голосовой режим: кружочки-аватарки по центру, как звонок в Discord.
   if (!shares.length && !anyCam) return (
@@ -369,7 +378,7 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
   if (!mainShare && !focusedPart) return (
     <div className="c2-board">
       <div className="c2-grid">
-        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} onCtx={onCtx} /></div>)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} meName={meName} onCtx={onCtx} sharing={!!shareOf(p)} onWatch={() => watch(p)} /></div>)}
       </div>
     </div>
   )
@@ -383,7 +392,7 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
       </div>
       <div className="c2-strip">
         {shares.filter(s => s.key !== (mainShare && mainShare.key)).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
-        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} onCtx={onCtx} /></div>)}
+        {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} onCtx={onCtx} sharing={!!shareOf(p)} onWatch={() => watch(p)} /></div>)}
       </div>
     </div>
   )
@@ -414,13 +423,16 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   const [qMenu, setQMenu] = useState(false)
   const [devMenu, setDevMenu] = useState<null | 'mic' | 'cam'>(null)
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  const [sq, setSq] = useState<{ res: string; fps: number }>(() => {
-    // v1.113.0: одноразовая миграция — качество демонстрации по умолчанию теперь 4K.
-    const mig = localStorage.getItem('ponoi_mig_113_4k')
-    try { const s = JSON.parse(localStorage.getItem('ponoi_share_q') || '{}'); if (s.res && s.fps && mig) return s } catch {}
-    localStorage.setItem('ponoi_mig_113_4k', '1')
-    return { res: '4K', fps: 30 }
-  })
+  const [sq, setSq] = useState<ShareQuality>(() => readShareQuality(localStorage.getItem('ponoi_share_q')))
+  // v1.436.0: что именно показывать — экран или окно (только в приложении: в
+  // браузере выбор рисует он сам и подменить его нечем).
+  const [sources, setSources] = useState<ShareSource[] | null>(null)
+  const canPickSource = !!(window as any).ponoiDesktop?.shareSources
+  const loadSources = async () => {
+    const d = (window as any).ponoiDesktop
+    if (!d?.shareSources) return
+    try { setSources(orderSources(await d.shareSources())) } catch { setSources([]) }
+  }
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting')
   const [count, setCount] = useState(1)
   const [showSb, setShowSb] = useState(false)
@@ -625,8 +637,10 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   }
   async function startShare() {
     setQMenu(false)
-    const r = SHARE_RES.find(x => x.label === sq.res) ?? SHARE_RES[1]
     try { localStorage.setItem('ponoi_share_q', JSON.stringify(sq)) } catch {}
+    // v1.436.0: выбранный источник и «нужен ли звук» уезжают в оболочку до
+    // запроса — она отдаёт браузеру именно это окно (см. electron/main.cjs).
+    try { (window as any).ponoiDesktop?.setShareSource?.(sq.sourceId ?? null, sq.audio) } catch {}
     try {
       // v1.64.0: contentHint подсказывает браузеру, что важнее (чёткость/плавность),
       // simulcast выключен — зритель всегда получает полное разрешение.
@@ -636,12 +650,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
       // v1.113.0: реальное 4K — до 60 FPS чёткость важнее плавности (contentHint
       // 'detail'), и браузеру запрещено снижать разрешение под нагрузкой
       // (degradationPreference: maintain-resolution) — лучше потерять кадры, чем мыло.
-      await (room.localParticipant as any).setScreenShareEnabled(true,
-        { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
-          systemAudio: 'include',
-          resolution: { width: r.w, height: r.h, frameRate: sq.fps },
-          contentHint: sq.fps >= 60 ? 'motion' : 'detail' },
-        { screenShareEncoding: { maxBitrate: r.br, maxFramerate: sq.fps, priority: 'high' }, degradationPreference: 'maintain-resolution', simulcast: false })
+      await (room.localParticipant as any).setScreenShareEnabled(true, shareCapture(sq) as any, sharePublish(sq) as any)
       setScreen(true)
     } catch (e: any) { toastErr(e.message ?? String(e)) }
   }
@@ -652,9 +661,14 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   function leave() { room.disconnect(); onLeave() }
 
   // ---- v1.43.0: состояние звонка наружу (панель в сайдбаре, MeBar) + команды оттуда. ----
+  // v1.436.0: сюда добавилось «где» — название сервера или имя собеседника. Это
+  // же событие теперь слушает присутствие (см. lib/presence.tsx), и у людей
+  // рядом появляется «В голосовом канале · <где>» и «Демонстрирует экран».
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('ponoi-call-state', { detail: { mic, deaf, cam, screen, connected: status === 'connected' } }))
-  }, [mic, deaf, cam, screen, status])
+    const where = serverName || peer?.name || null
+    window.dispatchEvent(new CustomEvent('ponoi-call-state',
+      { detail: { mic, deaf, cam, screen, where, connected: status === 'connected' } }))
+  }, [mic, deaf, cam, screen, status, serverName, peer?.name])
   useEffect(() => {
     const h = (e: Event) => {
       const what = (e as CustomEvent).detail?.what
@@ -787,18 +801,43 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
           <button className={'c2-caret' + (devMenu === 'cam' ? ' on' : '')} title="Выбрать камеру" onClick={() => devMenu === 'cam' ? setDevMenu(null) : openDev('cam')}><Icon name="chevron-down" size={14} /></button>
         </div>
         <div className="c2-share-wrap">
-          <button className={'c2-btn' + (screen ? ' live' : '')} onClick={() => screen ? stopShare() : setQMenu(m => !m)} title={screen ? 'Остановить демонстрацию' : 'Демонстрация экрана'}><Icon name="screen-share" size={20} /></button>
+          <button className={'c2-btn' + (screen ? ' live' : '')} onClick={() => { if (screen) { stopShare(); return } setQMenu(m => { if (!m) void loadSources(); return !m }) }} title={screen ? 'Остановить демонстрацию' : 'Демонстрация экрана'}><Icon name="screen-share" size={20} /></button>
           {qMenu && !screen && <>
             <div className="c2-menu-ov" onClick={() => setQMenu(false)} />
-            <div className="c2-menu">
+            <div className="c2-menu c2-sharemenu">
+              {/* v1.436.0: выбор того, ЧТО показывать — как в Discord. Раньше
+                  отдавался только весь экран, и одно окно игры отдать было
+                  нельзя вовсе. */}
+              {canPickSource && <>
+                <div className="c2-menu-h">Что показывать</div>
+                <div className="c2-srcgrid">
+                  {sources === null && <div className="c2-dev-empty">Смотрю, что открыто…</div>}
+                  {sources?.length === 0 && <div className="c2-dev-empty">Не нашлось ни одного окна</div>}
+                  {sources?.map(src => (
+                    <button key={src.id} className={'c2-src' + (sq.sourceId === src.id ? ' on' : '')}
+                      title={src.name} onClick={() => setSq(s => ({ ...s, sourceId: src.id }))}>
+                      {src.thumb ? <img src={src.thumb} alt="" /> : <span className="c2-src-no"><Icon name="screen-share" size={20} /></span>}
+                      <span className="c2-src-nm">
+                        {src.icon && <img className="c2-src-ico" src={src.icon} alt="" />}
+                        <span className="c2-src-t">{src.kind === 'screen' ? 'Экран целиком' : src.name}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>}
               <div className="c2-menu-h">Качество</div>
               <div className="c2-qrow">
                 {SHARE_RES.map(r => <button key={r.label} className={sq.res === r.label ? 'on' : ''} onClick={() => setSq(s => ({ ...s, res: r.label }))}>{r.label}</button>)}
               </div>
               <div className="c2-menu-h">Частота кадров</div>
               <div className="c2-qrow">
-                {SHARE_FPS.map(f => <button key={f} className={sq.fps === f ? 'on' : ''} onClick={() => setSq(s => ({ ...s, fps: f }))}>{f} FPS</button>)}
+                {SHARE_FPS.map(f => <button key={f} className={sq.fps === f ? 'on' : ''} onClick={() => setSq(s => ({ ...s, fps: f }))}>{f} к/с</button>)}
               </div>
+              <button className={'c2-audio-sw' + (sq.audio ? ' on' : '')} onClick={() => setSq(s => ({ ...s, audio: !s.audio }))}>
+                <Icon name={sq.audio ? 'volume' : 'volume-off'} size={16} />
+                Звук с компьютера {sq.audio ? 'включён' : 'выключен'}
+              </button>
+              <div className="c2-sharehint">{shareSummary(sq)}</div>
               <button className="c2-go" onClick={startShare}><Icon name="screen-share" size={16} /> В эфир</button>
             </div>
           </>}

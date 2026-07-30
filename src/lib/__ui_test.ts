@@ -19,6 +19,8 @@ const _store = new Map<string, string>()
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
+import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
+import { SHARE_RES, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources } from './shareOpts'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -886,6 +888,143 @@ check('проверка заметила бы пропажу границ', () =
   const без = { zoom: 2, x: 9999, y: 0 }
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
+
+console.log('\n-- Демонстрация экрана: настройки (v1.436.0) --')
+{
+  check('по умолчанию — 1080p, 60 кадров, со звуком', () => {
+    const q = readShareQuality(null)
+    return q.res === '1080p' && q.fps === 60 && q.audio === true
+  })
+  check('мусор в сохранённых настройках не ломает демку', () => {
+    const q = readShareQuality('{"res":"8K","fps":999,"audio":"да"}')
+    return q.res === '1080p' && q.fps === 60 && q.audio === true
+  })
+  check('сохранённое своё возвращается как есть', () => {
+    const q = readShareQuality('{"res":"4K","fps":30,"audio":false,"sourceId":"window:7"}')
+    return q.res === '4K' && q.fps === 30 && q.audio === false && q.sourceId === 'window:7'
+  })
+  check('битрейт растёт вместе с разрешением', () => {
+    const b = SHARE_RES.map(r => r.br)
+    return b.every((v, i) => i === 0 || v > b[i - 1])
+  })
+  check('4K просит именно 4K, а не «примерно»', () => {
+    const c = shareCapture({ res: '4K', fps: 60, audio: true })
+    return c.resolution.width === 3840 && c.resolution.height === 2160 && c.resolution.frameRate === 60
+  })
+  check('на 60 кадрах бережём плавность, на 30 — чёткость', () =>
+    shareCapture({ res: '1080p', fps: 60, audio: true }).contentHint === 'motion' &&
+    shareCapture({ res: '1080p', fps: 30, audio: true }).contentHint === 'detail')
+  check('звук выключили — не просим его вовсе', () => {
+    const c = shareCapture({ res: '1080p', fps: 30, audio: false })
+    return c.audio === false && c.systemAudio === 'exclude'
+  })
+  check('звук просим без «улучшайзеров» и в стерео', () => {
+    const a: any = shareCapture({ res: '1080p', fps: 30, audio: true }).audio
+    return a.echoCancellation === false && a.autoGainControl === false && a.channelCount === 2
+  })
+  check('разрешение не роняется под нагрузкой', () =>
+    sharePublish({ res: '4K', fps: 60, audio: true }).degradationPreference === 'maintain-resolution')
+  check('подпись под кнопкой читается человеком', () =>
+    shareSummary({ res: '1440p', fps: 30, audio: false }) === '1440p · 30 к/с · без звука')
+
+  console.log('\n   выбор источника:')
+  const SRC: any[] = [
+    { id: 'window:2', name: 'Ponoi', kind: 'window' },
+    { id: 'window:1', name: 'Ярлык', kind: 'window' },
+    { id: 'screen:0', name: 'Screen 1', kind: 'screen' },
+    { id: 'window:3', name: 'Автобус', kind: 'window' },
+  ]
+  check('экраны идут первыми', () => orderSources(SRC)[0].kind === 'screen')
+  check('окна по алфавиту', () => {
+    const w = orderSources(SRC).filter(x => x.kind === 'window').map(x => x.name)
+    return w.join() === 'Автобус,Ярлык'
+  })
+  check('своё же окно в список не попадает', () =>
+    !orderSources(SRC).some(x => x.name === 'Ponoi'))
+  check('пустой список не ломает', () => orderSources([]).length === 0)
+
+  console.log('\n-- Ломаем нарочно (демонстрация) --')
+  check('проверка заметила бы возврат к «только весь экран»', () => {
+    // Прежнее поведение: окон в списке нет вообще.
+    const прежнее = SRC.filter(x => x.kind === 'screen')
+    return прежнее.length === 1 && orderSources(SRC).filter(x => x.kind === 'window').length === 2
+  })
+  check('проверка заметила бы звук, который просят всегда', () =>
+    shareCapture({ res: '720p', fps: 15, audio: false }).audio === false)
+}
+
+console.log('\n-- Присутствие: что рассылаем и что показываем (v1.436.0) --')
+{
+  const БАЗА = { username: 'я', avatarUrl: null, activity: null, listening: null, game: null, voice: null, device: 'desktop' as const }
+  const M = (o: any = {}) => buildMeta({ ...БАЗА, ...o })
+
+  check('состав присутствия собирается одинаково из любого места', () => {
+    const a = M({ listening: { title: 'п', pos: 3, at: 1 } })
+    const b = M({ listening: { title: 'п', pos: 3, at: 1 } })
+    return JSON.stringify(a) === JSON.stringify(b) && a.status === 'online'
+  })
+  check('пустые поля не превращаются в undefined', () => {
+    const m = M()
+    return m.game === null && m.voice === null && m.listening === null && m.activity === null
+  })
+
+  check('первая публикация нужна всегда', () => metaChanged(null, M()))
+  check('то же самое второй раз не рассылается', () => !metaChanged(M(), M()))
+  check('смена ника рассылается', () => metaChanged(M(), M({ username: 'другой' })))
+  check('вход в звонок рассылается', () => metaChanged(M(), M({ voice: { since: 1 } })))
+  check('включение демонстрации рассылается', () =>
+    metaChanged(M({ voice: { since: 1 } }), M({ voice: { since: 1, screen: true } })))
+  check('нажатие на микрофон рассылается', () =>
+    metaChanged(M({ voice: { since: 1 } }), M({ voice: { since: 1, muted: true } })))
+  check('выход из звонка рассылается', () => metaChanged(M({ voice: { since: 1 } }), M()))
+  check('бег полосы трека сам по себе не рассылается', () => {
+    const a = M({ listening: { title: 'п', pos: 3, at: 1000 } })
+    const b = M({ listening: { title: 'п', pos: 9, at: 7000 } })
+    return !metaChanged(a, b)
+  })
+  check('пауза трека рассылается', () => {
+    const a = M({ listening: { title: 'п', pos: 3, at: 1000 } })
+    const b = M({ listening: { title: 'п', pos: 3, at: 1000, paused: true } })
+    return metaChanged(a, b)
+  })
+  check('смена трека рассылается', () => {
+    const a = M({ listening: { title: 'первый', pos: 3, at: 1 } })
+    const b = M({ listening: { title: 'второй', pos: 3, at: 1 } })
+    return metaChanged(a, b)
+  })
+  check('обложка игры доезжает отдельным сообщением', () => {
+    const a = M({ game: { name: 'И', since: 1, cover: null } })
+    const b = M({ game: { name: 'И', since: 1, cover: 'https://x/1.jpg' } })
+    return metaChanged(a, b)
+  })
+
+  console.log('\n   что человек делает — по важности:')
+  check('демонстрация экрана важнее всего', () =>
+    whatIsDoing({ voice: { since: 1, screen: true }, game: { name: 'И', since: 1 } }).kind === 'screen')
+  check('голос важнее игры', () =>
+    whatIsDoing({ voice: { since: 1 }, game: { name: 'И', since: 1 } }).kind === 'voice')
+  check('игра важнее музыки', () =>
+    whatIsDoing({ game: { name: 'И', since: 1 }, listening: { title: 'п', pos: 0, at: 0 } }).kind === 'game')
+  check('музыка важнее своей строки', () =>
+    whatIsDoing({ listening: { title: 'п', pos: 0, at: 0 }, activity: { text: 'пью чай', since: 0 } }).kind === 'music')
+  check('ничего не делает — так и говорим', () => whatIsDoing({}).kind === 'none')
+  check('в голосе видно, где именно', () =>
+    whatIsDoing({ voice: { since: 1, where: 'Общий' } }).text.includes('Общий'))
+  check('время в звонке считается от входа, а не от нажатия кнопок', () =>
+    whatIsDoing({ voice: { since: 12345, screen: true } }).since === 12345)
+
+  console.log('\n-- Ломаем нарочно (присутствие) --')
+  check('проверка заметила бы пропажу голоса из присутствия', () => {
+    const прежнее = whatIsDoing({ game: null, listening: null, activity: null })
+    const теперь = whatIsDoing({ voice: { since: 1 } })
+    return прежнее.kind === 'none' && теперь.kind === 'voice'
+  })
+  check('проверка заметила бы «рассылаем на каждый чих»', () => {
+    const a = M({ listening: { title: 'п', pos: 3, at: 1000 } })
+    const b = M({ listening: { title: 'п', pos: 4, at: 2000 } })
+    return !metaChanged(a, b)
+  })
+}
 
 console.log('\n-- Долгое нажатие (v1.433.0) --')
 // Проверяется на поддельном окне: настоящих касаний в стенде взять негде (у меня

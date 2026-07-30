@@ -1364,17 +1364,52 @@ app.whenReady().then(() => {
   // монитор. Теперь ищем источник, совпадающий с ОСНОВНЫМ дисплеем Windows;
   // если сопоставить не удалось (display_id недоступен на этой ОС) — прежнее
   // поведение (первый источник) как безопасный откат.
+  // v1.436.0: свой выбор источника, как в Discord — экран ИЛИ отдельное окно.
+  //
+  // Что было. Брались только экраны (`types: ['screen']`), а системный выбор
+  // (useSystemPicker) показывал окно Windows поверх приложения. То есть отдать
+  // одно окно игры, как это делают в Discord, было нельзя вообще: демка всегда
+  // была «весь экран», со всеми чужими уведомлениями и вкладками.
+  //
+  // Теперь приложение спрашивает список само (ponoi-share-sources, с картинками
+  // предпросмотра), человек выбирает в интерфейсе звонка, а сюда приезжает
+  // готовый id. Не выбрал — как раньше, основной экран.
+  ipcMain.handle('ponoi-share-sources', async () => {
+    const list = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: true,
+    })
+    return list.map((x) => ({
+      id: x.id,
+      name: x.name,
+      kind: x.id.startsWith('screen') ? 'screen' : 'window',
+      thumb: (() => { try { return x.thumbnail && !x.thumbnail.isEmpty() ? x.thumbnail.toDataURL() : null } catch { return null } })(),
+      icon: (() => { try { return x.appIcon && !x.appIcon.isEmpty() ? x.appIcon.toDataURL() : null } catch { return null } })(),
+    }))
+  })
+  let shareSourceId = null
+  let shareWantAudio = true
+  ipcMain.on('ponoi-share-source', (_e, d) => {
+    shareSourceId = d && d.id ? String(d.id) : null
+    shareWantAudio = !d || d.audio !== false
+  })
   session.defaultSession.setDisplayMediaRequestHandler((request, cb) => {
-    desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      let pick = sources[0]
-      try {
-        const { screen } = require('electron')
-        const primaryId = String(screen.getPrimaryDisplay().id)
-        pick = sources.find((s) => String(s.display_id) === primaryId) || sources[0]
-      } catch {}
-      cb({ video: pick, audio: 'loopback' })
+    desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      let pick = shareSourceId ? sources.find((s) => s.id === shareSourceId) : null
+      if (!pick) {
+        try {
+          const { screen } = require('electron')
+          const primaryId = String(screen.getPrimaryDisplay().id)
+          pick = sources.find((s) => String(s.display_id) === primaryId)
+        } catch {}
+      }
+      if (!pick) pick = sources[0]
+      // Звук системы отдаём только когда его попросили: у окна его может не быть
+      // вовсе, и тогда браузер иначе отказывает во всей демке разом.
+      cb(shareWantAudio ? { video: pick, audio: 'loopback' } : { video: pick })
     }).catch(() => cb({}))
-  }, { useSystemPicker: true })
+  }, { useSystemPicker: false })
 
   // Автообновления (как в Discord): проверяем GitHub Releases при запуске и
   // каждые 10 минут; обновление качается в фоне само — перезапускать приложение
