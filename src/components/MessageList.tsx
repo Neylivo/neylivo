@@ -632,6 +632,28 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
             <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '')}
               onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}
+              /* v1.426.0: долгое нажатие открывает то же меню сообщения.
+                 На телефоне меню не открывалось НИЧЕМ: правого щелчка там нет, а
+                 долгое нажатие браузер отдаёт выделению текста и события
+                 contextmenu не присылает. То есть ответить, закрепить, скопировать
+                 ссылку, переслать и удалить сообщение с телефона было нельзя
+                 вообще — всё это жило в меню, до которого не добраться. */
+              onPointerDown={e => {
+                if (e.pointerType === 'mouse') return
+                const at = { x: e.clientX, y: e.clientY }
+                const el = e.currentTarget
+                const timer = window.setTimeout(() => { setPickFor(null); setMenu({ id: m.id, ...at }) }, 450)
+                const off = () => {
+                  window.clearTimeout(timer)
+                  el.removeEventListener('pointerup', off)
+                  el.removeEventListener('pointercancel', off)
+                  el.removeEventListener('pointermove', off)
+                  el.removeEventListener('scroll', off)
+                }
+                el.addEventListener('pointerup', off)
+                el.addEventListener('pointercancel', off)
+                el.addEventListener('pointermove', off)
+              }}
               onDoubleClick={e => {
                 // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
                 // двойным щелчком при этом не ломается: если что-то выделилось, человек

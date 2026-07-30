@@ -19,6 +19,7 @@ import { searchQuery } from './streaming'
 import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { mergeTracks } from './mergeTracks'
+import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -420,6 +421,70 @@ check('проверка заметила бы возврат к мягкому �
   const played = soft(waveLib, 'a1', 9)
   // Прежний расчёт крутит ровно те же три песни — на этом и жаловались.
   return played.filter(id => id.startsWith('a')).length >= 8
+})
+
+
+console.log('\n-- Прослушивание засчитывается по-настоящему (v1.426.0) --')
+// Раньше плюс один ставился в тот же миг, когда трек начинал играть: число
+// говорило «сколько раз нажали», а не «сколько слушали». Пролистал двадцать
+// треков по секунде — двадцать прослушиваний.
+/** Проиграть трек шагами по step секунд. */
+function listen(seconds: number, step = 0.5, start = 0) {
+  let st = freshListened(start)
+  for (let t = start + step; t <= start + seconds + 1e-9; t += step) st = advance(st, t)
+  return st
+}
+check('тридцать секунд — засчитано', () => credited(listen(30), 200))
+check('двадцать девять — ещё нет', () => !credited(listen(29), 200))
+check('порог по умолчанию — тридцать секунд', () => creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
+check('короткую запись надо дослушать', () => {
+  // Трек на 20 секунд: порог — почти вся его длина, а не тридцать секунд.
+  const th = creditThreshold(20)
+  return th < CREDIT_SEC && th >= 19 - 1e-9
+})
+check('короткая запись целиком — засчитано', () => credited(listen(20, 0.5), 20))
+check('половина короткой записи — нет', () => !credited(listen(10, 0.5), 20))
+
+console.log('\n-- Перемотка не считается слушанием --')
+check('перемотка на тридцатую секунду ничего не даёт', () => {
+  const st = advance(freshListened(0), 30)   // один прыжок сразу на 30 с
+  return st.sec === 0 && !credited(st, 200)
+})
+check('перемотка туда-сюда не накапливает время', () => {
+  let st = freshListened(0)
+  for (const p of [40, 5, 90, 10, 150, 2]) st = advance(st, p)
+  return st.sec === 0
+})
+check('после перемотки счёт продолжается с нового места', () => {
+  let st = advance(freshListened(0), 100)    // перемотали
+  st = advance(st, 100.5); st = advance(st, 101)
+  return Math.abs(st.sec - 1) < 1e-9
+})
+check('назад время не отматывает', () => {
+  let st = listen(10)
+  const was = st.sec
+  st = advance(st, 1)
+  return st.sec === was
+})
+check('шаг больше порога считается перемоткой', () => {
+  const st = advance(freshListened(0), STEP_MAX + 0.1)
+  return st.sec === 0
+})
+check('мусорная позиция ничего не портит', () => {
+  const st = advance(listen(5), NaN as any)
+  return Math.abs(st.sec - 5) < 1e-9
+})
+check('пауза не прибавляет времени', () => {
+  const st = listen(5)
+  const same = advance(st, st.pos)
+  return same.sec === st.sec
+})
+
+console.log('\n-- Ломаем нарочно (подсчёт прослушивания) --')
+check('проверка заметила бы возврат к «плюс один при запуске»', () => {
+  // Прежнее поведение: засчитывали сразу, ничего не накапливая.
+  const oldWay = () => true
+  return oldWay() === true && !credited(freshListened(0), 200)
 })
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)

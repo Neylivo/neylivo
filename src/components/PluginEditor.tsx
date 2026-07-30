@@ -12,7 +12,7 @@ import { pluginError, isRunning } from '../lib/plugins/host'
 import { ALL_PERMISSIONS, PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission } from '../lib/plugins/types'
 import { publishPlugin, shorten, SUMMARY_MAX } from '../lib/catalog'
 import {
-  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify,
+  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify, cleanPasted,
   missingPermissions, unusedPermissions, type Draft,
 } from '../lib/plugins/editorDraft'
 import { RECIPES, recipeDefaults, recipeReady, type Recipe } from '../lib/plugins/recipes'
@@ -345,7 +345,21 @@ export function PluginEditor({ editId, onClose, onSaved }: {
         </>}
 
         <label className="modal-lbl">Код</label>
-        <textarea className="ped-code" spellCheck={false} value={d.body} onChange={e => set('body', e.target.value)}
+        {/* v1.426.0: вставку из чата с ИИ чистим сами. Ответ приходит названием,
+            описанием и кодом внизу (так просил владелец), а человек копирует всё
+            разом — и раньше получал «в файле нет шапки плагина», хотя приложение
+            прекрасно видит, где начинается файл. */}
+        <textarea className="ped-code" spellCheck={false} value={d.body}
+          onPaste={e => {
+            const raw = e.clipboardData?.getData('text') ?? ''
+            if (!raw.includes('/**')) return
+            const clean = cleanPasted(raw)
+            if (clean.trim() === raw.trim()) return   // чистить нечего — обычная вставка
+            e.preventDefault()
+            set('body', clean)
+            toastOk('Убрал лишнее вокруг кода — оставил сам файл')
+          }}
+          onChange={e => set('body', e.target.value)}
           placeholder="function onLoad(ponoi) { … }" />
         <div className="cset-hint" style={{ marginTop: 4 }}>
           Функция <code>onLoad</code> получает объект <code>ponoi</code> — через него плагин и работает.

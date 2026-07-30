@@ -14,6 +14,7 @@ import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
 import { bindMediaKeys, setMediaNow, updateMediaPosition } from './mediaSession'
 import { needRepublish } from '../lib/listenProgress'
@@ -99,6 +100,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return () => io.disconnect()
   })
   const [libQ, setLibQ] = useState('')
+  /**
+   * Меню карточки склада (v1.426.0). Открывается правым щелчком и долгим
+   * нажатием — там живёт всё, что раньше висело кнопками поверх обложки.
+   */
+  const [cardMenu, setCardMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
   // Открыли склад заново или начали искать — снова с первой порции.
   useEffect(() => { setLibShown(LIB_PAGE) }, [showLib, libQ])
   const [uploading, setUploading] = useState(false)
@@ -1526,16 +1532,35 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [myPlays, setMyPlays] = useState<Record<string, number>>({})
   useEffect(() => { myPlayCounts().then(setMyPlays) }, [])
 
-  // Отмечаем прослушивание один раз на трек: не на каждую перемотку и не на
-  // паузу, иначе число говорило бы о нажатиях, а не о том, что человек слушал.
+  /**
+   * Прослушивание засчитывается только после тридцати секунд (v1.426.0).
+   *
+   * Что было. Плюс один в тот же миг, когда трек начинал играть. То есть число
+   * говорило «сколько раз на это нажали», а не «сколько это слушали»: пролистал
+   * двадцать треков по секунде — двадцать прослушиваний, и склад «сначала то,
+   * что слушают чаще всего» выкладывался по случайным нажатиям.
+   *
+   * Теперь как у стриминговых сервисов: тридцать секунд, а короткая запись —
+   * целиком. Время НАКАПЛИВАЕТСЯ маленькими шагами (см. playCredit.ts), поэтому
+   * перемотка до тридцатой секунды ничего не даёт: прыжок шагом не считается.
+   */
   const countedRef = useRef<string>('')
+  const listenRef = useRef<Listened>(freshListened())
   useEffect(() => {
-    if (!cur || !playing || countedRef.current === cur.id) return
+    listenRef.current = freshListened(curT)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur?.id])
+  useEffect(() => {
+    if (!cur || !playing) return
+    if (countedRef.current === cur.id) return
+    listenRef.current = advance(listenRef.current, curT)
+    if (!credited(listenRef.current, dur || cur.dur)) return
     countedRef.current = cur.id
     void recordPlay(cur.id)
     setMyPlays(p => ({ ...p, [cur.id]: (p[cur.id] ?? 0) + 1 }))
     setTracks(ts => ts.map(t => (t.id === cur.id ? { ...t, plays: (t.plays ?? 0) + 1 } : t)))
-  }, [cur, playing])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curT, playing, cur?.id, dur])
 
   // v1.399.0: что играло только что — чтобы очередь не гоняла одно и то же по
   // кругу. Держим короткий хвост: рекомендация смотрит на свежесть, а не на всю
@@ -1921,6 +1946,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           часть плеера. Это разные дела: плеер отвечает «что играет», трекотека —
           «что у меня есть», и склад на сотню записей не должен ютиться в узкой
           колонке рядом с обложкой. */}
+      {cardMenu && (() => {
+        const t = tracks.find(x => x.id === cardMenu.id)
+        if (!t) return null
+        const mine = !!meId && t.ownerId === meId
+        const close = () => setCardMenu(null)
+        return <Portal>
+          <div className="ctxmenu-overlay" onClick={close} onContextMenu={e => { e.preventDefault(); close() }} />
+          <div className="ctxmenu mus2-cardmenu" style={{ left: Math.min(cardMenu.x, window.innerWidth - 230), top: Math.min(cardMenu.y, window.innerHeight - 220) }}>
+            <div className="ctxmenu-title notr" translate="no">{cardMenu.title}</div>
+            <div className="ctxmenu-item" onClick={() => { const i = tracks.findIndex(x => x.id === t.id); playAt(i); setPlaying(true); setShowLib(false); close() }}>
+              <Icon name="play" size={15} /> Играть сейчас
+            </div>
+            <div className="ctxmenu-item" onClick={() => { queueNext(t.id); close() }}>
+              <Icon name="plus" size={15} /> Поставить следующим
+            </div>
+            <div className="ctxmenu-item" onClick={() => { void copyText(t.url, 'Ссылка скопирована'); close() }}>
+              <Icon name="link" size={15} /> Скопировать ссылку
+            </div>
+            {unplayable(t) && <div className="ctxmenu-item" onClick={() => {
+              forgetBroken(t.id); forgetNoEmbed(t.id); setYtDenied(prev => prev.filter(x => x !== t.id)); toastOk('Попробую этот трек снова'); close()
+            }}><Icon name="rotate" size={15} /> Попробовать снова</div>}
+            {mine
+              ? <div className="ctxmenu-item danger" onClick={() => { void removeTrack(t.id, cardMenu.title); close() }}>
+                  <Icon name="trash" size={15} /> Убрать из Трекотеки
+                </div>
+              : <div className="ctxmenu-note">Убрать может только тот, кто выложил трек</div>}
+          </div>
+        </Portal>
+      })()}
+
       {showLib && <Portal><div className="mus2-lib" onClick={() => setShowLib(false)}>
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
@@ -1970,24 +2025,31 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     return (
                       <div key={t.id} className={'mus2-card' + (on ? ' on' : '') + (isBroken(t.id) ? ' broken' : '')}
                         title={title + (author ? ' — ' + author : '')}
-                        onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true); setShowLib(false) }}>
+                        onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true); setShowLib(false) }}
+                        onContextMenu={e => { e.preventDefault(); if (!guest) setCardMenu({ id: t.id, title, x: e.clientX, y: e.clientY }) }}
+                        onPointerDown={e => {
+                          // Долгое нажатие — то же меню: на телефоне правого щелчка нет.
+                          if (guest || e.pointerType === 'mouse') return
+                          const at = { x: e.clientX, y: e.clientY }
+                          const timer = window.setTimeout(() => setCardMenu({ id: t.id, title, ...at }), 480)
+                          const off = () => { window.clearTimeout(timer); e.currentTarget?.removeEventListener('pointerup', off); e.currentTarget?.removeEventListener('pointercancel', off); e.currentTarget?.removeEventListener('pointermove', off) }
+                          e.currentTarget.addEventListener('pointerup', off)
+                          e.currentTarget.addEventListener('pointercancel', off)
+                          e.currentTarget.addEventListener('pointermove', off)
+                        }}>
                         <div className="mus2-card-art">
                           {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={34} />}
-                          {/* Кнопка появляется на наведении и по фокусу — до неё
-                              можно дойти и с клавиатуры, а не только мышью. */}
-                          <button className="mus2-card-play" tabIndex={-1} aria-hidden
-                            onClick={e => { e.stopPropagation(); playAt(i); setPlaying(true); setShowLib(false) }}>
-                            <Icon name={on && playing ? 'pause' : 'play'} size={18} />
-                          </button>
-                          {/* v1.374.0: поставить в очередь, не бросая то, что играет. */}
-                          {!guest && <button className="mus2-card-q" title="Поставить следующим"
-                            onClick={e => { e.stopPropagation(); queueNext(t.id) }}>
-                            <Icon name="plus" size={15} />
-                          </button>}
-                          {/* v1.376.0: удаление вернулось сюда. Кнопка жила в старом
-                              вертикальном списке очереди и исчезла вместе с ним —
-                              убрать трек из трекотеки стало нечем вовсе. */}
-                          {!guest && <button className="mus2-card-del" title="Убрать из трекотеки"
+                          {/* v1.426.0: карточка чистая.
+                              Раньше при наведении на неё вылезали три кнопки:
+                              «играть» (хотя щелчок по карточке и так играет),
+                              «поставить следующим» и «убрать из Трекотеки» — и
+                              последняя показывалась ВСЕМ, даже у чужого трека,
+                              который база всё равно не даст удалить: кнопка,
+                              которая гарантированно откажет, хуже отсутствующей.
+                              Осталась одна, и только у своего трека. Всё
+                              остальное — правым щелчком или долгим нажатием (см.
+                              меню карточки ниже): функции никуда не делись. */}
+                          {!guest && t.ownerId === meId && <button className="mus2-card-del" title="Убрать из Трекотеки"
                             onClick={e => { e.stopPropagation(); void removeTrack(t.id, title) }}>
                             <Icon name="trash" size={14} />
                           </button>}

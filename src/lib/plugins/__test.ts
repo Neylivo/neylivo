@@ -12,7 +12,7 @@ import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS, PLUGIN_EVENTS } from './types'
 import { PANEL_SLOTS } from './registry'
 import {
-  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify,
+  TEMPLATES, buildFile, draftFrom, draftFromTemplate, slugify, cleanPasted,
   permissionsFromCode, missingPermissions, unusedPermissions,
 } from './editorDraft'
 import { RECIPES, recipeDefaults, recipeReady } from './recipes'
@@ -483,6 +483,37 @@ for (const p of OFFICIAL_PLUGINS) {
     'servers', 'channels', 'open', 'status.set', 'status.get', 'sound.play',
     'storage.clear',
   ]
+
+
+  // ── Вставка из чата с ИИ (v1.426.0) ─────────────────────────────────────
+  //
+  // Ответ ИИ теперь идёт названием, описанием и кодом внизу — как просил
+  // владелец. Человек копирует всё разом, и приложение обязано взять из этого
+  // сам файл: иначе он получает «в файле нет шапки плагина» на совершенно
+  // правильном ответе.
+  console.log('\n── Вставка из чата с ИИ ──')
+  const ФАЙЛ = ['/**', ' * @name Проба', ' * @id proba-1', ' * @version 1.0.0', ' */', 'function onLoad(ponoi){ ponoi.log("x") }'].join('\n')
+  check('название и описание перед кодом отрезаются', () => {
+    const вставка = 'Приветствие\n\nЗдоровается по команде. Просит команды и отправку.\n\n' + ФАЙЛ
+    return parsePlugin(cleanPasted(вставка)).id === 'proba-1'
+  })
+  check('markdown-забор снимается', () => {
+    const вставка = 'Вот твой плагин:\n\n```js\n' + ФАЙЛ + '\n```\n'
+    return parsePlugin(cleanPasted(вставка)).id === 'proba-1'
+  })
+  check('забор без языка тоже', () =>
+    parsePlugin(cleanPasted('```\n' + ФАЙЛ + '\n```')).id === 'proba-1')
+  check('чистый файл не портится', () => cleanPasted(ФАЙЛ).trim() === ФАЙЛ.trim())
+  check('код перед шапкой не режется', () => {
+    // Чужой файл со своим порядком: сначала код, потом комментарий. Резать
+    // ему начало значило бы потерять чужую работу.
+    const свой = 'const A = 1;\n' + ФАЙЛ
+    return cleanPasted(свой).includes('const A = 1')
+  })
+  check('без шапки чистка не выдумывает её', () => {
+    const мимо = cleanPasted('просто текст без кода')
+    return !мимо.includes('/**')
+  })
 
   check('в инструкции описано каждое разрешение', () => {
     const missing = ALL_PERMISSIONS.filter(p => !PLUGIN_SPEC.includes(p))

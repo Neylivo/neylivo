@@ -6066,7 +6066,9 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
     padding: calc(10px + env(safe-area-inset-top)) 12px 10px; gap: 8px; flex-wrap: wrap;
   }
   .mus2-lib-head b { font-size: 15px; }
-  .mus2-lib-head .mus2-in { max-width: none; order: 3; width: 100%; }
+  /* Поиск — своей строкой: flex-basis обязателен, без него поле оставалось в
+     одном ряду с названием и крестиком и сжималось до «Поиск по…». */
+  .mus2-lib-head .mus2-in { max-width: none; order: 3; flex: 1 0 100%; }
   .mus2-lib-x { width: 38px; height: 38px; }
   .mus2-lib-body { padding: 10px 12px calc(20px + env(safe-area-inset-bottom)); }
   .mus2-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -6110,4 +6112,128 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
     .dm-side, .channels { padding-bottom: env(safe-area-inset-bottom); }
     .mus2 { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
   }
+}
+
+/* ══ v1.426.0: Трекотека — вид и появление ═════════════════════════════════════
+   Что было. Склад открывался мгновенной подменой экрана: щёлкнул — и вместо
+   плеера сразу простыня карточек, без единого перехода. Сами карточки выдавали
+   при наведении три кнопки поверх обложки, из них «удалить» показывалась даже у
+   чужого трека, который база всё равно не даст удалить. Заголовок, поиск и
+   счётчик стояли простой строкой.
+
+   Здесь: появление, о котором просил владелец, и вид, за которым не стыдно —
+   тёмный слой с размытием, всплывающая панель, обложки крупнее и с мягкой
+   тенью, играющая карточка подсвечена, а не просто «чуть светлее». */
+
+/* Появление: слой проявляется, панель всплывает снизу. Быстро — это окно
+   открывают, чтобы включить песню, а не смотреть на переход. */
+@keyframes mus2-lib-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes mus2-lib-up {
+  from { opacity: 0; transform: translateY(18px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mus2-card-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+
+.mus2-lib {
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(14px) saturate(1.1);
+  animation: mus2-lib-in .16s var(--ease-out4, ease) both;
+  padding: 0;
+}
+.mus2-lib-inner {
+  background: var(--bg);
+  animation: mus2-lib-up .22s var(--ease-out4, ease) both;
+  overflow: hidden;
+}
+/* Шапка не уезжает при прокрутке: в складе на тысячу треков поиск нужен
+   постоянно, а не только в самом верху. */
+.mus2-lib-head {
+  position: sticky; top: 0; z-index: 2;
+  background: linear-gradient(180deg, var(--bg) 70%, rgba(0, 0, 0, 0));
+  backdrop-filter: blur(8px);
+}
+.mus2-lib-head b { font-size: 17px; letter-spacing: .2px; }
+.mus2-lib-count {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; margin-bottom: 14px; border-radius: 999px;
+  background: rgba(var(--ov, 255,255,255), .06); color: var(--mut);
+  font-size: 12.5px; font-weight: 700;
+}
+.mus2-lib-note {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; margin: 0 0 10px; border-radius: 999px;
+  background: var(--mus-a-soft, rgba(88, 101, 242, .18));
+  color: var(--tx); font-size: 12px; font-weight: 700;
+}
+
+/* Карточки: обложка крупнее в кадре, тень мягче, наведение приподнимает. */
+.mus2-grid { gap: 18px; }
+.mus2-card {
+  animation: mus2-card-in .2s var(--ease-out4, ease) both;
+  padding: 10px 10px 12px;
+}
+.mus2-card:hover { transform: translateY(-3px); }
+.mus2-card-art { box-shadow: 0 10px 24px rgba(0, 0, 0, .45); margin-bottom: 12px; }
+.mus2-card:hover .mus2-card-art { box-shadow: 0 16px 32px rgba(0, 0, 0, .55); }
+/* Мягкая тень внизу обложки: под ней лежат длительность и число прослушиваний,
+   и на светлой картинке белые надписи иначе теряются. */
+.mus2-card-art::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .55));
+  pointer-events: none;
+}
+/* ВАЖНО: не «> *» — такое правило сбивает position:absolute у всех пометок на
+   обложке (длительность, число прослушиваний, «не играет»), и они выстраиваются
+   флекс-рядом, сжимая саму картинку. На это я уже наступил здесь же: обложка
+   поехала в левую треть карточки. Поднимаем слой у самих пометок, а тень держим
+   ниже них. */
+.mus2-card-art::after { z-index: 1; }
+.mus2-card-d, .mus2-card-pl, .mus2-card-bad, .mus2-card-only,
+.mus2-card-del, .mus2-card-retry, .mus2-card-play { z-index: 2; }
+.mus2-card-t { font-size: 14.5px; }
+/* Играющая карточка: рамка акцентом, а не просто фон посветлее. */
+.mus2-card.on {
+  background: var(--mus-a-soft, rgba(88, 101, 242, .16));
+  box-shadow: inset 0 0 0 1.5px var(--mus-a, var(--brand));
+}
+body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { animation: none; }
+
+/* Меню карточки (v1.426.0): всё, что раньше висело кнопками поверх обложки. */
+.ctxmenu-overlay { position: fixed; inset: 0; z-index: var(--z-over-modal, 130); }
+.mus2-cardmenu { max-width: 260px; }
+.ctxmenu-title {
+  padding: 6px 10px 8px; font-size: 12px; font-weight: 800; color: var(--mut);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-bottom: 1px solid rgba(var(--ov, 255,255,255), .08); margin-bottom: 4px;
+}
+.ctxmenu-note { padding: 8px 10px; font-size: 12px; color: var(--mut); line-height: 1.4; }
+
+/* Удаление — в правый верхний угол обложки (v1.426.0): слева уже стоит число
+   прослушиваний, и на наведении кнопка накрывала его собой. */
+.mus2-card-del { left: auto; right: 6px; top: 6px; }
+
+/* ══ v1.426.0: телефон — второй проход, чат ════════════════════════════════════
+   Пальцем попадают не туда, где мышью: кнопки в шапке канала были 28–30
+   пикселей и стояли вплотную, реакции — мелкими чипами, а тема канала занимала
+   середину шапки, оставляя названию канала половину строки. */
+@media (max-width: 768px) {
+  /* Кнопки шапки — 40 пикселей и с воздухом; тема канала на узком экране
+     скрыта: название канала важнее, а тему видно в его настройках. */
+  .ph2-btns { gap: 4px; }
+  .ph2-btns .pin-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .ph2-topic, .ph2-topic-sep { display: none; }
+  .mob-burger { width: 40px; height: 40px; }
+
+  /* Реакции: чип крупнее, между ними больше места — иначе ставишь не ту. */
+  .rx { min-height: 30px; padding: 3px 9px; font-size: 13.5px; }
+  .rx-bar { gap: 6px; }
+
+  /* Кнопки у поля ввода — 40 пикселей: раньше в них попадали через раз. */
+  .composer-tools .ctool { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Долгое нажатие по сообщению открывает меню (см. MessageList) — чтобы это
+     не превращалось в выделение текста, отключаем «своё» выделение на пузыре.
+     Сам текст выделять по-прежнему можно: правило только для служебной обвязки. */
+  .msg { -webkit-touch-callout: none; }
+  .msg-txt, .msg-txt * { -webkit-touch-callout: default; }
 }
