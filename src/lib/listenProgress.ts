@@ -57,3 +57,26 @@ export function fmtClock(sec: number): string {
   const mm = h > 0 ? String(m).padStart(2, '0') : String(m)
   return (h > 0 ? h + ':' : '') + mm + ':' + String(ss).padStart(2, '0')
 }
+
+/**
+ * Пора ли заново рассказать всем, где мы в песне (v1.425.0).
+ *
+ * Раньше активность обновлялась строго раз в пятнадцать секунд, и этого было
+ * достаточно ровно до первой перемотки: человек перетаскивал полосу на 0:54, а
+ * в его активности у всех (и у него самого в профиле) оставалось 0:12 —
+ * досчитанное от старой позиции. Выглядело это как «время в активности
+ * неправильное», хотя считалось всё верно, просто из устаревшей точки.
+ *
+ * Поэтому кроме таймера есть это правило: если настоящая позиция разошлась с
+ * той, что была бы досчитана из опубликованной, больше чем на TOLERANCE —
+ * публикуем немедленно. Так ловятся все перемотки сразу: и своя мышью, и чужая
+ * (ведущий лобби, кнопки на гарнитуре, сам YouTube).
+ */
+export const REPUBLISH_TOLERANCE = 2.5
+
+export function needRepublish(published: ListenPos | null, curPos: number, now: number): boolean {
+  if (!published) return true
+  if (!Number.isFinite(curPos)) return false
+  const expected = livePos(published, now)
+  return Math.abs(curPos - expected) > REPUBLISH_TOLERANCE
+}

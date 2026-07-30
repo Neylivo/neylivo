@@ -14,6 +14,9 @@ import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import { IS_MOBILE } from '../lib/mobile'
+import { bindMediaKeys, setMediaNow, updateMediaPosition } from './mediaSession'
+import { needRepublish } from '../lib/listenProgress'
 import { chunksToLrc, alignPlainToChunks, whyCantRecognize, type AiProgress } from './aiLyrics'
 import { listenToTrack } from './aiListen'
 
@@ -221,40 +224,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // v1.371.0: название, автор и обложка уходят в системный проигрыватель — тот
   // самый, что всплывает в Windows при нажатии кнопок громкости, и живёт на
   // экране блокировки телефона. Оттуда же работают кнопки на клавиатуре и
-  // наушниках: раньше нажатие «плей» на гарнитуре не делало ничего.
-  useEffect(() => {
-    const ms = (navigator as any).mediaSession
-    if (!ms || !cur) return
-    try {
-      const art = curArt
-      ms.metadata = new (window as any).MediaMetadata({
-        title: curMeta?.title || cur.name || 'Трек',
-        artist: curMeta?.author || cur.author || 'Ponoi Music',
-        album: 'Ponoi Music',
-        artwork: art ? [{ src: art, sizes: '512x512' }] : [],
-      })
-      ms.playbackState = playing ? 'playing' : 'paused'
-    } catch { /* браузер не умеет — просто не будет системной карточки */ }
-  }, [cur, curMeta, curArt, playing])
-
-  useEffect(() => {
-    const ms = (navigator as any).mediaSession
-    if (!ms?.setActionHandler) return
-    const set = (name: string, fn: (() => void) | null) => {
-      // Не все действия поддерживаются везде: неизвестное имя бросает исключение,
-      // и без try один незнакомый обработчик отменил бы все остальные.
-      try { ms.setActionHandler(name, fn) } catch { /* это действие не умеют */ }
-    }
-    set('play', () => setPlaying(true))
-    set('pause', () => setPlaying(false))
-    set('previoustrack', () => prevRef.current())
-    set('nexttrack', () => nextRef.current())
-    set('stop', () => setPlaying(false))
-    return () => {
-      for (const n of ['play', 'pause', 'previoustrack', 'nexttrack', 'stop']) set(n, null)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // наушниках.
+  //
+  // v1.425.0: всё это переехало в src/music/mediaSession.ts и заодно доделано.
+  // Здесь были только метаданные и четыре кнопки: полосы в системной карточке
+  // не было вовсе (setPositionState никто не звал), перемотку системе отдать
+  // было нечем, а метаданные пересобирались на каждое изменение — карточка
+  // мигала обложкой. Сама подписка и обновление — ниже, рядом с активностью:
+  // там же считается всё, что нужно системе.
 
   // Esc закрывает трекотеку — как любое другое окно приложения.
   useEffect(() => {
@@ -510,20 +487,100 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return () => window.removeEventListener('ponoi-uprefs', onSync)
   }, [])
   useEffect(() => { curTRef.current = curT }, [curT])
+  /**
+   * Активность «Слушает…» (v1.425.0 — переписана публикация).
+   *
+   * Что было не так. Позиция уходила всем строго раз в пятнадцать секунд, а
+   * зрители досчитывали её от последней опубликованной точки. Стоило человеку
+   * перемотать песню — и до следующей публикации у всех (и у него самого в
+   * профиле) висело старое время: перетащил на 0:54, а в активности 0:12.
+   *
+   * Теперь публикуем в трёх случаях: сменилось то, что играет; прошло пять
+   * секунд; настоящая позиция разошлась с досчитанной (см. needRepublish) —
+   * именно это и есть перемотка, чья бы она ни была.
+   */
+  const pubRef = useRef<{ pos: number; dur?: number; at: number } | null>(null)
+  const pubListenRef = useRef(() => {})
   useEffect(() => {
-    if (!playing || !cur) { setMyListening(null); return }
+    if (!playing || !cur) { setMyListening(null); pubRef.current = null; return }
     const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
-    const pub = () => setMyListening({
-      title: curMeta?.title || cur.name, author: curMeta?.author || cur.author || '',
-      // v1.423.0: обложка. Ссылка и так лежит в общем складе и видна всем — а
-      // другим при этом показывалась нота-заглушка.
-      source, art: curArt || null, pos: curTRef.current, dur: dur || undefined, at: Date.now(),
-    })
+    const pub = () => {
+      const snap = { pos: curTRef.current, dur: dur || undefined, at: Date.now() }
+      pubRef.current = snap
+      setMyListening({
+        title: curMeta?.title || cur.name, author: curMeta?.author || cur.author || '',
+        // v1.423.0: обложка. Ссылка и так лежит в общем складе и видна всем — а
+        // другим при этом показывалась нота-заглушка.
+        source, art: curArt || null, ...snap,
+      })
+    }
+    pubListenRef.current = pub
     pub()
-    const t = window.setInterval(pub, 15000)   // периодически освежаем позицию (перемотки и т.п.)
+    const t = window.setInterval(pub, 5000)
     return () => window.clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, cur?.url, curMeta?.title, curMeta?.author, curArt, dur])
+  /**
+   * Системная карточка проигрывателя (v1.425.0).
+   *
+   * Та же информация, что уходит в активность, отдаётся и системе: шторка
+   * уведомлений, экран блокировки, кнопки гарнитуры. Раньше о Ponoi Music не
+   * знало ничего за пределами открытого окна — свернул приложение, и на телефоне
+   * не было даже названия, не то что кнопок.
+   *
+   * Кнопки подписываются один раз и зовут свежие действия через ссылки: сами
+   * обработчики живут дольше любого рендера.
+   */
+  const mediaRef = useRef({ play: () => {}, pause: () => {}, next: () => {}, prev: () => {}, seek: (_: number) => {}, stop: () => {} })
+  mediaRef.current = {
+    play: () => setPlaying(true),
+    pause: () => setPlaying(false),
+    next: () => nextRef.current(),
+    prev: () => prevRef.current(),
+    seek: (sec: number) => seekTo(sec),
+    // «Стоп» в системной карточке — это закрыть проигрыватель, а не пауза.
+    stop: () => { setPlaying(false); setMediaNow(null) },
+  }
+  useEffect(() => {
+    bindMediaKeys({
+      play: () => mediaRef.current.play(),
+      pause: () => mediaRef.current.pause(),
+      next: () => mediaRef.current.next(),
+      prev: () => mediaRef.current.prev(),
+      seek: (sec: number) => mediaRef.current.seek(sec),
+      stop: () => mediaRef.current.stop(),
+    })
+  }, [])
+  useEffect(() => {
+    if (!cur) { setMediaNow(null); return }
+    setMediaNow({
+      title: curMeta?.title || cur.name,
+      artist: curMeta?.author || cur.author || '',
+      album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'Ponoi Music',
+      art: curArt || null,
+      dur: dur || cur.dur,
+      pos: curTRef.current,
+      playing,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cur?.id, curMeta?.title, curMeta?.author, curArt, dur, playing])
+  // Полосу в системной карточке освежаем отдельно: метаданные при этом не
+  // пересобираются, иначе система мигала бы обложкой на каждом тике.
+  useEffect(() => {
+    if (!cur) return
+    updateMediaPosition(curT, dur || cur.dur)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curT, dur, cur?.id])
+  // Закрыли плеер — карточка уходит вместе с ним.
+  useEffect(() => () => setMediaNow(null), [])
+
+  // Перемотка — сразу, не дожидаясь таймера. Сюда попадает и своя мышью, и
+  // чужая: полоса YouTube, ведущий лобби, кнопки на гарнитуре.
+  useEffect(() => {
+    if (!playing || !cur) return
+    if (needRepublish(pubRef.current, curT, Date.now())) pubListenRef.current()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curT, playing])
   useEffect(() => () => { setMyListening(null) }, [])   // размонтирование плеера = слушание кончилось
 
   /**
@@ -2066,16 +2123,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       // v1.381.0: плашку можно утащить куда угодно, пока тащишь — она сворачивается
       // в кружок. Полоса шириной в треть экрана, летающая за курсором, закрывает
       // больше, чем стояла на месте.
-      <div ref={miniDrag.ref} className={'mus-mini' + (miniDrag.dragging ? ' dragging' : '')}
-        style={{ ...musStyle, ...miniDrag.style }} onPointerDown={miniDrag.onPointerDown}>
+      /* v1.425.0: на телефоне плашка не таскается.
+         Летающая пилюля, которую надо ловить пальцем, на маленьком экране только
+         мешает: она закрывает то, что под ней, и уезжает под палец при прокрутке.
+         Место у неё одно и правильное — строкой внизу, над панелью с аватаркой,
+         как во всех музыкальных приложениях. Перетаскивание остаётся на
+         компьютере, где мышь и большой экран. */
+      <div ref={IS_MOBILE ? undefined : miniDrag.ref} className={'mus-mini' + (miniDrag.dragging ? ' dragging' : '')}
+        style={IS_MOBILE ? musStyle : { ...musStyle, ...miniDrag.style }}
+        onPointerDown={IS_MOBILE ? undefined : miniDrag.onPointerDown}>
         <div className={'mus-mini-art' + (playing ? ' spin' : '')}
-          onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер · тяни, чтобы переставить">
+          onClick={() => { if (IS_MOBILE || !miniDrag.wasDrag()) onClose() }}
+          title={IS_MOBILE ? 'Открыть плеер' : 'Открыть плеер · тяни, чтобы переставить'}>
           {/* v1.386.0: без запрета перетаскивания браузер тащил саму картинку —
               вместо плашки за курсором ехала копия обложки, и переставить её
               было почти невозможно. */}
           {curArt ? <img src={curArt} alt="" draggable={false} onDragStart={e => e.preventDefault()} /> : <Icon name="music" size={18} />}
         </div>
-        <div className="mus-mini-meta" onClick={() => { if (!miniDrag.wasDrag()) onClose() }} title="Открыть плеер">
+        <div className="mus-mini-meta" onClick={() => { if (IS_MOBILE || !miniDrag.wasDrag()) onClose() }} title="Открыть плеер">
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
           <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'Ponoi Music')}</div>
         </div>

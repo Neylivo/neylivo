@@ -6016,3 +6016,98 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   font-size:11.5px; font-weight:700; vertical-align:middle;
   font-variant-numeric:tabular-nums;
 }
+
+/* ══ v1.425.0: телефон — большой проход по удобству ═══════════════════════════
+   Что было. Мобильные правила у приложения есть с v1.121.0, но Ponoi Music в них
+   не попал вовсе: на телефоне плеер оставался узкой панелью на 92% ширины с
+   обложкой в 280 пикселей, кнопками по 18 и ползунком громкости, до которого
+   пальцем не дотянуться. Трекотека рисовалась сеткой по 150 пикселей — на узком
+   экране это полторы карточки в ряд. А мини-плашка была летающей пилюлей,
+   которую надо ловить пальцем.
+
+   Здесь всё это приведено к телефону: плеер во весь экран, крупные кнопки,
+   сетка по две карточки, плашка строкой внизу. Отступы — через safe-area:
+   приложение теперь рисуется ПОД системными полосами (см. MainActivity.java),
+   и без отступов часы наезжали бы на шапку. */
+@media (max-width: 768px) {
+  /* Плеер занимает экран целиком, как отдельное приложение. */
+  .mus2 {
+    left: 0; right: 0; width: auto; border-left: none; box-shadow: none;
+  }
+  .mus2-top { padding: calc(10px + env(safe-area-inset-top)) 12px 8px; }
+  .mus2-topr button { width: 38px; height: 38px; }
+  .mus2:not(.full) .mus2-side, .mus2-side { max-height: 42%; padding: 12px; }
+  .mus2-now, .mus2:not(.full) .mus2-now { padding: 10px 12px; gap: 10px; }
+  /* Обложка от ширины экрана, а не фиксированные 280: на узком телефоне она
+     занимала весь экран и выдавливала название с кнопками за край. */
+  .mus2-art, .mus2:not(.full) .mus2-art { width: min(74vw, 320px); height: min(74vw, 320px); }
+  .mus2-nowt, .mus2:not(.full) .mus2-nowt { font-size: 19px; }
+  .mus2-nowsub { font-size: 13px; }
+  .mus2-bar, .mus2:not(.full) .mus2-bar {
+    padding: 8px 14px calc(10px + env(safe-area-inset-bottom)); gap: 8px;
+  }
+  /* Пальцем: кнопки крупнее, между ними больше воздуха, полоса перемотки выше. */
+  .mus2-ctl { gap: 20px; }
+  .mus2-ctl button { font-size: 22px; }
+  .mus2-ctl .big { width: 60px; height: 60px; }
+  .mus2-seek input[type="range"] { height: 28px; }
+  .mus2-seek input[type="range"]::-webkit-slider-thumb { opacity: 1; }
+  /* Громкость на телефоне системная — кнопками сбоку. Ползунок только отнимал
+     место у кнопок, по которым и надо попадать. */
+  .mus2-vol { display: none; }
+  /* Кнопки — своим рядом, «Текст» и «Вместе» — своим: в одну строку они
+     сжимались до двух слов в столбик у самого края экрана. */
+  .mus2-ctlrow { justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .mus2-extra { order: 3; width: 100%; justify-content: center; gap: 18px; }
+  .mus2-inpl, .mus2-tog { font-size: 14px; padding: 6px 4px; }
+
+  /* Трекотека: две карточки в ряд и отступы под системные полосы. */
+  .mus2-lib-head {
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px; gap: 8px; flex-wrap: wrap;
+  }
+  .mus2-lib-head b { font-size: 15px; }
+  .mus2-lib-head .mus2-in { max-width: none; order: 3; width: 100%; }
+  .mus2-lib-x { width: 38px; height: 38px; }
+  .mus2-lib-body { padding: 10px 12px calc(20px + env(safe-area-inset-bottom)); }
+  .mus2-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .mus2-card { padding: 8px; }
+  /* Кнопки на карточке видны сразу: наведения пальцем не существует. */
+  .mus2-card-q, .mus2-card-del, .mus2-card-play { opacity: 1; transform: none; }
+  .mus2-card-q { width: 34px; height: 34px; }
+  .mus2-card-del { width: 34px; height: 34px; }
+
+  /* Текст песни: караоке ниже, чтобы под ним оставались кнопки. */
+  .mus2-karaoke { height: min(300px, 38vh); }
+  .mus2-kline { font-size: 21px; line-height: 2.2em; }
+
+  /* Мини-плашка — строкой внизу, над панелью с аватаркой. Ширина по экрану:
+     фиксированные 340 пикселей на узком телефоне вылезали за край. */
+  .mus-mini {
+    left: 8px; right: 8px; width: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    border-radius: var(--r-xl, 14px); padding: 8px;
+  }
+  .mus-mini button { width: 40px; height: 40px; }
+  .mus-mini-art { width: 44px; height: 44px; }
+  .mus-mini-t { font-size: 14px; }
+
+  /* Свой мини-профиль на телефоне открывается полноэкранной карточкой
+     (см. MeBar), но если он всё же показан — пусть занимает ширину экрана. */
+  .mini.mini2 { width: calc(100vw - 16px); max-width: 340px; }
+
+  /* Окна и шторки не должны прятаться под системными полосами. */
+  .modal { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .ms-modal { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .lyr-modal { max-height: calc(100dvh - 24px - env(safe-area-inset-top)); }
+}
+
+/* Полный экран под системными полосами: приложение рисует свой фон от края до
+   края, а отступы под часы и кнопки навигации добавляет там, где это важно.
+   Работает и в браузере (viewport-fit=cover в index.html), и в приложении. */
+@supports (padding: env(safe-area-inset-top)) {
+  @media (max-width: 768px) {
+    .servers { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    .dm-side, .channels { padding-bottom: env(safe-area-inset-bottom); }
+    .mus2 { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  }
+}

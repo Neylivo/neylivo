@@ -18,7 +18,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
-import { livePos, leftOver, listenPct, fmtClock } from './listenProgress'
+import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
 import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
@@ -751,6 +751,36 @@ check('проверка заметила бы, что позиция перес�
   livePos(L(60, 200, 1000), 1000 + 10_000) !== 60)
 check('проверка заметила бы, что длину перестали учитывать', () =>
   livePos(L(190, 200, 1000), 1000 + 60_000) !== 250)
+
+
+console.log('\n-- Активность: когда рассказывать заново (v1.425.0) --')
+// Живая жалоба: перетащил песню на 0:54, а в активности осталось 0:12.
+// Позиция уходила всем строго раз в пятнадцать секунд, и до следующего раза все
+// видели время, досчитанное от старой точки.
+const P = (pos: number, at: number, dur = 200) => ({ pos, dur, at })
+check('пока ничего не публиковали — публикуем', () => needRepublish(null, 10, 1000))
+check('песня просто идёт — заново не рассказываем', () => {
+  // Опубликовали 60-ю секунду, прошло 10 — настоящая позиция 70, как и ожидается.
+  return !needRepublish(P(60, 1000), 70, 1000 + 10_000)
+})
+check('перемотали вперёд — рассказываем сразу', () =>
+  needRepublish(P(60, 1000), 120, 1000 + 10_000))
+check('перемотали назад — тоже сразу', () =>
+  needRepublish(P(60, 1000), 5, 1000 + 10_000))
+check('мелкая неточность не дёргает канал', () =>
+  !needRepublish(P(60, 1000), 71, 1000 + 10_000))
+check('порог не больше трёх секунд — иначе рассинхрон заметен глазом', () =>
+  REPUBLISH_TOLERANCE <= 3)
+check('мусорная позиция не заставляет публиковать', () =>
+  !needRepublish(P(60, 1000), NaN, 2000))
+
+console.log('\n-- Ломаем нарочно (обновление активности) --')
+check('проверка заметила бы, что перемотку перестали замечать', () => {
+  // Ровно прежнее поведение: обновляем только по таймеру, на позицию не смотрим.
+  const onlyTimer = (published: any, _cur: number, now: number) => now - published.at >= 15_000
+  return onlyTimer(P(60, 1000), 120, 1000 + 10_000) === false
+    && needRepublish(P(60, 1000), 120, 1000 + 10_000) === true
+})
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

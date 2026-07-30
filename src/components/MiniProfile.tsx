@@ -120,6 +120,10 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   useLayoutEffect(() => {
     const el = boxRef.current
     if (!el) return
+    // Своя карточка прижата к низу и высотой ограничена — подгонять её по
+    // измеренной высоте не нужно, а именно эта подгонка и оставляла её висеть
+    // в воздухе, когда содержимое становилось короче.
+    if (data.anchor === 'me') return
     const M = 20
     const r = el.getBoundingClientRect()
     let top = r.top, left = r.left, changed = false
@@ -194,10 +198,25 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     : data.anchor === 'member-list'
     ? { right: 252, top: Math.max(12, Math.min(data.y - 60, window.innerHeight - 540)) }
     : { left: data.x, top: data.y }
+  /**
+   * Своя карточка (та, что над нижней панелью) держится за НИЗ (v1.425.0).
+   *
+   * Что было не так. Позиция измерялась один раз при открытии и превращалась в
+   * top. Высота карточки зависит от содержимого — и когда содержимое исчезало
+   * (кончилась музыка, а вместе с ней карточка «Слушает музыку»), карточка
+   * становилась ниже, но её ВЕРХ оставался на месте: между ней и панелью
+   * появлялась пустота, и она висела в воздухе посреди экрана.
+   *
+   * Держась за низ, она растёт и уменьшается вверх — как в Discord и как
+   * ожидает человек. Потолок высоты нужен на случай очень длинной карточки:
+   * без него она уползла бы под верхний край, а прокрутка у неё своя.
+   */
   // adj — уже измеренная и гарантированно влезающая позиция; когда она есть,
   // полностью заменяет грубую прикидку (top+bottom одновременно не задаём —
   // иначе position:fixed без явной height растянет карточку между ними).
-  const posStyle: React.CSSProperties = adj ? { top: adj.top, left: adj.left } : basePos
+  const posStyle: React.CSSProperties = data.anchor === 'me'
+    ? { ...basePos, maxHeight: `calc(100vh - ${Math.max(8, window.innerHeight - data.y + 8) + 20}px)` }
+    : adj ? { top: adj.top, left: adj.left } : basePos
 
   return (
     <>
