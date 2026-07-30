@@ -6516,3 +6516,36 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 @media (max-width: 768px) {
   body.mob-nav-open .mus-mini { bottom: calc(70px + env(safe-area-inset-bottom)); }
 }
+
+/* ══ v1.431.0: приближение картинок и гифок ═══════════════════════════════════
+   Раньше колесо меняло масштаб от центра, а сдвинуть картинку было нельзя вовсе:
+   приблизил — нужный угол уехал за экран. Теперь приближение к точке,
+   перетаскивание и щипок. Здесь только то, что нужно жестам: браузер по
+   умолчанию норовит начать своё выделение, своё перетаскивание картинки и своё
+   «умное» приближение по двойному тапу — всё это надо у него забрать. */
+.lb-stage {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  max-width: 100vw; max-height: 100vh; touch-action: none;
+}
+.lb-img {
+  touch-action: none; user-select: none; -webkit-user-drag: none;
+  will-change: transform; transform-origin: center center;
+}
+/* Пока картинка вписана — курсор обычный: двигать нечего. Приближенная — «рука». */
+.lb-img.zoomed { cursor: grab; }
+.lb-img.zoomed:active { cursor: grabbing; }
+/* Никакой плавности у самой картинки: во время перетаскивания она превращает
+   движение в кисель, а в проверке стендом ещё и путала показания — computed
+   transform во время перехода отдаёт промежуточное значение, и понять, что
+   происходит, невозможно. Во всех просмотрщиках это тоже мгновенно. */
+.lb-img { transition: none; }
+
+@media (max-width: 768px) {
+  /* На телефоне картинка занимает экран целиком, а панель инструментов не
+     должна налезать на неё сверху. */
+  .lb-tools { top: calc(6px + env(safe-area-inset-top)); right: 6px; gap: 2px; }
+  .lb-tools button { width: 42px; height: 42px; }
+  .lb-author { top: calc(6px + env(safe-area-inset-top)); left: 8px; max-width: 46vw; }
+  /* Метка масштаба ниже панели инструментов: наверху её место уже занято. */
+  .lightbox-zoom { top: calc(58px + env(safe-area-inset-top)); }
+}

@@ -19,6 +19,10 @@ const _store = new Map<string, string>()
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
+import {
+  zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
+  ZOOM_MIN, ZOOM_MAX, ZOOM_STEP, DRAG_SLOP,
+} from './zoomPan'
 import { classifyAuthError } from './authErr'
 import { sessionMs } from './sessionTime'
 import { serviceOf, titleFromUrl, splitTitleAuthor, searchQuery, looksSame } from '../music/streaming'
@@ -780,6 +784,86 @@ check('проверка заметила бы, что перемотку пер�
   const onlyTimer = (published: any, _cur: number, now: number) => now - published.at >= 15_000
   return onlyTimer(P(60, 1000), 120, 1000 + 10_000) === false
     && needRepublish(P(60, 1000), 120, 1000 + 10_000) === true
+})
+
+
+console.log('\n-- Приближение картинок (v1.431.0) --')
+// Раньше колесо меняло масштаб ОТ ЦЕНТРА, а сдвинуть картинку было нельзя: угол
+// фотографии приблизить невозможно. Главное здесь — «точка под курсором остаётся
+// на месте»: это не «умножить масштаб», а «умножить и подвинуть».
+const близко = (a: number, b: number) => Math.abs(a - b) < 0.001
+
+check('масштаб не выходит за границы', () =>
+  clampZoom(0.1) === ZOOM_MIN && clampZoom(99) === ZOOM_MAX && clampZoom(NaN) === 1)
+check('приближение в центре ничего не сдвигает', () => {
+  const v = zoomAt(zoomStart, 2, 0, 0)
+  return v.zoom === 2 && v.x === 0 && v.y === 0
+})
+check('точка под курсором остаётся на месте', () => {
+  const v = zoomAt(zoomStart, 2, 100, 0)
+  const точкаДо = (100 - zoomStart.x) / zoomStart.zoom
+  return близко(v.x + точкаДо * v.zoom, 100)
+})
+check('то же и при отдалении', () => {
+  const приближено = zoomAt(zoomStart, 4, 50, -30)
+  const v = zoomAt(приближено, 1 / 2, 50, -30)
+  const точка = (50 - приближено.x) / приближено.zoom
+  return близко(v.x + точка * v.zoom, 50) && близко(v.zoom, 2)
+})
+check('дальше предела приближение не идёт', () =>
+  zoomAt({ zoom: ZOOM_MAX, x: 0, y: 0 }, 2, 10, 10).zoom === ZOOM_MAX)
+check('ближе единицы не отдаляется', () =>
+  zoomAt(zoomStart, 0.2, 10, 10).zoom === ZOOM_MIN)
+check('мусорный множитель ничего не портит', () =>
+  zoomAt(zoomStart, NaN, 10, 10).zoom === 1 && zoomAt(zoomStart, -3, 0, 0).zoom === 1)
+
+console.log('\n-- Границы сдвига --')
+check('вписанную картинку двигать некуда', () => {
+  const v = clampPan({ zoom: 1, x: 200, y: 200 }, 1000, 800, 900, 700)
+  return v.x === 0 && v.y === 0
+})
+check('приближённую можно двигать до края, но не дальше', () => {
+  // 900x700 при масштабе 2 = 1800x1400, окно 1000x800:
+  // запас по x = (1800-1000)/2 = 400, по y = (1400-800)/2 = 300.
+  const v = clampPan({ zoom: 2, x: 9999, y: -9999 }, 1000, 800, 900, 700)
+  return v.x === 400 && v.y === -300
+})
+check('внутри границ сдвиг не трогается', () => {
+  const v = clampPan({ zoom: 2, x: 120, y: -80 }, 1000, 800, 900, 700)
+  return v.x === 120 && v.y === -80
+})
+check('мусор в сдвиге обнуляется', () => {
+  const v = clampPan({ zoom: 2, x: NaN, y: NaN }, 1000, 800, 900, 700)
+  return v.x === 0 && v.y === 0
+})
+
+console.log('\n-- Щипок и двойной щелчок --')
+check('пальцы разъехались вдвое — масштаб вдвое', () => pinchZoom(1, 100, 200) === 2)
+check('пальцы сошлись — масштаб уменьшается', () => близко(pinchZoom(4, 200, 100), 2))
+check('нулевое расстояние не ломает щипок', () =>
+  pinchZoom(2, 0, 100) === 2 && pinchZoom(2, 100, 0) === 2)
+check('расстояние и середина считаются как надо', () =>
+  dist(0, 0, 3, 4) === 5 && mid(0, 0, 10, 20).x === 5 && mid(0, 0, 10, 20).y === 10)
+check('двойной щелчок приближает в этой точке', () => {
+  const v = toggleZoomAt(zoomStart, 80, 40)
+  return близко(v.zoom, ZOOM_STEP) && v.x !== 0
+})
+check('повторный двойной щелчок возвращает как было', () => {
+  const v = toggleZoomAt({ zoom: 3, x: 100, y: 50 }, 80, 40)
+  return v.zoom === 1 && v.x === 0 && v.y === 0
+})
+check('дрожь руки — это щелчок, а не перетаскивание', () =>
+  !wasDragged(2, 2) && wasDragged(DRAG_SLOP + 2, 0))
+
+console.log('\n-- Ломаем нарочно (приближение) --')
+check('проверка заметила бы возврат к приближению от центра', () => {
+  // Прежнее поведение: только масштаб, без сдвига — точка под курсором уезжает.
+  const простоМасштаб = { zoom: 2, x: 0, y: 0 }
+  return простоМасштаб.x + 100 * простоМасштаб.zoom !== 100
+})
+check('проверка заметила бы пропажу границ', () => {
+  const без = { zoom: 2, x: 9999, y: 0 }
+  return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

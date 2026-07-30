@@ -5,6 +5,10 @@ import { Avatar } from './Avatar'
 import { Icon } from './icons'
 import { useClampToViewport } from '../lib/clampPos'
 import { openSafely } from '../lib/safeUrl'
+import {
+  zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
+  ZOOM_MIN, ZOOM_MAX, type ZoomState,
+} from '../lib/zoomPan'
 
 export interface LightboxMeta { name: string; avatar?: string | null; at?: string | null }
 
@@ -29,13 +33,27 @@ function whenLabel(iso?: string | null): string {
 // («Копировать изображение», «Сохранить изображение», «Копировать ссылку на
 // медиа», «Открыть ссылку на медиафайл»).
 export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxMeta; onClose: () => void }) {
-  const [zoom, setZoom] = useState(1)
+  /**
+   * v1.431.0: приближение стало нормальным.
+   *
+   * Было: колесо меняло масштаб от центра картинки, и сдвинуть её было нельзя
+   * вообще — приблизил, а нужный угол уехал за экран и достать его нечем. На
+   * телефоне не было и этого: щипок двумя пальцами просмотрщик не понимал.
+   *
+   * Стало: приближение К ТОЧКЕ (под курсором, между пальцами, по двойному
+   * щелчку), перетаскивание пальцем и мышью, щипок, границы — картинку нельзя
+   * выбросить за экран. Вся арифметика в lib/zoomPan.ts и проверяется отдельно:
+   * промах в знаке там уводит картинку в сторону, а глазами это не поймать.
+   */
+  const [view, setView] = useState<ZoomState>(zoomStart)
+  const zoom = view.zoom
   const [more, setMore] = useState(false)
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
   // Размер «на весь экран»: любая картинка (даже крошечная гифка) растягивается
   // до ~92vw x 86vh с сохранением пропорций — 1-в-1 как просмотрщик Discord.
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const ctxClamp = useClampToViewport(ctx?.x ?? 0, ctx?.y ?? 0)
 
   function computeFit() {
@@ -60,11 +78,95 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   }, [onClose, ctx])
 
   // Новая картинка — зум, размер и меню сбрасываются.
-  useEffect(() => { setZoom(1); setMore(false); setFit(null); setCtx(null) }, [url])
+  useEffect(() => { setView(zoomStart); setMore(false); setFit(null); setCtx(null) }, [url])
+
+  /** Точка события относительно центра картинки — в этой системе живёт сдвиг. */
+  function atCenter(clientX: number, clientY: number) {
+    const box = wrapRef.current?.getBoundingClientRect()
+    const cx = box ? box.left + box.width / 2 : window.innerWidth / 2
+    const cy = box ? box.top + box.height / 2 : window.innerHeight / 2
+    return { px: clientX - cx, py: clientY - cy }
+  }
+
+  /**
+   * Свести масштаб и сдвиг в границы: делается после каждого изменения.
+   *
+   * Размер картинки берём с самого элемента (offsetWidth), а не из состояния
+   * fit: пока оно не посчитано, там ноль — и тогда границы обнуляли ЛЮБОЙ сдвиг,
+   * то есть приближение к точке и перетаскивание молча не работали. Это видно
+   * только по числам, и нашлось именно так: в стенде трансформ оставался без
+   * сдвига при любом жесте.
+   */
+  const fix = (st: ZoomState): ZoomState => {
+    const el = imgRef.current
+    const w = el?.offsetWidth || fit?.w || 0
+    const h = el?.offsetHeight || fit?.h || 0
+    return clampPan(st, window.innerWidth, window.innerHeight, w, h)
+  }
 
   function wheel(e: React.WheelEvent) {
     e.stopPropagation()
-    setZoom(z => Math.min(4, Math.max(0.25, +(z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)).toFixed(3))))
+    e.preventDefault()
+    const { px, py } = atCenter(e.clientX, e.clientY)
+    // Шаг мягче прежнего: колесом обычно доводят, а не прыгают.
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
+    setView(v => fix(zoomAt(v, factor, px, py)))
+  }
+
+  // ── Пальцы и мышь ───────────────────────────────────────────────────────
+  // Держим все нажатые указатели: один — перетаскивание, два — щипок. Так же
+  // это устроено в фотопросмотрщиках телефона, и другого способа отличить
+  // щипок от перетаскивания нет.
+  const ptsRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const dragRef = useRef<{ x: number; y: number; from: ZoomState; moved: number } | null>(null)
+  const pinchRef = useRef<{ d: number; zoom: number } | null>(null)
+  const movedRef = useRef(false)
+
+  function onPointerDown(e: React.PointerEvent) {
+    e.stopPropagation()
+    ptsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    movedRef.current = false
+    if (ptsRef.current.size === 1) {
+      dragRef.current = { x: e.clientX, y: e.clientY, from: view, moved: 0 }
+      pinchRef.current = null
+    } else if (ptsRef.current.size === 2) {
+      const [a, b] = [...ptsRef.current.values()]
+      pinchRef.current = { d: dist(a.x, a.y, b.x, b.y), zoom: view.zoom }
+      dragRef.current = null
+    }
+    try { (e.target as Element).setPointerCapture?.(e.pointerId) } catch { /* не поддерживается */ }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!ptsRef.current.has(e.pointerId)) return
+    ptsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (ptsRef.current.size >= 2 && pinchRef.current) {
+      const [a, b] = [...ptsRef.current.values()]
+      const now = dist(a.x, a.y, b.x, b.y)
+      const z = pinchZoom(pinchRef.current.zoom, pinchRef.current.d, now)
+      const m = mid(a.x, a.y, b.x, b.y)
+      const { px, py } = atCenter(m.x, m.y)
+      movedRef.current = true
+      setView(v => fix(zoomAt({ ...v, zoom: v.zoom }, z / v.zoom, px, py)))
+      return
+    }
+
+    const d = dragRef.current
+    if (!d) return
+    const dx = e.clientX - d.x, dy = e.clientY - d.y
+    if (!movedRef.current && wasDragged(dx, dy)) movedRef.current = true
+    if (!movedRef.current) return
+    // Двигаем только приближённую картинку: иначе случайное движение мышью по
+    // вписанной картинке сдвигало бы её без причины.
+    if (d.from.zoom <= 1.01) return
+    setView(fix({ zoom: d.from.zoom, x: d.from.x + dx, y: d.from.y + dy }))
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    ptsRef.current.delete(e.pointerId)
+    if (ptsRef.current.size < 2) pinchRef.current = null
+    if (ptsRef.current.size === 0) dragRef.current = null
   }
 
   // Правый клик по картинке — меню как в Discord.
@@ -79,7 +181,7 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
   return createPortal(
     // Перетаскивание из просмотрщика запрещено: случайный drag гифки раньше
     // «ронял» её в чат как новое вложение через зону дропа файлов.
-    <div className="lightbox" onClick={onClose} onWheel={wheel}
+    <div className="lightbox" onClick={() => { if (!movedRef.current) onClose() }} onWheel={wheel}
       onDragStart={e => e.preventDefault()}
       onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
       onDrop={e => { e.preventDefault(); e.stopPropagation() }}>
@@ -91,7 +193,10 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
         </div>
       </div>}
       <div className="lb-tools" onClick={e => e.stopPropagation()}>
-        <button title="Приблизить" onClick={() => setZoom(z => Math.min(4, +(z * 1.5).toFixed(3)))}><Icon name="zoom-in" size={18} /></button>
+        <button title="Приблизить" disabled={zoom >= ZOOM_MAX}
+          onClick={() => setView(v => fix(zoomAt(v, 1.5, 0, 0)))}><Icon name="zoom-in" size={18} /></button>
+        <button title="Отдалить" disabled={zoom <= ZOOM_MIN}
+          onClick={() => setView(v => fix(zoomAt(v, 1 / 1.5, 0, 0)))}><Icon name="zoom-out" size={18} /></button>
         <button title="Скачать" onClick={() => saveMedia(url)}><Icon name="download" size={18} /></button>
         <button title="Открыть в браузере" onClick={() => openSafely(url)}><Icon name="external" size={18} /></button>
         <div className="lb-more-wrap">
@@ -99,22 +204,38 @@ export function Lightbox({ url, meta, onClose }: { url: string; meta?: LightboxM
           {more && <div className="lb-more">
             <button onClick={() => { setMore(false); copyMedia(url) }}>Скопировать картинку</button>
             <button onClick={() => { setMore(false); copyMediaLink(url) }}>Скопировать ссылку</button>
-            <button onClick={() => { setMore(false); setZoom(1) }}>Сбросить масштаб</button>
+            <button onClick={() => { setMore(false); setView(zoomStart) }}>Сбросить масштаб</button>
           </div>}
         </div>
         <span className="lb-tools-sep" />
         <button title="Закрыть (Esc)" onClick={onClose}><Icon name="close" size={18} /></button>
       </div>
-      <img ref={imgRef} src={url} alt="" crossOrigin="anonymous"
-        draggable={false}
-        onDragStart={e => e.preventDefault()}
-        className={fit ? 'lb-fit' : undefined}
-        style={{ width: fit?.w, height: fit?.h, transform: zoom !== 1 ? `scale(${zoom})` : undefined }}
-        onLoad={computeFit}
-        onClick={e => e.stopPropagation()}
-        onContextMenu={onImgCtx}
-        onDoubleClick={e => { e.stopPropagation(); setZoom(z => z === 1 ? 2 : 1) }} />
-      {zoom !== 1 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setZoom(1) }} title="Сбросить масштаб">{Math.round(zoom * 100)}%</span>}
+      {/* Обёртка нужна для двух вещей: от неё считается центр (в нём живёт сдвиг)
+          и она перехватывает жесты — на самой картинке браузер норовит начать
+          своё выделение или своё «умное» приближение. */}
+      <div className="lb-stage" ref={wrapRef} onClick={e => e.stopPropagation()}>
+        <img ref={imgRef} src={url} alt="" crossOrigin="anonymous"
+          draggable={false}
+          onDragStart={e => e.preventDefault()}
+          className={'lb-img' + (fit ? ' lb-fit' : '') + (zoom > 1.01 ? ' zoomed' : '')}
+          style={{
+            width: fit?.w, height: fit?.h,
+            transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
+          }}
+          onLoad={computeFit}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onContextMenu={onImgCtx}
+          onDoubleClick={e => {
+            e.stopPropagation()
+            const { px, py } = atCenter(e.clientX, e.clientY)
+            setView(v => fix(toggleZoomAt(v, px, py)))
+          }} />
+      </div>
+      {zoom > 1.01 && <span className="lightbox-zoom" onClick={e => { e.stopPropagation(); setView(zoomStart) }}
+        title="Сбросить масштаб (двойной щелчок по картинке)">{Math.round(zoom * 100)}%</span>}
       {ctx && <>
         <div className="lb-ctx-ov" onClick={e => { e.stopPropagation(); setCtx(null) }}
           onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx(null) }} />
