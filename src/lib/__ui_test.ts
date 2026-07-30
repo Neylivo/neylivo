@@ -474,9 +474,20 @@ console.log('\n── Очередь под человека ──')
 const T = (id: string) => ({ id })
 const LIB = [T('a'), T('b'), T('c'), T('d'), T('e')]
 
-check('чаще слушаемое идёт раньше', () => {
-  const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10, e: 3, b: 1 } })
-  return r[0].id === 'c' && r[1].id === 'e' && r[2].id === 'b'
+// v1.435.0: сигнал «ты это часто слушаешь» убран по просьбе владельца — вместо
+// частоты теперь давность и незнакомое. Проверки ниже описывают новое правило.
+const ДЕНЬ_UI = 86_400_000
+const СЕЙЧАС_UI = 1_800_000_000_000
+check('число прослушиваний на очки больше не влияет', () => {
+  const r = recommend({ tracks: LIB, idx: 0, plays: { c: 10, e: 5, b: 1 }, now: СЕЙЧАС_UI,
+    lastAt: { c: СЕЙЧАС_UI - ДЕНЬ_UI, e: СЕЙЧАС_UI - ДЕНЬ_UI, b: СЕЙЧАС_UI - ДЕНЬ_UI } })
+  const очки = r.filter(x => ['c', 'e', 'b'].includes(x.track.id)).map(x => x.score)
+  return очки.length === 3 && очки.every(v => v === очки[0])
+})
+check('незнакомое идёт раньше слушанного', () => {
+  const r = personalOrder({ tracks: LIB, idx: 0, plays: { c: 10, e: 3, b: 1 }, now: СЕЙЧАС_UI,
+    lastAt: { c: СЕЙЧАС_UI - ДЕНЬ_UI, e: СЕЙЧАС_UI - ДЕНЬ_UI, b: СЕЙЧАС_UI - ДЕНЬ_UI } })
+  return r[0].id === 'd'
 })
 check('текущий трек в очередь не попадает', () => {
   const r = personalOrder({ tracks: LIB, idx: 2, plays: { c: 10 } })
@@ -490,9 +501,11 @@ check('без истории порядок остаётся складским'
   const r = personalOrder({ tracks: LIB, idx: 0, plays: {} })
   return r.map(t => t.id).join('') === 'bcde'
 })
-check('ничью решает недавность', () => {
-  const r = personalOrder({ tracks: LIB, idx: 0, plays: { b: 5, d: 5 }, lastAt: { d: 2000, b: 1000 } })
-  return r[0].id === 'd' && r[1].id === 'b'
+check('из двух слушанных раньше идёт тот, кого дольше не ставили', () => {
+  const t = [T('cur'), T('вчера'), T('давно')]
+  const r = personalOrder({ tracks: t, idx: 0, plays: { 'вчера': 5, 'давно': 5 }, now: СЕЙЧАС_UI,
+    lastAt: { 'вчера': СЕЙЧАС_UI - ДЕНЬ_UI, 'давно': СЕЙЧАС_UI - 300 * ДЕНЬ_UI } })
+  return r[0].id === 'давно' && r[1].id === 'вчера'
 })
 check('выдача устойчива: два вызова подряд дают одно и то же', () => {
   const a = personalOrder({ tracks: LIB, idx: 0, plays: { c: 2, e: 2 } }).map(t => t.id).join('')
@@ -508,7 +521,9 @@ console.log('\n── Ломаем нарочно (очередь) ──')
 check('проверка заметила бы возврат к «просто следующий по списку»', () => {
   // Ровно то, что было: порядок склада, к слушателю отношения не имеющий.
   const oldWay = LIB.filter((_, n) => n !== 0).map(t => t.id).join('')
-  const now = personalOrder({ tracks: LIB, idx: 0, plays: { e: 9 } }).map(t => t.id).join('')
+  // Слушано всё, кроме «e»: он единственный незнакомый и обязан быть первым.
+  const now = personalOrder({ tracks: LIB, idx: 0, plays: { b: 2, c: 2, d: 2 }, now: СЕЙЧАС_UI,
+    lastAt: { b: СЕЙЧАС_UI, c: СЕЙЧАС_UI, d: СЕЙЧАС_UI } }).map(t => t.id).join('')
   return oldWay === 'bcde' && now.startsWith('e')
 })
 check('проверка заметила бы очередь из одних любимых', () => {
@@ -546,22 +561,27 @@ check('служебные слова сходством не считаются'
   return r[0].score === r[1].score
 })
 
-check('один общий автор не перевешивает сотню прослушиваний', () => {
+check('сотня своих прослушиваний больше не перевешивает общего автора', () => {
+  // До v1.435.0 здесь побеждал заслушанный трек — ровно та колея, из-за которой
+  // сигнал и убран: чем чаще песня уже звучала, тем охотнее её ставили снова.
   const t = [M('cur', 'Ночь', 'Кино'), M('same', 'Пачка сигарет', 'Кино'), M('loved', 'Любимое', 'Другой')]
-  const r = recommend({ tracks: t, idx: 0, plays: { loved: 100 } })
-  return r[0].track.id === 'loved'
+  const r = recommend({ tracks: t, idx: 0, plays: { loved: 100, same: 1 }, now: СЕЙЧАС_UI,
+    lastAt: { loved: СЕЙЧАС_UI - ДЕНЬ_UI, same: СЕЙЧАС_UI - ДЕНЬ_UI } })
+  return r[0].track.id === 'same'
 })
 
-check('свои прослушивания важнее общих', () => {
-  const t = [M('cur', 'Ночь', 'А'), M('mine', 'Моё', 'Б', 0), M('hit', 'Хит', 'В', 8)]
-  const r = recommend({ tracks: t, idx: 0, plays: { mine: 8 } })
-  return r[0].track.id === 'mine'
+check('незнакомое важнее уже слушанного, как бы часто то ни звучало', () => {
+  const t = [M('cur', 'Ночь', 'А'), M('слушанное', 'Моё', 'Б', 0), M('новое', 'Хит', 'В', 0)]
+  const r = recommend({ tracks: t, idx: 0, plays: { 'слушанное': 80 }, now: СЕЙЧАС_UI,
+    lastAt: { 'слушанное': СЕЙЧАС_UI - ДЕНЬ_UI } })
+  return r[0].track.id === 'новое' && r[0].why === 'fresh'
 })
 
-check('общие прослушивания помогают, когда своих нет', () => {
+check('общие прослушивания разводят два одинаково незнакомых', () => {
+  // Оба человек не слышал: решает то, что одно слушают все, а другое никто.
   const t = [M('cur', 'Ночь', 'А'), M('hit', 'Хит', 'Б', 50), M('quiet', 'Тихое', 'В', 0)]
-  const r = recommend({ tracks: t, idx: 0, plays: {}, freshCount: 0 })
-  return r[0].track.id === 'hit' && r[0].why === 'popular'
+  const r = recommend({ tracks: t, idx: 0, plays: {}, now: СЕЙЧАС_UI })
+  return r[0].track.id === 'hit' && r[0].score > r[1].score
 })
 
 check('только что игравшее уходит назад', () => {

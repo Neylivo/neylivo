@@ -18,7 +18,9 @@ import { boost, lighten, scale, rgb } from './artColor'
 import { searchQuery } from './streaming'
 import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
+import { pushFail, sourceDown, SOURCE_DOWN_FAILS, SOURCE_DOWN_MS, type FailMark } from './broken'
 import { mergeTracks } from './mergeTracks'
+import { libraryPlan, newestAt, SNAPSHOT_TTL_MS } from './libCache'
 import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
 import { tooShortWhy, MIN_TRACK_SEC } from './minLength'
 import {
@@ -104,7 +106,7 @@ const MIX = [T('cur', 'Ночь', 'Кино'), T('same', 'Пачка сигар�
 check('тот же исполнитель первым', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].track.id === 'same')
 check('и причина названа верно', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].why === 'author')
 check('у каждой причины есть человеческая подпись', () =>
-  (['author', 'similar', 'mine', 'popular', 'fresh', 'order'] as const).every(w => !!WHY_LABEL[w]))
+  (['author', 'similar', 'rested', 'popular', 'fresh', 'order'] as const).every(w => !!WHY_LABEL[w]))
 check('текущий трек не предлагается', () =>
   recommend({ tracks: MIX, idx: 0, plays: { cur: 99 } }).every(s => s.track.id !== 'cur'))
 check('склад из одного трека — пустой подбор', () =>
@@ -442,12 +444,17 @@ function listen(seconds: number, step = 0.5, start = 0) {
 }
 // v1.430.0: порог зачёта — тридцать секунд (в v1.428.0 я по ошибке опустил его до
 // пятнадцати: просьба была про минимальную ДЛИНУ трека, а не про зачёт).
-check('тридцать секунд — засчитано', () => credited(listen(CREDIT_SEC), 200))
+// v1.435.0: владелец попросил поднять порог до пятидесяти.
+check('порог отслушан — засчитано', () => credited(listen(CREDIT_SEC), 200))
 check('на секунду меньше — ещё нет', () => !credited(listen(CREDIT_SEC - 1), 200))
-check('порог по умолчанию — тридцать секунд', () =>
-  CREDIT_SEC === 30 && creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
+check('порог по умолчанию — пятьдесят секунд', () =>
+  CREDIT_SEC === 50 && creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
+check('порог не длиннее самой короткой песни в складе', () =>
+  // Меньше минимальной длины трека порог быть не обязан, но длиннее обычной
+  // песни — уже бессмыслица: засчитывать станет нечего.
+  CREDIT_SEC >= MIN_TRACK_SEC && CREDIT_SEC <= 90)
 check('короткую запись надо дослушать', () => {
-  // Трек на 20 секунд: порог — почти вся его длина, а не тридцать секунд.
+  // Трек на 20 секунд: порог — почти вся его длина, а не полсотни секунд.
   const th = creditThreshold(20)
   return th < CREDIT_SEC && th >= 19 - 1e-9
 })
@@ -709,6 +716,146 @@ check('на паузе время не бежит', () => {
   const l = { pos: 42, dur: 200, at: 1000 }
   return livePosLocal(l, 1000 + 60_000) === 102 && l.pos === 42
 })
+
+console.log('\n-- Лёг сервис, а не треки (v1.435.0) --')
+{
+  const T0 = 1_800_000_000_000
+  let list: FailMark[] = []
+  check('один неигравший трек — это трек, а не сервис', () => {
+    list = pushFail([], 'a', T0)
+    return !sourceDown(list, T0)
+  })
+  check('несколько разных подряд — это сервис', () => {
+    let l: FailMark[] = []
+    for (let i = 0; i < SOURCE_DOWN_FAILS; i++) l = pushFail(l, 'т' + i, T0 + i * 1000)
+    return sourceDown(l, T0 + 5000)
+  })
+  check('один и тот же трек, сколько ни падай, сервисом не считается', () => {
+    let l: FailMark[] = []
+    for (let i = 0; i < 20; i++) l = pushFail(l, 'один', T0 + i * 100)
+    return !sourceDown(l, T0 + 2000)
+  })
+  check('старые отказы забываются', () => {
+    let l: FailMark[] = []
+    for (let i = 0; i < SOURCE_DOWN_FAILS; i++) l = pushFail(l, 'т' + i, T0 + i * 100)
+    return !sourceDown(l, T0 + SOURCE_DOWN_MS + 1000)
+  })
+  check('окно достаточно короткое, чтобы не ловить обычные пропуски', () =>
+    SOURCE_DOWN_MS <= 60_000 && SOURCE_DOWN_FAILS >= 3)
+
+  console.log('\n-- Ломаем нарочно (сторож сервиса) --')
+  check('проверка заметила бы сторож, который срабатывает от одного трека', () => {
+    let l: FailMark[] = []
+    l = pushFail(l, 'a', T0)
+    l = pushFail(l, 'b', T0 + 100)
+    // Два разных — ещё не повод: иначе плеер вставал бы на любых двух подряд.
+    return !sourceDown(l, T0 + 200)
+  })
+}
+
+console.log('\n-- Трекотека не качается заново (v1.435.0) --')
+{
+  const NOW = 1_800_000_000_000
+  const снимок = (n: number, at = NOW - 1000) => ({
+    tracks: Array.from({ length: n }, (_, i) => ({
+      id: 't' + i, url: 'u' + i, name: 'п' + i, owner: 'o',
+      at: new Date(NOW - (n - i) * 1000).toISOString(),
+    })) as any[],
+    at,
+  })
+
+  check('снимка нет — качаем целиком', () =>
+    libraryPlan(null, 100, NOW).kind === 'full')
+  check('пустой снимок — тоже целиком', () =>
+    libraryPlan({ tracks: [], at: NOW }, 0, NOW).kind === 'full')
+  check('счёт сошёлся — спрашиваем только новое', () => {
+    const p = libraryPlan(снимок(50), 50, NOW)
+    return p.kind === 'incremental' && !!p.since
+  })
+  check('и спрашиваем от самого свежего известного', () => {
+    const s = снимок(50)
+    const p = libraryPlan(s, 50, NOW)
+    return p.kind === 'incremental' && p.since === newestAt(s.tracks)
+  })
+  check('треков стало больше — качаем целиком', () =>
+    libraryPlan(снимок(50), 51, NOW).kind === 'full')
+  check('трек удалили — тоже целиком, счёт это ловит', () => {
+    const p = libraryPlan(снимок(50), 49, NOW)
+    return p.kind === 'full' && p.why === 'count-differs'
+  })
+  check('счёт спросить не вышло — не доверяем снимку', () => {
+    const p = libraryPlan(снимок(50), null, NOW)
+    return p.kind === 'full' && p.why === 'no-count'
+  })
+  check('снимок старше недели перечитывается целиком', () => {
+    const p = libraryPlan(снимок(50, NOW - SNAPSHOT_TTL_MS - 1), 50, NOW)
+    return p.kind === 'full' && p.why === 'stale'
+  })
+  check('без времени добавления инкрементом не обойтись', () => {
+    const s = { tracks: [{ id: 'a', url: 'u', name: 'a', owner: 'o' }] as any[], at: NOW }
+    return libraryPlan(s, 1, NOW).kind === 'full'
+  })
+  check('самое свежее время находится верно', () =>
+    newestAt([{ at: '2026-01-01' }, { at: '2026-07-30' }, { at: '2026-03-03' }] as any[]) === '2026-07-30')
+
+  console.log('\n-- Ломаем нарочно (кэш склада) --')
+  check('проверка заметила бы «верим снимку всегда»', () => {
+    // Ровно та поломка, которой тут можно всё испортить: удалили трек, а мы
+    // показываем прежний склад и не замечаем этого никогда.
+    const слепо = () => ({ kind: 'incremental' as const, since: 'x' })
+    return слепо().kind === 'incremental' && libraryPlan(снимок(50), 49, NOW).kind === 'full'
+  })
+}
+
+console.log('\n-- Волна без «часто слушаешь» (v1.435.0) --')
+{
+  const ДЕНЬ = 86_400_000
+  const NOW = 1_800_000_000_000
+  const рядом = [T('cur'), T('часто'), T('редко')]
+  check('число своих прослушиваний на очки больше не влияет вовсе', () => {
+    // Два трека одинаковы во всём, кроме числа прослушиваний: двести против
+    // одного. Очки обязаны совпасть — иначе сигнал вернулся.
+    const r = recommend({ tracks: рядом, idx: 0, plays: { часто: 200, редко: 1 }, now: NOW,
+      lastAt: { часто: NOW - ДЕНЬ, редко: NOW - ДЕНЬ } })
+    const a = r.find(x => x.track.id === 'часто')!.score
+    const b = r.find(x => x.track.id === 'редко')!.score
+    return a === b
+  })
+  check('незнакомое впереди знакомого', () => {
+    const t = [T('cur'), T('слушал'), T('новое')]
+    const r = recommend({ tracks: t, idx: 0, plays: { слушал: 5 }, now: NOW, lastAt: { слушал: NOW - ДЕНЬ } })
+    return r[0].track.id === 'новое' && r[0].why === 'fresh'
+  })
+  check('давно не слушанное впереди вчерашнего', () => {
+    const t = [T('cur'), T('вчера'), T('год назад')]
+    const r = recommend({ tracks: t, idx: 0, plays: { 'вчера': 3, 'год назад': 3 }, now: NOW,
+      lastAt: { 'вчера': NOW - ДЕНЬ, 'год назад': NOW - 365 * ДЕНЬ } })
+    return r[0].track.id === 'год назад' && r[0].why === 'rested'
+  })
+  check('без дат ничего не ломается', () => {
+    const r = recommend({ tracks: рядом, idx: 0, plays: { часто: 9 }, now: NOW })
+    return r.length === 2
+  })
+  check('причины «ты это часто слушаешь» больше нет вовсе', () =>
+    !Object.values(WHY_LABEL).some(v => v.includes('часто слушаешь') && !v.includes('это часто слушают')))
+  check('тот же исполнитель всё ещё сильнее давности', () => {
+    const t = [T('cur', 'Ночь', 'Кино'), T('свой', 'Пачка', 'Кино'), T('чужой', 'Другое', 'Кто-то')]
+    const r = recommend({ tracks: t, idx: 0, plays: { свой: 2 }, now: NOW,
+      lastAt: { свой: NOW - ДЕНЬ, чужой: NOW - 400 * ДЕНЬ } })
+    return r[0].track.id === 'свой'
+  })
+
+  console.log('\n-- Ломаем нарочно (волна) --')
+  check('проверка заметила бы возврат сигнала «часто слушаешь»', () => {
+    // Прежнее правило давало +25*log2(1+свои прослушивания): на этих данных
+    // разрыв под сто семьдесят очков. Сейчас разрыв обязан быть нулевым.
+    const прежнийРазрыв = 25 * Math.log2(1 + 200) - 25 * Math.log2(1 + 1)
+    const r = recommend({ tracks: рядом, idx: 0, plays: { часто: 200, редко: 1 }, now: NOW,
+      lastAt: { часто: NOW - ДЕНЬ, редко: NOW - ДЕНЬ } })
+    const разрыв = Math.abs(r.find(x => x.track.id === 'часто')!.score - r.find(x => x.track.id === 'редко')!.score)
+    return прежнийРазрыв > 100 && разрыв === 0
+  })
+}
 
 console.log('\n-- Обход неиграбельных: показ и действие (v1.433.0) --')
 // В v1.432.0 обход появился только в кнопке: строка «Дальше» звала голую

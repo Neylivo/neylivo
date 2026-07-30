@@ -124,11 +124,15 @@ app.whenReady().then(async () => {
   const meW = await box('.me'), compW = await box('.composer'), chatW = await box('.chat')
 
   console.log('\n── Большой экран: низ окна ──')
-  check('панель с аватаркой доходит до края окна', meW.bottom === winH, 'низ ' + meW.bottom + ' при окне ' + winH)
+  // v1.435.0: правило уточнено по снимку Discord, который принёс владелец: обе
+  // плашки кончаются на ОДНОЙ высоте и обе отступают от низа одинаково. В
+  // v1.434.0 я прижал их к самому краю — это было не то.
+  const gapMe = winH - meW.bottom, gapComp = winH - compW.bottom
   check('колонка чата доходит до края окна', chatW.bottom === winH, 'низ ' + chatW.bottom)
-  check('поле ввода доходит до края окна', compW.bottom === winH, 'низ ' + compW.bottom)
   check('низ поля и низ панели — одна линия', compW.bottom === meW.bottom,
     'поле ' + compW.bottom + ', панель ' + meW.bottom)
+  check('отступ от низа у обеих одинаковый', gapMe === gapComp, 'панель ' + gapMe + ', поле ' + gapComp)
+  check('отступ есть, но небольшой', gapMe > 0 && gapMe <= 16, 'отступ ' + gapMe)
 
   console.log(failed ? '\nПРОВАЛЕНО: ' + failed : '\nИТОГ: все проверки пройдены')
   process.exit(failed ? 1 : 0)

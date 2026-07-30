@@ -102,6 +102,8 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // экрана, сдвигается так, чтобы поместиться целиком с отступом MARGIN.
   const boxRef = useRef<HTMLDivElement>(null)
   const [adj, setAdj] = useState<{ top: number; left: number } | null>(null)
+  // v1.435.0: поправленный отступ снизу для своей карточки — см. useLayoutEffect.
+  const [adjBottom, setAdjBottom] = useState<number | null>(null)
 
   // v1.427.0: системная «назад» закрывает карточку, а не приложение.
   useBackClose(true, onClose)
@@ -127,7 +129,22 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
     // Своя карточка прижата к низу и высотой ограничена — подгонять её по
     // измеренной высоте не нужно, а именно эта подгонка и оставляла её висеть
     // в воздухе, когда содержимое становилось короче.
-    if (data.anchor === 'me') return
+    //
+    // v1.435.0: но за низ она держится по числу, снятому в момент открытия, и
+    // это число подводило: карточка накрывала собой ту самую панель, над
+    // которой должна стоять — видны оставались только наушники и шестерёнка
+    // справа. Поэтому меряем панель ЖИВЬЁМ, из разметки, и если карточка всё же
+    // заходит на неё — поднимаем. Это дешевле, чем гадать, откуда приехал
+    // неверный отступ, и не сломается, когда панель снова переедет.
+    if (data.anchor === 'me') {
+      const panel = document.querySelector('.me')
+      if (!panel) return
+      const pr = panel.getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      const GAP = 8
+      if (r.bottom > pr.top - GAP) setAdjBottom(Math.round(window.innerHeight - pr.top + GAP))
+      return
+    }
     const M = 20
     const r = el.getBoundingClientRect()
     let top = r.top, left = r.left, changed = false
@@ -218,8 +235,9 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // adj — уже измеренная и гарантированно влезающая позиция; когда она есть,
   // полностью заменяет грубую прикидку (top+bottom одновременно не задаём —
   // иначе position:fixed без явной height растянет карточку между ними).
+  const bottomMe = adjBottom ?? Math.max(8, window.innerHeight - data.y + 8)
   const posStyle: React.CSSProperties = data.anchor === 'me'
-    ? { ...basePos, maxHeight: `calc(100vh - ${Math.max(8, window.innerHeight - data.y + 8) + 20}px)` }
+    ? { ...basePos, bottom: bottomMe, maxHeight: `calc(100vh - ${bottomMe + 20}px)` }
     : adj ? { top: adj.top, left: adj.left } : basePos
 
   return (

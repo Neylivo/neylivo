@@ -1,6 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
-import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, forgetBroken, forgetNoEmbed, pauseKind, silenceStuck, SILENCE_MS } from './broken'
+import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, forgetBroken, forgetNoEmbed, pauseKind, silenceStuck, SILENCE_MS, pushFail, sourceDown, type FailMark } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
@@ -12,8 +12,9 @@ import { idbGet } from '../lib/idb'
 import { supabase } from '../lib/supabase'
 import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
-import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
+import { fetchTracks, fetchTracksPage, fetchTracksAfter, tracksCount, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import { loadLibrary, saveLibrary, libraryPlan } from './libCache'
 import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
 import {
   normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist,
@@ -32,7 +33,7 @@ import { listenToTrack } from './aiListen'
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
 import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
-import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, type Lyrics } from './lyrics'
+import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, lyricsScrollMs, lyricsEase, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
@@ -231,6 +232,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     '--mus-a': rgb(acc),
     '--mus-a2': rgb(lighten(acc)),
     '--mus-a-soft': rgb(acc, .22),
+    // v1.435.0: те же цифры без обёртки rgb() — для свечения поющейся строки,
+    // где нужен именно набор чисел внутри rgba(..., прозрачность).
+    '--mus-a-rgb': acc.r + ',' + acc.g + ',' + acc.b,
     '--mus-bg1': rgb(scale(acc, .16)),
   } as React.CSSProperties) : undefined
 
@@ -366,13 +370,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const lyrTouchRef = useRef(0)
   const [lyrHeld, setLyrHeld] = useState(false)
 
+  // v1.435.0: текст едет своим ходом, а не системной плавной прокруткой.
+  // Почему — см. lyricsScrollMs: у системной одна скорость на любое расстояние,
+  // и соседняя строка тянется столько же, сколько прыжок через припев. Свой ход
+  // ещё и прерывается на полуслове без рывка: новая цель просто продолжает
+  // движение с того места, где оно сейчас.
+  const lyrAnimRef = useRef(0)
+  const stopLyrScroll = () => {
+    if (lyrAnimRef.current) { cancelAnimationFrame(lyrAnimRef.current); lyrAnimRef.current = 0 }
+  }
   const centerLyrLine = (i: number, smooth = true) => {
     const box = kBoxRef.current
     const el = kLineRefs.current.get(i)
     if (!box || !el) return
     const top = centerScrollTop(el.offsetTop, el.offsetHeight, box.clientHeight, box.scrollHeight - box.clientHeight)
-    box.scrollTo({ top, behavior: smooth && !document.body.classList.contains('no-anim') ? 'smooth' : 'auto' })
+    stopLyrScroll()
+    if (!smooth || document.body.classList.contains('no-anim')) { box.scrollTop = top; return }
+    const from = box.scrollTop
+    const dist = top - from
+    if (Math.abs(dist) < 1) return
+    const ms = lyricsScrollMs(dist)
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const p = (now - t0) / ms
+      box.scrollTop = from + dist * lyricsEase(p)
+      if (p < 1) lyrAnimRef.current = requestAnimationFrame(step)
+      else lyrAnimRef.current = 0
+    }
+    lyrAnimRef.current = requestAnimationFrame(step)
   }
+  useEffect(() => stopLyrScroll, [])
 
   useEffect(() => {
     if (lyrMode !== 'karaoke' || lyrActive < 0) return
@@ -388,6 +415,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // клавиши), а не событие прокрутки: последнее приходит и от наших собственных
   // сдвигов, и отличить их надёжно нельзя.
   const lyrTouched = () => {
+    stopLyrScroll()   // v1.435.0: под пальцем свой ход прекращаем сразу
     lyrTouchRef.current = Date.now()
     setLyrHeld(true)
     window.setTimeout(() => {
@@ -659,6 +687,28 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     let ok = true
 
     ;(async () => {
+      // v1.435.0: сначала — то, что уже лежит на устройстве. Список появляется
+      // мгновенно, до единого запроса; см. music/libCache.ts, там же и почему.
+      const snap = await loadLibrary()
+      if (!ok) return
+      if (snap) setTracks(prev => (prev.length ? mergeTracks(prev, snap.tracks) : snap.tracks))
+
+      // Счёт спрашиваем ТОЛЬКО когда есть что с ним сверять: без снимка ответ
+      // всё равно один — качать целиком, а лишний запрос отодвинул бы первую
+      // страницу, ради которой всё и делалось.
+      const count = snap ? await tracksCount() : null
+      if (!ok) return
+      const plan = libraryPlan(snap, count, Date.now())
+
+      if (plan.kind === 'incremental') {
+        // Склад не изменился в размере — спрашиваем только появившееся после
+        // самого свежего известного. Обычно это ноль строк и один запрос.
+        const fresh = await fetchTracksAfter(plan.since)
+        if (!ok) return
+        if (fresh.length) setTracks(prev => mergeTracks(prev, fresh))
+        return
+      }
+
       for (let from = 0; ok; from += TRACKS_PAGE) {
         const { tracks: page, done } = await fetchTracksPage(from)
         if (!ok) return
@@ -690,6 +740,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
     return () => { ok = false; supabase.removeChannel(ch) }
   }, [])
+
+  /**
+   * Снимок склада на устройство (v1.435.0).
+   *
+   * С задержкой: во время догрузки страниц список меняется десятки раз подряд, и
+   * писать снимок на каждую значило бы тратить больше, чем экономим. Пишем, когда
+   * склад успокоился.
+   */
+  useEffect(() => {
+    if (tracks.length === 0) return
+    const t = window.setTimeout(() => { void saveLibrary(tracksRef.current) }, 3000)
+    return () => window.clearTimeout(t)
+  }, [tracks])
 
   /**
    * Дописать только что добавленное, не выкачивая склад заново (v1.420.0).
@@ -1248,6 +1311,32 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
    * если он твой, из общего склада он убирается сам. Чужой не трогаем: его и
    * база не даст удалить, и удалять чужое из-за своей сети неправильно.
    */
+  /**
+   * Сторож «лёг сервис, а не треки» (v1.435.0).
+   *
+   * Считает отказы по РАЗНЫМ трекам за полминуты. Набралось много — значит дело
+   * не в песнях, и метить их нельзя: пометка «не встраивается» переживает
+   * перезапуск, и один сбой сервиса испортил бы весь залитый плейлист навсегда.
+   * Возвращает true, если решили, что виноват сервис (тогда зовущий обязан
+   * остановиться и ничего не помечать).
+   */
+  const failsRef = useRef<FailMark[]>([])
+  const downSaidRef = useRef(0)
+  const sourceIsDown = (id: string): boolean => {
+    const now = Date.now()
+    failsRef.current = pushFail(failsRef.current, id, now)
+    if (!sourceDown(failsRef.current, now)) return false
+    setPlaying(false)
+    // Говорим один раз в минуту: смысл в том, чтобы прекратить поток отказов, а
+    // не добавить к нему ещё один.
+    if (now - downSaidRef.current > 60_000) {
+      downSaidRef.current = now
+      toastErr('Сервис сейчас не отдаёт треки — подряд не заиграло несколько. Подожди немного и включи снова')
+    }
+    failsRef.current = []
+    return true
+  }
+
   function trackFailed(reason: string, forId?: string) {
     const t = cur
     if (!t) return
@@ -1258,6 +1347,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // а на «дальше» в какой-то момент играть становится нечего. Ровно то, на что
     // жаловались: «листаешь — идёт ломано, а потом кнопка перестаёт работать».
     if (forId && forId !== t.id) return
+    if (sourceIsDown(t.id)) return
     const fails = markFailed(t.id)
     if (fails < BROKEN_AFTER) { toastErr(reason + ' — пробую следующий'); next(); return }
     if (t.ownerId && t.ownerId === meId) {
@@ -1344,6 +1434,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       })()
       // Копия уже есть и всё равно встало — значит, дело не в запрете сервиса.
       if (copy) { trackFailed(reason); return }
+      // v1.435.0: если подряд не заиграло много РАЗНЫХ треков — это сервис, и
+      // помечать их «не встраивается» нельзя: пометка вечная (см. broken.ts).
+      if (sourceIsDown(t.id)) return
       markNoEmbed(t.id)
       setYtDenied(prev => (prev.includes(t.id) ? prev : [...prev, t.id]))
       toastErr(`«${title}»: ${reason} — ищу копию`)
@@ -1707,19 +1800,28 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   useEffect(() => { myPlayCounts().then(setMyPlays) }, [])
 
   /**
-   * Прослушивание засчитывается только после тридцати секунд (v1.426.0).
+   * Прослушивание засчитывается только после порога в CREDIT_SEC (v1.426.0,
+   * с v1.435.0 порог — пятьдесят секунд).
    *
    * Что было. Плюс один в тот же миг, когда трек начинал играть. То есть число
    * говорило «сколько раз на это нажали», а не «сколько это слушали»: пролистал
    * двадцать треков по секунде — двадцать прослушиваний, и склад «сначала то,
    * что слушают чаще всего» выкладывался по случайным нажатиям.
    *
-   * Теперь как у стриминговых сервисов: тридцать секунд, а короткая запись —
+   * Теперь как у стриминговых сервисов: полсотни секунд, а короткая запись —
    * целиком. Время НАКАПЛИВАЕТСЯ маленькими шагами (см. playCredit.ts), поэтому
    * перемотка до тридцатой секунды ничего не даёт: прыжок шагом не считается.
    */
   const countedRef = useRef<string>('')
   const listenRef = useRef<Listened>(freshListened())
+  // Когда каждый трек слушался в последний раз — на этом устройстве.
+  const LASTAT_KEY = 'ponoi_mus_lastat_v1'
+  const [lastAt, setLastAt] = useState<Record<string, number>>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(LASTAT_KEY) || '{}')
+      return v && typeof v === 'object' ? v : {}
+    } catch { return {} }
+  })
   useEffect(() => {
     listenRef.current = freshListened(curT)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1732,6 +1834,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     countedRef.current = cur.id
     void recordPlay(cur.id)
     setMyPlays(p => ({ ...p, [cur.id]: (p[cur.id] ?? 0) + 1 }))
+    // v1.435.0: запоминаем и КОГДА это было. По давности волна теперь и
+    // выбирает — вместо прежнего «сколько раз слушал» (см. personalQueue).
+    // Хранится на устройстве: отдельной колонки в базе под это нет, а заводить
+    // её значит рассказывать серверу, что и когда человек слушал.
+    setLastAt(m => {
+      const next = { ...m, [cur.id]: Date.now() }
+      try { localStorage.setItem(LASTAT_KEY, JSON.stringify(next)) } catch { /* переполнено */ }
+      return next
+    })
     setTracks(ts => ts.map(t => (t.id === cur.id ? { ...t, plays: (t.plays ?? 0) + 1 } : t)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curT, playing, cur?.id, dur])
@@ -1813,10 +1924,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // показывала одно, а плеер играл другое (он такие треки обходит сам).
     return recommend({
       tracks: enriched, idx, plays: myPlays, recent: recentRef.current,
+      lastAt, now: Date.now(),
       skip: t => unplayable(tracks[byId.get(t.id) ?? -1]),
     })[0] ?? null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, byId, idx, myPlays, meta, cur?.id, ytDenied, recentAt])
+  }, [tracks, byId, idx, myPlays, lastAt, meta, cur?.id, ytDenied, recentAt])
   const personalIdx = reco ? byId.get(reco.track.id) ?? -1 : -1
   // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому
   // берёт значение через ссылку — иначе там останется номер с первого рендера.
@@ -2228,17 +2340,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
             <b>Ponoi Music · Трекотека</b>
-            <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
-            <button className="mus2-lib-x" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
             {/* v1.428.0: у склада появился второй отдел — плейлисты. Раньше они
                 жили одной строкой в узкой панели плеера: ни открыть, ни включить
-                целиком, ни переименовать. */}
+                целиком, ни переименовать.
+                v1.435.0: отделы стоят слева, сразу за названием — это выбор
+                РАЗДЕЛА, а не действие, и место ему в начале строки, а не в
+                дальнем углу. Кнопка закрытия ушла в правый верхний угол, где её
+                и ищут: раньше она стояла посреди шапки. */}
             <div className="mus2-libtabs">
               <button className={'mus2-tab' + (libTab === 'tracks' ? ' on' : '')}
                 onClick={() => { setLibTab('tracks'); setOpenPl(null) }}>Треки</button>
               <button className={'mus2-tab' + (libTab === 'playlists' ? ' on' : '')}
                 onClick={() => setLibTab('playlists')}>Плейлисты{playlists.length > 0 ? ' · ' + playlists.length : ''}</button>
             </div>
+            <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
+            <button className="mus2-lib-x" title="Закрыть Трекотеку" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
           </header>
           {/* v1.371.0: сетка карточек вместо строчек, как на главной Spotify.
               Кто выложил трек — убрано: в списке из сотни записей это ничего не

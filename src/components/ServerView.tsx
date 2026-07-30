@@ -1155,10 +1155,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // и у собеседников оставалось.
     const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.filter(m => m.id !== id))
-    if (!await deleteMessage('messages', id)) {
+    // v1.435.0: отказ и «база не вернула строку» — разные вещи, см. deleteMessage.
+    // Возвращаем сообщение в ленту только при НАСТОЯЩЕМ отказе, а причину
+    // называем: чаще всего это чужое сообщение, а не пропавшие права.
+    const res = await deleteMessage('messages', id)
+    if (!res.ok) {
       if (prev) setMessages(ms => ms.some(m => m.id === id) ? ms
         : [...ms, prev].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)))
-      toastErr('Не удалось удалить сообщение — нет прав')
+      toastErr(res.why === 'net'
+        ? 'Не удалось удалить сообщение — нет связи'
+        : prev && prev.author !== user?.id
+        ? 'Это сообщение отправлено другой учётной записью — удалить его можно только с неё'
+        : 'Не удалось удалить сообщение — база отказала')
     }
   }
   async function editMsg(id: string, content: string) {

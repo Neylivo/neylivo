@@ -4018,7 +4018,12 @@ input, textarea { caret-color:var(--brand,#5865f2); }
    заметным справа и почти незаметным под аватаркой и именем. В списках
    участников и диалогов кубик не трогаем — там строки другие и жалоб на них не
    было. */
-.me .plate-bg {
+/* v1.435.0: то же и в списке участников, и в списке диалогов.
+   Владелец прислал снимок списка участников: строки не читались вовсе — картинки
+   лезли во всю строку, поверх имён, и вместо ряда людей получался ряд обоев. В
+   Discord украшение видно справа и не мешает ни аватарке, ни имени. Правило одно
+   на все три места, чтобы они снова не разъехались. */
+.me .plate-bg, .member .plate-bg, .dm-item .plate-bg {
   filter:brightness(.5) saturate(.85);
   -webkit-mask-image:linear-gradient(90deg, transparent, rgba(0,0,0,.45) 50%, rgba(0,0,0,.8));
   mask-image:linear-gradient(90deg, transparent, rgba(0,0,0,.45) 50%, rgba(0,0,0,.8));
@@ -4505,11 +4510,21 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
    низом, а содержимое (текст и значки) остаётся ровно там, где стояло. Нижние
    углы при этом не скругляем — иначе на краю окна остались бы два просвета.
    В этой же полосе оказывается номер версии, и он больше ничего не закрывает. */
+/* v1.435.0: обе нижние плашки — по одной линии и с одинаковым отступом.
+   В v1.434.0 я прижал поле ввода к самому краю окна, и это было не то: владелец
+   принёс снимок Discord, где панель с аватаркой и поле ввода кончаются на одной
+   высоте, а под ними у ОБЕИХ одинаковая полоска фона. Замер его снимка: обе
+   плашки заканчиваются на одном y, ниже восемь пикселей фона. Делаем так же —
+   одна переменная на оба отступа, чтобы они не разъехались снова. */
+:root { --bar-gap: 8px; }
 @media (min-width: 901px) {
-  .composer {
-    min-height:52px; margin-bottom:0;
-    padding-bottom:17px;   /* 3px своих + 14px бывшего внешнего отступа */
-    border-bottom-left-radius:0; border-bottom-right-radius:0;
+  .composer { min-height:52px; margin-bottom:var(--bar-gap); }
+  /* Панель с аватаркой — такая же плашка: те же отступы снизу и по бокам, те же
+     скруглённые углы. До этого она доходила до самого угла окна, и рядом с
+     полем ввода это читалось как «одно ниже другого». */
+  .me {
+    margin:0 var(--bar-gap) var(--bar-gap);
+    border-radius:var(--r-md, 8px);
   }
 }
 
@@ -5788,18 +5803,37 @@ body.no-anim .pcb-drop, body.no-anim .pcb-hint { transition: none; }
   font-size: 12.5px; font-weight: 700; backdrop-filter: blur(6px);
 }
 .mus2-kback:hover { border-color: var(--brand); }
+/* v1.435.0: строки живут мягче.
+   Раньше строка меняла цвет и размер за четверть секунды одной кривой, и
+   переход читался как «дёрнулось». Теперь: цвет догоняет чуть быстрее размера,
+   у размера кривая с лёгким подхватом (как будто строка выдыхает), и соседние
+   строки светлее дальних — глаз держится за середину сам, без рывка. Сам
+   проезд текста считается отдельно (lyricsScrollMs). */
 .mus2-kline {
   font-size: 26px; line-height: 2.4em; font-weight: 800; cursor: pointer;
-  color: rgba(var(--ov, 255,255,255), .34);
-  transition: color .25s var(--ease-out4, ease), transform .25s var(--ease-out4, ease);
+  color: rgba(var(--ov, 255,255,255), .28);
+  transform-origin: center;
+  transition: color .34s var(--ease-out4, ease),
+              opacity .34s var(--ease-out4, ease),
+              text-shadow .34s var(--ease-out4, ease),
+              transform .42s cubic-bezier(.22, .9, .28, 1.06);
+  will-change: transform;
 }
 .mus2-kline:hover { color: rgba(var(--ov, 255,255,255), .6); }
+/* Соседи поющейся строки — на полпути между ней и остальными. Предыдущую
+   выбираем через :has: обратного «предыдущий сосед» в CSS нет. */
+.mus2-kline.on + .mus2-kline,
+.mus2-kline:has(+ .mus2-kline.on) { color: rgba(var(--ov, 255,255,255), .5); }
 /* Строка без метки времени: перематывать по ней некуда, поэтому и вид не
    обещает нажатия (v1.420.0 — текст без меток теперь тоже показывается
    списком, а не только фоном за обложкой). */
 .mus2-kline.plain { cursor: default; }
 .mus2-kline.past { color: rgba(var(--ov, 255,255,255), .22); }
-.mus2-kline.on { color: var(--tx-hi, #fff); transform: scale(1.04); }
+.mus2-kline.on {
+  color: var(--tx-hi, #fff); transform: scale(1.07);
+  /* Свечение под цвет обложки (--mus-a ставит сам плеер), а без него — белое. */
+  text-shadow: 0 2px 26px rgba(var(--mus-a-rgb, 255, 255, 255), .35);
+}
 /* В караоке обложка уходит с середины: две крупные вещи разом читаются хуже,
    чем одна. Пластинка и свечение остаются — по ним видно, что играет. */
 .mus2-now.karaoke .mus2-artwrap { display: none; }
@@ -6437,7 +6471,10 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
    Раньше плейлист был строкой в узкой панели плеера: ни открыть, ни включить
    целиком, ни переименовать, ни поменять порядок. Теперь это отдел склада с
    карточками, у карточки — плитка из обложек его треков, как в Spotify. */
-.mus2-libtabs { display: flex; gap: 6px; margin-left: auto; }
+/* v1.435.0: отделы слева, сразу за названием (см. разметку в MusicPlayer).
+   Раньше здесь стоял margin-left:auto — он уводил их в правый край, а кнопка
+   закрытия оказывалась посреди шапки. */
+.mus2-libtabs { display: flex; gap: 6px; flex: none; }
 .mus2-libtabs .mus2-tab { padding: 6px 12px; font-size: 13.5px; }
 .mus2-plart { display: grid; gap: 2px; }
 .mus2-plart.n0 { display: flex; align-items: center; justify-content: center; }
@@ -6479,7 +6516,8 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .lsn-paused span { display: inline-flex; align-items: center; gap: 4px; }
 
 @media (max-width: 768px) {
-  .mus2-libtabs { order: 4; flex: 1 0 100%; margin-left: 0; }
+  /* На телефоне: отделы своей строкой под названием, поиск — следующей. */
+  .mus2-libtabs { order: 2; flex: 1 0 100%; margin-left: 0; }
   .mus2-pltitle { font-size: 18px; }
   .mus2-plbtns { margin-left: 0; flex: 1 0 100%; }
   .mus2-plbtns .pqs2-btn { flex: 1; justify-content: center; }

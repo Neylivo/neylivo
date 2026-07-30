@@ -1159,5 +1159,31 @@ await check('избранные эмодзи попали в публикаци�
 }
 
 
+// ── Своё сообщение удаляется из любого сеанса (v1.435.0) ──────────────────
+// Владелец принёс: «написал с телефона — с ПК удалить не даёт, и наоборот».
+// Устройства для базы не существует вовсе: она видит только auth.uid(). Значит
+// проверять надо ровно это — что правило смотрит на автора и ни на что больше.
+// Каждый вызов as() тут выставляет «кто я» заново, то есть это другой сеанс.
+{
+  const dch = (await db.query(
+    `insert into channels (server_id, name) values ($1,'про удаление') returning id`, [srv])).rows[0].id
+
+  const mid = (await as(USER,
+    `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','с телефона') returning id`,
+    [dch, USER])).rows[0].id
+  await check('своё сообщение удаляется из другого сеанса', async () => {
+    await as(USER, `delete from messages where id=$1`, [mid])
+    return (await db.query('select 1 from messages where id=$1', [mid])).rows.length === 0
+  })
+
+  const mid2 = (await as(USER,
+    `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','ещё одно') returning id`,
+    [dch, USER])).rows[0].id
+  await check('чужое сообщение по-прежнему не удаляется', async () => {
+    await as(OTHER, `delete from messages where id=$1`, [mid2])
+    return (await db.query('select 1 from messages where id=$1', [mid2])).rows.length === 1
+  })
+}
+
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

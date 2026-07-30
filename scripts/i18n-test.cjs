@@ -54,7 +54,7 @@ function allFiles(dir) {
   const declared = new Set((css.match(/--[a-z0-9-]+\s*:/g) || []).map(x => x.replace(/\s*:$/, '')))
   const SET_BY_JS = [
     '--ov', '--font-px', '--fold', '--chatbg-url', '--chatbg-blur', '--chatbg-tint',
-    '--mus-a', '--mus-a2', '--mus-a-soft', '--mus-bg1', '--tx-name', '--plate-oc', '--pb-i', '--td',
+    '--mus-a', '--mus-a2', '--mus-a-soft', '--mus-a-rgb', '--mus-bg1', '--tx-name', '--plate-oc', '--pb-i', '--td',
     // v1.383.0: цвета профиля — их выбирает человек, ставит ProfileCard прямо на
     // карточку. В теме их и не должно быть: у каждого профиля они свои.
     '--pc-a', '--pc-b',

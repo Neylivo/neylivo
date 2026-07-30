@@ -67,6 +67,22 @@ export async function fetchTracksPage(from: number, size = TRACKS_PAGE): Promise
 }
 
 /**
+ * Сколько всего треков в складе (v1.435.0).
+ *
+ * Один дешёвый запрос: `head: true` означает, что строки не передаются вовсе,
+ * приходит только число. По нему решается, можно ли доверять снимку на
+ * устройстве (см. music/libCache.ts) — совпало, значит ни добавлений, ни
+ * удалений не было.
+ */
+export async function tracksCount(): Promise<number | null> {
+  try {
+    const { count, error } = await supabase.from('music_tracks').select('id', { count: 'exact', head: true })
+    if (error || typeof count !== 'number') return null
+    return count
+  } catch { return null }
+}
+
+/**
  * Треки, добавленные после указанного момента (v1.420.0).
  *
  * Нужны на случай, когда живая подписка молчала: вкладку свернули, сеть

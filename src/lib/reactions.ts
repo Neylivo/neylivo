@@ -58,9 +58,40 @@ export async function setPin(table: PinTable, id: string, pinned: boolean): Prom
  * пропадало с экрана и оставалось в базе: у собеседника оно на месте, а после
  * перезагрузки возвращалось и к тебе.
  */
-export async function deleteMessage(table: PinTable, id: string): Promise<boolean> {
+/**
+ * Почему удаление не вышло — словами, чтобы сказать это человеку.
+ *
+ * `denied` — база отказала (это не твоё сообщение либо нет прав);
+ * `net` — до базы не достучались.
+ */
+export type DeleteFail = 'denied' | 'net'
+
+/**
+ * Удалить сообщение (v1.435.0 — переписано).
+ *
+ * Что было не так. Успех определялся по тому, вернула ли база удалённую строку
+ * (`delete ... returning`). Но вернуть её она может только через правило ЧТЕНИЯ,
+ * а оно к удалению отношения не имеет: пустой ответ означал и «не дали удалить»,
+ * и «удалила, но показывать нечего». Во втором случае приложение возвращало
+ * сообщение обратно в ленту и писало «нет прав» — хотя в базе его уже не было.
+ * Со стороны это выглядит ровно как жалоба владельца: «с телефона написал, с ПК
+ * удалить не даёт» — а на самом деле удалилось, просто в другом окне ещё висит
+ * копия и рядом неверное сообщение об отказе. Правила базы тут ни при чём: они
+ * смотрят только на автора, и это теперь отдельно проверяется в test:db.
+ *
+ * Теперь пустой ответ — не приговор: спрашиваем, есть ли строка ещё. Нет —
+ * значит удалили. Есть — значит правда отказ.
+ */
+export async function deleteMessage(table: PinTable, id: string): Promise<{ ok: true } | { ok: false; why: DeleteFail }> {
   const { data, error } = await supabase.from(table).delete().eq('id', id).select('id')
-  return !error && !!data && data.length > 0
+  if (error) {
+    const denied = /row-level security|permission denied|violates/i.test(String(error.message ?? ''))
+    return { ok: false, why: denied ? 'denied' : 'net' }
+  }
+  if (data && data.length > 0) return { ok: true }
+  const { data: still, error: readErr } = await supabase.from(table).select('id').eq('id', id).maybeSingle()
+  if (readErr) return { ok: false, why: 'net' }
+  return still ? { ok: false, why: 'denied' } : { ok: true }
 }
 
 export async function editMessage(table: PinTable, id: string, content: string): Promise<boolean> {

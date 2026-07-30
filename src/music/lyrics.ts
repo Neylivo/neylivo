@@ -266,23 +266,116 @@ export interface LrcRow {
 }
 
 /**
+ * Насколько долго ехать к следующей строке (v1.435.0).
+ *
+ * Раньше текст двигала системная плавная прокрутка (`behavior: 'smooth'`): у
+ * неё одна скорость на любое расстояние и своя, ничем не управляемая кривая.
+ * На песне это заметно — короткий шаг между соседними строками она тянет так
+ * же долго, как прыжок через припев, и движение выходит вязким, а на быстрых
+ * строчках следующая прокрутка обрывает предыдущую на середине.
+ *
+ * Поэтому время считается от расстояния: соседняя строка — быстро, далёкий
+ * прыжок — заметно, но не дольше секунды, иначе текст «плывёт» отдельно от
+ * музыки.
+ */
+export function lyricsScrollMs(distancePx: number): number {
+  const d = Math.abs(distancePx)
+  return Math.max(240, Math.min(900, 240 + d * 1.1))
+}
+
+/**
+ * Кривая движения: быстро трогается, мягко останавливается.
+ *
+ * Без «отскока» нарочно: текст, который проезжает мимо строки и возвращается,
+ * читать невозможно, а строка — это то, что человек в этот момент читает.
+ */
+export function lyricsEase(p: number): number {
+  const t = Math.max(0, Math.min(1, p))
+  return 1 - Math.pow(1 - t, 5)
+}
+
+/** Имя для сверки: без регистра, без скобок и без служебных слов. */
+function nameKey(s: string | undefined): string {
+  return (s || '').toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/\b(official|video|audio|lyrics?|remaster(ed)?|hd|prod|feat|ft|version|клип|премьера)\b/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+/** Значимые слова имени — по ним считается совпадение «на две трети». */
+function nameWords(s: string | undefined): string[] {
+  return nameKey(s).split(' ').filter(w => w.length >= 2)
+}
+
+/**
+ * Похожи ли имена (исполнителя или названия) настолько, чтобы считать их одним.
+ *
+ * Не строгое равенство: в каталоге пишут «Король и Шут», «Король И Шут (КиШ)»,
+ * «Korol i Shut». Совпадением считается вхождение одного в другое целиком или
+ * общая часть не меньше двух третей меньшего имени — этого хватает, чтобы
+ * пережить приписки, и мало, чтобы спутать двух разных людей.
+ */
+export function sameName(a: string | undefined, b: string | undefined): boolean {
+  const ka = nameKey(a), kb = nameKey(b)
+  if (!ka || !kb) return false
+  if (ka === kb || ka.includes(kb) || kb.includes(ka)) return true
+  const wa = new Set(nameWords(a)), wb = nameWords(b)
+  if (!wa.size || !wb.length) return false
+  const common = wb.filter(w => wa.has(w)).length
+  return common / Math.min(wa.size, wb.length) >= 0.67
+}
+
+/**
  * Какую из найденных записей брать.
  *
- * Сначала те, где есть текст вообще. Дальше — с метками времени: ради караоке
- * всё и затевалось. При равенстве ближе та, у которой длительность совпадает с
- * нашей: у одной песни в каталоге бывает и студийная запись, и концертная, и
- * час «расширенной версии», а текст к ним разъезжается.
+ * v1.435.0: сверяется ИСПОЛНИТЕЛЬ, и это главное изменение.
+ *
+ * Что было. Выбор шёл по двум признакам: есть ли метки времени (+1000) и близка
+ * ли длительность. Автор не участвовал вообще. У песни с распространённым
+ * названием («Осень», «Небо», «Home») в каталоге десятки записей разных людей —
+ * и побеждала та, у которой оказались метки времени, а не та, которую человек
+ * слушает. То есть под музыку одного исполнителя пелся текст другого, и со
+ * стороны это выглядело как «караоке показывает чушь». Владелец принёс ровно
+ * это.
+ *
+ * Как теперь, по убыванию важности:
+ *   1. совпал исполнитель — сильнее всего остального вместе взятого;
+ *   2. совпало название;
+ *   3. есть метки времени — ради караоке всё и затевалось;
+ *   4. ближе длительность: у одной песни бывает и студийная запись, и
+ *      концертная, и час «расширенной версии», а текст к ним разъезжается.
+ *
+ * И отдельно — правило отказа. Если исполнитель известен, но НИ ОДНА запись с
+ * ним не сошлась, берём чужую только при почти точном совпадении длительности
+ * (до пяти секунд): одинаковая длина и одинаковое название — это уже та самая
+ * запись, просто автор в каталоге записан иначе. Во всех прочих случаях честнее
+ * сказать «не нашлось», чем показать чужой текст.
  */
-export function pickLyrics(rows: LrcRow[], dur?: number): LrcRow | null {
+export function pickLyrics(rows: LrcRow[], dur?: number, want?: { title?: string; artist?: string }): LrcRow | null {
   const withText = (rows ?? []).filter(r => (r.syncedLyrics || r.plainLyrics || '').trim())
   if (!withText.length) return null
+  const wantArtist = (want?.artist || '').trim()
+  const wantTitle = (want?.title || '').trim()
+  const durOk = (r: LrcRow) => !!(dur && isFinite(dur) && r.duration && Math.abs(r.duration - dur) <= 5)
+
+  const artistHit = (r: LrcRow) => !!wantArtist && sameName(r.artistName, wantArtist)
+  const titleHit = (r: LrcRow) => !!wantTitle && sameName(r.trackName, wantTitle)
+
   const score = (r: LrcRow) => {
-    let v = r.syncedLyrics && r.syncedLyrics.trim() ? 1000 : 0
+    let v = 0
+    if (artistHit(r)) v += 100_000
+    if (titleHit(r)) v += 10_000
+    if (r.syncedLyrics && r.syncedLyrics.trim()) v += 1000
     if (dur && isFinite(dur) && r.duration) v -= Math.min(200, Math.abs(r.duration - dur))
     return v
   }
+
   let best = withText[0]
   for (const r of withText) if (score(r) > score(best)) best = r
+
+  // Исполнитель известен, а совпадения с ним нет ни у кого: пускаем только
+  // запись той же длины — иначе это чужая песня с тем же названием.
+  if (wantArtist && !artistHit(best) && !durOk(best)) return null
   return best
 }
 
@@ -306,7 +399,9 @@ export async function searchLyricsOnline(title: string, artist: string, dur?: nu
         { headers: { Accept: 'application/json' } })
       if (!r.ok) { if (r.status >= 500) netFail = true; continue }
       const rows = await r.json()
-      const best = pickLyrics(Array.isArray(rows) ? rows : [], dur)
+      // v1.435.0: кого именно ищем — передаётся внутрь выбора. Без этого он
+      // брал запись с метками времени от любого однофамильца по названию.
+      const best = pickLyrics(Array.isArray(rows) ? rows : [], dur, { title, artist })
       if (best) return { ok: true, hit: {
         // Длительность записи дописываем строкой [length:...] — по ней потом
         // подгоняется время для ускоренных версий. lrclib отдаёт её отдельным

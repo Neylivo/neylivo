@@ -8,7 +8,7 @@
 // сдвигом [offset], с повторами припева и просто с мусором.
 export {}
 
-import { parseLyrics, activeLineIndex, pickLyrics, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS } from './lyrics'
+import { parseLyrics, activeLineIndex, pickLyrics, sameName, lyricsScrollMs, lyricsEase, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS } from './lyrics'
 import { stamp, words, chunksToLrc, alignPlainToChunks, fillGaps, whyCantRecognize, type SpeechChunk } from './aiLyrics'
 
 let pass = 0, fail = 0
@@ -292,6 +292,72 @@ check('проверка заметила бы, что порог совпаде�
     { start: 15, end: 16, text: 'третья строка песни' },
   ]
   return alignPlainToChunks(known, half, 100) !== null
+})
+
+console.log('\n── Как едет текст (v1.435.0) ──')
+check('соседняя строка — быстро', () => lyricsScrollMs(60) < 350)
+check('далёкий прыжок дольше, но не бесконечно', () =>
+  lyricsScrollMs(2000) === 900 && lyricsScrollMs(200) > lyricsScrollMs(60))
+check('вверх и вниз едем одинаково', () => lyricsScrollMs(-300) === lyricsScrollMs(300))
+check('даже нулевой сдвиг не мгновенный', () => lyricsScrollMs(0) >= 240)
+check('движение начинается в нуле и кончается в единице', () =>
+  lyricsEase(0) === 0 && lyricsEase(1) === 1)
+check('к концу движение замедляется, а не рвётся', () => {
+  const начало = lyricsEase(0.1) - lyricsEase(0)
+  const конец = lyricsEase(1) - lyricsEase(0.9)
+  return начало > конец
+})
+check('строка не проезжает мимо и не возвращается', () => {
+  // Отскок читался бы как «текст дёрнулся»: значения выше единицы запрещены.
+  for (let p = 0; p <= 1.0001; p += 0.01) if (lyricsEase(p) > 1) return false
+  return true
+})
+check('за пределами отрезка ничего не ломается', () =>
+  lyricsEase(-5) === 0 && lyricsEase(9) === 1)
+
+console.log('\n── Исполнитель при выборе текста (v1.435.0) ──')
+// Ровно тот случай, который принёс владелец: у песни то же название, но другой
+// автор — и до этой версии побеждала чужая запись, потому что у неё были метки.
+const ЧУЖОЙ = { trackName: 'Осень', artistName: 'Другая Группа', syncedLyrics: '[00:01.00]чужой текст', duration: 200 }
+const СВОЙ = { trackName: 'Осень', artistName: 'ДДТ', plainLyrics: 'свой текст', duration: 200 }
+
+check('свой исполнитель важнее меток времени у чужого', () => {
+  const r = pickLyrics([ЧУЖОЙ, СВОЙ], 200, { title: 'Осень', artist: 'ДДТ' })
+  return r!.artistName === 'ДДТ'
+})
+check('среди своих же берём ту, что с метками', () => {
+  const r = pickLyrics([
+    { trackName: 'Осень', artistName: 'ДДТ', plainLyrics: 'без меток', duration: 200 },
+    { trackName: 'Осень', artistName: 'ДДТ', syncedLyrics: '[00:01.00]с метками', duration: 200 },
+  ], 200, { title: 'Осень', artist: 'ДДТ' })
+  return !!r!.syncedLyrics
+})
+check('исполнитель узнаётся с припиской', () => {
+  const r = pickLyrics([ЧУЖОЙ, { ...СВОЙ, artistName: 'ДДТ (Юрий Шевчук)' }], 200, { title: 'Осень', artist: 'ДДТ' })
+  return r!.artistName === 'ДДТ (Юрий Шевчук)'
+})
+check('чужой текст не берётся вовсе, если длина другая', () =>
+  pickLyrics([{ ...ЧУЖОЙ, duration: 320 }], 200, { title: 'Осень', artist: 'ДДТ' }) === null)
+check('чужого автора пускаем при точном совпадении длины', () => {
+  // Тот же самый трек, просто автор в каталоге записан иначе — длина выдаёт.
+  const r = pickLyrics([{ ...ЧУЖОЙ, artistName: 'DDT', duration: 202 }], 200, { title: 'Осень', artist: 'ДДТ' })
+  return !!r && r.artistName === 'DDT'
+})
+check('когда своего автора не знаем — работает как раньше', () => {
+  const r = pickLyrics([ЧУЖОЙ, СВОЙ], 200)
+  return r!.artistName === 'Другая Группа'
+})
+check('сверка имён не путает разных людей', () =>
+  !sameName('Король и Шут', 'Ленинград') && sameName('Король и Шут', 'КОРОЛЬ И ШУТ (KiSh)'))
+
+console.log('\n-- Ломаем нарочно (выбор текста) --')
+check('проверка заметила бы возврат к выбору без исполнителя', () => {
+  // Прежнее правило: метки времени решают всё. На этих же данных оно берёт
+  // чужую запись, а нынешнее — свою.
+  const прежнее = [ЧУЖОЙ, СВОЙ].sort((a: any, b: any) =>
+    (b.syncedLyrics ? 1000 : 0) - (a.syncedLyrics ? 1000 : 0))[0]
+  const теперь = pickLyrics([ЧУЖОЙ, СВОЙ], 200, { title: 'Осень', artist: 'ДДТ' })
+  return прежнее.artistName === 'Другая Группа' && теперь!.artistName === 'ДДТ'
 })
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)

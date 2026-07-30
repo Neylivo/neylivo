@@ -149,6 +149,42 @@ export function silenceStuck(lastMoveAt: number, now: number, playing: boolean):
   return now - lastMoveAt >= SILENCE_MS
 }
 
+/**
+ * Сервис лёг, а не треки сломались (v1.435.0).
+ *
+ * Что принёс владелец: залил плейлист на 77 треков — и по КАЖДОМУ посыпалось
+ * «SoundCloud не начал играть этот трек — ищу копию», следом «можно слушать
+ * только на самом сервисе — пропускаю», и так по всему списку.
+ *
+ * Разбор. Один неигравший трек — это, скорее всего, трек. Пять подряд разных
+ * треков за полминуты — это уже не они: сервис не отвечает, или он придержал
+ * нас за десятки запросов подряд (а при заливке плейлиста их именно столько).
+ * Разница принципиальная, потому что каждый такой отказ ПОМЕЧАЛ трек в памяти
+ * устройства: «не встраивается». Пометка переживает перезапуск, и волна потом
+ * обходит эти треки всегда — то есть один сбой сервиса портил плейлист
+ * насовсем. Вот это и выглядит как «абсолютно все песни сломались».
+ *
+ * Поэтому: считаем отказы по РАЗНЫМ трекам в окне времени, и как только их
+ * набирается достаточно — останавливаемся, говорим один раз про сервис и
+ * ничего не помечаем.
+ */
+export const SOURCE_DOWN_FAILS = 5
+export const SOURCE_DOWN_MS = 30_000
+
+export interface FailMark { id: string; at: number }
+
+/** Оставить только свежие отказы (окно SOURCE_DOWN_MS) и дописать новый. */
+export function pushFail(list: FailMark[], id: string, now: number): FailMark[] {
+  return [...list.filter(f => now - f.at < SOURCE_DOWN_MS && f.id !== id), { id, at: now }]
+}
+
+/** Похоже ли, что лёг сам сервис, а не треки. */
+export function sourceDown(list: FailMark[], now: number): boolean {
+  const fresh = list.filter(f => now - f.at < SOURCE_DOWN_MS)
+  const ids = new Set(fresh.map(f => f.id))
+  return ids.size >= SOURCE_DOWN_FAILS
+}
+
 export function forgetNoEmbed(id: string) {
   const all = loadNoEmbed()
   if (!(id in all)) return

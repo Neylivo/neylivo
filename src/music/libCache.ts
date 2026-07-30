@@ -1,0 +1,83 @@
+// v1.435.0: Трекотека не выкачивается заново при каждом открытии.
+//
+// Что было. Каждый вход в приложение начинал склад с нуля: страница за
+// страницей по триста строк, и так до конца. На складе владельца это восемь
+// тысяч треков — почти тридцать запросов подряд, и всё это время список
+// достраивается прямо под руками, а метаданные к нему запрашиваются заново.
+// Выглядит как «Трекотека грузится каждый раз», потому что она и правда
+// грузится каждый раз.
+//
+// Как теперь. Последний известный склад лежит на устройстве (IndexedDB — в
+// localStorage два мегабайта не положить) и показывается СРАЗУ, ещё до первого
+// запроса. Дальше приложение спрашивает у базы одно число — сколько всего
+// треков. Совпало с тем, что лежит на устройстве, — значит, ничего не
+// изменилось, и достаточно спросить только появившееся после самого свежего
+// известного. Не совпало — качаем страницами, как раньше.
+//
+// Почему именно счёт. Он ловит и добавление, и удаление одним дешёвым запросом
+// (`head: true` — строки не передаются вовсе). Правку существующей строки он не
+// поймает, но её приносит живая подписка, а при следующем несовпадении счёта
+// склад всё равно перечитается целиком.
+import { idbPut, idbGetAny, idbDel } from '../lib/idb'
+import type { Track } from './types'
+
+const KEY = 'music_library_v1'
+
+export interface LibSnapshot {
+  /** Треки в том же порядке, в каком приехали из базы. */
+  tracks: Track[]
+  /** Когда снимок сохранён (мс). */
+  at: number
+}
+
+/** Сколько снимок считается годным без сверки. Дальше — перечитать целиком. */
+export const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Снимок склада с устройства. Ничего нет или мусор — вернём null. */
+export async function loadLibrary(): Promise<LibSnapshot | null> {
+  try {
+    const v = await idbGetAny<LibSnapshot>(KEY)
+    if (!v || !Array.isArray(v.tracks) || typeof v.at !== 'number') return null
+    // Мусор внутри массива безопаснее отсечь здесь, чем разбираться потом в
+    // плеере: одна строка без id ломает и очередь, и поиск.
+    const tracks = v.tracks.filter(t => t && typeof (t as any).id === 'string' && typeof (t as any).url === 'string')
+    return tracks.length ? { tracks, at: v.at } : null
+  } catch { return null }
+}
+
+export async function saveLibrary(tracks: Track[]): Promise<void> {
+  try { await idbPut(KEY, { tracks, at: Date.now() } as LibSnapshot) } catch { /* нет места — переживём */ }
+}
+
+export async function dropLibrary(): Promise<void> {
+  try { await idbDel(KEY) } catch { /* и не было */ }
+}
+
+/** Самое свежее время добавления в снимке — от него спрашиваем «что нового». */
+export function newestAt(tracks: Track[]): string {
+  let newest = ''
+  for (const t of tracks) if (t.at && t.at > newest) newest = t.at
+  return newest
+}
+
+export type LibPlan =
+  /** Показать снимок и спросить только новое после этого времени. */
+  | { kind: 'incremental'; since: string }
+  /** Качать страницами целиком. */
+  | { kind: 'full'; why: 'no-cache' | 'count-differs' | 'stale' | 'no-count' }
+
+/**
+ * Что делать при открытии — решение отдельной функцией, чтобы его проверить.
+ *
+ * `count` — сколько строк в базе (null, если спросить не вышло: тогда честнее
+ * перечитать целиком, чем поверить снимку неизвестной свежести).
+ */
+export function libraryPlan(snap: LibSnapshot | null, count: number | null, now: number): LibPlan {
+  if (!snap || snap.tracks.length === 0) return { kind: 'full', why: 'no-cache' }
+  if (now - snap.at > SNAPSHOT_TTL_MS) return { kind: 'full', why: 'stale' }
+  if (count === null) return { kind: 'full', why: 'no-count' }
+  if (count !== snap.tracks.length) return { kind: 'full', why: 'count-differs' }
+  const since = newestAt(snap.tracks)
+  // Без времени добавления не от чего оттолкнуться — тогда только целиком.
+  return since ? { kind: 'incremental', since } : { kind: 'full', why: 'no-cache' }
+}

@@ -263,6 +263,17 @@ create policy "stickers_read"     on stickers     for select using (is_member(se
 create policy "servers_read"   on servers  for select using (true);
 create policy "channels_read"  on channels for select using (true);
 create policy "messages_read"  on messages for select using (true);
+-- v1.435.0: настоящее правило удаления из миграции 34 (см. supabase/34_permissions.sql).
+-- Раньше его тут не было вовсе, и любое удаление отклонялось — то есть проверить
+-- «своё сообщение удаляется» стендом было нельзя. Держим копию здесь, как и
+-- остальные правила: расхождение с миграцией поймает первая же проверка.
+create policy "messages_delete" on messages for delete using (
+  author = auth.uid()
+  or exists (
+    select 1 from channels c join servers s on s.id = c.server_id
+    where c.id = messages.channel_id and (s.owner = auth.uid() or (server_permissions(s.id, auth.uid()) & 32) <> 0)
+  )
+);
 create policy "sm_read"        on server_members for select using (true);
 create policy "roles_read"     on server_roles for select using (true);
 create policy "mr_read"        on member_roles for select using (true);

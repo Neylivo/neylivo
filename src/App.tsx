@@ -8,7 +8,15 @@ import { openSafely } from './lib/safeUrl'
 import { loadFavs, toggleFav } from './lib/emoji'
 import { ConfirmHost } from './lib/confirm'
 import { Icon } from './components/icons'
-import { CHANGELOG } from './lib/changelog'
+// v1.435.0: история версий больше НЕ в стартовой сборке.
+//
+// Файл changelog.ts — четыреста килобайт русского текста, и он растёт с каждой
+// версией на пару килобайт. Всё это грузилось при каждом входе всем и каждому
+// ради окна, которое открывается тройным щелчком по номеру версии. Именно из-за
+// него стартовый вес и подполз к потолку: 879 при 880.
+//
+// Теперь текст подтягивается в тот момент, когда окно открывают.
+import type { ChangelogEntry } from './lib/changelog'
 import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
 import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, installApkInApp, type ApkUpdate } from './lib/apkUpdate'
@@ -194,6 +202,15 @@ function Titlebar() {
 
 // v1.116.0: окно «Что нового» — открывается тройным кликом по версии в правом нижнем углу.
 function ChangelogModal({ onClose }: { onClose: () => void }) {
+  const [list, setList] = useState<ChangelogEntry[] | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let ok = true
+    import('./lib/changelog')
+      .then(m => { if (ok) setList(m.CHANGELOG) })
+      .catch(() => { if (ok) setFailed(true) })
+    return () => { ok = false }
+  }, [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -210,7 +227,9 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
           <button className="chlog-x" title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
         <div className="chlog-body">
-          {CHANGELOG.map(v => (
+          {failed && <div className="chlog-ver">Не удалось загрузить историю обновлений — нет связи.</div>}
+          {!failed && !list && <div className="chlog-ver">Загружаю историю…</div>}
+          {(list ?? []).map(v => (
             <div key={v.version} className="chlog-ver">
               <div className="chlog-ver-h">
                 <span className="chlog-badge">v{v.version}</span>
