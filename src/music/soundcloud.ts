@@ -1,7 +1,11 @@
 // SoundCloud support: oEmbed metadata (title / author / artwork) and the
 // Widget API (hidden iframe) for actual playback of soundcloud.com links —
 // a plain <audio> element cannot play a soundcloud.com page URL.
-export interface ScMeta { title: string; author: string; art: string | null; play?: string | null }
+// v1.430.0: dur — длительность в секундах, если сервис её сказал. Нужна, чтобы
+// не пускать в общий склад секундные обрезки (см. music/minLength.ts). Знают её
+// не все: у YouTube через oEmbed длительности нет вовсе, и это не повод
+// отказывать — проверяем только когда она правда известна.
+export interface ScMeta { title: string; author: string; art: string | null; play?: string | null; dur?: number }
 
 const META_KEY = 'ponoi_mus_scmeta_v2'
 

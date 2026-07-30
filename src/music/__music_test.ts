@@ -20,6 +20,7 @@ import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { mergeTracks } from './mergeTracks'
 import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
+import { tooShortWhy, MIN_TRACK_SEC } from './minLength'
 import {
   normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist, addToPlaylist,
   removeFromPlaylist, movePlaylistTrack, playlistsOrder, playlistTracks, playlistSize,
@@ -439,18 +440,19 @@ function listen(seconds: number, step = 0.5, start = 0) {
   for (let t = start + step; t <= start + seconds + 1e-9; t += step) st = advance(st, t)
   return st
 }
-// v1.428.0: порог опущен с тридцати секунд до пятнадцати — так попросил владелец.
-check('пятнадцать секунд — засчитано', () => credited(listen(CREDIT_SEC), 200))
+// v1.430.0: порог зачёта — тридцать секунд (в v1.428.0 я по ошибке опустил его до
+// пятнадцати: просьба была про минимальную ДЛИНУ трека, а не про зачёт).
+check('тридцать секунд — засчитано', () => credited(listen(CREDIT_SEC), 200))
 check('на секунду меньше — ещё нет', () => !credited(listen(CREDIT_SEC - 1), 200))
-check('порог по умолчанию — пятнадцать секунд', () =>
-  CREDIT_SEC === 15 && creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
+check('порог по умолчанию — тридцать секунд', () =>
+  CREDIT_SEC === 30 && creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
 check('короткую запись надо дослушать', () => {
-  // Трек на 10 секунд: порог — почти вся его длина, а не пятнадцать секунд.
-  const th = creditThreshold(10)
-  return th < CREDIT_SEC && th >= 9 - 1e-9
+  // Трек на 20 секунд: порог — почти вся его длина, а не тридцать секунд.
+  const th = creditThreshold(20)
+  return th < CREDIT_SEC && th >= 19 - 1e-9
 })
-check('короткая запись целиком — засчитано', () => credited(listen(10, 0.5), 10))
-check('половина короткой записи — нет', () => !credited(listen(4, 0.5), 10))
+check('короткая запись целиком — засчитано', () => credited(listen(20, 0.5), 20))
+check('половина короткой записи — нет', () => !credited(listen(9, 0.5), 20))
 
 console.log('\n-- Перемотка не считается слушанием --')
 check('перемотка сразу за порог ничего не даёт', () => {
@@ -586,6 +588,33 @@ check('проверка заметила бы, что порядок перес�
 })
 check('проверка заметила бы, что пропавшие треки снова показываются', () =>
   playlistTracks({ id: 'x', name: 'y', trackIds: ['нет-такого'] }, PT).length === 0)
+
+
+console.log('\n-- Минимальная длина трека (v1.430.0) --')
+// Склад общий, и в него попадало что угодно: секундные обрезки, звуки нажатий,
+// случайные голосовые. В списке они выглядят как песни, а в волне стоят в
+// очереди наравне со всем остальным.
+check('минимум — пятнадцать секунд', () => MIN_TRACK_SEC === 15)
+check('короткий обрезок не пускаем', () => tooShortWhy(6) !== null)
+check('ровно пятнадцать — можно', () => tooShortWhy(15) === null)
+check('обычная песня проходит', () => tooShortWhy(210) === null)
+check('в отказе сказано и сколько есть, и сколько нужно', () => {
+  const why = tooShortWhy(6) ?? ''
+  return why.includes('6') && why.includes(String(MIN_TRACK_SEC))
+})
+check('неизвестная длина — не повод отказывать', () =>
+  tooShortWhy(undefined) === null && tooShortWhy(null) === null)
+check('мусор в длине тоже не повод', () =>
+  tooShortWhy(NaN) === null && tooShortWhy(0) === null && tooShortWhy(-5) === null)
+check('меньше секунды не превращается в «0 с»', () => (tooShortWhy(0.4) ?? '').includes('1 с'))
+
+console.log('\n-- Ломаем нарочно (минимальная длина) --')
+check('проверка заметила бы отказ при неизвестной длине', () => {
+  // Прежнее «на всякий случай»: нет длины — не пускать. Так в склад не попала бы
+  // половина обычных ссылок.
+  const наВсякийСлучай = (d: number | undefined) => d === undefined || d < MIN_TRACK_SEC
+  return наВсякийСлучай(undefined) === true && tooShortWhy(undefined) === null
+})
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

@@ -89,6 +89,9 @@ export async function audiusMeta(url: string): Promise<ScMeta | null> {
       author: String(d.user?.name || d.user?.handle || 'Audius'),
       art: (d.artwork && (d.artwork['480x480'] || d.artwork['150x150'])) || null,
       play: 'https://api.audius.co/v1/tracks/' + d.id + '/stream?app_name=ponoi',
+      // v1.430.0: Audius отдаёт длительность прямо в ответе — берём: по ней
+      // короткие обрезки не попадут в общий склад (см. music/minLength.ts).
+      dur: typeof d.duration === 'number' && d.duration > 0 ? Math.round(d.duration) : undefined,
     }
     cache[url] = meta; saveCache()
     return meta

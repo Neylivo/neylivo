@@ -14,6 +14,7 @@ import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
 import {
   normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist,
   addToPlaylist as addTrackToPl, removeFromPlaylist, movePlaylistTrack,
@@ -1054,9 +1055,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (fs.length === 0 || !meId) return
     setUploading(true)
     try {
-      let dupes = 0
+      let dupes = 0, коротких = 0
       const свежие: any[] = []
       for (const f of fs) {
+        // v1.430.0: длину читаем ДО заливки. Иначе короткий обрезок сначала
+        // уедет в хранилище, а потом получит отказ — и останется висеть там
+        // навсегда, никому не видимый.
+        const длина = await audioDuration(f)
+        if (tooShortWhy(длина)) { коротких++; continue }
         const url = await uploadTo('attachments', meId, f)   // shared public URL
         const r = await addTrack({ url, name: f.name.replace(/\.[^.]+$/, ''), ownerId: meId, ownerName: me, kind: 'file' })
         if (r.data) свежие.push(r.data)
@@ -1065,6 +1071,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // а не глотаем: человек должен понимать, почему добавилось не всё.
         if (isDuplicateTrack(r.error)) dupes++
         else if (r.error) throw new Error(r.error.message)
+      }
+      if (коротких > 0) {
+        toastErr(коротких === 1
+          ? `Трек короче ${MIN_TRACK_SEC} с не добавлен: в Трекотеку берём от ${MIN_TRACK_SEC} с`
+          : `Не добавлено коротких треков: ${коротких} — в Трекотеку берём от ${MIN_TRACK_SEC} с`)
       }
       if (dupes > 0) {
         toastErr(dupes === fs.length
@@ -1092,10 +1103,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // с разными хвостами (?si=, ?in=…/sets/…), и по строкам это разные ссылки.
         const have = new Set(tracks.map(x => normalizeTrackUrl(x.url)))
         const свежиеИз: any[] = []
-        let added = 0, dupes = 0
+        let added = 0, dupes = 0, короткие = 0
         for (const s of list) {
           const key = normalizeTrackUrl(s.url)
           if (have.has(key)) { dupes++; continue }
+          // Короткие обрезки из плейлиста тоже не берём — правило одно на все пути.
+          if (tooShortWhy(s.dur)) { короткие++; continue }
           have.add(key)
           setMeta(prev => ({ ...prev, [s.url]: { title: s.title, author: s.author, art: s.art, play: s.play } }))
           const r = await addTrack({ url: s.url, name: s.title, ownerId: meId, ownerName: me, kind: 'url', author: s.author, art: s.art, dur: s.dur, play: s.play })
@@ -1108,6 +1121,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         // недостаёт. Раньше пропущенные исчезали молча, и человек видел «добавлено
         // 47» вместо 52, не зная, что чего-то не хватает.
         const lost = lastImportSkipped()
+        if (короткие > 0) toastErr(`Пропущено коротких треков: ${короткие} — берём от ${MIN_TRACK_SEC} с`)
         if (added === 0) toastErr(dupes > 0 ? 'Эти треки уже есть в трекотеке' : 'Из плейлиста нечего добавить')
         else if (dupes > 0 && !lost.length) toastOk(`Добавлено треков: ${added}, уже были: ${dupes}`)
         else if (lost.length) {
@@ -1123,6 +1137,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           if (tracks.some(x => sameTrack(x.url, url))) { toastErr('Этот трек уже есть в трекотеке') }
           else {
             const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
+            const почему = tooShortWhy(m?.dur)
+            if (почему) { toastErr(почему); setImporting(''); return }
             if (m) setMeta(prev => ({ ...prev, [url]: m }))
             const r = await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
             appendAdded([r.data])
@@ -1175,6 +1191,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const m = isYouTubeUrl(url) ? await ytMeta(url) : isAudiusUrl(url) ? await audiusMeta(url) : null
     if (!m && isAudiusUrl(url)) { toastErr('Не удалось прочитать ссылку Audius — проверь её'); return }
     const name = m?.title || decodeURIComponent(url.split('/').filter(Boolean).pop() || 'Трек').replace(/[-_]/g, ' ')
+    // v1.430.0: длина известна не у всех ссылок, и отказывать «на всякий случай»
+    // нельзя — иначе в склад не попала бы половина нормальных треков. Проверяем
+    // только когда длина правда известна.
+    const почемуНет = tooShortWhy(m?.dur)
+    if (почемуНет) { toastErr(почемуНет); return }
     if (m) setMeta(prev => ({ ...prev, [url]: m }))
     const добавлен = await addTrack({ url, name, ownerId: meId, ownerName: me, kind: 'url', author: m?.author, art: m?.art ?? null, play: m?.play ?? null })
     setScUrl('')
