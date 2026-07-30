@@ -24,7 +24,8 @@ import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
 import { useBackClose } from '../lib/mobileBack'
 import { bindMediaKeys, setMediaNow, updateMediaPosition } from './mediaSession'
-import { needRepublish } from '../lib/listenProgress'
+import { needRepublish, REPUBLISH_TOLERANCE } from '../lib/listenProgress'
+import { startLongPress } from '../lib/longPress'
 import { chunksToLrc, alignPlainToChunks, whyCantRecognize, type AiProgress } from './aiLyrics'
 import { listenToTrack } from './aiListen'
 
@@ -38,7 +39,7 @@ import { Avatar } from '../components/Avatar'
 import { copyText } from '../lib/copyMedia'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
-import { nextTrack, backTarget } from './nextTrack'
+import { resolveNext, backTarget, type StopWhy } from './nextTrack'
 import { useDragBar } from './useDragBar'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
@@ -528,6 +529,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
    * секунд; настоящая позиция разошлась с досчитанной (см. needRepublish) —
    * именно это и есть перемотка, чья бы она ни была.
    */
+  // Адрес трека, который заиграет следующим, — им приоритезируется подгрузка
+  // метаданных (см. выше). Через ссылку, потому что считается он ниже по файлу,
+  // а нужен раньше: подгрузка живёт в эффекте и читает его уже после отрисовки.
+  const qNextUrlRef = useRef<string | undefined>(undefined)
   const pubRef = useRef<{ pos: number; dur?: number; at: number } | null>(null)
   const pubListenRef = useRef(() => {})
   useEffect(() => {
@@ -613,9 +618,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   // Перемотка — сразу, не дожидаясь таймера. Сюда попадает и своя мышью, и
   // чужая: полоса YouTube, ведущий лобби, кнопки на гарнитуре.
+  // v1.433.0: и перемотка НА ПАУЗЕ тоже. Раньше здесь стоял выход при !playing:
+  // человек останавливал песню, перетаскивал полосу на другое место, и у себя
+  // видел новое время, а у людей рядом под «На паузе» оставалось старое — и так
+  // до самого нажатия «играть». Досчитывать от времени публикации на паузе
+  // нельзя (время не идёт), поэтому сравниваем прямо позиции.
   useEffect(() => {
-    if (!playing || !cur) return
-    if (needRepublish(pubRef.current, curT, Date.now())) pubListenRef.current()
+    if (!cur) return
+    const p = pubRef.current
+    const stale = !playing
+      ? !p || Math.abs(curT - p.pos) > REPUBLISH_TOLERANCE
+      : needRepublish(p, curT, Date.now())
+    if (stale) pubListenRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curT, playing])
   useEffect(() => () => { setMyListening(null) }, [])   // размонтирование плеера = слушание кончилось
@@ -793,7 +807,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // не берём: это чужие сервисы, и заваливать их пачкой запросов невежливо, да
     // и отвечать они начнут отказом.
     const first = cur?.url
-    const nextUrl = tracks[personalIdx >= 0 ? personalIdx : (idx + 1) % Math.max(tracks.length, 1)]?.url
+    // v1.433.0: «следующий» здесь считался третьим по счёту способом — по номеру
+    // в складе и волне, мимо ручной очереди и мимо обхода неиграбельных. То есть
+    // вперёд подгружался не тот трек, который заиграет: поставленный кнопкой «в
+    // очередь» ждал своих метаданных наравне со всем складом и потому начинался
+    // медленно, а у SoundCloud — ещё и через адрес страницы. Берём то же, что
+    // показано в очереди и что сыграет кнопка (см. qNext).
+    const nextUrl = qNextUrlRef.current
     const rank = (u: string) => (u === first ? 0 : u === nextUrl ? 1 : 2)
     // v1.410.0: за раз берём не больше шестидесяти. На складе в три сотни
     // это триста запросов к чужим сервисам подряд: они начинают
@@ -1526,34 +1546,37 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // v1.377.0: решение «что дальше» вынесено в lib и проверяется тестом. Здесь
   // только исполнение: раньше вся логика жила тут и потому не проверялась ничем —
   // повтор списка из одного трека молча превращался в тишину.
-  const next = () => {
-    // v1.414.0: сломанные треки очередь обходит. Иначе плеер честно переключался
-    // бы на битую ссылку, спотыкался и переключался снова — с виду это зависание.
-    const playable = tracks.filter(t => !unplayable(t))
-    if (playable.length === 0 && tracks.length > 0) { setPlaying(false); toastErr('Ни один трек не играет'); return }
+  // v1.414.0: сломанные треки очередь обходит. Иначе плеер честно переключался
+  // бы на битую ссылку, спотыкался и переключался снова — с виду это зависание.
+  // v1.433.0: обход и остановки уехали в resolveNext, потому что их обязан знать
+  // и показ тоже. Здесь остаётся только исполнение.
+  const nextInput = () => {
     const first = manualLive.find(id => tracks.some(t => t.id === id))
-    const manualIdx = first ? tracks.findIndex(t => t.id === first) : -1
-    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx: personalIdxRef.current })
+    return {
+      first,
+      arg: {
+        idx, count: tracks.length, repeat, shuffle,
+        manualIdx: first ? tracks.findIndex(t => t.id === first) : -1,
+        unplayable: (n: number) => unplayable(tracks[n]),
+      },
+    }
+  }
+  const STOP_WHY: Record<StopWhy, string> = {
+    end: '',
+    none: 'Больше нет треков, которые можно играть',
+    'repeat-one': 'Этот трек играть нечем — повторять нечего',
+  }
+  const next = () => {
+    const { first, arg } = nextInput()
+    const act = resolveNext({ ...arg, personalIdx: personalIdxRef.current })
     if (first && act.kind !== 'restart') saveManual(manual.filter(x => x !== first))
-    if (act.kind === 'restart') {
-      // v1.432.0: повторять нечего, если играть нечем. Раньше «повтор» на
-      // неиграбельном треке крутил его бесконечно: плеер молчал, а кнопка
-      // «дальше» выглядела сломанной.
-      if (unplayable(tracks[idx])) { setPlaying(false); toastErr('Этот трек играть нечем — повторять нечего'); return }
-      restartCurrent(); return
+    if (act.kind === 'stop') {
+      setPlaying(false)
+      if (STOP_WHY[act.why]) toastErr(STOP_WHY[act.why])
+      return
     }
-    if (act.kind === 'stop') { setPlaying(false); return }
-    if (act.index === idx) {
-      if (unplayable(tracks[idx])) { setPlaying(false); toastErr('Больше нет треков, которые можно играть'); return }
-      restartCurrent(); return
-    }
-    let n = act.index
-    for (let step = 0; step < tracks.length && unplayable(tracks[n]); step++) n = (n + 1) % tracks.length
-    // Обошли весь склад и ничего не нашли — честно останавливаемся, а не встаём
-    // на трек, который всё равно не заиграет. Раньше в этом месте плеер выбирал
-    // неиграбельный трек и замолкал без объяснений.
-    if (unplayable(tracks[n])) { setPlaying(false); toastErr('Ни один трек не играет'); return }
-    setIdx(n)
+    if (act.kind === 'restart') { restartCurrent(); return }
+    setIdx(act.index)
   }
   // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
   // склада. При перемешивании это была прямая поломка: человек слушал случайный
@@ -1775,22 +1798,28 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (target) return tracks.find(t => t.id === target) ?? null
     return tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
   })()
+  // v1.433.0: строка «Дальше» считается ТОЙ ЖЕ resolveNext, что и кнопка. До
+  // этого она звала голую nextTrack, не знавшую про обход неиграбельных: очередь
+  // называла сломанный трек, а плеер перешагивал через него на следующий — и
+  // «Дальше — этот же» стояло даже там, где плеер на самом деле остановится.
   const qNext = (() => {
     if (!cur) return { label: 'Дальше', t: null as typeof cur | null }
-    if (repeat === 'one') return { label: 'Дальше — этот же', t: cur }
-    if (shuffle) return { label: 'Дальше — случайный', t: null as typeof cur | null }
-    const firstManual = manualLive.find(id => tracks.some(t => t.id === id))
-    const manualIdx = firstManual ? tracks.findIndex(t => t.id === firstManual) : -1
-    const act = nextTrack({ idx, count: tracks.length, repeat, shuffle, manualIdx, personalIdx })
-    if (act.kind === 'go') {
-      const label = manualIdx >= 0 && act.index === manualIdx ? 'Дальше — поставлен вручную'
-        : act.index === personalIdx && reco ? 'Дальше — ' + WHY_LABEL[reco.why]
-        : 'Дальше'
-      return { label, t: tracks[act.index] ?? null }
+    const { arg } = nextInput()
+    const act = resolveNext({ ...arg, personalIdx })
+    if (act.kind === 'stop') {
+      return { label: act.why === 'end' ? 'Дальше ничего' : STOP_WHY[act.why], t: null as typeof cur | null }
     }
+    // Перемешивание выбирает случайный номер — называть конкретный трек нельзя,
+    // но сказать, что дальше что-то будет, уже можно честно.
+    if (shuffle) return { label: 'Дальше — случайный', t: null as typeof cur | null }
     if (act.kind === 'restart') return { label: 'Дальше — этот же', t: cur }
-    return { label: 'Дальше ничего', t: null as typeof cur | null }
+    const label = arg.manualIdx >= 0 && act.index === arg.manualIdx ? 'Дальше — поставлен вручную'
+      : act.index === personalIdx && reco ? 'Дальше — ' + WHY_LABEL[reco.why]
+      : 'Дальше'
+    return { label, t: tracks[act.index] ?? null }
   })()
+  // Подгрузка метаданных тянет вперёд именно то, что заиграет (см. выше).
+  qNextUrlRef.current = qNext.t?.url
 
   /** Поставить трек следующим. Уже стоящий — переставляем, а не задваиваем. */
   function queueNext(id: string) {
@@ -2306,16 +2335,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                         title={title + (author ? ' — ' + author : '')}
                         onClick={() => { if (guest) { toastErr(noGuest); return } playAt(i); setPlaying(true); setShowLib(false) }}
                         onContextMenu={e => { e.preventDefault(); if (!guest) setCardMenu({ id: t.id, title, x: e.clientX, y: e.clientY }) }}
-                        onPointerDown={e => {
-                          // Долгое нажатие — то же меню: на телефоне правого щелчка нет.
-                          if (guest || e.pointerType === 'mouse') return
-                          const at = { x: e.clientX, y: e.clientY }
-                          const timer = window.setTimeout(() => setCardMenu({ id: t.id, title, ...at }), 480)
-                          const off = () => { window.clearTimeout(timer); e.currentTarget?.removeEventListener('pointerup', off); e.currentTarget?.removeEventListener('pointercancel', off); e.currentTarget?.removeEventListener('pointermove', off) }
-                          e.currentTarget.addEventListener('pointerup', off)
-                          e.currentTarget.addEventListener('pointercancel', off)
-                          e.currentTarget.addEventListener('pointermove', off)
-                        }}>
+                        // Долгое нажатие — то же меню: на телефоне правого щелчка нет.
+                        // v1.433.0: отсчёт общий (lib/longPress.ts). Здесь он снимал
+                        // слушателей через e.currentTarget, который у React после выхода
+                        // из обработчика равен null: они не снимались вовсе, и каждое
+                        // касание карточки оставляло на ней три вечных слушателя.
+                        onPointerDown={e => { if (!guest) startLongPress(e, at => setCardMenu({ id: t.id, title, ...at })) }}>
                         <div className="mus2-card-art">
                           {art ? <img src={art} alt="" loading="lazy" /> : <Icon name="music" size={34} />}
                           {/* v1.426.0: карточка чистая.

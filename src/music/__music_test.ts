@@ -10,7 +10,7 @@
 // плашки — в окне (npm run test:drag): там нужен настоящий DOM.
 export {}
 
-import { nextTrack, backTarget } from './nextTrack'
+import { nextTrack, backTarget, resolveNext } from './nextTrack'
 import { recommend, libraryOrder, personalOrder, WHY_LABEL, banWindow, AUTHOR_STREAK } from './personalQueue'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './sources'
@@ -671,7 +671,7 @@ check('трек, которого нет в складе, не мешает вк
   return list.length === 2 && playlistSize(pl, lib) === 2
 })
 check('порядок плейлиста не рушится добавлением того же трека', () => {
-  let pl = [{ id: 'p', name: 'п', trackIds: ['a', 'b'], at: 1 }]
+  let pl: Playlist[] = [{ id: 'p', name: 'п', trackIds: ['a', 'b'], at: 1 }]
   pl = addToPlaylist(pl, 'p', 'a')
   return pl[0].trackIds.join() === 'a,b'
 })
@@ -708,6 +708,53 @@ check('на паузе время не бежит', () => {
   // Позиция на паузе публикуется как есть, и зрителю показывается она же.
   const l = { pos: 42, dur: 200, at: 1000 }
   return livePosLocal(l, 1000 + 60_000) === 102 && l.pos === 42
+})
+
+console.log('\n-- Обход неиграбельных: показ и действие (v1.433.0) --')
+// В v1.432.0 обход появился только в кнопке: строка «Дальше» звала голую
+// nextTrack и называла трек, через который плеер перешагнёт. Теперь обе стороны
+// зовут resolveNext, и вот что она обязана отвечать.
+const R = (o: any) => resolveNext({ repeat: 'off', shuffle: false, unplayable: () => false, ...o })
+const bad = (...ids: number[]) => (n: number) => ids.includes(n)
+
+check('следующий неиграбельный пропускается, а не называется', () =>
+  JSON.stringify(R({ idx: 0, count: 4, unplayable: bad(1) })) === '{"kind":"go","index":2}')
+check('подряд несколько неиграбельных — перешагиваем все', () =>
+  JSON.stringify(R({ idx: 0, count: 5, unplayable: bad(1, 2, 3) })) === '{"kind":"go","index":4}')
+check('играть нечем вовсе — остановка со словами', () =>
+  JSON.stringify(R({ idx: 0, count: 3, unplayable: () => true })) === '{"kind":"stop","why":"none"}')
+check('повтор одного на неиграбельном не крутит молчание', () =>
+  JSON.stringify(R({ idx: 1, count: 3, repeat: 'one', unplayable: bad(1) })) === '{"kind":"stop","why":"repeat-one"}')
+check('повтор одного на живом треке — как и был', () =>
+  JSON.stringify(R({ idx: 1, count: 3, repeat: 'one' })) === '{"kind":"restart"}')
+check('играбелен только текущий, повтор списка — крутим его', () =>
+  JSON.stringify(R({ idx: 0, count: 3, repeat: 'all', unplayable: bad(1, 2) })) === '{"kind":"restart"}')
+check('играбелен только текущий, без повтора — конец', () =>
+  JSON.stringify(R({ idx: 0, count: 3, unplayable: bad(1, 2) })) === '{"kind":"stop","why":"none"}')
+check('конец списка без повтора — это «end», а не «нечего играть»', () =>
+  JSON.stringify(R({ idx: 2, count: 3 })) === '{"kind":"stop","why":"end"}')
+check('повтор списка через неиграбельный конец возвращает к началу', () =>
+  JSON.stringify(R({ idx: 1, count: 3, repeat: 'all', unplayable: bad(2) })) === '{"kind":"go","index":0}')
+check('ручная очередь сильнее обхода: живой трек берётся как есть', () =>
+  JSON.stringify(R({ idx: 0, count: 4, manualIdx: 3, unplayable: bad(1) })) === '{"kind":"go","index":3}')
+check('пустой склад — остановка, а не обращение к пустоте', () =>
+  JSON.stringify(R({ idx: 0, count: 0 })) === '{"kind":"stop","why":"end"}')
+check('перемешивание на живом складе всё равно куда-то идёт', () => {
+  const a = R({ idx: 0, count: 4, shuffle: true, rnd: () => 0.6 })
+  return a.kind === 'go' && a.index !== 0
+})
+
+console.log('\n-- Ломаем нарочно (обход неиграбельных) --')
+check('проверка заметила бы возврат к показу без обхода', () => {
+  // Голая nextTrack — ровно то, что стояло в строке «Дальше» до v1.433.0.
+  const naive = nextTrack({ idx: 0, count: 4, repeat: 'off', shuffle: false })
+  const real = R({ idx: 0, count: 4, unplayable: bad(1) })
+  // Наивный ответ называет трек 1, настоящий — трек 2: расхождение видно.
+  return naive.kind === 'go' && naive.index === 1 && real.kind === 'go' && real.index === 2
+})
+check('проверка заметила бы пропажу остановки на мёртвом складе', () => {
+  const r = R({ idx: 0, count: 3, unplayable: () => true })
+  return r.kind === 'stop'
 })
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)

@@ -81,6 +81,62 @@ export function nextTrack(i: NextInput): NextAction {
 }
 
 /**
+ * Почему плеер останавливается — словами, чтобы сказать это человеку.
+ *
+ * `end` — список кончился и повтора нет;
+ * `none` — играть нечем: всё, до чего дотянулись, неиграбельно;
+ * `repeat-one` — «повтор одного» стоит на треке, который играть нечем.
+ */
+export type StopWhy = 'end' | 'none' | 'repeat-one'
+
+export type ResolvedNext =
+  | { kind: 'go'; index: number }
+  | { kind: 'restart' }
+  | { kind: 'stop'; why: StopWhy }
+
+/**
+ * Что плеер СДЕЛАЕТ дальше с учётом неиграбельных треков (v1.433.0).
+ *
+ * Зачем отдельно от nextTrack. В v1.432.0 обход неиграбельных треков появился
+ * только в исполнении: кнопка «следующий» перешагивала через сломанный трек, а
+ * строка «Дальше» в очереди звала ту же nextTrack БЕЗ обхода и показывала
+ * именно его. То есть очередь снова обещала одно, а плеер играл другое — ровно
+ * та болезнь, которую v1.432.0 и лечила, только заведённая заново на шаг ниже.
+ *
+ * Поэтому решение целиком, вместе с обходом и остановками, лежит здесь: и показ,
+ * и исполнение зовут одну эту функцию, а проверяется она отдельно.
+ *
+ * `unplayable(i)` отвечает про трек с номером i.
+ */
+export function resolveNext(i: NextInput & { unplayable: (index: number) => boolean }): ResolvedNext {
+  const { idx, count, unplayable } = i
+  if (count <= 0) return { kind: 'stop', why: 'end' }
+
+  // Играть нечем вообще — останавливаемся честно, не перебирая склад впустую.
+  let anyPlayable = false
+  for (let k = 0; k < count; k++) if (!unplayable(k)) { anyPlayable = true; break }
+  if (!anyPlayable) return { kind: 'stop', why: 'none' }
+
+  const act = nextTrack(i)
+  if (act.kind === 'stop') return { kind: 'stop', why: 'end' }
+  if (act.kind === 'restart') {
+    // Повторять нечего, если играть нечем: иначе «повтор» крутит молчание.
+    return unplayable(idx) ? { kind: 'stop', why: 'repeat-one' } : { kind: 'restart' }
+  }
+  if (act.index === idx) return unplayable(idx) ? { kind: 'stop', why: 'none' } : { kind: 'restart' }
+
+  let n = act.index
+  for (let step = 0; step < count && unplayable(n); step++) n = (n + 1) % count
+  // Обошли весь склад и вернулись ни с чем — остановка, а не молчащий трек.
+  if (unplayable(n)) return { kind: 'stop', why: 'none' }
+  // Обход привёл обратно к играющему: кроме него, играть нечего. Раньше здесь
+  // выставлялся тот же номер — состояние не менялось, перерисовки не было, и
+  // плеер молча замирал. Повтор списка означает «крути этот», иначе — конец.
+  if (n === idx) return i.repeat === 'all' ? { kind: 'restart' } : { kind: 'stop', why: 'none' }
+  return { kind: 'go', index: n }
+}
+
+/**
  * Куда вернуться по «назад» (v1.407.0).
  *
  * История — стопка того, что играло, наверху лежит играющее сейчас. Шаг назад

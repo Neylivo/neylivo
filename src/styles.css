@@ -3137,7 +3137,11 @@ body.no-anim .member-typing i { animation:none; }
   .day-sep span { background:var(--bg2); border-radius:999px; padding:4px 12px; color:var(--mut); font-size:12.5px; }
 
   /* Композер: тёмная панель, меньше кнопок, круглая синяя «Отправить» */
-  .composer { padding:6px 8px calc(8px + env(safe-area-inset-bottom)); background:var(--bg2); gap:4px; }
+  /* v1.433.0: отступ под кнопки навигации даёт оболочка (.app), и композер лежит
+     внутри неё — свой такой же отступ здесь означал двойной. На телефоне с
+     жестовой полосой под полем ввода оставалось около семидесяти пикселей
+     пустоты вместо тридцати. */
+  .composer { padding:6px 8px 8px; background:var(--bg2); gap:4px; }
   .composer textarea { background:transparent; padding:12px 6px; font-size:16px; }
   .attach-btn { background:transparent; color:var(--mut); width:40px; }
   .ctool { background:transparent; color:var(--mut); min-width:38px; height:40px; padding:0 6px; }
@@ -4302,10 +4306,12 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .pqs2-x, .mob-burger { min-width: 42px; min-height: 42px; }
   .rx { min-height: 30px; }
 
-  /* 6. Учёт вырезов экрана в альбомной ориентации и по бокам */
-  .composer { padding-left: calc(8px + env(safe-area-inset-left)); padding-right: calc(8px + env(safe-area-inset-right)); }
+  /* 6. Учёт вырезов экрана в альбомной ориентации и по бокам.
+     v1.433.0: боковые вырезы тоже отдаёт оболочка, поэтому здесь их больше нет —
+     композер и шапка чата лежат внутри неё, и свой такой же отступ был двойным.
+     Список участников — шторка поверх (position: fixed), он вне оболочки и
+     держит вырез сам. */
   .members { padding-right: env(safe-area-inset-right); }
-  .chat-head { padding-left: calc(10px + env(safe-area-inset-left)); padding-right: calc(10px + env(safe-area-inset-right)); }
 
   /* 7. v1.212.0: настройки на телефоне — полноэкранный список разделов с
      карточками-группами (как в мобильном Discord), а не сжатый в 78vw
@@ -6340,7 +6346,12 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   .c2-wrap { height: auto; flex: 1; min-height: 42vh; }
   .c2-wrap:has(.c2-board) { height: auto; min-height: 52vh; }
   .c2-grid { grid-template-columns: 1fr; gap: 6px; }
-  .c2-bar, .call-bar { padding-bottom: calc(8px + env(safe-area-inset-bottom)); gap: 10px; }
+  /* v1.433.0: отступ под системную полосу нужен только в полном экране — там
+     звонок лежит поверх всего (position: fixed) и до края экрана достаёт сам. В
+     обычном виде звонок стоит В ЧАТЕ над сообщениями, и этот отступ втыкал
+     тридцать пустых пикселей прямо посреди экрана, под кнопками звонка. */
+  .c2-bar, .call-bar { padding-bottom: 8px; gap: 10px; }
+  .c2-wrap.fs .c2-bar, .c2-wrap.fs .call-bar { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
   .c2-bar button, .call-bar button { width: 52px; height: 52px; }
   .c2-name { font-size: 13px; }
 
@@ -6464,10 +6475,21 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
     padding-right: env(safe-area-inset-right);
     box-sizing: border-box;
   }
-  /* Шторки навигации лежат вне оболочки — им отступы нужны свои. */
-  .servers, .channels, .dm-side {
+  /* Шторки навигации лежат вне оболочки — им отступы нужны свои.
+     v1.433.0: рейку серверов эта строка портила. У неё свой отступ был раньше и
+     с запасом (12px + полоса), а эта, стоящая ниже по файлу, перебивала его
+     голой полосой — первый кружок упирался в часы, последний в кнопки. Рейку
+     оставляем ей самой (см. правила выше и блок @supports). */
+  .channels, .dm-side {
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Список участников — тоже шторка поверх всего, и про него забыли: с тех пор
+     как приложение рисуется под полосами, первый участник оказался под часами,
+     а последний под кнопками навигации. */
+  .members {
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   /* ── Шапки: одна строка, ничего не обрезается ──────────────────────────── */

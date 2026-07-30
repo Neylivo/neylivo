@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.432.0",
+  "version": "1.433.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -29,7 +29,8 @@
     "test:drag": "esbuild src/music/__drag_test.tsx --bundle --format=iife --jsx=automatic --outfile=dist-drag-test/t.js && electron scripts/drag-test.cjs",
     "test:lyrics": "esbuild src/music/__lyrics_test.ts --bundle --platform=node --format=esm --outfile=dist-lyrics-test/t.mjs --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && node dist-lyrics-test/t.mjs",
     "check:lyrics": "node scripts/lyrics-live.mjs",
-    "test:music": "esbuild src/music/__music_test.ts --bundle --platform=node --format=esm --outfile=dist-music-test/t.mjs --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && node dist-music-test/t.mjs"
+    "test:music": "esbuild src/music/__music_test.ts --bundle --platform=node --format=esm --outfile=dist-music-test/t.mjs --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && node dist-music-test/t.mjs",
+    "test:safe": "electron scripts/safe-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

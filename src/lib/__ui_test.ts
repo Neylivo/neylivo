@@ -18,6 +18,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
+import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -864,6 +865,111 @@ check('проверка заметила бы возврат к приближе
 check('проверка заметила бы пропажу границ', () => {
   const без = { zoom: 2, x: 9999, y: 0 }
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
+})
+
+console.log('\n-- Долгое нажатие (v1.433.0) --')
+// Проверяется на поддельном окне: настоящих касаний в стенде взять негде (у меня
+// мышь), а вся суть здесь — кто на что подписался и когда отписался.
+function поддельноеОкно() {
+  const ls = new Map<string, Set<(ev: any) => void>>()
+  let seq = 0
+  const timers = new Map<number, () => void>()
+  const w = {
+    setTimeout: (f: () => void) => { timers.set(++seq, f); return seq },
+    clearTimeout: (id: number) => { timers.delete(id) },
+    addEventListener: (t: string, f: (ev: any) => void) => {
+      if (!ls.has(t)) ls.set(t, new Set()); ls.get(t)!.add(f)
+    },
+    removeEventListener: (t: string, f: (ev: any) => void) => { ls.get(t)?.delete(f) },
+    // — служебное для проверки —
+    сколькоСлушателей: () => [...ls.values()].reduce((n, s) => n + s.size, 0),
+    послать: (t: string, ev: any) => { for (const f of [...(ls.get(t) ?? [])]) f(ev) },
+    подождать: () => { for (const [id, f] of [...timers]) { timers.delete(id); f() } },
+    таймеров: () => timers.size,
+  }
+  ;(globalThis as any).window = w
+  return w
+}
+
+check('нажать и держать — меню открывается', () => {
+  const w = поддельноеОкно()
+  let открыто: any = null
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, at => { открыто = at })
+  w.подождать()
+  return открыто && открыто.x === 10 && открыто.y === 20
+})
+check('дрожь руки нажатие не отменяет', () => {
+  const w = поддельноеОкно()
+  let открыто = false
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыто = true })
+  // Палец «дышит» на пару пикселей — так держит руку любой живой человек.
+  w.послать('pointermove', { clientX: 12, clientY: 21 })
+  w.послать('pointermove', { clientX: 9, clientY: 23 })
+  w.подождать()
+  return открыто
+})
+check('настоящая протяжка нажатие отменяет', () => {
+  const w = поддельноеОкно()
+  let открыто = false
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыто = true })
+  w.послать('pointermove', { clientX: 10, clientY: 60 })
+  w.подождать()
+  return !открыто
+})
+check('прокрутка списка — не нажатие', () => {
+  const w = поддельноеОкно()
+  let открыто = false
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыто = true })
+  w.послать('scroll', {})
+  w.подождать()
+  return !открыто
+})
+check('отпустил раньше срока — меню не открылось', () => {
+  const w = поддельноеОкно()
+  let открыто = false
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыто = true })
+  w.послать('pointerup', {})
+  w.подождать()
+  return !открыто
+})
+check('мышь долгим нажатием не пользуется — у неё правый щелчок', () => {
+  const w = поддельноеОкно()
+  let открыто = false
+  startLongPress({ pointerType: 'mouse', clientX: 10, clientY: 20 }, () => { открыто = true })
+  return !открыто && w.сколькоСлушателей() === 0 && w.таймеров() === 0
+})
+check('после нажатия слушателей не остаётся', () => {
+  const w = поддельноеОкно()
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => {})
+  w.подождать()
+  return w.сколькоСлушателей() === 0
+})
+check('после отмены слушателей тоже не остаётся', () => {
+  const w = поддельноеОкно()
+  startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => {})
+  w.послать('pointerup', {})
+  return w.сколькоСлушателей() === 0 && w.таймеров() === 0
+})
+check('сто касаний подряд не копят слушателей', () => {
+  const w = поддельноеОкно()
+  for (let i = 0; i < 100; i++) {
+    startLongPress({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => {})
+    w.послать('pointerup', {})
+  }
+  return w.сколькоСлушателей() === 0
+})
+
+console.log('\n-- Ломаем нарочно (долгое нажатие) --')
+check('проверка заметила бы отмену по любому движению', () =>
+  !movedTooFar({ x: 10, y: 20 }, { x: 12, y: 21 }) && movedTooFar({ x: 10, y: 20 }, { x: 10, y: 60 }))
+check('проверка заметила бы слушателей на элементе вместо окна', () => {
+  // Слушатели обязаны быть у окна: палец, уехавший с карточки, до элемента
+  // pointerup уже не донесёт, и нажатие осталось бы висеть открытым.
+  const w = поддельноеОкно()
+  startLongPress({ pointerType: 'touch', clientX: 1, clientY: 1 }, () => {})
+  const было = w.сколькоСлушателей()
+  w.послать('pointerup', {})
+  return было >= 4 && w.сколькоСлушателей() === 0
 })
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

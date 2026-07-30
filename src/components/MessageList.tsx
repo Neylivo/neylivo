@@ -151,6 +151,7 @@ export interface UiMessage {
 import { Em } from '../lib/twemoji'
 import { loadCustom } from '../lib/emoji'
 import { openSafely } from '../lib/safeUrl'
+import { startLongPress } from '../lib/longPress'
 
 // v1.129.0: эмодзи реакции — кастомные (:имя:) рендерятся картинкой из общего
 // стора, юникодные — как обычно через Twemoji. Список сообщений уже
@@ -643,22 +644,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                  contextmenu не присылает. То есть ответить, закрепить, скопировать
                  ссылку, переслать и удалить сообщение с телефона было нельзя
                  вообще — всё это жило в меню, до которого не добраться. */
-              onPointerDown={e => {
-                if (e.pointerType === 'mouse') return
-                const at = { x: e.clientX, y: e.clientY }
-                const el = e.currentTarget
-                const timer = window.setTimeout(() => { setPickFor(null); setMenu({ id: m.id, ...at }) }, 450)
-                const off = () => {
-                  window.clearTimeout(timer)
-                  el.removeEventListener('pointerup', off)
-                  el.removeEventListener('pointercancel', off)
-                  el.removeEventListener('pointermove', off)
-                  el.removeEventListener('scroll', off)
-                }
-                el.addEventListener('pointerup', off)
-                el.addEventListener('pointercancel', off)
-                el.addEventListener('pointermove', off)
-              }}
+              /* v1.433.0: отсчёт общий (lib/longPress.ts). Здесь он отменялся
+                 на первом же pointermove — то есть на дрожи руки, которая идёт
+                 постоянно: меню на телефоне почти не открывалось. */
+              onPointerDown={e => startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at }) })}
               onDoubleClick={e => {
                 // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
                 // двойным щелчком при этом не ломается: если что-то выделилось, человек
