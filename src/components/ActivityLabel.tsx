@@ -132,6 +132,14 @@ export function ListenProgress({ l }: { l: Listening }) {
     return () => window.clearInterval(t)
   }, [])
   const now = Date.now()
+  // v1.428.0: на паузе полосы нет — она врала бы, что песня идёт. Вместо неё
+  // прямо сказано «на паузе», и время застывает там, где остановились.
+  if (l.paused) {
+    return <div className="lsn-time lsn-paused">
+      <span><Icon name="pause" size={12} /> На паузе</span>
+      <span className="notr" translate="no">{fmtClock(l.pos)}</span>
+    </div>
+  }
   const pct = listenPct(l, now)
   const left = leftOver(l, now)
   const passed = fmtClock(livePos(l, now))

@@ -25,7 +25,9 @@ export interface Activity { text: string; since: number }
 // v1.423.0: art — обложка трека. Публикуется вместе с остальным: у себя в
 // плеере обложка есть, а другим показывалась нота-заглушка, хотя ссылка на
 // картинку и так лежит в общем складе и видна всем.
-export interface Listening { title: string; author?: string; source?: string; art?: string | null; pos: number; dur?: number; at: number }
+// v1.428.0: paused — трек стоит на паузе. Раньше пауза просто убирала активность
+// целиком, и со стороны это выглядело как «музыку выключили».
+export interface Listening { title: string; author?: string; source?: string; art?: string | null; paused?: boolean; pos: number; dur?: number; at: number }
 // Авто-активность «Играет в …»: десктоп присылает только старт/стоп ({ name, since }),
 // тикающий таймер каждый клиент досчитывает сам из разницы часов.
 // mode — режим/плейс (v1.89.0, пока только Roblox); placeId/jobId — числовой id

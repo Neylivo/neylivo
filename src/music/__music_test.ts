@@ -20,6 +20,11 @@ import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
 import { mergeTracks } from './mergeTracks'
 import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
+import {
+  normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist, addToPlaylist,
+  removeFromPlaylist, movePlaylistTrack, playlistsOrder, playlistTracks, playlistSize,
+  PL_NAME_MAX, PL_TRACKS_MAX, type Playlist,
+} from './playlists'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -434,20 +439,22 @@ function listen(seconds: number, step = 0.5, start = 0) {
   for (let t = start + step; t <= start + seconds + 1e-9; t += step) st = advance(st, t)
   return st
 }
-check('тридцать секунд — засчитано', () => credited(listen(30), 200))
-check('двадцать девять — ещё нет', () => !credited(listen(29), 200))
-check('порог по умолчанию — тридцать секунд', () => creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
+// v1.428.0: порог опущен с тридцати секунд до пятнадцати — так попросил владелец.
+check('пятнадцать секунд — засчитано', () => credited(listen(CREDIT_SEC), 200))
+check('на секунду меньше — ещё нет', () => !credited(listen(CREDIT_SEC - 1), 200))
+check('порог по умолчанию — пятнадцать секунд', () =>
+  CREDIT_SEC === 15 && creditThreshold(200) === CREDIT_SEC && creditThreshold(undefined) === CREDIT_SEC)
 check('короткую запись надо дослушать', () => {
-  // Трек на 20 секунд: порог — почти вся его длина, а не тридцать секунд.
-  const th = creditThreshold(20)
-  return th < CREDIT_SEC && th >= 19 - 1e-9
+  // Трек на 10 секунд: порог — почти вся его длина, а не пятнадцать секунд.
+  const th = creditThreshold(10)
+  return th < CREDIT_SEC && th >= 9 - 1e-9
 })
-check('короткая запись целиком — засчитано', () => credited(listen(20, 0.5), 20))
-check('половина короткой записи — нет', () => !credited(listen(10, 0.5), 20))
+check('короткая запись целиком — засчитано', () => credited(listen(10, 0.5), 10))
+check('половина короткой записи — нет', () => !credited(listen(4, 0.5), 10))
 
 console.log('\n-- Перемотка не считается слушанием --')
-check('перемотка на тридцатую секунду ничего не даёт', () => {
-  const st = advance(freshListened(0), 30)   // один прыжок сразу на 30 с
+check('перемотка сразу за порог ничего не даёт', () => {
+  const st = advance(freshListened(0), CREDIT_SEC + 5)   // один прыжок сразу за порог
   return st.sec === 0 && !credited(st, 200)
 })
 check('перемотка туда-сюда не накапливает время', () => {
@@ -486,6 +493,99 @@ check('проверка заметила бы возврат к «плюс од�
   const oldWay = () => true
   return oldWay() === true && !credited(freshListened(0), 200)
 })
+
+
+console.log('\n-- Плейлисты (v1.428.0) --')
+// Раньше плейлист умел только заводиться и хранить id: ни открыть, ни
+// переименовать, ни убрать трек, ни поменять порядок. Порядок здесь — главное:
+// плейлист для него и нужен, а восстановить сбитый нечем.
+const PT = [
+  { id: 't1', name: 'первая' }, { id: 't2', name: 'вторая' },
+  { id: 't3', name: 'третья' }, { id: 't4', name: 'четвёртая' },
+]
+
+check('плейлист создаётся и получает id', () => {
+  const l = createPlaylist([], 'Моя музыка')
+  return l.length === 1 && l[0].name === 'Моя музыка' && !!l[0].id && l[0].trackIds.length === 0
+})
+check('плейлист можно создать сразу с треком', () =>
+  createPlaylist([], 'Моя', 't1')[0].trackIds.join() === 't1')
+check('пустое имя плейлистом не становится', () =>
+  createPlaylist([], '   ').length === 0)
+check('слишком длинное имя обрезается', () =>
+  createPlaylist([], 'я'.repeat(200))[0].name.length === PL_NAME_MAX)
+
+let pl = createPlaylist([], 'Проба', 't1')
+const plId = pl[0].id
+check('трек добавляется в конец', () => {
+  pl = addToPlaylist(pl, plId, 't2')
+  pl = addToPlaylist(pl, plId, 't3')
+  return pl[0].trackIds.join() === 't1,t2,t3'
+})
+check('повтор не добавляется', () => {
+  const было = pl[0].trackIds.length
+  return addToPlaylist(pl, plId, 't2')[0].trackIds.length === было
+})
+check('трек убирается, остальные остаются на местах', () =>
+  removeFromPlaylist(pl, plId, 't2')[0].trackIds.join() === 't1,t3')
+check('переименование не трогает треки', () => {
+  const n = renamePlaylist(pl, plId, 'Новое имя')
+  return n[0].name === 'Новое имя' && n[0].trackIds.join() === 't1,t2,t3'
+})
+check('пустое имя при переименовании отвергается', () =>
+  renamePlaylist(pl, plId, '  ')[0].name === 'Проба')
+check('удаление убирает только этот плейлист', () => {
+  const два = createPlaylist(pl, 'Второй')
+  return removePlaylist(два, plId).length === 1 && removePlaylist(два, plId)[0].name === 'Второй'
+})
+
+console.log('\n-- Плейлисты: порядок треков --')
+check('трек поднимается на одну позицию', () =>
+  movePlaylistTrack(pl, plId, 't3', -1)[0].trackIds.join() === 't1,t3,t2')
+check('трек опускается на одну позицию', () =>
+  movePlaylistTrack(pl, plId, 't1', 1)[0].trackIds.join() === 't2,t1,t3')
+check('верхний трек выше не уезжает', () =>
+  movePlaylistTrack(pl, plId, 't1', -1)[0].trackIds.join() === 't1,t2,t3')
+check('нижний трек ниже не уезжает', () =>
+  movePlaylistTrack(pl, plId, 't3', 1)[0].trackIds.join() === 't1,t2,t3')
+check('чужой трек порядок не портит', () =>
+  movePlaylistTrack(pl, plId, 'нет-такого', -1)[0].trackIds.join() === 't1,t2,t3')
+
+console.log('\n-- Плейлисты: пропавшие треки --')
+check('трек, убранный из Трекотеки, в плейлисте не показывается', () => {
+  const без = PT.filter(t => t.id !== 't2')
+  return playlistTracks(pl[0], без).map(t => t.id).join() === 't1,t3'
+})
+check('число треков — то, что реально можно включить', () =>
+  playlistSize(pl[0], PT.filter(t => t.id !== 't2')) === 2)
+check('порядок плейлиста сохраняется, а не порядок склада', () => {
+  const переставленный = movePlaylistTrack(pl, plId, 't3', -2)
+  return playlistTracks(переставленный[0], PT).map(t => t.id).join() === 't3,t1,t2'
+})
+
+console.log('\n-- Плейлисты: чтение из настроек --')
+check('мусор из настроек не ломает список', () =>
+  normalizePlaylists([null, 5, { id: 'a' }, { name: 'b' }, { id: 'c', name: 'Ок', trackIds: ['x', 2, null] }]).length === 1)
+check('повторы внутри плейлиста схлопываются при чтении', () =>
+  normalizePlaylists([{ id: 'c', name: 'Ок', trackIds: ['x', 'x', 'y'] }])[0].trackIds.join() === 'x,y')
+check('не список — пустой список', () => normalizePlaylists('нет' as any).length === 0)
+check('свежие плейлисты сверху', () => {
+  const l: Playlist[] = [
+    { id: '1', name: 'старый', trackIds: [], at: 100 },
+    { id: '2', name: 'свежий', trackIds: [], at: 900 },
+  ]
+  return playlistsOrder(l)[0].name === 'свежий'
+})
+check('потолок треков в плейлисте есть и он разумный', () => PL_TRACKS_MAX >= 100 && PL_TRACKS_MAX <= 2000)
+
+console.log('\n-- Ломаем нарочно (плейлисты) --')
+check('проверка заметила бы, что порядок перестал держаться', () => {
+  // Прежнее поведение: множество вместо списка — порядок теряется.
+  const set = [...new Set(['t3', 't1', 't2'])].sort()
+  return set.join() !== 't3,t1,t2'
+})
+check('проверка заметила бы, что пропавшие треки снова показываются', () =>
+  playlistTracks({ id: 'x', name: 'y', trackIds: ['нет-такого'] }, PT).length === 0)
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

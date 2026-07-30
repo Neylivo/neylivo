@@ -6348,3 +6348,70 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 @supports (height: 100dvh) {
   html, body, #root { height: 100dvh; }
 }
+
+/* ══ v1.428.0: плейлисты в Трекотеке ══════════════════════════════════════════
+   Раньше плейлист был строкой в узкой панели плеера: ни открыть, ни включить
+   целиком, ни переименовать, ни поменять порядок. Теперь это отдел склада с
+   карточками, у карточки — плитка из обложек его треков, как в Spotify. */
+.mus2-libtabs { display: flex; gap: 6px; margin-left: auto; }
+.mus2-libtabs .mus2-tab { padding: 6px 12px; font-size: 13.5px; }
+.mus2-plart { display: grid; gap: 2px; }
+.mus2-plart.n0 { display: flex; align-items: center; justify-content: center; }
+.mus2-plart.n1 { grid-template-columns: 1fr; }
+.mus2-plart.n2 { grid-template-columns: 1fr 1fr; }
+.mus2-plart.n3, .mus2-plart.n4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.mus2-plart img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mus2-plart.n3 img:first-child { grid-column: span 2; }
+
+.mus2-plhead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.mus2-plback {
+  display: inline-flex; align-items: center; gap: 4px; background: none; border: none;
+  color: var(--mut); cursor: pointer; font-size: 13.5px; font-weight: 700;
+}
+.mus2-plback:hover { color: var(--tx); }
+.mus2-pltitle { font-size: 22px; font-weight: 800; }
+.mus2-plbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.mus2-pllist { display: flex; flex-direction: column; gap: 2px; }
+.mus2-plrow {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: var(--r-md, 10px); cursor: pointer;
+}
+.mus2-plrow:hover { background: rgba(var(--ov, 255,255,255), .06); }
+.mus2-plrow.on { background: var(--mus-a-soft, rgba(88, 101, 242, .16)); }
+.mus2-plnum { width: 22px; text-align: right; color: var(--mut); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.mus2-plmove {
+  background: none; border: none; color: var(--mut); cursor: pointer;
+  width: 30px; height: 30px; border-radius: var(--r-sm, 8px); flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mus2-plmove:hover { background: rgba(var(--ov, 255,255,255), .1); color: var(--tx); }
+.mus2-plmove.danger:hover { background: var(--red); color: #fff; }
+.mus2-plpick { max-width: 300px; }
+.mus2-plcount { margin-left: auto; color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* «На паузе» в активности вместо полосы (v1.428.0): полоса на паузе врала бы,
+   что песня идёт. */
+.lsn-paused { color: var(--mut); }
+.lsn-paused span { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (max-width: 768px) {
+  .mus2-libtabs { order: 4; flex: 1 0 100%; margin-left: 0; }
+  .mus2-pltitle { font-size: 18px; }
+  .mus2-plbtns { margin-left: 0; flex: 1 0 100%; }
+  .mus2-plbtns .pqs2-btn { flex: 1; justify-content: center; }
+  .mus2-plmove { width: 36px; height: 36px; }
+
+  /* Свой мини-профиль — нижней шторкой, как остальные меню (v1.428.0).
+     На маленьком экране карточка, прижатая к низу, накрывала собой почти всё
+     окно: и панель с аватаркой, и плашку плеера. Шторка ведёт себя предсказуемо
+     и не делает вид, что она всплывающее окошко. */
+  .mini.mini2 {
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+    width: 100% !important; max-width: none !important;
+    max-height: 76vh !important; overflow-y: auto;
+    border-radius: var(--r-2xl, 16px) var(--r-2xl, 16px) 0 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
+  }
+}

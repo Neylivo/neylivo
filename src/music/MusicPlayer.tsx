@@ -14,6 +14,11 @@ import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import {
+  normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist,
+  addToPlaylist as addTrackToPl, removeFromPlaylist, movePlaylistTrack,
+  playlistsOrder, playlistTracks, playlistSize, type Playlist,
+} from './playlists'
 import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
 import { useBackClose } from '../lib/mobileBack'
@@ -40,10 +45,10 @@ import { openSafely } from '../lib/safeUrl'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 
-interface Playlist { id: string; name: string; trackIds: string[] }
+// v1.428.0: сами действия над плейлистами — в music/playlists.ts, с проверками.
 
 // Плейлисты синхронизируются через user_prefs (миграция 39), как остальные личные настройки.
-function loadPlaylists(): Playlist[] { return getUserPrefs().mus_playlists as Playlist[] }
+function loadPlaylists(): Playlist[] { return normalizePlaylists(getUserPrefs().mus_playlists) }
 function savePlaylists(p: Playlist[]) { patchUserPrefs({ mus_playlists: p }) }
 function fmt(s: number) {
   if (!isFinite(s)) return '0:00'
@@ -101,6 +106,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return () => io.disconnect()
   })
   const [libQ, setLibQ] = useState('')
+  /** Вкладка склада: треки или плейлисты (v1.428.0). */
+  const [libTab, setLibTab] = useState<'tracks' | 'playlists'>('tracks')
+  /** Открытый плейлист — его содержимое показывается вместо сетки. */
+  const [openPl, setOpenPl] = useState<string | null>(null)
+  // «Назад» на телефоне закрывает и выбор плейлиста, и открытый плейлист.
+  useBackClose(!!openPl, () => setOpenPl(null))
   /**
    * Меню карточки склада (v1.426.0). Открывается правым щелчком и долгим
    * нажатием — там живёт всё, что раньше висело кнопками поверх обложки.
@@ -150,7 +161,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // Ссылки на текущее — для обработчиков, которые живут дольше одного рендера.
   // Обработчик отказа тоже нужен через ссылку: плеер YouTube создаётся один
   // раз, и в его замыкании иначе застынет функция с первого рендера.
-  const trackFailedRef = useRef<(reason: string) => void>(() => {})
+  const trackFailedRef = useRef<(reason: string, forId?: string) => void>(() => {})
+  /** id трека, который играет прямо сейчас, — им подписываются отказы источников. */
+  const curTrackIdRef = useRef<string>('')
   const idxRef = useRef(0); idxRef.current = idx
   const tracksRef = useRef(tracks); tracksRef.current = tracks
   const cur = tracks[idx]
@@ -517,7 +530,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const pubRef = useRef<{ pos: number; dur?: number; at: number } | null>(null)
   const pubListenRef = useRef(() => {})
   useEffect(() => {
-    if (!playing || !cur) { setMyListening(null); pubRef.current = null; return }
+    // v1.428.0: пауза больше не убирает активность.
+    //
+    // Раньше на паузе активность гасла совсем: у людей рядом трек просто
+    // исчезал, будто музыку выключили. Теперь он остаётся, но вместо полосы
+    // видно «на паузе» — как в Spotify и Discord: человек слушает эту песню,
+    // просто остановил её на минуту.
+    if (!cur) { setMyListening(null); pubRef.current = null; return }
     const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
     const pub = () => {
       const snap = { pos: curTRef.current, dur: dur || undefined, at: Date.now() }
@@ -526,11 +545,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         title: curMeta?.title || cur.name, author: curMeta?.author || cur.author || '',
         // v1.423.0: обложка. Ссылка и так лежит в общем складе и видна всем — а
         // другим при этом показывалась нота-заглушка.
-        source, art: curArt || null, ...snap,
+        source, art: curArt || null, paused: !playing, ...snap,
       })
     }
     pubListenRef.current = pub
     pub()
+    // На паузе позицию освежать незачем — она не двигается.
+    if (!playing) return
     const t = window.setInterval(pub, 5000)
     return () => window.clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -941,7 +962,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             onError: (e: any) => {
               if (disposed) return
               if (isEmbedDeniedCode(e?.data)) { void ytEmbedDeniedRef.current() ; return }
-              trackFailedRef.current('YouTube не отдал это видео')
+              trackFailedRef.current('YouTube не отдал это видео', curTrackIdRef.current)
             },
           },
         })
@@ -1186,9 +1207,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
    * если он твой, из общего склада он убирается сам. Чужой не трогаем: его и
    * база не даст удалить, и удалять чужое из-за своей сети неправильно.
    */
-  function trackFailed(reason: string) {
+  function trackFailed(reason: string, forId?: string) {
     const t = cur
     if (!t) return
+    // v1.428.0: отказ мог приехать от ПРЕДЫДУЩЕГО трека — <audio> сообщает об
+    // ошибке с задержкой, а при быстром листании к этому моменту играет уже
+    // другой. Раньше такой отказ записывался на новый трек: пролистал десяток
+    // песен — и половина из них помечена сломанными, дальше очередь их обходит,
+    // а на «дальше» в какой-то момент играть становится нечего. Ровно то, на что
+    // жаловались: «листаешь — идёт ломано, а потом кнопка перестаёт работать».
+    if (forId && forId !== t.id) return
     const fails = markFailed(t.id)
     if (fails < BROKEN_AFTER) { toastErr(reason + ' — пробую следующий'); next(); return }
     if (t.ownerId && t.ownerId === meId) {
@@ -1203,6 +1231,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }
 
   trackFailedRef.current = trackFailed
+  curTrackIdRef.current = cur?.id ?? ''
 
   /**
    * YouTube запретил встраивать это видео (v1.420.0).
@@ -1316,10 +1345,51 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const p = meta[t.url]?.play || t.play
     return p && !isSoundcloudUrl(p) && !isYouTubeUrl(p) ? p : null
   }
-  const unplayable = (t: Track | undefined): boolean =>
-    !!t && (isBroken(t.id) || (isNoEmbed(t.id) && !copyOf(t)))
+  const unplayable = (t: Track | undefined): boolean => {
+    if (!t) return false
+    if (isBroken(t.id)) return true
+    if (isNoEmbed(t.id) && !copyOf(t)) return true
+    // v1.428.0: трек со стримингового сервиса, для которого копии не нашлось.
+    //
+    // Играть его нечем — сервис не отдаёт свои записи наружу, и приложение
+    // честно показывает карточку «слушать там». Но в ОЧЕРЕДИ он до сих пор
+    // оставался как обычный: волна ставила его следующим, плеер упирался в
+    // карточку и замолкал НАСОВСЕМ — ни следующего трека, ни объяснения. Именно
+    // это и выглядело как «включая такие песни, у тебя всё ломается».
+    if (isStreamingUrl(t.url) && !copyOf(t)) return true
+    return false
+  }
   const sourceStuckRef = useRef(sourceStuck)
   sourceStuckRef.current = sourceStuck
+
+  /**
+   * Играющий трек нечем играть (v1.428.0).
+   *
+   * Человек мог выбрать его руками из склада, или он лежал в плейлисте, или
+   * копия перестала находиться. Раньше плеер в этом месте просто замолкал с
+   * карточкой на экране: включённое воспроизведение оставалось включённым, а
+   * звука не было — и следующий трек не наступал никогда.
+   *
+   * Теперь: если играем и играть нечем — идём дальше, сказав словами. Если
+   * играть нечего вообще (весь склад такой), останавливаемся честно.
+   */
+  useEffect(() => {
+    if (!playing || !cur || guest) return
+    if (!curStreamOnly) return
+    const other = tracks.some(t => t.id !== cur.id && !unplayable(t))
+    const name = meta[cur.url]?.title || cur.name
+    if (!other) {
+      setPlaying(false)
+      toastErr(`«${name}» можно слушать только в ${curSvc ? SERVICE_NAME[curSvc] : 'сервисе'} — играть больше нечего`)
+      return
+    }
+    const t = window.setTimeout(() => {
+      toastErr(`«${name}» слушается только в ${curSvc ? SERVICE_NAME[curSvc] : 'сервисе'} — пропускаю`)
+      nextRef.current()
+    }, 1200)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, cur?.id, curStreamOnly, guest])
 
   /**
    * Сторож молчания (v1.421.0).
@@ -1495,15 +1565,47 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   prevRef.current = prev
   nextRef.current = next
 
-  async function addToPlaylist(trackId: string) {
-    const name = (await promptUi('Название плейлиста (существующее или новое)', { placeholder: 'Моя музыка' }))?.trim(); if (!name) return
-    setPlaylists(ps => {
-      const found = ps.find(p => p.name === name)
-      let n: Playlist[]
-      if (found) n = ps.map(p => p.id === found.id ? { ...p, trackIds: [...new Set([...p.trackIds, trackId])] } : p)
-      else n = [...ps, { id: 'pl_' + Date.now(), name, trackIds: [trackId] }]
-      savePlaylists(n); return n
-    })
+  /**
+   * Добавить трек в плейлист (v1.428.0).
+   *
+   * Раньше это было одно окошко «введите название плейлиста»: чтобы положить
+   * трек в уже существующий, надо было вспомнить и набрать его название
+   * посимвольно — ошибся буквой, и завёлся второй плейлист с почти тем же
+   * именем. Теперь список открывается сам (см. plPick ниже), а «Новый плейлист»
+   * — один из пунктов.
+   */
+  const [plPick, setPlPick] = useState<string | null>(null)   // id трека, который кладём
+  useBackClose(!!plPick, () => setPlPick(null))
+  function putInPlaylist(plId: string, trackId: string) {
+    const n = addTrackToPl(playlists, plId, trackId)
+    setPlaylists(n); savePlaylists(n)
+    const p = n.find(x => x.id === plId)
+    toastOk(`Добавлено в «${p?.name ?? 'плейлист'}»`)
+  }
+  async function newPlaylistWith(trackId?: string) {
+    const name = (await promptUi('Название плейлиста', { placeholder: 'Моя музыка', okText: 'Создать' }))?.trim()
+    if (!name) return
+    const n = createPlaylist(playlists, name, trackId)
+    setPlaylists(n); savePlaylists(n)
+    toastOk(`Плейлист «${name}» создан`)
+  }
+
+  /**
+   * Включить плейлист целиком (v1.428.0).
+   *
+   * Через ту же ручную очередь, что и «поставить следующим»: она уже проверена и
+   * уже имеет приоритет над волной (см. nextTrack). Свой второй механизм
+   * очереди развёл бы показ с исполнением — на этом в плеере обжигались дважды.
+   */
+  function playPlaylist(p: Playlist) {
+    const list = playlistTracks(p, tracks)
+    if (list.length === 0) { toastErr('В плейлисте нет треков, которые есть в Трекотеке'); return }
+    const [first, ...rest] = list
+    saveManual(rest.map(t => t.id))
+    const i = tracks.findIndex(t => t.id === first.id)
+    if (i >= 0) { playAt(i); setPlaying(true) }
+    setShowLib(false)
+    toastOk(`Играет плейлист «${p.name}» — ${list.length} трек.`)
   }
   function startTogether() {
     const code = Math.random().toString(36).slice(2, 8).toUpperCase()
@@ -1877,7 +1979,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <button className={repeat !== 'off' ? 'on' : ''} title={guest ? noGuest : repeat === 'off' ? 'Повтор выключен' : repeat === 'all' ? 'Повторять весь список' : 'Повторять один трек'} disabled={guest} onClick={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}><Icon name="repeat" size={18} />{repeat === 'one' ? <span className="mus2-repeat-one">1</span> : null}</button>
           </div>
           <div className="mus2-extra">
-            <button className="mus2-inpl" onClick={() => cur && addToPlaylist(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
+            <button className="mus2-inpl" onClick={() => cur && setPlPick(cur.id)} disabled={!cur}><Icon name="plus" size={15} /> В плейлист</button>
             {/* v1.394.0: свой текст песни — без интернета и без чужих серверов. */}
             <button className={'mus2-inpl' + (lyr ? ' on' : '')} disabled={!cur || !lyrMine}
               title={!lyrMine ? 'Текст ставит тот, кто выложил трек'
@@ -1970,6 +2072,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="ctxmenu-item" onClick={() => { queueNext(t.id); close() }}>
               <Icon name="plus" size={15} /> Поставить следующим
             </div>
+            <div className="ctxmenu-item" onClick={() => { setPlPick(t.id); close() }}>
+              <Icon name="plus" size={15} /> Добавить в плейлист
+            </div>
             <div className="ctxmenu-item" onClick={() => { void copyText(t.url, 'Ссылка скопирована'); close() }}>
               <Icon name="link" size={15} /> Скопировать ссылку
             </div>
@@ -1985,12 +2090,42 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </Portal>
       })()}
 
+      {/* v1.428.0: выбор плейлиста. Раньше это было окошко «введите название»:
+          чтобы положить трек в существующий плейлист, надо было вспомнить и
+          набрать его имя посимвольно — ошибся буквой, и завёлся второй почти с
+          тем же названием. */}
+      {plPick && <Portal>
+        <div className="ctxmenu-overlay" onClick={() => setPlPick(null)} />
+        <div className="ctxmenu mus2-plpick">
+          <div className="ctxmenu-title">В какой плейлист</div>
+          {playlists.length === 0 && <div className="ctxmenu-note">Плейлистов пока нет — заведи первый.</div>}
+          {playlistsOrder(playlists).map(p => (
+            <div key={p.id} className="ctxmenu-item" onClick={() => { putInPlaylist(p.id, plPick); setPlPick(null) }}>
+              <Icon name="list" size={15} /> {p.name}
+              <span className="mus2-plcount">{playlistSize(p, tracks)}</span>
+            </div>
+          ))}
+          <div className="ctxmenu-item" onClick={() => { const id = plPick; setPlPick(null); void newPlaylistWith(id) }}>
+            <Icon name="plus" size={15} /> Новый плейлист
+          </div>
+        </div>
+      </Portal>}
+
       {showLib && <Portal><div className="mus2-lib" onClick={() => setShowLib(false)}>
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
             <b>Ponoi Music · Трекотека</b>
             <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
             <button className="mus2-lib-x" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
+            {/* v1.428.0: у склада появился второй отдел — плейлисты. Раньше они
+                жили одной строкой в узкой панели плеера: ни открыть, ни включить
+                целиком, ни переименовать. */}
+            <div className="mus2-libtabs">
+              <button className={'mus2-tab' + (libTab === 'tracks' ? ' on' : '')}
+                onClick={() => { setLibTab('tracks'); setOpenPl(null) }}>Треки</button>
+              <button className={'mus2-tab' + (libTab === 'playlists' ? ' on' : '')}
+                onClick={() => setLibTab('playlists')}>Плейлисты{playlists.length > 0 ? ' · ' + playlists.length : ''}</button>
+            </div>
           </header>
           {/* v1.371.0: сетка карточек вместо строчек, как на главной Spotify.
               Кто выложил трек — убрано: в списке из сотни записей это ничего не
@@ -1998,6 +2133,96 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-lib-body">
             {/* v1.417.0: уголок плагинов над списком треков. */}
             <PluginPanels slot="library" />
+            {libTab === 'playlists' ? <>
+              {/* ── Отдел плейлистов ─────────────────────────────────────── */}
+              {(() => {
+                const pl = openPl ? playlists.find(p => p.id === openPl) : null
+                if (pl) {
+                  const list = playlistTracks(pl, tracks)
+                  return <>
+                    <div className="mus2-plhead">
+                      <button className="mus2-plback" onClick={() => setOpenPl(null)}><Icon name="chevron-left" size={16} /> Плейлисты</button>
+                      <div className="mus2-pltitle notr" translate="no">{pl.name}</div>
+                      <div className="mus2-lib-count">{list.length} трек.</div>
+                      <div className="mus2-plbtns">
+                        <button className="pqs2-btn" disabled={list.length === 0} onClick={() => playPlaylist(pl)}>
+                          <Icon name="play" size={15} /> Играть
+                        </button>
+                        <button className="pqs2-btn ghost" onClick={async () => {
+                          const nm = (await promptUi('Новое название', { initial: pl.name, okText: 'Сохранить' }))?.trim()
+                          if (!nm) return
+                          const n = renamePlaylist(playlists, pl.id, nm); setPlaylists(n); savePlaylists(n)
+                        }}><Icon name="edit" size={15} /> Переименовать</button>
+                        <button className="pqs2-btn ghost danger" onClick={async () => {
+                          if (!await confirmUi(`Удалить плейлист «${pl.name}»?`, { okText: 'Удалить', danger: true })) return
+                          const n = removePlaylist(playlists, pl.id); setPlaylists(n); savePlaylists(n); setOpenPl(null)
+                        }}><Icon name="trash" size={15} /> Удалить</button>
+                      </div>
+                    </div>
+                    {list.length === 0
+                      ? <div className="mus2-empty center">Плейлист пуст. Добавь треки из отдела «Треки» — долгое нажатие или правый щелчок по карточке.</div>
+                      : <div className="mus2-pllist">
+                          {list.map((t, n) => (
+                            <div key={t.id} className={'mus2-plrow' + (cur?.id === t.id ? ' on' : '')}
+                              onClick={() => { const i = tracks.findIndex(x => x.id === t.id); playAt(i); setPlaying(true); setShowLib(false) }}>
+                              <span className="mus2-plnum">{n + 1}</span>
+                              <span className="mus2-lib-art">
+                                {(meta[t.url]?.art || t.art) ? <img src={(meta[t.url]?.art || t.art)!} alt="" loading="lazy" /> : <Icon name="music" size={18} />}
+                              </span>
+                              <span className="mus2-lib-meta">
+                                <span className="mus2-lib-t notr" translate="no">{meta[t.url]?.title || t.name}</span>
+                                <span className="mus2-lib-a notr" translate="no">{meta[t.url]?.author || t.author || ''}</span>
+                              </span>
+                              {t.dur ? <span className="mus2-lib-d">{fmt(t.dur)}</span> : null}
+                              {/* Порядок треков — то, ради чего плейлист и нужен. */}
+                              <button className="mus2-plmove" title="Выше" onClick={e => {
+                                e.stopPropagation()
+                                const n2 = movePlaylistTrack(playlists, pl.id, t.id, -1); setPlaylists(n2); savePlaylists(n2)
+                              }}><Icon name="chevron-up" size={14} /></button>
+                              <button className="mus2-plmove" title="Ниже" onClick={e => {
+                                e.stopPropagation()
+                                const n2 = movePlaylistTrack(playlists, pl.id, t.id, 1); setPlaylists(n2); savePlaylists(n2)
+                              }}><Icon name="chevron-down" size={14} /></button>
+                              <button className="mus2-plmove danger" title="Убрать из плейлиста" onClick={e => {
+                                e.stopPropagation()
+                                const n2 = removeFromPlaylist(playlists, pl.id, t.id); setPlaylists(n2); savePlaylists(n2)
+                              }}><Icon name="close" size={14} /></button>
+                            </div>
+                          ))}
+                        </div>}
+                  </>
+                }
+                return <>
+                  <div className="mus2-plbtns" style={{ marginBottom: 12 }}>
+                    <button className="pqs2-btn" onClick={() => void newPlaylistWith()}><Icon name="plus" size={15} /> Новый плейлист</button>
+                  </div>
+                  {playlists.length === 0
+                    ? <div className="mus2-empty center">Плейлистов пока нет. Заведи первый — и складывай в него треки долгим нажатием по карточке.</div>
+                    : <div className="mus2-grid">
+                        {playlistsOrder(playlists).map(p => {
+                          const list = playlistTracks(p, tracks)
+                          const arts = list.map(t => meta[t.url]?.art || t.art).filter(Boolean).slice(0, 4) as string[]
+                          return (
+                            <div key={p.id} className="mus2-card" onClick={() => setOpenPl(p.id)}
+                              title={p.name + ' — ' + list.length + ' трек.'}>
+                              {/* Обложка плейлиста — плитка из обложек его треков, как в Spotify. */}
+                              <div className={'mus2-card-art mus2-plart n' + Math.min(arts.length, 4)}>
+                                {arts.length === 0
+                                  ? <Icon name="music" size={34} />
+                                  : arts.map((a, i) => <img key={i} src={a} alt="" loading="lazy" />)}
+                                <span className="mus2-card-d">{list.length} трек.</span>
+                              </div>
+                              <div className="mus2-card-t notr" translate="no">{p.name}</div>
+                              <div className="mus2-card-a">
+                                {list.length === 0 ? 'пусто' : (meta[list[0].url]?.title || list[0].name)}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>}
+                </>
+              })()}
+            </> : <>
             {tracks.length > 1 && !libQ.trim() && (
               <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
             )}
@@ -2109,6 +2334,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 {all.length > shown.length && <div ref={libEndRef} className="mus2-lib-end">Загружаю ещё…</div>}
               </>
             })()}
+            </>}
           </div>
         </div>
       </div></Portal>}
@@ -2119,7 +2345,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         onEnded={next}
         // v1.414.0: раньше отказ <audio> не обрабатывался вовсе — плеер молча
         // замолкал на битой ссылке, и это выглядело как «сломался плеер».
-        onError={() => trackFailed('Трек не открылся')}
+        onError={() => trackFailed('Трек не открылся', cur?.id)}
         onPlaying={() => { if (cur) markOk(cur.id) }}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
