@@ -3068,8 +3068,10 @@ body.no-anim .member-typing i { animation:none; }
   .ch { padding:9px 8px; font-size:15px; }
   .dm-item { padding:9px 8px; }
   .member { padding:7px 6px; }
-  .chat-head { padding-top:calc(8px + env(safe-area-inset-top)); }
-  .me { padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
+  /* v1.429.0: отступ под часы даёт оболочка (.app ниже), а не каждая шапка —
+     иначе он складывался дважды и шапка уезжала вниз, а в шапках, про которые
+     забыли, содержимое лезло прямо под часы. */
+  .me { padding-bottom:8px; }
 }
 
 
@@ -3138,7 +3140,7 @@ body.no-anim .member-typing i { animation:none; }
 @media (max-width:768px) {
   .dm-side { background:var(--bg2, #2b2d31); }
   .channels { background:var(--bg2, #2b2d31); }
-  .dm-top { height:auto; padding:calc(12px + env(safe-area-inset-top)) 12px 10px; flex-direction:column;
+  .dm-top { height:auto; padding:10px 12px; flex-direction:column;
     align-items:stretch; gap:10px; border-bottom:none; box-shadow:none; }
   .dm-top-title { font-size:20px; font-weight:800; color:var(--tx); padding:0 4px; }
   .dm-top-row { display:flex; align-items:center; gap:8px; }
@@ -6414,4 +6416,82 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
     animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
   }
+}
+
+/* ══ v1.429.0: телефон — как это выглядит на самом деле ═══════════════════════
+   Владелец прислал снимки с телефона, и по ним видно главное: с тех пор как
+   приложение стало рисоваться ПОД системными полосами (v1.425.0), отступ под
+   часы получили только те шапки, до которых я тогда дошёл. На остальных экранах
+   заголовок «Сообщения» и шапка чата оказались прямо под часами — читать
+   невозможно. А ряд вкладок «В сети / Все / Ожидание» не влезал в строку:
+   вкладка ломалась на два слова, а кнопка справа обрезалась экраном.
+
+   Поэтому здесь два решения, оба общие:
+
+   1. Отступы под системные полосы даёт ОБОЛОЧКА приложения, один раз. Любой
+      экран внутри неё оказывается ниже часов и выше кнопок навигации, и
+      «забыть» про отступ больше нельзя. Всплывающие панели и шторки лежат вне
+      оболочки (position: fixed) и держат свои отступы сами — они у них уже есть.
+   2. Шапки на телефоне — одна строка: заголовок сжимается, ряд вкладок листается
+      пальцем по горизонтали, кнопки не обрезаются. Разложить их в столбик на
+      узком экране значило бы отдать под шапку треть высоты. */
+@media (max-width: 768px) {
+  .app, .auth2 {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
+  }
+  /* Шторки навигации лежат вне оболочки — им отступы нужны свои. */
+  .servers, .channels, .dm-side {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ── Шапки: одна строка, ничего не обрезается ──────────────────────────── */
+  .chat-head, .pfr-head {
+    /* Непрозрачный фон: раньше шапка была полупрозрачной, и сообщения
+       просвечивали сквозь неё прямо поверх имени собеседника. */
+    background: var(--bg2); background-image: none;
+    height: 52px; min-height: 52px; padding: 0 8px; gap: 6px;
+    flex-wrap: nowrap; overflow: hidden;
+  }
+  .pfr-title, .ph2-name { font-size: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pfr-vsep { display: none; }
+  /* Вкладки листаются пальцем: на 390 пикселях три вкладки и кнопка в строку не
+     влезают никогда, а перенос ломал слова пополам («В / сети»). */
+  .pfr-tabs {
+    flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    display: flex; flex-wrap: nowrap; gap: 2px;
+  }
+  .pfr-tabs::-webkit-scrollbar { height: 0; }
+  .pfr-tab { flex: none; white-space: nowrap; padding: 8px 10px; font-size: 14px; }
+  /* Кнопка «плюс» вместо надписи (см. DMHome): квадратная, не сжимается и не
+     уезжает за край, как это делала надпись «Добавить в друзья». */
+  .pfr-addfriend {
+    flex: none; width: 40px; height: 40px; padding: 0; margin-left: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Заголовок «Сообщения» и поиск: своя строка, но без лишней высоты. */
+  .dm-top-title { font-size: 18px; }
+
+  /* Версия приложения на телефоне не нужна: она висела поверх поля ввода. */
+  .app-ver { display: none; }
+
+  /* Пустые экраны: строчка «никого нет» стояла в самом верху огромной пустоты. */
+  .pfr-empty {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 40vh; padding: 20px; font-size: 15px;
+  }
+}
+
+/* Плашка плеера и открытая шторка навигации (v1.429.0).
+   На снимке с телефона плашка легла ровно на панель с аватаркой: обе прижаты к
+   низу, и обе видны одновременно, когда шторка открыта. Поднимаем плашку над
+   панелью — но только в этом случае, чтобы в чате она не висела в воздухе. */
+@media (max-width: 768px) {
+  body.mob-nav-open .mus-mini { bottom: calc(70px + env(safe-area-inset-bottom)); }
 }

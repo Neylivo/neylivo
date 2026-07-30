@@ -1445,7 +1445,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
               <button className={'pfr-tab' + (tab === 'pending' ? ' on' : '')} onClick={() => setTab('pending')}>Ожидание{requests.length > 0 ? ' — ' + requests.length : ''}</button>
             </div>
-            <button className={'pfr-addfriend' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}>Добавить в друзья</button>
+            {/* v1.429.0: на телефоне вместо длинной надписи — «плюс».
+                «Добавить в друзья» рядом с тремя вкладками в строку не влезало
+                никогда: кнопка уезжала за правый край экрана и нажать её было
+                нельзя вовсе. Так же поступает мобильный Discord. */}
+            <button className={'pfr-addfriend' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}
+              title={IS_MOBILE ? 'Добавить в друзья' : undefined}>
+              {IS_MOBILE ? <Icon name="plus" size={18} /> : 'Добавить в друзья'}
+            </button>
           </header>
           <div className="pfr-main">
           <div className="pfr-body">
