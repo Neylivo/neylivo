@@ -62,6 +62,7 @@ import { ServerGuideModal } from './ServerGuideModal'
 import { ServerEvents } from './ServerEvents'
 import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
+import { takeCall, releaseCall } from '../lib/activeCall'
 import { PluginPanels } from './PluginPanels'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
@@ -893,6 +894,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // (токен + connect + микрофон) идёт в фоне. Раньше всё это ждали до показа —
     // и канал «залипал» на доли секунды.
     const seq = ++joinSeq.current
+    // v1.438.0: один звонок на приложение. Личный звонок отсюда тоже
+    // завершается — раньше он продолжал идти параллельно каналу, и выход из
+    // одного оставлял второй в непонятном виде.
+    takeCall({ kind: 'server', id: c.id, leave: () => leaveVoice() })
     if (voice) { try { voice.room.disconnect() } catch {} }
     setVoice(null)
     setConnecting(c)
@@ -920,6 +925,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
 
   function leaveVoice() {
     joinSeq.current++   // v1.142.0: отменяем незавершённый вход, если он ещё в процессе
+    releaseCall()
     if (voice) { try { voice.room.disconnect() } catch {} }
     setVoice(null)
     setConnecting(null)

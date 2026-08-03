@@ -2308,6 +2308,11 @@ body.no-anim .member-typing i { animation:none; }
 .ctx-item-empty:hover { background:transparent; }
 .ctx-item-stack { display:flex; flex-direction:column; gap:1px; }
 .ctx-item-stack small { font-weight:400; font-size:11px; opacity:.65; }
+/* v1.438.0: громкость человека прямо в меню — как в Discord. Строка не
+   нажимается целиком: ползунок тянут, а не щёлкают по нему один раз. */
+.ctx-vol { padding:6px 10px 10px; cursor:default; }
+.ctx-vol input[type=range] { width:100%; margin-top:6px; accent-color:var(--brand); cursor:pointer; }
+.ctx-item input[type=checkbox] { accent-color:var(--brand); pointer-events:none; margin-left:auto; }
 .ctx-idbadge { flex:none; font-size:10px; font-weight:800; letter-spacing:.3px; color:var(--mut);
   background:rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-xs); padding:1px 5px; }
 .ctx-item:hover .ctx-idbadge { color:var(--tx-hi, #fff); background:rgba(var(--ov, 255,255,255),.22); }

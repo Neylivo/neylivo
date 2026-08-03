@@ -16,6 +16,7 @@ import { sysInvite } from '../lib/sysmsg'
 import { supabase } from '../lib/supabase'
 import type { Server } from '../types'
 import { useClampToViewport, useFlipSubmenu } from '../lib/clampPos'
+import { getPeerVolume, setPeerVolume, togglePeerMuted, isVideoHidden, toggleVideoHidden, peerSoundLabel } from '../lib/peerPrefs'
 
 interface Friend { id: string; name: string }
 
@@ -106,6 +107,9 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   const muted = isDmMuted(friend.id)
   const ignored = isDmIgnored(friend.id)
   const clamp = useClampToViewport(x, y)
+  // v1.438.0: голосовые решения о человеке — см. lib/peerPrefs.ts.
+  const [vol, setVol] = useState(() => getPeerVolume(friend.id))
+  const [vidOff, setVidOff] = useState(() => isVideoHidden(friend.id))
   const inviteSub = useFlipSubmenu()
   const muteSub = useFlipSubmenu()
 
@@ -132,6 +136,21 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
           <button onClick={saveNick}>Сохранить</button>
         </div>}
         <div className="ctx-item" onClick={() => { onCloseDm(); onClose() }}><span>Закрыть ЛС</span><Icon name="close" size={14} /></div>
+        <div className="ctx-sep" />
+        {/* v1.438.0: голосовые решения о человеке — прямо здесь, как в Discord.
+            До этого они существовали только внутри звонка: чтобы убавить кому-то
+            громкость, надо было сначала с ним созвониться. */}
+        <div className="ctx-item-stack ctx-vol" onClick={e => e.stopPropagation()}>
+          <span>Громкость пользователя<small>{peerSoundLabel(friend.id)}</small></span>
+          <input type="range" min={0} max={200} step={5} value={vol}
+            onChange={e => { const v = parseInt(e.target.value, 10); setVol(v); setPeerVolume(friend.id, v) }} />
+        </div>
+        <div className="ctx-item" onClick={() => { togglePeerMuted(friend.id); setVol(getPeerVolume(friend.id)) }}>
+          <span>Заглушить</span><input type="checkbox" readOnly checked={vol === 0} />
+        </div>
+        <div className="ctx-item" onClick={() => { toggleVideoHidden(friend.id); setVidOff(v => !v) }}>
+          <span>Отключить видео</span><input type="checkbox" readOnly checked={vidOff} />
+        </div>
         <div className="ctx-sep" />
         <div className="ctx-item has-sub" onClick={() => setSub(s => s === 'invite' ? null : 'invite')}>
           <span>Пригласить на сервер</span><Icon name="chevron-right" size={14} />

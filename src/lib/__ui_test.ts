@@ -22,6 +22,7 @@ import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
 import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
 import { SHARE_RES, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources } from './shareOpts'
 import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon } from './callState'
+import { shouldLeave, takeCall, releaseCall, activeCall } from './activeCall'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -889,6 +890,80 @@ check('проверка заметила бы пропажу границ', () =
   const без = { zoom: 2, x: 9999, y: 0 }
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
+
+console.log('\n-- Звонок только один (v1.438.0) --')
+{
+  check('входа никуда не было — выходить неоткуда', () =>
+    !shouldLeave(null, { kind: 'dm', id: 'a' }))
+  check('свой же канал повторным входом не считается', () =>
+    !shouldLeave({ kind: 'server', id: 'общий' }, { kind: 'server', id: 'общий' }))
+  check('другой канал — выходим из прежнего', () =>
+    shouldLeave({ kind: 'server', id: 'общий' }, { kind: 'server', id: 'игровой' }))
+  check('из личного звонка в канал — выходим', () =>
+    shouldLeave({ kind: 'dm', id: 'тред1' }, { kind: 'server', id: 'общий' }))
+  check('из канала в личный звонок — тоже выходим', () =>
+    shouldLeave({ kind: 'server', id: 'общий' }, { kind: 'dm', id: 'тред1' }))
+  check('совпадение id при разном виде не путает', () =>
+    shouldLeave({ kind: 'dm', id: 'x' }, { kind: 'server', id: 'x' }))
+
+  console.log('\n   учёт занятого места:')
+  check('вход занимает место', () => {
+    releaseCall()
+    takeCall({ kind: 'dm', id: 'т1', leave: () => {} })
+    const a = activeCall()
+    releaseCall()
+    return !!a && a.kind === 'dm' && a.id === 'т1'
+  })
+  check('вход в другой звонок закрывает прежний ровно один раз', () => {
+    releaseCall()
+    let вышли = 0
+    takeCall({ kind: 'dm', id: 'т1', leave: () => { вышли++ } })
+    const было = takeCall({ kind: 'server', id: 'к1', leave: () => {} })
+    const итог = вышли === 1 && было === true && activeCall()?.id === 'к1'
+    releaseCall()
+    return итог
+  })
+  check('повторный вход в тот же звонок никого не выгоняет', () => {
+    releaseCall()
+    let вышли = 0
+    takeCall({ kind: 'server', id: 'к1', leave: () => { вышли++ } })
+    takeCall({ kind: 'server', id: 'к1', leave: () => {} })
+    const итог = вышли === 0
+    releaseCall()
+    return итог
+  })
+  check('выход освобождает место', () => {
+    releaseCall()
+    takeCall({ kind: 'dm', id: 'т1', leave: () => {} })
+    releaseCall()
+    return activeCall() === null
+  })
+  check('чужой выход текущий звонок не трогает', () => {
+    releaseCall()
+    takeCall({ kind: 'dm', id: 'т1', leave: () => {} })
+    releaseCall('другой')
+    const итог = activeCall()?.id === 'т1'
+    releaseCall()
+    return итог
+  })
+  check('leave() из старого звонка не уводит в круг', () => {
+    // leave() обычно сам зовёт releaseCall — важно, чтобы новый звонок при этом
+    // не оказался стёрт.
+    releaseCall()
+    takeCall({ kind: 'dm', id: 'т1', leave: () => releaseCall() })
+    takeCall({ kind: 'server', id: 'к1', leave: () => {} })
+    const итог = activeCall()?.id === 'к1'
+    releaseCall()
+    return итог
+  })
+
+  console.log('\n-- Ломаем нарочно (один звонок) --')
+  check('проверка заметила бы возврат к «сидим сразу в двух»', () => {
+    // Прежнее поведение: вход в канал ничего не знал про личный звонок.
+    const прежнее = () => false
+    return прежнее() === false && shouldLeave({ kind: 'dm', id: 'т1' }, { kind: 'server', id: 'к1' })
+  })
+}
 
 console.log('\n-- Звонок: кто заглушил всех (v1.436.0) --')
 {

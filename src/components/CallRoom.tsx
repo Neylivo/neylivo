@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { RoomEvent, DisconnectReason, getLocalDevices } from '../lib/livekit'
 import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
+import { getPeerVolume, setPeerVolume, isVideoHidden, toggleVideoHidden, subscribePeerPrefs, registerGain } from '../lib/peerPrefs'
 import { ClockElapsed } from './ActivityLabel'
 import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon, type CallFlags } from '../lib/callState'
 import { SHARE_RES, SHARE_FPS, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources, type ShareQuality, type ShareSource } from '../lib/shareOpts'
@@ -54,38 +55,24 @@ function useCallFlags(): Record<string, CallFlags> {
   return flagsMap
 }
 
-// ---- Громкость собеседников: WebAudio-гейны в общем реестре по identity ----
-const gainReg = new Map<string, Set<GainNode>>()
-function getVol(identity: string): number {
-  const v = parseInt(localStorage.getItem('ponoi_vol_' + identity) || '100', 10)
-  return isNaN(v) ? 100 : Math.max(0, Math.min(200, v))
-}
-function setPeerVolume(identity: string, v: number) {
-  try { localStorage.setItem('ponoi_vol_' + identity, String(v)) } catch {}
-  gainReg.get(identity)?.forEach(g => { g.gain.value = v / 100 })
-}
-
-// v1.183.0: «Отключить видео» из меню участника — чисто у себя, для остальных
-// он продолжает транслировать камеру как ни в чём не бывало. Тот же реестр-паттерн,
-// что у громкости (gainReg) — Tile подписан и перерисовывается по toggleVideoHidden.
-const hiddenVideoReg = new Set<string>()
-const hiddenVideoListeners = new Set<() => void>()
-function isVideoHidden(identity: string): boolean { return hiddenVideoReg.has(identity) }
-function toggleVideoHidden(identity: string) {
-  if (hiddenVideoReg.has(identity)) hiddenVideoReg.delete(identity); else hiddenVideoReg.add(identity)
-  hiddenVideoListeners.forEach(l => l())
-}
+// v1.438.0: громкость собеседника и «не показывать его видео» переехали в
+// lib/peerPrefs.ts — теми же решениями пользуется меню в списке диалогов, где
+// звонка ещё нет. Заодно «отключить видео» теперь переживает перезапуск: раньше
+// оно жило в памяти вкладки, и решение человека молча отменялось.
+const getVol = getPeerVolume
 
 /** Невидимый приёмник звука участника: все его аудиодорожки идут через GainNode. */
 function AudioSink({ p }: { p: any }) {
   useEffect(() => {
     let els: HTMLElement[] = []
     let nodes: AudioNode[] = []
-    let regs: GainNode[] = []
+    // v1.438.0: реестр узлов громкости живёт в lib/peerPrefs.ts — им же
+    // пользуется меню в списке диалогов. Здесь только регистрация и снятие.
+    let regs: (() => void)[] = []
     function refresh() {
       els.forEach(e => e.remove()); els = []
       nodes.forEach(n => { try { n.disconnect() } catch {} }); nodes = []
-      regs.forEach(g => gainReg.get(p.identity)?.delete(g)); regs = []
+      regs.forEach(off => off()); regs = []
       p.trackPublications.forEach((pub: any) => {
         const t = pub.track
         if (!t || t.kind !== 'audio') return
@@ -96,12 +83,11 @@ function AudioSink({ p }: { p: any }) {
           const ctx = audioCtx()
           const src = ctx.createMediaStreamSource(new MediaStream([t.mediaStreamTrack]))
           const g = ctx.createGain()
-          g.gain.value = getVol(p.identity) / 100
           src.connect(g); g.connect(master())
           el.muted = true
           nodes.push(src, g)
-          if (!gainReg.has(p.identity)) gainReg.set(p.identity, new Set())
-          gainReg.get(p.identity)!.add(g); regs.push(g)
+          // registerGain сам выставит текущую громкость и вернёт снятие.
+          regs.push(registerGain(p.identity, g))
         } catch { /* нет WebAudio — элемент играет сам на 100% */ }
       })
     }
@@ -112,7 +98,7 @@ function AudioSink({ p }: { p: any }) {
       evs.forEach(e => p.off(e, refresh))
       els.forEach(e => e.remove())
       nodes.forEach(n => { try { n.disconnect() } catch {} })
-      regs.forEach(g => gainReg.get(p.identity)?.delete(g))
+      regs.forEach(off => off())
     }
   }, [p])
   return null
@@ -287,9 +273,7 @@ function Tile({ p, isLocal, avatar, color, small, meName, onCtx, sharing, onWatc
   const flags = useCallFlags()
   const icon = tileIcon(flags[p.identity], micOn)
   useEffect(() => {
-    const l = () => setVidHidden(isVideoHidden(p.identity))
-    hiddenVideoListeners.add(l)
-    return () => { hiddenVideoListeners.delete(l) }
+    return subscribePeerPrefs(() => setVidHidden(isVideoHidden(p.identity)))
   }, [p.identity])
   useEffect(() => {
     const host = vidRef.current!

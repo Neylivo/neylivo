@@ -55,6 +55,7 @@ import { NewConversationModal } from './NewConversationModal'
 import { GroupMembersPanel } from './GroupMembersPanel'
 import { fetchGroupThreads, fetchGroupMembers, groupDisplayName, type GroupThread } from '../lib/groupDm'
 import { PluginPanels } from './PluginPanels'
+import { takeCall, releaseCall } from '../lib/activeCall'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let dmRxDeb: number | undefined
@@ -353,6 +354,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
   function hangUp(sendCancel: boolean) {
     callSeq.current++   // отменяем незавершённую попытку подключения, если она ещё в процессе
+    releaseCall()
     endRing(sendCancel)
     try { callRef.current?.disconnect() } catch {}
     finishCallMsg()
@@ -392,6 +394,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       }
       const room = await joinRoom('dm_' + threadId, meId, username, callKey ? { key: callKey } : undefined)
       if (callSeq.current !== seq) { try { room.disconnect() } catch {}; return }
+      // v1.438.0: звонок один на приложение — если сидели в голосовом канале
+      // сервера, выходим оттуда. Раньше можно было остаться сразу в обоих: два
+      // микрофона в эфире, два потока в наушниках и две панели управления.
+      takeCall({ kind: 'dm', id: threadId, leave: () => hangUp(true) })
       setCall(room)
       setCallThread(threadId)
       setCallPeer(active)
@@ -473,8 +479,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   useEffect(() => {
     const clear = () => { if (aloneTimerRef.current) { window.clearTimeout(aloneTimerRef.current); aloneTimerRef.current = null } }
     if (!call) { clear(); return }
-    const onLeft = () => {
-      const n = (call as any).remoteParticipants?.size ?? (call as any).participants?.size ?? 0
+    // v1.438.0: считаем ОСТАВШИХСЯ, исключая того, кто прямо сейчас вышел.
+    // Раньше бралась просто длина списка на момент события — а если библиотека
+    // сообщает о выходе до того, как убрала участника из списка, выходило «нас
+    // всё ещё двое»: таймер не заводился, и человек оставался в мёртвом звонке
+    // навсегда. Ровно то, что описано как «вышел один — всё сломалось».
+    const onLeft = (gone?: any) => {
+      const map: Map<string, any> = (call as any).remoteParticipants ?? (call as any).participants ?? new Map()
+      const goneId = String(gone?.identity ?? '')
+      const n = [...map.values()].filter(p => String(p?.identity ?? '') !== goneId).length
       if (n > 0) return
       clear()
       aloneTimerRef.current = window.setTimeout(() => {
