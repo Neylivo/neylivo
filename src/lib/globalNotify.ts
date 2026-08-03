@@ -45,7 +45,15 @@ export function startGlobalNotify(ctx: NotifyCtx): () => void {
       if (isDmMuted(m.author) || isDmIgnored(m.author)) return
       if (focused() && getOpenDmThread() === m.thread_id) return
       msgSound()
-      notifyMessage(m.author_name || 'Личное сообщение', m.content ?? '', ctx.avatarOf(m.author), 'dm:' + m.thread_id)
+      notifyMessage({
+        author: m.author_name || 'Личное сообщение',
+        text: m.content ?? '',
+        hasAttach: !!m.attach_url,
+        icon: ctx.avatarOf(m.author),
+        tag: 'dm:' + m.thread_id,
+        // v1.440.0: нажатие открывает именно этот разговор.
+        route: 'ponoi://msg/d/' + m.thread_id + '/' + m.id,
+      })
     })
     .subscribe()
 
@@ -65,10 +73,16 @@ export function startGlobalNotify(ctx: NotifyCtx): () => void {
         // заглушённый канал молчит, даже если сервер звучит.
         if (!shouldNotify(chNotifModeOf(m.channel_id, where.serverId), mentioned)) return
         msgSound()
-        notifyMessage(
-          (m.author_name || 'Сообщение') + ' — #' + where.channel,
-          m.content ?? '', ctx.avatarOf(m.author), 'ch:' + m.channel_id,
-        )
+        notifyMessage({
+          author: m.author_name || 'Сообщение',
+          channel: where.channel,
+          text: m.content ?? '',
+          hasAttach: !!m.attach_url,
+          mention: mentioned,
+          icon: ctx.avatarOf(m.author),
+          tag: 'ch:' + m.channel_id,
+          route: 'ponoi://msg/s/' + where.serverId + '/' + m.channel_id + '/' + m.id,
+        })
       })
     })
     .subscribe()

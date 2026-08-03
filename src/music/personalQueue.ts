@@ -64,6 +64,8 @@
 // списка: если весь склад окажется под запретом (три трека всего), волна всё
 // равно выберет самое давнее, а не остановится.
 
+import { songKey } from './songKey'
+
 export interface QueueTrack {
   id: string
   /** Название — по нему ищется сходство. Без него сигнал просто не работает. */
@@ -189,6 +191,29 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
 
   const curAuthor = norm(cur?.author)
   const curWords = new Set(words(cur?.name ?? ''))
+  // v1.440.0: та же песня в другой обёртке — это повтор.
+  //
+  // Очередь не повторялась по id, но ремикс, ускоренная версия и клип одной
+  // вещи — это разные id и разные ссылки. Человек слышал одно и то же три раза
+  // подряд и справедливо считал очередь сломанной. Ключ песни (songKey.ts)
+  // очищает название от пометок версии, и дальше запрет работает по нему.
+  const curKey = songKey(cur?.name, cur?.author)
+  const keyOf = new Map<string, string>()
+  for (const t of tracks) keyOf.set(t.id, songKey(t.name, t.author))
+  const bannedKeys = new Set<string>()
+  const ban0 = i.noRepeat ?? banWindow(Math.max(1, tracks.length - 1))
+  recent.slice(0, ban0).forEach(id => { const k = keyOf.get(id); if (k) bannedKeys.add(k) })
+  // v1.440.0: контекст сессии. Раньше через несколько десятков треков волна
+  // теряла всякую связь с тем, что человек слушал, и скатывалась к глобально
+  // популярному: свежесть кончалась у всего, что рядом, и решать оставалось
+  // только числу чужих прослушиваний. Держим исполнителей последних треков —
+  // по ним и продолжаем.
+  const sessionAuthors = new Set<string>()
+  for (const id of recent.slice(0, 12)) {
+    const t = tracks.find(x => x.id === id)
+    const a = norm(t?.author)
+    if (a) sessionAuthors.add(a)
+  }
   const pos = new Map(tracks.map((t, n) => [t.id, n]))
   const ban = i.noRepeat ?? banWindow(rest.length)
   // Сколько последних треков подряд — одного исполнителя. Считаем по самой
@@ -236,10 +261,21 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
       if (v > 0) { score += v; reasons.push(['rested', v]) }
     }
 
-    // Общие прослушивания остаются слабым сигналом: это про саму песню, а не про
-    // то, что человек уже заслушал её до дыр.
+    // v1.440.0: то же самое, только в другой обёртке, — не предлагаем вовсе.
+    const tKey = keyOf.get(t.id) ?? ''
+    if (tKey && curKey && tKey === curKey) score -= 10_000
+    else if (tKey && bannedKeys.has(tKey)) score -= 5_000
+
+    // Контекст сессии: исполнитель, которого человек уже слушал в этот заход.
+    // Слабее прямого совпадения с текущим треком, но именно он не даёт волне
+    // скатиться к глобально популярному через полсотни песен.
+    if (!sameAuthor && sessionAuthors.has(norm(t.author))) { score += 30; reasons.push(['author', 30]) }
+
+    // Общие прослушивания — только разрешитель ничьих. v1.440.0: вес срезан
+    // втрое: на длинной сессии он оказывался единственным работающим сигналом и
+    // выносил наверх глобальные хиты, к человеку отношения не имеющие.
     const all = t.plays ?? 0
-    if (all > 0) { const v = Math.min(24, 5 * Math.log2(1 + all)); score += v; reasons.push(['popular', v]) }
+    if (all > 0) { const v = Math.min(9, 2 * Math.log2(1 + all)); score += v; reasons.push(['popular', v]) }
 
     // Только что игравшее — НЕЛЬЗЯ, пока не пройдёт окно. Внутри окна
     // сортируем по давности: если запрещено вообще всё (склад из трёх треков),

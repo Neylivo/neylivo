@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { RoomEvent, DisconnectReason, getLocalDevices } from '../lib/livekit'
 import type { Room } from '../lib/livekit'
 import { Icon } from './icons'
-import { getPeerVolume, setPeerVolume, isVideoHidden, toggleVideoHidden, subscribePeerPrefs, registerGain } from '../lib/peerPrefs'
+import { getPeerVolume, setPeerVolume, isVideoHidden, toggleVideoHidden, subscribePeerPrefs, registerGain,
+  isShareHidden, toggleShareHidden, isShareMuted, toggleShareMuted } from '../lib/peerPrefs'
 import { ClockElapsed } from './ActivityLabel'
 import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon, type CallFlags } from '../lib/callState'
 import { SHARE_RES, SHARE_FPS, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources, type ShareQuality, type ShareSource } from '../lib/shareOpts'
@@ -76,6 +77,10 @@ function AudioSink({ p }: { p: any }) {
       p.trackPublications.forEach((pub: any) => {
         const t = pub.track
         if (!t || t.kind !== 'audio') return
+        // v1.440.0: звук чужой демонстрации — отдельная дорожка, и заглушить её
+        // можно отдельно от голоса. Раньше выбора не было: либо слушаешь и
+        // музыку из его игры, либо не слышишь самого человека.
+        if (pub.source === 'screen_share_audio' && isShareMuted(p.identity)) return
         const el = t.attach() as HTMLMediaElement
         el.style.display = 'none'
         document.body.appendChild(el); els.push(el)
@@ -94,7 +99,9 @@ function AudioSink({ p }: { p: any }) {
     refresh()
     const evs = ['trackSubscribed', 'trackUnsubscribed', 'trackMuted', 'trackUnmuted', 'trackPublished', 'trackUnpublished']
     evs.forEach(e => p.on(e, refresh))
+    const offPrefs = subscribePeerPrefs(refresh)   // заглушили демку — пересобираем дорожки
     return () => {
+      offPrefs()
       evs.forEach(e => p.off(e, refresh))
       els.forEach(e => e.remove())
       nodes.forEach(n => { try { n.disconnect() } catch {} })
@@ -197,6 +204,8 @@ function PartCtxMenu({ identity, x, y, onClose, onProfile }:
   { identity: string; x: number; y: number; onClose: () => void; onProfile?: () => void }) {
   const [vol, setVol] = useState(() => getVol(identity))
   const [hidden, setHidden] = useState(() => isVideoHidden(identity))
+  const [shareOff, setShareOff] = useState(() => isShareHidden(identity))
+  const [shareMute, setShareMute] = useState(() => isShareMuted(identity))
   const muted = vol === 0
   const clamp = useClampToViewport(x, y)
   useEffect(() => {
@@ -221,6 +230,14 @@ function PartCtxMenu({ identity, x, y, onClose, onProfile }:
         </div>
         <div className="ctx-item" onClick={() => { toggleVideoHidden(identity); setHidden(h => !h) }}>
           <span>{hidden ? 'Показать видео' : 'Отключить видео'}</span><Icon name={hidden ? 'video' : 'video-off'} size={14} />
+        </div>
+        {/* v1.440.0: демонстрация — отдельно от камеры и отдельно от голоса. */}
+        <div className="ctx-item" onClick={() => { toggleShareHidden(identity); setShareOff(v => !v) }}>
+          <span>{shareOff ? 'Показать демонстрацию' : 'Убрать демонстрацию'}</span><Icon name="screen-share" size={14} />
+        </div>
+        <div className="ctx-item" onClick={() => { toggleShareMuted(identity); setShareMute(v => !v) }}>
+          <span>{shareMute ? 'Вернуть звук демонстрации' : 'Заглушить звук демонстрации'}</span>
+          <Icon name={shareMute ? 'volume-off' : 'volume'} size={14} />
         </div>
         <div className="ctx-sep" />
         {devMode() && <div className="ctx-item" onClick={() => { navigator.clipboard?.writeText(identity); onClose() }}><span>Копировать ID пользователя</span><Icon name="id-card" size={14} /></div>}
@@ -326,7 +343,7 @@ function Tile({ p, isLocal, avatar, color, small, meName, onCtx, sharing, onWatc
 }
 
 /** Плитка демонстрации экрана. */
-function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () => void }) {
+function ShareTile({ pub, who, onClick, owner }: { pub: any; who: string; onClick?: () => void; owner?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const host = ref.current!
@@ -335,11 +352,27 @@ function ShareTile({ pub, who, onClick }: { pub: any; who: string; onClick?: () 
     const el = t.attach(); el.classList.add('c2-media'); host.appendChild(el)
     return () => { t.detach().forEach((e: HTMLElement) => e.remove()) }
   }, [pub])
+  const [, bump] = useState(0)
+  useEffect(() => subscribePeerPrefs(() => bump(v => v + 1)), [])
+  const muted = !!owner && isShareMuted(owner)
   return (
     <div className="c2-tile share" onClick={onClick}>
       <span className="c2-live">LIVE</span>
       <div className="c2-vid" ref={ref} />
-      <div className="c2-cap"><Icon name="screen-share" size={11} /> {who} — экран</div>
+      {/* v1.440.0: чужой демонстрацией можно управлять у себя — заглушить её
+          звук отдельно от голоса или убрать её с экрана совсем. Раньше выбора не
+          было вовсе: единственным способом избавиться от чужой демки был выход
+          из звонка. */}
+      {owner && <div className="c2-share-ctl" onClick={e => e.stopPropagation()}>
+        <button className={muted ? 'on' : ''} title={muted ? 'Вернуть звук демонстрации' : 'Заглушить звук демонстрации'}
+          onClick={() => toggleShareMuted(owner)}>
+          <Icon name={muted ? 'volume-off' : 'volume'} size={14} />
+        </button>
+        <button title="Убрать демонстрацию с экрана" onClick={() => toggleShareHidden(owner)}>
+          <Icon name="close" size={14} />
+        </button>
+      </div>}
+      <div className="c2-cap"><Icon name="screen-share" size={11} /> {who} — экран{muted ? ' · без звука' : ''}</div>
     </div>
   )
 }
@@ -354,17 +387,19 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
       RoomEvent.TrackSubscribed, RoomEvent.TrackUnsubscribed, RoomEvent.TrackMuted, RoomEvent.TrackUnmuted,
       RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished] as any[]
     evs.forEach(e => room.on(e, re))
-    return () => { evs.forEach(e => room.off(e, re)) }
+    const offPrefs = subscribePeerPrefs(re)
+    return () => { offPrefs(); evs.forEach(e => room.off(e, re)) }
   }, [room])
 
   const remotes: any[] = Array.from((room as any).remoteParticipants?.values?.() ?? (room as any).participants?.values?.() ?? [])
   const all = [{ p: room.localParticipant as any, local: true }, ...remotes.map(p => ({ p, local: false }))]
 
+  // v1.440.0: демонстрации, которые человек у себя выключил, на сцену не идут.
   const shares: { pub: any; owner: string; who: string; key: string }[] = []
   let anyCam = false
   all.forEach(({ p, local }) => {
     p.trackPublications.forEach((pub: any) => {
-      if (pub.source === 'screen_share' && pub.track) shares.push({ pub, owner: String(p.identity ?? ''), who: local ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
+      if (pub.source === 'screen_share' && pub.track && !(!local && isShareHidden(String(p.identity ?? '')))) shares.push({ pub, owner: String(p.identity ?? ''), who: local ? (meName || p.name || p.identity || localStorage.getItem('ponoi_username') || '?') : (p.name || p.identity || '?'), key: 'sh:' + (pub.trackSid || p.sid || '') })
       if (pub.source === 'camera' && pub.track) anyCam = true
     })
   })
@@ -402,11 +437,11 @@ function Stage({ room, avatars, colors, meName, onMainDblClick, onCtx }: { room:
     <div className="c2-board">
       <div className="c2-main" onDoubleClick={onMainDblClick}>
         {mainShare
-          ? <ShareTile key={mainShare.key} pub={mainShare.pub} who={mainShare.who} onClick={() => { if (focusedShare) setFocus(null) }} />
+          ? <ShareTile key={mainShare.key} pub={mainShare.pub} who={mainShare.who} owner={mainShare.owner} onClick={() => { if (focusedShare) setFocus(null) }} />
           : <div className="c2-click" onClick={() => setFocus(null)}><Tile p={focusedPart!.p} isLocal={focusedPart!.local} avatar={av(focusedPart!.p)} color={col(focusedPart!.p)} meName={meName} onCtx={onCtx} /></div>}
       </div>
       <div className="c2-strip">
-        {shares.filter(s => s.key !== (mainShare && mainShare.key)).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} onClick={() => setFocus(s.key)} />)}
+        {shares.filter(s => s.key !== (mainShare && mainShare.key)).map(s => <ShareTile key={s.key} pub={s.pub} who={s.who} owner={s.owner} onClick={() => setFocus(s.key)} />)}
         {all.map(({ p, local }) => <div key={p.sid || p.identity} className="c2-click" onClick={() => setFocus(pKey(p))}><Tile p={p} isLocal={local} avatar={av(p)} color={col(p)} small meName={meName} onCtx={onCtx} sharing={!!shareOf(p)} onWatch={() => watch(p)} /></div>)}
       </div>
     </div>

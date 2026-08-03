@@ -128,6 +128,33 @@ export function lyricsScale(srcDur?: number, trackDur?: number): number {
  * как её начали петь.
  */
 export const LYRICS_LOOKAHEAD = 0.25
+
+/**
+ * Где песня НА САМОМ ДЕЛЕ сейчас (v1.440.0).
+ *
+ * Позиция приходит рывками: YouTube отдаёт её раз в полсекунды, обычный звук —
+ * событием времени, тоже нерегулярно. Между этими рывками приложение думает,
+ * что песня стоит на месте, — и строка меняется не когда её запели, а когда
+ * приехало очередное сообщение. Отсюда и «текст то отстаёт, то дёргается»:
+ * ошибка гуляет от нуля до полусекунды, и на глаз это ровно то, на что жаловались.
+ *
+ * Досчитываем сами: сколько реального времени прошло с последнего сообщения,
+ * столько и прибавляем. На паузе не прибавляем ничего.
+ *
+ * Ограничение сверху обязательно: если сообщений не было давно (вкладку свернули,
+ * звук встал, сеть моргнула), досчитанное время убежит от настоящего. Секунда —
+ * заметно больше самого большого промежутка между сообщениями и заметно меньше
+ * строки песни.
+ */
+export const LYRICS_PREDICT_MAX = 1
+
+export function livePosition(lastPos: number, lastAt: number, now: number, playing: boolean): number {
+  const base = Number.isFinite(lastPos) && lastPos > 0 ? lastPos : 0
+  if (!playing) return base
+  const passed = (now - lastAt) / 1000
+  if (!Number.isFinite(passed) || passed <= 0) return base
+  return base + Math.min(passed, LYRICS_PREDICT_MAX)
+}
 export function lyricsTime(cur: number, scale: number, offset: number): number {
   return cur * scale + offset + LYRICS_LOOKAHEAD
 }

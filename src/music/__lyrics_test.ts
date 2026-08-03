@@ -8,7 +8,7 @@
 // сдвигом [offset], с повторами припева и просто с мусором.
 export {}
 
-import { parseLyrics, activeLineIndex, pickLyrics, sameName, lyricsScrollMs, lyricsEase, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS } from './lyrics'
+import { parseLyrics, activeLineIndex, pickLyrics, sameName, lyricsScrollMs, lyricsEase, livePosition, LYRICS_PREDICT_MAX, lyricsScale, lyricsTime, LYRICS_LOOKAHEAD, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS } from './lyrics'
 import { stamp, words, chunksToLrc, alignPlainToChunks, fillGaps, whyCantRecognize, type SpeechChunk } from './aiLyrics'
 
 let pass = 0, fail = 0
@@ -292,6 +292,39 @@ check('проверка заметила бы, что порог совпаде�
     { start: 15, end: 16, text: 'третья строка песни' },
   ]
   return alignPlainToChunks(known, half, 100) !== null
+})
+
+console.log('\n── Время между рывками (v1.440.0) ──')
+// Позиция приезжает рывками: YouTube отдаёт её раз в полсекунды. Между рывками
+// приложение считало, что песня стоит, — и строка вспыхивала не когда её запели,
+// а когда пришло очередное сообщение.
+check('через полсекунды после сообщения песня ушла на полсекунды', () =>
+  Math.abs(livePosition(10, 1_000_000, 1_000_500, true) - 10.5) < 1e-9)
+check('в сам миг сообщения — ровно оно', () =>
+  livePosition(10, 1_000_000, 1_000_000, true) === 10)
+check('на паузе время не бежит', () =>
+  livePosition(10, 1_000_000, 1_005_000, false) === 10)
+check('долгое молчание не уводит текст в будущее', () =>
+  livePosition(10, 1_000_000, 1_060_000, true) === 10 + LYRICS_PREDICT_MAX)
+check('предел заметно больше промежутка между сообщениями', () =>
+  LYRICS_PREDICT_MAX >= 0.5 && LYRICS_PREDICT_MAX <= 2)
+check('часы, идущие назад, ничего не портят', () =>
+  livePosition(10, 1_000_500, 1_000_000, true) === 10)
+check('мусор вместо позиции не ломает', () =>
+  livePosition(NaN, 1_000_000, 1_000_500, true) >= 0)
+check('на настоящих метках строка меняется вовремя', () => {
+  const l = parseLyrics('[00:10.00]раз\n[00:20.00]два\n[00:30.00]три').lines
+  // Последнее сообщение было на 19.6 с, с тех пор прошло полсекунды: поют уже
+  // вторую строку. По старому расчёту была бы ещё первая.
+  const было = activeLineIndex(l, lyricsTime(19.6, 1, 0))
+  const стало = activeLineIndex(l, lyricsTime(livePosition(19.6, 1_000_000, 1_000_500, true), 1, 0))
+  return было === 0 && стало === 1
+})
+
+console.log('\n-- Ломаем нарочно (синхрон текста) --')
+check('проверка заметила бы возврат к позиции из последнего сообщения', () => {
+  const прежнее = (pos: number) => pos
+  return прежнее(19.6) === 19.6 && livePosition(19.6, 1_000_000, 1_000_500, true) > 19.6
 })
 
 console.log('\n── Как едет текст (v1.435.0) ──')

@@ -82,6 +82,39 @@ export function toggleVideoHidden(identity: string) {
   notify()
 }
 
+// ── Чужая демонстрация экрана (v1.440.0) ─────────────────────────────────────
+// Разделены нарочно: чаще всего нужно именно заглушить звук чужой демки (там
+// играет музыка или стреляют), а картинку оставить. В Discord это тоже две
+// разные вещи, и до сих пор у нас не было ни одной из них: демонстрация шла как
+// есть, и единственным способом от неё избавиться было выйти из звонка.
+const SHARE_OFF_KEY = 'ponoi_share_off_v1'
+const SHARE_MUTE_KEY = 'ponoi_share_mute_v1'
+
+function loadSet(key: string): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || '[]')
+    return new Set(Array.isArray(v) ? v.filter(x => typeof x === 'string') : [])
+  } catch { return new Set() }
+}
+let shareOff: Set<string> | null = null
+let shareMute: Set<string> | null = null
+const offSet = (): Set<string> => (shareOff ??= loadSet(SHARE_OFF_KEY))
+const muteSet = (): Set<string> => (shareMute ??= loadSet(SHARE_MUTE_KEY))
+
+function toggleIn(s: Set<string>, key: string, id: string) {
+  if (s.has(id)) s.delete(id); else s.add(id)
+  try { localStorage.setItem(key, JSON.stringify([...s])) } catch { /* переполнено */ }
+  notify()
+}
+
+/** Не показывать демонстрацию этого человека — только у себя. */
+export const isShareHidden = (identity: string): boolean => offSet().has(identity)
+export const toggleShareHidden = (identity: string) => toggleIn(offSet(), SHARE_OFF_KEY, identity)
+
+/** Заглушить звук его демонстрации, оставив голос. */
+export const isShareMuted = (identity: string): boolean => muteSet().has(identity)
+export const toggleShareMuted = (identity: string) => toggleIn(muteSet(), SHARE_MUTE_KEY, identity)
+
 /** Подпись для меню: «Заглушен · 40%» — чтобы не открывать ползунок ради проверки. */
 export function peerSoundLabel(identity: string): string {
   const v = getPeerVolume(identity)

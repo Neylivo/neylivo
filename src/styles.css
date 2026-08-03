@@ -6814,3 +6814,39 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   .sb-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
   .sb-tile { min-height: 88px; }
 }
+
+/* v1.440.0: управление чужой демонстрацией прямо на её плитке.
+   Раньше избавиться от чужой демки можно было только выйдя из звонка. */
+.c2-share-ctl {
+  position: absolute; top: 6px; right: 6px; z-index: 3; display: flex; gap: 4px;
+  opacity: 0; transition: opacity .12s var(--ease-out4, ease);
+}
+.c2-tile.share:hover .c2-share-ctl { opacity: 1; }
+.c2-share-ctl button {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border: none; border-radius: 7px; background: rgba(0, 0, 0, .55); color: #dbdee1; cursor: pointer;
+}
+.c2-share-ctl button:hover { background: rgba(0, 0, 0, .8); color: #fff; }
+.c2-share-ctl button.on { background: var(--red); color: #fff; }
+
+/* v1.440.0: окно «Отправить другу» из меню карточки трека. */
+.mus2-share-ov {
+  position: fixed; inset: 0; z-index: var(--z-over-modal, 130);
+  background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.mus2-share {
+  width: min(360px, 96vw); max-height: min(70vh, 520px); display: flex; flex-direction: column;
+  background: var(--bg2); border-radius: var(--r-xl, 14px); box-shadow: 0 16px 48px rgba(0, 0, 0, .55);
+  overflow: hidden;
+}
+.mus2-share-h { padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 2px; }
+.mus2-share-h span { font-size: 12.5px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mus2-share-list { overflow-y: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.mus2-share-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; cursor: pointer;
+  border: none; border-radius: var(--r-md, 8px); background: transparent; color: var(--tx);
+  font-size: 14px; font-weight: 600; text-align: left;
+}
+.mus2-share-item:hover:not(:disabled) { background: rgba(var(--ov, 255,255,255), .07); }
+.mus2-share-item:disabled { opacity: .6; cursor: default; }
+.mus2-share-item .mut { margin-left: auto; font-weight: 400; font-size: 12px; }

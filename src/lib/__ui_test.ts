@@ -25,6 +25,8 @@ import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon } from './c
 import { shouldLeave, takeCall, releaseCall, activeCall } from './activeCall'
 import { takeSlot, freeSlot, hasSlot, liveCount, resetSlots, subscribeSlots, MAX_LIVE } from './petSlots'
 import { tileEmoji, tileLabel, orderTiles, filterTiles } from './soundTile'
+import { fmtNotification, cleanBody, trimBody, plusMessages, BODY_MAX } from './notifyFormat'
+import { shareTrackText } from '../music/shareText'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -892,6 +894,74 @@ check('проверка заметила бы пропажу границ', () =
   const без = { zoom: 2, x: 9999, y: 0 }
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
+
+console.log('\n-- Уведомления: что видит человек (v1.440.0) --')
+{
+  check('заголовок говорит, кто и куда написал', () => {
+    const n = fmtNotification({ author: 'Вася', channel: 'общий', text: 'привет' })
+    return n.title === 'Вася — #общий' && n.body === 'привет'
+  })
+  check('в личке канала нет', () =>
+    fmtNotification({ author: 'Вася', text: 'привет' }).title === 'Вася')
+  check('упоминание помечено — по нему решают, бросать ли дела', () =>
+    fmtNotification({ author: 'Вася', text: 'эй', mention: true }).title.startsWith('@ '))
+  check('вложение без текста — «Вложение», а не пустота', () =>
+    fmtNotification({ author: 'Вася', text: '', hasAttach: true }).body === 'Вложение')
+  check('пустое сообщение без вложения тоже не пустое', () =>
+    fmtNotification({ author: 'Вася', text: '' }).body === 'Новое сообщение')
+
+  console.log('\n   тело чистится:')
+  check('служебная вставка не показывается', () =>
+    cleanBody('⁣sys:call:start⁣хвост').trim() === '')
+  check('спойлер остаётся скрытым', () => cleanBody('вот ||секрет||') === 'вот ▮▮')
+  check('разметка не показывается знаками', () =>
+    cleanBody('**жирный** и *косой* и ~~зачёркнутый~~') === 'жирный и косой и зачёркнутый')
+  check('код превращается в пометку', () => cleanBody('смотри ```console.log(1)```') === 'смотри 「код」')
+  check('ссылка не занимает всё окно', () =>
+    cleanBody('глянь https://example.com/очень/длинный/путь?a=1') === 'глянь 🔗 ссылка')
+  check('переносы и пробелы схлопываются', () => cleanBody('раз\n\n\nдва   три') === 'раз\nдва три')
+
+  console.log('\n   длина:')
+  check('короткое не режется', () => trimBody('привет') === 'привет')
+  check('длинное режется по словам', () => {
+    const b = trimBody('слово '.repeat(60), 40)
+    return b.endsWith('…') && b.length <= 41 && !b.includes('сл…')
+  })
+  check('предел разумный', () => BODY_MAX >= 80 && BODY_MAX <= 200)
+
+  console.log('\n   повторы:')
+  check('одно сообщение — без хвоста', () =>
+    !fmtNotification({ author: 'В', text: 'раз' }).body.includes('и ещё'))
+  check('несколько — сказано сколько', () =>
+    fmtNotification({ author: 'В', text: 'раз', more: 3 }).body.includes('и ещё 3 сообщения'))
+  check('склонение верное', () =>
+    plusMessages(1).includes('сообщение') && plusMessages(2).includes('сообщения') &&
+    plusMessages(5).includes('сообщений') && plusMessages(11).includes('сообщений'))
+
+  console.log('\n-- Ломаем нарочно (уведомления) --')
+  check('проверка заметила бы сырой текст в уведомлении', () => {
+    const сырое = 'вот ||секрет|| и **жирный**'
+    return cleanBody(сырое) !== сырое && !cleanBody(сырое).includes('секрет')
+  })
+}
+
+console.log('\n-- Поделиться треком (v1.440.0) --')
+{
+  check('в сообщении видно, что это песня', () => {
+    const t = shareTrackText({ title: 'Осень', author: 'ДДТ', url: 'https://x/1' })
+    return t.startsWith('🎵 Осень — ДДТ') && t.includes('https://x/1')
+  })
+  check('без исполнителя тоже читается', () =>
+    shareTrackText({ title: 'Осень', url: 'https://x/1' }).startsWith('🎵 Осень\n'))
+  check('без названия не отправляем пустоту', () =>
+    shareTrackText({ title: '', url: 'https://x/1' }).startsWith('🎵 Трек'))
+  check('своя приписка идёт после ссылки', () => {
+    const t = shareTrackText({ title: 'О', url: 'https://x/1' }, 'послушай')
+    return t.endsWith('послушай') && t.indexOf('https://x/1') < t.indexOf('послушай')
+  })
+  check('пустая приписка не добавляет пустой строки', () =>
+    shareTrackText({ title: 'О', url: 'https://x/1' }, '   ').split('\n').length === 2)
+}
 
 console.log('\n-- Саундпад сеткой (v1.439.0) --')
 {

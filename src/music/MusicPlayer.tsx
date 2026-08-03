@@ -14,6 +14,8 @@ import { usePresence } from '../lib/presence'
 import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, tracksCount, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
+import { sendTrackToFriend } from './shareTrack'
+import { emptyHist, pushPlayed, back as histBack, forward as histForward, recentIds, canForward, type Hist } from './history'
 import { loadLibrary, saveLibrary, libraryPlan } from './libCache'
 import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
 import {
@@ -33,14 +35,14 @@ import { listenToTrack } from './aiListen'
 /** Крупные числа сокращаем: «1.2K» вместо «1247» — на карточке важнее порядок. */
 const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'K' : String(n)
 import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
-import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, lyricsScrollMs, lyricsEase, type Lyrics } from './lyrics'
+import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, lyricsScrollMs, lyricsEase, livePosition, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
 import { copyText } from '../lib/copyMedia'
 import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
-import { resolveNext, backTarget, type StopWhy } from './nextTrack'
+import { resolveNext, type StopWhy } from './nextTrack'
 import { useDragBar } from './useDragBar'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
@@ -347,9 +349,31 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [lyrShift, setLyrShiftState] = useState(0)
   useEffect(() => { setLyrShiftState(cur ? lyricsShift(cur.id) : 0) }, [cur?.id])
   const lyrK = lyr && lyr.synced ? lyricsScale(lyr.srcDur, dur || cur?.dur) : 1
+  // v1.440.0: текст идёт по ДОСЧИТАННОМУ времени, а не по последнему сообщению.
+  //
+  // Позиция приезжает рывками (YouTube — раз в полсекунды), и между рывками
+  // приложение считало, что песня стоит: строка вспыхивала не когда её запели, а
+  // когда пришло очередное сообщение. Ошибка гуляла от нуля до полусекунды —
+  // ровно то, что видно как «текст то отстаёт, то прыгает вперёд».
+  //
+  // Отдельные часы, тикающие ради этого: двадцать раз в секунду, только пока
+  // открыт текст и идёт музыка. Караоке — единственное место, где такая точность
+  // нужна; полосе времени и всему остальному хватает и рывков.
+  const posAtRef = useRef(0)
+  useEffect(() => { posAtRef.current = Date.now() }, [curT])
+  const [lyrTick, setLyrTick] = useState(0)
+  useEffect(() => {
+    if (!lyr?.synced || !playing || lyrMode === 'off') return
+    const id = window.setInterval(() => setLyrTick(v => v + 1), 50)
+    return () => window.clearInterval(id)
+  }, [lyr?.synced, playing, lyrMode])
+  const lyrPos = lyr && lyr.synced
+    ? livePosition(curT, posAtRef.current, Date.now(), playing)
+    : curT
   const lyrActive = lyr && lyr.synced
-    ? activeLineIndex(lyr.lines, lyricsTime(curT, lyrK, lyrShift))
+    ? activeLineIndex(lyr.lines, lyricsTime(lyrPos, lyrK, lyrShift))
     : -1
+  void lyrTick   // от него зависит только пересчёт выше
   /**
    * Поющаяся строка всегда посередине, а текст можно листать (v1.420.0).
    *
@@ -1677,6 +1701,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     'repeat-one': 'Этот трек играть нечем — повторять нечего',
   }
   const next = () => {
+    // v1.440.0: если человек возвращался назад, «дальше» ведёт по той же
+    // истории вперёд, а не выдумывает новый трек. Новый подбор начинается
+    // только когда история кончилась.
+    if (repeat !== 'one' && goHist('forward')) return
     const { first, arg } = nextInput()
     const act = resolveNext({ ...arg, personalIdx: personalIdxRef.current })
     if (first && act.kind !== 'restart') saveManual(manual.filter(x => x !== first))
@@ -1700,29 +1728,34 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // «Прошлый», и пока она лежала в ссылке, панель не перерисовывалась: кнопка
   // «назад» уводила к одному треку, а в очереди значился другой. Ровно та же
   // болезнь, что уже была с «дальше» (v1.398.0) — показ и действие разошлись.
-  const [hist, setHist] = useState<string[]>([])
-  const fromPrevRef = useRef(false)
+  // v1.440.0: история со ходом ВПЕРЁД (см. music/history.ts).
+  //
+  // Раньше «назад» разбирало стопку: трек снимался насовсем, и вернуться вперёд
+  // к тому, что только что слушал, было нечем — очередь придумывала следующий
+  // заново. Теперь это список с указателем, как история страниц: назад и вперёд
+  // ходят по одному и тому же пути.
+  const [hist, setHist] = useState<Hist>(emptyHist)
+  const histRef = useRef(hist); histRef.current = hist
+  const fromHistRef = useRef(false)
+  const alive = (id: string) => tracks.some(t => t.id === id)
   useEffect(() => {
     const id = cur?.id
     if (!id) return
-    if (fromPrevRef.current) { fromPrevRef.current = false; return }
-    setHist(h => {
-      // Тот же трек подряд (перезапуск, повтор одного) в историю не пишем:
-      // иначе «назад» топталось бы на месте.
-      if (h[h.length - 1] === id) return h
-      const n = [...h, id]
-      return n.length > 30 ? n.slice(n.length - 30) : n
-    })
+    if (fromHistRef.current) { fromHistRef.current = false; return }   // шли по истории — указатель уже сдвинут
+    setHist(h => pushPlayed(h, id))
   }, [cur?.id])
 
+  const goHist = (step: 'back' | 'forward'): boolean => {
+    const r = step === 'back' ? histBack(histRef.current, alive) : histForward(histRef.current, alive)
+    if (!r) return false
+    setHist(r.hist)
+    fromHistRef.current = true
+    setIdx(tracks.findIndex(t => t.id === r.target))
+    return true
+  }
+
   const prev = () => {
-    const { hist: rest, target } = backTarget(hist, id => tracks.some(t => t.id === id))
-    if (target) {
-      setHist(rest)
-      fromPrevRef.current = true
-      setIdx(tracks.findIndex(t => t.id === target))
-      return
-    }
+    if (goHist('back')) return
     // Истории ещё нет (первый трек за сеанс) — прежнее поведение: шаг по складу.
     setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
   }
@@ -1877,13 +1910,35 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const recentRef = useRef<string[]>((() => {
     try {
       const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
-      return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 40) : []
+      return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 80) : []
     } catch { return [] }
   })())
   const [recentAt, setRecentAt] = useState(0)
+  // v1.440.0: кому отправляем трек. null — окно закрыто.
+  const [shareFor, setShareFor] = useState<Track | null>(null)
+  const [shareList, setShareList] = useState<{ id: string; username: string; avatar_url: string | null }[]>([])
+  const [shareBusy, setShareBusy] = useState('')
+  useEffect(() => {
+    if (!shareFor) return
+    let ok = true
+    ;(async () => {
+      // Берём тех, с кем уже есть переписка: отправить песню человеку, которому
+      // ты никогда не писал, — не то, ради чего эта кнопка нужна.
+      const { data: fr } = await supabase.from('friend_requests').select('from_user, to_user')
+        .eq('status', 'accepted').or('from_user.eq.' + meId + ',to_user.eq.' + meId)
+      const ids = [...new Set(((fr ?? []) as any[]).map(r => (r.from_user === meId ? r.to_user : r.from_user)))]
+      if (!ids.length) { if (ok) setShareList([]); return }
+      const { data } = await supabase.from('profiles').select('id, username, avatar_url').in('id', ids).limit(100)
+      if (ok) setShareList(((data ?? []) as any[]).sort((a, b) => String(a.username).localeCompare(String(b.username), 'ru')))
+    })()
+    return () => { ok = false }
+  }, [shareFor, meId])
   useEffect(() => {
     if (!cur) return
-    recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 40)
+    // v1.440.0: помним восемьдесят вместо сорока. На сороковом треке хвост
+    // кончался, запрет повтора переставал работать по всей сессии, и волна
+    // сваливалась к глобально популярному — ровно то, на что жаловались.
+    recentRef.current = [cur.id, ...recentRef.current.filter(x => x !== cur.id)].slice(0, 80)
     try { localStorage.setItem(RECENT_KEY, JSON.stringify(recentRef.current)) } catch { /* переполнено */ }
     // v1.434.0: список «только что игравшего» живёт в ссылке, а волна с этой
     // версии считается не на каждой отрисовке, а по списку зависимостей — из
@@ -1962,8 +2017,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // возврат. Раньше здесь стоял «предыдущий номер по списку», и при
   // перемешивании очередь показывала одно, а кнопка играла другое.
   const qPrev = (() => {
-    const { target } = backTarget(hist, id => tracks.some(t => t.id === id))
-    if (target) return tracks.find(t => t.id === target) ?? null
+    const r = histBack(hist, alive)
+    if (r) return tracks.find(t => t.id === r.target) ?? null
     return tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
   })()
   // v1.433.0: строка «Дальше» считается ТОЙ ЖЕ resolveNext, что и кнопка. До
@@ -1972,6 +2027,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // «Дальше — этот же» стояло даже там, где плеер на самом деле остановится.
   const qNext = (() => {
     if (!cur) return { label: 'Дальше', t: null as typeof cur | null }
+    // v1.440.0: если человек возвращался назад, «дальше» ведёт по истории — и
+    // строка обязана говорить ровно это, иначе показ снова разойдётся с
+    // действием (см. resolveNext и всю историю этой болезни).
+    if (repeat !== 'one') {
+      const f = histForward(hist, alive)
+      if (f) return { label: 'Дальше — по истории', t: tracks.find(t => t.id === f.target) ?? null }
+    }
     const { arg } = nextInput()
     const act = resolveNext({ ...arg, personalIdx })
     if (act.kind === 'stop') {
@@ -2320,6 +2382,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             <div className="ctxmenu-item" onClick={() => { void copyText(t.url, 'Ссылка скопирована'); close() }}>
               <Icon name="link" size={15} /> Скопировать ссылку
             </div>
+            {/* v1.440.0: отдать песню другу прямо отсюда. Раньше для этого надо
+                было скопировать голую ссылку, открыть переписку и вставить — и
+                собеседник получал адрес без единого слова о том, что это. */}
+            <div className="ctxmenu-item" onClick={() => { setShareFor(t); close() }}>
+              <Icon name="forward" size={15} /> Отправить другу
+            </div>
             {unplayable(t) && <div className="ctxmenu-item" onClick={() => {
               forgetBroken(t.id); forgetNoEmbed(t.id); setYtDenied(prev => prev.filter(x => x !== t.id)); toastOk('Попробую этот трек снова'); close()
             }}><Icon name="rotate" size={15} /> Попробовать снова</div>}
@@ -2349,6 +2417,40 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           ))}
           <div className="ctxmenu-item" onClick={() => { const id = plPick; setPlPick(null); void newPlaylistWith(id) }}>
             <Icon name="plus" size={15} /> Новый плейлист
+          </div>
+        </div>
+      </Portal>}
+
+      {shareFor && <Portal>
+        <div className="mus2-share-ov" onClick={() => setShareFor(null)}>
+          <div className="mus2-share" onClick={e => e.stopPropagation()}>
+            <div className="mus2-share-h">
+              <b>Отправить другу</b>
+              <span className="notr" translate="no">{meta[shareFor.url]?.title || shareFor.name}</span>
+            </div>
+            <div className="mus2-share-list">
+              {shareList.length === 0 && <div className="mus2-empty">Нет друзей, которым можно отправить</div>}
+              {shareList.map(f => (
+                <button key={f.id} className="mus2-share-item" disabled={!!shareBusy}
+                  onClick={async () => {
+                    setShareBusy(f.id)
+                    try {
+                      await sendTrackToFriend(meId, me, f.id, {
+                        title: meta[shareFor.url]?.title || shareFor.name,
+                        author: meta[shareFor.url]?.author || shareFor.author,
+                        url: shareFor.url,
+                      })
+                      toastOk('Отправлено — ' + f.username)
+                      setShareFor(null)
+                    } catch (e: any) { toastErr(e?.message ?? String(e)) }
+                    finally { setShareBusy('') }
+                  }}>
+                  <Avatar name={f.username} url={f.avatar_url} size={28} />
+                  <span>{f.username}</span>
+                  {shareBusy === f.id && <span className="mut">отправляю…</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </Portal>}

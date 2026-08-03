@@ -4,6 +4,8 @@
 // when the app/tab is closed) would need a service worker + VAPID + a sender.
 import { getSettings } from './settings'
 import { getUserPrefs } from './userPrefs'
+import { fmtNotification, type NotifyInput } from './notifyFormat'
+import { openMsgLink } from './deepLink'
 
 export function initNotifications() {
   try {
@@ -24,9 +26,36 @@ const DEFAULT_ICON = '/icon.png'
 // пользователь сам открыл этот канал/чат, не дожидаясь автозакрытия по таймеру.
 const openNotifs = new Map<string, Notification>()
 
-export function notifyMessage(title: string, body: string, icon?: string | null, tag?: string) {
+/**
+ * Сколько сообщений пришло из этого места, пока человек не смотрел (v1.440.0).
+ *
+ * Раньше каждое следующее сообщение из того же чата ПОЛНОСТЬЮ заменяло собой
+ * предыдущее уведомление, и было не понять, пришло одно сообщение или двадцать.
+ * Теперь считаем и дописываем «и ещё N».
+ */
+const pending = new Map<string, number>()
+
+/** Куда идти по нажатию: тег -> ссылка вида ponoi://msg/... */
+const routes = new Map<string, string>()
+
+/**
+ * Показать уведомление о сообщении (v1.440.0 — переписано).
+ *
+ * Что изменилось:
+ *   • текст готовит одна функция (notifyFormat.ts), а не каждое место по-своему:
+ *     из тела уходят служебные вставки, разметка и простыни на тысячу знаков;
+ *   • нажатие ОТКРЫВАЕТ нужный чат, а не просто поднимает окно — раньше человек
+ *     нажимал на уведомление и оставался там же, где был;
+ *   • повторы из одного места считаются: «и ещё 3 сообщения»;
+ *   • разрешение спрашивается при первом же уведомлении, если его ещё не
+ *     спрашивали: раньше вопрос задавался один раз при запуске, и отказавшийся
+ *     случайно оставался без уведомлений навсегда.
+ */
+export function notifyMessage(input: NotifyInput & { icon?: string | null; tag?: string; route?: string }) {
   try {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'default') { Notification.requestPermission().catch(() => {}); return }
+    if (Notification.permission !== 'granted') return
     // v1.332.0: тумблер «Системные уведомления» в настройках не читался ЗДЕСЬ и
     // нигде больше — то есть выключить их было нельзя, они показывались всегда.
     // Проверка стоит в одном месте, у самого показа: любой новый вызывающий
@@ -34,11 +63,26 @@ export function notifyMessage(title: string, body: string, icon?: string | null,
     if (!getSettings().notifSystem) return
     // Only notify when the user isn't actively looking at the app.
     if (document.visibilityState === 'visible' && document.hasFocus()) return
+    const tag = input.tag
     if (tag) { try { openNotifs.get(tag)?.close() } catch {} }
-    const n = new Notification(title, { body: body || 'Вложение', icon: icon || DEFAULT_ICON, tag })
+    const more = tag ? (pending.get(tag) ?? 0) : 0
+    const { title, body } = fmtNotification({ ...input, more })
+    if (tag) { pending.set(tag, more + 1); if (input.route) routes.set(tag, input.route) }
+    const n = new Notification(title, {
+      body, icon: input.icon || DEFAULT_ICON, tag,
+      // renotify — чтобы система показала плашку ещё раз, а не молча подменила
+      // текст уже показанной: иначе второе сообщение можно вовсе не заметить.
+      ...(tag ? { renotify: true } as any : {}),
+    })
     if (tag) openNotifs.set(tag, n)
     const forget = () => { if (tag && openNotifs.get(tag) === n) openNotifs.delete(tag) }
-    n.onclick = () => { try { window.focus() } catch {} ; n.close() }
+    n.onclick = () => {
+      try { window.focus() } catch {}
+      const route = input.route || (tag ? routes.get(tag) : undefined)
+      if (route) { try { openMsgLink(route) } catch {} }
+      if (tag) { pending.delete(tag); routes.delete(tag) }
+      n.close()
+    }
     n.onclose = forget
     setTimeout(() => { try { n.close() } catch {} ; forget() }, 8000)
   } catch {}
@@ -46,7 +90,9 @@ export function notifyMessage(title: string, body: string, icon?: string | null,
 
 /** Закрыть уведомление по тегу руками — например, когда пользователь сам открыл этот канал/чат. */
 export function closeNotif(tag: string) {
-  try { openNotifs.get(tag)?.close(); openNotifs.delete(tag) } catch {}
+  // v1.440.0: заодно сбрасываем счётчик — человек открыл это место сам, и
+  // «и ещё 3 сообщения» в следующем уведомлении было бы неправдой.
+  try { openNotifs.get(tag)?.close(); openNotifs.delete(tag); pending.delete(tag); routes.delete(tag) } catch {}
 }
 
 // --- Звуки сообщений и интерфейса через WebAudio (без аудиофайлов) ---

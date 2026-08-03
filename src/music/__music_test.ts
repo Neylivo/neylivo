@@ -20,6 +20,8 @@ import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, playKind, silenceStuck, SILENCE_MS } from './broken'
 import { pushFail, sourceDown, SOURCE_DOWN_FAILS, SOURCE_DOWN_MS, type FailMark } from './broken'
 import { mergeTracks } from './mergeTracks'
+import { songKey, sameSong } from './songKey'
+import { emptyHist, pushPlayed, back as histBack, forward as histForward, recentIds, HIST_MAX } from './history'
 import { libraryPlan, newestAt, SNAPSHOT_TTL_MS } from './libCache'
 import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
 import { tooShortWhy, MIN_TRACK_SEC } from './minLength'
@@ -716,6 +718,97 @@ check('на паузе время не бежит', () => {
   const l = { pos: 42, dur: 200, at: 1000 }
   return livePosLocal(l, 1000 + 60_000) === 102 && l.pos === 42
 })
+
+console.log('\n-- Одна и та же песня в другой обёртке (v1.440.0) --')
+check('ускоренная версия — та же песня', () =>
+  sameSong('Осень', 'ДДТ', 'Осень (Sped Up)', 'ДДТ'))
+check('замедленная тоже', () => sameSong('Осень', 'ДДТ', 'Осень - slowed + reverb', 'ДДТ'))
+check('ремикс тоже', () => sameSong('Осень', 'ДДТ', 'Осень (DJ Ivan Remix)', 'ДДТ'))
+check('клип с приписками тоже', () =>
+  sameSong('Осень', 'ДДТ', 'ДДТ — Осень (Official Video) HD', 'ДДТ'))
+check('найткор тоже', () => sameSong('Осень', 'ДДТ', 'Осень [Nightcore]', 'ДДТ'))
+check('разные песни одного исполнителя не склеиваются', () =>
+  !sameSong('Осень', 'ДДТ', 'Родина', 'ДДТ'))
+check('одинаковое название у разных исполнителей — всё же одна вещь по названию', () =>
+  sameSong('Осень', 'ДДТ', 'Осень', 'Кто-то'))
+check('пустое название ни с чем не совпадает', () =>
+  !sameSong('', 'ДДТ', '', 'ДДТ') && !sameSong('(Official Video)', '', 'что угодно', ''))
+check('ключ не зависит от регистра и знаков', () =>
+  songKey('ОСЕНЬ!!!', 'ДДТ') === songKey('осень', 'ддт'))
+
+console.log('\n   волна не ставит другую версию подряд:')
+{
+  const V = (id: string, name: string, author: string) => ({ id, name, author, plays: 0 })
+  const склад = [
+    V('cur', 'Осень', 'ДДТ'),
+    V('speed', 'Осень (Sped Up)', 'ДДТ'),
+    V('other', 'Родина', 'ДДТ'),
+  ]
+  check('ускоренная версия играющего не предлагается', () => {
+    const r = recommend({ tracks: склад, idx: 0, plays: {} })
+    return r[0].track.id === 'other'
+  })
+  check('и версия только что игравшего тоже', () => {
+    const t = [V('cur', 'Родина', 'ДДТ'), V('speed', 'Осень (Sped Up)', 'ДДТ'), V('third', 'Дождь', 'ДДТ')]
+    const r = recommend({ tracks: t, idx: 0, plays: {}, recent: ['осень-id'] })
+    // «осень-id» в складе нет, поэтому проверяем прямее: с настоящим id.
+    const t2 = [V('cur', 'Родина', 'ДДТ'), V('osen', 'Осень', 'ДДТ'), V('speed', 'Осень (Sped Up)', 'ДДТ'), V('third', 'Дождь', 'ДДТ')]
+    const r2 = recommend({ tracks: t2, idx: 0, plays: {}, recent: ['osen'] })
+    return r.length > 0 && r2[0].track.id === 'third'
+  })
+}
+
+console.log('\n-- История: назад и вперёд по одному пути (v1.440.0) --')
+{
+  const есть = () => true
+  let h = emptyHist
+  h = pushPlayed(h, 'a'); h = pushPlayed(h, 'b'); h = pushPlayed(h, 'c')
+  check('история пишется по порядку', () => h.list.join() === 'a,b,c' && h.at === 2)
+  check('тот же трек подряд не пишется', () => pushPlayed(h, 'c') === h)
+  check('шаг назад ведёт к предыдущему', () => histBack(h, есть)!.target === 'b')
+  check('шаг назад не разбирает историю', () => {
+    const r = histBack(h, есть)!
+    return r.hist.list.join() === 'a,b,c' && r.hist.at === 1
+  })
+  check('после «назад» шаг вперёд возвращает ТОТ ЖЕ трек', () => {
+    const b = histBack(h, есть)!
+    const f = histForward(b.hist, есть)
+    return f?.target === 'c'
+  })
+  check('два шага назад и два вперёд — там же, где были', () => {
+    const b1 = histBack(h, есть)!, b2 = histBack(b1.hist, есть)!
+    const f1 = histForward(b2.hist, есть)!, f2 = histForward(f1.hist, есть)!
+    return f2.target === 'c' && f2.hist.at === h.at
+  })
+  check('впереди ничего — нужен новый подбор', () => histForward(h, есть) === null)
+  check('в самом начале назад некуда', () => histBack({ list: ['a'], at: 0 }, есть) === null)
+  check('удалённый трек пропускается и назад, и вперёд', () => {
+    const жив = (id: string) => id !== 'b'
+    const b = histBack(h, жив)
+    return b?.target === 'a'
+  })
+  check('новый трек из середины обрезает будущее', () => {
+    const b = histBack(h, есть)!            // стоим на b
+    const n = pushPlayed(b.hist, 'x')
+    return n.list.join() === 'a,b,x' && n.at === 2 && histForward(n, есть) === null
+  })
+  check('история не растёт бесконечно', () => {
+    let big = emptyHist
+    for (let i = 0; i < HIST_MAX + 20; i++) big = pushPlayed(big, 'т' + i)
+    return big.list.length === HIST_MAX && big.at === HIST_MAX - 1
+  })
+  check('«что играло только что» берётся из истории', () =>
+    recentIds(h, 2).join() === 'c,b')
+
+  console.log('\n-- Ломаем нарочно (история) --')
+  check('проверка заметила бы возврат к разбирающей стопке', () => {
+    // Прежнее поведение: «назад» СНИМАЛО трек, и вперёд возвращаться было некуда.
+    const прежнее = (list: string[]) => list.slice(0, -1)
+    const после = прежнее(['a', 'b', 'c'])
+    const b = histBack(h, есть)!
+    return после.join() === 'a,b' && histForward(b.hist, есть)?.target === 'c'
+  })
+}
 
 console.log('\n-- Тишина при входе (v1.439.0) --')
 // Чужой проигрыватель (виджет SoundCloud в скрытом iframe) умеет стартовать сам:
