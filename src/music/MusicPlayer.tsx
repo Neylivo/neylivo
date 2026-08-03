@@ -47,11 +47,12 @@ import { Icon } from '../components/icons'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
 import { copyText } from '../lib/copyMedia'
-import { isSoundcloudUrl, scMeta, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
+import { isSoundcloudUrl, scMeta, cachedMeta as scCached, scResolveTracks, lastImportSkipped, loadWidgetApi, widgetSrc, cleanScUrl, type ScMeta } from './soundcloud'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
 import { resolveNext, type StopWhy } from './nextTrack'
 import { useDragBar } from './useDragBar'
-import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi } from './sources'
+import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi, cachedMeta as srcCached } from './sources'
+import { planMeta, seedFromCache, needsFetch } from './metaPlan'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
@@ -972,6 +973,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // обложки: у SoundCloud без неё трек играет через адрес страницы.
     const missing = tracks.filter(t => !meta[t.url] && (!t.art || !t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
+    // v1.445.0: сперва забираем всё, что уже лежит в кэше на устройстве, — разом
+    // и без единого запроса. Раньше приложение узнавало о лежащем в кэше только
+    // через ту же очередь: каждая карточка ждала своей очереди, чтобы получить
+    // то, что и так на диске, и обложки на складе проявлялись по одной.
+    const seeded = seedFromCache(missing, u => (isSoundcloudUrl(u) ? scCached(u) : srcCached(u)))
+    if (Object.keys(seeded).length) setMeta(prev => ({ ...seeded, ...prev }))
+    const toFetch = needsFetch(missing, seeded)
+    if (toFetch.length === 0) return
     // v1.405.0: чем больше склад, тем дольше начиналась песня — и вот почему.
     //
     // Метаданные (в том числе ссылка, по которой трек реально играет) тянулись
@@ -992,12 +1001,20 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // медленно, а у SoundCloud — ещё и через адрес страницы. Берём то же, что
     // показано в очереди и что сыграет кнопка (см. qNext).
     const nextUrl = qNextUrlRef.current
-    const rank = (u: string) => (u === first ? 0 : u === nextUrl ? 1 : 2)
     // v1.410.0: за раз берём не больше шестидесяти. На складе в три сотни
     // это триста запросов к чужим сервисам подряд: они начинают
     // отвечать отказом, а окно всё это время занято. Остальные догрузятся
     // следующим заходом — когда список изменится или человек откроет склад.
-    const queue = [...missing].sort((a, b) => rank(a.url) - rank(b.url)).slice(0, 60)
+    // v1.445.0: порядок считает planMeta (music/metaPlan.ts). Раньше он знал ровно
+    // про два трека — играющий и следующий, — а найденное поиском грузилось
+    // последним, потому что лежит в середине склада: человек искал, получал
+    // двадцать карточек без обложек и включал трек, у которого ещё нет своей
+    // ссылки. Теперь найденное идёт сразу за играющим, а показанное на экране —
+    // за найденным.
+    const queue = planMeta(toFetch, {
+      current: first, next: nextUrl,
+      found: libFoundRef.current, shown: libShownRef.current,
+    })
     ;(async () => {
       const CONCURRENCY = 4
       let at = 0
@@ -1025,7 +1042,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // ссылка, по которой он реально играет) не запрашивались вовсе — пока не
   // изменится список или не откроют склад. То есть выбранное ждало чего-то
   // постороннего.
-  }, [tracks, showLib, libShown, cur?.id])
+  }, [tracks, showLib, libShown, cur?.id, libQ])
 
   // ---- Тема под цвет трека: выжимаем доминирующий цвет из обложки ----
   useEffect(() => {
@@ -2125,6 +2142,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     scored.sort((a, b) => b.s - a.s)
     return scored.map(x => x.t)
   }, [tracks, meta, libQ])
+
+  // v1.445.0: что сейчас найдено и что показано на экране склада — для очереди
+  // подгрузки (music/metaPlan.ts). Через ссылки, а не через зависимости эффекта:
+  // эффект не должен перезапускаться на каждую букву в поиске, ему достаточно
+  // видеть свежее значение в момент, когда он и так сработал.
+  const libFoundRef = useRef<string[]>([])
+  libFoundRef.current = libQ.trim() ? libAll.map(t => t.url) : []
+  const libShownRef = useRef<string[]>([])
+  libShownRef.current = libAll.slice(0, libShown).map(t => t.url)
 
   // Подсказка «возможно, вы имели в виду» — только когда не нашлось ничего.
   const libHint = useMemo(() => {

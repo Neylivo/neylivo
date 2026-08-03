@@ -96,6 +96,10 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
   const dispatch = createDispatcher(plugin, {
     sendMessage: text => ctx.sendMessage(text),
     toast: text => ctx.toast(text),
+    // v1.445.0: поток отдаёт куски ответа обработчику плагина. Ищем песочницу
+    // по имени, а не держим ссылку: диспетчер создаётся раньше песочницы, и к
+    // моменту первого потока плагин уже запущен.
+    invoke: (ref, args) => invokePlugin(plugin.manifest.id, ref, args),
   }, ev => subs.add(ev))
   const sandbox = new PluginSandbox({
     onCall: dispatch,

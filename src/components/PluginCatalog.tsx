@@ -9,6 +9,7 @@ import { installPlugin } from '../lib/plugins/install'
 import { getPlugin, loadPlugins } from '../lib/plugins/store'
 import { OFFICIAL_PLUGINS } from '../lib/plugins/official'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type Permission, type PluginManifest } from '../lib/plugins/types'
+import { auditPlugin, auditBadge, AUDIT_NOTE } from '../lib/plugins/audit'
 import { PermissionGate } from './PluginPermissionGate'
 import { PicField } from './PicField'
 import {
@@ -34,6 +35,9 @@ interface Card {
   iconUrl?: string | null
   bannerUrl?: string | null
   permissions: Permission[]
+  // v1.445.0: домены из @hosts — по ним отметка безопасности видит, ходит ли
+  // плагин туда, о чём не сказал (см. lib/plugins/audit.ts).
+  hosts?: string[]
   installs?: number
   official: boolean
   code: string
@@ -46,16 +50,24 @@ function officialCards(): Card[] {
     const m = parsePlugin(p.code)
     return {
       id: m.id, name: m.name, author: m.author, summary: p.summary, description: m.description,
-      emoji: p.emoji, permissions: m.permissions, official: true, code: p.code, version: m.version,
+      emoji: p.emoji, permissions: m.permissions, hosts: m.hosts, official: true, code: p.code, version: m.version,
       iconUrl: m.icon, bannerUrl: m.banner, installs: 0,
     }
   })
+}
+
+/** @hosts из кода. Плагин с битой шапкой не должен ронять весь каталог. */
+function safeHosts(code: string): string[] {
+  try { return parsePlugin(code).hosts } catch { return [] }
 }
 
 function toCard(r: CatalogPlugin): Card {
   return {
     id: r.id, name: r.name, author: r.author_name, summary: r.summary, description: r.description,
     iconUrl: r.icon_url, bannerUrl: r.banner_url, permissions: (r.permissions ?? []) as Permission[], installs: r.installs,
+    // Отдельной колонки под @hosts в каталоге нет — читаем их из самого кода,
+    // который и так лежит рядом. Разбор кода всё равно идёт по нему же.
+    hosts: safeHosts(r.code),
     official: false, code: r.code, version: r.version, authorId: r.author_id,
   }
 }
@@ -189,6 +201,9 @@ function CardView({ c, onOpen, onInstall, onRemove }: {
 }) {
   const installed = !!getPlugin(c.id)
   const sensitive = c.permissions.filter(p => SENSITIVE_PERMISSIONS.includes(p))
+  // v1.445.0: отметка безопасности. Считается по коду, который выложен, — то
+  // есть у всех одинаково и без чьего-либо решения (см. lib/plugins/audit.ts).
+  const badge = auditBadge(auditPlugin(c.code, { permissions: c.permissions, hosts: c.hosts ?? [] }), c.official)
   return (
     <div className="cat-tile" onClick={onOpen}>
       <div className={'cat-tile-bg' + (c.bannerUrl ? '' : ' plain')}
@@ -198,8 +213,11 @@ function CardView({ c, onOpen, onInstall, onRemove }: {
       </div>
       <div className="cat-tile-body">
         <div className="cat-nm">
-          {c.name}
-          {c.official && <span className="cat-badge">от Ponoi</span>}
+          {/* v1.445.0: название — отдельной строкой-элементом, а не голым текстом.
+              Голый текст в flex-строке не умеет сжиматься, и ярлыки рядом с ним
+              уезжали за край экрана: на телефоне «стоит» просто не было видно. */}
+          <span className="cat-nm-t">{c.name}</span>
+          <span className={'cat-badge audit ' + badge.kind} title={AUDIT_NOTE}>{badge.text}</span>
           {installed && <span className="cat-badge on">стоит</span>}
         </div>
         <div className="cat-sum">{shorten(c.summary)}</div>
@@ -233,6 +251,22 @@ function DetailModal({ c, onClose, onInstall }: { c: Card; onClose: () => void; 
           </div>
         </div>
         <div className="cat-desc">{c.description || c.summary}</div>
+        {/* v1.445.0: разбор безопасности — целиком, а не одной отметкой. Человек
+            вправе видеть, ЧТО именно нашлось, а не только цвет ярлыка. */}
+        {(() => {
+          const r = auditPlugin(c.code, { permissions: c.permissions, hosts: c.hosts ?? [] })
+          const b = auditBadge(r, c.official)
+          return <div className="cat-audit">
+            <div className={'cat-audit-h ' + b.kind}>
+              <Icon name={b.kind === 'ok' ? 'check' : 'shield'} size={15} />
+              <b>{b.text}</b>
+            </div>
+            {r.findings.map(f => (
+              <div key={f.code} className={'cat-audit-f' + (f.level === 'danger' ? ' bad' : '')}>{f.text}</div>
+            ))}
+            <div className="cat-audit-note">{AUDIT_NOTE}</div>
+          </div>
+        })()}
         {c.permissions.length > 0 && <>
           <label className="modal-lbl">Плагин сможет</label>
           {c.permissions.map(p => (

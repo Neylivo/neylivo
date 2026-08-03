@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
 import { keepAliveAction } from './keepAlive'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
@@ -1594,6 +1595,92 @@ check('проверка ловит просьбу о разрешении на �
   // Спросить у того, кто ничего не включал, — значит получить отказ навсегда.
   ka({ playing: false, allowed: false, hidden: true }) !== 'ask'
   && ka({ allowed: false, hidden: false }) !== 'ask')
+
+
+// -- v1.445.0: удаление пачкой -----------------------------------------------
+// Удалять можно было только по одному. Здесь проверяется главное: число на
+// кнопке и то, что уходит в базу, считает ОДНА функция — иначе экран сказал бы
+// «удалить 12», а ушло бы 9, потому что три чужих.
+console.log('\n-- Удаление пачкой --')
+const лента = [1, 2, 3, 4, 5, 6].map(n => ({ id: 'm' + n, author: n % 3 === 0 ? 'чужой' : 'я' }))
+const моё = (m: { author: string }) => m.author === 'я'
+const наб = (...ids: string[]) => new Set(ids)
+
+check('отметка снимается тем же нажатием', () => {
+  const один = toggleOne(наб(), 'm1')
+  return один.has('m1') && !toggleOne(один, 'm1').has('m1')
+})
+check('исходный набор не портится', () => {
+  const было = наб('m1')
+  toggleOne(было, 'm2')
+  return было.size === 1
+})
+check('диапазон по Shift берёт всё между', () => {
+  const r = selectRange(наб('m2'), лента, 'm2', 'm5')
+  return r.size === 4 && r.has('m2') && r.has('m3') && r.has('m4') && r.has('m5')
+})
+check('диапазон работает и снизу вверх', () => {
+  const r = selectRange(наб('m5'), лента, 'm5', 'm2')
+  return r.size === 4 && r.has('m2') && r.has('m5')
+})
+check('без якоря Shift ведёт себя как обычное нажатие', () =>
+  selectRange(наб(), лента, null, 'm3').size === 1)
+check('якорь на пропавшем сообщении не ломает выбор', () =>
+  selectRange(наб(), лента, 'нетакого', 'm3').size === 1)
+
+check('удаляется только своё', () => {
+  const d = deletable(наб('m1', 'm2', 'm3'), лента, моё)
+  return d.length === 2 && d.every(m => m.author === 'я')
+})
+check('число на кнопке — длина того же списка', () => {
+  // Ровно это и не давало показу разойтись с действием.
+  const sel = наб('m1', 'm2', 'm3', 'm6')
+  const d = deletable(sel, лента, моё)
+  return bulkLabel(d.length) === 'Удалить 2 сообщения' && skippedCount(sel, лента, моё) === 2
+})
+check('удаляется в порядке ленты, а не в порядке нажатий', () => {
+  const d = deletable(наб('m4', 'm1', 'm2'), лента, моё)
+  return d.map(m => m.id).join(',') === 'm1,m2,m4'
+})
+check('за раз не больше сотни', () => {
+  const много = Array.from({ length: 250 }, (_, i) => ({ id: 'x' + i, author: 'я' }))
+  const sel = new Set(много.map(m => m.id))
+  return deletable(sel, много, моё).length === BULK_MAX
+      && skippedNote(0, true).includes('100')
+})
+check('пропавшее из ленты выпадает из выбора', () => {
+  const r = pruneSelection(наб('m1', 'нетакого'), лента)
+  return r.size === 1 && r.has('m1')
+})
+check('счёт чужих не считает пропавших', () =>
+  skippedCount(наб('m1', 'нетакого'), лента, моё) === 0)
+
+check('склонение считается по числу', () =>
+  bulkLabel(1) === 'Удалить 1 сообщение' && bulkLabel(3) === 'Удалить 3 сообщения'
+  && bulkLabel(5) === 'Удалить 5 сообщений' && bulkLabel(11) === 'Удалить 11 сообщений'
+  && bulkLabel(22) === 'Удалить 22 сообщения' && bulkLabel(0) === '')
+
+// check() синхронный, а runBulk — нет: ждём результат ДО проверки, иначе
+// проверка получила бы обещание (всегда истинное) и не смогла бы провалиться.
+const пачка = await runBulk(лента.slice(0, 3), async id => id !== 'm2')
+check('отказ по одному не отменяет остальные', () => пачка.done === 2 && пачка.failed === 1)
+check('итог называет то, что произошло на самом деле', () =>
+  bulkReport({ done: 9, failed: 3 }) === 'Удалено 9, не удалось 3'
+  && bulkReport({ done: 5, failed: 0 }) === 'Удалено 5'
+  && bulkReport({ done: 0, failed: 4 }) === 'Не удалось удалить ни одного сообщения')
+
+console.log('\n-- Ломаем нарочно (удаление пачкой) --')
+check('проверка ловит счёт по выбору вместо счёта по удаляемым', () => {
+  // Так и появлялось «удалить 12», после которого исчезало 9.
+  const sel = наб('m1', 'm2', 'm3')
+  const плохо = sel.size                          // считаем по отмеченным
+  const правильно = deletable(sel, лента, моё).length
+  return плохо !== правильно && правильно === 2
+})
+check('проверка ловит потерю ограничения в сотню', () => {
+  const много = Array.from({ length: 120 }, (_, i) => ({ id: 'y' + i, author: 'я' }))
+  return deletable(new Set(много.map(m => m.id)), много, моё).length < много.length
+})
 
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

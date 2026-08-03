@@ -354,12 +354,21 @@ interface Props {
   // v1.239.0: цвета ролей сервера (имя роли в нижнем регистре -> цвет) — чтобы
   // @Роль в тексте сообщения красилась как настоящая роль (см. src/lib/md.tsx).
   roleColors?: Record<string, string>
+  // v1.445.0: режим выбора нескольких сообщений (удаление пачкой).
+  // Набор и его разбор живут у родителя: он же удаляет и он же считает, что
+  // именно удалится (src/lib/bulkSelect.ts). Здесь только показ и нажатия.
+  selectMode?: boolean
+  selected?: ReadonlySet<string>
+  /** Нажали по сообщению в режиме выбора. shift — брать диапазон. */
+  onSelectToggle?: (id: string, shift: boolean) => void
+  /** «Выбрать сообщения» из меню — включает режим и отмечает это сообщение. */
+  onSelectStart?: (id: string) => void
   // v1.239.0: мои роли на этом сервере — упоминание любой из них подсвечивает
   // сообщение так же, как упоминание меня лично.
   myRoleNames?: string[]
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx, roleColors, myRoleNames }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx, roleColors, myRoleNames, selectMode, selected, onSelectToggle, onSelectStart }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -636,8 +645,20 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           <Fragment key={m._localId ?? m.id}>
             {newDividerId === m.id && <div className="new-sep"><span>НОВОЕ</span></div>}
             {showDay && <div className="day-sep"><span>{dayLabel(m.created_at)}</span></div>}
-            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '')}
-              onContextMenu={e => { e.preventDefault(); setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}
+            <div id={'msg-' + m.id} className={'msg' + (grouped ? ' grouped' : '') + (m.pinned ? ' pinned' : '') + (meMentioned ? ' mention-hl' : '') + (currentUser && m.author === currentUser ? ' mine' : '') + (editingId === m.id ? ' editing-live' : '') + (selectMode ? ' picking' : '') + (selected?.has(m.id) ? ' picked' : '')}
+              /* v1.445.0: в режиме выбора нажатие по строке отмечает её, а не
+                 открывает что-либо. Меню, ответ двойным щелчком и долгое
+                 нажатие на это время выключены: иначе уборка превращалась бы в
+                 случайные ответы и открытые окна. */
+              onClickCapture={selectMode ? (e => {
+                const t = e.target as HTMLElement
+                // Ссылку и картинку по-прежнему можно открыть: человек может
+                // захотеть посмотреть, что именно он удаляет.
+                if (t.closest('a, img, video')) return
+                e.preventDefault(); e.stopPropagation()
+                onSelectToggle?.(m.id, e.shiftKey)
+              }) : undefined}
+              onContextMenu={e => { e.preventDefault(); if (selectMode) return; setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}
               /* v1.426.0: долгое нажатие открывает то же меню сообщения.
                  На телефоне меню не открывалось НИЧЕМ: правого щелчка там нет, а
                  долгое нажатие браузер отдаёт выделению текста и события
@@ -647,12 +668,12 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               /* v1.433.0: отсчёт общий (lib/longPress.ts). Здесь он отменялся
                  на первом же pointermove — то есть на дрожи руки, которая идёт
                  постоянно: меню на телефоне почти не открывалось. */
-              onPointerDown={e => startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at }) })}
+              onPointerDown={e => { if (selectMode) return; startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at }) }) }}
               onDoubleClick={e => {
                 // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
                 // двойным щелчком при этом не ломается: если что-то выделилось, человек
                 // копирует, а не отвечает, и мы не мешаем.
-                if (!onReply) return
+                if (!onReply || selectMode) return
                 if (window.getSelection()?.toString()) return
                 const t = e.target as HTMLElement
                 // Внутри ссылок, кнопок, полей и картинок двойной щелчок значит своё.
@@ -660,7 +681,13 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 onReply(m)
               }}>
               <div className="msg-gutter">
-                {grouped
+                {/* v1.445.0: галочка на месте аватарки — так строка не прыгает
+                    при входе в режим выбора и обратно. */}
+                {selectMode
+                  ? <span className={'msg-pick' + (selected?.has(m.id) ? ' on' : '')} aria-hidden>
+                      {selected?.has(m.id) ? <Icon name="check" size={13} /> : null}
+                    </span>
+                  : grouped
                   ? <span className="msg-ts-hover" title={timeFull(m.created_at)}>{timeShort(m.created_at)}</span>
                   : settings.showAvatars
                   ? <span className="av-click" title="Профиль" onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}><Avatar name={m.author_name} url={m.author_avatar} size={40} userId={m.author} /></span>
@@ -669,7 +696,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               <div className="msg-body">
                 {isReply && <div className="msg-reply clickable" title="Перейти к сообщению" onClick={() => jumpToMessage(m.reply_to!)}><span className="msg-reply-curve" /> <b>{m.reply_author}</b> <span className="msg-reply-tx">{m.reply_preview}</span></div>}
                 {m.pinned && <div className="msg-pinned-tag"><Icon name="pin" size={13} /> Закреплено</div>}
-                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}<BotBadge userId={m.author} /><UserTagBadge userId={m.author} />{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title="Сообщение было отредактировано">(изменено)</span>}</div>}
+                {!grouped && <div className="msg-hdr"><span className={'nm' + (onProfile ? ' clickable' : '')} style={{ color: colorOf?.(m.author), fontFamily: uf.nick }} onClick={e => onProfile?.(m, Math.min(e.clientX, window.innerWidth - 260), Math.min(e.clientY, window.innerHeight - 340))}>{m.author_name}</span>{(() => { const ic = iconOf?.(m.author); return ic ? <img className="role-badge" src={ic} alt="" /> : null })()}<BotBadge userId={m.author} /><UserTagBadge userId={m.author} />{ownerId != null && m.author === ownerId && <span className="msg-crown" title="Владелец сервера"><Icon name="crown" size={13} /></span>}<span className="msg-time" title={timeFull(m.created_at)}>{msgTime(m.created_at)}</span>{m.edited && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}><Icon name="edit" size={11} /></span>}</div>}
                 {fwd
                   ? <div className="msg-fwd">
                       <div className="msg-fwd-hdr"><Icon name="forward" size={13} /> Пересланное сообщение</div>
@@ -681,7 +708,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     const long = isLongText(m.content)
                     const open = !!expanded[m.id]
                     return <>
-                      <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '') + (long && !open ? ' msg-clamp' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}>(изменено)</span>}</div>
+                      <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '') + (long && !open ? ' msg-clamp' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}><Icon name="edit" size={11} /></span>}</div>
                       {long && <button className="msg-more" onClick={() => setExpanded(e => ({ ...e, [m.id]: !e[m.id] }))}>
                         {open ? 'Свернуть' : 'Показать полностью'}
                       </button>}
@@ -778,6 +805,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           </> : null}
           {(canDelete ? canDelete(menuMsg) : menuMsg.author === currentUser) ? <>
             <div className="ctx-sep" />
+            {/* v1.445.0: уборка пачкой. Раньше десяток строк означал десяток
+                правых щелчков и десяток подтверждений. */}
+            {onSelectStart && item('Выбрать сообщения', 'check', () => onSelectStart(menu.id), '',
+              'Отметить несколько и удалить разом')}
             {item('Удалить сообщение', 'trash', e => onDelete?.(menu.id, e.shiftKey), ' danger',
               'С зажатым Shift — удалить сразу, без вопроса')}
           </> : null}

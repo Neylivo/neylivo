@@ -24,7 +24,7 @@ const VOICE = `/**
  * @version 1.0.0
  * @author Ponoi
  * @description Меняет твой голос в звонке: робот, эхо, рация, хор, подводный. Команда /голос и кнопка в звонке.
- * @permissions voice, commands, notify, settings, storage
+ * @permissions voice, commands, notify, settings
  */
 export async function onLoad(ponoi) {
   const list = await ponoi.voice.list()

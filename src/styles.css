@@ -1140,7 +1140,42 @@ select.pqs-in { cursor: pointer; }
 .msg-reply { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mut); margin-bottom: 2px; opacity: .9; }
 .msg-reply b { color: var(--tx); font-weight: 600; }
 .msg-reply-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420px; }
-.msg-edited { color: var(--mut); font-size: 10px; margin-left: 5px; }
+/* v1.445.0: режим выбора сообщений и полоса «выбрано N — удалить».
+   Полоса лежит НАД лентой и не перекрывает её: иначе при уборке пропадала бы
+   верхняя строка — как раз та, до которой человек долистал. */
+.bulk-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; margin: -16px -16px 8px; background: var(--bg2); border-bottom: 1px solid rgba(var(--ov, 255,255,255),.08); }
+.bulk-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.bulk-tx b { font-size: 14px; }
+.bulk-tx span { font-size: 11.5px; color: var(--mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-x { background: none; border: none; color: var(--mut); cursor: pointer; display: flex; padding: 6px; border-radius: var(--r-sm); }
+.bulk-x:hover { background: rgba(var(--ov, 255,255,255),.08); color: var(--tx); }
+.bulk-go { display: flex; align-items: center; gap: 6px; background: #da373c; border: none; color: #fff;
+  padding: 8px 14px; border-radius: var(--r-xs); font-size: 13px; font-weight: 600; cursor: pointer; flex: none; }
+.bulk-go:disabled { background: #4e5058; color: var(--mut); cursor: default; }
+/* Строка в режиме выбора: курсор-указатель и подсветка выбранного. Текст не
+   выделяется — иначе протяжка по нескольким строкам красила бы их вместо
+   отметки. */
+.msg.picking { cursor: pointer; user-select: none; }
+.msg.picking:hover { background: rgba(var(--ov, 255,255,255),.04); }
+.msg.picked { background: color-mix(in srgb, var(--brand, #5865f2) 14%, transparent); }
+/* position: relative обязателен — квадратик рисуется абсолютом внутри, и без
+   этого он привязался бы к далёкому предку и уехал через полэкрана. */
+.msg-pick { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; position: relative; }
+.msg-pick::before { content: ''; width: 18px; height: 18px; border-radius: var(--r-xs);
+  border: 2px solid rgba(var(--ov, 255,255,255),.28); position: absolute; }
+.msg-pick.on { color: #fff; }
+.msg-pick.on::before { background: var(--brand, #5865f2); border-color: var(--brand, #5865f2); }
+.msg-pick svg { position: relative; }
+.msg.grouped .msg-pick { height: 20px; }
+
+/* v1.445.0: вместо слова «(изменено)» — маленький карандаш. Слово занимало
+   почти столько же места, сколько короткое сообщение, и в ленте с правками
+   читалось как часть текста. Значок бледный и по наведению называет время
+   правки — то же, что говорило слово, но не спорит с самим сообщением. */
+.msg-edited { color: var(--mut); font-size: 10px; margin-left: 5px; display: inline-flex; vertical-align: middle; opacity: .55; }
+.msg-edited:hover { opacity: .9; }
+.msg-txt .msg-edited { margin-left: 4px; }
 .reply-banner { display: flex; align-items: center; gap: 6px; padding: 6px 14px; margin: 0 16px; background: var(--c-panel); border-top-left-radius:var(--radius); border-top-right-radius:var(--radius); font-size: 13px; color: var(--mut); }
 .reply-banner b { color: var(--tx); }
 .reply-banner span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4416,6 +4451,28 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 
   /* 5. Крупнее зоны нажатия там, где было впритык */
   .pqs2-item { padding: 11px 10px; font-size: 15px; }
+  /* v1.445.0: настройки на телефоне. Переключатель был 44×25, кнопки — 32
+     пикселя в высоту: попасть по такому пальцем можно, промахнуться проще.
+     Поля ввода и списки уже были в порядке, их не трогаем. */
+  /* Переключатель: 51×31 — привычный размер, при котором кружок остаётся
+     кружком. Растягивать сам переключатель до сорока пикселей нельзя: получится
+     полоса с кружком, приклеенным к верхнему краю. Вместо этого расширяем ЗОНУ
+     НАЖАТИЯ невидимой накладкой — палец попадает по 51×43, а видно по-прежнему
+     аккуратный переключатель. */
+  .pqs-toggle { width: 51px; height: 31px; }
+  .pqs-toggle span { width: 25px; height: 25px; top: 3px; left: 3px; }
+  .pqs-toggle.on span { transform: translateX(20px); }
+  .pqs-toggle::after { content: ''; position: absolute; inset: -6px; border-radius: inherit; }
+  /* Кроме самого переключателя: у него своя высота, и min-height растянул бы его
+     в неаккуратную полосу с кружком, приклеенным к верхнему краю. Поймал это
+     тем, что нарочно вернул старый размер, — а проверка осталась зелёной,
+     потому что растянутый переключатель проходил её по высоте. */
+  .pqs-optrow .pqs2-btn, .pqs-optrow button:not(.pqs-toggle) { min-height: 40px; }
+  /* Строка настройки с длинным названием и пояснением: на узком экране значение
+     уходит под текст, а не сжимает его в две буквы. */
+  .pqs-optrow { align-items: flex-start; gap: 12px; }
+  .pqs-optrow > :first-child { min-width: 0; }
+  .pqs-optrow > :last-child { flex: none; display: flex; align-items: center; min-height: 40px; }
   .pqs2-x, .mob-burger { min-width: 42px; min-height: 42px; }
   .rx { min-height: 30px; }
 
@@ -4788,6 +4845,17 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .plug-actions { flex: 0 0 auto; margin-left: auto; }
   .plug-msg-foot { flex-wrap: wrap; }
   .plug-msg-foot > * { flex: 1 1 auto; text-align: center; }
+
+  /* v1.445.0: управление плагинами и ботами на телефоне.
+     Кнопки карточки («Настройки», «Журнал», «Удалить») стояли в одной строке с
+     названием и занимали её почти целиком: на 390 пикселях они помещались
+     впритык, а от чуть более длинного названия начинали слипаться. Теперь ряд
+     кнопок — своей строкой во всю ширину, и каждая кнопка не ниже 40 пикселей:
+     столько нужно, чтобы попасть пальцем, а не ногтем. */
+  .plug-actions { flex: 1 0 100%; margin-left: 0; display: flex; gap: 8px; }
+  .plug-actions > button { flex: 1 1 0; min-height: 40px; justify-content: center; }
+  .plug-name { flex: 1 1 100%; }
+  .plug-card { padding: 14px; }
 }
 
 /* v1.315.0: экран «Каналы и роли» */
@@ -4997,8 +5065,45 @@ body.no-anim .cat-tile:hover { transform: none; }
 .cat-badge { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
   background: var(--brand); color: #fff; letter-spacing: .02em; flex: none; }
 .cat-badge.on { background: #3ba55d; }
+/* v1.445.0: отметка безопасности. Раньше в каталоге все плагины выглядели
+   одинаково, и отличить честный от того, что читает переписку и шлёт её на
+   сторону, можно было только прочитав код. Цвета сдержанные: «не проверен» —
+   это не обвинение, а «небезопасный» не должен теряться среди прочих ярлыков. */
+.cat-badge.audit.ok { background: #3ba55d; }
+.cat-badge.audit.warn { background: #4e5058; color: var(--tx-2, #b5bac1); }
+.cat-badge.audit.bad { background: #da373c; }
+.cat-audit { margin: 12px 0 4px; background: var(--bg3); border-radius: var(--r-md); padding: 10px 12px; }
+.cat-audit-h { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+.cat-audit-h.ok { color: #3ba55d; }
+.cat-audit-h.warn { color: var(--tx-2, #b5bac1); }
+.cat-audit-h.bad { color: #f23f43; }
+.cat-audit-f { font-size: 12.5px; color: var(--tx-2, #b5bac1); margin-top: 7px; padding-left: 22px; line-height: 1.45; }
+.cat-audit-f.bad { color: #f23f43; }
+.cat-audit-note { font-size: 11.5px; color: var(--mut); margin-top: 10px; line-height: 1.45;
+  border-top: 1px solid rgba(var(--ov, 255,255,255),.07); padding-top: 8px; }
+
+/* v1.445.0: каталог плагинов на телефоне.
+   Блок стоит ПОСЛЕ обычных правил каталога намеренно: при равной силе выигрывает
+   то, что ниже по файлу, а первая версия этих правил, написанная выше, не
+   действовала вовсе. Поймал я это единственным способом — нарочно испортил
+   правило и увидел, что проверка осталась зелёной. */
+@media (max-width: 768px) {
+  /* Одна карточка в ряд: на 390 пикселях в две колонки не помещается даже название. */
+  .cat-grid { grid-template-columns: 1fr; gap: 10px; }
+  .cat-acts { display: flex; gap: 8px; }
+  .cat-acts > button { min-height: 40px; }
+  .cat-acts > button:first-child { flex: 1 1 auto; }
+  .cat-audit { padding: 10px; }
+  /* Разбор безопасности читают именно с телефона: там до кода плагина не
+     добраться вовсе, и отметка остаётся единственным источником. */
+  .cat-audit-f { padding-left: 0; }
+}
 .cat-nm { min-width: 0; }
-.cat-nm > :first-child, .cat-tile .cat-nm { overflow: hidden; }
+/* v1.445.0: сжимается ТОЛЬКО название; ярлыки держат свой размер и остаются
+   на экране. Раньше название было голым текстом — сжиматься ему нечем, и
+   ярлык «стоит» уезжал за правый край телефона. */
+.cat-nm-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-tile .cat-nm { overflow: hidden; }
 /* Короткое описание — ровно две строки, дальше многоточие: карточки в списке
    должны быть одной высоты, иначе список «прыгает». */
 .cat-sum { font-size: 12.5px; color: var(--tx); opacity: .85; margin-top: 2px;

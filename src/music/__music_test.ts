@@ -10,6 +10,7 @@
 // плашки — в окне (npm run test:drag): там нужен настоящий DOM.
 export {}
 
+import { planMeta, metaRank, seedFromCache, needsFetch, META_BATCH } from './metaPlan'
 import { mediaPos, mediaKey, mediaArtwork, MEDIA_FALLBACK_ART } from './mediaSession'
 import { nextTrack, backTarget, resolveNext } from './nextTrack'
 import { recommend, libraryOrder, personalOrder, WHY_LABEL, banWindow, AUTHOR_STREAK } from './personalQueue'
@@ -1274,6 +1275,82 @@ check('проверка ловит позицию больше длительн�
 check('проверка ловит пустой список обложек', () =>
   // Пустой список означает «нарисуй что хочешь» — Android рисует серый квадрат.
   mediaArtwork(null).length > 0 && mediaArtwork(undefined).length > 0)
+
+
+// -- v1.445.0: что подгружать первым ------------------------------------------
+// Порядок подгрузки знал ровно про два трека: играющий и следующий. Найденное
+// поиском грузилось последним, потому что лежит в середине склада, — то есть
+// ровно то, на что человек смотрит и что вот-вот включит, ждало дольше всего.
+console.log('\n-- Очередь подгрузки --')
+const склад = Array.from({ length: 10 }, (_, i) => ({ url: 'u' + i }))
+const план = (o: any) => planMeta(склад, o).map(t => t.url)
+
+check('играющий тянется первым', () => план({ current: 'u7' })[0] === 'u7')
+check('следующий — вторым', () => {
+  const r = план({ current: 'u7', next: 'u3' })
+  return r[0] === 'u7' && r[1] === 'u3'
+})
+check('найденное поиском идёт раньше остального склада', () => {
+  const r = план({ found: ['u8', 'u9'] })
+  return r[0] === 'u8' && r[1] === 'u9'
+})
+check('внутри найденного порядок выдачи сохраняется', () => {
+  const r = план({ found: ['u9', 'u2', 'u5'] })
+  return r.slice(0, 3).join(',') === 'u9,u2,u5'
+})
+check('играющий важнее найденного', () => {
+  const r = план({ current: 'u4', found: ['u9', 'u4'] })
+  return r[0] === 'u4' && r[1] === 'u9'
+})
+check('видимое на экране идёт после найденного, но раньше прочего', () => {
+  const r = план({ found: ['u9'], shown: ['u5', 'u6'] })
+  return r.slice(0, 3).join(',') === 'u9,u5,u6'
+})
+check('без подсказок порядок склада не меняется', () =>
+  план({}).join(',') === склад.map(t => t.url).join(','))
+check('при равных разрядах порядок устойчив', () => {
+  // Иначе один и тот же склад планировался бы по-разному от захода к заходу.
+  const a = план({ found: ['u1'] }).join(',')
+  const b = план({ found: ['u1'] }).join(',')
+  return a === b
+})
+check('за заход берётся не больше пачки', () => {
+  const много = Array.from({ length: 500 }, (_, i) => ({ url: 'x' + i }))
+  return planMeta(много, {}).length === META_BATCH && planMeta(много, { batch: 5 }).length === 5
+})
+check('длинная выдача не перелезает в следующий разряд', () => {
+  // Тысяча первый найденный всё равно должен быть раньше невидимого хвоста.
+  const found = Array.from({ length: 1200 }, (_, i) => 'f' + i)
+  return metaRank('f1199', { found }) < metaRank('прочее', { found })
+})
+
+check('лежащее в кэше забирается разом и без запросов', () => {
+  const кэш: Record<string, string> = { u1: 'есть', u3: 'есть' }
+  const seeded = seedFromCache(склад, u => кэш[u] ?? null)
+  return Object.keys(seeded).length === 2 && needsFetch(склад, seeded).length === 8
+})
+check('когда в кэше всё — запрашивать нечего', () => {
+  const seeded = seedFromCache(склад, () => 'есть')
+  return needsFetch(склад, seeded).length === 0
+})
+check('повторы в складе не удваивают работу', () => {
+  const с_повтором = [{ url: 'u1' }, { url: 'u1' }, { url: 'u2' }]
+  let звали = 0
+  seedFromCache(с_повтором, u => { звали++; return u === 'u1' ? 'есть' : null })
+  return звали === 2
+})
+
+console.log('\n-- Ломаем нарочно (очередь подгрузки) --')
+check('проверка ловит потерю приоритета у найденного', () => {
+  // Так и было: найденное шло в общем порядке склада и грузилось последним.
+  const без = склад.map(t => t.url).indexOf('u8')
+  const с = план({ found: ['u8'] }).indexOf('u8')
+  return без === 8 && с === 0
+})
+check('проверка ловит запрос за тем, что уже лежит в кэше', () => {
+  const seeded = seedFromCache(склад, u => (u === 'u0' ? 'есть' : null))
+  return needsFetch(склад, seeded).every(t => t.url !== 'u0')
+})
 
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)

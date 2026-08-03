@@ -27,6 +27,7 @@ const store = new Map<string, string>()
 ;(globalThis as any).fetch = async () => ({ ok: true, status: 200, text: async () => 'ok' })
 
 const { createDispatcher, PLUGIN_METHODS } = await import('./api')
+const { NET_HEADERS } = await import('./netGuard')
 const { readFileSync } = await import('node:fs')
 const registry = await import('./registry')
 const { upsertPlugin, loadPlugins } = await import('./store')
@@ -350,6 +351,33 @@ console.log('\n── Сеть ──')
   // v1.419.0: DELETE и PUT теперь разрешены (обычные методы чужих API), а вот
   // всё остальное — по-прежнему нет.
   await blocked('чужой метод не пустят', () => d('net.fetch', ['https://evil.example/x', { method: 'CONNECT' }]))
+
+  // v1.445.0: поток (ponoi.net.stream) — второй способ выйти в сеть, появившийся
+  // ради своих ИИ-моделей. Он ОБЯЗАН упираться ровно в те же запреты: правила
+  // вынесены в netGuard.ts и зовутся обоими, но проверять это надо тем же
+  // штурмом, а не верой в общий файл. Если однажды поток заведёт свою копию
+  // проверок — упадёт здесь.
+  await blocked('поток: чужой домен не пустят', () => d('net.stream', ['https://not-declared.example/x', {}, fn]))
+  await blocked('поток: к самому приложению ходить нельзя', () => d('net.stream', ['https://ponoi.app/api', {}, fn]))
+  await blocked('поток: http без шифрования не пустят', () => d('net.stream', ['http://evil.example/x', {}, fn]))
+  await blocked('поток: file:// не пустят', () => d('net.stream', ['file:///etc/passwd', {}, fn]))
+  await blocked('поток: чужой метод не пустят', () => d('net.stream', ['https://evil.example/x', { method: 'CONNECT' }, fn]))
+  await blocked('поток: без обработчика не открыть', () => d('net.stream', ['https://evil.example/x', {}, 'не функция']))
+
+  // Разрешения проверяются до всего остального: без net поток не открыть, каким
+  // бы правильным ни был адрес.
+  {
+    const без = attacker(['ui'])
+    await blocked('поток: без права net не открыть', () => без('net.stream', ['https://evil.example/x', {}, fn]))
+  }
+
+  // Заголовки у потока — тот же белый список. Cookie не должен пройти нигде.
+  await blocked('поток: Cookie не подставить', async () => {
+    // Дойти до сети в стенде нельзя, поэтому проверяем сам список: он один на
+    // оба способа, и Cookie в нём нет.
+    if (NET_HEADERS.some(h => h.toLowerCase() === 'cookie')) return 'Cookie в белом списке'
+    throw new Error('Cookie не проходит')
+  })
 }
 
 console.log('\n── Наводнение интерфейса ──')

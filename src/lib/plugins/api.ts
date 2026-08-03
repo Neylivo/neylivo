@@ -1,5 +1,6 @@
 import { PLUGIN_EVENTS, PLUGIN_EVENT_NAMES, type InstalledPlugin, type Permission } from './types'
 import { isFnRef, type FnRef } from './sandbox'
+import { checkTarget, checkMethod, pickHeaders, normMethod, type NetTarget } from './netGuard'
 import {
   addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
   setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, type SettingsRow, type PanelSlot,
@@ -36,7 +37,7 @@ export const PLUGIN_METHODS = [
   'messages.recent', 'messages.send', 'messages.react', 'messages.remove',
   'music.now', 'music.library', 'music.play', 'music.pause', 'music.next', 'music.prev', 'music.queue',
   'music.add',                       // единственная общая запись — со спросом
-  'sound.play', 'clipboard.write', 'open', 'notify', 'log', 'net.fetch', 'subscribe',
+  'sound.play', 'clipboard.write', 'open', 'notify', 'log', 'net.fetch', 'net.stream', 'subscribe',
   // свой интерфейс
   'commands.register', 'ui.addComposerButton', 'ui.addMessageAction', 'ui.addPanel',
   'ui.addSettingsPage', 'ui.addHotkey', 'ui.confirm', 'ui.prompt',
@@ -45,6 +46,14 @@ export const PLUGIN_METHODS = [
 ] as const
 
 export interface HostContext {
+  /** v1.445.0: позвать обработчик плагина. Нужен потоку: куски ответа надо
+   *  отдавать по мере поступления, а не одним значением в конце.
+   *
+   *  Необязателен потому, что этот же тип описывает контекст, который
+   *  подставляет открытый чат (см. host.ts, claimHostContext): ему звать
+   *  обработчики незачем, и требовать от него заглушку — лишний шум. Без
+   *  него поток честно откажется работать, а не сделает вид. */
+  invoke?: (ref: FnRef, args: unknown[]) => Promise<unknown>
   /** Отправить сообщение в открытый сейчас канал от имени пользователя. */
   sendMessage: (text: string) => Promise<void>
   /** Всплывающее уведомление. */
@@ -60,8 +69,18 @@ export interface HostContext {
 }
 
 /** Сколько ждём ответа от чужого сайта и сколько байт согласны принять. */
+// v1.445.0: обычному запросу десяти секунд хватало, а вот ИИ-модели отвечают
+// дольше — двадцать-шестьдесят секунд для генерации это норма. Пока предел был
+// общий и равнялся десяти, встроить в плагин свою модель было нельзя в
+// принципе: запрос обрывался раньше, чем приходил ответ.
 const NET_TIMEOUT_MS = 10_000
+/** Потолок для потока: столько ждём ВЕСЬ ответ. */
+const NET_STREAM_MS = 180_000
+/** И столько — очередной кусок. Замерший поток должен умирать, а не висеть до конца. */
+const NET_STREAM_IDLE_MS = 45_000
 const NET_MAX_BYTES = 1024 * 1024
+/** Поток может быть длиннее: ответ модели на длинный запрос не редкость. */
+const NET_STREAM_MAX_BYTES = 4 * 1024 * 1024
 const MAX_STORAGE_VALUE = 64 * 1024
 const MAX_CSS = 128 * 1024
 const MAX_LABEL = 40
@@ -492,6 +511,22 @@ export function createDispatcher(
         return await pluginFetch(plugin, String(args[0] ?? ''), args[1] as any)
       }
 
+      // v1.445.0: ответ по кускам, по мере поступления.
+      //
+      // Зачем. Своя ИИ-модель в плагине без этого не работает вовсе: обычный
+      // запрос ждёт ВЕСЬ ответ целиком, а модель отвечает по слову и делает это
+      // десятками секунд. Человек всё это время видел пустоту, а на десятой
+      // секунде запрос ещё и обрывался по общему пределу.
+      //
+      // Правила выхода в сеть при этом ровно те же — они вынесены в netGuard.ts
+      // и зовутся отсюда, а не переписаны заново.
+      case 'net.stream': {
+        need('net')
+        rateLimit(id + ':netstream', 5, 60_000, 'открывать поток')
+        return await pluginStream(plugin, String(args[0] ?? ''), args[1] as any,
+          fnRef(args[2], 'net.stream: третьим доводом'), ctx)
+      }
+
       // ---- v1.360.0: обстановка вокруг ------------------------------------
       // Плагину почти всегда нужно знать, от чьего имени он работает и куда
       // пишет: без этого нельзя ни поздороваться по имени, ни отличить свои
@@ -576,43 +611,28 @@ export function createDispatcher(
 // то, что ему сам отдал API (например, текст сообщений при разрешении messages.read).
 // Именно поэтому домены объявляются в @hosts и показываются человеку при установке —
 // проверка ниже следит, чтобы этот список было невозможно обойти после установки.
-async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): Promise<unknown> {
-  let url: URL
-  try { url = new URL(rawUrl) } catch { throw new Denied('Плохой адрес запроса.') }
-
-  if (url.protocol !== 'https:') throw new Denied('Разрешены только https-адреса.')
-  if (!plugin.manifest.hosts.includes(url.hostname.toLowerCase())) {
-    throw new Denied(`Домен ${url.hostname} не объявлен в @hosts этого плагина.`)
-  }
-  // Своё же приложение и свой бэкенд — не «внешний сайт»: запрос туда пошёл бы с
-  // куками/через наш же origin, чего плагину не положено вообще никогда.
+/** Куда можно ходить этому плагину — из одного места с потоком (netGuard.ts). */
+function netTarget(plugin: InstalledPlugin): NetTarget {
   const supaHost = (() => { try { return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname } catch { return '' } })()
-  if (url.hostname === location.hostname || (supaHost && url.hostname === supaHost)) {
-    throw new Denied('Обращаться к самому Ponoi и его серверу плагинам нельзя.')
-  }
+  return { hosts: plugin.manifest.hosts, selfHost: location.hostname, supaHost }
+}
 
-  // v1.419.0: полный набор методов. Раньше были только GET и POST — то есть
-  // половина обычных API (всё, что правит и удаляет) плагину была недоступна,
-  // хотя ходить он всё равно может только на объявленные в @hosts домены.
-  const method = String(init?.method ?? 'GET').toUpperCase()
-  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    throw new Denied('Разрешены методы GET, POST, PUT, PATCH и DELETE.')
-  }
+/** Общая для запроса и потока подготовка: проверки и разбор доводов.
+ *  v1.445.0: раньше всё это лежало внутри pluginFetch, и второй способ выйти в
+ *  сеть неизбежно завёл бы вторую копию проверок — а вторая копия рано или
+ *  поздно расходится с первой. */
+function prepareNet(plugin: InstalledPlugin, rawUrl: string, init: any) {
+  const bad = checkTarget(rawUrl, netTarget(plugin))
+  if (bad) throw new Denied(bad)
+  const method = normMethod(init?.method)
+  const badMethod = checkMethod(method)
+  if (badMethod) throw new Denied(badMethod)
+  return { method, headers: pickHeaders(init?.headers) }
+}
 
-  // Заголовки — белый список. v1.419.0: в нём появились те, которыми
-  // подписываются у чужих API (Authorization, X-Api-Key и подобные): без них
-  // плагин не мог обратиться ни к одному сервису, где нужен ключ, — а это почти
-  // все. Опасности в этом нет: ключ плагин приносит свой, запрос идёт без куки
-  // (credentials: omit) и только на домен из @hosts, а до самого Ponoi и его
-  // сервера дорога закрыта отдельной проверкой выше.
-  //
-  // Cookie по-прежнему нельзя: это единственный заголовок, который браузер
-  // считает «своим» для сайта, и подставлять его плагину незачем.
-  const headers: Record<string, string> = {}
-  const allowed = ['content-type', 'accept', 'authorization', 'x-api-key', 'x-auth-token', 'user-agent', 'accept-language']
-  for (const [k, v] of Object.entries(init?.headers ?? {})) {
-    if (allowed.includes(k.toLowerCase())) headers[k] = String(v).slice(0, 500)
-  }
+async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): Promise<unknown> {
+  const { method, headers } = prepareNet(plugin, rawUrl, init)
+  const url = new URL(rawUrl)
 
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), NET_TIMEOUT_MS)
@@ -633,5 +653,102 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
     throw new Denied('Запрос не удался: ' + (err?.message ?? String(err)))
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * v1.445.0: ответ по кускам — то, без чего своя ИИ-модель в плагине невозможна.
+ *
+ * Что было. Единственный способ выйти в сеть ждал ВЕСЬ ответ целиком и не
+ * дольше десяти секунд. Модель отвечает по слову и делает это десятками секунд:
+ * человек всё это время видел пустоту, а на десятой секунде запрос обрывался. То
+ * есть дело было не в «строгих ограничениях вообще», а ровно в двух числах и в
+ * отсутствии потока.
+ *
+ * Что изменилось и чего НЕ изменилось. Ждём дольше (три минуты на весь ответ,
+ * сорок пять секунд на очередной кусок — замерший поток обязан умирать) и
+ * пропускаем больше (четыре мегабайта). Правила выхода наружу при этом ровно те
+ * же и берутся из того же места (netGuard.ts): только https, только домены из
+ * @hosts, никогда к самому Ponoi и его серверу, белый список заголовков, без
+ * куки. Поток не может пойти туда, куда не может обычный запрос.
+ *
+ * Куски отдаются обработчику плагина как есть, без разбора: SSE, JSON-строки
+ * или сплошной текст — дело плагина. Приложение в содержимое не лезет.
+ */
+/** Отдать кусок обработчику плагина. Без invoke поток работать не может —
+ *  говорим это прямо, а не глотаем куски молча. */
+async function callChunk(ctx: HostContext, ref: FnRef, piece: string): Promise<void> {
+  if (!ctx.invoke) throw new Denied('Поток недоступен: приложение не может позвать обработчик плагина.')
+  await ctx.invoke(ref, [piece])
+}
+
+async function pluginStream(
+  plugin: InstalledPlugin, rawUrl: string, init: any, onChunk: FnRef, ctx: HostContext,
+): Promise<unknown> {
+  const { method, headers } = prepareNet(plugin, rawUrl, init)
+  const url = new URL(rawUrl)
+
+  const ctl = new AbortController()
+  let done = false
+  // Общий предел на весь ответ.
+  const whole = setTimeout(() => { if (!done) ctl.abort() }, NET_STREAM_MS)
+  // И отдельный на молчание: поток, из которого перестали приходить куски,
+  // висел бы до общего предела, а это три минуты пустого ожидания.
+  let idle = setTimeout(() => { if (!done) ctl.abort() }, NET_STREAM_IDLE_MS)
+  const beat = () => {
+    clearTimeout(idle)
+    idle = setTimeout(() => { if (!done) ctl.abort() }, NET_STREAM_IDLE_MS)
+  }
+
+  try {
+    const res = await fetch(url.toString(), {
+      method,
+      headers,
+      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? '').slice(0, NET_MAX_BYTES),
+      signal: ctl.signal,
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+    })
+    const body = res.body
+    if (!body) {
+      // Поток не дали — отдаём то, что есть, одним куском: лучше так, чем
+      // молча вернуть пустоту.
+      const text = (await res.text()).slice(0, NET_STREAM_MAX_BYTES)
+      if (text) await callChunk(ctx, onChunk, text)
+      return { ok: res.ok, status: res.status, bytes: text.length }
+    }
+
+    const reader = body.getReader()
+    const dec = new TextDecoder()
+    let total = 0
+    for (;;) {
+      const { value, done: end } = await reader.read()
+      if (end) break
+      beat()
+      const piece = dec.decode(value, { stream: true })
+      if (!piece) continue
+      total += piece.length
+      if (total > NET_STREAM_MAX_BYTES) {
+        // Дальше не читаем: иначе бесконечный поток съест память вкладки.
+        try { await reader.cancel() } catch { /* уже закрыт */ }
+        throw new Denied(`Ответ длиннее ${Math.round(NET_STREAM_MAX_BYTES / 1024 / 1024)} МБ — поток прерван.`)
+      }
+      // Обработчик упал — прекращаем поток. Продолжать сыпать куски в сломанный
+      // обработчик бессмысленно, а тишина скрыла бы поломку от автора плагина.
+      try { await callChunk(ctx, onChunk, piece) }
+      catch (e: any) {
+        try { await reader.cancel() } catch { /* уже закрыт */ }
+        throw new Denied('Обработчик потока упал: ' + (e?.message ?? String(e)))
+      }
+    }
+    return { ok: res.ok, status: res.status, bytes: total }
+  } catch (err: any) {
+    if (err instanceof Denied) throw err
+    if (err?.name === 'AbortError') throw new Denied(`Поток замолчал или шёл дольше ${NET_STREAM_MS / 1000} с.`)
+    throw new Denied('Поток не удался: ' + (err?.message ?? String(err)))
+  } finally {
+    done = true
+    clearTimeout(whole)
+    clearTimeout(idle)
   }
 }

@@ -195,6 +195,92 @@ app.whenReady().then(async () => {
   check('отступ от низа у обеих одинаковый', gapMe === gapComp, 'панель ' + gapMe + ', поле ' + gapComp)
   check('отступ есть, но небольшой', gapMe > 0 && gapMe <= 16, 'отступ ' + gapMe)
 
+  // ── v1.445.0: плагины и боты на телефоне ─────────────────────────────────────
+  // Экраны управления плагинами рисовались теми же правилами, что и на большом
+  // окне: ряд кнопок стоял в одной строке с названием и занимал её почти
+  // целиком, а ярлыки рядом с названием уезжали за правый край — «стоит» на
+  // телефоне просто не было видно. Здесь проверяется то, что видно глазом:
+  // ничего не вылезает за экран, а по кнопкам можно попасть пальцем.
+  fs.writeFileSync(path.join(OUT, 'plug.html'), `<!doctype html><meta charset=utf-8>
+<link rel=stylesheet href="styles-safe.css">
+<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}</style>
+<div class="pqs2-overlay"><div class="pqs2 mob-content"><div class="pqs2-body">
+ <div class="pqs2-main"><div class="pqs2-inner">
+  <div class="cat-grid">
+    <div class="cat-tile"><div class="cat-tile-bg plain"></div>
+      <div class="cat-tile-ic"><span class="cat-emoji">A</span></div>
+      <div class="cat-tile-body">
+        <div class="cat-nm"><span class="cat-nm-t">Очень длинное название плагина, которое не влезает</span><span class="cat-badge audit warn">Не проверен</span><span class="cat-badge on">стоит</span></div>
+        <div class="cat-sum">Короткое описание</div>
+        <div class="cat-meta"><span class="cat-author">Автор</span></div>
+        <div class="cat-acts"><button class="pqs2-btn">Установить</button><button class="pqs2-btn ghost danger">x</button></div>
+      </div></div>
+  </div>
+  <div class="plug-card"><div class="plug-head">
+      <div class="plug-ic ph">A</div>
+      <div class="plug-name">Плагин с длинным именем <span class="plug-ver">1.0.0</span></div>
+      <div class="plug-dot on"></div>
+      <div class="plug-actions"><button class="pqs2-btn ghost">Настройки</button><button class="pqs2-btn ghost">Журнал</button><button class="pqs2-btn ghost danger">Удалить</button></div>
+    </div>
+    <div class="plug-sub">Описание плагина одной строкой</div></div>
+  <div class="pqs-sec-t">Настройки</div>
+  <div class="pqs-optrow"><div><div class="pqs-optt">Переключатель с длинным названием</div>
+    <div class="pqs-optd">Пояснение под ним, тоже не короткое</div></div>
+    <div><button class="pqs-toggle on"><span></span></button></div></div>
+  <div class="pqs-optrow"><div><div class="pqs-optt">Выбор</div></div>
+    <div><select class="modal-in"><option>Вариант</option></select></div></div>
+  <div class="pqs-optrow"><div><div class="pqs-optt">Кнопка</div></div>
+    <div><button class="pqs2-btn ghost">Нажать</button></div></div>
+ </div></div>
+</div></div></div>
+<script>window.__p = () => {
+  const out = []
+  document.querySelectorAll('*').forEach(e => { const b = e.getBoundingClientRect()
+    if (b.width > 0 && (b.right > innerWidth + 1 || b.left < -1)) out.push((e.className || e.tagName) + ' ' + Math.round(b.left) + '..' + Math.round(b.right)) })
+  const btns = [...document.querySelectorAll('.plug-actions > button, .cat-acts > button')]
+    .map(b => Math.round(b.getBoundingClientRect().height))
+  // Всё, по чему надо попадать пальцем, — не мельче сорока пикселей.
+  const small = []
+  document.querySelectorAll('button, select, input').forEach(e => {
+    if (e.classList.contains('pqs-toggle')) return   // у него меряется зона нажатия, см. ниже
+    const b = e.getBoundingClientRect()
+    if (b.width > 0 && b.height < 40) small.push((e.className || e.tagName) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height))
+  })
+  // Переключатель растягивать нельзя — получится полоса с кружком у края.
+  // Поэтому меряем не его размер, а то, куда попадёт палец: тыкаем на 5 пикселей
+  // выше и ниже видимых границ и смотрим, попали ли по переключателю.
+  let tapH = 0
+  const tg = document.querySelector('.pqs-toggle')
+  if (tg) {
+    const b = tg.getBoundingClientRect()
+    const x = Math.round(b.left + b.width / 2)
+    const hit = y => { const e = document.elementFromPoint(x, y); return !!e && (e === tg || tg.contains(e) || e.parentElement === tg) }
+    let top = Math.round(b.top), bottom = Math.round(b.bottom)
+    while (hit(top - 1) && top > b.top - 20) top--
+    while (hit(bottom + 1) && bottom < b.bottom + 20) bottom++
+    tapH = bottom - top
+  }
+  return JSON.stringify({ win: innerWidth, out,
+    cols: getComputedStyle(document.querySelector('.cat-grid')).gridTemplateColumns.trim().split(/\s+/).length,
+    btns, small, tapH, scroll: document.body.scrollWidth })
+}</script>`)
+  const plug = new BrowserWindow({ show: false, useContentSize: true, width: 390, height: 844,
+    backgroundColor: '#313338', webPreferences: { partition: 'safe-plug-' + Date.now() } })
+  await plug.loadFile(path.join(OUT, 'plug.html'))
+  await new Promise(r => setTimeout(r, 400))
+  const pm = JSON.parse(await plug.webContents.executeJavaScript('window.__p()'))
+
+  console.log('\n── Плагины и боты на телефоне ──')
+  check('ничего не вылезает за край экрана', pm.out.length === 0, pm.out.join('; '))
+  check('страница не ездит вбок', pm.scroll <= pm.win, 'ширина ' + pm.scroll + ' при экране ' + pm.win)
+  check('каталог в одну колонку', pm.cols === 1, 'колонок ' + pm.cols)
+  check('по кнопкам можно попасть пальцем', pm.btns.length > 0 && pm.btns.every(h => h >= 40),
+    'высоты: ' + pm.btns.join(', '))
+  // v1.445.0: переключатель настроек был 44×25, а кнопки в строках — 32 пикселя.
+  // Попасть по такому можно, промахнуться проще.
+  check('в настройках нет мелких кнопок и полей', pm.small.length === 0, pm.small.join('; '))
+  check('по переключателю можно попасть пальцем', pm.tapH >= 40, 'зона нажатия ' + pm.tapH + ' пикселей')
+
   console.log(failed ? '\nПРОВАЛЕНО: ' + failed : '\nИТОГ: все проверки пройдены')
   process.exit(failed ? 1 : 0)
 })

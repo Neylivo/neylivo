@@ -65,6 +65,7 @@ import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
 import { takeCall, releaseCall } from '../lib/activeCall'
 import { PluginPanels } from './PluginPanels'
+import { useBulkSelect } from './BulkBar'
 import { channelPermissions, parseOverrides, CH_SEND } from '../lib/chanPerms'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
@@ -1180,6 +1181,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       })
     }
   }
+  // v1.445.0: удаление пачкой. Право на удаление и само удаление берутся те же,
+  // что у одиночного, — иначе в списке оказалось бы не то, что уходит в базу.
+  const bulk = useBulkSelect(
+    messages as any[],
+    (m: any) => isOwner || m.author === user?.id || canManageMessages,
+    async (id: string) => {
+      const res = await deleteMessage('messages', id)
+      if (res.ok) setMessages(ms => ms.filter(m => m.id !== id))
+      return res.ok
+    },
+  )
+
   async function removeMsg(id: string, skipConfirm?: boolean) {
     if (!skipConfirm && !await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     // v1.327.0: убираем из ленты сразу, но если база не дала удалить — возвращаем
@@ -1601,7 +1614,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               )}
             </div>
           )}
-          <MessageList messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
+          {bulk.bar}
+          <MessageList {...bulk.listProps} messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             roleColors={roleColorMap} myRoleNames={myRoleNameList}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}

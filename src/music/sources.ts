@@ -9,6 +9,12 @@ function loadCache(): Record<string, ScMeta> {
 }
 const cache = loadCache()
 function saveCache() { try { localStorage.setItem(META_KEY, JSON.stringify(cache)) } catch {} }
+/** v1.445.0: то, что уже лежит в кэше на устройстве, — без единого запроса.
+ *  Раньше приложение узнавало о лежащем в кэше только через ту же очередь
+ *  запросов, и обложки на складе проявлялись по одной, хотя тянуть было
+ *  нечего (см. music/metaPlan.ts). */
+export function cachedMeta(url: string): ScMeta | null { return cache[url] ?? null }
+
 
 // ---------- YouTube ----------
 export function parseYouTubeId(u: string): string | null {

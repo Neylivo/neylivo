@@ -36,6 +36,7 @@ import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, e
 import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
+import { useBulkSelect } from './BulkBar'
 import { kbScrollDelta } from '../lib/keyboardInset'
 import { publishMyKey } from '../lib/crypto/keys'
 import { sealForPeer, openIncoming, NoRecipientKeys, isUnreadable } from '../lib/crypto/dm'
@@ -1243,6 +1244,18 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     const ok = await setPin('dm_messages', id, pinned)
     if (!ok) { setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, pinned: !pinned } as any) : m))); toastErr('Не удалось изменить закреп') }
   }
+  // v1.445.0: удаление пачкой (см. BulkBar.tsx). В ЛС ролей нет — своё удаляет
+  // автор, и это ровно то же правило, что у одиночного удаления.
+  const bulk = useBulkSelect(
+    messages as any[],
+    (m: any) => m.author === meId,
+    async (id: string) => {
+      const res = await deleteMessage('dm_messages', id)
+      if (res.ok) setMessages(ms => ms.filter(m => m.id !== id))
+      return res.ok
+    },
+  )
+
   async function removeMsg(id: string, skipConfirm?: boolean) {
     if (!skipConfirm && !await confirmUi('Удалить сообщение?', { okText: 'Удалить' })) return
     // v1.327.0: см. ServerView.tsx — при отказе базы возвращаем сообщение в ленту.
@@ -1422,7 +1435,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
             onProfile={(userId, name, avatarUrl, x, y) => setMini({ userId, name, avatarUrl: avatarUrl ?? null, status: statusOf(userId), x, y })} />}
           <div className="msgs" ref={msgsBoxRef} onScroll={onMsgsScroll}
             onWheel={() => { stickUntil.current = 0 }} onTouchMove={() => { stickUntil.current = 0 }}>
-            <MessageList messages={(messages as any)
+            {bulk.bar}
+            <MessageList {...bulk.listProps} messages={(messages as any)
                 .filter((m: any) => !isBlockedWith(m.author))
                 // Зашифрованное подменяем расшифрованным; пока расшифровка идёт —
                 // показываем замок, а не сырой шифротекст.
