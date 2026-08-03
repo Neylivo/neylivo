@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.447.0",
+  "version": "1.448.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

@@ -24,6 +24,8 @@ import { readFileSync } from 'node:fs'
 // Исходник диспетчера читаем файлом: нам нужны имена его case-ветвей, а не то,
 // что он делает — вызвать их отсюда нельзя, там браузерное окружение.
 const DISPATCHER_SRC = readFileSync('src/lib/plugins/api.ts', 'utf8')
+// v1.447.0: и загрузчик песочницы — по нему видно, что плагин МОЖЕТ позвать.
+const BOOTSTRAP_SRC = readFileSync('src/lib/plugins/bootstrap.ts', 'utf8')
 
 let pass = 0, fail = 0
 const ok = (n: string) => { pass++; console.log('OK   ' + n) }
@@ -769,6 +771,28 @@ for (const p of OFFICIAL_PLUGINS) {
     const r = auditPlugin('function onLoad(ponoi){ ponoi.on("message",()=>ponoi.net.fetch("https://a.ru")) }',
       шапка('messages.read, net', ['a.ru']))
     return r.findings.filter(f => f.level === 'danger').length === 1
+  })
+
+  // -- v1.447.0: метод есть у приложения — есть ли он у плагина ---------------
+  // Настоящая поломка, найденная разбором: net.stream добавили в диспетчер, в
+  // правила, в документацию и в штурм — и не добавили в сам объект ponoi. То
+  // есть плагин звал бы метод, которого у него нет, а все проверки при этом
+  // оставались зелёными. «Настройка есть» не значит «работает».
+  console.log('\n-- Плагину доступно то, что умеет приложение --')
+  check('каждый метод диспетчера доступен из песочницы', () => {
+    const зовётся = new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-z.]+)'/g)].map(m => m[1]))
+    const ветви = [...new Set([...DISPATCHER_SRC.matchAll(/case '([a-z.]+)':/g)].map(m => m[1]))]
+      .filter(m => !ROW_TYPES.includes(m))
+    const нет = ветви.filter(m => !зовётся.has(m))
+    if (нет.length) throw new Error('приложение умеет, плагин позвать не может: ' + нет.join(', '))
+    return true
+  })
+  check('песочница не зовёт того, чего приложение не умеет', () => {
+    const ветви = new Set([...DISPATCHER_SRC.matchAll(/case '([a-z.]+)':/g)].map(m => m[1]))
+    const зовётся = [...new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-z.]+)'/g)].map(m => m[1]))]
+    const лишние = зовётся.filter(m => !ветви.has(m))
+    if (лишние.length) throw new Error('плагин зовёт несуществующее: ' + лишние.join(', '))
+    return true
   })
 
   // -- v1.446.0: пределы одной таблицей ---------------------------------------
