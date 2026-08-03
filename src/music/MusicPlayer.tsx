@@ -28,6 +28,10 @@ import {
 } from './playlists'
 import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
+import { Capacitor } from '@capacitor/core'
+import { keepAliveAction, keepAliveAsked, canKeepAlive, askKeepAlive, startKeepAlive, stopKeepAlive } from '../lib/keepAlive'
+/** Приложение на Android: только там есть постоянная служба (v1.444.0). */
+const IS_NATIVE = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 import { useBackClose } from '../lib/mobileBack'
 import { bindMediaKeys, setMediaNow, updateMediaPosition } from './mediaSession'
 import { needRepublish, REPUBLISH_TOLERANCE } from '../lib/listenProgress'
@@ -714,6 +718,46 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }, [curT, dur, cur?.id])
   // Закрыли плеер — карточка уходит вместе с ним.
   useEffect(() => () => setMediaNow(null), [])
+
+  // v1.444.0: пока играет музыка, приложение не выгружается из памяти.
+  //
+  // Одной системной карточки для этого мало: она поднимает приоритет, но
+  // процесс всё равно обычный, и Android при нехватке памяти вправе его
+  // прибрать — музыка обрывалась на полуслове. Теперь на время воспроизведения
+  // поднимается постоянная служба (MusicService.java). Решение «нужна ли она»
+  // принимает keepAliveAction и только она — см. src/lib/keepAlive.ts.
+  const kaOn = useRef(false)
+  useEffect(() => {
+    if (!IS_NATIVE) return
+    let alive = true
+    const decide = async () => {
+      const act = keepAliveAction({
+        native: true, playing, hasTrack: !!cur,
+        hidden: document.visibilityState === 'hidden',
+        allowed: await canKeepAlive(), askedBefore: keepAliveAsked(),
+      })
+      if (!alive) return
+      if (act === 'start') {
+        kaOn.current = true
+        await startKeepAlive(curMeta?.title || cur?.name, curMeta?.author || cur?.author || '')
+      } else if (act === 'stop') {
+        // Отпускаем только то, что сами держали: висящее уведомление без музыки
+        // — это съеденная батарея и недоумение.
+        if (kaOn.current) { kaOn.current = false; await stopKeepAlive() }
+      } else if (act === 'ask') {
+        await askKeepAlive()
+        if (alive) decide()   // разрешили — служба поднимется тут же
+      }
+    }
+    void decide()
+    // Свернули приложение — это и есть момент, когда служба начинает значить.
+    const onVis = () => void decide()
+    document.addEventListener('visibilitychange', onVis)
+    return () => { alive = false; document.removeEventListener('visibilitychange', onVis) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, cur?.id, curMeta?.title, curMeta?.author])
+  // Плеер закрыли — службу отпускаем вместе с ним.
+  useEffect(() => () => { if (kaOn.current) { kaOn.current = false; void stopKeepAlive() } }, [])
 
   // Перемотка — сразу, не дожидаясь таймера. Сюда попадает и своя мышью, и
   // чужая: полоса YouTube, ведущий лобби, кнопки на гарнитуре.

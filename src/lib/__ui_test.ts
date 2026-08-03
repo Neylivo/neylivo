@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { keepAliveAction } from './keepAlive'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
@@ -1552,6 +1553,47 @@ check('проверка заметила бы отступ во весь экр�
   const плохо = 800 - 0
   return плохо === 800 && kbInset({ winH: 800, vvH: 0, vvTop: 0 }) === 0
 })
+
+
+// -- v1.444.0: музыка в свёрнутом приложении ---------------------------------
+// Пока постоянной службы не было, Android при нехватке памяти прибирал процесс,
+// и музыка обрывалась на полуслове. Здесь проверяется правило «когда служба
+// нужна» — то самое, по которому она и включается, и выключается.
+console.log('\n-- Музыка в фоне --')
+const KA = {
+  native: true, playing: true, hasTrack: true, hidden: false,
+  allowed: true, askedBefore: false,
+}
+const ka = (o: Partial<typeof KA>) => keepAliveAction({ ...KA, ...o })
+
+check('играет — держим процесс', () => ka({}) === 'start')
+check('встало — отпускаем', () => ka({ playing: false }) === 'stop')
+check('играть нечего — тоже отпускаем', () => ka({ hasTrack: false }) === 'stop')
+check('в браузере службы нет и не трогаем', () =>
+  ka({ native: false }) === 'idle' && ka({ native: false, playing: false }) === 'idle')
+
+check('разрешение спрашиваем, когда свернули с музыкой', () =>
+  ka({ allowed: false, hidden: true }) === 'ask')
+check('на экране не пристаём — там процесс и так живой', () =>
+  ka({ allowed: false, hidden: false }) === 'idle')
+check('спросили один раз — больше не спрашиваем', () =>
+  ka({ allowed: false, hidden: true, askedBefore: true }) === 'idle')
+check('без разрешения службу не поднимаем', () =>
+  ka({ allowed: false, hidden: true }) !== 'start'
+  && ka({ allowed: false, hidden: true, askedBefore: true }) !== 'start')
+check('пауза важнее разрешения', () =>
+  ka({ playing: false, allowed: false, hidden: true }) === 'stop')
+
+console.log('\n-- Ломаем нарочно (музыка в фоне) --')
+check('проверка ловит службу, оставленную после паузы', () => {
+  // Так батарея и утекала бы: уведомление висит, процесс держится, музыки нет.
+  const плохо = 'start'
+  return плохо !== ka({ playing: false }) && ka({ playing: false }) === 'stop'
+})
+check('проверка ловит просьбу о разрешении на пустом месте', () =>
+  // Спросить у того, кто ничего не включал, — значит получить отказ навсегда.
+  ka({ playing: false, allowed: false, hidden: true }) !== 'ask'
+  && ka({ allowed: false, hidden: false }) !== 'ask')
 
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

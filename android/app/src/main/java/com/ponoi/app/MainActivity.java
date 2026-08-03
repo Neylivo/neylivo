@@ -15,6 +15,8 @@ public class MainActivity extends BridgeActivity {
         // v1.308.0: плагин обновления регистрируется ДО super.onCreate — иначе мост
         // успевает подняться без него, и вызов из интерфейса не находит адресата.
         registerPlugin(ApkInstaller.class);
+        // v1.444.0: постоянная служба для музыки — по той же причине до super.
+        registerPlugin(MusicKeepAlive.class);
         super.onCreate(savedInstanceState);
         goFullScreen();
     }
