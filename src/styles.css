@@ -6850,3 +6850,90 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .mus2-share-item:hover:not(:disabled) { background: rgba(var(--ov, 255,255,255), .07); }
 .mus2-share-item:disabled { opacity: .6; cursor: default; }
 .mus2-share-item .mut { margin-left: auto; font-weight: 400; font-size: 12px; }
+
+/* ══ v1.441.0: создание плейлиста своим окном ════════════════════════════════
+   Было: системный запрос имени одной строкой — ни обложки, ни понимания, что
+   вообще произойдёт. А это единственный шаг, где плейлист создаётся. */
+.mus2-plnew { width: min(420px, 96vw); }
+.mus2-plnew-body { display: flex; gap: 14px; padding: 4px 16px 12px; }
+.mus2-plnew-cover {
+  flex: none; width: 108px; height: 108px; border-radius: var(--r-lg, 12px); cursor: pointer;
+  border: 1px dashed rgba(var(--ov, 255,255,255), .18); background: rgba(var(--ov, 255,255,255), .04);
+  color: var(--mut); overflow: hidden; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.mus2-plnew-cover:hover { border-color: var(--brand); color: var(--tx); }
+.mus2-plnew-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mus2-plnew-cover span { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; }
+.mus2-plnew-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.mus2-plnew-right .mus2-in { width: 100%; }
+.mus2-plnew-hint { font-size: 11.5px; color: var(--mut); line-height: 1.4; }
+.mus2-plnew-foot { display: flex; gap: 8px; padding: 0 16px 16px; align-items: center; }
+.mus2-plnew-foot button { border: none; border-radius: var(--r-md, 8px); padding: 9px 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.mus2-plnew-clear { background: transparent; color: var(--mut); }
+.mus2-plnew-cancel { margin-left: auto; background: var(--bg3); color: var(--tx); }
+.mus2-plnew-ok { background: var(--brand); color: #fff; }
+.mus2-plnew-ok:disabled { opacity: .5; cursor: default; }
+
+/* Пустой поиск больше не тупик: отсюда сразу можно добавить свою песню. */
+.mus2-noresult { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.mus2-noresult-t { font-size: 15px; font-weight: 700; color: var(--tx); }
+.mus2-noresult-s { font-size: 13px; color: var(--mut); max-width: 380px; line-height: 1.5; }
+.mus2-noresult-b {
+  display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 999px;
+  background: var(--brand); color: #fff; font-size: 13.5px; font-weight: 700; padding: 10px 18px; cursor: pointer;
+}
+.mus2-noresult-b:hover { filter: brightness(1.08); }
+.mus2-noresult-l { border: none; background: transparent; color: var(--mut); font-size: 12.5px; cursor: pointer; }
+.mus2-noresult-l:hover { color: var(--tx); text-decoration: underline; }
+
+/* ══ v1.441.0: видно, кто говорит и кто в эфире ══════════════════════════════
+   Что было. Говорящего отмечала тонкая зелёная обводка аватарки в два пикселя —
+   на строке высотой в двадцать её почти не видно, а в списке из шести человек
+   не видно совсем. «В ЭФИРЕ» было спокойной серо-красной пометкой, которую
+   легко принять за часть имени.
+   Стало: у говорящего аватарка светится и имя становится ярче, а «В ЭФИРЕ»
+   пульсирует точкой — как в Discord, где это видно боковым зрением. */
+.vo.speaking .vo-av {
+  box-shadow: 0 0 0 2px var(--green), 0 0 10px 2px rgba(59, 165, 93, .55);
+}
+.vo.speaking .vo-nm { color: var(--tx-hi, #fff); font-weight: 600; }
+.vo-live {
+  display: inline-flex; align-items: center; gap: 5px;
+  box-shadow: 0 0 0 1px rgba(242, 63, 67, .35), 0 2px 8px rgba(242, 63, 67, .3);
+}
+.vo-live::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; background: #fff;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+/* Строка того, кто делится экраном, подсвечена целиком: по ней можно нажать и
+   смотреть, и это должно быть видно до наведения. */
+.vo.vo-watch { background: rgba(242, 63, 67, .08); cursor: pointer; }
+.vo.vo-watch:hover { background: rgba(242, 63, 67, .16); }
+
+/* То же самое в самом звонке: говорящего видно по свечению плитки, а не только
+   по тонкой рамке. */
+.c2-tile.speaking { box-shadow: inset 0 0 0 2px var(--green), 0 0 16px rgba(59, 165, 93, .35); }
+.c2-bub-av.speaking, .c2-tile.speaking .c2-tile-av { filter: drop-shadow(0 0 8px rgba(59, 165, 93, .5)); }
+body.no-anim .vo-live::before { animation: none; }
+
+/* ══ v1.441.0: кнопки плеера на телефоне — твёрдого размера ══════════════════
+   Замер в окне 390×844: наложений НЕ БЫЛО (первые три насчитала моя же неверная
+   проверка — она считала наложением кнопки, стоящие одна под другой). А вот что
+   было: кнопки шириной 42 пикселя и правый край в 349 из 390 — то есть впритык.
+   Палец промахивается и по 42, и при первом же добавлении кнопки в этот ряд он
+   начнёт слипаться по-настоящему.
+   Поэтому: у каждой кнопки твёрдый размер (44 — то же, что у остальных кнопок
+   приложения на телефоне), сжиматься им нельзя, а не вместившееся переносится на
+   вторую строку, а не сдавливается. Ползунок громкости уходит на свою строку —
+   он в этом ряду самый бесполезный, но убирать его значит отнять возможность. */
+@media (max-width: 768px) {
+  .mus2-ctlrow { gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .mus2-ctl { gap: 6px; flex: 0 1 auto; min-width: 0; }
+  .mus2-ctl button {
+    flex: none; width: 44px; height: 44px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .mus2-ctl button.big { width: 58px; height: 58px; }
+  .mus2-vol { flex: 1 0 100%; margin: 2px 0 0; }
+}

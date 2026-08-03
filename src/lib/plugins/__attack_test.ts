@@ -26,7 +26,8 @@ const store = new Map<string, string>()
 ;(globalThis as any).location = { hostname: 'ponoi.app' }
 ;(globalThis as any).fetch = async () => ({ ok: true, status: 200, text: async () => 'ok' })
 
-const { createDispatcher } = await import('./api')
+const { createDispatcher, PLUGIN_METHODS } = await import('./api')
+const { readFileSync } = await import('node:fs')
 const registry = await import('./registry')
 const { upsertPlugin, loadPlugins } = await import('./store')
 const { ALL_PERMISSIONS, PLUGIN_EVENTS } = await import('./types')
@@ -429,6 +430,41 @@ console.log('\n── Чужое ──')
     await a('storage.set', ['секрет', 'мой'])
     const got = await b('storage.get', ['секрет'])
     return got === null
+  })
+}
+
+// ── Что плагин может вообще: список зафиксирован (v1.441.0) ────────────────
+// Владелец попросил убедиться, что плагин не может действовать за других людей.
+// Проверка не даёт новой возможности появиться молча: любой добавленный метод
+// обязан быть внесён в PLUGIN_METHODS, а значит — обдуман на предмет «а кого
+// это заденет, кроме самого человека».
+{
+  // Читаем ИСХОДНИК, а не собранный файл: проверка бежит из dist-attack-test,
+  // и относительный путь оттуда ведёт не туда, где лежит api.ts.
+  const исходник = readFileSync('src/lib/plugins/api.ts', 'utf8')
+  const вКоде = [...исходник.matchAll(/case '([a-zA-Z.]+)'/g)].map(m => m[1])
+  const вСписке = new Set<string>(PLUGIN_METHODS as readonly string[])
+
+  await check('каждая возможность из кода внесена в список', () => {
+    const лишние = [...new Set(вКоде)].filter(m => !вСписке.has(m))
+    if (лишние.length) console.log('    не в списке:', лишние.join(', '))
+    return лишние.length === 0
+  })
+  await check('в списке нет ничего, чего нет в коде', () => {
+    const набор = new Set(вКоде)
+    const мёртвые = [...вСписке].filter(m => !набор.has(m))
+    if (мёртвые.length) console.log('    нет в коде:', мёртвые.join(', '))
+    return мёртвые.length === 0
+  })
+  await check('нет возможностей управлять сервером и правами', () =>
+    ![...вСписке].some(m => /role|perm|ban|kick|member|server\.(set|update|create|delete)/i.test(m)))
+  await check('нет возможностей писать от чужого имени или трогать чужое', () =>
+    ![...вСписке].some(m => /(as|for)User|impersonat|user\.(set|update)|profile\.set/i.test(m)))
+  await check('единственная общая запись — добавление трека', () => {
+    // Всё остальное меняет либо сам плагин, либо то, что человек и так делает у
+    // себя. Если общих записей стало больше — это надо заметить здесь.
+    const общие = [...вСписке].filter(m => m === 'music.add')
+    return общие.length === 1
   })
 }
 

@@ -20,11 +20,23 @@ export interface Playlist {
   trackIds: string[]
   /** Когда создан, мс. По нему сортируется список: свежие сверху. */
   at?: number
+  /**
+   * Своя обложка (v1.441.0). Пусто — плитка собирается из обложек треков, как
+   * было раньше: это разумное умолчание, а не заглушка.
+   */
+  cover?: string | null
 }
 
 export const PL_NAME_MAX = 60
-/** Больше — это уже не плейлист, а второй склад; и такой список не открыть. */
-export const PL_TRACKS_MAX = 500
+/**
+ * Сколько треков помещается в плейлист (v1.441.0: 2500 вместо 500).
+ *
+ * Пятисот не хватало: у людей есть подборки на несколько тысяч, и «положить
+ * ещё один» молча переставало работать. Две с половиной тысячи — с запасом и
+ * при этом не бесконечность: список хранится на устройстве целиком, и на
+ * десятках тысяч он перестал бы открываться.
+ */
+export const PL_TRACKS_MAX = 2500
 
 /** Разобрать то, что лежит в настройках: там может быть что угодно из прошлых версий. */
 export function normalizePlaylists(raw: unknown): Playlist[] {
@@ -38,6 +50,7 @@ export function normalizePlaylists(raw: unknown): Playlist[] {
       name: p.name.slice(0, PL_NAME_MAX),
       trackIds: [...new Set(ids)].slice(0, PL_TRACKS_MAX),
       at: typeof p.at === 'number' ? p.at : undefined,
+      cover: typeof p.cover === 'string' && p.cover ? p.cover : null,
     })
   }
   return out
@@ -46,10 +59,15 @@ export function normalizePlaylists(raw: unknown): Playlist[] {
 export const newPlaylistId = (): string => 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 /** Завести плейлист. Пустое имя — не плейлист, поэтому отказ. */
-export function createPlaylist(list: Playlist[], name: string, firstTrack?: string): Playlist[] {
+export function createPlaylist(list: Playlist[], name: string, firstTrack?: string, cover?: string | null): Playlist[] {
   const nm = name.trim().slice(0, PL_NAME_MAX)
   if (!nm) return list
-  return [...list, { id: newPlaylistId(), name: nm, trackIds: firstTrack ? [firstTrack] : [], at: Date.now() }]
+  return [...list, { id: newPlaylistId(), name: nm, trackIds: firstTrack ? [firstTrack] : [], at: Date.now(), cover: cover || null }]
+}
+
+/** Поставить или снять свою обложку. */
+export function setPlaylistCover(list: Playlist[], id: string, cover: string | null): Playlist[] {
+  return list.map(p => (p.id === id ? { ...p, cover: cover || null } : p))
 }
 
 export function renamePlaylist(list: Playlist[], id: string, name: string): Playlist[] {
@@ -64,11 +82,32 @@ export function removePlaylist(list: Playlist[], id: string): Playlist[] {
 
 /** Добавить трек в конец. Повтор не добавляется — и это не ошибка, просто нечего делать. */
 export function addToPlaylist(list: Playlist[], id: string, trackId: string): Playlist[] {
-  return list.map(p => {
-    if (p.id !== id || p.trackIds.includes(trackId)) return p
-    if (p.trackIds.length >= PL_TRACKS_MAX) return p
-    return { ...p, trackIds: [...p.trackIds, trackId] }
-  })
+  return addTrackTo(list, id, trackId).list
+}
+
+/**
+ * Почему трек не добавился (v1.441.0).
+ *
+ * Раньше добавление просто ничего не делало: трек уже в плейлисте или плейлист
+ * полон — список возвращался как есть, и человек нажимал ещё раз, потом ещё,
+ * не понимая, почему ничего не происходит. Это та же кнопка-обманка, только
+ * молчаливая. Теперь причина возвращается словом, и её видно.
+ */
+export type AddFail = 'dup' | 'full' | 'missing'
+
+export function addTrackTo(list: Playlist[], id: string, trackId: string): { list: Playlist[]; ok: boolean; why?: AddFail } {
+  const p = list.find(x => x.id === id)
+  if (!p || !trackId) return { list, ok: false, why: 'missing' }
+  if (p.trackIds.includes(trackId)) return { list, ok: false, why: 'dup' }
+  if (p.trackIds.length >= PL_TRACKS_MAX) return { list, ok: false, why: 'full' }
+  return { list: list.map(x => (x.id === id ? { ...x, trackIds: [...x.trackIds, trackId] } : x)), ok: true }
+}
+
+/** Человеческое объяснение отказа — его и показываем. */
+export function addFailText(why: AddFail, plName: string): string {
+  if (why === 'dup') return `Этот трек уже есть в «${plName}»`
+  if (why === 'full') return `В «${plName}» уже ${PL_TRACKS_MAX} треков — больше не помещается`
+  return 'Плейлист не найден'
 }
 
 export function removeFromPlaylist(list: Playlist[], id: string, trackId: string): Playlist[] {

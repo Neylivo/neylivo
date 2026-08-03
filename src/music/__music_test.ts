@@ -28,7 +28,7 @@ import { tooShortWhy, MIN_TRACK_SEC } from './minLength'
 import {
   normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist, addToPlaylist,
   removeFromPlaylist, movePlaylistTrack, playlistsOrder, playlistTracks, playlistSize,
-  PL_NAME_MAX, PL_TRACKS_MAX, type Playlist,
+  PL_NAME_MAX, PL_TRACKS_MAX, addTrackTo, addFailText, setPlaylistCover, type Playlist,
 } from './playlists'
 
 let pass = 0, fail = 0
@@ -587,7 +587,51 @@ check('свежие плейлисты сверху', () => {
   ]
   return playlistsOrder(l)[0].name === 'свежий'
 })
-check('потолок треков в плейлисте есть и он разумный', () => PL_TRACKS_MAX >= 100 && PL_TRACKS_MAX <= 2000)
+// v1.441.0: потолок поднят до 2500 по просьбе владельца — пятисот не хватало.
+check('потолок треков в плейлисте есть и он разумный', () => PL_TRACKS_MAX === 2500)
+
+console.log('\n-- Плейлист: строгая проверка при добавлении (v1.441.0) --')
+{
+  const ПЛ = [{ id: 'p', name: 'Мой', trackIds: ['a'], at: 1 }]
+  check('новый трек добавляется', () => {
+    const r = addTrackTo(ПЛ, 'p', 'b')
+    return r.ok && r.list[0].trackIds.join() === 'a,b'
+  })
+  check('тот же трек второй раз — отказ с причиной', () => {
+    const r = addTrackTo(ПЛ, 'p', 'a')
+    return !r.ok && r.why === 'dup' && r.list === ПЛ
+  })
+  check('причина сказана словами, а не кодом', () =>
+    addFailText('dup', 'Мой').includes('уже есть') && addFailText('full', 'Мой').includes('2500'))
+  check('в полный плейлист не влезает', () => {
+    const полный = [{ id: 'p', name: 'Мой', trackIds: Array.from({ length: PL_TRACKS_MAX }, (_, i) => 'т' + i), at: 1 }]
+    const r = addTrackTo(полный, 'p', 'ещё')
+    return !r.ok && r.why === 'full'
+  })
+  check('несуществующий плейлист не создаётся молча', () => {
+    const r = addTrackTo(ПЛ, 'нет-такого', 'b')
+    return !r.ok && r.why === 'missing'
+  })
+  check('исходный список не портится', () => {
+    addTrackTo(ПЛ, 'p', 'b')
+    return ПЛ[0].trackIds.join() === 'a'
+  })
+  check('обложка ставится и снимается', () => {
+    const с = setPlaylistCover(ПЛ, 'p', 'https://x/1.jpg')
+    const без = setPlaylistCover(с, 'p', null)
+    return с[0].cover === 'https://x/1.jpg' && без[0].cover === null
+  })
+  check('мусор вместо обложки не сохраняется', () =>
+    normalizePlaylists([{ id: 'p', name: 'n', trackIds: [], cover: 42 }])[0].cover === null)
+
+  console.log('\n-- Ломаем нарочно (плейлисты) --')
+  check('проверка заметила бы молчаливый отказ', () => {
+    // Прежнее поведение: список возвращался как есть, и человек не понимал,
+    // почему ничего не произошло.
+    const прежнее = addToPlaylist(ПЛ, 'p', 'a')
+    return прежнее === ПЛ && addTrackTo(ПЛ, 'p', 'a').why === 'dup'
+  })
+}
 
 console.log('\n-- Ломаем нарочно (плейлисты) --')
 check('проверка заметила бы, что порядок перестал держаться', () => {

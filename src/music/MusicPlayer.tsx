@@ -20,8 +20,8 @@ import { loadLibrary, saveLibrary, libraryPlan } from './libCache'
 import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
 import {
   normalizePlaylists, createPlaylist, renamePlaylist, removePlaylist,
-  addToPlaylist as addTrackToPl, removeFromPlaylist, movePlaylistTrack,
-  playlistsOrder, playlistTracks, playlistSize, type Playlist,
+  addTrackTo, addFailText, setPlaylistCover, removeFromPlaylist, movePlaylistTrack,
+  playlistsOrder, playlistTracks, playlistSize, PL_NAME_MAX, PL_TRACKS_MAX, type Playlist,
 } from './playlists'
 import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
@@ -1777,17 +1777,53 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [plPick, setPlPick] = useState<string | null>(null)   // id трека, который кладём
   useBackClose(!!plPick, () => setPlPick(null))
   function putInPlaylist(plId: string, trackId: string) {
-    const n = addTrackToPl(playlists, plId, trackId)
-    setPlaylists(n); savePlaylists(n)
-    const p = n.find(x => x.id === plId)
+    const p = playlists.find(x => x.id === plId)
+    const r = addTrackTo(playlists, plId, trackId)
+    // v1.441.0: раньше при повторе и при переполнении не происходило ничего и не
+    // говорилось ничего — человек нажимал снова и снова. Теперь причина видна.
+    if (!r.ok) { toastErr(addFailText(r.why!, p?.name ?? 'плейлист')); return }
+    setPlaylists(r.list); savePlaylists(r.list)
     toastOk(`Добавлено в «${p?.name ?? 'плейлист'}»`)
   }
-  async function newPlaylistWith(trackId?: string) {
-    const name = (await promptUi('Название плейлиста', { placeholder: 'Моя музыка', okText: 'Создать' }))?.trim()
-    if (!name) return
-    const n = createPlaylist(playlists, name, trackId)
+  /**
+   * Создание плейлиста (v1.441.0 — своим окном).
+   *
+   * Было: системный запрос имени одной строкой. Ни обложки, ни понимания,
+   * сколько треков туда поедет, ни возможности передумать — и это единственный
+   * шаг, на котором плейлист вообще создаётся.
+   */
+  const [plNew, setPlNew] = useState<{ trackId?: string } | null>(null)
+  const [plName, setPlName] = useState('')
+  const [plCover, setPlCover] = useState<string | null>(null)
+  const [plBusy, setPlBusy] = useState(false)
+  const plCoverRef = useRef<HTMLInputElement>(null)
+  function newPlaylistWith(trackId?: string) { setPlName(''); setPlCover(null); setPlNew({ trackId }) }
+  async function createPlNow() {
+    const name = plName.trim()
+    if (!name) { toastErr('Без названия плейлист не создать'); return }
+    const n = createPlaylist(playlists, name, plNew?.trackId, plCover)
     setPlaylists(n); savePlaylists(n)
+    setPlNew(null)
     toastOk(`Плейлист «${name}» создан`)
+  }
+  // Для какого уже существующего плейлиста выбираем обложку. null — значит идёт
+  // создание нового, и картинка ложится в окно создания.
+  const [plCoverFor, setPlCoverFor] = useState<string | null>(null)
+  async function pickPlCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f || !meId) return
+    setPlBusy(true)
+    try {
+      const url = await uploadTo('avatars', meId, f)
+      if (plCoverFor) {
+        const n = setPlaylistCover(playlists, plCoverFor, url)
+        setPlaylists(n); savePlaylists(n); setPlCoverFor(null)
+        toastOk('Обложка сохранена')
+      } else setPlCover(url)
+    }
+    catch (err: any) { toastErr(err?.message ?? String(err)) }
+    finally { setPlBusy(false) }
   }
 
   /**
@@ -2421,6 +2457,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
       </Portal>}
 
+      {plNew && <Portal>
+        <div className="mus2-share-ov" onClick={() => setPlNew(null)}>
+          <div className="mus2-share mus2-plnew" onClick={e => e.stopPropagation()}>
+            <div className="mus2-share-h"><b>Новый плейлист</b></div>
+            <div className="mus2-plnew-body">
+              {/* Обложка своя — необязательная: без неё плитка соберётся из
+                  обложек треков, как и раньше. */}
+              <button className="mus2-plnew-cover" onClick={() => plCoverRef.current?.click()}
+                title="Выбрать обложку плейлиста" disabled={plBusy}>
+                {plCover ? <img src={plCover} alt="" /> : <span><Icon name="image" size={22} />{plBusy ? 'Загружаю…' : 'Обложка'}</span>}
+              </button>
+              <input ref={plCoverRef} type="file" accept="image/*" hidden onChange={pickPlCover} />
+              <div className="mus2-plnew-right">
+                <input className="mus2-in" autoFocus placeholder="Название" maxLength={PL_NAME_MAX}
+                  value={plName} onChange={e => setPlName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void createPlNow() }} />
+                <div className="mus2-plnew-hint">
+                  {plNew.trackId ? 'Трек попадёт в него сразу' : 'Треки добавишь из меню карточки'} · до {PL_TRACKS_MAX} треков
+                </div>
+              </div>
+            </div>
+            <div className="mus2-plnew-foot">
+              {plCover && <button className="mus2-plnew-clear" onClick={() => setPlCover(null)}>Убрать обложку</button>}
+              <button className="mus2-plnew-cancel" onClick={() => setPlNew(null)}>Отмена</button>
+              <button className="mus2-plnew-ok" disabled={!plName.trim() || plBusy} onClick={() => void createPlNow()}>Создать</button>
+            </div>
+          </div>
+        </div>
+      </Portal>}
+
       {shareFor && <Portal>
         <div className="mus2-share-ov" onClick={() => setShareFor(null)}>
           <div className="mus2-share" onClick={e => e.stopPropagation()}>
@@ -2542,6 +2608,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 }
                 return <>
                   <div className="mus2-plbtns" style={{ marginBottom: 12 }}>
+                    {/* v1.441.0: обложку можно поменять и потом, а не только при
+                        создании — иначе она была бы решением на один раз. */}
+                    <button className="pqs2-btn" onClick={() => { setPlCoverFor(pl!.id); plCoverRef.current?.click() }}>
+                      <Icon name="image" size={15} /> {pl!.cover ? 'Сменить обложку' : 'Обложка'}
+                    </button>
+                    {pl!.cover && <button className="pqs2-btn" onClick={() => {
+                      const n = setPlaylistCover(playlists, pl!.id, null)
+                      setPlaylists(n); savePlaylists(n); toastOk('Обложка убрана')
+                    }}><Icon name="close" size={15} /> Убрать обложку</button>}
                     <button className="pqs2-btn" onClick={() => void newPlaylistWith()}><Icon name="plus" size={15} /> Новый плейлист</button>
                   </div>
                   {playlists.length === 0
@@ -2554,8 +2629,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                             <div key={p.id} className="mus2-card" onClick={() => setOpenPl(p.id)}
                               title={p.name + ' — ' + list.length + ' трек.'}>
                               {/* Обложка плейлиста — плитка из обложек его треков, как в Spotify. */}
-                              <div className={'mus2-card-art mus2-plart n' + Math.min(arts.length, 4)}>
-                                {arts.length === 0
+                              {/* v1.441.0: своя обложка, если её поставили; иначе — плитка
+                                  из обложек треков, как и было. */}
+                              <div className={'mus2-card-art mus2-plart n' + (p.cover ? 1 : Math.min(arts.length, 4))}>
+                                {p.cover
+                                  ? <img src={p.cover} alt="" loading="lazy" />
+                                  : arts.length === 0
                                   ? <Icon name="music" size={34} />
                                   : arts.map((a, i) => <img key={i} src={a} alt="" loading="lazy" />)}
                                 <span className="mus2-card-d">{list.length} трек.</span>
@@ -2581,7 +2660,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               }
               const shown = all.slice(0, libShown)
               if (all.length === 0) {
-                return <div className="mus2-empty center">Ничего не нашлось по запросу «{libQ.trim()}»</div>
+                // v1.441.0: пустой поиск больше не тупик. Раньше строка «ничего
+                // не нашлось» была концом разговора, хотя ровно в этот момент
+                // человек и хочет добавить свою песню — а кнопка добавления
+                // живёт наверху и в этот момент не на виду.
+                return <div className="mus2-empty center mus2-noresult">
+                  <div className="mus2-noresult-t">Ничего не нашлось по запросу «{libQ.trim()}»</div>
+                  <div className="mus2-noresult-s">Этой песни ещё нет в Трекотеке. Загрузи свой файл — он появится у всех.</div>
+                  <button className="mus2-noresult-b" onClick={() => fileRef.current?.click()}>
+                    <Icon name="paperclip" size={15} /> Загрузить свой файл
+                  </button>
+                  <button className="mus2-noresult-l" onClick={() => setLibQ('')}>Показать всю Трекотеку</button>
+                </div>
               }
               return <>
                 <div className="mus2-lib-count">{all.length === tracks.length
@@ -2645,7 +2735,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                               помечать его как «не играет» было бы неправдой: на самом
                               YouTube он играет прекрасно. Пометка отдельная и мягче. */}
                           {!isBroken(t.id) && isNoEmbed(t.id) && !copyOf(t) &&
-                            <span className="mus2-card-only" title="Владелец запретил встраивание: слушать можно только на YouTube">только на YouTube</span>}
+                            null}
                           {/* v1.424.0: число стоит на КАЖДОМ треке, как в SoundCloud.
                               Раньше оно появлялось только у тех, кого человек уже
                               слушал сам: у остальных было пусто — и не потому, что

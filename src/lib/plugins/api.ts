@@ -17,6 +17,33 @@ import { VOICE_EFFECTS, activeEffect, isVoiceEffect, applyVoiceEffectSafe, remem
 // было бы делом одной строчки.
 
 /** Что API умеет делать «наружу» — подставляет приложение (см. host.ts). */
+/**
+ * Всё, что плагин вообще может позвать (v1.441.0).
+ *
+ * Список зафиксирован НАРОЧНО и проверяется отдельной проверкой. Смысл не в
+ * documentation ради documentation: любая новая возможность обязана пройти через
+ * этот список, а значит — через вопрос «а не действует ли она на других людей?».
+ * Сейчас ни один метод не умеет: менять права на сервере, писать от чужого
+ * имени, трогать чужие сообщения, менять чужие настройки. Единственная запись,
+ * которую видят все, — music.add, и она спрашивает человека каждый раз.
+ */
+export const PLUGIN_METHODS = [
+  // своё окружение, только чтение
+  'me', 'channel', 'channels', 'servers', 'status.get', 'voice.current', 'voice.effects',
+  // своё состояние
+  'status.set', 'voice.setEffect', 'storage.get', 'storage.set', 'storage.remove', 'storage.keys', 'storage.clear',
+  // то, что человек и так делает кнопками у себя
+  'messages.recent', 'messages.send', 'messages.react', 'messages.remove',
+  'music.now', 'music.library', 'music.play', 'music.pause', 'music.next', 'music.prev', 'music.queue',
+  'music.add',                       // единственная общая запись — со спросом
+  'sound.play', 'clipboard.write', 'open', 'notify', 'log', 'net.fetch', 'subscribe',
+  // свой интерфейс
+  'commands.register', 'ui.addComposerButton', 'ui.addMessageAction', 'ui.addPanel',
+  'ui.addSettingsPage', 'ui.addHotkey', 'ui.confirm', 'ui.prompt',
+  // строки описания панели
+  'label', 'text', 'button', 'toggle', 'select', 'slider', 'color', 'image', 'progress', 'css',
+] as const
+
 export interface HostContext {
   /** Отправить сообщение в открытый сейчас канал от имени пользователя. */
   sendMessage: (text: string) => Promise<void>
@@ -245,12 +272,31 @@ export function createDispatcher(
       }
       case 'music.add': {
         need('music')
-        // Добавление ссылки — запись в общий склад, поэтому отдельно и редко:
-        // плагин с ошибкой в цикле иначе завалил бы Трекотеку у всех.
-        rateLimit(id + ':music.add', 5, 60_000, 'добавлять треки')
+        /**
+         * v1.441.0: добавление в общий склад — только с разрешения человека.
+         *
+         * Это единственное место во всём API, где плагин пишет туда, что видят
+         * ВСЕ: Трекотека общая. Ограничения по частоте тут мало — пять треков в
+         * минуту это всё равно пять чужих песен в общем складе, которых никто не
+         * просил. Теперь каждый такой трек подтверждается вручную, и отказ
+         * молчаливый: плагин узнаёт только «не разрешили».
+         *
+         * Всё остальное, что плагин может, касается либо его самого, либо того,
+         * что человек и так делает своими кнопками у себя (см. PLUGIN_METHODS
+         * ниже — там же список и его смысл).
+         */
+        rateLimit(id + ':music.add', 3, 60_000, 'добавлять треки')
         const b = musicBridge()
         if (!b) throw new Denied('Плеер сейчас не открыт — добавлять некуда.')
-        const why = await b.add(str(args[0], 500, 'ссылка на трек'))
+        const link = str(args[0], 500, 'ссылка на трек')
+        if (!ctx.confirm) throw new Denied('Добавлять треки можно только с подтверждением.')
+        const ok = await ctx.confirm(
+          'Плагин добавляет трек',
+          'Плагин «' + id + '» хочет добавить трек в общую Трекотеку — его увидят все.\n' + link,
+          'Добавить',
+        )
+        if (!ok) throw new Denied('Человек не разрешил добавлять этот трек.')
+        const why = await b.add(link)
         if (why) throw new Denied(why)
         return true
       }
