@@ -1,6 +1,6 @@
 import { toastErr, toastOk } from '../lib/toast'
 import { recommend, libraryOrder, WHY_LABEL } from './personalQueue'
-import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, forgetBroken, forgetNoEmbed, pauseKind, silenceStuck, SILENCE_MS, pushFail, sourceDown, type FailMark } from './broken'
+import { markFailed, markOk, isBroken, BROKEN_AFTER, isEmbedDeniedCode, markNoEmbed, isNoEmbed, forgetBroken, forgetNoEmbed, pauseKind, playKind, silenceStuck, SILENCE_MS, pushFail, sourceDown, type FailMark } from './broken'
 import { setMusicBridge } from '../lib/plugins/musicApi'
 import { emitPluginEvent } from '../lib/plugins/host'
 import { PluginPanels } from '../components/PluginPanels'
@@ -978,7 +978,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         })
         w.bind(SC.Widget.Events.FINISH, () => { if (!disposed) nextRef.current() })
         // Виджет скрыт, но его события всё равно синхронизируем с нашими кнопками.
-        w.bind(SC.Widget.Events.PLAY, () => { if (!disposed) setPlaying(true) })
+        //
+        // v1.439.0: но САМ он музыку не включает.
+        //
+        // Что было. Любое «играю» от виджета включало плеер у нас. А виджет
+        // умеет стартовать сам: iframe создаётся с разрешением на автозапуск, и
+        // SoundCloud этим пользуется — открыл приложение, и музыка заиграла без
+        // единого нажатия. Владелец попросил, чтобы при входе было тихо, и это
+        // правильно: звук в приложении должен начинаться только по просьбе
+        // человека.
+        //
+        // Отличаем так же, как отличаем свою паузу от чужой (v1.421.0): наше
+        // «играю» приходит ПОСЛЕ того, как мы сами включили воспроизведение.
+        // Пришло, когда у нас пауза, — это виджет сам, и мы его останавливаем.
+        w.bind(SC.Widget.Events.PLAY, () => {
+          if (disposed) return
+          if (playKind(playingRef.current) === 'ours') return   // подтверждение нашего включения
+          try { w.pause() } catch { /* виджет уже уехал */ }
+        })
         // v1.421.0: пауза бывает двух совершенно разных видов, и раньше мы
         // считали их одной.
         //

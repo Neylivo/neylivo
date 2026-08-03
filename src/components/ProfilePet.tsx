@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ProfilePrefs, PetFree } from '../lib/profilePrefs'
-import { ensureModelViewer } from '../lib/modelViewer'
+import { Pet3D } from './Pet3D'
 
 export type PetCard = 'mini' | 'big'
 
@@ -30,6 +30,10 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
   p: ProfilePrefs; scale?: number; card?: PetCard; bannerH?: number
   onFreeMove?: (card: PetCard, pos: PetFree, done: boolean) => void
 }) {
+  // Ключ этого питомца на экране: по нему считаются места среди живых холстов
+  // (см. lib/petSlots.ts). Один и тот же человек в разных карточках — разные
+  // места, поэтому в ключ входит и вид карточки.
+  const petKey = (p.petUrl || 'pet') + '|' + card
   const dragging = useRef(false)
   const lastPos = useRef<PetFree | null>(null)
   const [reacting, setReacting] = useState(false)
@@ -102,18 +106,16 @@ export function ProfilePet({ p, scale = 1, card = 'mini', bannerH, onFreeMove }:
     },
   } : {}
 
-  // v1.298.0: библиотека 3D подтягивается только здесь и только для объёмного
-  // питомца — раньше она грузилась с чужого CDN при каждом запуске приложения.
-  useEffect(() => { if (p.petKind === 'model') void ensureModelViewer() }, [p.petKind])
-
   let mediaInner: JSX.Element
   if (p.petKind === 'video') mediaInner = <video className={animClass} style={mediaStyle} src={p.petUrl} autoPlay loop muted playsInline onClick={onReactClick} onAnimationEnd={onReactEnd} />
   else if (p.petKind === 'model') {
+    // v1.439.0: объёмный питомец переехал в свой компонент (Pet3D). Там же
+    // разобрано, что с ним было не так: холст WebGL жил всегда и у каждого,
+    // ограничения на их число не было вовсе, а незагрузившаяся библиотека
+    // оставляла молчаливую пустоту.
     mediaInner = (
       <div style={{ width: '100%', height: '100%', cursor: clickable ? 'pointer' : undefined }} {...modelTap}>
-        {/* @ts-ignore - <model-viewer> is a web component */}
-        <model-viewer className={animClass} style={mediaStyle as any} src={p.petUrl} auto-rotate camera-controls disable-zoom
-          interaction-prompt="none" onAnimationEnd={onReactEnd} />
+        <Pet3D id={petKey} src={p.petUrl} className={animClass} style={mediaStyle} />
       </div>
     )
   }

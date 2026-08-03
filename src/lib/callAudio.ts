@@ -12,6 +12,7 @@
 import { Track } from './livekit'
 import type { Room } from './livekit'
 import { audioCtx, master } from './callSounds'
+import { sbVolume } from './soundTile'
 
 export class CallRecorder {
   ctx: AudioContext
@@ -106,7 +107,13 @@ export async function playToAll(
   const src = ctx.createBufferSource()
   src.buffer = buf
   src.connect(dest)
-  src.connect(master()) // local monitor for the presser — through the shared deafen-aware gain
+  // v1.439.0: громкость звуковой панели. Слышно её только у себя: собеседникам
+  // уходит дорожка как есть, иначе один человек своим ползунком менял бы
+  // громкость у всех остальных.
+  const sbGain = ctx.createGain()
+  sbGain.gain.value = sbVolume() / 100
+  src.connect(sbGain)
+  sbGain.connect(master()) // local monitor for the presser — through the shared deafen-aware gain
   const track = dest.stream.getAudioTracks()[0]
 
   let cleaned = false

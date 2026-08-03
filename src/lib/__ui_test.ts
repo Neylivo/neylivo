@@ -23,6 +23,8 @@ import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
 import { SHARE_RES, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources } from './shareOpts'
 import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon } from './callState'
 import { shouldLeave, takeCall, releaseCall, activeCall } from './activeCall'
+import { takeSlot, freeSlot, hasSlot, liveCount, resetSlots, subscribeSlots, MAX_LIVE } from './petSlots'
+import { tileEmoji, tileLabel, orderTiles, filterTiles } from './soundTile'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -891,6 +893,122 @@ check('проверка заметила бы пропажу границ', () =
   return без.x !== clampPan(без, 1000, 800, 900, 700).x
 })
 
+console.log('\n-- Саундпад сеткой (v1.439.0) --')
+{
+  const S = (id: string, name: string, ownerId: string, owner = 'кто-то', duration = 3) =>
+    ({ id, name, ownerId, owner, duration })
+  const СПИСОК = [
+    S('1', 'Ржач', 'вася', 'Вася'),
+    S('2', 'Барабаны', 'server', 'Мой сервер'),
+    S('3', 'Бум', 'я', 'Я'),
+    S('4', 'Автобус', 'я', 'Я'),
+  ]
+
+  check('звуки сервера идут первыми', () => orderTiles(СПИСОК, 'я')[0].ownerId === 'server')
+  check('свои — раньше чужих', () => {
+    const ids = orderTiles(СПИСОК, 'я').map(c => c.ownerId)
+    return ids.indexOf('я') < ids.indexOf('вася')
+  })
+  check('внутри группы — по алфавиту, а не по времени загрузки', () => {
+    const свои = orderTiles(СПИСОК, 'я').filter(c => c.ownerId === 'я').map(c => c.name)
+    return свои.join() === 'Автобус,Бум'
+  })
+  check('порядок устойчив: место звука не прыгает', () => {
+    const a = orderTiles(СПИСОК, 'я').map(c => c.id).join()
+    const b = orderTiles([...СПИСОК].reverse(), 'я').map(c => c.id).join()
+    return a === b
+  })
+
+  check('поиск находит по названию', () => filterTiles(СПИСОК, 'бум').length === 1)
+  check('поиск находит и по тому, кто выложил', () => filterTiles(СПИСОК, 'вася').length === 1)
+  check('пустой поиск отдаёт всё', () => filterTiles(СПИСОК, '   ').length === 4)
+
+  console.log('\n   как выглядит плитка:')
+  check('значок подбирается по названию', () =>
+    tileEmoji('Дикий ржач') === '😂' && tileEmoji('Барабаны') === '🥁' && tileEmoji('Бум!') === '💥')
+  check('незнакомому звуку — обычный значок', () => tileEmoji('шшш') === '🔊')
+  check('пустое имя не ломает значок', () => tileEmoji('') === '🔊')
+  check('короткое название не режется', () => tileLabel('Бум') === 'Бум')
+  check('длинное режется по словам и с многоточием', () => {
+    const l = tileLabel('МЕЛЛСТРОЙ АМ АМ АМ МЕМ ТРЕЧОК ПЕСНЯ')
+    return l.endsWith('…') && l.length <= 23 && !l.includes('  ')
+  })
+  check('слово не разрывается посередине, если можно иначе', () => {
+    const l = tileLabel('Очень длинное название звука', 20)
+    return l.endsWith('…') && !/\S…$/.test(l.slice(0, -1) + 'x') === false || l.includes(' ')
+  })
+  check('пустое имя превращается в «Звук»', () => tileLabel('') === 'Звук')
+
+  console.log('\n-- Ломаем нарочно (саундпад) --')
+  check('проверка заметила бы порядок «как пришло из базы»', () => {
+    // Прежний вид: список в том порядке, в каком отдала база, — место звука
+    // менялось от того, кто когда его загрузил, и рука его не запоминала.
+    const какПришло = СПИСОК.map(c => c.id).join()
+    const теперь = orderTiles(СПИСОК, 'я').map(c => c.id).join()
+    return какПришло !== теперь
+  })
+}
+
+console.log('\n-- Объёмные питомцы: сколько холстов живут разом (v1.439.0) --')
+{
+  resetSlots()
+  check('первым питомцам места хватает', () => {
+    resetSlots()
+    return Array.from({ length: MAX_LIVE }, (_, i) => takeSlot('п' + i)).every(Boolean)
+  })
+  check('сверх предела места нет — будет заглушка', () => {
+    resetSlots()
+    for (let i = 0; i < MAX_LIVE; i++) takeSlot('п' + i)
+    return takeSlot('лишний') === false
+  })
+  check('предел заметно ниже, чем держит браузер', () => MAX_LIVE >= 2 && MAX_LIVE <= 8)
+  check('тот же питомец второй раз место не занимает', () => {
+    resetSlots()
+    takeSlot('один'); takeSlot('один')
+    return liveCount() === 1
+  })
+  check('ушёл с экрана — место освободилось', () => {
+    resetSlots()
+    for (let i = 0; i < MAX_LIVE; i++) takeSlot('п' + i)
+    freeSlot('п0')
+    return takeSlot('новый') === true && liveCount() === MAX_LIVE
+  })
+  check('освобождение чужого места ничего не ломает', () => {
+    resetSlots()
+    takeSlot('один')
+    freeSlot('другой')
+    return hasSlot('один') && liveCount() === 1
+  })
+  check('о смене мест сообщается — ждущие получат свой холст', () => {
+    resetSlots()
+    let сообщений = 0
+    const off = subscribeSlots(() => { сообщений++ })
+    takeSlot('a'); freeSlot('a')
+    off()
+    return сообщений === 2
+  })
+  check('после отписки не дёргаем', () => {
+    resetSlots()
+    let сообщений = 0
+    const off = subscribeSlots(() => { сообщений++ })
+    off()
+    takeSlot('b')
+    return сообщений === 0
+  })
+
+  console.log('\n-- Ломаем нарочно (питомцы) --')
+  check('проверка заметила бы возврат к «холст каждому»', () => {
+    // Прежнее поведение: сколько питомцев на экране, столько и холстов WebGL —
+    // браузер при переполнении убивает самые старые, и вместо питомцев чернота.
+    resetSlots()
+    const безПредела = 20
+    let дали = 0
+    for (let i = 0; i < безПредела; i++) if (takeSlot('м' + i)) дали++
+    return дали === MAX_LIVE && дали < безПредела
+  })
+  resetSlots()
+}
+
 console.log('\n-- Звонок только один (v1.438.0) --')
 {
   check('входа никуда не было — выходить неоткуда', () =>
@@ -1100,6 +1218,8 @@ console.log('\n-- Присутствие: что рассылаем и что п
   check('первая публикация нужна всегда', () => metaChanged(null, M()))
   check('то же самое второй раз не рассылается', () => !metaChanged(M(), M()))
   check('смена ника рассылается', () => metaChanged(M(), M({ username: 'другой' })))
+  // Само присутствие голоса остаётся и рассылается: по нему рисуются значки в
+  // списках, просто активностью это больше не называется.
   check('вход в звонок рассылается', () => metaChanged(M(), M({ voice: { since: 1 } })))
   check('включение демонстрации рассылается', () =>
     metaChanged(M({ voice: { since: 1 } }), M({ voice: { since: 1, screen: true } })))
@@ -1130,23 +1250,31 @@ console.log('\n-- Присутствие: что рассылаем и что п
   console.log('\n   что человек делает — по важности:')
   check('демонстрация экрана важнее всего', () =>
     whatIsDoing({ voice: { since: 1, screen: true }, game: { name: 'И', since: 1 } }).kind === 'screen')
-  check('голос важнее игры', () =>
-    whatIsDoing({ voice: { since: 1 }, game: { name: 'И', since: 1 } }).kind === 'voice')
+  // v1.439.0: просто «в голосовом канале» активностью больше не считается — по
+  // просьбе владельца. Игра и музыка снова видны у тех, кто держит канал открытым.
+  check('голос сам по себе активностью не считается', () =>
+    whatIsDoing({ voice: { since: 1 }, game: { name: 'И', since: 1 } }).kind === 'game')
+  check('в голосе без игры и музыки — ничего не показываем', () =>
+    whatIsDoing({ voice: { since: 1 } }).kind === 'none')
+  check('демонстрация экрана из звонка по-прежнему важнее всего', () =>
+    whatIsDoing({ voice: { since: 1, screen: true }, game: { name: 'И', since: 1 } }).kind === 'screen')
   check('игра важнее музыки', () =>
     whatIsDoing({ game: { name: 'И', since: 1 }, listening: { title: 'п', pos: 0, at: 0 } }).kind === 'game')
   check('музыка важнее своей строки', () =>
     whatIsDoing({ listening: { title: 'п', pos: 0, at: 0 }, activity: { text: 'пью чай', since: 0 } }).kind === 'music')
   check('ничего не делает — так и говорим', () => whatIsDoing({}).kind === 'none')
-  check('в голосе видно, где именно', () =>
-    whatIsDoing({ voice: { since: 1, where: 'Общий' } }).text.includes('Общий'))
+  check('в демонстрации видно, где именно', () =>
+    whatIsDoing({ voice: { since: 1, screen: true, where: 'Общий' } }).text.includes('Общий'))
   check('время в звонке считается от входа, а не от нажатия кнопок', () =>
     whatIsDoing({ voice: { since: 12345, screen: true } }).since === 12345)
 
   console.log('\n-- Ломаем нарочно (присутствие) --')
-  check('проверка заметила бы пропажу голоса из присутствия', () => {
-    const прежнее = whatIsDoing({ game: null, listening: null, activity: null })
-    const теперь = whatIsDoing({ voice: { since: 1 } })
-    return прежнее.kind === 'none' && теперь.kind === 'voice'
+  check('проверка заметила бы возврат «в голосовом канале» в активности', () => {
+    // Строка перекрывала собой игру и музыку у всех, кто просто держит канал
+    // открытым, — с v1.439.0 её быть не должно.
+    const сИгрой = whatIsDoing({ voice: { since: 1 }, game: { name: 'И', since: 1 } })
+    const один = whatIsDoing({ voice: { since: 1 } })
+    return сИгрой.kind === 'game' && один.kind === 'none'
   })
   check('проверка заметила бы «рассылаем на каждый чих»', () => {
     const a = M({ listening: { title: 'п', pos: 3, at: 1000 } })

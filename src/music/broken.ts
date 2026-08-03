@@ -137,6 +137,21 @@ export const SILENCE_MS = 15000
  * `retry` — встал посреди песни, это бывает от сети, и один раз стоит
  * попробовать продолжить. `stuck` — встал снова: дело в самом треке.
  */
+/**
+ * Чьё это «играю» (v1.439.0).
+ *
+ * Зеркало pauseKind. Чужой проигрыватель умеет стартовать сам — iframe создаётся
+ * с разрешением на автозапуск, и сервис этим пользуется: человек только зашёл в
+ * приложение, а музыка уже играет. Наше «играю» приходит ПОСЛЕ того, как мы сами
+ * включили воспроизведение; пришло на паузе — значит начал не человек.
+ *
+ * `ours` — подтверждение нашего же включения, ничего делать не надо.
+ * `stray` — самозапуск: останавливаем, при входе должно быть тихо.
+ */
+export function playKind(weWantPlay: boolean): 'ours' | 'stray' {
+  return weWantPlay ? 'ours' : 'stray'
+}
+
 export function pauseKind(weWantPlay: boolean, posSec: number, resumeTries: number): 'ours' | 'notStarted' | 'retry' | 'stuck' {
   if (!weWantPlay) return 'ours'
   if (!(posSec >= 1)) return 'notStarted'

@@ -6,6 +6,7 @@ import { fetchClips, addClip, removeClip, decodeAudio, audioBufferToWav, fmtDur,
 import { uploadTo } from '../lib/storage'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
+import { tileEmoji, tileLabel, orderTiles, filterTiles, sbVolume, setSbVolume } from '../lib/soundTile'
 
 export function Soundboard({ room, recorder, meId, meName, onClose, serverSounds, serverName }:
   { room: Room; recorder: CallRecorder | null; meId: string; meName: string; onClose: () => void
@@ -25,6 +26,7 @@ export function Soundboard({ room, recorder, meId, meName, onClose, serverSounds
   // предпрослушивание и трансляция в канал независимы.
   const [previewingId, setPreviewingId] = useState<string | null>(null)
   const [trim, setTrim] = useState<{ clip: Clip; buf: AudioBuffer; start: number; end: number } | null>(null)
+  const [vol, setVol] = useState(() => sbVolume())
   const fileRef = useRef<HTMLInputElement>(null)
   const stopRef = useRef<(() => void) | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
@@ -148,8 +150,9 @@ export function Soundboard({ room, recorder, meId, meName, onClose, serverSounds
   const srvClips: Clip[] = (serverSounds ?? [])
     .filter(s => s?.url)
     .map((s, i) => ({ id: 'srv:' + i, url: s.url, name: s.name || 'Звук', owner: serverName ?? 'Сервер', ownerId: 'server', duration: 0, created_at: '' }))
-  const all = [...srvClips, ...clips]
-  const list = q ? all.filter(c => c.name.toLowerCase().includes(q.toLowerCase())) : all
+  // v1.439.0: порядок и отбор — в lib/soundTile.ts, там же и проверяются.
+  const all = orderTiles([...srvClips, ...clips], meId)
+  const list = filterTiles(all, q)
 
   return (
     <div className="sb" onClick={e => e.stopPropagation()}>
@@ -172,24 +175,40 @@ export function Soundboard({ room, recorder, meId, meName, onClose, serverSounds
 
       <input className="sb-search" placeholder="Поиск звука…" value={q} onChange={e => setQ(e.target.value)} />
 
-      <div className="sb-list">
+      {/* v1.439.0: сетка плиток вместо списка строк — как звуковая панель в
+          Discord. Раньше это был вертикальный список, где у каждого звука были
+          свои четыре кнопки: чтобы включить один звук посреди разговора, надо
+          было прочитать строку и попасть в нужную кнопку. Теперь нажатие ровно
+          одно — по самой плитке, и звук уходит всем; остальное (прослушать у
+          себя, обрезать, удалить) появляется на плитке при наведении. */}
+      <div className="sb-grid">
         {list.length === 0 && <div className="sb-empty">Пока нет сохранённых звуков. Сохрани момент из звонка или загрузи аудио — их увидят все.</div>}
         {list.map(c => (
-          <div key={c.id} className={'sb-item' + (playingId === c.id ? ' playing' : '')}>
-            <button className="sb-play" title={previewingId === c.id ? 'Остановить' : 'Прослушать у себя'} onClick={() => play(c)}>
-              <Icon name={previewingId === c.id ? 'pause' : 'play'} size={15} />
-            </button>
-            <div className="sb-meta">
-              <div className="sb-name">{c.name}</div>
-              <div className="sb-sub">{c.ownerId === 'server' ? 'Звук сервера · ' + c.owner : fmtDur(c.duration) + ' · ' + c.owner}</div>
-            </div>
-            <button className="sb-blast" title="Включить всем в канале" onClick={() => blast(c)}>
-              <Icon name={playingId === c.id ? 'pause' : 'volume'} size={15} /> {playingId === c.id ? 'Стоп' : 'Всем'}
-            </button>
-            {c.ownerId !== 'server' && <button className="sb-trim" title="Обрезать" onClick={() => openTrim(c)}><Icon name="scissors" size={15} /></button>}
-            {c.ownerId === meId && <button className="sb-del" title="Удалить" onClick={async () => { try { await removeClip(c.id); refresh() } catch (e: any) { toastErr(e.message ?? String(e)) } }}><Icon name="trash" size={14} /></button>}
-          </div>
+          <button key={c.id} className={'sb-tile' + (playingId === c.id ? ' playing' : '')}
+            title={c.name + (c.ownerId === 'server' ? ' · звук сервера' : ' · ' + fmtDur(c.duration) + ' · ' + c.owner)}
+            onClick={() => blast(c)}>
+            <span className="sb-tile-em">{playingId === c.id ? '⏹' : tileEmoji(c.name)}</span>
+            <span className="sb-tile-nm">{tileLabel(c.name)}</span>
+            <span className="sb-tile-sub">{c.ownerId === 'server' ? 'сервер' : fmtDur(c.duration)}</span>
+            <span className="sb-tile-acts" onClick={e => e.stopPropagation()}>
+              <span className="sb-mini" title={previewingId === c.id ? 'Остановить' : 'Прослушать у себя'} onClick={() => play(c)}>
+                <Icon name={previewingId === c.id ? 'pause' : 'play'} size={13} />
+              </span>
+              {c.ownerId !== 'server' && <span className="sb-mini" title="Обрезать" onClick={() => openTrim(c)}><Icon name="scissors" size={13} /></span>}
+              {c.ownerId === meId && <span className="sb-mini danger" title="Удалить"
+                onClick={async () => { try { await removeClip(c.id); refresh() } catch (e: any) { toastErr(e.message ?? String(e)) } }}><Icon name="trash" size={13} /></span>}
+            </span>
+          </button>
         ))}
+      </div>
+
+      {/* Громкость звуковой панели — как в Discord: звуки бывают заметно громче
+          голоса, и убавлять их приходится отдельно от собеседников. */}
+      <div className="sb-vol">
+        <Icon name="volume" size={14} />
+        <input type="range" min={0} max={200} step={5} value={vol}
+          onChange={e => { const v = parseInt(e.target.value, 10); setVol(v); setSbVolume(v) }} />
+        <span>{vol}%</span>
       </div>
 
       {trim && <div className="sb-trim-modal" onClick={closeTrim}>

@@ -421,9 +421,13 @@ export function PresenceProvider({ username, avatarUrl, children }:
     // Приоритет как в Discord: демонстрация экрана > голос > игра > музыка >
     // ручная активность. Голос добавлен в v1.436.0 — до этого человек мог сидеть
     // в звонке и делиться экраном, а у всех значилась вчерашняя игра.
+    // v1.439.0: «В голосовом канале» из активностей убрано по просьбе владельца.
+    // Само присутствие голоса остаётся (voiceOf) — по нему рисуются значки в
+    // списках, — но строкой активности это больше не считается: сидеть в звонке
+    // и «делать что-то» не одно и то же, а игру и музыку оно перекрывало.
+    // Демонстрация экрана остаётся: её можно открыть и посмотреть.
     const v = userId === user?.id ? voiceRef.current : online[userId]?.voice
     if (v?.screen) return { text: '🖥 Демонстрирует экран' + (v.where ? ' · ' + v.where : ''), since: v.since }
-    if (v) return { text: '🔊 В голосовом канале' + (v.where ? ' · ' + v.where : ''), since: v.since }
     const g = userId === user?.id ? myGame : online[userId]?.game
     if (g) return { text: '🎮 Играет в ' + g.name + (g.mode ? ': ' + g.mode : ''), since: g.since }
     const l = userId === user?.id ? myListening : online[userId]?.listening

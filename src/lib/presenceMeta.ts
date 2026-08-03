@@ -104,9 +104,12 @@ export interface What { kind: WhatKind; text: string; since: number }
 export function whatIsDoing(p: {
   voice?: Voice | null; game?: Game | null; listening?: Listening | null; activity?: Activity | null
 }): What {
+  // v1.439.0: просто «в голосовом канале» активностью больше НЕ считается — по
+  // просьбе владельца. Сидеть в звонке и что-то делать — разные вещи, а строка
+  // перекрывала собой игру и музыку у всех, кто просто держит канал открытым.
+  // Демонстрация экрана осталась: её можно открыть и посмотреть.
   const v = p.voice
   if (v?.screen) return { kind: 'screen', text: 'Демонстрирует экран' + (v.where ? ' · ' + v.where : ''), since: v.since }
-  if (v) return { kind: 'voice', text: (v.where ? 'В голосовом канале · ' + v.where : 'В голосовом канале'), since: v.since }
   const g = p.game
   if (g) return { kind: 'game', text: 'Играет в ' + g.name + (g.mode ? ': ' + g.mode : ''), since: g.since }
   const l = p.listening

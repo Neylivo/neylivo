@@ -6754,3 +6754,63 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .mpg-music .mpg-cover { width: 52px; height: 52px; }
 .mpg-music .mpg-nm { font-size: 15px; line-height: 1.25; }
 .mpg-music .mpg-mode { font-size: 12.5px; }
+
+/* v1.439.0: заглушка объёмного питомца (см. components/Pet3D.tsx).
+   Показывается, пока грузится библиотека, пока питомец за пределами экрана и
+   когда живых холстов WebGL уже достаточно. Раньше на этом месте была молчаливая
+   пустота, неотличимая от поломки. */
+.pet3d-ph {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; color: rgba(var(--ov, 255,255,255), .45);
+  background: rgba(var(--ov, 255,255,255), .06);
+  border: 1px dashed rgba(var(--ov, 255,255,255), .12);
+}
+
+/* ══ v1.439.0: саундпад сеткой, как звуковая панель Discord ═══════════════════
+   Было: вертикальный список строк, у каждой четыре кнопки. Чтобы включить один
+   звук посреди разговора, надо было прочитать строку и попасть в нужную кнопку —
+   а звук нужен «вот сейчас», пока смешно. Стало: сетка одинаковых плиток,
+   нажатие ровно одно (звук уходит всем), остальное появляется при наведении. */
+.sb-grid {
+  /* flex:1 — как было у списка: сетка занимает всё свободное место панели, а не
+     ровно столько, сколько нужно плиткам (иначе нижний ряд обрезается). */
+  flex: 1; min-height: 0;
+  display: grid; gap: 8px; padding: 4px 10px 10px;
+  grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+  overflow-y: auto; align-content: start;
+}
+.sb-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 10px 6px 8px; min-height: 96px; cursor: pointer; text-align: center;
+  border: 1px solid rgba(var(--ov, 255,255,255), .07); border-radius: var(--r-lg, 12px);
+  background: rgba(var(--ov, 255,255,255), .04); color: var(--tx);
+  transition: background .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease), transform .12s var(--ease-out4, ease);
+}
+.sb-tile:hover { background: rgba(var(--ov, 255,255,255), .09); border-color: rgba(var(--ov, 255,255,255), .16); }
+.sb-tile:active { transform: scale(.96); }
+.sb-tile.playing { border-color: var(--brand); background: rgba(88, 101, 242, .16); }
+.sb-tile-em { font-size: 26px; line-height: 1.1; }
+.sb-tile-nm { font-size: 12px; font-weight: 600; line-height: 1.25; word-break: break-word; }
+.sb-tile-sub { font-size: 10.5px; color: var(--mut); }
+/* Мелкие действия — только при наведении: в покое плитка должна быть чистой,
+   иначе сетка превращается в тот же список кнопок, от которого уходили. */
+.sb-tile-acts {
+  position: absolute; top: 4px; right: 4px; display: flex; gap: 2px;
+  opacity: 0; transition: opacity .12s var(--ease-out4, ease);
+}
+.sb-tile:hover .sb-tile-acts, .sb-tile:focus-within .sb-tile-acts { opacity: 1; }
+.sb-mini {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 6px; background: rgba(0, 0, 0, .45); color: #dbdee1; cursor: pointer;
+}
+.sb-mini:hover { background: rgba(0, 0, 0, .7); color: #fff; }
+.sb-mini.danger:hover { background: var(--red); color: #fff; }
+.sb-vol {
+  display: flex; align-items: center; gap: 8px; padding: 8px 2px 2px;
+  border-top: 1px solid rgba(var(--ov, 255,255,255), .06); color: var(--mut); font-size: 12px;
+}
+.sb-vol input[type=range] { flex: 1; accent-color: var(--brand); cursor: pointer; }
+@media (max-width: 768px) {
+  .sb-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .sb-tile { min-height: 88px; }
+}

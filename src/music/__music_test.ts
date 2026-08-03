@@ -17,7 +17,7 @@ import { parseYouTubeId, isYouTubeUrl, findYouTubeLink, isAudiusUrl } from './so
 import { boost, lighten, scale, rgb } from './artColor'
 import { searchQuery } from './streaming'
 import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
-import { isEmbedDeniedCode, pauseKind, silenceStuck, SILENCE_MS } from './broken'
+import { isEmbedDeniedCode, pauseKind, playKind, silenceStuck, SILENCE_MS } from './broken'
 import { pushFail, sourceDown, SOURCE_DOWN_FAILS, SOURCE_DOWN_MS, type FailMark } from './broken'
 import { mergeTracks } from './mergeTracks'
 import { libraryPlan, newestAt, SNAPSHOT_TTL_MS } from './libCache'
@@ -715,6 +715,21 @@ check('на паузе время не бежит', () => {
   // Позиция на паузе публикуется как есть, и зрителю показывается она же.
   const l = { pos: 42, dur: 200, at: 1000 }
   return livePosLocal(l, 1000 + 60_000) === 102 && l.pos === 42
+})
+
+console.log('\n-- Тишина при входе (v1.439.0) --')
+// Чужой проигрыватель (виджет SoundCloud в скрытом iframe) умеет стартовать сам:
+// разрешение на автозапуск у iframe есть, и сервис им пользуется. Раньше любое
+// его «играю» включало плеер у нас — человек только зашёл, а музыка уже идёт.
+check('чужой проигрыватель не включает музыку сам', () => playKind(false) === 'stray')
+check('наше собственное включение помехой не считается', () => playKind(true) === 'ours')
+check('это зеркало правила про паузу', () =>
+  pauseKind(false, 0, 0) === 'ours' && playKind(false) === 'stray')
+
+console.log('\n-- Ломаем нарочно (тишина при входе) --')
+check('проверка заметила бы возврат к «любое играю включает плеер»', () => {
+  const прежнее = () => 'ours'
+  return прежнее() === 'ours' && playKind(false) === 'stray'
 })
 
 console.log('\n-- Лёг сервис, а не треки (v1.435.0) --')
