@@ -2147,10 +2147,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // подгрузки (music/metaPlan.ts). Через ссылки, а не через зависимости эффекта:
   // эффект не должен перезапускаться на каждую букву в поиске, ему достаточно
   // видеть свежее значение в момент, когда он и так сработал.
+  //
+  // Через useMemo, а не прямо в теле: плеер перерисовывается на каждый тик
+  // полосы времени, то есть раз в секунду, а найденное по широкому запросу — это
+  // тысячи строк. Первая версия этой правки собирала оба списка заново при
+  // каждой перерисовке — ровно та потеря скорости, которую в этом файле уже
+  // чинили (см. v1.436.0 про recommend).
+  const libFound = useMemo(
+    () => (libQ.trim() ? libAll.map(t => t.url) : []),
+    [libAll, libQ],
+  )
+  const libShownUrls = useMemo(() => libAll.slice(0, libShown).map(t => t.url), [libAll, libShown])
   const libFoundRef = useRef<string[]>([])
-  libFoundRef.current = libQ.trim() ? libAll.map(t => t.url) : []
+  libFoundRef.current = libFound
   const libShownRef = useRef<string[]>([])
-  libShownRef.current = libAll.slice(0, libShown).map(t => t.url)
+  libShownRef.current = libShownUrls
 
   // Подсказка «возможно, вы имели в виду» — только когда не нашлось ничего.
   const libHint = useMemo(() => {

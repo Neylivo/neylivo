@@ -50,4 +50,6 @@ export function chatBridge(key: string | null | undefined): ChatBridge | null {
 }
 
 /** Сколько сообщений плагин может забрать за раз: столько же примерно и на экране. */
-export const MAX_RECENT = 50
+// v1.446.0: было 50 — для разбора переписки ИИ-моделью этого мало. Число
+// живёт в limits.ts вместе с остальными.
+export { MAX_RECENT } from './limits'

@@ -1,3 +1,4 @@
+import { LIMITS_WARNING_SHORT } from '../lib/plugins/limits'
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
@@ -295,6 +296,9 @@ export function PluginsSettings() {
                 ))}
               </div>
             )}
+            {/* v1.446.0: у включённого плагина пределы по частоте почти сняты —
+                напоминаем об этом там, где человек его выключает. */}
+            {p.enabled && <div className="plug-note"><Icon name="shield" size={13} /> {LIMITS_WARNING_SHORT}</div>}
             {err && <div className="plug-err"><Icon name="flag" size={14} /> {err}</div>}
             {logOpen === p.manifest.id && (() => {
               const lines = pluginLogs(p.manifest.id)

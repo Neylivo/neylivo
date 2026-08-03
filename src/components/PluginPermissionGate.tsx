@@ -2,6 +2,7 @@ import { Icon } from './icons'
 import { Portal } from './Portal'
 import { compareVersions } from '../lib/plugins/manifest'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type InstalledPlugin } from '../lib/plugins/types'
+import { LIMITS_WARNING } from '../lib/plugins/limits'
 import { missingPermissions } from '../lib/plugins/editorDraft'
 
 // v1.333.0: вынесено из PluginsSettings.tsx отдельным файлом. Каталог плагинов
@@ -69,6 +70,14 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
             </span>
           </div>
         )}
+
+        {/* v1.446.0: пределы по частоте сняты почти полностью (см. lib/plugins/limits.ts),
+            и молчать об этом нельзя: раньше «пять сообщений за десять секунд»
+            само по себе было страховкой, теперь её нет. */}
+        <div className="plug-err warn" style={{ marginTop: 12 }}>
+          <Icon name="shield" size={14} />
+          <span>{LIMITS_WARNING}</span>
+        </div>
 
         <div className="cset-hint" style={{ marginTop: 14 }}>
           Плагин выполняется в песочнице: он не видит твой пароль, сессию и файлы на компьютере.

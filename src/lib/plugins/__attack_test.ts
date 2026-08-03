@@ -28,6 +28,10 @@ const store = new Map<string, string>()
 
 const { createDispatcher, PLUGIN_METHODS } = await import('./api')
 const { NET_HEADERS } = await import('./netGuard')
+// v1.446.0: пределы подняты, и числа в штурме больше НЕ пишутся руками —
+// они берутся оттуда же, откуда их берёт приложение. Иначе проверка
+// стережёт вчерашние числа, а не сегодняшнее правило.
+const { LIMITS, MAX_PER_PLUGIN, MAX_RECENT, MAX_CSS, MAX_STORAGE_VALUE } = await import('./limits')
 const { readFileSync } = await import('node:fs')
 const registry = await import('./registry')
 const { upsertPlugin, loadPlugins } = await import('./store')
@@ -170,13 +174,16 @@ console.log('\n── Новые возможности (v1.419.0) ──')
     try { await b('ui.addHotkey', [{ combo: 'Ctrl+Shift+K', description: 'подмена', onPress: fn }]); return false }
     catch { return true }
   })
-  await check('горячих клавиш не больше пяти на плагин', async () => {
+  await check('горячих клавиш не больше положенного на плагин', async () => {
     const d = attacker([...ALL_PERMISSIONS], 'hk-flood')
     let added = 0
-    for (const c of ['Ctrl+Alt+A', 'Ctrl+Alt+B', 'Ctrl+Alt+C', 'Ctrl+Alt+D', 'Ctrl+Alt+E', 'Ctrl+Alt+F', 'Ctrl+Alt+G']) {
+    // Пробуем на десяток больше, чем позволено: сколько бы ни был предел,
+    // перешагнуть его нельзя.
+    for (let i = 0; i < MAX_PER_PLUGIN.hotkeys + 10; i++) {
+      const c = 'Ctrl+Alt+' + String.fromCharCode(65 + (i % 26)) + (i < 26 ? '' : i)
       try { await d('ui.addHotkey', [{ combo: c, description: 'x', onPress: fn }]); added++ } catch { /* предел */ }
     }
-    return added <= 5
+    return added <= MAX_PER_PLUGIN.hotkeys
   })
 
   // Панель в чате — новое место; выдуманное по-прежнему не проходит.
@@ -265,7 +272,7 @@ console.log('\n── Открытый чат: что можно и чего н�
     const got = await d('messages.recent', [10]) as any[]
     return Array.isArray(got) && got.length === 2 && got[0].id === 'm1' && got[1].mine === false
   })
-  await check('больше пятидесяти сообщений за раз не выдаётся', async () => {
+  await check('больше положенного сообщений за раз не выдаётся', async () => {
     let asked = 0
     setChatBridge('chat-open', {
       recent: (n: number) => { asked = n; return [] },
@@ -275,7 +282,7 @@ console.log('\n── Открытый чат: что можно и чего н�
     // Вернуть настоящий мост обязательно: иначе проверки ниже спрашивали бы
     // эту заглушку и «прошли» бы, ничего не проверив.
     setChatBridge('chat-open', открытый)
-    return asked <= 50
+    return asked <= MAX_RECENT
   })
   await check('чужой чат недоступен, даже зная его id', async () => {
     // Никакого способа назвать другой чат у плагина нет: адресат берётся из
@@ -389,7 +396,7 @@ console.log('\n── Наводнение интерфейса ──')
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().composerButtons.length - before
   await check(`кнопок композера не больше разумного (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => added <= 20)
+    () => added <= MAX_PER_PLUGIN.buttons)
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil2')
@@ -399,7 +406,7 @@ console.log('\n── Наводнение интерфейса ──')
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().commands.length - before
   await check(`команд не больше разумного (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => added <= 30)
+    () => added <= MAX_PER_PLUGIN.commands)
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil3')
@@ -408,7 +415,7 @@ console.log('\n── Наводнение интерфейса ──')
   try { for (let i = 0; i < 3000; i++) await d('ui.addMessageAction', [{ key: 'a' + i, label: 'x', onClick: fn }]) }
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().messageActions.length - before
-  await check(`действий над сообщением не больше разумного (добавлено ${added})`, () => added <= 20)
+  await check(`действий над сообщением не больше разумного (добавлено ${added})`, () => added <= MAX_PER_PLUGIN.actions)
 }
 
 console.log('\n── Наводнение чатом и уведомлениями ──')
@@ -416,22 +423,23 @@ console.log('\n── Наводнение чатом и уведомления�
   const d = attacker([...ALL_PERMISSIONS], 'evil4')
   sent.length = 0
   let err = ''
-  try { for (let i = 0; i < 200; i++) await d('messages.send', ['спам ' + i]) }
+  // Пробуем вдвое больше, чем позволено: предел подняли, но он есть.
+  try { for (let i = 0; i < LIMITS.send.times * 2; i++) await d('messages.send', ['спам ' + i]) }
   catch (e: any) { err = String(e?.message ?? e) }
-  await check(`нельзя залить чат сотнями сообщений (ушло ${sent.length}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => sent.length <= 30)
+  await check(`поток сообщений упирается в предел (ушло ${sent.length}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
+    () => sent.length <= LIMITS.send.times)
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil5')
   toasts.length = 0
-  try { for (let i = 0; i < 500; i++) await d('notify', ['бум ' + i]) } catch { /* отказ — тоже защита */ }
-  await check(`нельзя завалить экран уведомлениями (показано ${toasts.length})`, () => toasts.length <= 30)
+  try { for (let i = 0; i < LIMITS.notify.times * 2; i++) await d('notify', ['бум ' + i]) } catch { /* отказ — тоже защита */ }
+  await check(`поток уведомлений упирается в предел (показано ${toasts.length})`, () => toasts.length <= LIMITS.notify.times)
 }
 
 console.log('\n── Оформление ──')
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil6')
-  await blocked('гигантский css не примут', () => d('css', ['a{}'.repeat(200000)]))
+  await blocked('гигантский css не примут', () => d('css', ['a{}'.repeat(MAX_CSS)]))
   // Накрыть приложение непрозрачным слоем и не дать до него добраться — самый
   // простой способ сделать Ponoi неработающим, при этом «легальными» средствами.
   await check('после вредного css остаётся способ его снять', async () => {
@@ -445,7 +453,7 @@ console.log('\n── Оформление ──')
 console.log('\n── Хранилище ──')
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil7')
-  await blocked('огромное значение в хранилище не влезет', () => d('storage.set', ['k', 'я'.repeat(200000)]))
+  await blocked('огромное значение в хранилище не влезет', () => d('storage.set', ['k', 'я'.repeat(MAX_STORAGE_VALUE)]))
 }
 
 console.log('\n── Чужое ──')

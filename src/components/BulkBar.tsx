@@ -54,9 +54,11 @@ export function useBulkSelect<T extends { id: string }>(
     anchor.current = id
   }
 
-  const list = deletable(sel, all, can)
-  const skipped = skippedCount(sel, all, can)
-  const over = pruneSelection(sel, all).size > BULK_MAX
+  // Пока режим выключен, перебирать ленту незачем: чат перерисовывается часто, и
+  // три прохода по всем сообщениям на каждую перерисовку — это плата ни за что.
+  const list = mode ? deletable(sel, all, can) : []
+  const skipped = mode ? skippedCount(sel, all, can) : 0
+  const over = mode && pruneSelection(sel, all).size > BULK_MAX
 
   async function remove() {
     if (!list.length || busy) return

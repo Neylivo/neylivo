@@ -117,7 +117,8 @@ const reg: Registry = { composerButtons: [], messageActions: [], commands: [], s
  * этого не нужен злой умысел, хватит цикла с ошибкой. Числа взяты с запасом:
  * ни один осмысленный плагин столько не просит.
  */
-const MAX_PER_PLUGIN = { buttons: 5, actions: 5, commands: 15, hotkeys: 5 }
+// v1.446.0: было 5/5/15/5 — большому плагину не хватало на один экран.
+import { MAX_PER_PLUGIN } from './limits'
 
 /** Снимок для проверок — приложению он не нужен, оно читает через хуки. */
 export const getRegistry = (): Registry => reg

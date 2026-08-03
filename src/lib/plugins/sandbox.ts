@@ -5,9 +5,10 @@ import { WORKER_BOOTSTRAP } from './bootstrap'
 // разрешениями — не здесь, а в api.ts; здесь только транспорт и живучесть.
 
 /** Сколько ждём, пока плагин доложит о загрузке. Больше — почти наверняка вечный цикл. */
-const INIT_TIMEOUT_MS = 5_000
+// v1.446.0: сроки — в limits.ts. Было 5 с на запуск и 10 с на обработчик:
+// плагин с ИИ-моделью не успевал ответить и выглядел зависшим.
+import { INIT_TIMEOUT_MS, INVOKE_TIMEOUT_MS } from './limits'
 /** Столько ждём ответа обработчика плагина (клик по кнопке, слэш-команда). */
-const INVOKE_TIMEOUT_MS = 10_000
 
 /** Метка функции плагина в аргументах (см. packArgs в bootstrap.ts). */
 export interface FnRef { __fn: string }
