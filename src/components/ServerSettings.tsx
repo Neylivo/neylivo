@@ -255,6 +255,14 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     // фиксируем локально — иначе именно то, ради чего persistNow сделали
     // мгновенным (не терять изменения, см. v1.178.0), тихо ломалось тем же способом.
     const { data: upd, error } = await supabase.from('servers').update({ settings: next } as any).eq('id', server.id).select('id')
+    // v1.451.0: у того, чьё единственное право — «Управление автомодерацией»,
+    // база принимает правку ТОЛЬКО фильтров автомода (сторож из миграции 104).
+    // Без этой ветки он увидел бы совет применить миграцию 17 — то есть
+    // сообщение не про то, что случилось.
+    if (error && /automod_only/.test(error.message ?? '')) {
+      toastErr('С правом «Управление автомодерацией» можно менять только фильтры автомода — остальные настройки сервера меняет владелец')
+      return
+    }
     if (error) { toastErr('Примени миграцию supabase/17_server_settings.sql — настройки пока не сохраняются'); return }
     if (!upd || upd.length === 0) { toastErr('Не сохранилось — нет прав на изменение сервера'); return }
     setSt(next)

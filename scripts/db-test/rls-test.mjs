@@ -137,7 +137,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql'), 104: sql('104_automod_perm.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -180,6 +180,7 @@ await db.exec(SRC[97])
 // v1.443.0: права на канал с перекрытиями ролей. Ставим после 85/87, потому что
 // она переобъявляет messages_insert и can_view_channel поверх них.
 await db.exec(SRC[103])
+await db.exec(SRC[104])
 await db.exec(SRC[98])
 // music_tracks заводится в 06, которую песочница целиком не применяет.
 await db.exec(`create table if not exists music_tracks (
@@ -1262,6 +1263,63 @@ await check('избранные эмодзи попали в публикаци�
     // Битые числа не должны превращаться в «разрешить всё»: пишем как и раньше.
     return await пишет(USER)
   })
+}
+
+// ── v1.451.0: право «Управление автомодерацией» ─────────────────────────────
+// Право было в списке ролей, интерфейс по нему пускал во вкладку — а настройки
+// автомода лежат в servers.settings, куда правило пускает только владельца и
+// «Управление сервером». Человек менял фильтры, нажимал сохранить, и база
+// молча не обновляла ни строки. Просто добавить бит в правило нельзя: тогда он
+// смог бы менять В СЕРВЕРЕ ВСЁ. Поэтому правило пускает, а сторож следит, что
+// меняется ровно settings->'automod'.
+{
+  const роль = (await db.query(
+    `insert into server_roles (server_id, name, permissions, position) values ($1,'Автомод',32768,5) returning id`,
+    [srv])).rows[0].id
+  await db.query(`insert into member_roles (server_id, user_id, role_id) values ($1,$2,$3)`, [srv, OTHER, роль])
+
+  const настройки = async () => (await db.query('select settings from servers where id=$1', [srv])).rows[0].settings
+
+  await check('автомодератор меняет фильтры автомода', async () => {
+    await as(OTHER, `update servers set settings = coalesce(settings,'{}'::jsonb) || '{"automod":{"words":["хрень"]}}'::jsonb where id=$1`, [srv])
+    const st = await настройки()
+    return !!st?.automod?.words?.includes('хрень')
+  })
+
+  await check('и не может переименовать сервер', async () => {
+    try { await as(OTHER, `update servers set name = 'мой теперь' where id=$1`, [srv]); return false }
+    catch { return true }
+  })
+
+  await check('и не может менять прочие настройки сервера', async () => {
+    try {
+      await as(OTHER, `update servers set settings = coalesce(settings,'{}'::jsonb) || '{"rules":"мои правила"}'::jsonb where id=$1`, [srv])
+      return false
+    } catch { return true }
+  })
+
+  await check('и не может забрать сервер себе', async () => {
+    try { await as(OTHER, `update servers set owner = $2 where id=$1`, [srv, OTHER]); return false }
+    catch { return true }
+  })
+
+  await check('владельца сторож не ограничивает', async () => {
+    await as(OWNER, `update servers set name = 'Сервер' where id=$1`, [srv])
+    return (await db.query('select name from servers where id=$1', [srv])).rows[0].name === 'Сервер'
+  })
+
+  await check('без права автомода фильтры не поменять', async () => {
+    try {
+      await as(USER, `update servers set settings = coalesce(settings,'{}'::jsonb) || '{"automod":{"words":["ещё"]}}'::jsonb where id=$1`, [srv])
+      // Правило не пустило — строк не изменилось; проверяем по содержимому.
+      const st = await настройки()
+      return !st?.automod?.words?.includes('ещё')
+    } catch { return true }
+  })
+
+  // Убираем роль, чтобы дальнейшие проверки видели прежнюю расстановку.
+  await db.query(`delete from member_roles where role_id=$1`, [роль])
+  await db.query(`delete from server_roles where id=$1`, [роль])
 }
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

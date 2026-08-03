@@ -1,5 +1,6 @@
 
 
+import { Portal } from './components/Portal'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
@@ -433,10 +434,21 @@ export default function App() {
   return <>
     <Toasts />
     <ConfirmHost />
-    <EmojiCtxHost />
+    {/* v1.450.0: всё, что обязано лежать ПОВЕРХ всего, выносится порталом.
+        Причина та же, из-за которой окно подтверждения пряталось под
+        конструктором плагинов: оболочка приложения (#root, position: fixed) —
+        это отдельный слой, и большой экран, вынесенный в страницу, рисуется
+        поверх неё целиком, каким бы высоким ни был слой внутри. Плашка «нет
+        связи» и предложение обновиться так же были не видны из настроек. */}
+    <Portal>
+      <EmojiCtxHost />
+      {isDesktop && <UpdateBanner />}
+      {isApkNative && <ApkUpdateBanner />}
+    </Portal>
     {isDesktop && <Titlebar />}
-    {isDesktop && <UpdateBanner />}
-    {isApkNative && <ApkUpdateBanner />}
+    {/* А эта полоса — НЕ наложение: она обычная строка в колонке приложения и
+        сдвигает содержимое вниз (.net-banner, flex: none). В портале она
+        потеряла бы колонку и легла бы поверх — поэтому остаётся на месте. */}
     <NetStatusBanner onOpenEmergency={() => setShowEmergency(true)} />
     <div className="app-viewport">
       {loading ? <div className="center">Загрузка…</div> : !session ? <AuthScreen /> : <Home />}
