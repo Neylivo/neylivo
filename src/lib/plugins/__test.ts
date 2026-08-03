@@ -8,6 +8,7 @@
 //
 // Запуск: npm run test:plugins
 import { auditPlugin, auditBadge, hiddenCode, unusedPerms, AUDIT_NOTE, AUDITED_PERMISSIONS } from './audit'
+import { LIMITS, MAX_RECENT, MAX_PER_PLUGIN, LIMITS_WARNING, LIMITS_WARNING_SHORT } from './limits'
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS, PLUGIN_EVENTS } from './types'
@@ -768,6 +769,75 @@ for (const p of OFFICIAL_PLUGINS) {
     const r = auditPlugin('function onLoad(ponoi){ ponoi.on("message",()=>ponoi.net.fetch("https://a.ru")) }',
       шапка('messages.read, net', ['a.ru']))
     return r.findings.filter(f => f.level === 'danger').length === 1
+  })
+
+  // -- v1.446.0: пределы одной таблицей ---------------------------------------
+  // Пределы подняты почти до свободы, но не убраны: зациклившийся плагин иначе
+  // подвесил бы приложение, и до кнопки «выключить» человек бы не добрался.
+  // Самое опасное здесь — опечатка в названии предела: rateLimit молча
+  // пропускает неизвестный вид, то есть ограничение исчезает целиком и
+  // незаметно. Эта проверка ровно про это.
+  console.log('\n-- Пределы плагинов --')
+
+  check('у каждого предела в коде есть строка в таблице', () => {
+    const used = [...DISPATCHER_SRC.matchAll(/rateLimit\(id, '([a-z.]+)'\)/g)].map(m => m[1])
+    if (used.length < 10) throw new Error('пределов в коде подозрительно мало: ' + used.length)
+    const нет = [...new Set(used)].filter(k => !(k in LIMITS))
+    if (нет.length) throw new Error('нет в таблице (предел ИСЧЕЗ): ' + нет.join(', '))
+    return true
+  })
+
+  check('в таблице нет пределов, которых никто не зовёт', () => {
+    // Мёртвая строка в таблице — это ложное обещание: выглядит как ограничение,
+    // а не ограничивает ничего.
+    const used = new Set([...DISPATCHER_SRC.matchAll(/rateLimit\(id, '([a-z.]+)'\)/g)].map(m => m[1]))
+    const лишние = Object.keys(LIMITS).filter(k => !used.has(k))
+    if (лишние.length) throw new Error('в таблице есть, в коде не зовётся: ' + лишние.join(', '))
+    return true
+  })
+
+  check('ни один предел не выключен в ноль', () =>
+    Object.values(LIMITS).every(l => l.times > 0 && l.windowMs > 0))
+
+  check('у каждого предела есть человеческое название', () =>
+    Object.values(LIMITS).every(l => typeof l.what === 'string' && l.what.length > 3))
+
+  check('пределы правда подняты, а не остались прежними', () => {
+    // Смысл выпуска: было 5 сообщений за 10 с и 5 потоков в минуту.
+    return LIMITS.send.times >= 100 && LIMITS.netstream.times >= 100
+      && LIMITS.net.times >= 400 && MAX_RECENT >= 400
+  })
+
+  check('приложение предупреждает о снятых пределах', () =>
+    LIMITS_WARNING.length > 80 && /от твоего имени/.test(LIMITS_WARNING)
+    && LIMITS_WARNING_SHORT.length > 20)
+
+  check('числа в тексте пределов не написаны руками', () => {
+    // Сообщение об отказе собирается из самой таблицы: иначе оно однажды
+    // назовёт число, которого больше нет.
+    return /\$\{l\.times\}/.test(DISPATCHER_SRC) && /\$\{l\.what\}/.test(DISPATCHER_SRC)
+  })
+
+  check('инструкция называет сегодняшние пределы, а не вчерашние', () => {
+    // Худший вид расхождения: ИИ читает инструкцию и пишет плагин под предел,
+    // которого уже нет. Поймано разбором в v1.446.0 — числа подняли, а в
+    // инструкции они остались старыми сразу в восьми местах.
+    const должно = [
+      String(LIMITS.send.times), String(LIMITS.net.times), String(LIMITS.notify.times),
+      String(LIMITS.music.times), String(MAX_PER_PLUGIN.commands), String(MAX_RECENT),
+    ]
+    const нет = должно.filter(n => !PLUGIN_SPEC.includes(n))
+    if (нет.length) throw new Error('в инструкции нет чисел: ' + нет.join(', '))
+    const старое = /не чаще 5 сообщений|не чаще 20 запросов|не больше 1 МБ|не больше 64 КБ|команд — 15/
+    if (старое.test(PLUGIN_SPEC)) throw new Error('в инструкции остался старый предел')
+    return true
+  })
+
+  console.log('\n-- Ломаем нарочно (пределы) --')
+  check('проверка заметила бы предел с опечаткой в названии', () => {
+    // Опечатка означает не «строгий предел», а ОТСУТСТВИЕ предела.
+    const выдумка = 'sennd'
+    return !(выдумка in LIMITS)
   })
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

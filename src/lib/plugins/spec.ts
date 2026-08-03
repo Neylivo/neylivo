@@ -1,4 +1,9 @@
 import { PLUGIN_EVENTS } from './types'
+import {
+  LIMITS, MAX_STORAGE_VALUE, MAX_RECENT, MAX_PER_PLUGIN,
+  NET_MAX_BYTES, NET_TIMEOUT_MS, NET_STREAM_MS, NET_STREAM_IDLE_MS, NET_STREAM_MAX_BYTES,
+  INVOKE_TIMEOUT_MS,
+} from './limits'
 import { PANEL_SLOTS } from './registry'
 // v1.360.0: полное описание формата плагина — одним текстом.
 //
@@ -23,6 +28,17 @@ const EVENT_DOC_TABLE = [
   ...Object.entries(PLUGIN_EVENTS).map(([name, e]) =>
     `| ${name} | ${e.when} | ${e.payload} | ${e.permission ?? '—'} |`),
 ].join('\n')
+
+// v1.446.0: числа пределов берутся из таблицы (limits.ts), а не пишутся в
+// тексте руками. Их подняли в v1.446.0, а инструкция осталась со старыми — и
+// это худший вид расхождения: ИИ читает её и пишет плагин под предел, которого
+// уже нет. Проверка на это есть в __test.ts.
+const lim = (k: keyof typeof LIMITS) => {
+  const l = LIMITS[k]
+  return `${l.times} раз за ${Math.round(l.windowMs / 1000)} с`
+}
+const mb = (b: number) => (b >= 1024 * 1024 ? Math.round(b / 1024 / 1024) + ' МБ' : Math.round(b / 1024) + ' КБ')
+const sec = (ms: number) => (ms >= 60_000 ? Math.round(ms / 60_000) + ' мин' : Math.round(ms / 1000) + ' с')
 
 // Места для панелей — тоже из одного источника с приложением (v1.419.0).
 const SLOT_DOC_TABLE = [
@@ -105,7 +121,7 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
 ### Сообщения
 
     await ponoi.messages.send('текст')                 // нужно messages.write
-    const last = await ponoi.messages.recent(20)       // нужно messages.read
+    const last = await ponoi.messages.recent(20)       // нужно messages.read, до ${MAX_RECENT}
     // last: [{ id, author, authorName, content, mine, at }] — то же, что на экране
     await ponoi.messages.react(id, '👍')               // нужно messages.write
     await ponoi.messages.remove(id)                    // нужно messages.write
@@ -114,7 +130,7 @@ recent, react и remove работают с ОТКРЫТЫМ сейчас чат
 send. Если чат не открыт, вызов бросает ошибку. Убрать можно только своё
 сообщение: чужое не даст ни приложение, ни база.
 
-Отправка ограничена: не чаще 5 сообщений за 10 секунд.
+Отправка ограничена: не чаще ${lim('send')}.
 
 ### События
 
@@ -184,8 +200,8 @@ skull, sword, rifle, car, compass, flag, tag, pin, link, code, list, search,
 image, camera, film, music, volume, bell, mail, lock, shield, crown, gamepad,
 message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 
-Кнопок и пунктов меню — не больше 5 каждого вида, горячих клавиш — 5,
-команд — 15.
+Кнопок и пунктов меню — не больше ${MAX_PER_PLUGIN.buttons} каждого вида,
+горячих клавиш — ${MAX_PER_PLUGIN.hotkeys}, команд — ${MAX_PER_PLUGIN.commands}.
 
 ### Спросить человека (нужно ui)
 
@@ -204,7 +220,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
     const keys = await ponoi.storage.keys()
     await ponoi.storage.clear()
 
-Одно значение — не больше 64 КБ. Хранится на этом устройстве, между устройствами
+Одно значение — не больше ${mb(MAX_STORAGE_VALUE)}. Хранится на этом устройстве, между устройствами
 не синхронизируется. Чужое хранилище недоступно.
 
 ### Обстановка (нужно context)
@@ -220,7 +236,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
     await ponoi.open({ dmId })                  // открыть диалог по его id
     await ponoi.open({ userId, userName })      // открыть личку с человеком
 
-Не чаще 5 раз за 10 секунд: переход уводит человека с того, на что он смотрит.
+Не чаще ${lim('open')}: переход уводит человека с того, на что он смотрит.
 
 ### Активность (нужно status)
 
@@ -233,7 +249,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 
 ### Уведомления и звук (нужно notify)
 
-    await ponoi.notify('текст')          // не чаще 10 раз за 10 секунд
+    await ponoi.notify('текст')          // не чаще ${lim('notify')}
     await ponoi.sound.play('message')    // 'message' или 'chime', 5 раз за 10 с
 
 ### Буфер обмена (нужно ui)
@@ -261,8 +277,8 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
       body: JSON.stringify({ a: 1 }),
     })
 
-Только https и только домены, перечисленные в @hosts. Не чаще 20 запросов за
-10 секунд, ответ — не больше 1 МБ, ожидание — 10 секунд. Заголовки — из
+Только https и только домены, перечисленные в @hosts. Не чаще ${lim('net')},
+ответ — не больше ${mb(NET_MAX_BYTES)}, ожидание — ${sec(NET_TIMEOUT_MS)}. Заголовки — из
 разрешённых: Content-Type, Accept, Authorization, X-Api-Key, X-Auth-Token,
 User-Agent, Accept-Language, Anthropic-Version, Anthropic-Beta,
 OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и его серверу
@@ -280,11 +296,11 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
     })
     // вернёт { ok, status, bytes } — когда поток закончится
 
-Для чего это. Обычный ponoi.net.fetch ждёт ВЕСЬ ответ и не дольше десяти
-секунд, а ИИ-модель отвечает по слову и делает это десятками секунд: через
-fetch она не работает вовсе. У потока пределы другие: три минуты на весь
-ответ, 45 секунд на очередной кусок (замолчал — обрываем), до 4 МБ всего,
-не чаще 5 потоков за минуту.
+Для чего это. Обычный ponoi.net.fetch ждёт ВЕСЬ ответ целиком, а ИИ-модель
+отвечает по слову: поток отдаёт её ответ по мере поступления. У потока и сроки
+свои: ${sec(NET_STREAM_MS)} на весь
+ответ, ${sec(NET_STREAM_IDLE_MS)} на очередной кусок (замолчал — обрываем),
+до ${mb(NET_STREAM_MAX_BYTES)} всего, не чаще ${lim('netstream')}.
 
 Правила выхода наружу — те же самые: https, только @hosts, те же заголовки,
 без куки, к самому Ponoi нельзя. Ключ от модели плагин приносит свой; храни
@@ -318,8 +334,9 @@ fetch она не работает вовсе. У потока пределы д
     await ponoi.music.queue(trackId)   // поставить следующим; false — нет такого трека
     await ponoi.music.add(url)         // добавить ссылку в Трекотеку
 
-Управлять можно не чаще 20 раз за 10 секунд, добавлять треки — не чаще 5 раз в
-минуту: Трекотека общая, и плагин с ошибкой в цикле завалил бы её у всех.
+Управлять можно не чаще ${lim('music')}, добавлять треки — не чаще
+${lim('music.add')}: Трекотека общая, и плагин с ошибкой в цикле завалил бы её у
+всех. Каждое добавление отдельно подтверждает человек — это не предел, а согласие.
 Самого звука плагину не достаётся ни в каком виде.
 
 ### Отладка
@@ -349,7 +366,7 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
    try/catch то, в чём не уверен.
 5. Ошибка внутри onLoad не даёт плагину загрузиться; ошибка позже — только
    записывается, плагин продолжает работать.
-6. Обработчик кнопки, команды или горячей клавиши обязан ответить за 10 секунд.
+6. Обработчик кнопки, команды или горячей клавиши обязан ответить за ${sec(INVOKE_TIMEOUT_MS)}.
 
 ## Пример целиком
 
