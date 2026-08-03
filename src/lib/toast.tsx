@@ -1,3 +1,4 @@
+import { Portal } from '../components/Portal'
 import { useEffect, useState } from 'react'
 
 // Красивые тосты вместо системных alert(): всплывают справа внизу и сами исчезают.
@@ -27,7 +28,12 @@ export function Toasts() {
   }, [])
 
   if (list.length === 0) return null
+  // v1.450.0: тем же порталом, что и подтверждение, и по той же причине: #root —
+  // отдельный слой, а большие экраны выносятся в <body> и рисуются после него.
+  // Плашка с 400 пряталась под экраном со 150, то есть отказ или подсказка,
+  // показанные из конструктора плагинов или настроек канала, просто не были видны.
   return (
+    <Portal>
     <div className="toasts">
       {list.map(t => (
         <div key={t.id} className={'toast toast-' + t.kind} onClick={() => setList(l => l.filter(x => x.id !== t.id))}>
@@ -36,5 +42,6 @@ export function Toasts() {
         </div>
       ))}
     </div>
+    </Portal>
   )
 }

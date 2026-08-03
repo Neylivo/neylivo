@@ -281,6 +281,46 @@ app.whenReady().then(async () => {
   check('в настройках нет мелких кнопок и полей', pm.small.length === 0, pm.small.join('; '))
   check('по переключателю можно попасть пальцем', pm.tapH >= 40, 'зона нажатия ' + pm.tapH + ' пикселей')
 
+  // ── v1.450.0: окно подтверждения поверх всего ────────────────────────────────
+  // Владелец принёс: «Закрыть конструктор?» появляется ПОД меню плагинов, и
+  // нажать нечем. Причина: #root у нас position: fixed — это отдельный слой, и
+  // z-index 390 у подтверждения считался только среди своих, а большие экраны
+  // выносятся порталом прямо в <body> и рисуются после #root целиком.
+  // Проверяется не порядок в разметке, а то, что видно глазом: попадёт ли
+  // нажатие в кнопку.
+  fs.writeFileSync(path.join(OUT, 'layer.html'), `<!doctype html><meta charset=utf-8>
+<link rel=stylesheet href="styles-safe.css">
+<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}</style>
+<div id="root"><div class="app"></div></div>
+<div class="ped-screen"><div class="ped-sheet">конструктор</div></div>
+<div class="cfm-overlay"><div class="cfm-box"><div class="cfm-btns">
+  <button class="cfm-cancel">Отмена</button><button class="cfm-ok danger" id="ok">Закрыть</button></div></div></div>
+<div class="toasts"><div class="toast toast-err" id="tst">отказ</div></div>
+<script>window.__hit = () => {
+  const at = el => { const b = el.getBoundingClientRect()
+    const t = document.elementFromPoint(Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2))
+    return !!t && (t === el || el.contains(t)) }
+  return JSON.stringify({ ok: at(document.getElementById('ok')), toast: at(document.getElementById('tst')) })
+}</script>`)
+  const lay = new BrowserWindow({ show: false, useContentSize: true, width: 1200, height: 800,
+    backgroundColor: '#313338', webPreferences: { partition: 'safe-layer-' + Date.now() } })
+  await lay.loadFile(path.join(OUT, 'layer.html'))
+  await new Promise(r => setTimeout(r, 300))
+  const lm = JSON.parse(await lay.webContents.executeJavaScript('window.__hit()'))
+
+  console.log('\n── Что поверх чего ──')
+  check('по кнопке подтверждения можно нажать поверх большого экрана', lm.ok,
+    'нажатие уходит не в кнопку')
+  check('плашка отказа видна поверх большого экрана', lm.toast, 'плашка под экраном')
+  // Проверка выше стережёт СТИЛИ (390 против 150). А то, что подтверждение и
+  // плашки вообще оказываются на уровне <body>, держится на портале — уберут
+  // его, и стили снова ничего не решат, потому что #root свой отдельный слой.
+  for (const [что, файл] of [['подтверждение', 'src/lib/confirm.tsx'], ['плашки', 'src/lib/toast.tsx']]) {
+    const src = fs.readFileSync(path.join(__dirname, '..', файл), 'utf8')
+    check(что + ' выносится порталом в <body>', /<Portal>/.test(src) && /from '\.\.\/components\/Portal'/.test(src),
+      'портала нет в ' + файл)
+  }
+
   console.log(failed ? '\nПРОВАЛЕНО: ' + failed : '\nИТОГ: все проверки пройдены')
   process.exit(failed ? 1 : 0)
 })

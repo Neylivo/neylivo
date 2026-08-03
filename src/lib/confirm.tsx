@@ -1,3 +1,4 @@
+import { Portal } from '../components/Portal'
 import { useEffect, useState } from 'react'
 
 // Красивые модалки подтверждения и ввода вместо системных confirm()/prompt().
@@ -65,7 +66,18 @@ export function ConfirmHost() {
   }
 
   if (!ask) return null
+  // v1.450.0: через портал — иначе окно оказывается ПОД тем, что его вызвало.
+  //
+  // Почему так. #root у нас position: fixed, а это делает его отдельным слоем:
+  // всё, что внутри, рисуется как один пласт, и z-index 390 у подтверждения
+  // считается только среди своих. Большие экраны (конструктор плагинов,
+  // настройки канала) выносятся порталом прямо в <body> — то есть становятся
+  // соседями #root и рисуются ПОСЛЕ него. В итоге подтверждение с 390 пряталось
+  // под экраном со 150, и нажать «Закрыть» было нечем: владелец это и принёс.
+  //
+  // В портале оба оказываются в одном слое, и 390 против 150 работает как надо.
   return (
+    <Portal>
     <div className="cfm-overlay" onMouseDown={e => { if (e.target === e.currentTarget) done(false) }}>
       <div className="cfm-box">
         <div className="cfm-msg">{ask.msg}</div>
@@ -80,5 +92,6 @@ export function ConfirmHost() {
         </div>
       </div>
     </div>
+    </Portal>
   )
 }
