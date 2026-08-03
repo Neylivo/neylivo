@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { percent, counts, currentIndex, currentMission, isComplete, shortLabel, fullLabel, storyShare, shareLabel, parseMissions, buildCampaign, toggleMission, setNote, askContext, askPrompt, MAX_MISSIONS, MAX_MISSION_NAME } from './campaign'
 import { mentionsMe, mentionsMyRole } from './mentions'
 import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
 import { keepAliveAction } from './keepAlive'
@@ -1708,6 +1709,113 @@ check('проверка ловит возврат к решению отправ
   // Так и было: текст с @everyone звенел у всех независимо от прав автора.
   const поСтарому = /@everyone/.test('@everyone привет')
   return поСтарому && !mentionsMe('@everyone привет', 'Вася', нельзя)
+})
+
+
+// -- v1.452.0: прохождение сюжетных игр --------------------------------------
+// Про сюжетную игру в присутствии было ровно одно: «Играет в X». Ни места
+// прохождения, ни процентов. Здесь проверяется счёт и то, что строка активности
+// и открытая панель считают ОДНО И ТО ЖЕ.
+console.log('\n-- Прохождение сюжетки --')
+const кампания = (n: number, done: number) => ({
+  game: 'Игра', at: 0,
+  missions: Array.from({ length: n }, (_, i) => ({ name: 'Миссия ' + (i + 1), done: i < done })),
+})
+
+check('проценты считаются от пройденного', () =>
+  percent(кампания(20, 7)) === 35 && percent(кампания(20, 0)) === 0 && percent(кампания(20, 20)) === 100)
+check('пустой список не делит на ноль', () =>
+  percent(кампания(0, 0)) === 0 && shortLabel(кампания(0, 0)) === '' && storyShare(кампания(0, 0)) === null)
+check('текущая — первая непройденная', () => {
+  const c = кампания(20, 7)
+  return currentIndex(c) === 7 && currentMission(c)?.name === 'Миссия 8'
+})
+check('всё пройдено — текущей нет', () => {
+  const c = кампания(5, 5)
+  return isComplete(c) && currentIndex(c) === -1 && currentMission(c) === null
+})
+check('строка активности называет место и проценты', () =>
+  shortLabel(кампания(20, 7)) === 'Миссия 8 из 20 · 35%'
+  && shortLabel(кампания(5, 5)) === 'Пройдено полностью · 5 из 5')
+check('полная строка добавляет название миссии', () =>
+  fullLabel(кампания(20, 7)) === 'Миссия 8 из 20 · 35% · Миссия 8')
+check('длинное название миссии режется', () => {
+  const c = { game: 'И', at: 0, missions: [{ name: 'М'.repeat(200), done: false }] }
+  const l = fullLabel(c, 20)
+  return l.includes('…') && l.length < 60
+})
+
+check('своё и чужое прохождение пишутся одинаково', () => {
+  // Разойдись эти две функции — и у друга в списке было бы одно, а у себя другое.
+  const c = кампания(20, 7)
+  return shareLabel(storyShare(c)) === shortLabel(c)
+      && shareLabel(storyShare(кампания(5, 5))) === shortLabel(кампания(5, 5))
+})
+
+console.log('\n-- Список миссий приносит человек --')
+check('нумерация и маркеры отбрасываются', () =>
+  parseMissions('1. Первая\n2) Вторая\n- Третья\n• Четвёртая').join('|') === 'Первая|Вторая|Третья|Четвёртая')
+check('пустые строки и пробелы не создают миссий', () =>
+  parseMissions('\n\n  Одна  \n\n\n   \n').join('|') === 'Одна')
+check('повторы выкидываются', () =>
+  parseMissions('Пролог\nПролог\nпролог\nФинал').join('|') === 'Пролог|Финал')
+check('вставленная простыня обрезается', () => {
+  const много = Array.from({ length: 900 }, (_, i) => 'М' + i).join('\n')
+  return parseMissions(много).length === MAX_MISSIONS
+})
+check('абзац вместо названия обрезается', () =>
+  parseMissions('А'.repeat(500))[0].length === MAX_MISSION_NAME)
+
+check('правка списка не теряет отметки и заметки', () => {
+  // Список дополняют — и это не повод обнулить пройденное.
+  let c = buildCampaign('Игра', 'Пролог\nЛес\nЗамок', null, 1)
+  c = toggleMission(c, 1, 2)
+  c = setNote(c, 1, 'взять факел', 3)
+  const c2 = buildCampaign('Игра', 'Пролог\nЛес\nЗамок\nФинал', c, 4)
+  return c2.missions.length === 4 && c2.missions[0].done && c2.missions[1].done
+      && c2.missions[1].note === 'взять факел' && !c2.missions[3].done
+})
+
+check('отметка закрывает всё до неё', () => {
+  const c = toggleMission(кампания(10, 0), 4)
+  return counts(c).done === 5 && c.missions[4].done && !c.missions[5].done
+})
+check('снятие отметки открывает всё после', () => {
+  const c = toggleMission(кампания(10, 8), 3)
+  return counts(c).done === 3 && !c.missions[3].done && !c.missions[7].done
+})
+check('чужой номер миссии ничего не портит', () => {
+  const c = кампания(3, 1)
+  return toggleMission(c, 99) === c && setNote(c, -1, 'x') === c
+})
+
+console.log('\n-- Вопрос к ИИ про своё место --')
+check('к вопросу прикладывается место прохождения', () => {
+  const ctx = askContext(кампания(20, 7))
+  return ctx.includes('Игра') && ctx.includes('Миссия 8') && ctx.includes('35%')
+})
+check('пройденную кампанию описываем как пройденную', () =>
+  askContext(кампания(5, 5)).includes('пройдена полностью'))
+check('без списка контекста нет, а вопрос всё равно уходит', () =>
+  askContext(кампания(0, 0)) === '' && askPrompt(кампания(0, 0), 'как быть?').includes('как быть?'))
+check('пустой вопрос не отправляется', () =>
+  askPrompt(кампания(20, 7), '   ') === '')
+check('ИИ просят не рассказывать сюжет вперёд', () =>
+  /испортить сюжет/.test(askPrompt(кампания(20, 7), 'куда идти?')))
+check('своя заметка попадает в вопрос', () => {
+  const c = setNote(кампания(20, 7), 7, 'застрял на боссе')
+  return askContext(c).includes('застрял на боссе')
+})
+
+console.log('\n-- Ломаем нарочно (прохождение) --')
+check('проверка ловит проценты, посчитанные от номера, а не от пройденного', () => {
+  // Так бы вышло, если считать «текущая/всего»: 8 из 20 = 40%, а пройдено 35%.
+  const плохо = Math.round((8 / 20) * 100)
+  return плохо === 40 && percent(кампания(20, 7)) === 35
+})
+check('проверка ловит расхождение своей и чужой строки', () => {
+  const c = кампания(13, 4)
+  return shareLabel(storyShare(c)) === shortLabel(c) && shortLabel(c).includes('из 13')
 })
 
 

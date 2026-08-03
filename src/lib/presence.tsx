@@ -1,4 +1,5 @@
 
+import { storyShare, loadCampaign, type StoryShare } from './campaign'
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { resolveCover } from './gameCovers'
@@ -34,7 +35,10 @@ export interface Listening { title: string; author?: string; source?: string; ar
 // mode — режим/плейс (v1.89.0, пока только Roblox); placeId/jobId — числовой id
 // плейса и guid конкретного сервера Roblox (v1.184.0, «Поделиться игрой» —
 // нужны для join-диплинка, см. src/lib/gameShare.ts).
-export interface Game { name: string; since: number; cover?: string | null; mode?: string | null; placeId?: string | null; jobId?: string | null }
+// v1.452.0: story — место в сюжетной кампании (миссия, сколько пройдено,
+// проценты). Уходит только выжимка: сам список миссий и заметки к ним
+// остаются на устройстве, см. src/lib/campaign.ts.
+export interface Game { name: string; since: number; cover?: string | null; mode?: string | null; placeId?: string | null; jobId?: string | null; story?: StoryShare | null }
 interface PresenceState { username: string; status: Status; avatar_url?: string | null; activity?: Activity | null; listening?: Listening | null; game?: Game | null; voice?: Voice | null; device?: 'mobile' | 'desktop' }
 interface PresenceCtx {
   online: Record<string, PresenceState>   // user_id -> state
@@ -106,9 +110,14 @@ export function PresenceProvider({ username, avatarUrl, children }:
    * рассылается всем, кто в сети, и лишние рассылки бьют по каждому.
    */
   const publishNow = async (force = false) => {
+    // v1.452.0: к игре прикладываем место в кампании — миссию и проценты. Берём
+    // его здесь, в единственном месте публикации: иначе проценты обновлялись бы
+    // только там, откуда их случайно вспомнили, и у друзей висело бы вчерашнее.
+    const g = gameRef.current
+    const game = g ? { ...g, story: storyShare(loadCampaign(g.name)) } : null
     const meta = buildMeta({
       username: propRef.current.username, avatarUrl: propRef.current.avatarUrl,
-      activity: customActivity(), listening: lisRef.current, game: gameRef.current,
+      activity: customActivity(), listening: lisRef.current, game,
       voice: voiceRef.current, device: DEVICE,
     })
     if (!force && !metaChanged(lastMetaRef.current, meta)) return
@@ -360,6 +369,15 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // Авто-детект игры (только в десктоп-приложении): Electron раз в 20 сек смотрит
   // процессы и присылает событие ТОЛЬКО при старте/выходе из игры. Сервер — «записная
   // книжка»: хранит имя игры и момент старта; тикает таймер у каждого зрителя локально.
+  // v1.452.0: отметил миссию — проценты у друзей меняются сразу, а не к
+  // следующему запуску. Событие шлёт saveCampaign (см. lib/campaign.ts).
+  useEffect(() => {
+    const h = () => { void publishNow(true) }
+    window.addEventListener('ponoi-campaign', h)
+    return () => window.removeEventListener('ponoi-campaign', h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const d = (window as any).ponoiDesktop
     if (!d?.onGame) return

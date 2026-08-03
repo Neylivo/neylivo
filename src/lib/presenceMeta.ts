@@ -10,6 +10,7 @@
 // Теперь состав присутствия собирает одна функция, а показ («что человек
 // делает») считает вторая — и обе проверяются.
 import type { Activity, Game, Listening, Status } from './presence'
+import { shareLabel } from './campaign'
 
 /**
  * Голосовое состояние (v1.436.0) — этого в присутствии не было вовсе.
@@ -111,7 +112,14 @@ export function whatIsDoing(p: {
   const v = p.voice
   if (v?.screen) return { kind: 'screen', text: 'Демонстрирует экран' + (v.where ? ' · ' + v.where : ''), since: v.since }
   const g = p.game
-  if (g) return { kind: 'game', text: 'Играет в ' + g.name + (g.mode ? ': ' + g.mode : ''), since: g.since }
+  if (g) {
+    // v1.452.0: у сюжетной игры показываем место прохождения — «Миссия 8 из 20 ·
+    // 35%». Считает это shareLabel из campaign.ts, та же функция, что и у себя в
+    // панели: иначе своё и чужое разошлись бы в написании.
+    const story = shareLabel(g.story)
+    const tail = g.mode ? ': ' + g.mode : story ? ' · ' + story : ''
+    return { kind: 'game', text: 'Играет в ' + g.name + tail, since: g.since }
+  }
   const l = p.listening
   if (l) {
     return {

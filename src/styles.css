@@ -7118,3 +7118,39 @@ body.no-anim .vo-live::before { animation: none; }
 .ms-tog.on { background: var(--brand); border-color: var(--brand); color: #fff; }
 .ms-row span small { display: block; font-weight: 400; font-size: 11.5px; color: var(--mut); }
 .ms-hint { font-size: 12px; color: var(--mut); line-height: 1.45; margin: -2px 0 10px; }
+
+/* v1.452.0: панель прохождения сюжетной игры (CampaignModal).
+   Устроена как статистика CS2: не одна строка, а вся картина — полоса
+   процентов, список миссий, текущая отдельно и свои заметки внизу. */
+.modal.cmp { width: min(680px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+.cmp-sub { color: var(--mut); font-size: 13px; margin: 2px 0 12px; }
+.cmp-bar { position: relative; height: 22px; border-radius: 999px; background: var(--bg3); overflow: hidden; flex: none; }
+.cmp-bar-fill { position: absolute; inset: 0 auto 0 0; background: var(--brand, #5865f2); transition: width .25s var(--ease-out4, ease); }
+.cmp-bar-fill.full { background: #3ba55d; }
+.cmp-bar-tx { position: relative; display: block; text-align: center; line-height: 22px; font-size: 12px; font-weight: 700; }
+.cmp-paste { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; resize: vertical; }
+/* Список сам по себе прокручивается: у длинной кампании пять сотен строк, и
+   прокручивать всё окно вместе с заметками было бы неудобно. */
+.cmp-list { flex: 1; min-height: 120px; overflow-y: auto; margin: 12px 0; overscroll-behavior: contain; }
+.cmp-row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer; font-size: 14px; }
+.cmp-row:hover { background: rgba(var(--ov, 255,255,255),.05); }
+.cmp-row.sel { background: rgba(var(--ov, 255,255,255),.09); }
+.cmp-row.done .cmp-nm { color: var(--mut); text-decoration: line-through; text-decoration-color: rgba(var(--ov, 255,255,255),.28); }
+.cmp-row.cur { background: color-mix(in srgb, var(--brand, #5865f2) 12%, transparent); }
+.cmp-num { width: 26px; text-align: right; color: var(--mut); font-size: 12px; flex: none; }
+.cmp-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-here { font-size: 10.5px; font-weight: 700; color: var(--brand, #5865f2); flex: none; }
+.cmp-tick { width: 22px; height: 22px; flex: none; border-radius: var(--r-xs); cursor: pointer;
+  border: 2px solid rgba(var(--ov, 255,255,255),.28); background: none; color: #fff;
+  display: flex; align-items: center; justify-content: center; padding: 0; }
+.cmp-tick.on { background: #3ba55d; border-color: #3ba55d; }
+.cmp-tick:disabled { cursor: default; opacity: .5; }
+.cmp-note, .cmp-ask { flex: none; }
+.cmp-ask-row { display: flex; gap: 8px; align-items: center; }
+.cmp-ask-row .modal-in { flex: 1; min-width: 0; }
+@media (max-width: 768px) {
+  .cmp-row { padding: 10px 8px; font-size: 15px; }
+  .cmp-tick { width: 26px; height: 26px; }
+  .cmp-ask-row { flex-direction: column; align-items: stretch; }
+  .cmp-ask-row .pqs2-btn { min-height: 40px; }
+}

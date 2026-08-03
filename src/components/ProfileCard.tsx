@@ -27,8 +27,11 @@ import type { Profile, Server } from '../types'
 import { fetchWall, addDrawing, deleteDrawing, subscribeWall, type Drawing } from '../lib/wall'
 import { lazyNamed } from '../lib/lazyScreen'
 const WallDraw = lazyNamed(() => import('./WallDraw'), 'WallDraw')
+import { shareLabel } from '../lib/campaign'
 import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
 const GameStatsModal = lazyNamed(() => import('./GameStatsModal'), 'GameStatsModal')
+// v1.452.0: прохождение сюжетной игры — миссии, проценты, свои заметки.
+const CampaignModal = lazyNamed(() => import('./CampaignModal'), 'CampaignModal')
 import { WidgetGamesModal } from './WidgetGamesModal'
 
 function fmtMs(ms: number): string {
@@ -141,6 +144,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [drawings, setDrawings] = useState<Drawing[]>([])
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [campOpen, setCampOpen] = useState(false)   // v1.452.0: панель прохождения
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
   const [gamePicker, setGamePicker] = useState<{ field: 'favGames'; mode: 'single' } | { field: WidgetField; mode: 'multi' } | null>(null)
   const [widgetCovers, setWidgetCovers] = useState<Record<string, string | null>>({})
@@ -494,10 +498,15 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                     настройками приватности (см. profiles.game_stats_visibility в Настройках -> Активность). */}
                 {(() => {
                   const statsAllowed = MATCH_TRACKED_GAMES.has(curGame.name) && (isMe || pp.gameStatsVisibility !== 'none')
+                  // v1.452.0: у сюжетной игры матчей нет и статистики быть не может —
+                  // зато есть прохождение. Своё можно завести всегда; чужое открывается,
+                  // только если человек им делится (проценты приходят в присутствии).
+                  const story = curGame.story
+                  const campaignAllowed = !statsAllowed && (isMe || !!story)
                   return (
-                    <div className={'act-card fp-cur' + (statsAllowed ? ' clickable' : '')}
-                      title={statsAllowed ? 'Статистика за 30 дней' : undefined}
-                      onClick={() => { if (statsAllowed) setStatsOpen(true) }}>
+                    <div className={'act-card fp-cur' + (statsAllowed || campaignAllowed ? ' clickable' : '')}
+                      title={statsAllowed ? 'Статистика за 30 дней' : campaignAllowed ? 'Прохождение: миссии и проценты' : undefined}
+                      onClick={() => { if (statsAllowed) setStatsOpen(true); else if (campaignAllowed) setCampOpen(true) }}>
                       <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
                       <div className="act-row">
                         {(curGame.cover ?? covers[curGame.name])
@@ -511,6 +520,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                             {(recent?.find(r => r.name === curGame.name)?.streak ?? 1) > 1 && <span><Icon name="zap" size={13} /> x{recent!.find(r => r.name === curGame.name)!.streak} д. подряд</span>}
                             {popular.has(curGame.name) && <span><Icon name="flame" size={13} /> Популярное</span>}
                             {statsAllowed && <span><Icon name="list" size={13} /> Статистика</span>}
+                            {/* Место в кампании — то же, что видно в строке активности:
+                                считает одна функция, см. lib/campaign.ts. */}
+                            {story && <span title={story.mission}><Icon name="list" size={13} /> {shareLabel(story)}</span>}
+                            {campaignAllowed && !story && <span><Icon name="list" size={13} /> Прохождение</span>}
                           </div>
                         </div>
                       </div>
@@ -589,6 +602,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             throw new Error('wall save failed')
           }
         }} />}
+        {campOpen && curGame && <CampaignModal game={curGame.name} isMe={isMe} onClose={() => setCampOpen(false)} />}
         {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} steamId={pp.steamId} isMe={isMe} onClose={() => setStatsOpen(false)} />}
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
