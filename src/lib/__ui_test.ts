@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { mentionsMe, mentionsMyRole } from './mentions'
 import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
 import { keepAliveAction } from './keepAlive'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1680,6 +1681,33 @@ check('проверка ловит счёт по выбору вместо сч�
 check('проверка ловит потерю ограничения в сотню', () => {
   const много = Array.from({ length: 120 }, (_, i) => ({ id: 'y' + i, author: 'я' }))
   return deletable(new Set(много.map(m => m.id)), много, моё).length < много.length
+})
+
+
+// -- v1.449.0: право на @everyone решает получатель -------------------------
+// Право проверялось ровно в одном месте — в поле ввода у отправителя, а база не
+// проверяет его нигде. То есть обходилось своим клиентом, ботом или плагином.
+console.log('\n-- Упоминания и права --')
+const можно = { everyone: true, roles: true }
+const нельзя = { everyone: false, roles: false }
+
+check('@everyone от того, кому можно, звенит', () => mentionsMe('@everyone привет', 'Вася', можно))
+check('@everyone от того, кому нельзя, не звенит', () => !mentionsMe('@everyone привет', 'Вася', нельзя))
+check('@here — то же право', () =>
+  mentionsMe('@here ау', 'Вася', можно) && !mentionsMe('@here ау', 'Вася', нельзя))
+check('личное упоминание звенит всегда', () =>
+  mentionsMe('@Вася глянь', 'Вася', нельзя) && mentionsMe('@Вася глянь', 'Вася', можно))
+check('без сведений о правах ведём себя как раньше', () =>
+  mentionsMe('@everyone привет', 'Вася') && mentionsMe('@Вася', 'Вася'))
+check('роль упоминается только тем, кому позволено', () =>
+  mentionsMyRole('@Модеры сюда', 'Модеры', можно) && !mentionsMyRole('@Модеры сюда', 'Модеры', нельзя))
+check('запрет на роли не глушит личное упоминание', () => mentionsMe('@Вася', 'Вася', нельзя))
+
+console.log('\n-- Ломаем нарочно (упоминания) --')
+check('проверка ловит возврат к решению отправителя', () => {
+  // Так и было: текст с @everyone звенел у всех независимо от прав автора.
+  const поСтарому = /@everyone/.test('@everyone привет')
+  return поСтарому && !mentionsMe('@everyone привет', 'Вася', нельзя)
 })
 
 

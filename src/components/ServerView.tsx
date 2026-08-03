@@ -344,6 +344,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         ov: parseOverrides((curChannel as any).perm_overrides),
         serverPerms: myPerms, roleIds: rolesOfId(user?.id ?? ''), userId: user?.id ?? '', isOwner,
       }) & CH_SEND) !== 0)
+  // v1.449.0: права упоминания АВТОРА сообщения — их спрашивает лента, чтобы
+  // решить, звенеть ли мне (см. lib/mentions.ts). Считаются тем же способом, что
+  // и мои собственные: сумма прав ролей плюс права @everyone сервера.
+  const authorMentionRights = (userId: string) => {
+    const owner = userId === server.owner
+    const perms = rolesOfId(userId).reduce((m, id) => m | (roleById[id]?.permissions ?? 0), 0)
+      | (server.base_permissions ?? 0)
+    return {
+      everyone: owner || hasPerm(perms, PERM.MENTION_EVERYONE),
+      roles: owner || hasPerm(perms, PERM.MENTION_ROLES),
+    }
+  }
   const canManageNicknames = isOwner || hasPerm(myPerms, PERM.MANAGE_NICKNAMES)
   const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
   const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
@@ -1617,6 +1629,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
           {bulk.bar}
           <MessageList {...bulk.listProps} messages={(messages as any).filter((m: any) => !isBlockedWith(m.author))} reactions={reactions} currentUser={user?.id} currentUserName={username} newDividerId={newDividerId} ownerId={server.owner}
             roleColors={roleColorMap} myRoleNames={myRoleNameList}
+            /* v1.449.0: чужое @everyone звенит только если автору это правда
+               позволено. Раньше право проверялось лишь в поле ввода у
+               отправителя и обходилось своим клиентом, ботом или плагином. */
+            mentionRights={authorMentionRights}
             linkCtx={curChannel ? { kind: 'server', serverId: server.id, channelId: curChannel.id } : undefined}
             nameOf={id => members.find(z => z.user_id === id)?.member_name} colorOf={roleColorOf} iconOf={roleIconOf}
             canPin={m => isOwner || m.author === user?.id || canManageMessages} canDelete={m => isOwner || m.author === user?.id || canManageMessages}

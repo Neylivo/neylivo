@@ -2,7 +2,8 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { Attachment } from './Composer'
 import { timeShort, timeFull, dayLabel, msgTime, callTime, fmtN, ruMembers } from '../lib/ui'
-import { renderMd, mentionsUser, mentionsRoleName } from '../lib/md'
+import { renderMd } from '../lib/md'
+import { mentionsMe, mentionsMyRole, type MentionRights } from '../lib/mentions'
 import type { RxSummary } from '../lib/reactions'
 import { Icon } from './icons'
 import { useSettings, devMode } from '../lib/settings'
@@ -366,9 +367,13 @@ interface Props {
   // v1.239.0: мои роли на этом сервере — упоминание любой из них подсвечивает
   // сообщение так же, как упоминание меня лично.
   myRoleNames?: string[]
+  // v1.449.0: что автору сообщения ПОЗВОЛЕНО упоминать. Решает получатель:
+  // право на @everyone проверялось только в поле ввода у отправителя, и
+  // обходилось своим клиентом, ботом или плагином (см. lib/mentions.ts).
+  mentionRights?: (userId: string) => MentionRights | undefined
 }
 
-export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx, roleColors, myRoleNames, selectMode, selected, onSelectToggle, onSelectStart }: Props) {
+export function MessageList({ messages, reactions = {}, currentUser, currentUserName, canPin, canDelete, onReact, canReact, onPin, onDelete, onReply, onStartEdit, editingId, onEditAttachment, onProfile, newDividerId, ownerId, nameOf, colorOf, iconOf, onMarkUnread, linkCtx, roleColors, myRoleNames, mentionRights, selectMode, selected, onSelectToggle, onSelectStart }: Props) {
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
@@ -407,7 +412,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         emitPluginEvent('message', {
           id: m.id, author: m.author, authorName: m.author_name, content: m.content ?? '',
           mine: m.author === currentUser,
-          mentionsMe: !!currentUserName && !!m.content && m.author !== currentUser && mentionsUser(m.content, currentUserName),
+          mentionsMe: !!currentUserName && !!m.content && m.author !== currentUser && mentionsMe(m.content, currentUserName, mentionRights?.(m.author)),
         })
       }
     }
@@ -638,7 +643,11 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         lastAuthor = m.author; lastTs = ts; lastDay = day
         const rx = reactions[m.id] ?? []
         const meMentioned = !!(currentUserName && m.content && m.author !== currentUser
-          && (mentionsUser(m.content, currentUserName) || myRoleNames?.some(rn => mentionsRoleName(m.content!, rn))))
+          && (() => {
+            const rights = mentionRights?.(m.author)
+            return mentionsMe(m.content!, currentUserName, rights)
+              || myRoleNames?.some(rn => mentionsMyRole(m.content!, rn, rights))
+          })())
         const fwd = parseFwd(m.content)
         const uf: UserFonts = (settings.otherFonts || m.author === currentUser) ? fontsOf(m.author) : {}
         return (
