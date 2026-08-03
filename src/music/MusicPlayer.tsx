@@ -209,6 +209,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   /** id трека, который играет прямо сейчас, — им подписываются отказы источников. */
   const curTrackIdRef = useRef<string>('')
   const idxRef = useRef(0); idxRef.current = idx
+  // v1.443.0: переключать трек — только через это. Раньше «дальше» считало
+  // следующий номер от idx из состояния, а состояние до перерисовки не
+  // меняется: два быстрых нажатия подряд оба считали от ОДНОЙ позиции и
+  // приводили в один и тот же трек — второе нажатие пропадало впустую. На
+  // телефоне, где по кнопке бьют пальцем несколько раз, это выглядело как
+  // «перемотка залипла». Ссылка двигается сразу, поэтому следующее нажатие
+  // считает уже от нового места.
+  const goIdx = (n: number) => { idxRef.current = n; setIdx(n) }
   const tracksRef = useRef(tracks); tracksRef.current = tracks
   const cur = tracks[idx]
   // v1.412.0: играющий трек держится за себя, а не за место в списке.
@@ -225,7 +233,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (!id || tracks.length === 0) return
     if (tracks[idx]?.id === id) return
     const i = tracks.findIndex(t => t.id === id)
-    if (i >= 0) { setIdx(i); return }
+    if (i >= 0) { goIdx(i); return }
     // Трек убрали у всех — молча играть вместо него соседний нельзя.
     curIdRef.current = null
     setPlaying(false)
@@ -1166,8 +1174,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       // у кого версия старее.
       if (typeof payload.id === 'string') {
         const i = tracks.findIndex(t => t.id === payload.id)
-        if (i >= 0) setIdx(i)
-      } else if (typeof payload.idx === 'number') setIdx(payload.idx)
+        if (i >= 0) goIdx(i)
+      } else if (typeof payload.idx === 'number') goIdx(payload.idx)
       setPlaying(!!payload.playing)
       const a = audioRef.current
       if (a && typeof payload.t === 'number' && Math.abs(a.currentTime - payload.t) > 2) a.currentTime = payload.t
@@ -1377,8 +1385,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setTracks(rest)
     // Удалили трек ПЕРЕД текущим — иначе играть начало бы соседнюю песню:
     // номер тот же, а список сдвинулся. Раньше номер просто прижимался к концу.
-    if (gone >= 0 && gone < idx) setIdx(i => Math.max(0, i - 1))
-    else if (gone === idx) setIdx(i => Math.min(i, Math.max(0, rest.length - 1)))
+    if (gone >= 0 && gone < idx) goIdx(Math.max(0, idxRef.current - 1))
+    else if (gone === idx) goIdx(Math.min(idxRef.current, Math.max(0, rest.length - 1)))
     // Из очереди тоже убираем: ждать удалённого нечего.
     saveManual(manual.filter(x => x !== id))
   }
@@ -1728,7 +1736,9 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return {
       first,
       arg: {
-        idx, count: tracks.length, repeat, shuffle,
+        // v1.443.0: позиция берётся из ссылки, а не из состояния — иначе два
+        // быстрых нажатия считают от одного и того же места (см. goIdx).
+        idx: idxRef.current, count: tracks.length, repeat, shuffle,
         manualIdx: first ? tracks.findIndex(t => t.id === first) : -1,
         unplayable: (n: number) => unplayable(tracks[n]),
       },
@@ -1753,7 +1763,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       return
     }
     if (act.kind === 'restart') { restartCurrent(); return }
-    setIdx(act.index)
+    goIdx(act.index)
   }
   // v1.407.0: «назад» возвращает к тому, что играло, а не к предыдущему номеру
   // склада. При перемешивании это была прямая поломка: человек слушал случайный
@@ -1787,16 +1797,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const goHist = (step: 'back' | 'forward'): boolean => {
     const r = step === 'back' ? histBack(histRef.current, alive) : histForward(histRef.current, alive)
     if (!r) return false
+    // Указатель истории тоже двигаем сразу: без этого второе быстрое нажатие
+    // «назад» шагнуло бы из той же точки и вернуло тот же трек.
+    histRef.current = r.hist
     setHist(r.hist)
     fromHistRef.current = true
-    setIdx(tracks.findIndex(t => t.id === r.target))
+    goIdx(tracks.findIndex(t => t.id === r.target))
     return true
   }
 
   const prev = () => {
     if (goHist('back')) return
     // Истории ещё нет (первый трек за сеанс) — прежнее поведение: шаг по складу.
-    setIdx(i => (i - 1 + tracks.length) % Math.max(tracks.length, 1))
+    goIdx((idxRef.current - 1 + tracks.length) % Math.max(tracks.length, 1))
   }
   // v1.371.0: системные кнопки («предыдущий» на гарнитуре) вешаются один раз, и
   // без ссылки обработчик держал бы список таким, каким он был на первом рендере
@@ -2150,7 +2163,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   function playAt(i: number) {
     const t = tracks[i]
     if (t && manual.includes(t.id)) saveManual(manual.filter(x => x !== t.id))
-    setIdx(i)
+    goIdx(i)
   }
 
   return (<>
@@ -2269,7 +2282,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                     <span className="mus2-li-del" title="Удалить" onClick={() => { const n = playlists.filter(x => x.id !== p.id); setPlaylists(n); savePlaylists(n) }}><Icon name="close" size={13} /></span>
                   </div>
                   {p.trackIds.map(tid => { const t = tracks.find(x => x.id === tid); if (!t) return null
-                    return <div key={tid} className="mus2-pl-t" onClick={() => { setIdx(byId.get(t.id) ?? 0); setPlaying(true) }}>{t.name}</div> })}
+                    return <div key={tid} className="mus2-pl-t" onClick={() => { goIdx(byId.get(t.id) ?? 0); setPlaying(true) }}>{t.name}</div> })}
                 </div>
               ))}
             </div>

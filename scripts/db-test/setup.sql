@@ -261,8 +261,13 @@ $$;
 create policy "server_emoji_read" on server_emoji for select using (is_member(server_id));
 create policy "stickers_read"     on stickers     for select using (is_member(server_id));
 create policy "servers_read"   on servers  for select using (true);
-create policy "channels_read"  on channels for select using (true);
-create policy "messages_read"  on messages for select using (true);
+-- v1.443.0: настоящие правила чтения из 69_channel_privacy.sql. Раньше здесь
+-- стояли заглушки «видно всё», и проверить, что запрет просмотра канала правда
+-- скрывает канал и его сообщения, было нечем.
+create policy "channels_read"  on channels for select using (is_member(server_id) and can_view_channel(id, auth.uid()));
+create policy "messages_read"  on messages for select using (
+  exists (select 1 from channels c where c.id = messages.channel_id and is_member(c.server_id))
+  and can_view_channel(messages.channel_id, auth.uid()));
 -- v1.435.0: настоящее правило удаления из миграции 34 (см. supabase/34_permissions.sql).
 -- Раньше его тут не было вовсе, и любое удаление отклонялось — то есть проверить
 -- «своё сообщение удаляется» стендом было нельзя. Держим копию здесь, как и

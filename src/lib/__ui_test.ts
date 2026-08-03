@@ -17,6 +17,8 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
+import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
 import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
 import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
@@ -1468,6 +1470,89 @@ check('проверка заметила бы слушателей на элем
   w.послать('pointerup', {})
   return было >= 4 && w.сколькоСлушателей() === 0
 })
+
+// -- v1.443.0: обновление на телефоне ----------------------------------------
+// Раньше проверка была одна на весь запуск приложения, и решение «показать
+// кнопку» жило отдельно от того, скачан ли файл. Теперь и расписание, и вид
+// карточки считает otaPlan.ts.
+console.log('\n-- Обновление на телефоне --')
+const OTA = {
+  now: 1_000_000_000, lastCheck: 0, resumed: false, dismissed: null as string | null,
+  found: null as string | null, ready: null as string | null,
+  metered: false, online: true, busy: false,
+}
+const ota = (o: Partial<typeof OTA>) => otaDecide({ ...OTA, ...o })
+
+check('первый запуск — проверяем сразу', () => ota({}) === 'check')
+check('только что проверяли — не дёргаем сервер снова', () =>
+  ota({ lastCheck: OTA.now - 60_000 }) === 'idle')
+check('вернулись в приложение после долгого перерыва — проверяем', () =>
+  ota({ lastCheck: OTA.now - OTA_RESUME_MS - 1, resumed: true }) === 'check')
+check('вернулись через минуту — не проверяем', () =>
+  ota({ lastCheck: OTA.now - 60_000, resumed: true }) === 'idle')
+check('прошло полдня без сворачиваний — проверяем', () =>
+  ota({ lastCheck: OTA.now - OTA_EVERY_MS - 1 }) === 'check')
+check('нашли новее — качаем сами по Wi-Fi', () =>
+  ota({ lastCheck: OTA.now, found: '1.500.0' }) === 'download')
+check('на мобильном интернете сами не качаем', () =>
+  ota({ lastCheck: OTA.now, found: '1.500.0', metered: true }) === 'idle')
+check('уже скачано — второй раз не качаем', () =>
+  ota({ lastCheck: OTA.now, found: '1.500.0', ready: '1.500.0' }) === 'idle')
+check('без сети ничего не делаем', () =>
+  ota({ found: '1.500.0', online: false }) === 'idle' && ota({ online: false }) === 'idle')
+check('пока качаем — не начинаем заново', () =>
+  ota({ lastCheck: OTA.now, found: '1.500.0', busy: true }) === 'idle')
+
+check('карточки нет, пока нечего ставить', () => otaBanner({ ...OTA }) === null)
+check('закрытую крестиком версию не показываем', () =>
+  otaBanner({ ...OTA, found: '1.500.0', dismissed: '1.500.0' }) === null)
+check('карточка знает, скачан файл или нет', () => {
+  const нет = otaBanner({ ...OTA, found: '1.500.0' })
+  const да  = otaBanner({ ...OTA, found: '1.500.0', ready: '1.500.0' })
+  return нет?.ready === false && да?.ready === true && да?.version === '1.500.0'
+})
+check('файл от прошлой версии считается лишним', () =>
+  otaStale('1.400.0', '1.500.0') && !otaStale('1.500.0', '1.500.0') && !otaStale(null, '1.500.0'))
+
+console.log('\n-- Ломаем нарочно (обновление) --')
+check('кнопка «Установить» не может появиться без скачанного файла', () => {
+  // Если бы карточка считала готовность по найденной версии, а не по скачанной,
+  // человек нажал бы «Установить» и получил отказ.
+  const b = otaBanner({ ...OTA, found: '1.500.0', ready: '1.400.0' })
+  return b !== null && b.ready === false
+})
+check('проверка заметила бы, что скачивание не смотрит на тариф', () =>
+  ota({ lastCheck: OTA.now, found: '1.500.0', metered: false }) === 'download'
+  && ota({ lastCheck: OTA.now, found: '1.500.0', metered: true }) !== 'download')
+
+
+// -- v1.443.0: экранная клавиатура ------------------------------------------
+// Приложение не знало про клавиатуру вовсе: на Android она ложится поверх окна,
+// и поле ввода оказывалось под ней. Здесь проверяется замер её высоты и то, что
+// низ переписки не уезжает.
+console.log('\n-- Экранная клавиатура --')
+const экран = (vvH: number, vvTop = 0, winH = 800) => kbInset({ winH, vvH, vvTop })
+
+check('без клавиатуры отступа нет', () => экран(800) === 0)
+check('клавиатура меряется как разница высот', () => экран(480) === 320)
+check('панель браузера за клавиатуру не считается', () => экран(760) === 0 && экран(721) === 0)
+check('порог ровно на границе срабатывает', () => экран(800 - KB_MIN) === KB_MIN)
+check('сдвиг страницы вверх учитывается', () => экран(480, 40) === 280)
+check('бессмысленный замер не двигает вёрстку', () =>
+  экран(0) === 0 && kbInset({ winH: 0, vvH: 480, vvTop: 0 }) === 0 && экран(-100) === 0)
+
+check('читал низ — низ и останется', () => kbScrollDelta(0, 320, true) === 320)
+check('читал переписку выше — его не дёргают', () => kbScrollDelta(0, 320, false) === 0)
+check('клавиатура спряталась — список не прыгает вверх', () => kbScrollDelta(320, 0, true) === 0)
+
+console.log('\n-- Ломаем нарочно (клавиатура) --')
+check('проверка заметила бы отступ во весь экран', () => {
+  // Так бывает в момент поворота: visualViewport на миг отдаёт нулевую высоту.
+  // Поднять поле ввода на всю высоту экрана хуже, чем не поднять вовсе.
+  const плохо = 800 - 0
+  return плохо === 800 && kbInset({ winH: 800, vvH: 0, vvTop: 0 }) === 0
+})
+
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

@@ -19,7 +19,11 @@ import { Icon } from './components/icons'
 import type { ChangelogEntry } from './lib/changelog'
 import { openMsgLink } from './lib/deepLink'
 import { Capacitor } from '@capacitor/core'
-import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, installApkInApp, type ApkUpdate } from './lib/apkUpdate'
+import { checkApkUpdate, getDismissedApkVersion, dismissApkVersion, installApkInApp,
+  readyApkVersion, apkNetInfo, downloadApk, installReadyApk, type ApkUpdate } from './lib/apkUpdate'
+import { otaDecide, otaBanner, otaStale } from './lib/otaPlan'
+import { IS_MOBILE } from './lib/mobile'
+import { watchKeyboard } from './lib/keyboardInset'
 import { useClampToViewport } from './lib/clampPos'
 import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
 import { lazyNamed } from './lib/lazyScreen'
@@ -56,41 +60,102 @@ const isApkNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 
 // уже качает и ставит само (UpdateBanner ниже), у APK самое большее, что можно —
 // сверить версию и дать прямую ссылку на .apk с последнего GitHub Release;
 // установку (и её подтверждение) всё равно делает сама Android.
+//
+// v1.443.0: обновление стало фоновым. Раньше проверка была ровно одна — при
+// запуске; на телефоне приложение неделями не запускается заново, его
+// сворачивают и разворачивают, поэтому о новой версии человек узнавал только
+// после того, как система выгрузит приложение из памяти. И даже узнав, он жал
+// «Обновить» и ждал скачивания десятков мегабайт.
+//
+// Теперь: проверка повторяется (при возврате в приложение и раз в несколько
+// часов), файл качается заранее и сам — но только по сети без тарификации, —
+// а кнопка превращается в «Установить» и срабатывает мгновенно. Расписание
+// решает otaDecide (src/lib/otaPlan.ts), вид карточки — otaBanner: одна
+// функция на оба вопроса, чтобы «Установить» не могло появиться раньше файла.
 function ApkUpdateBanner() {
   const [upd, setUpd] = useState<ApkUpdate | null>(null)
+  const [ready, setReady] = useState<string | null>(null)
   const [pct, setPct] = useState<number | null>(null)
+  const [dismissed, setDismissed] = useState<string | null>(() => getDismissedApkVersion())
+  // Всё, что меняется вне отрисовки, держим в ссылке: планировщик читает
+  // состояние из таймера и из обработчика возврата, а не из замыкания.
+  const st = useRef({ lastCheck: 0, busy: false, found: null as ApkUpdate | null, ready: null as string | null })
+
   useEffect(() => {
     let alive = true
-    checkApkUpdate(__APP_VERSION__).then(u => {
-      if (!alive || !u) return
-      if (getDismissedApkVersion() === u.version) return
-      setUpd(u)
-    })
-    return () => { alive = false }
-  }, [])
-  if (!upd) return null
+    async function tick(resumed: boolean) {
+      if (!alive) return
+      const net = await apkNetInfo()
+      if (!alive) return
+      const s = {
+        now: Date.now(), lastCheck: st.current.lastCheck, resumed, dismissed,
+        found: st.current.found?.version ?? null, ready: st.current.ready,
+        metered: net.metered, online: net.online, busy: st.current.busy,
+      }
+      const act = otaDecide(s)
+      if (act === 'check') {
+        st.current.lastCheck = Date.now()
+        const u = await checkApkUpdate(__APP_VERSION__)
+        if (!alive) return
+        st.current.found = u
+        setUpd(u)
+        // Скачанное от прошлой версии уже не поставится — забываем о нём, чтобы
+        // карточка не обещала мгновенную установку не той версии.
+        if (otaStale(st.current.ready, u?.version ?? null)) { st.current.ready = null; setReady(null) }
+        if (u) tick(false)   // сразу решаем, качать ли
+        return
+      }
+      if (act === 'download' && st.current.found) {
+        st.current.busy = true
+        try {
+          await downloadApk(st.current.found.url, st.current.found.version)
+          if (!alive) return
+          st.current.ready = st.current.found.version
+          setReady(st.current.found.version)
+        } catch { /* тихо: не вышло сейчас — попробуем на следующей проверке */ }
+        finally { st.current.busy = false }
+      }
+    }
+
+    // Что уже лежит на диске с прошлого раза.
+    readyApkVersion().then(v => { if (alive) { st.current.ready = v; setReady(v) } })
+    tick(false)
+    const t = setInterval(() => tick(false), 15 * 60 * 1000)
+    // В WebView возврат из фона приходит как visibilitychange — отдельного
+    // пакета @capacitor/app ради этого не нужно.
+    const onVis = () => { if (document.visibilityState === 'visible') tick(true) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis) }
+  }, [dismissed])
+
+  const card = otaBanner({
+    now: Date.now(), lastCheck: 0, resumed: false, dismissed,
+    found: upd?.version ?? null, ready, metered: false, online: true, busy: false,
+  })
+  if (!card || !upd) return null
   return (
     <div className="upd-card">
       <div className="upd-ico"><Icon name="download" size={18} /></div>
       <div className="upd-tx">
-        <b>Доступно обновление — v{upd.version}</b>
-        <span>Скачай APK и установи поверх текущей версии</span>
+        <b>Доступно обновление — v{card.version}</b>
+        <span>{card.ready ? 'Уже скачано — осталось подтвердить установку' : 'Скачается само по Wi-Fi, или нажми «Обновить»'}</span>
       </div>
       {/* v1.308.0: ставим прямо в приложении. Если что-то пошло не так — тихо
           откатываемся на прежнее поведение, обычную ссылку: хуже, чем было, не станет. */}
       {pct === null
         ? <button className="upd-go" onClick={async () => {
             try {
+              if (card.ready) return await installReadyApk()
               setPct(0)
-              await installApkInApp(upd.url, setPct)
+              await installApkInApp(upd.url, setPct, upd.version)
             } catch (e: any) {
               setPct(null)
               toastErr(e?.message ?? 'Не удалось обновить — открываю страницу загрузки')
-              openSafely(upd.url)
+              if (!card.ready) openSafely(upd.url)
             }
-          }}>Обновить</button>
+          }}>{card.ready ? 'Установить' : 'Обновить'}</button>
         : <span className="upd-pct">{pct}%</span>}
-      <button className="upd-x" title="Скрыть" onClick={() => { dismissApkVersion(upd.version); setUpd(null) }}><Icon name="close" size={14} /></button>
+      <button className="upd-x" title="Скрыть" onClick={() => { dismissApkVersion(card.version); setDismissed(card.version) }}><Icon name="close" size={14} /></button>
     </div>
   )
 }
@@ -283,6 +348,17 @@ export default function App() {
   // устройство, а не на аккаунт, поэтому сессия для этого не нужна — они работают и
   // на экране входа (свои темы оформления, например).
   useEffect(() => { void startEnabledPlugins() }, [])
+  // v1.443.0: экранная клавиатура на телефоне. Держим её высоту в --kb, чтобы
+  // поле ввода не оставалось под клавиатурой, и рассылаем событие — переписка
+  // по нему подкручивает список, если человек читал именно низ.
+  // Только на телефоне: на десктопе visualViewport меняется от масштаба
+  // страницы, и вёрстка дёргалась бы на ровном месте.
+  useEffect(() => {
+    if (!IS_MOBILE) return
+    return watchKeyboard((px, prev) => {
+      window.dispatchEvent(new CustomEvent('ponoi:kb', { detail: { px, prev } }))
+    })
+  }, [])
   // v1.116.0: три быстрых клика по версии — окно «Что нового»
   const [showLog, setShowLog] = useState(false)
   // v1.275.0: доступен даже если сам основной вход/сессия не грузится (loading

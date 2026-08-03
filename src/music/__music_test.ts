@@ -10,6 +10,7 @@
 // плашки — в окне (npm run test:drag): там нужен настоящий DOM.
 export {}
 
+import { mediaPos, mediaKey, mediaArtwork, MEDIA_FALLBACK_ART } from './mediaSession'
 import { nextTrack, backTarget, resolveNext } from './nextTrack'
 import { recommend, libraryOrder, personalOrder, WHY_LABEL, banWindow, AUTHOR_STREAK } from './personalQueue'
 import { normalizeTrackUrl, sameTrack } from './trackUrl'
@@ -1193,6 +1194,87 @@ check('проверка заметила бы пропажу остановки 
   const r = R({ idx: 0, count: 3, unplayable: () => true })
   return r.kind === 'stop'
 })
+
+// -- v1.443.0: подряд нажатая перемотка --------------------------------------
+// Настоящая поломка, найденная разбором: «дальше» считало следующий номер от
+// idx из состояния React, а состояние до перерисовки не меняется. Два быстрых
+// нажатия оба считали от ОДНОЙ позиции и приводили в один и тот же трек —
+// второе пропадало впустую. На телефоне, где по кнопке бьют пальцем несколько
+// раз, это выглядит как «залипла перемотка». Плеер теперь двигает позицию
+// сразу (goIdx), а resolveNext считает от неё.
+console.log('\n-- Перемотка подряд --')
+
+/** Нажали «дальше» n раз подряд, каждый раз считая от УЖЕ сдвинутой позиции. */
+function жмёмДальше(n: number, from: number, count: number, unplayable: (i: number) => boolean = () => false) {
+  let i = from
+  for (let k = 0; k < n; k++) {
+    const a = resolveNext({ idx: i, count, repeat: 'off', shuffle: false, manualIdx: -1, personalIdx: -1, unplayable })
+    if (a.kind !== 'go') break
+    i = a.index
+  }
+  return i
+}
+
+check('три нажатия подряд перематывают на три трека', () => жмёмДальше(3, 0, 10) === 3)
+check('нажатия у конца списка не улетают за край', () => жмёмДальше(5, 8, 10) === 9)
+check('сломанные треки пропускаются и при быстрых нажатиях', () =>
+  // 1 и 2 играть нечем: два нажатия от нуля должны привести к 4, а не к 2.
+  жмёмДальше(2, 0, 10, i => i === 1 || i === 2) === 4)
+
+console.log('\n-- Ломаем нарочно (перемотка) --')
+check('проверка ловит счёт от застывшей позиции', () => {
+  // Так было до исправления: обе кнопки считают от одного и того же места.
+  const a1 = resolveNext({ idx: 0, count: 10, repeat: 'off', shuffle: false, manualIdx: -1, personalIdx: -1, unplayable: () => false })
+  const a2 = resolveNext({ idx: 0, count: 10, repeat: 'off', shuffle: false, manualIdx: -1, personalIdx: -1, unplayable: () => false })
+  const застыло = a1.kind === 'go' && a2.kind === 'go' && a1.index === a2.index
+  return застыло && жмёмДальше(2, 0, 10) === 2   // а с движущейся позицией — два шага
+})
+
+
+// -- v1.443.0: карточка плеера в шторке --------------------------------------
+// Ошибка здесь видна только по тому, что полоса в шторке однажды застыла:
+// браузер на неверных числах бросает исключение и МОЛЧА перестаёт обновлять
+// карточку целиком — вместе с названием следующего трека.
+console.log('\n-- Карточка в шторке --')
+
+check('позиция не выходит за длительность', () => {
+  const st = mediaPos(500, 200)
+  return st !== null && st.position === 200 && st.duration === 200
+})
+check('без длительности полосы нет', () =>
+  mediaPos(10, 0) === null && mediaPos(10, undefined) === null && mediaPos(10, -5) === null)
+check('мусор вместо чисел полосу не ломает', () =>
+  mediaPos(NaN, 200)?.position === 0 && mediaPos(Infinity, 200)?.position === 0
+  && mediaPos(10, NaN) === null && mediaPos(-30, 200)?.position === 0)
+
+check('карточка пересобирается только при смене трека', () => {
+  const a = { title: 'Т', artist: 'И', album: 'Ponoi Music', art: 'u' }
+  return mediaKey(a) === mediaKey({ ...a }) && mediaKey(a) !== mediaKey({ ...a, title: 'Другой' })
+})
+check('смена обложки тоже пересобирает карточку', () => {
+  const a = { title: 'Т', artist: 'И', art: null as string | null }
+  return mediaKey(a) !== mediaKey({ ...a, art: 'u' })
+})
+
+check('без обложки отдаём значок приложения', () => {
+  const w = mediaArtwork(null)
+  return w.length === 4 && w.every(x => x.src === MEDIA_FALLBACK_ART) && w[0].type === 'image/png'
+})
+check('обложка трека отдаётся во всех размерах', () => {
+  const w = mediaArtwork('https://x/y.jpg')
+  return w.length === 4 && w.every(x => x.src === 'https://x/y.jpg' && x.type === 'image/jpeg')
+})
+
+console.log('\n-- Ломаем нарочно (карточка) --')
+check('проверка ловит позицию больше длительности', () => {
+  // Так карточка и застывала: 500 из 200 браузеру не нравится.
+  const плохо = { duration: 200, position: 500 }
+  return плохо.position > плохо.duration && (mediaPos(500, 200)?.position ?? 0) <= 200
+})
+check('проверка ловит пустой список обложек', () =>
+  // Пустой список означает «нарисуй что хочешь» — Android рисует серый квадрат.
+  mediaArtwork(null).length > 0 && mediaArtwork(undefined).length > 0)
+
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

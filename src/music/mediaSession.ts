@@ -52,6 +52,39 @@ type MS = MediaSession & {
   setPositionState?: (s: { duration?: number; position?: number; playbackRate?: number }) => void
 }
 
+// v1.443.0: то, из-за чего системная карточка «застывает», вынесено в чистые
+// функции и проверяется тестом (npm run test:music). Раньше и признак «что-то
+// изменилось», и разбор позиции жили прямо внутри вызовов к браузеру, а там
+// ошибку видно только по тому, что однажды полоса в шторке перестала ползти.
+
+/** Признак «карточку надо пересобрать». Пересборка на каждый тик заставляет
+ *  систему перерисовывать обложку — она мигает. */
+export function mediaKey(n: { title: string; artist: string; album?: string; art?: string | null }): string {
+  return [n.title, n.artist, n.album ?? '', n.art ?? ''].join('|')
+}
+
+/** Что отдать системе для полосы. null — полосы не будет.
+ *
+ *  Позиция обязана быть не больше длительности: иначе браузер бросает ошибку и
+ *  МОЛЧА перестаёт обновлять карточку целиком — то есть застывает не только
+ *  полоса, но и название следующего трека. */
+export function mediaPos(pos?: number, dur?: number): { duration: number; position: number; playbackRate: number } | null {
+  const d = typeof dur === 'number' && isFinite(dur) && dur > 0 ? dur : 0
+  if (!d) return null
+  const p = typeof pos === 'number' && isFinite(pos) ? Math.max(0, pos) : 0
+  return { duration: d, position: Math.min(p, d), playbackRate: 1 }
+}
+
+/** Обложки нет — отдаём значок приложения. Пустой список означает «нарисуй что
+ *  хочешь», и Android рисует серый прямоугольник вместо карточки. */
+export const MEDIA_FALLBACK_ART = '/icon.png'
+
+export function mediaArtwork(art?: string | null): { src: string; sizes: string; type: string }[] {
+  const src = art || MEDIA_FALLBACK_ART
+  const type = /\.png(\?|$)/i.test(src) ? 'image/png' : 'image/jpeg'
+  return [96, 192, 384, 512].map(px => ({ src, sizes: `${px}x${px}`, type }))
+}
+
 function session(): MS | null {
   try {
     const ms = (navigator as any)?.mediaSession
@@ -108,7 +141,7 @@ export function setMediaNow(now: MediaNow | null) {
     try { ms.metadata = null } catch { /* не поддерживается */ }
     return
   }
-  const key = [now.title, now.artist, now.album ?? '', now.art ?? ''].join('|')
+  const key = mediaKey(now)
   if (key !== lastKey) {
     lastKey = key
     try {
@@ -120,9 +153,9 @@ export function setMediaNow(now: MediaNow | null) {
           album: now.album || 'Ponoi Music',
           // Несколько размеров одной и той же картинки: система сама выберет,
           // что ей нужно для шторки и что для экрана блокировки.
-          artwork: now.art
-            ? [96, 192, 384, 512].map(px => ({ src: now.art as string, sizes: `${px}x${px}`, type: 'image/jpeg' }))
-            : [],
+          // v1.443.0: без обложки отдаём значок приложения — пустой список
+          // означает «нарисуй что хочешь», и в шторке был серый прямоугольник.
+          artwork: mediaArtwork(now.art),
         })
       }
     } catch { /* движок не знает MediaMetadata — карточки просто не будет */ }
@@ -142,9 +175,9 @@ export function updateMediaPosition(pos?: number, dur?: number) {
   const ms = session()
   if (!ms || typeof ms.setPositionState !== 'function') return
   curPos = typeof pos === 'number' && isFinite(pos) ? Math.max(0, pos) : null
-  const d = typeof dur === 'number' && isFinite(dur) && dur > 0 ? dur : 0
+  const st = mediaPos(pos, dur)
   try {
-    if (!d) { ms.setPositionState({}); return }
-    ms.setPositionState({ duration: d, position: Math.min(curPos ?? 0, d), playbackRate: 1 })
+    if (!st) { ms.setPositionState({}); return }
+    ms.setPositionState(st)
   } catch { /* значения не понравились — не беда, карточка просто без полосы */ }
 }

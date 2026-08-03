@@ -1,7 +1,11 @@
 package com.ponoi.app;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -58,9 +62,111 @@ public class ApkInstaller extends Plugin {
         call.resolve();
     }
 
+    /**
+     * v1.443.0: тип сети — чтобы обновление не качалось само на мобильном
+     * трафике. Приложение весит десятки мегабайт, и «оно само скачало» на
+     * тарифе с лимитом — это не забота, а неприятность.
+     */
+    @PluginMethod
+    public void netInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean metered = true, online = false;
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                Network n = cm.getActiveNetwork();
+                NetworkCapabilities caps = n == null ? null : cm.getNetworkCapabilities(n);
+                if (caps != null) {
+                    online = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                    metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+                }
+            }
+        } catch (Exception ignored) { }
+        ret.put("metered", metered);
+        ret.put("online", online);
+        call.resolve(ret);
+    }
+
+    /** Файл уже скачанного обновления. */
+    private File updateFile() {
+        return new File(getContext().getCacheDir(), "ponoi-update.apk");
+    }
+
+    /** Отметка о том, для какой версии лежит скачанный файл. */
+    private File updateMark() {
+        return new File(getContext().getCacheDir(), "ponoi-update.version");
+    }
+
+    /**
+     * v1.443.0: какая версия уже скачана и готова к установке.
+     *
+     * Проверяется не только отметка, но и сам файл: кэш система вправе очистить
+     * в любой момент, и без этой сверки приложение показывало бы кнопку
+     * «Установить», за которой ничего нет.
+     */
+    @PluginMethod
+    public void readyVersion(PluginCall call) {
+        JSObject ret = new JSObject();
+        String v = null;
+        try {
+            File f = updateFile(), m = updateMark();
+            if (f.exists() && f.length() > 0 && m.exists()) {
+                byte[] buf = new byte[64];
+                try (java.io.FileInputStream in = new java.io.FileInputStream(m)) {
+                    int n = in.read(buf);
+                    if (n > 0) v = new String(buf, 0, n, "UTF-8").trim();
+                }
+            }
+        } catch (Exception ignored) { }
+        ret.put("value", v == null || v.isEmpty() ? null : v);
+        call.resolve(ret);
+    }
+
+    /** v1.443.0: скачать заранее, установщик не открывать. */
+    @PluginMethod
+    public void download(final PluginCall call) {
+        fetchApk(call, call.getString("url"), call.getString("version"), false);
+    }
+
+    /**
+     * v1.443.0: открыть установщик для уже скачанного файла.
+     *
+     * Разделение на «скачать» и «поставить» — весь смысл фонового обновления:
+     * файл приезжает по Wi-Fi заранее и молча, а система спрашивает согласие
+     * только тогда, когда человек сам нажал «Установить».
+     */
+    @PluginMethod
+    public void install(PluginCall call) {
+        try {
+            File out = updateFile();
+            if (!out.exists() || out.length() == 0) {
+                call.reject("Обновление ещё не скачано");
+                return;
+            }
+            launchInstaller(out);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Не удалось открыть установщик: " + e.getMessage());
+        }
+    }
+
+    private void launchInstaller(File out) {
+        Uri uri = FileProvider.getUriForFile(
+                getContext(), getContext().getPackageName() + ".fileprovider", out);
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        // Без этого флага установщик не получит доступа к файлу в нашем кэше.
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        Activity act = getActivity();
+        if (act != null) act.startActivity(i); else getContext().startActivity(i);
+    }
+
     @PluginMethod
     public void downloadAndInstall(final PluginCall call) {
-        final String url = call.getString("url");
+        fetchApk(call, call.getString("url"), call.getString("version"), true);
+    }
+
+    private void fetchApk(final PluginCall call, final String url, final String version, final boolean thenInstall) {
         if (url == null || url.isEmpty()) {
             call.reject("Не указан адрес файла обновления");
             return;
@@ -72,7 +178,11 @@ public class ApkInstaller extends Plugin {
             public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    File out = new File(getContext().getCacheDir(), "ponoi-update.apk");
+                    File out = updateFile();
+                    // Отметку сносим ДО скачивания: если оно оборвётся, файл
+                    // останется недокачанным, и «готово к установке» на него
+                    // указывать не должно.
+                    updateMark().delete();
                     if (out.exists() && !out.delete()) {
                         call.reject("Не удалось освободить место под обновление");
                         return;
@@ -114,15 +224,15 @@ public class ApkInstaller extends Plugin {
                         fos.flush();
                     }
 
-                    Uri uri = FileProvider.getUriForFile(
-                            getContext(), getContext().getPackageName() + ".fileprovider", out);
-                    Intent i = new Intent(Intent.ACTION_VIEW);
-                    i.setDataAndType(uri, "application/vnd.android.package-archive");
-                    // Без этого флага установщик не получит доступа к файлу в нашем кэше.
-                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    Activity act = getActivity();
-                    if (act != null) act.startActivity(i); else getContext().startActivity(i);
-                    call.resolve();
+                    if (version != null && !version.isEmpty()) {
+                        try (FileOutputStream mf = new FileOutputStream(updateMark())) {
+                            mf.write(version.getBytes("UTF-8"));
+                        }
+                    }
+                    if (thenInstall) launchInstaller(out);
+                    JSObject ret = new JSObject();
+                    ret.put("bytes", out.length());
+                    call.resolve(ret);
                 } catch (Exception e) {
                     call.reject("Не удалось скачать обновление: " + e.getMessage());
                 } finally {

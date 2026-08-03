@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
-import { createInvite } from '../lib/servers'
+import { createInvite, listMembers } from '../lib/servers'
 import { useAuth } from '../auth/AuthProvider'
 import { listWebhooks, createWebhook, deleteWebhook, type Webhook } from '../lib/webhooks'
 import { uploadTo } from '../lib/storage'
@@ -17,23 +17,21 @@ import { CH_FONTS, CH_COLOR_PRESETS, chNameStyle } from '../lib/chStyle'
 import { logAudit } from '../lib/auditLog'
 import { fetchRoles, type ServerRole } from '../lib/roles'
 import { forumTagsOf, type ForumTag } from '../lib/threads'
+import {
+  PERM_ROWS, parseOverrides, fromNorm, mergeLegacy, legacyFromOverrides, triOf, setTri, normOverrides,
+  userKey, isUserKey, keyUserId, type Overrides,
+} from '../lib/chanPerms'
 
 const SLOW_OPTS = ['Выкл', '5с', '10с', '15с', '30с', '1м', '2м', '5м', '10м', '15м', '30м', '1ч', '2ч', '6ч']
 const HIDE_OPTS = ['1 час', '24 часа', '3 дней', '1 неделя']
 const REGIONS = ['Автоматически', 'Россия', 'Европа', 'США Восток', 'США Запад', 'Азия']
 
 type Tri = 'deny' | 'default' | 'allow'
-// v1.316.0: из шести переключателей остался один — тот, что работает.
-//
-// Остальные пять были декоративными: «Просмотр канала» повторял уже работающий
-// переключатель приватности выше, «Управлять каналом/правами» и «Создание
-// приглашения» — понятия уровня сервера, а не канала, а вебхуков в приложении нет
-// вовсе. Держать переключатель, который сохраняется и ничего не делает, хуже, чем
-// не иметь его: человек считает, что настроил, а канал открыт.
-const MEMBER_PERMS: { k: string; t: string; d: string }[] = [
-  { k: 'send', t: 'Отправлять сообщения', d: 'Запрети у @everyone — и канал станет только для чтения: писать смогут владелец сервера и те, кому выдано управление сообщениями или каналами. Так делают каналы объявлений.' },
-]
-
+// v1.443.0: прежний список «прав участника» здесь больше не нужен: вкладка
+// «Права доступа» показывает перекрытия из src/lib/chanPerms.ts (PERM_ROWS), и
+// каждое из них правда исполняется правилами базы (supabase/103_channel_perms.sql).
+// До этого тут был один переключатель на @everyone — остальные пять убрали в
+// v1.316.0 как декоративные.
 export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted }: {
   server: Server; channel: Channel; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
   const { user } = useAuth()
@@ -62,6 +60,15 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [privRoles, setPrivRoles] = useState<string[]>(Array.isArray((channel as any).private_roles) ? (channel as any).private_roles : [])
   const [roles, setRoles] = useState<ServerRole[]>([])
   useEffect(() => { fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e)) }, [server.id])
+  // v1.443.0: перекрытия прав канала — для @everyone, любой роли и отдельного
+  // участника (supabase/103_channel_perms.sql). Старая настройка «только для
+  // чтения» подхватывается сюда же, иначе вкладка показывала бы «ничего не
+  // запрещено» у канала, в который на деле нельзя писать.
+  const [ov, setOv] = useState<Overrides>(() => mergeLegacy(parseOverrides((channel as any).perm_overrides), s0.perms))
+  const [ovTarget, setOvTarget] = useState('everyone')
+  const [members, setMembers] = useState<any[]>([])
+  const [addOpen, setAddOpen] = useState(false)
+  const [addQ, setAddQ] = useState('')
   const [perms, setPerms] = useState<Record<string, Tri>>(s0.perms ?? {})
   // v1.320.0: теги форума (см. ForumView.tsx). Живут в settings канала, а не
   // отдельной таблицей: их десяток на канал, и меняет их тот же человек тем же
@@ -78,8 +85,8 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   // v1.128.0: «несохранённые изменения» считаются сравнением с последними
   // сохранёнными значениями — вернул настройку обратно, и плашка пропадает сама.
   const normPerms = (p: Record<string, Tri>) => { const o: Record<string, Tri> = {}; for (const k of Object.keys(p ?? {}).sort()) if (p[k] && p[k] !== 'default') o[k] = p[k]; return o }
-  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, privRoles: [...privRoles].sort(), perms: normPerms(perms), paused, nameFont, nameColors, nameAnim, nameFontUrl, forumTags })
-  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, privRoles: (Array.isArray((channel as any).private_roles) ? [...(channel as any).private_roles] : []).sort(), perms: normPerms(s0.perms ?? {}), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null, forumTags: forumTagsOf(channel) }))
+  const snapAll = () => JSON.stringify({ name, topic, slow, nsfw, hide, bitrate, vq, limit, region, priv, privRoles: [...privRoles].sort(), perms: normPerms(perms), ov: normOverrides(ov), paused, nameFont, nameColors, nameAnim, nameFontUrl, forumTags })
+  const [base, setBase] = useState(() => JSON.stringify({ name: channel.name, topic: (channel as any).topic ?? '', slow: s0.slow ?? 'Выкл', nsfw: !!s0.nsfw, hide: s0.hide ?? '3 дней', bitrate: s0.bitrate ?? 64, vq: s0.video_quality ?? 'auto', limit: s0.user_limit ?? 0, region: s0.region ?? 'Автоматически', priv: !!s0.private, privRoles: (Array.isArray((channel as any).private_roles) ? [...(channel as any).private_roles] : []).sort(), perms: normPerms(s0.perms ?? {}), ov: normOverrides(mergeLegacy(parseOverrides((channel as any).perm_overrides), s0.perms)), paused: !!s0.invites_paused, nameFont: s0.name_font ?? '', nameColors: Array.isArray(s0.name_colors) ? s0.name_colors : [], nameAnim: !!s0.name_anim, nameFontUrl: s0.name_font_url ?? null, forumTags: forumTagsOf(channel) }))
   const dirty = snapAll() !== base
   const setDirty = (_d: boolean) => {}
 
@@ -94,8 +101,6 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     supabase.from('server_invites').select('*').eq('server_id', server.id).order('created_at', { ascending: false })
       .then(({ data }) => setInvites(data ?? []))
   }, [tab, server.id])
-
-  function setPerm(k: string, v: Tri) { setPerms(p => ({ ...p, [k]: v })); setDirty(true) }
 
   // v1.140.0: свой файл шрифта для названия канала (.ttf/.otf/.woff/.woff2)
   const chFontFileRef = useRef<HTMLInputElement>(null)
@@ -112,13 +117,30 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     // Тег без названия — пустая кнопка в фильтре, которую не за что нажать:
     // добавили строку и передумали. Такие выкидываем при сохранении.
     const cleanTags = forumTags.map(t => ({ ...t, name: t.name.trim(), emoji: t.emoji?.trim() || undefined })).filter(t => t.name)
-    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim, forum_tags: cleanTags }
+    // v1.443.0: «только для чтения» пишется и в перекрытие, и в прежний
+    // settings.perms.send — их согласует legacyFromOverrides. Иначе на сервере
+    // без миграции 103 (колонки perm_overrides нет) запрет молча пропал бы.
+    const perms2 = legacyFromOverrides(ov, perms)
+    const settings = { ...s0, slow, nsfw, hide, bitrate, video_quality: vq, user_limit: limit, region, private: priv, perms: perms2, invites_paused: paused, name_font: nameFont || null, name_font_url: nameFontUrl || null, name_colors: nameColors.length ? nameColors : null, name_anim: nameAnim, forum_tags: cleanTags }
     const nm = name.trim() || channel.name
-    let { data: upd, error } = await supabase.from('channels').update({ name: nm, topic: topic || null, settings, private_roles: privRoles } as any).eq('id', channel.id).select('id')
+    const payload: any = { name: nm, topic: topic || null, settings, private_roles: privRoles, perm_overrides: ov }
+    let { data: upd, error } = await supabase.from('channels').update(payload).eq('id', channel.id).select('id')
+    // v1.443.0: колонки perm_overrides нет, пока не применена миграция 103.
+    // Сохраняем остальное и говорим прямо, что перекрытия не записались, —
+    // молча потерять их значит показать настройку, которой в базе нет.
+    if (error && /perm_overrides/i.test(error.message ?? '')) {
+      delete payload.perm_overrides
+      const r0 = await supabase.from('channels').update(payload).eq('id', channel.id).select('id')
+      upd = r0.data; error = r0.error
+      if (!error) toastErr('Права ролей по каналу не сохранены — примени миграцию supabase/103_channel_perms.sql')
+    }
     // v1.267.0: private_roles — отдельная колонка (миграция supabase/69_channel_privacy.sql,
     // нужна RLS-политикам can_view_channel), пока не применена — колонки не существует.
     if (error && /private_roles/i.test(error.message ?? '')) {
-      const r0 = await supabase.from('channels').update({ name: nm, topic: topic || null, settings } as any).eq('id', channel.id).select('id')
+      // v1.443.0: повторяем тем же payload без одной колонки — раньше здесь
+      // собирался объект заново, и вместе с private_roles терялись перекрытия.
+      delete payload.private_roles
+      const r0 = await supabase.from('channels').update(payload).eq('id', channel.id).select('id')
       upd = r0.data; error = r0.error
       if (!error) toastErr('Выбор ролей для приватного канала не сохранён — примени миграцию supabase/69_channel_privacy.sql')
     }
@@ -145,7 +167,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     const b = JSON.parse(base)
     setName(b.name); setTopic(b.topic); setSlow(b.slow); setNsfw(b.nsfw)
     setHide(b.hide); setBitrate(b.bitrate); setVq(b.vq); setLimit(b.limit)
-    setRegion(b.region); setPriv(b.priv); setPrivRoles(b.privRoles ?? []); setPerms(b.perms); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null); setForumTags(b.forumTags ?? [])
+    setRegion(b.region); setPriv(b.priv); setPrivRoles(b.privRoles ?? []); setPerms(b.perms); setOv(fromNorm(b.ov ?? '[]')); setPaused(b.paused); setNameFont(b.nameFont ?? ''); setNameColors(b.nameColors ?? []); setNameAnim(!!b.nameAnim); setNameFontUrl(b.nameFontUrl ?? null); setForumTags(b.forumTags ?? [])
   }
 
   async function del() {
@@ -156,6 +178,45 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     logAudit(server.id, 'channel_delete', (isVoice ? '🔊 ' : '#') + channel.name)
     toastOk('Канал удалён')
     onDeleted()
+  }
+
+  // ── v1.443.0: перекрытия прав канала ──────────────────────────────────────
+  // Участники нужны только на этой вкладке — тянем их при первом заходе, а не
+  // при открытии настроек: на большом сервере это лишний запрос на каждый вход.
+  const [extra, setExtra] = useState<string[]>([])
+  useEffect(() => {
+    if (tab !== 'perms' || members.length) return
+    listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
+  }, [tab, server.id])
+
+  const hasOv = (key: string) => !!ov[key]
+  const memberName = (id: string) => members.find(m => m.user_id === id)?.member_name ?? id.slice(0, 8)
+  // Цели: @everyone, все роли сервера, плюс те участники, у кого перекрытия уже
+  // есть или кого только что добавили.
+  const ovUserIds = [...new Set([...Object.keys(ov).filter(isUserKey).map(keyUserId), ...extra])]
+  const ovTargets = [
+    { key: 'everyone', name: '@everyone', color: '#99aab5' },
+    ...roles.map(r => ({ key: r.id, name: r.name, color: r.color })),
+    ...ovUserIds.map(id => ({ key: userKey(id), name: memberName(id), color: '#5865f2' })),
+  ]
+  const ovTargetName = ovTargets.find(t => t.key === ovTarget)?.name ?? '@everyone'
+  const addable = members
+    .filter(m => !ovUserIds.includes(m.user_id))
+    .filter(m => !addQ.trim() || String(m.member_name ?? '').toLowerCase().includes(addQ.trim().toLowerCase()))
+    .slice(0, 8)
+
+  /** Три состояния одного права. Читает и пишет то же самое перекрытие, что
+   *  уедет в базу, — отдельного «отображаемого» значения здесь нет намеренно. */
+  const ovTri = (bit: number) => {
+    const cur = triOf(ov, ovTarget, bit)
+    const put = (v: Tri) => { setOv(setTri(ov, ovTarget, bit, v)); setDirty(true) }
+    return (
+      <div className="cset-tri">
+        <button className={'deny' + (cur === 'deny' ? ' on' : '')} title="Запретить" onClick={() => put('deny')}><Icon name="close" size={13} /></button>
+        <button className={'def' + (cur === 'default' ? ' on' : '')} title="По умолчанию" onClick={() => put('default')}>／</button>
+        <button className={'allow' + (cur === 'allow' ? ' on' : '')} title="Разрешить" onClick={() => put('allow')}><Icon name="check" size={13} /></button>
+      </div>
+    )
   }
 
   async function makeInvite() {
@@ -177,17 +238,6 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
     if (tab !== 'integrations' || hooks !== null) return
     listWebhooks(channel.id).then(setHooks).catch(() => setHooks([]))
   }, [tab, channel.id, hooks])
-
-  const tri = (k: string) => {
-    const v: Tri = perms[k] ?? 'default'
-    return (
-      <div className="cset-tri">
-        <button className={'deny' + (v === 'deny' ? ' on' : '')} title="Запретить" onClick={() => setPerm(k, 'deny')}><Icon name="close" size={13} /></button>
-        <button className={'def' + (v === 'default' ? ' on' : '')} title="По умолчанию" onClick={() => setPerm(k, 'default')}>／</button>
-        <button className={'allow' + (v === 'allow' ? ' on' : '')} title="Разрешить" onClick={() => setPerm(k, 'allow')}><Icon name="check" size={13} /></button>
-      </div>
-    )
-  }
 
   // v1.128.0: пузырёк-значение над бегунком ползунка (как в Discord)
   const plural = (n: number, one: string, few: string, many: string) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many }
@@ -360,14 +410,63 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
             ))}
           </div>}
           <div className="cset-div" />
+          {/* v1.443.0: раньше здесь стоял один переключатель для @everyone.
+              Теперь — перекрытия как в Discord: цель слева (@everyone, роль,
+              отдельный участник), её права справа. Считает и показывает одна и
+              та же функция channelPermissions из src/lib/chanPerms.ts — та же
+              арифметика, что в базе (supabase/103_channel_perms.sql). */}
           <div className="cset-h" style={{ fontSize: 17 }}>Расширенные права</div>
-          <div className="cset-cat" style={{ padding: '0 0 6px' }}>Роли/Участники</div>
-          <div className="cset-role-chip">@everyone</div>
-          <label className="cset-lbl">Права участников</label>
-          {MEMBER_PERMS.map(p => <div key={p.k} className="cset-perm">
-            <div className="cset-perm-h">{p.t} {tri(p.k)}</div>
-            <div className="cset-hint">{p.d}</div>
-          </div>)}
+          <div className="cset-hint" style={{ marginTop: -12, marginBottom: 12 }}>
+            Права отдельной роли или участника <b>только в этом канале</b>. Личное разрешение сильнее запрета роли, а запрет роли — сильнее того, что разрешено всем.
+          </div>
+          <div className="cset-ovr">
+            <div className="cset-ovr-side">
+              <div className="cset-cat" style={{ padding: '0 0 6px' }}>Роли/Участники</div>
+              {ovTargets.map(t => (
+                <div key={t.key} className={'cset-ovr-t' + (ovTarget === t.key ? ' on' : '')} onClick={() => setOvTarget(t.key)}>
+                  <span className="role-dot" style={{ background: t.color }} />
+                  <span className="cset-ovr-nm">{t.name}</span>
+                  {hasOv(t.key) && <span className="cset-ovr-mark" title="Есть перекрытия">●</span>}
+                </div>
+              ))}
+              <button className="cset-ovr-add" onClick={() => { setAddOpen(v => !v); setAddQ('') }}>+ Добавить участника</button>
+              {addOpen && <div className="cset-ovr-add-box">
+                <input className="modal-in" autoFocus placeholder="Имя участника" value={addQ} onChange={e => setAddQ(e.target.value)} />
+                {addable.length === 0 && <div className="cset-hint" style={{ padding: '6px 2px' }}>Никого не нашлось</div>}
+                {addable.map(m => (
+                  <div key={m.user_id} className="cset-ovr-t" onClick={() => {
+                    // Пустая запись перекрытием не считается и в базу не уедет —
+                    // она нужна лишь для того, чтобы цель появилась в списке.
+                    setExtra(x => x.includes(m.user_id) ? x : [...x, m.user_id])
+                    setOvTarget(userKey(m.user_id)); setAddOpen(false)
+                  }}>
+                    <span className="role-dot" style={{ background: '#5865f2' }} />
+                    <span className="cset-ovr-nm">{m.member_name ?? m.user_id}</span>
+                  </div>
+                ))}
+              </div>}
+            </div>
+            <div className="cset-ovr-main">
+              <label className="cset-lbl">Права для «{ovTargetName}»</label>
+              {PERM_ROWS.map(p => <div key={p.bit} className="cset-perm">
+                <div className="cset-perm-h">{p.t} {ovTri(p.bit)}</div>
+                <div className="cset-hint">{p.d}</div>
+              </div>)}
+              {ovTarget !== 'everyone' && hasOv(ovTarget) && (
+                <button className="cset-reset" style={{ marginTop: 10 }} onClick={() => {
+                  let next = ov
+                  for (const p of PERM_ROWS) next = setTri(next, ovTarget, p.bit, 'default')
+                  setOv(next); setDirty(true)
+                }}>Убрать все перекрытия у этой цели</button>
+              )}
+              {/* Разрешать всё подряд без нужды не стоит: «по умолчанию» — это
+                  «как на сервере», и оно продолжает следовать за настройками
+                  сервера, а явное разрешение — нет. */}
+              <div className="cset-hint" style={{ marginTop: 12 }}>
+                «По умолчанию» — как настроено на сервере. Владельца сервера и обладателей права «Управление каналами» перекрытия не ограничивают.
+              </div>
+            </div>
+          </div>
         </>}
         {tab === 'invites' && <>
           <div className="cset-h">Приглашения</div>

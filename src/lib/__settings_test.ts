@@ -8,6 +8,7 @@
 //
 // Запуск: npm run test:settings
 export {}   // файл — модуль: иначе await на верхнем уровне не разрешён
+import { CH_VIEW, CH_SEND, CH_DEFAULT, MANAGE_CHANNELS, channelPermissions, triOf, setTri, parseOverrides, mergeLegacy, stripLegacy, normOverrides, fromNorm, legacyFromOverrides, userKey, type Overrides } from './chanPerms'
 
 // ── Заглушки браузера ────────────────────────────────────────────────────────
 // Модули настроек написаны под браузер; в Node их нет, поэтому подкладываем
@@ -100,7 +101,119 @@ check('account-настройки перечислены среди обычны
   return true
 })
 
+// ── v1.443.0: перекрытия прав канала ────────────────────────────────────────
+// Здесь проверяется арифметика, по которой ЭКРАН показывает галки. Та же самая
+// логика на настоящем Postgres прогоняется в npm run test:db — если эти два
+// набора разойдутся, экран начнёт врать про то, что делает база.
+console.log('\n── Права канала ──')
+const роль = '11111111-1111-1111-1111-111111111111'
+const иная = '22222222-2222-2222-2222-222222222222'
+const кто  = '33333333-3333-3333-3333-333333333333'
+const итог = (ov: Overrides, roleIds: string[] = [роль], serverPerms = 0, isOwner = false) =>
+  channelPermissions({ ov, serverPerms, roleIds, userId: кто, isOwner })
+
+check('без перекрытий даны и просмотр, и отправка', () =>
+  (итог({}) & CH_SEND) !== 0 && (итог({}) & CH_VIEW) !== 0)
+
+check('запрет для всех отбирает отправку', () => {
+  const ov = setTri({}, 'everyone', CH_SEND, 'deny')
+  return (итог(ov) & CH_SEND) === 0 && (итог(ov) & CH_VIEW) !== 0
+})
+
+check('роль возвращает то, что отобрано у всех', () => {
+  let ov = setTri({}, 'everyone', CH_SEND, 'deny')
+  ov = setTri(ov, роль, CH_SEND, 'allow')
+  return (итог(ov) & CH_SEND) !== 0 && (итог(ov, [иная]) & CH_SEND) === 0
+})
+
+check('личное разрешение сильнее запрета роли', () => {
+  let ov = setTri({}, роль, CH_SEND, 'deny')
+  ov = setTri(ov, userKey(кто), CH_SEND, 'allow')
+  return (итог(ov) & CH_SEND) !== 0
+})
+
+check('личный запрет сильнее разрешения роли', () => {
+  let ov = setTri({}, роль, CH_SEND, 'allow')
+  ov = setTri(ov, userKey(кто), CH_SEND, 'deny')
+  return (итог(ov) & CH_SEND) === 0
+})
+
+check('порядок ролей на итог не влияет', () => {
+  let ov = setTri({}, роль, CH_SEND, 'deny')
+  ov = setTri(ov, иная, CH_SEND, 'allow')
+  // Запреты всех ролей применяются раньше разрешений, поэтому «разрешено».
+  return итог(ov, [роль, иная]) === итог(ov, [иная, роль])
+       && (итог(ov, [роль, иная]) & CH_SEND) !== 0
+})
+
+check('владельца и управляющего каналами перекрытия не запирают', () => {
+  const ov = setTri({}, 'everyone', CH_SEND, 'deny')
+  return (итог(ov, [роль], 0, true) & CH_SEND) !== 0
+      && (итог(ov, [роль], MANAGE_CHANNELS) & CH_SEND) !== 0
+})
+
+check('галка показывает ровно то, что записано', () => {
+  let ov = setTri({}, роль, CH_VIEW, 'deny')
+  ov = setTri(ov, роль, CH_SEND, 'allow')
+  return triOf(ov, роль, CH_VIEW) === 'deny'
+      && triOf(ov, роль, CH_SEND) === 'allow'
+      && triOf(ov, иная, CH_SEND) === 'default'
+})
+
+check('возврат в «по умолчанию» убирает пустую запись', () => {
+  const ov = setTri(setTri({}, роль, CH_SEND, 'deny'), роль, CH_SEND, 'default')
+  return Object.keys(ov).length === 0
+})
+
+check('мусор из базы не открывает доступ', () => {
+  const ov = parseOverrides({ everyone: { a: 'всё', d: null }, плохое: 5, [роль]: { d: CH_SEND } })
+  return (channelPermissions({ ov, serverPerms: 0, roleIds: [роль], userId: кто, isOwner: false }) & CH_SEND) === 0
+      && triOf(ov, 'everyone', CH_SEND) === 'default'
+})
+
+check('старая настройка «только для чтения» переносится в перекрытие', () => {
+  const ov = mergeLegacy({}, { send: 'deny' })
+  return triOf(ov, 'everyone', CH_SEND) === 'deny'
+      && !('send' in stripLegacy({ send: 'deny' }))
+})
+
+check('перенос не затирает уже настроенное перекрытие', () => {
+  const было = setTri({}, 'everyone', CH_SEND, 'allow')
+  return triOf(mergeLegacy(было, { send: 'deny' }), 'everyone', CH_SEND) === 'allow'
+})
+
+check('запрет для всех остаётся и в старой карте — на случай неприменённой миграции', () => {
+  const запрет = setTri({}, 'everyone', CH_SEND, 'deny')
+  const снято  = setTri(запрет, 'everyone', CH_SEND, 'default')
+  return legacyFromOverrides(запрет, {}).send === 'deny'
+      && !('send' in legacyFromOverrides(снято, { send: 'deny' }))
+})
+
+check('запрет роли в старую карту не попадает', () =>
+  // Иначе «нельзя одной роли» превратилось бы в «нельзя всем».
+  !('send' in legacyFromOverrides(setTri({}, роль, CH_SEND, 'deny'), {})))
+
+check('сравнение «изменилось ли» не зависит от порядка ключей', () =>
+  normOverrides({ everyone: { a: 0, d: CH_SEND }, [роль]: { a: CH_SEND, d: 0 } })
+    === normOverrides({ [роль]: { a: CH_SEND, d: 0 }, everyone: { a: 0, d: CH_SEND } }))
+
+check('«Сбросить» возвращает ровно те же перекрытия', () => {
+  // Кнопка сброса восстанавливает состояние из сохранённой строки: если разбор
+  // теряет хоть один бит, человек увидит не то, что лежит в базе.
+  let было = setTri({}, 'everyone', CH_VIEW, 'deny')
+  было = setTri(было, роль, CH_SEND, 'allow')
+  было = setTri(было, userKey(кто), CH_SEND, 'deny')
+  return normOverrides(fromNorm(normOverrides(было))) === normOverrides(было)
+})
+
 console.log('\n── Ломаем нарочно ──')
+check('проверка замечает перекрытие, которое не применяется', () => {
+  // Как если бы запрет сохранялся, но арифметика его не учитывала.
+  const ov = setTri({}, 'everyone', CH_SEND, 'deny')
+  const мимо = (0 | CH_DEFAULT) & ~0   // «забыли» вычесть запрет
+  return (мимо & CH_SEND) !== 0 && (итог(ov) & CH_SEND) === 0   // расхождение видно
+})
+
 check('проверка замечает настройку, которая не сохраняется', () => {
   store.clear()
   const before = loadSettings()

@@ -326,6 +326,9 @@ body {
 
 /* ===== pass 3: user settings screen ===== */
 :root { --font-scale:1; }
+/* v1.443.0: высота экранной клавиатуры (см. src/lib/keyboardInset.ts). Ноль по
+   умолчанию — на десктопе и в вебе её просто нет. */
+:root { --kb:0px; }
 body { font-size: calc(15px * var(--font-scale)); }
 body.no-anim *, body.no-anim *::before, body.no-anim *::after { animation:none !important; transition:none !important; }
 body.compact .msg { padding-top:0; padding-bottom:0; }
@@ -2481,6 +2484,24 @@ body.no-anim .member-typing i { animation:none; }
 .cset-tri .deny.on { background:#f23f43; border-color:#f23f43; color:#fff; }
 .cset-tri .def.on { background:#4e5058; border-color:#4e5058; color:#fff; }
 .cset-tri .allow.on { background:#23a55a; border-color:#23a55a; color:#fff; }
+/* v1.443.0: перекрытия прав канала — слева цели, справа их права.
+   На узком окне колонки складываются в одну, иначе список целей ужимался до
+   нечитаемой полосы. */
+.cset-ovr { display:flex; gap:18px; align-items:flex-start; }
+.cset-ovr-side { width:220px; flex:none; }
+.cset-ovr-main { flex:1; min-width:0; }
+.cset-ovr-t { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:var(--r-sm); font-size:14px; cursor:pointer; color:var(--mut); }
+.cset-ovr-t:hover { background:rgba(var(--ov, 255,255,255),.06); color:var(--tx); }
+.cset-ovr-t.on { background:rgba(var(--ov, 255,255,255),.1); color:var(--tx); }
+.cset-ovr-nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cset-ovr-mark { color:var(--brand); font-size:10px; flex:none; }
+.cset-ovr-add { width:100%; margin-top:6px; background:none; border:1px dashed rgba(var(--ov, 255,255,255),.18); color:var(--mut); padding:7px 10px; border-radius:var(--r-sm); font-size:13px; cursor:pointer; }
+.cset-ovr-add:hover { color:var(--tx); border-color:rgba(var(--ov, 255,255,255),.3); }
+.cset-ovr-add-box { margin-top:6px; background:var(--bg3); border-radius:var(--r-sm); padding:6px; }
+@media (max-width: 760px) {
+  .cset-ovr { flex-direction:column; }
+  .cset-ovr-side { width:100%; }
+}
 .cset-link { color:var(--blue); cursor:pointer; }
 .cset-pause { background:#da373c; border:none; color:#fff; padding:8px 14px; border-radius:var(--r-xs); font-size:13px; font-weight:600; cursor:pointer; }
 .cset-pause.off { background:#4e5058; }
@@ -6643,6 +6664,17 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
     padding-right: env(safe-area-inset-right);
     box-sizing: border-box;
   }
+  /* v1.443.0: экранная клавиатура. На Android окно приложения, нарисованного во
+     весь экран, при её появлении не уменьшается — клавиатура ложится поверх, и
+     поле ввода оказывается под ней: человек набирает вслепую.
+     Высоту меряет src/lib/keyboardInset.ts и кладёт в --kb. Отступ здесь, на
+     уровне оболочки, а не у поля ввода: так поднимается вся переписка целиком,
+     и низ ленты остаётся виден.
+     Когда клавиатура открыта, нижнюю полосу навигации она закрывает собой —
+     держать под неё ещё и отступ значит оставить пустую щель. */
+  .app { padding-bottom: calc(env(safe-area-inset-bottom) + var(--kb, 0px)); }
+  body.kb-open .app { padding-bottom: var(--kb, 0px); }
+  body.kb-open .auth2 { padding-bottom: var(--kb, 0px); }
   /* Шторки навигации лежат вне оболочки — им отступы нужны свои.
      v1.433.0: рейку серверов эта строка портила. У неё свой отступ был раньше и
      с запасом (12px + полоса), а эта, стоящая ниже по файлу, перебивала его

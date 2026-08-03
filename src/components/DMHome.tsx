@@ -36,6 +36,7 @@ import { loadReactions, toggleReaction, groupReactions, setPin, deleteMessage, e
 import type { RxSummary, AttachPatch } from '../lib/reactions'
 import { Icon } from './icons'
 import { openMobNav, closeMobNav, IS_MOBILE } from '../lib/mobile'
+import { kbScrollDelta } from '../lib/keyboardInset'
 import { publishMyKey } from '../lib/crypto/keys'
 import { sealForPeer, openIncoming, NoRecipientKeys, isUnreadable } from '../lib/crypto/dm'
 import { isEncrypted } from '../lib/crypto/envelope'
@@ -969,6 +970,20 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     prevLen.current = messages.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
+
+  // v1.443.0: то же, что в серверной переписке — клавиатура не должна утаскивать
+  // низ ленты под себя (см. src/lib/keyboardInset.ts).
+  useEffect(() => {
+    if (!IS_MOBILE) return
+    const on = (e: Event) => {
+      const { px, prev } = (e as CustomEvent).detail as { px: number; prev: number }
+      const el = msgsBoxRef.current
+      const d = kbScrollDelta(prev, px, nearBottom())
+      if (el && d) el.scrollTop += d
+    }
+    window.addEventListener('ponoi:kb', on)
+    return () => window.removeEventListener('ponoi:kb', on)
+  }, [])
 
   // «К последним ↓»: автоскролл только если пользователь у низа; иначе копим счётчик.
   function nearBottom(): boolean {

@@ -47,6 +47,7 @@ import { fetchThreads, createThread, isForum, forumTagsOf, type Thread } from '.
 import { ThreadPanel } from './ThreadPanel'
 import { ForumView } from './ForumView'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
+import { kbScrollDelta } from '../lib/keyboardInset'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
@@ -64,6 +65,7 @@ import { ProfileCard } from './ProfileCard'
 import { getMsgs, putMsgs } from '../lib/msgCache'
 import { takeCall, releaseCall } from '../lib/activeCall'
 import { PluginPanels } from './PluginPanels'
+import { channelPermissions, parseOverrides, CH_SEND } from '../lib/chanPerms'
 
 // v1.103.0: дебаунс перезагрузки реакций — реалтайм-события пачкой дают один запрос вместо десятка.
 let svRxDeb: number | undefined
@@ -329,9 +331,18 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // показываем поле ввода, чтобы человек не набирал сообщение, которое всё равно
   // не уйдёт. Писать в такой канал могут владелец и те, кому выдано управление
   // сообщениями или каналами.
+  //
+  // v1.443.0: сюда же — перекрытия прав канала (для роли или лично участника,
+  // supabase/103_channel_perms.sql). Считает их та же функция, что и экран
+  // настроек канала: если бы поле ввода решало по-своему, человек с запретом
+  // по роли видел бы поле, писал сообщение и получал отказ от базы.
   const canPostHere = !curChannel
-    || ((curChannel as any).settings?.perms?.send !== 'deny')
-    || isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS)
+    || ((((curChannel as any).settings?.perms?.send !== 'deny')
+      || isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES) || hasPerm(myPerms, PERM.MANAGE_CHANNELS))
+      && (channelPermissions({
+        ov: parseOverrides((curChannel as any).perm_overrides),
+        serverPerms: myPerms, roleIds: rolesOfId(user?.id ?? ''), userId: user?.id ?? '', isOwner,
+      }) & CH_SEND) !== 0)
   const canManageNicknames = isOwner || hasPerm(myPerms, PERM.MANAGE_NICKNAMES)
   const canManageRoles = isOwner || hasPerm(myPerms, PERM.MANAGE_ROLES)
   const canManageMessages = isOwner || hasPerm(myPerms, PERM.MANAGE_MESSAGES)
@@ -656,6 +667,21 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     prevLen.current = messages.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
+
+  // v1.443.0: клавиатура выехала — низ переписки уезжает под неё. Если человек
+  // читал именно низ, подкручиваем список на ту же высоту; если он был выше,
+  // не трогаем: утащить его с выбранного места хуже, чем ничего не сделать.
+  useEffect(() => {
+    if (!IS_MOBILE) return
+    const on = (e: Event) => {
+      const { px, prev } = (e as CustomEvent).detail as { px: number; prev: number }
+      const el = msgsBoxRef.current
+      const d = kbScrollDelta(prev, px, nearBottom())
+      if (el && d) el.scrollTop += d
+    }
+    window.addEventListener('ponoi:kb', on)
+    return () => window.removeEventListener('ponoi:kb', on)
+  }, [])
 
   // «К последним ↓»: автоскролл только если пользователь у низа; иначе копим счётчик.
   function nearBottom(): boolean {

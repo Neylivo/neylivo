@@ -137,7 +137,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -177,6 +177,9 @@ await db.exec(`create table if not exists audit_log (
   target_name text, detail text, created_at timestamptz not null default now());`)
 await db.exec(SRC[96])
 await db.exec(SRC[97])
+// v1.443.0: права на канал с перекрытиями ролей. Ставим после 85/87, потому что
+// она переобъявляет messages_insert и can_view_channel поверх них.
+await db.exec(SRC[103])
 await db.exec(SRC[98])
 // music_tracks заводится в 06, которую песочница целиком не применяет.
 await db.exec(`create table if not exists music_tracks (
@@ -1182,6 +1185,82 @@ await check('избранные эмодзи попали в публикаци�
   await check('чужое сообщение по-прежнему не удаляется', async () => {
     await as(OTHER, `delete from messages where id=$1`, [mid2])
     return (await db.query('select 1 from messages where id=$1', [mid2])).rows.length === 1
+  })
+}
+
+// ── Права НА КАНАЛ: перекрытия ролей (v1.443.0) ───────────────────────────
+// Владелец просил «настройки канала и переопределения ролей по каналам, как в
+// Discord». Здесь проверяется самое важное: что перекрытия правда РЕШАЮТ, а не
+// сохраняются в никуда — на этом проект уже обжигался (см. историю v1.316.0,
+// где из шести переключателей канала работал один).
+{
+  const SEND_OFF = 2097152
+  const VIEW_OFF = 1048576
+  const pch = (await db.query(
+    `insert into channels (server_id, name) values ($1,'права') returning id`, [srv])).rows[0].id
+  const роль = (await db.query(
+    `insert into server_roles (server_id, name, permissions, position) values ($1,'Тихие',0,5) returning id`, [srv])).rows[0].id
+  await db.query(`insert into member_roles (server_id, user_id, role_id) values ($1,$2,$3)`, [srv, USER, роль])
+
+  const ov = async (json) => db.query(`update channels set perm_overrides = $2::jsonb where id = $1`, [pch, JSON.stringify(json)])
+  const пишет = async (uid) => {
+    const before = (await db.query('select count(*)::int c from messages where channel_id=$1', [pch])).rows[0].c
+    try {
+      await as(uid, `insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','тест')`, [pch, uid])
+    } catch { /* отказ — тоже ответ */ }
+    const after = (await db.query('select count(*)::int c from messages where channel_id=$1', [pch])).rows[0].c
+    return after > before
+  }
+
+  await check('без перекрытий пишут все', async () => { await ov({}); return await пишет(USER) })
+
+  await check('запрет роли отбирает отправку', async () => {
+    await ov({ [роль]: { a: 0, d: SEND_OFF } })
+    return !(await пишет(USER))
+  })
+  await check('у того, кому эта роль не выдана, всё по-прежнему', async () => {
+    await ov({ [роль]: { a: 0, d: SEND_OFF } })
+    return await пишет(OTHER)
+  })
+  await check('личное разрешение сильнее запрета роли', async () => {
+    await ov({ [роль]: { a: 0, d: SEND_OFF }, ['u:' + USER]: { a: SEND_OFF, d: 0 } })
+    return await пишет(USER)
+  })
+  await check('запрет для всех отбирает у всех', async () => {
+    await ov({ everyone: { a: 0, d: SEND_OFF } })
+    return !(await пишет(USER)) && !(await пишет(OTHER))
+  })
+  await check('роль возвращает то, что отобрано у всех', async () => {
+    await ov({ everyone: { a: 0, d: SEND_OFF }, [роль]: { a: SEND_OFF, d: 0 } })
+    return await пишет(USER) && !(await пишет(OTHER))
+  })
+  await check('владелец сервера перекрытиями не запирается', async () => {
+    // Иначе можно закрыть себе вход в собственный канал и остаться без способа
+    // это починить изнутри приложения.
+    await ov({ everyone: { a: 0, d: SEND_OFF } })
+    return await пишет(OWNER)
+  })
+
+  await check('запрет просмотра скрывает канал', async () => {
+    await ov({ [роль]: { a: 0, d: VIEW_OFF } })
+    const r = await as(USER, `select 1 from channels where id=$1`, [pch])
+    return r.rows.length === 0
+  })
+  await check('и сообщения из скрытого канала не читаются', async () => {
+    await db.query(`insert into messages (channel_id, author, author_name, content) values ($1,$2,'n','тайна')`, [pch, OTHER])
+    await ov({ [роль]: { a: 0, d: VIEW_OFF } })
+    const r = await as(USER, `select 1 from messages where channel_id=$1`, [pch])
+    return r.rows.length === 0
+  })
+  await check('снятое перекрытие возвращает канал', async () => {
+    await ov({})
+    const r = await as(USER, `select 1 from channels where id=$1`, [pch])
+    return r.rows.length === 1
+  })
+  await check('мусор в перекрытиях не открывает лишнего', async () => {
+    await ov({ everyone: { a: 'дом', d: null } })
+    // Битые числа не должны превращаться в «разрешить всё»: пишем как и раньше.
+    return await пишет(USER)
   })
 }
 

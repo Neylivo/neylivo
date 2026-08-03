@@ -98,6 +98,67 @@ app.whenReady().then(async () => {
   const mem = await pad('.members')
   check('список участников ниже часов и выше кнопок', mem.t > TOP && mem.b > BOT, mem.t + '/' + mem.b)
 
+  // ── v1.443.0: экранная клавиатура ────────────────────────────────────────────
+  // На Android окно приложения, нарисованного во весь экран, при появлении
+  // клавиатуры не уменьшается — она ложится поверх, и поле ввода оказывается под
+  // ней. Высоту меряет src/lib/keyboardInset.ts и кладёт в --kb; здесь
+  // проверяется, что вёрстка на неё правда реагирует и поднимает поле ввода
+  // ровно на эту высоту — не меньше (иначе поле под клавиатурой) и не больше
+  // (иначе над клавиатурой пустая полоса).
+  // Пустышка панели звонка в стенде растягивается на треть экрана (в ней нет
+  // содержимого, только кнопка) и сама переполняет колонку — для замера
+  // клавиатуры её убираем, иначе меряли бы не то.
+  await win.webContents.executeJavaScript("document.querySelector('.c2-wrap').style.display='none'; 1")
+  const KB = 320
+  const kbSet = async v => {
+    await win.webContents.executeJavaScript(
+      `document.documentElement.style.setProperty('--kb', ${JSON.stringify(v + 'px')});` +
+      `document.body.classList.toggle('kb-open', ${v > 0}); 1`)
+    await new Promise(r => setTimeout(r, 60))
+  }
+  const bottomOf = async sel => JSON.parse(await win.webContents.executeJavaScript(
+    `JSON.stringify({ b: Math.round(document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect().bottom) })`)).b
+  const winH = await win.webContents.executeJavaScript('window.innerHeight')
+
+  console.log('\n── Экранная клавиатура ──')
+  await kbSet(0)
+  const compClosed = await bottomOf('.composer')
+  await kbSet(KB)
+  const compOpen = await bottomOf('.composer')
+  check('поле ввода поднимается над клавиатурой', winH - compOpen >= KB,
+    'от низа окна ' + (winH - compOpen) + ', клавиатура ' + KB)
+  // Пока клавиатура открыта, полосу навигации она закрывает собой: держать под
+  // неё ещё и отступ значит оставить пустую щель над клавиатурой. Мерить надо
+  // не от края окна (там всегда есть собственный отступ поля ввода), а от
+  // нижней границы оболочки: она обязана быть одинаковой и с клавиатурой, и без.
+  const appEdge = async () => {
+    const r = JSON.parse(await win.webContents.executeJavaScript(
+      `(function(){var a=document.querySelector('.app'),s=getComputedStyle(a);`
+      + `return JSON.stringify({b:a.getBoundingClientRect().bottom,p:parseFloat(s.paddingBottom)})})()`))
+    return Math.round(r.b - r.p)
+  }
+  const edgeOpen = await appEdge()
+  await kbSet(0)
+  const edgeClosed = await appEdge()
+  await kbSet(KB)
+  check('над клавиатурой нет лишней пустоты',
+    (edgeOpen - compOpen) === (edgeClosed - compClosed),
+    'зазор с клавиатурой ' + (edgeOpen - compOpen) + ', без неё ' + (edgeClosed - compClosed))
+  check('поднялось ровно на высоту клавиатуры', compClosed - compOpen === KB - BOT,
+    'сдвиг ' + (compClosed - compOpen) + ', ожидалось ' + (KB - BOT))
+  await kbSet(0)
+  check('клавиатура спряталась — вёрстка вернулась', await bottomOf('.composer') === compClosed,
+    'низ ' + (await bottomOf('.composer')) + ', было ' + compClosed)
+
+  console.log('\n── Ломаем нарочно (клавиатура) ──')
+  // Если бы отступ стоял на поле ввода, а не на оболочке, поднялось бы только
+  // оно — переписка осталась бы под клавиатурой.
+  await kbSet(KB)
+  const msgsOpen = await bottomOf('.msgs')
+  check('переписка тоже уходит из-под клавиатуры', winH - msgsOpen >= KB,
+    'низ ленты от края ' + (winH - msgsOpen))
+  await kbSet(0)
+
   // ── Большой экран: нижняя полоса ────────────────────────────────────────────
   // v1.434.0. Владелец дважды приносил одно и то же: внизу окна полоса пустоты,
   // приложение кончается раньше края. В v1.430.0 я «закрыл класс» вслепую, не
@@ -120,15 +181,15 @@ app.whenReady().then(async () => {
   await wide.loadFile(path.join(OUT, 'wide.html'))
   await new Promise(r => setTimeout(r, 400))
   const box = async s => JSON.parse(await wide.webContents.executeJavaScript(`window.__b(${JSON.stringify(s)})`))
-  const winH = await wide.webContents.executeJavaScript('window.innerHeight')
+  const wideH = await wide.webContents.executeJavaScript('window.innerHeight')
   const meW = await box('.me'), compW = await box('.composer'), chatW = await box('.chat')
 
   console.log('\n── Большой экран: низ окна ──')
   // v1.435.0: правило уточнено по снимку Discord, который принёс владелец: обе
   // плашки кончаются на ОДНОЙ высоте и обе отступают от низа одинаково. В
   // v1.434.0 я прижал их к самому краю — это было не то.
-  const gapMe = winH - meW.bottom, gapComp = winH - compW.bottom
-  check('колонка чата доходит до края окна', chatW.bottom === winH, 'низ ' + chatW.bottom)
+  const gapMe = wideH - meW.bottom, gapComp = wideH - compW.bottom
+  check('колонка чата доходит до края окна', chatW.bottom === wideH, 'низ ' + chatW.bottom)
   check('низ поля и низ панели — одна линия', compW.bottom === meW.bottom,
     'поле ' + compW.bottom + ', панель ' + meW.bottom)
   check('отступ от низа у обеих одинаковый', gapMe === gapComp, 'панель ' + gapMe + ', поле ' + gapComp)

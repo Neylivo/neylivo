@@ -57,17 +57,52 @@ import { registerPlugin } from '@capacitor/core'
 interface ApkInstallerPlugin {
   canInstall(): Promise<{ value: boolean }>
   openInstallSettings(): Promise<void>
-  downloadAndInstall(o: { url: string }): Promise<void>
+  downloadAndInstall(o: { url: string; version?: string }): Promise<void>
+  // v1.443.0: скачивание и установка разделены — файл приезжает заранее и сам,
+  // а согласие системы спрашивается только когда человек нажал «Установить».
+  download(o: { url: string; version?: string }): Promise<{ bytes: number }>
+  install(): Promise<void>
+  readyVersion(): Promise<{ value: string | null }>
+  netInfo(): Promise<{ metered: boolean; online: boolean }>
   addListener(e: 'progress', cb: (d: { percent: number }) => void): Promise<{ remove: () => Promise<void> }>
 }
 const ApkInstaller = registerPlugin<ApkInstallerPlugin>('ApkInstaller')
+
+/** Какая версия уже скачана. null — ничего готового нет (в том числе если
+ *  систе́ма почистила кэш: плагин сверяет отметку с самим файлом). */
+export async function readyApkVersion(): Promise<string | null> {
+  try { return (await ApkInstaller.readyVersion()).value ?? null } catch { return null }
+}
+
+/** Тип сети. При любом сбое считаем сеть тарифицируемой — тогда фоновое
+ *  скачивание просто не начнётся, и это безопаснее обратной ошибки. */
+export async function apkNetInfo(): Promise<{ metered: boolean; online: boolean }> {
+  try { return await ApkInstaller.netInfo() } catch { return { metered: true, online: true } }
+}
+
+/** Скачать заранее, установщик не открывать. */
+export async function downloadApk(url: string, version: string, onProgress?: (p: number) => void): Promise<void> {
+  const sub = onProgress ? await ApkInstaller.addListener('progress', d => onProgress(d.percent)) : null
+  try { await ApkInstaller.download({ url, version }) }
+  finally { await sub?.remove() }
+}
+
+/** Открыть установщик для уже скачанного файла. */
+export async function installReadyApk(): Promise<void> {
+  const { value } = await ApkInstaller.canInstall()
+  if (!value) {
+    await ApkInstaller.openInstallSettings()
+    throw new Error('Разреши установку из этого приложения и нажми «Установить» ещё раз')
+  }
+  await ApkInstaller.install()
+}
 
 /**
  * Скачать и открыть установщик. onProgress получает проценты.
  * Бросает — вызывающая сторона в этом случае откатывается на обычную ссылку,
  * то есть на прежнее поведение: хуже, чем было, не станет ни при каком сбое.
  */
-export async function installApkInApp(url: string, onProgress?: (p: number) => void): Promise<void> {
+export async function installApkInApp(url: string, onProgress?: (p: number) => void, version?: string): Promise<void> {
   const sub = onProgress ? await ApkInstaller.addListener('progress', d => onProgress(d.percent)) : null
   try {
     const { value } = await ApkInstaller.canInstall()
@@ -77,7 +112,7 @@ export async function installApkInApp(url: string, onProgress?: (p: number) => v
       await ApkInstaller.openInstallSettings()
       throw new Error('Разреши установку из этого приложения и нажми «Обновить» ещё раз')
     }
-    await ApkInstaller.downloadAndInstall({ url })
+    await ApkInstaller.downloadAndInstall({ url, version })
   } finally {
     await sub?.remove()
   }
