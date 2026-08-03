@@ -27,6 +27,7 @@ import { takeSlot, freeSlot, hasSlot, liveCount, resetSlots, subscribeSlots, MAX
 import { tileEmoji, tileLabel, orderTiles, filterTiles } from './soundTile'
 import { fmtNotification, cleanBody, trimBody, plusMessages, BODY_MAX } from './notifyFormat'
 import { shareTrackText } from '../music/shareText'
+import { authKeyFor, isAuthKey } from './authStore'
 import { livePos, leftOver, listenPct, fmtClock, needRepublish, REPUBLISH_TOLERANCE } from './listenProgress'
 import {
   zoomStart, zoomAt, clampPan, clampZoom, pinchZoom, dist, mid, toggleZoomAt, wasDragged,
@@ -943,6 +944,16 @@ console.log('\n-- Уведомления: что видит человек (v1.4
     const сырое = 'вот ||секрет|| и **жирный**'
     return cleanBody(сырое) !== сырое && !cleanBody(сырое).includes('секрет')
   })
+}
+
+console.log('\n-- Вход переживает обновление (v1.442.0) --')
+{
+  check('ключ сессии узнаётся по адресу проекта', () =>
+    authKeyFor('https://fmqaedeudurzxfqbixrc.supabase.co') === 'sb-fmqaedeudurzxfqbixrc-auth-token')
+  check('битый адрес не роняет расчёт ключа', () => authKeyFor('').startsWith('sb-'))
+  check('дублируем только вход, ничего лишнего', () =>
+    isAuthKey('sb-abc-auth-token') && isAuthKey('supabase.auth.token') &&
+    !isAuthKey('ponoi_settings') && !isAuthKey('ponoi_mus_dsp'))
 }
 
 console.log('\n-- Поделиться треком (v1.440.0) --')

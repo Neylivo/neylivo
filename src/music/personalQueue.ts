@@ -137,12 +137,19 @@ export function banWindow(restCount: number): number {
 export const AUTHOR_STREAK = 2
 
 /** Почему трек предложен — показывается человеку в очереди. */
-export type Why = 'author' | 'similar' | 'rested' | 'popular' | 'fresh' | 'order'
+/**
+ * v1.442.0: «давно не слушал» убрано из причин по просьбе владельца.
+ *
+ * Сама давность в подборе осталась и работает (см. recommend) — без неё волна
+ * снова скатится к одной и той же сотне треков. Убрана именно СТРОКА в очереди:
+ * «дальше — давно не слушал» человеку ничего не даёт, он и так это знает, а
+ * место занимает.
+ */
+export type Why = 'author' | 'similar' | 'popular' | 'fresh' | 'order'
 
 export const WHY_LABEL: Record<Why, string> = {
   author: 'тот же исполнитель',
   similar: 'похоже на то, что играет',
-  rested: 'давно не слушал',
   popular: 'это часто слушают',
   fresh: 'ещё не слушал',
   order: 'дальше по списку',
@@ -257,8 +264,8 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
       // Даты нет — считаем, что слушал давно: иначе всё, о чём мы не помним
       // когда, навсегда уходило бы вниз.
       const days = at > 0 ? Math.max(0, (now - at) / DAY) : RESTED_DAYS
-      const v = 40 * Math.min(1, days / RESTED_DAYS)
-      if (v > 0) { score += v; reasons.push(['rested', v]) }
+      // Очки за давность идут, а причиной не называются: см. Why выше.
+      score += 40 * Math.min(1, days / RESTED_DAYS)
     }
 
     // v1.440.0: то же самое, только в другой обёртке, — не предлагаем вовсе.

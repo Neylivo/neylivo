@@ -6937,3 +6937,40 @@ body.no-anim .vo-live::before { animation: none; }
   .mus2-ctl button.big { width: 58px; height: 58px; }
   .mus2-vol { flex: 1 0 100%; margin: 2px 0 0; }
 }
+
+/* v1.442.0: кнопка «Подборка» рядом с подписью склада. */
+.mus2-lib-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mus2-mixbtn {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: auto;
+  border: none; border-radius: 999px; cursor: pointer; padding: 7px 14px;
+  background: linear-gradient(90deg, var(--mus-a, #8b5cf6), var(--mus-a2, #5865f2));
+  color: #fff; font-size: 13px; font-weight: 700;
+  transition: filter .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease);
+}
+.mus2-mixbtn:hover:not(:disabled) { filter: brightness(1.1); }
+.mus2-mixbtn:active:not(:disabled) { transform: scale(.96); }
+.mus2-mixbtn:disabled { opacity: .5; cursor: default; }
+/* Подсказка «возможно, имелось в виду» в пустом поиске. */
+.mus2-noresult-hint {
+  border: none; background: transparent; color: var(--brand); cursor: pointer;
+  font-size: inherit; font-weight: 700; padding: 0; text-decoration: underline;
+}
+@media (max-width: 768px) { .mus2-mixbtn { margin-left: 0; width: 100%; justify-content: center; } }
+
+/* v1.442.0: обработка звука в настройках плеера. */
+.ms-eq { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.ms-eq button {
+  border: 1px solid rgba(var(--ov, 255,255,255), .1); border-radius: var(--r-md, 8px);
+  background: var(--bg3); color: var(--mut); font-size: 12.5px; font-weight: 600;
+  padding: 6px 10px; cursor: pointer;
+}
+.ms-eq button:hover { color: var(--tx); }
+.ms-eq button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ms-tog {
+  border: 1px solid rgba(var(--ov, 255,255,255), .1); border-radius: var(--r-md, 8px);
+  background: var(--bg3); color: var(--mut); font-size: 12.5px; font-weight: 600;
+  padding: 6px 12px; cursor: pointer;
+}
+.ms-tog.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ms-row span small { display: block; font-weight: 400; font-size: 11.5px; color: var(--mut); }
+.ms-hint { font-size: 12px; color: var(--mut); line-height: 1.45; margin: -2px 0 10px; }

@@ -29,17 +29,36 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('./sw.js').catch(() => {})
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <SettingsProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </SettingsProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+/**
+ * v1.442.0: поднять вход из запасной полки ДО того, как приложение спросит о нём.
+ *
+ * На Android localStorage переживает не всякое обновление, а клиент Supabase
+ * читает сессию сразу при создании — то есть если восстанавливать после, он уже
+ * успеет показать экран входа. Поэтому: сначала восстановление, потом импорт
+ * всего, что тянет за собой клиент.
+ *
+ * В браузере запасной полки нет, restoreAuth возвращает false мгновенно и ничего
+ * не задерживает.
+ */
+async function boot() {
+  try {
+    const { restoreAuth, authKeyFor } = await import('./lib/authStore')
+    await restoreAuth([authKeyFor(import.meta.env.VITE_SUPABASE_URL as string)])
+  } catch { /* нет запасной полки — работаем на одном localStorage */ }
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <SettingsProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </SettingsProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  )
+}
+void boot()
 
 
 // Скрытый лог в консоли — приветствие для любопытных 🐾

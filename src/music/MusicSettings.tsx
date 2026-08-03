@@ -4,6 +4,7 @@ import { GIF_KEY, BG_KEY, BG_IDB_KEY, LYRICS_KEY } from './types'
 import { idbSet, idbDel } from '../lib/idb'
 import { videoDuration } from './videoDuration'
 import { Icon } from '../components/icons'
+import { EQ_LABEL, dspSummary, type DspSettings } from './dsp'
 import { Portal } from '../components/Portal'
 
 export function loadGif(): GifCfg { try { return JSON.parse(localStorage.getItem(GIF_KEY) || '') } catch { return { url: '', pos: 'both' } } }
@@ -18,7 +19,11 @@ export function loadLyricsCfg(): LyricsCfg {
 
 export function loadBg(): BgCfg { try { return JSON.parse(localStorage.getItem(BG_KEY) || '') } catch { return { type: 'none', mode: 'url', url: '', dim: 40, ver: 0 } } }
 
-export function MusicSettings({ onClose, onChange }: { onClose: () => void; onChange: () => void }) {
+export function MusicSettings({ onClose, onChange, dsp, onDsp }:
+  { onClose: () => void; onChange: () => void
+    // v1.442.0: обработка звука живёт в самом плеере (там <audio>), а
+    // настраивается здесь — поэтому приходит сверху, а не читается заново.
+    dsp: DspSettings; onDsp: (d: DspSettings) => void }) {
   const [gif, setGif] = useState<GifCfg>(loadGif())
   const [bg, setBg] = useState<BgCfg>(loadBg())
   const [lyr, setLyr] = useState<LyricsCfg>(loadLyricsCfg())
@@ -58,6 +63,40 @@ export function MusicSettings({ onClose, onChange }: { onClose: () => void; onCh
     <Portal><div className="ms-overlay" onClick={onClose}>
       <div className="ms-modal" onClick={e => e.stopPropagation()}>
         <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
+
+        {/* ── Обработка звука (v1.442.0) ───────────────────────────────── */}
+        <div className="ms-sec"><Icon name="soundboard" size={15} /> Звук</div>
+        <div className="ms-hint">
+          Работает для треков, которые Ponoi играет сам. У YouTube и SoundCloud звук идёт
+          внутри их окна — туда приложению хода нет, и обработка на них не действует.
+        </div>
+        <div className="ms-row">
+          <span>Эквалайзер</span>
+          <div className="ms-eq">
+            {(['off', 'bass', 'vocal', 'treble', 'night'] as const).map(k => (
+              <button key={k} className={dsp.eq === k ? 'on' : ''} onClick={() => onDsp({ ...dsp, eq: k })}>
+                {EQ_LABEL[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ms-row">
+          <span>Глухой звук<small>Будто из соседней комнаты</small></span>
+          <button className={'ms-tog' + (dsp.muffle ? ' on' : '')} onClick={() => onDsp({ ...dsp, muffle: !dsp.muffle })}>
+            {dsp.muffle ? 'Включено' : 'Выключено'}
+          </button>
+        </div>
+        <div className="ms-row">
+          <span>Эхо</span>
+          <div className="ms-eq">
+            {([0, 1, 2] as const).map(v => (
+              <button key={v} className={dsp.echo === v ? 'on' : ''} onClick={() => onDsp({ ...dsp, echo: v })}>
+                {v === 0 ? 'Нет' : v === 1 ? 'Комната' : 'Зал'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ms-hint">{dspSummary(dsp)}</div>
 
         <div className="ms-sec"><Icon name="film" size={15} /> Гифки по бокам</div>
         {/* v1.418.0: раньше здесь было голое поле «URL гифки» и три кнопки без

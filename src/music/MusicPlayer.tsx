@@ -15,6 +15,9 @@ import { uploadTo } from '../lib/storage'
 import { fetchTracks, fetchTracksPage, fetchTracksAfter, tracksCount, rowToTrack, TRACKS_PAGE, addTrack, removeTrackDb, updateTrackMeta, isDuplicateTrack, recordPlay, myPlayCounts } from '../lib/music'
 import { mergeTracks } from './mergeTracks'
 import { sendTrackToFriend } from './shareTrack'
+import { trackScore, suggestQuery } from './fuzzy'
+import { buildDsp, readDsp, dspActive, type DspSettings, type DspChain } from './dsp'
+import { smartMix, mixSummary, MIX_SIZE } from './smartMix'
 import { emptyHist, pushPlayed, back as histBack, forward as histForward, recentIds, canForward, type Hist } from './history'
 import { loadLibrary, saveLibrary, libraryPlan } from './libCache'
 import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
@@ -147,6 +150,42 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const miniDrag = useDragBar()
   const [lobby, setLobby] = useState<{ id: string; name: string; avatar: string | null; host: boolean }[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
+  /**
+   * Обработка звука (v1.442.0): эквалайзер, «глухо», эхо.
+   *
+   * Работает только для того звука, который приложение играет само. У YouTube и
+   * SoundCloud звук живёт внутри их окна, и добраться до него нечем — там
+   * обработка не применяется, и в настройках об этом написано прямо.
+   *
+   * Цепочка строится ОДИН раз на элемент: createMediaElementSource можно позвать
+   * для одного элемента ровно однажды, второй вызов бросает ошибку и оставляет
+   * плеер без звука совсем — это первое, на чём тут можно всё сломать.
+   */
+  const [dsp, setDsp] = useState<DspSettings>(() => readDsp(localStorage.getItem('ponoi_mus_dsp')))
+  const dspRef = useRef<{ ctx: AudioContext; src: MediaElementAudioSourceNode; chain: DspChain } | null>(null)
+  useEffect(() => {
+    const el = audioRef.current
+    if (!el || !dspActive(dsp)) { dspRef.current?.chain.apply(dsp); return }
+    if (!dspRef.current) {
+      try {
+        const Ctor = window.AudioContext || (window as any).webkitAudioContext
+        const ctx: AudioContext = new Ctor()
+        const src = ctx.createMediaElementSource(el)
+        const chain = buildDsp(ctx, ctx.destination)
+        src.connect(chain.input)
+        dspRef.current = { ctx, src, chain }
+      } catch { return }   // нет WebAudio — играем как есть, это не повод падать
+    }
+    const d = dspRef.current
+    if (!d) return
+    if (d.ctx.state === 'suspended') void d.ctx.resume().catch(() => {})
+    d.chain.apply(dsp)
+  }, [dsp])
+  useEffect(() => () => { dspRef.current?.chain.dispose(); void dspRef.current?.ctx.close().catch(() => {}) }, [])
+  const saveDsp = (d: DspSettings) => {
+    setDsp(d)
+    try { localStorage.setItem('ponoi_mus_dsp', JSON.stringify(d)) } catch { /* переполнено */ }
+  }
   const fileRef = useRef<HTMLInputElement>(null)
   const togChan = useRef<any>(null)
   const scRef = useRef<HTMLIFrameElement>(null)
@@ -2008,19 +2047,34 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // Порядок и поиск по складу — тоже не на каждый тик полосы времени, а только
   // когда меняется склад, метаданные или строка поиска.
   const libAll = useMemo(() => {
-    const q = libQ.trim().toLowerCase()
+    const q = libQ.trim()
     // v1.406.0: склад выкладывается по прослушиваниям, а не по времени
     // добавления: порядок добавления — это про того, кто когда принёс трек, а
     // зашедшему послушать он не говорит ничего. Сортируется только показ: по
     // порядку самого tracks считается номер играющего.
     const ordered = libraryOrder(tracks)
     if (!q) return ordered
-    return ordered.filter(t => {
-      const title = (meta[t.url]?.title || t.name || '').toLowerCase()
-      const author = (meta[t.url]?.author || t.author || '').toLowerCase()
-      return title.includes(q) || author.includes(q)
-    })
+    // v1.442.0: поиск прощает опечатки, другую раскладку и «ё» (см. fuzzy.ts).
+    // Раньше сравнение шло через includes: одна лишняя буква — и трек «не
+    // найден», хотя лежит прямо тут. На восьми тысячах песен это читалось как
+    // «поиск не работает»: человек не знает, что ошибся, он видит пустоту.
+    // Порядок — по близости к запросу, иначе точное совпадение тонуло бы среди
+    // найденного через две опечатки.
+    const scored: { t: typeof ordered[number]; s: number }[] = []
+    for (const t of ordered) {
+      const sc = trackScore(q, t, meta[t.url]?.title || t.name, meta[t.url]?.author || t.author)
+      if (sc > 0) scored.push({ t, s: sc })
+    }
+    scored.sort((a, b) => b.s - a.s)
+    return scored.map(x => x.t)
   }, [tracks, meta, libQ])
+
+  // Подсказка «возможно, вы имели в виду» — только когда не нашлось ничего.
+  const libHint = useMemo(() => {
+    if (!libQ.trim() || libAll.length > 0) return ''
+    const names = tracks.slice(0, 2000).map(t => meta[t.url]?.title || t.name || '')
+    return suggestQuery(libQ, names)[0] ?? ''
+  }, [libQ, libAll.length, tracks, meta])
   const reco = useMemo(() => {
     if (!cur || tracks.length < 2) return null
     const enriched = tracks.map(t => ({
@@ -2651,7 +2705,33 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               })()}
             </> : <>
             {tracks.length > 1 && !libQ.trim() && (
-              <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
+              <div className="mus2-lib-row">
+                <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
+                {/* v1.442.0: «Подборка» — собрать интересное одним нажатием.
+                    Тот же подбор, что у волны, просто вызванный подряд: свой
+                    второй алгоритм развёл бы «что советуют» и «что играет». */}
+                <button className="mus2-mixbtn" disabled={guest || tracks.length < 3}
+                  title="Собрать подборку под себя и включить"
+                  onClick={() => {
+                    const enriched = tracks.map(t => ({
+                      ...t, name: meta[t.url]?.title || t.name, author: meta[t.url]?.author || t.author,
+                    }))
+                    const mix = smartMix({
+                      tracks: enriched, plays: myPlays, lastAt, now: Date.now(),
+                      recent: recentRef.current, from: idx, size: MIX_SIZE,
+                      skip: t => unplayable(tracks.find(x => x.id === t.id)),
+                    })
+                    if (mix.length === 0) { toastErr('Не нашлось, из чего собрать подборку'); return }
+                    const [first, ...rest] = mix
+                    saveManual(rest.map(t => t.id))
+                    const i = byId.get(first.id) ?? -1
+                    if (i >= 0) { playAt(i); setPlaying(true) }
+                    setShowLib(false)
+                    toastOk('Подборка готова — ' + mixSummary(mix))
+                  }}>
+                  <Icon name="wand" size={15} /> Подборка
+                </button>
+              </div>
             )}
             {(() => {
               const all = libAll   // v1.434.0: посчитано выше и только при нужде
@@ -2666,7 +2746,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 // живёт наверху и в этот момент не на виду.
                 return <div className="mus2-empty center mus2-noresult">
                   <div className="mus2-noresult-t">Ничего не нашлось по запросу «{libQ.trim()}»</div>
-                  <div className="mus2-noresult-s">Этой песни ещё нет в Трекотеке. Загрузи свой файл — он появится у всех.</div>
+                  {libHint
+                    ? <div className="mus2-noresult-s">
+                        Возможно, имелось в виду{' '}
+                        <button className="mus2-noresult-hint" onClick={() => setLibQ(libHint)}>{libHint}</button>
+                      </div>
+                    : <div className="mus2-noresult-s">Этой песни ещё нет в Трекотеке. Загрузи свой файл — он появится у всех.</div>}
                   <button className="mus2-noresult-b" onClick={() => fileRef.current?.click()}>
                     <Icon name="paperclip" size={15} /> Загрузить свой файл
                   </button>
@@ -2776,7 +2861,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         onPlaying={() => { if (cur) markOk(cur.id) }}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
         onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
-      {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} />}
+      {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} dsp={dsp} onDsp={saveDsp} />}
       {/* v1.394.0: окно текста песни. Через портал, как и остальные окна плеера:
           изнутри .mus2 со своим слоем окно не выбирается и прижимается к низу. */}
       {lyrEdit !== null && cur && <Portal>

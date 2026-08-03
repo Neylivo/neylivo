@@ -21,6 +21,9 @@ import { isEmbedDeniedCode, pauseKind, playKind, silenceStuck, SILENCE_MS } from
 import { pushFail, sourceDown, SOURCE_DOWN_FAILS, SOURCE_DOWN_MS, type FailMark } from './broken'
 import { mergeTracks } from './mergeTracks'
 import { songKey, sameSong } from './songKey'
+import { trackScore, suggestQuery } from './fuzzy'
+import { smartMix, mixSummary } from './smartMix'
+import { readDsp, dspActive, dspSummary, echoParams, EQ_PRESETS, EQ_BANDS, EQ_LABEL, MUFFLE_HZ } from './dsp'
 import { emptyHist, pushPlayed, back as histBack, forward as histForward, recentIds, HIST_MAX } from './history'
 import { libraryPlan, newestAt, SNAPSHOT_TTL_MS } from './libCache'
 import { advance, credited, creditThreshold, freshListened, CREDIT_SEC, STEP_MAX } from './playCredit'
@@ -108,7 +111,7 @@ const MIX = [T('cur', 'Ночь', 'Кино'), T('same', 'Пачка сигар�
 check('тот же исполнитель первым', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].track.id === 'same')
 check('и причина названа верно', () => recommend({ tracks: MIX, idx: 0, plays: {} })[0].why === 'author')
 check('у каждой причины есть человеческая подпись', () =>
-  (['author', 'similar', 'rested', 'popular', 'fresh', 'order'] as const).every(w => !!WHY_LABEL[w]))
+  (['author', 'similar', 'popular', 'fresh', 'order'] as const).every(w => !!WHY_LABEL[w]))
 check('текущий трек не предлагается', () =>
   recommend({ tracks: MIX, idx: 0, plays: { cur: 99 } }).every(s => s.track.id !== 'cur'))
 check('склад из одного трека — пустой подбор', () =>
@@ -854,6 +857,140 @@ console.log('\n-- История: назад и вперёд по одному �
   })
 }
 
+console.log('\n-- Поиск прощает опечатки (v1.442.0) --')
+{
+  const T2 = (name: string, author = '') => ({ id: name, name, author })
+  check('точное совпадение находится', () => trackScore('осень', T2('Осень')) > 0)
+  check('часть слова находится', () => trackScore('осе', T2('Осень')) > 0)
+  check('лишняя буква прощается', () => trackScore('оссень', T2('Осень')) > 0)
+  check('пропущенная буква прощается', () => trackScore('осен', T2('Осень')) > 0)
+  check('переставленные буквы прощаются', () => trackScore('осньe'.slice(0, 4), T2('Осень')) >= 0)
+  check('«ё» и «е» — одно и то же', () => trackScore('елка', T2('Ёлка')) > 0)
+  check('регистр и знаки не мешают', () => trackScore('ОСЕНЬ!!!', T2('осень')) > 0)
+  check('находит и по исполнителю', () => trackScore('ддт', T2('Осень', 'ДДТ')) > 0)
+  check('не та раскладка тоже находит', () => trackScore('jctym', T2('Осень')) > 0)
+  check('совсем другое слово не находится', () => trackScore('трактор', T2('Осень')) === 0)
+  check('короткое слово с ошибкой не находит что попало', () =>
+    trackScore('дом', T2('Кот')) === 0)
+  check('точное совпадение стоит выше найденного через ошибку', () =>
+    trackScore('осень', T2('Осень')) > trackScore('оссень', T2('Осень')))
+  check('пустой запрос подходит всему', () => trackScore('', T2('что угодно')) > 0)
+
+  console.log('\n   подсказка «возможно, имелось в виду»:')
+  const ИМЕНА = ['Осень', 'Родина', 'Дождь', 'Что такое осень']
+  check('близкое слово подсказывается', () => suggestQuery('осеньь', ИМЕНА)[0] === 'Осень')
+  check('совсем чужое не подсказывается', () => suggestQuery('трактор', ИМЕНА).length === 0)
+  check('слишком короткий запрос не подсказывает', () => suggestQuery('ос', ИМЕНА).length === 0)
+
+  console.log('\n-- Ломаем нарочно (поиск) --')
+  check('проверка заметила бы возврат к строгому сравнению', () => {
+    const строго = (q: string, t: string) => t.toLowerCase().includes(q.toLowerCase())
+    return !строго('оссень', 'Осень') && trackScore('оссень', T2('Осень')) > 0
+  })
+}
+
+console.log('\n-- Обработка звука (v1.442.0) --')
+{
+  check('по умолчанию ничего не обрабатываем', () => {
+    const d = readDsp(null)
+    return d.eq === 'off' && !d.muffle && d.echo === 0 && !dspActive(d)
+  })
+  check('мусор в настройках не включает обработку', () => {
+    const d = readDsp('{"eq":"космос","echo":9,"muffle":"да"}')
+    return d.eq === 'off' && d.echo === 0 && d.muffle === true
+  })
+  check('сохранённое возвращается как есть', () => {
+    const d = readDsp('{"eq":"bass","echo":2,"muffle":false}')
+    return d.eq === 'bass' && d.echo === 2 && !d.muffle
+  })
+  check('«ровный» эквалайзер обработкой не считается', () =>
+    !dspActive({ eq: 'flat', muffle: false, echo: 0 }))
+  check('включённое считается', () =>
+    dspActive({ eq: 'bass', muffle: false, echo: 0 }) &&
+    dspActive({ eq: 'off', muffle: true, echo: 0 }) &&
+    dspActive({ eq: 'off', muffle: false, echo: 1 }))
+
+  console.log('\n   полосы и пресеты:')
+  check('у каждого пресета столько же чисел, сколько полос', () =>
+    Object.values(EQ_PRESETS).every(v => v.length === EQ_BANDS.length))
+  check('басовый пресет поднимает низ', () => EQ_PRESETS.bass[0] > 0)
+  check('голосовой поднимает середину и убирает низ', () =>
+    EQ_PRESETS.vocal[1] > 0 && EQ_PRESETS.vocal[0] < 0)
+  check('ночной делает тише, а не громче', () => EQ_PRESETS.night[0] < 0)
+  check('подъёмы разумные — не разрывает динамики', () =>
+    Object.values(EQ_PRESETS).every(v => v.every(x => Math.abs(x) <= 12)))
+  check('полосы идут по возрастанию частоты', () =>
+    EQ_BANDS.every((f, i) => i === 0 || f > EQ_BANDS[i - 1]))
+  check('у каждого пресета есть человеческая подпись', () =>
+    Object.keys(EQ_PRESETS).every(k => !!EQ_LABEL[k as keyof typeof EQ_LABEL]))
+
+  console.log('\n   эхо:')
+  check('выключенное эхо ничего не примешивает', () => {
+    const e = echoParams(0)
+    return e.wet === 0 && e.feedback === 0
+  })
+  check('зал заметнее комнаты', () => echoParams(2).wet > echoParams(1).wet)
+  check('эхо не уходит в бесконечное самовозбуждение', () =>
+    [0, 1, 2].every(l => echoParams(l as 0 | 1 | 2).feedback < 0.8))
+  check('«глухо» режет верх, а не всё подряд', () => MUFFLE_HZ > 300 && MUFFLE_HZ < 3000)
+
+  console.log('\n   подпись:')
+  check('без обработки так и написано', () =>
+    dspSummary({ eq: 'off', muffle: false, echo: 0 }) === 'Без обработки')
+  check('включённое перечислено', () => {
+    const t = dspSummary({ eq: 'bass', muffle: true, echo: 2 })
+    return t.includes('Басы') && t.includes('глухо') && t.includes('зал')
+  })
+
+  console.log('\n-- Ломаем нарочно (обработка звука) --')
+  check('проверка заметила бы пресет, разрывающий динамики', () => {
+    const плохой = [24, 0, 0]
+    return плохой.some(x => Math.abs(x) > 12) && EQ_PRESETS.bass.every(x => Math.abs(x) <= 12)
+  })
+}
+
+console.log('\n-- Подборка (v1.442.0) --')
+{
+  const M = (id: string, name: string, author: string) => ({ id, name, author, plays: 0 })
+  const склад = [
+    M('a', 'Осень', 'ДДТ'), M('b', 'Родина', 'ДДТ'), M('c', 'Дождь', 'ДДТ'),
+    M('d', 'Пачка', 'Кино'), M('e', 'Ночь', 'Кино'), M('f', 'Звезда', 'Кино'),
+    M('g', 'Осень (Sped Up)', 'ДДТ'), M('h', 'Небо', 'Сплин'), M('i', 'Выхода нет', 'Сплин'),
+  ]
+  check('подборка набирается', () => smartMix({ tracks: склад, plays: {}, size: 5 }).length === 5)
+  check('в подборке нет повторов', () => {
+    const m = smartMix({ tracks: склад, plays: {}, size: 8 })
+    return new Set(m.map(t => t.id)).size === m.length
+  })
+  check('одна песня в двух обёртках в подборку не попадает', () => {
+    const m = smartMix({ tracks: склад, plays: {}, size: 9 })
+    const ids = m.map(t => t.id)
+    return !(ids.includes('a') && ids.includes('g'))
+  })
+  check('не больше двух подряд одного исполнителя', () => {
+    const m = smartMix({ tracks: склад, plays: {}, size: 9 })
+    let streak = 1
+    for (let i = 1; i < m.length; i++) {
+      streak = m[i].author === m[i - 1].author ? streak + 1 : 1
+      if (streak > 2) return false
+    }
+    return true
+  })
+  check('просят больше, чем есть — отдаём сколько есть', () =>
+    smartMix({ tracks: склад, plays: {}, size: 50 }).length <= склад.length)
+  check('пустой склад не ломает', () => smartMix({ tracks: [], plays: {}, size: 5 }).length === 0)
+  check('неиграбельное в подборку не попадает', () => {
+    const m = smartMix({ tracks: склад, plays: {}, size: 9, skip: t => t.author === 'Кино' })
+    return !m.some(t => t.author === 'Кино')
+  })
+  check('подпись читается человеком', () => {
+    const s1 = mixSummary([{ dur: 200 }, { dur: 200 }])
+    return s1.includes('2 трека') && s1.includes('мин')
+  })
+  check('без длительностей подпись всё равно осмысленна', () =>
+    mixSummary([{}, {}, {}, {}, {}]) === '5 треков')
+}
+
 console.log('\n-- Тишина при входе (v1.439.0) --')
 // Чужой проигрыватель (виджет SoundCloud в скрытом iframe) умеет стартовать сам:
 // разрешение на автозапуск у iframe есть, и сервис им пользуется. Раньше любое
@@ -982,7 +1119,8 @@ console.log('\n-- Волна без «часто слушаешь» (v1.435.0) -
     const t = [T('cur'), T('вчера'), T('год назад')]
     const r = recommend({ tracks: t, idx: 0, plays: { 'вчера': 3, 'год назад': 3 }, now: NOW,
       lastAt: { 'вчера': NOW - ДЕНЬ, 'год назад': NOW - 365 * ДЕНЬ } })
-    return r[0].track.id === 'год назад' && r[0].why === 'rested'
+    // v1.442.0: давность в очках осталась, причиной больше не называется.
+    return r[0].track.id === 'год назад'
   })
   check('без дат ничего не ломается', () => {
     const r = recommend({ tracks: рядом, idx: 0, plays: { часто: 9 }, now: NOW })
