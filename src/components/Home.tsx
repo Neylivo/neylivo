@@ -1,3 +1,4 @@
+import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -458,7 +459,7 @@ export function Home() {
     // уже показанный (из кэша или прошлого успешного ответа) список.
     let list: Server[]
     try { list = await myServers(); netOk() }
-    catch (e) { netFail(); console.error('[servers] load failed:', e); return }
+    catch (e) { netFail(); logErr('servers]', e); return }
     setServers(list)
     // Умолчание уведомлений, заданное владельцем сервера, — оно нужно srvNotify,
     // а тот про сами серверы ничего не знает (v1.332.0).

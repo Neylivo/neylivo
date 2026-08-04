@@ -7,6 +7,7 @@
 // workers), every function quietly no-ops so the app keeps working. This is the
 // real-push path that fires even when the app/tab is closed; the in-app
 // Notification API path (notify.ts) still covers the open-but-unfocused case.
+import { logErr, logWarn } from './log'
 import { supabase } from './supabase'
 
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
@@ -55,7 +56,7 @@ export async function registerPush(userId: string): Promise<void> {
     })
   } catch (e) {
     // best-effort — never break the app because of push
-    console.warn('registerPush failed', e)
+    logWarn('push-register', e)
   }
 }
 
@@ -78,6 +79,6 @@ export async function sendPush(userIds: string[], title: string, body: string, u
     if (!targets.length) return
     await supabase.functions.invoke('send-push', { body: { userIds: targets, title, body, url, ctx } })
   } catch (e) {
-    console.warn('sendPush failed', e)
+    logWarn('push-send', e)
   }
 }

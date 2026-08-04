@@ -1,3 +1,4 @@
+import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
 import { netOk, netFail } from '../lib/netStatus'
 import { confirmUi, promptUi } from '../lib/confirm'
@@ -504,10 +505,10 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
   // v1.274.0: listMembers/fetchRoles теперь бросают на сбое сети (не глотают error
   // молча) — здесь просто ловим и логируем, чтобы не плодить unhandled rejection
   // и не затирать уже показанный список участников/ролей пустым при отказе.
-  async function loadMembers() { try { setMembers(await listMembers(server.id)) } catch (e) { console.error('[members] load failed:', e) } }
+  async function loadMembers() { try { setMembers(await listMembers(server.id)) } catch (e) { logErr('members]', e) } }
   async function loadRoles() {
     try { setRoles(await fetchRoles(server.id)); setMemberRoles(await fetchMemberRoles(server.id)) }
-    catch (e) { console.error('[roles] load failed:', e) }
+    catch (e) { logErr('roles]', e) }
   }
 
   async function loadChannels() {
@@ -517,7 +518,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // хотя ты просто на секунду потерял связь. При сбое просто не трогаем
     // уже показанное состояние.
     const { data, error } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
-    if (error) { netFail(); console.error('[channels] load failed:', error); return }
+    if (error) { netFail(); logErr('channels]', error); return }
     netOk()
     const list = data ?? []
     setChannels(list)
@@ -584,7 +585,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // v1.274.0: при сбое сети раньше всё равно шли в setMessages([]) — стирали уже
     // показанный кэш (cachedList чуть выше) реальной пустой лентой. Оставляем кэш
     // как есть при сбое, а не притворяемся, что в канале никогда не было сообщений.
-    if (error) { netFail(); console.error('[messages] load failed:', error); return }
+    if (error) { netFail(); logErr('messages]', error); return }
     netOk()
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
@@ -760,7 +761,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       // v1.274.0: сбой сети раньше молча читался как «старых сообщений больше нет»
       // (hasMore=false навсегда для этого канала) — теперь просто не трогаем
       // hasMore, следующая прокрутка вверх honestly попробует ещё раз.
-      if (error) { netFail(); console.error('[messages] loadOlder failed:', error); return }
+      if (error) { netFail(); logErr('messages] loadOlder', error); return }
       netOk()
       const older = ((data ?? []) as Message[]).reverse()
       hasMore.current = older.length === 50

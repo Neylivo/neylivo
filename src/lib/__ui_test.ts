@@ -17,6 +17,9 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { okColor, okColors, encodeTheme, decodeTheme, addPreset, removePreset, MAX_PRESETS } from './themePresets'
+import { shortReason, logLine } from './log'
+import { shouldDismiss } from './dismiss'
 import { flowContext, flowPrompt } from './flow'
 import { layoutFlow, orderNodes, linkPath, flowProgress, NODE_W, NODE_H } from './flow'
 import { makeSseReader, buildRequest, aiReady, whyFailed } from './gameAi'
@@ -2117,6 +2120,134 @@ check('проверка ловит вопрос без прогресса', () =
   const голый = flowPrompt('Игра', [], 'вопрос')
   const полный = flowPrompt('Игра', вехи, 'вопрос')
   return !голый.includes('50%') && полный.includes('50%')
+})
+
+
+// -- v1.460.0: панели закрываются щелчком мимо -------------------------------
+// Выбор эмодзи и гифок закрывался ТОЛЬКО повторным нажатием на тот же значок.
+// Щелчок мимо не делал ничего — панель висела поверх переписки. Здесь три
+// тонкости, и все три ловятся не глазами, а проверкой.
+console.log('\n-- Закрытие всплывающих панелей --')
+const узел = (внутри: any[] = []) => ({
+  contains: (x: any) => внутри.includes(x),
+}) as any
+
+check('щелчок внутри панели её не закрывает', () => {
+  const внутренний = {}
+  return !shouldDismiss(внутренний, узел([внутренний]), null)
+})
+check('щелчок по самой панели её не закрывает', () => {
+  const панель = узел([])
+  return !shouldDismiss(панель, панель, null)
+})
+check('нажатие по открывающему значку «мимо» не считается', () => {
+  // Иначе панель закрылась бы тем же нажатием, которым открылась, — то есть
+  // не открылась бы вовсе.
+  const значок = узел([])
+  return !shouldDismiss(значок, узел([]), значок)
+})
+check('щелчок в стороне закрывает', () =>
+  shouldDismiss({}, узел([]), узел([])))
+check('без панели и значка любой щелчок закрывает', () =>
+  shouldDismiss({}, null, null))
+check('мусор вместо узла не роняет проверку', () =>
+  shouldDismiss(null, узел([]), null) && shouldDismiss(undefined, null, null))
+
+console.log('\n-- Ломаем нарочно (панели) --')
+check('проверка ловит закрытие по собственному значку', () => {
+  const значок = узел([])
+  // Так и было бы, если забыть про значок: открыл и тут же закрыл.
+  return shouldDismiss(значок, узел([]), null) && !shouldDismiss(значок, узел([]), значок)
+})
+
+
+// -- v1.460.0: что уходит в консоль ------------------------------------------
+// Ошибки печатались как есть, вместе с объектом: в одном месте прямо уезжали
+// настройки человека. Консоль собранного приложения открывает кто угодно.
+console.log('\n-- Записи в консоль --')
+
+check('наружу уходит только короткая причина', () =>
+  shortReason(new Error('не вышло')) === 'не вышло'
+  && shortReason('строкой') === 'строкой')
+check('объект не разворачивается', () => {
+  // Именно в объекте и приезжает лишнее — запрос, заголовки, куски данных.
+  const с_данными: any = { message: 'отказ', token: 'секрет', payload: { имя: 'вася' } }
+  const r = shortReason(с_данными)
+  return r === 'отказ' && !r.includes('секрет') && !r.includes('вася')
+})
+check('ошибка без описания не роняет запись', () =>
+  shortReason({}) === 'ошибка без описания' && shortReason(null) === '')
+check('длинная причина обрезается', () =>
+  shortReason(new Error('я'.repeat(900))).length <= 200)
+
+check('в собранном приложении подробностей нет', () =>
+  logLine('roles', new Error('таблица не найдена'), true) === '[roles]')
+check('при разработке подробности остаются', () =>
+  logLine('roles', new Error('таблица не найдена'), false) === '[roles] таблица не найдена')
+
+console.log('\n-- Ломаем нарочно (консоль) --')
+check('проверка ловит утечку данных в запись', () => {
+  const с_данными: any = { message: 'отказ', patch: { тема: 'тёмная', ключ: 'секрет' } }
+  const было = JSON.stringify(с_данными)          // так печаталось раньше
+  const стало = logLine('user-prefs', с_данными, false)
+  return было.includes('секрет') && !стало.includes('секрет')
+})
+
+
+// -- v1.460.0: свои темы наборами --------------------------------------------
+// Набор своих цветов был ровно один: собрал тему под вечер, захотел светлую на
+// день — старую запоминай на бумажке. И поделиться было нечем.
+console.log('\n-- Свои темы --')
+const цвета = { dark: '#111111', content: '#222222', panel: '#333333',
+  hover: '#444444', active: '#555555', accent: '#5865f2' }
+
+check('полный набор цветов принимается', () => !!okColors(цвета))
+check('неполный или кривой набор — нет', () =>
+  !okColors({ ...цвета, accent: 'синий' }) && !okColors({ dark: '#111111' }) && !okColors(null))
+check('цвет приводится к одному виду', () => okColor('#ABCDEF') === '#abcdef' && okColor('оранжевый') === null)
+
+check('тема кодируется и читается обратно', () => {
+  const код = encodeTheme('Моя тема', цвета)
+  const t = decodeTheme(код)
+  return !!t && t.name === 'Моя тема' && JSON.stringify(t.colors) === JSON.stringify(цвета)
+})
+check('код видно глазом, что это тема', () => encodeTheme('X', цвета).startsWith('ponoi-theme:'))
+check('чужая строка темой не притворяется', () =>
+  decodeTheme('привет') === null && decodeTheme('ponoi-theme:X:мусор') === null
+  && decodeTheme('') === null)
+check('обрезанный код не применяется наполовину', () =>
+  decodeTheme('ponoi-theme:X:111111-222222') === null)
+check('название с двоеточием не ломает разбор', () => {
+  const t = decodeTheme(encodeTheme('Тема: вечер', цвета))
+  return !!t && t.colors.accent === '#5865f2'
+})
+
+check('одинаковое имя заменяет, а не плодит', () => {
+  let l = addPreset([], 'Моя', цвета, 1)
+  l = addPreset(l, 'моя', { ...цвета, accent: '#ff0000' }, 2)
+  return l.length === 1 && l[0].colors.accent === '#ff0000'
+})
+check('свежая тема оказывается сверху', () => {
+  let l = addPreset([], 'Первая', цвета, 1)
+  l = addPreset(l, 'Вторая', цвета, 2)
+  return l[0].name === 'Вторая'
+})
+check('список не растёт без предела', () => {
+  let l: any[] = []
+  for (let i = 0; i < 40; i++) l = addPreset(l, 'Т' + i, цвета, i)
+  return l.length === MAX_PRESETS
+})
+check('удаление убирает ровно одну', () => {
+  let l = addPreset(addPreset([], 'A', цвета, 1), 'B', цвета, 2)
+  l = removePreset(l, 'a')
+  return l.length === 1 && l[0].name === 'B'
+})
+
+console.log('\n-- Ломаем нарочно (темы) --')
+check('проверка ловит применение чужой строки как темы', () => {
+  // Молча применить непонятную строку — значит перекрасить приложение неизвестно
+  // во что и не сказать, почему.
+  return decodeTheme('ponoi-theme:Взлом:zzzzzz-222222-333333-444444-555555-666666') === null
 })
 
 

@@ -1,3 +1,4 @@
+import { logErr, logWarn } from '../lib/log'
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const finish = (s: Session | null) => { if (done) return; done = true; setSession(s); setLoading(false) }
     supabase.auth.getSession()
       .then(({ data }) => finish(data.session))
-      .catch(err => { console.error('[auth] getSession failed:', err); finish(null) })
+      .catch(err => { logErr('auth] getSession', err); finish(null) })
     const timeout = setTimeout(() => finish(null), 15000)
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => { clearTimeout(timeout); sub.subscription.unsubscribe() }

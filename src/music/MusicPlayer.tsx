@@ -55,6 +55,8 @@ import { resolveNext, type StopWhy } from './nextTrack'
 import { useDragBar } from './useDragBar'
 import { isYouTubeUrl, parseYouTubeId, ytMeta, isAudiusUrl, audiusMeta, loadYtApi, cachedMeta as srcCached } from './sources'
 import { planMeta, seedFromCache, needsFetch } from './metaPlan'
+import { saveSession, loadSession, clearSession, worthSaving, findTrack } from './session'
+import { LiveBg } from './MusicLiveBg'
 import { serviceOf, streamingMeta, findPlayable, titleFromUrl, isStreamingUrl, SERVICE_NAME } from './streaming'
 import { openSafely } from '../lib/safeUrl'
 import { artColor, boost, lighten, scale, rgb, type Rgb } from './artColor'
@@ -623,6 +625,40 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     return () => window.removeEventListener('ponoi-uprefs', onSync)
   }, [])
   useEffect(() => { curTRef.current = curT }, [curT])
+
+  // v1.460.0: плеер помнит, на чём остановился. Раньше громкость помнилась, а
+  // сам сеанс — нет: закрыл приложение и ищи заново, где слушал.
+  //
+  // Пишем не на каждую секунду, а раз в несколько: запись в хранилище на каждый
+  // тик — это лишняя работа шестьдесят раз в минуту ради того, что понадобится
+  // один раз при следующем запуске.
+  const сеансRef = useRef(0)
+  useEffect(() => {
+    const t = cur
+    if (!t || !playing) return
+    if (Math.abs(curT - сеансRef.current) < 5) return
+    сеансRef.current = curT
+    const длина = dur || t.dur || 0
+    if (worthSaving(curT, длина)) saveSession({ id: t.id, url: t.url, pos: curT, at: Date.now() })
+    else clearSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curT, playing, cur?.id])
+
+  /** Куда перемотать, как только источник будет готов (см. восстановление ниже). */
+  const seekWanted = useRef<number | null>(null)
+  // Восстановление: ставим трек и место, но НЕ включаем. Приложение, которое
+  // начинает играть само при запуске, — это то, за что выключают звук навсегда.
+  const восстановлено = useRef(false)
+  useEffect(() => {
+    if (восстановлено.current || tracks.length === 0) return
+    восстановлено.current = true
+    const s = loadSession()
+    const i = findTrack(s, tracks)
+    if (i < 0 || !s) return
+    goIdx(i)
+    setCurT(s.pos)
+    seekWanted.current = s.pos
+  }, [tracks])
   /**
    * Активность «Слушает…» (v1.425.0 — переписана публикация).
    *
@@ -2251,6 +2287,11 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
 
   return (<>
     <main className={'mus2' + (bg.type !== 'none' && bgUrl ? ' hasbg' : '') + (acc ? ' tinted' : '') + (full ? ' full' : '') + (visible ? '' : ' mus2-hidden')} style={musStyle}>
+      {/* v1.460.0: живой фон — узор из цвета обложки, который медленно движется.
+          Показывается, когда своей картинки-фона нет: поверх неё это была бы
+          каша. Один и тот же трек даёт один и тот же рисунок (см. liveBg.ts). */}
+      {cur && !(bg.type !== 'none' && bgUrl) && <LiveBg trackKey={cur.url}
+        accent={acc ? '#' + [acc.r, acc.g, acc.b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null} />}
       {bg.type !== 'none' && bgUrl && <>
         {bg.type === 'video'
           ? <video className="musbg" src={bgUrl} autoPlay loop muted playsInline />
@@ -2932,7 +2973,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         onError={() => trackFailed('Трек не открылся', cur?.id)}
         onPlaying={() => { if (cur) markOk(cur.id) }}
         onTimeUpdate={e => setCurT((e.target as HTMLAudioElement).currentTime)}
-        onLoadedMetadata={e => setDur((e.target as HTMLAudioElement).duration)} />
+        onLoadedMetadata={e => {
+          const a = e.target as HTMLAudioElement
+          setDur(a.duration)
+          // v1.460.0: место из прошлого сеанса применяем ровно здесь — раньше
+          // источник его молча проглатывал, потому что ещё не знал длины.
+          const хочем = seekWanted.current
+          if (хочем != null && хочем > 0 && хочем < (a.duration || Infinity)) {
+            a.currentTime = хочем
+            setCurT(хочем)
+          }
+          seekWanted.current = null
+        }} />
       {settings && <MusicSettings onClose={() => setSettings(false)} onChange={refreshCfg} dsp={dsp} onDsp={saveDsp} />}
       {/* v1.394.0: окно текста песни. Через портал, как и остальные окна плеера:
           изнутри .mus2 со своим слоем окно не выбирается и прижимается к низу. */}

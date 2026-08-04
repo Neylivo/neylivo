@@ -4,6 +4,7 @@
 // видна только владельцу. В отличие от profilePrefs.ts (публичная карточка профиля),
 // это личные данные — но они должны быть одинаковы на всех устройствах аккаунта,
 // поэтому больше не живут в localStorage.
+import { logErr, logWarn } from './log'
 import { supabase } from './supabase'
 
 export interface UserPrefsRow {
@@ -87,7 +88,9 @@ export function patchUserPrefs(patch: Partial<UserPrefsRow>) {
     window.setTimeout(() => {
       supabase.from('user_prefs').upsert({ user_id: save, ...patch, updated_at: new Date().toISOString() }).then(({ error: e2 }) => {
         if (!e2) return
-        console.error('patchUserPrefs: не удалось сохранить (повтор тоже не помог)', e2.message, patch)
+        // v1.460.0: сюда печатался сам patch — то есть настройки человека уезжали в
+        // консоль, которую открывает кто угодно. Оставляем только причину.
+        logErr('user-prefs', e2)
         // v1.337.0: раньше отказ уходил только в консоль. Настройка при этом
         // оставалась применённой на этом устройстве, но на сервер не попадала —
         // и следующая синхронизация возвращала старое значение. Со стороны это

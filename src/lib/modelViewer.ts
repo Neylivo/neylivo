@@ -1,3 +1,4 @@
+import { logErr, logWarn } from './log'
 // v1.298.0: 3D-питомцы профиля. Раньше библиотека подключалась скриптом с
 // ajax.googleapis.com прямо в index.html — то есть при КАЖДОМ запуске приложения,
 // даже у тех, кто ни одного трёхмерного питомца не увидит.
@@ -19,7 +20,7 @@ export function ensureModelViewer(): Promise<unknown> {
   // вызов безопасен: промис один на всё приложение.
   if (!loading) loading = import('@google/model-viewer').catch(err => {
     // Не удалось — питомец просто не покажется объёмным. Это не повод ронять профиль.
-    console.warn('3D-питомец недоступен:', err)
+    logWarn('3d-pet', err)
   })
   return loading
 }

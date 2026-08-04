@@ -1,3 +1,5 @@
+import { copyText } from '../lib/copyMedia'
+import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
 import { useBackClose } from '../lib/mobileBack'
@@ -24,6 +26,10 @@ import { myFingerprint } from '../lib/crypto/keys'
 import { SignOutModal } from './SignOutModal'
 import { IS_MOBILE } from '../lib/mobile'
 import { loadAi, saveAi, DEFAULT_MODEL as AI_DEFAULT_MODEL, KEY_HELP as AI_KEY_HELP } from '../lib/gameAi'
+import {
+  loadPresets, addPreset, removePreset, encodeTheme, decodeTheme, okColors,
+  COLOR_KEYS as THEME_KEYS, MAX_NAME as THEME_MAX_NAME,
+} from '../lib/themePresets'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
@@ -276,6 +282,11 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
   function saveSteamId(v: string) { setProfD('steamId', v.trim() || null) }
   // v1.453.0: настройки ИИ-подсказок по игре (ключ лежит на устройстве).
   const [aiCfg, setAiCfg] = useState(() => loadAi())
+  // v1.460.0: свои темы наборами (см. lib/themePresets.ts).
+  const [presets, setPresets] = useState(() => loadPresets())
+  const [themeName, setThemeName] = useState('')
+  const [themeCode, setThemeCode] = useState('')
+
 
   // v1.166.0: свои звуки — уведомление о сообщении, рингтон входящего, гудки
   // исходящего. Приватная account-настройка (см. src/lib/userPrefs.ts), синхронизируется
@@ -588,7 +599,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
     if (finalNick !== orig.name && user) {
       supabase.from('server_members').update({ member_name: finalNick })
         .eq('user_id', user.id).eq('nickname_override', false)
-        .then(({ error }) => { if (error) console.warn('member_name sync failed', error.message) })
+        .then(({ error }) => { if (error) logWarn('member_name sync', error.message) })
     }
     setName(finalNick); setUname(finalUname)
     setOrig({ name: finalNick, uname: finalUname, about, primary, accent })
@@ -993,6 +1004,54 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   <div className="pqs-custom-foot">
                     <label className="pqs-custom-toggle"><input type="checkbox" checked={view.custom.on} onChange={e => setCustomD({ on: e.target.checked })} /> Использовать свою тему</label>
                     <button className="pqs-save" onClick={() => setCustomD({ on: false })}>Сбросить</button>
+                  </div>
+
+                  {/* v1.460.0: свои темы НАБОРАМИ. Раньше набор был ровно один:
+                      собрал тему под вечер, захотел светлую на день — старую
+                      надо было запоминать на бумажке. И поделиться было нечем. */}
+                  <div className="pqs-custom-h" style={{ marginTop: 18 }}>Мои темы</div>
+                  <div className="pqs-custom-sub">
+                    Сохрани нынешние цвета под своим названием — и переключайся между темами одним нажатием.
+                    Кодом темы можно поделиться: он короткий, его видно в переписке.
+                  </div>
+                  <div className="pqs-theme-save">
+                    <input className="pqs-in" value={themeName} onChange={e => setThemeName(e.target.value)}
+                      placeholder="Название темы" maxLength={THEME_MAX_NAME} />
+                    <button className="pqs-save" disabled={!themeName.trim()} onClick={() => {
+                      const c = okColors(view.custom)
+                      if (!c) { toastErr('В теме есть цвет, который приложение не понимает'); return }
+                      setPresets(addPreset(presets, themeName, c))
+                      setThemeName('')
+                      toastOk('Тема сохранена')
+                    }}>Сохранить тему</button>
+                  </div>
+                  {presets.length > 0 && <div className="pqs-theme-list">
+                    {presets.map(pr => (
+                      <div key={pr.name} className="pqs-theme-row">
+                        <span className="pqs-theme-dots">
+                          {THEME_KEYS.map(k => <i key={k} style={{ background: pr.colors[k] }} />)}
+                        </span>
+                        <span className="pqs-theme-nm">{pr.name}</span>
+                        <button className="pqs-code-copy" onClick={() => setCustomD({ ...pr.colors, on: true } as any)}>Включить</button>
+                        <button className="pqs-code-copy" title="Скопировать код темы"
+                          onClick={() => copyText(encodeTheme(pr.name, pr.colors), 'Код темы скопирован')}>Код</button>
+                        <button className="pqs-custom-x" title="Удалить" onClick={() => setPresets(removePreset(presets, pr.name))}>✕</button>
+                      </div>
+                    ))}
+                  </div>}
+                  <div className="pqs-theme-save">
+                    <input className="pqs-in" value={themeCode} onChange={e => setThemeCode(e.target.value)}
+                      placeholder="Вставь код темы, чтобы добавить её себе" />
+                    <button className="pqs-save" disabled={!themeCode.trim()} onClick={() => {
+                      const t = decodeTheme(themeCode)
+                      // Молча применять чужую строку нельзя: непонятно, что это
+                      // было и почему ничего не изменилось.
+                      if (!t) { toastErr('Это не код темы Ponoi'); return }
+                      setPresets(addPreset(presets, t.name, t.colors))
+                      setCustomD({ ...t.colors, on: true } as any)
+                      setThemeCode('')
+                      toastOk('Тема «' + t.name + '» добавлена и включена')
+                    }}>Добавить</button>
                   </div>
                 </div>
 

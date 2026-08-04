@@ -1,6 +1,7 @@
 // Мероприятия сервера — модалка со списком событий и трёхшаговым визардом
 // создания («Место → Сведения о событии → Просмотреть»), 1-в-1 как в Discord.
 // События лежат в таблице server_events (миграция 17_server_settings.sql).
+import { logErr, logWarn } from '../lib/log'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toastOk, toastErr } from '../lib/toast'
@@ -42,7 +43,7 @@ export function ServerEvents({ server, channels, canCreate, onClose }: { server:
   async function load() {
     // Раньше error не проверялась — сбой сети читался как «мероприятий нет».
     const { data, error } = await supabase.from('server_events').select('*').eq('server_id', server.id).order('starts_at')
-    if (error) { console.error('[server_events] load failed:', error); return }
+    if (error) { logErr('server_events]', error); return }
     setEvents(data ?? [])
   }
 

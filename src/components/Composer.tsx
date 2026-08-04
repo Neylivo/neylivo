@@ -1,3 +1,4 @@
+import { Popover } from './Popover'
 import { toastErr } from '../lib/toast'
 import { isSafeUrl } from '../lib/safeUrl'
 import { stripAll } from '../lib/stripMeta'
@@ -151,6 +152,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   // хвост упоминания, — но своё состояние нужно, чтобы стрелки ходили по своему списку.
   const [eQ, setEQ] = useState<string | null>(null)
   const [eIdx, setEIdx] = useState(0)
+  // v1.460.0: сами значки — чтобы нажатие по ним не считалось «мимо».
+  const emojiBtn = useRef<HTMLButtonElement>(null)
+  const gifBtn = useRef<HTMLButtonElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const lastSent = useRef<{ t: string; at: number }>({ t: '', at: 0 })
@@ -871,8 +875,8 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
           {!isEditing && canAttachFiles !== false && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
-          <button type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
-          {!isEditing && <button type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
+          <button ref={emojiBtn} type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
+          {!isEditing && <button ref={gifBtn} type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
           {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
           {/* v1.286.0: кнопки плагинов. Рисуются нашим же компонентом с нашей иконкой —
               плагин задаёт только имя иконки и подсказку, поэтому подделать чужой
@@ -883,8 +887,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               <Icon name={b.icon} size={20} />
             </button>
           ))}
-          {emoji && <div className="pop-anchor"><EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} /></div>}
-          {gif && <div className="pop-anchor"><GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} /></div>}
+          {/* v1.460.0: обе панели закрываются щелчком мимо и Escape — раньше
+              только повторным нажатием на тот же значок или крестиком внутри. */}
+          {emoji && <Popover className="pop-anchor" trigger={emojiBtn.current} onClose={() => setEmoji(false)}>
+            <EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} />
+          </Popover>}
+          {gif && <Popover className="pop-anchor" trigger={gifBtn.current} onClose={() => setGif(false)}>
+            <GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} />
+          </Popover>}
         </div>
         {!busy && <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>}
         {busy && <button type="submit" className="send-busy" disabled>…</button>}

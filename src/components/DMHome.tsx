@@ -1,3 +1,4 @@
+import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
 import { setActiveDm, useBadgeCount } from '../lib/badge'
 import { confirmUi } from '../lib/confirm'
@@ -338,7 +339,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // v1.274.0: фоновая правка «начинает звонок» -> «звонок длился/пропущен» —
     // не то, ради чего стоит городить UI-обратную связь при сбое (не действие
     // пользователя), но раньше результат вообще никак не проверялся.
-    supabase.from('dm_messages').update({ content }).eq('id', id).then(({ error }) => { if (error) console.error('[call msg] update failed:', error) })
+    supabase.from('dm_messages').update({ content }).eq('id', id).then(({ error }) => { if (error) logErr('call msg] update', error) })
   }
 
   function endRing(sendCancel: boolean) {
@@ -567,7 +568,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // показанное (из кэша или прошлого успешного ответа).
     const { data, error } = await supabase.from('friend_requests').select('*')
       .or('from_user.eq.' + meId + ',to_user.eq.' + meId)
-    if (error) { netFail(); console.error('[friend_requests] load failed:', error); return }
+    if (error) { netFail(); logErr('friend_requests]', error); return }
     netOk()
     const all = (data ?? []) as FriendRequest[]
     const req = all.filter(r => r.status === 'pending' && r.to_user === meId)
@@ -1014,7 +1015,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       // v1.274.0: сбой сети раньше молча читался как «старых сообщений больше нет»
       // (hasMore=false навсегда) — теперь просто не трогаем hasMore, следующая
       // прокрутка вверх честно попробует ещё раз.
-      if (error) { netFail(); console.error('[dm_messages] loadOlder failed:', error); return }
+      if (error) { netFail(); logErr('dm_messages] loadOlder', error); return }
       netOk()
       const older = tagIgnored(((data ?? []) as DMMessage[]).reverse())
       hasMore.current = older.length === 50

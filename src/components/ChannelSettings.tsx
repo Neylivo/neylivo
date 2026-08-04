@@ -2,6 +2,7 @@
 // У текстовых каналов вкладки: Обзор / Права доступа / Приглашения / Интеграция.
 // У голосовых — те же, но БЕЗ «Интеграции» (прямое указание пользователя),
 // а в «Обзоре» дополнительно битрейт, качество видео, лимит пользователей и регион.
+import { logErr, logWarn } from '../lib/log'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
@@ -59,7 +60,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   // выбора ролей было физически некому давать доступ, кроме владельца/MANAGE_CHANNELS.
   const [privRoles, setPrivRoles] = useState<string[]>(Array.isArray((channel as any).private_roles) ? (channel as any).private_roles : [])
   const [roles, setRoles] = useState<ServerRole[]>([])
-  useEffect(() => { fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e)) }, [server.id])
+  useEffect(() => { fetchRoles(server.id).then(setRoles).catch(e => logErr('roles]', e)) }, [server.id])
   // v1.443.0: перекрытия прав канала — для @everyone, любой роли и отдельного
   // участника (supabase/103_channel_perms.sql). Старая настройка «только для
   // чтения» подхватывается сюда же, иначе вкладка показывала бы «ничего не
@@ -186,7 +187,7 @@ export function ChannelSettings({ server, channel, onClose, onChanged, onDeleted
   const [extra, setExtra] = useState<string[]>([])
   useEffect(() => {
     if (tab !== 'perms' || members.length) return
-    listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
+    listMembers(server.id).then(setMembers).catch(e => logErr('members]', e))
   }, [tab, server.id])
 
   const hasOv = (key: string) => !!ov[key]

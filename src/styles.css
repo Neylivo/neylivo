@@ -329,6 +329,10 @@ body {
 /* v1.443.0: высота экранной клавиатуры (см. src/lib/keyboardInset.ts). Ноль по
    умолчанию — на десктопе и в вебе её просто нет. */
 :root { --kb:0px; }
+/* v1.460.0: размах хода пятна в живом фоне плеера. Каждому пятну своё
+   значение ставит код (см. music/MusicLiveBg.tsx), здесь — умолчание: без
+   объявления браузер отбросил бы всё свойство transform целиком. */
+:root { --amp:5%; }
 body { font-size: calc(15px * var(--font-scale)); }
 body.no-anim *, body.no-anim *::before, body.no-anim *::after { animation:none !important; transition:none !important; }
 body.compact .msg { padding-top:0; padding-bottom:0; }
@@ -7263,4 +7267,70 @@ body.no-anim .vo-live::before { animation: none; }
 .cmp-desc { font-size: 12.5px; color: var(--tx-2, #b5bac1); margin: -4px 0 8px; line-height: 1.45; }
 @media (max-width: 768px) {
   .flow-tools button { width: 40px; height: 40px; }
+}
+
+/* v1.460.0: живой фон плеера — узор из цвета обложки, который медленно движется.
+   Медленно намеренно: фон не должен перетягивать внимание с того, ради чего
+   плеер открыт. При выключенных анимациях узор просто стоит. */
+.mus-livebg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+  filter: blur(56px) saturate(1.25); opacity: .75; }
+.mus-blob { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); will-change: transform; }
+.mus-blob.on { animation: mus-drift ease-in-out infinite alternate; }
+@keyframes mus-drift {
+  /* Запасное значение обязательно: без него, если --amp почему-то не задана,
+     браузер отбрасывает ВСЁ свойство transform — и пятно прыгает в угол.
+     Поймано проверкой npm run test:i18n, которая стережёт такие переменные. */
+  from { transform: translate(-50%, -50%) translate(calc(var(--amp, 5%) * -1), var(--amp, 5%)) scale(1); }
+  to   { transform: translate(-50%, -50%) translate(var(--amp, 5%), calc(var(--amp, 5%) * -1)) scale(1.14); }
+}
+body.no-anim .mus-blob.on { animation: none; }
+.mus2 > *:not(.mus-livebg):not(.musbg):not(.musbg-dim) { position: relative; z-index: 1; }
+
+/* v1.460.0: строка ввода на телефоне — как в мобильном Discord, но без лишнего.
+   В строке было четыре значка подряд плюс поле, и на 390 пикселях они съедали
+   половину места. Скрепка, эмодзи и микрофон остаются; отдельная кнопка GIF
+   убрана — она ведёт в ту же панель, что и эмодзи (там есть вкладка гифок),
+   то есть занимала место ради второго входа в одно и то же. */
+@media (max-width: 768px) {
+  .composer { gap: 4px; padding-left: 4px; padding-right: 4px; }
+  .composer textarea { border-radius: 999px; padding: 10px 14px; }
+  .composer-tools { gap: 2px; }
+  .composer .attach-btn, .composer-tools .ctool { border-radius: 50%; background: var(--c-hover); }
+  .composer .attach-btn:hover, .composer-tools .ctool:hover { background: #4e5058; }
+  .composer-tools .ctool.gif-badge { display: none; }
+}
+
+/* v1.460.0: крестик окна всегда доступен.
+   Он лежит absolute в углу, а содержимое окна прокручивается ПОД ним. У мастера
+   ботов подменю и длинные списки наезжали сверху и перекрывали его: человек
+   видел крестик, нажимал — и попадал в то, что лежит выше по слою. */
+.modal-x { z-index: 3; background: color-mix(in srgb, var(--bg2, #2b2d31) 82%, transparent);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.modal-x:hover { background: rgba(var(--ov, 255,255,255),.14); }
+@media (max-width: 768px) {
+  .modal-x { width: 40px; height: 40px; top: 10px; right: 10px; }
+}
+
+/* v1.460.0: края круглых аватарок.
+   Круг вырезался у контейнера, а картинка внутри оставалась квадратной — по
+   краю оставалась ступенька в один-два пикселя, заметная на светлых аватарках
+   поверх тёмного фона. */
+.me-av img, .msg-av img, .dm-av img, .mem-av img, .mini-av img, .av-click img, .srv img {
+  border-radius: inherit; backface-visibility: hidden; transform: translateZ(0);
+}
+
+/* v1.460.0: свои темы наборами. */
+.pqs-theme-save { display: flex; gap: 8px; margin: 8px 0; }
+.pqs-theme-save .pqs-in { flex: 1; min-width: 0; margin: 0; }
+.pqs-theme-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.pqs-theme-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: var(--bg3); border-radius: var(--r-sm); }
+.pqs-theme-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+/* Полоска из шести цветов — видно тему, не включая её. */
+.pqs-theme-dots { display: flex; flex: none; border-radius: 4px; overflow: hidden; }
+.pqs-theme-dots i { width: 12px; height: 20px; display: block; }
+@media (max-width: 768px) {
+  .pqs-theme-save { flex-direction: column; }
+  .pqs-theme-save .pqs-save { min-height: 40px; }
+  .pqs-theme-row button { min-height: 36px; }
 }

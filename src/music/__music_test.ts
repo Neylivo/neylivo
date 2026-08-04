@@ -10,6 +10,8 @@
 // плашки — в окне (npm run test:drag): там нужен настоящий DOM.
 export {}
 
+import { worthSaving, findTrack } from './session'
+import { blobsFor, paletteOf, shift } from './liveBg'
 import { planMeta, metaRank, seedFromCache, needsFetch, META_BATCH } from './metaPlan'
 import { mediaPos, mediaKey, mediaArtwork, MEDIA_FALLBACK_ART } from './mediaSession'
 import { nextTrack, backTarget, resolveNext } from './nextTrack'
@@ -1351,6 +1353,81 @@ check('проверка ловит запрос за тем, что уже ле�
   const seeded = seedFromCache(склад, u => (u === 'u0' ? 'есть' : null))
   return needsFetch(склад, seeded).every(t => t.url !== 'u0')
 })
+
+
+// -- v1.460.0: плеер помнит, на чём остановился ------------------------------
+// Закрыл приложение — и плеер открывался пустым. Громкость помнилась, а сам
+// сеанс нет: человек, слушавший длинную запись, каждый раз искал место заново.
+console.log('\n-- Сеанс плеера --')
+
+check('начало трека не запоминаем', () =>
+  !worthSaving(3, 300) && !worthSaving(0, 300) && worthSaving(60, 300))
+check('почти дослушанный трек не запоминаем', () =>
+  // Иначе при следующем запуске он «продолжится» за пять секунд до конца.
+  !worthSaving(295, 300) && worthSaving(200, 300))
+check('без известной длины запоминаем по одной только позиции', () =>
+  worthSaving(60, 0) && !worthSaving(5, 0))
+check('мусор вместо позиции не сохраняется', () =>
+  !worthSaving(NaN, 300) && !worthSaving(Infinity, 300))
+
+check('трек находится по ссылке, даже если id поменялся', () => {
+  const склад = [{ id: 'новый', url: 'u2' }, { id: 'x', url: 'u1' }]
+  return findTrack({ id: 'старый', url: 'u2', pos: 30, at: 1 }, склад) === 0
+})
+check('если ссылки нет — ищем по id', () => {
+  const склад = [{ id: 'a', url: 'нет' }, { id: 'b', url: 'тоже нет' }]
+  return findTrack({ id: 'b', url: 'пропала', pos: 30, at: 1 }, склад) === 1
+})
+check('пропавший трек не подменяется соседним', () => {
+  // Иначе после чистки склада «продолжилось» бы что-то постороннее.
+  const склад = [{ id: 'a', url: 'u1' }]
+  return findTrack({ id: 'нет', url: 'нет', pos: 30, at: 1 }, склад) === -1
+      && findTrack(null, склад) === -1
+})
+
+// -- v1.460.0: живой фон плеера ---------------------------------------------
+// Узор обязан быть УСТОЙЧИВЫМ: один и тот же трек — один и тот же рисунок.
+// Иначе пятна прыгали бы по экрану при каждой перерисовке.
+console.log('\n-- Живой фон --')
+
+check('один трек — один и тот же узор', () => {
+  const a = JSON.stringify(blobsFor('https://x/track1'))
+  const b = JSON.stringify(blobsFor('https://x/track1'))
+  return a === b
+})
+check('разные треки — разные узоры', () =>
+  JSON.stringify(blobsFor('u1')) !== JSON.stringify(blobsFor('u2')))
+check('пятна помещаются в экран и не вырождаются', () =>
+  blobsFor('u1').every(b => b.x > 0 && b.x < 1 && b.y > 0 && b.y < 1 && b.r > 0.1 && b.r < 0.6))
+check('движение медленное — фон не мельтешит', () =>
+  // Быстрее — и фон начинает отвлекать от того, ради чего плеер открыт.
+  blobsFor('u1').every(b => b.dur >= 18 && b.dur <= 34))
+check('пятна не ходят строем', () => {
+  const d = blobsFor('u1').map(b => b.dur)
+  return new Set(d).size === d.length
+})
+check('при выключенных анимациях узор стоит', () =>
+  blobsFor('u1', 0).every(b => b.dur === 0))
+
+check('без обложки берётся цвет темы, а не серое пятно', () => {
+  const p = paletteOf(null)
+  return p.length === 3 && p.every(c => /^#[0-9a-f]{6}$/i.test(c))
+})
+check('оттенки отличаются от основного', () => {
+  const [a, b, c] = paletteOf('#5865f2')
+  return a !== b && a !== c && b !== c
+})
+check('кривой цвет не ломает подбор', () =>
+  paletteOf('не цвет').length === 3 && shift('мусор', 20) === 'мусор')
+
+console.log('\n-- Ломаем нарочно (фон и сеанс) --')
+check('проверка ловит случайный узор вместо устойчивого', () => {
+  // Со случайными числами два вызова подряд дали бы разное — и пятна прыгали бы.
+  const два = [blobsFor('одно и то же'), blobsFor('одно и то же')]
+  return JSON.stringify(два[0]) === JSON.stringify(два[1])
+})
+check('проверка ловит сохранение первых секунд', () =>
+  !worthSaving(5, 600) && worthSaving(120, 600))
 
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)

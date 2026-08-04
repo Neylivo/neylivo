@@ -9,6 +9,7 @@
 //    см. src/components/DevPortal.tsx (раздел «Боты» в настройках пользователя).
 // Все настройки лежат в servers.settings (jsonb, миграция 17_server_settings.sql).
 // Без миграции код гладко деградирует: имя сервера сохраняется, остальное — с подсказкой.
+import { logErr, logWarn } from '../lib/log'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
@@ -214,9 +215,9 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
   }, [onClose])
 
   useEffect(() => {
-    const loadMembers = () => listMembers(server.id).then(setMembers).catch(e => console.error('[members] load failed:', e))
-    const loadRoles = () => fetchRoles(server.id).then(setRoles).catch(e => console.error('[roles] load failed:', e))
-    const loadMemberRoles = () => fetchMemberRoles(server.id).then(setMemberRoles).catch(e => console.error('[member_roles] load failed:', e))
+    const loadMembers = () => listMembers(server.id).then(setMembers).catch(e => logErr('members]', e))
+    const loadRoles = () => fetchRoles(server.id).then(setRoles).catch(e => logErr('roles]', e))
+    const loadMemberRoles = () => fetchMemberRoles(server.id).then(setMemberRoles).catch(e => logErr('member_roles]', e))
     loadMembers(); loadRoles(); loadMemberRoles()
     loadBans()
     const loadAudit = () => fetchAuditLog(server.id).then(setAuditLog)
@@ -365,7 +366,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
     setNewRole('')
     // v1.274.0: роль уже создана в базе к этому моменту — сбой ТОЛЬКО перечитки
     // списка не должен выглядеть как «роль не создалась» (fetchRoles теперь бросает).
-    try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after create failed:', e) }
+    try { setRoles(await fetchRoles(server.id)) } catch (e) { logErr('roles] reload after create', e) }
     toastOk('Роль «' + nm + '» создана')
   }
 
@@ -379,7 +380,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
       setRoles(await fetchRoles(server.id))
       setMemberRoles(await fetchMemberRoles(server.id))
       setMembers(await listMembers(server.id))
-    } catch (e) { console.error('[reloadRoles] failed:', e) }
+    } catch (e) { logErr('reloadRoles]', e) }
   }
 
   // Перестановка ролей (иерархия): двигаем на шаг и сохраняем позиции 0..n-1.
@@ -790,7 +791,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                     const next = v ? ((r.permissions ?? 0) | PERM.MANAGE_SERVER) : ((r.permissions ?? 0) & ~PERM.MANAGE_SERVER)
                     const { error } = await setRolePermissions(r.id, next)
                     if (error) return toastErr(String(error.message ?? error).includes('permissions') ? 'Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor' : String(error.message ?? error))
-                    try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after permission change failed:', e) }
+                    try { setRoles(await fetchRoles(server.id)) } catch (e) { logErr('roles] reload after permission change', e) }
                   }} /> Управление сервером
                 </label>
                 <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{members.filter(m => (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).includes(r.id)).length} 👤</span>
@@ -798,7 +799,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
                 <button className="sset-roledel" title="Удалить роль" onClick={async () => {
                   const { error } = await deleteRole(r.id)
                   if (error) { toastErr(error.message ?? String(error)); return }
-                  try { setRoles(await fetchRoles(server.id)) } catch (e) { console.error('[roles] reload after delete failed:', e) }
+                  try { setRoles(await fetchRoles(server.id)) } catch (e) { logErr('roles] reload after delete', e) }
                 }}><Icon name="trash" size={14} /></button>
               </div>
             ))}

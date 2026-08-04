@@ -1,3 +1,4 @@
+import { logErr, logWarn } from './log'
 import { supabase } from './supabase'
 import type { Profile, DMThread } from '../types'
 
@@ -85,10 +86,10 @@ export async function removeFriendship(meId: string, otherId: string) {
 export async function openThread(meId: string, otherId: string): Promise<DMThread | null> {
   const [a, b] = [meId, otherId].sort()
   const found = await supabase.from('dm_threads').select('*').eq('user_a', a).eq('user_b', b).maybeSingle()
-  if (found.error) { console.error('[openThread] select failed:', found.error); throw found.error }
+  if (found.error) { logErr('openThread] select', found.error); throw found.error }
   if (found.data) return found.data as DMThread
   const ins = await supabase.from('dm_threads').insert({ user_a: a, user_b: b }).select().single()
-  if (ins.error) { console.error('[openThread] insert failed:', ins.error); throw ins.error }
+  if (ins.error) { logErr('openThread] insert', ins.error); throw ins.error }
   return (ins.data as DMThread) ?? null
 }
 
