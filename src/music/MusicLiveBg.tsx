@@ -24,7 +24,10 @@ export function LiveBg({ trackKey, accent }: { trackKey: string; accent?: string
           top: (b.y * 100) + '%',
           width: (b.r * 100) + '%',
           paddingBottom: (b.r * 100) + '%',
-          background: цвета[i % цвета.length],
+          // v1.464.0: мягкий край делает сам градиент, а не filter: blur —
+          // размытие во весь плеер съедало кадры и подвешивало кнопки.
+          background: `radial-gradient(circle, ${цвета[i % цвета.length]} 0%, ` +
+            `${цвета[i % цвета.length]}00 70%)`,
           opacity: b.alpha,
           // Своя длительность и свой сдвиг у каждого пятна: иначе они ходят
           // строем, и это сразу видно как «анимация», а не как живой фон.

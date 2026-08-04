@@ -24,7 +24,7 @@ import { countAfterFail, countAfterOk, brokenIn, BROKEN_AFTER } from './broken'
 import { isEmbedDeniedCode, pauseKind, playKind, silenceStuck, SILENCE_MS } from './broken'
 import { pushFail, sourceDown, SOURCE_DOWN_FAILS, SOURCE_DOWN_MS, type FailMark } from './broken'
 import { mergeTracks } from './mergeTracks'
-import { songKey, sameSong } from './songKey'
+import { songKey, sameSong, VERSION_WORDS_FOR_TEST, FEAT_RE_FOR_TEST } from './songKey'
 import { trackScore, suggestQuery } from './fuzzy'
 import { smartMix, mixSummary } from './smartMix'
 import { readDsp, dspActive, dspSummary, echoParams, EQ_PRESETS, EQ_BANDS, EQ_LABEL, MUFFLE_HZ } from './dsp'
@@ -1478,6 +1478,87 @@ check('проверка ловит возврат к полной загрузк
   return было && стало.kind === 'incremental'
 })
 
+
+console.log('\n-- Подборка на большом складе (v1.464.0) --')
+{
+  // Владелец принёс: «лагает, кнопки через раз нажимаются, музыка еле грузится».
+  // Причина была здесь: ключ песни собирал семь десятков выражений заново на
+  // КАЖДОЕ название, а подборка зовёт его для каждого трека склада. Один
+  // пересчёт на тринадцати тысячах занимал 5133 мс — всё это время окно не
+  // отвечало ни на что.
+
+  // Прежний разбор, слово в слово. Новый обязан давать тот же ответ: скорость
+  // не должна была стоить ни одной изменившейся склейки версий.
+  const прежнийBase = (s?: string): string => {
+    let v = (s || '').toLowerCase()
+    v = v.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/\{[^}]*\}/g, ' ')
+    v = v.replace(FEAT_RE_FOR_TEST, ' ')
+    for (const w of VERSION_WORDS_FOR_TEST) {
+      v = v.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^\\p{L}\\p{N}])', 'giu'), ' ')
+    }
+    v = v.replace(/\b\d+\s?(bpm|x)\b/gi, ' ').replace(/\bx\s?\d+\b/gi, ' ')
+    return v.replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  }
+  const прежнийКлюч = (name?: string, author?: string): string => {
+    let t = прежнийBase(name)
+    if (!t) return ''
+    const a = прежнийBase(author)
+    if (a) {
+      if (t.startsWith(a + ' ')) t = t.slice(a.length + 1)
+      else if (t.endsWith(' ' + a)) t = t.slice(0, -(a.length + 1))
+    }
+    if (!t) return ''
+    return a ? a + '|' + t : t
+  }
+
+  const куски = ['Песня', 'Song', 'Ночь', 'Ai', '', '4k', 'x', 'Тень 2', 'Love', 'Дом']
+  const обёртки = ['', ' (Sped Up)', ' [Official Video]', ' - Remix', ' feat. Кто-то', ' x Гость',
+    ' slowed + reverb', ' (Live)', ' | Lyrics', ' 120 bpm', ' x2', ' -remix-', ' -sped-up-',
+    ' Official Audio', ' {Nightcore}', ' при участии Кого-то', ' RADIO EDIT', ' Ремикс', ' минус']
+  const имена: string[] = ['sped-remix-up', 'sped-official-up', 'a-live-b', 'слов-ремикс-но']
+  for (const k of куски) for (const o of обёртки) for (const o2 of ['', ...обёртки.slice(0, 8)]) имена.push(k + o + o2)
+
+  let расхождений = 0
+  for (const n of имена) for (const a of ['Автор', '', 'DJ Live', 'x']) {
+    if (прежнийКлюч(n, a) !== songKey(n, a)) расхождений++
+  }
+  check('быстрый разбор даёт тот же ключ, что и прежний, на ' + имена.length * 4 + ' названиях',
+    () => расхождений === 0)
+
+  check('память ключей не склеивает «Дом Мир» + пусто и «Дом» + «Мир»', () => {
+    // Дважды: первый проход кладёт ответ в память, второй берёт его оттуда.
+    const пары: [string, string][] = [['Дом Мир', ''], ['Дом', 'Мир'], ['А Б В', ''], ['А', 'Б В']]
+    for (let i = 0; i < 2; i++) for (const [n, a] of пары) if (songKey(n, a) !== прежнийКлюч(n, a)) return false
+    return songKey('Дом Мир', '') !== songKey('Дом', 'Мир')
+  })
+
+  const N = 13000
+  const склад = Array.from({ length: N }, (_, i) => ({
+    id: 't' + i, name: имена[i % имена.length] + ' ' + i, author: 'Автор ' + (i % 300), plays: i % 17,
+  }))
+  const myPlays: Record<string, number> = {}
+  for (let i = 0; i < N; i += 3) myPlays['t' + i] = i % 9
+  const пересчёт = () => recommend({
+    tracks: склад as never, idx: 10, plays: myPlays, recent: [], lastAt: {}, now: Date.now(),
+  })
+  // Мерить надо ПЕРВЫЙ проход. Второй берёт готовые ключи из памяти и уложится
+  // в потолок даже с самым медленным разбором — такая проверка не поймала бы
+  // ничего. Названия здесь свои, ни в одной проверке выше не встречались, так
+  // что память по ним пуста.
+  const t0 = Date.now()
+  пересчёт()
+  const холодный = Date.now() - t0
+  const t1 = Date.now()
+  пересчёт()
+  const тёплый = Date.now() - t1
+  // Потолок с запасом: было 5133 мс, стало около трёхсот. Проверка стоит не
+  // ради «быстро», а чтобы никто не вернул сборку выражений внутрь прохода по
+  // складу — это уже случалось, и заметил это владелец, а не я.
+  check('первый пересчёт подборки на ' + N + ' треках укладывается в 1200 мс (вышло ' + холодный + ')',
+    () => холодный < 1200)
+  check('повторный пересчёт берёт ключи из памяти и заметно дешевле первого (' + тёплый + ' против ' + холодный + ')',
+    () => тёплый * 2 < холодный || тёплый <= 30)
+}
 
 console.log('\nИТОГ: пройдено ' + pass + ', провалено ' + fail)
 if (fail) process.exit(1)

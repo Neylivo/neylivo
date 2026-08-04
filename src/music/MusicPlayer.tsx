@@ -1080,7 +1080,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       const worker = async () => {
         while (ok && at < queue.length) {
           const t = queue[at++]
-          const m = isSoundcloudUrl(t.url) ? await scMeta(t.url) : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
+          // v1.464.0: играющий и следующий спрашиваются НАСТОЙЧИВО, даже если
+          // сервис отдыхает после отказов. Отдых нужен, чтобы фоновый добор не
+          // мешал главному, — а не чтобы мешать главному самому: из-за этого
+          // музыка «еле грузилась» целую минуту.
+          const главный = t.url === first || t.url === nextUrl
+          const m = isSoundcloudUrl(t.url) ? await scMeta(t.url, главный)
+            : isYouTubeUrl(t.url) ? await ytMeta(t.url) : await audiusMeta(t.url)
           if (!ok) return
           if (m) {
             setMeta(prev => ({ ...prev, [t.url]: m }))
@@ -1852,14 +1858,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // v1.433.0: обход и остановки уехали в resolveNext, потому что их обязан знать
   // и показ тоже. Здесь остаётся только исполнение.
   const nextInput = () => {
-    const first = manualLive.find(id => tracks.some(t => t.id === id))
+    // v1.464.0: было tracks.some внутри find — то есть перебор склада на каждый
+    // элемент ручной очереди, и всё это на каждую перерисовку.
+    const first = manualLive.find(id => byId.has(id))
     return {
       first,
       arg: {
         // v1.443.0: позиция берётся из ссылки, а не из состояния — иначе два
         // быстрых нажатия считают от одного и того же места (см. goIdx).
         idx: idxRef.current, count: tracks.length, repeat, shuffle,
-        manualIdx: first ? tracks.findIndex(t => t.id === first) : -1,
+        manualIdx: first ? (byId.get(first) ?? -1) : -1,
         unplayable: (n: number) => unplayable(tracks[n]),
       },
     }
@@ -1906,7 +1914,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   const [hist, setHist] = useState<Hist>(emptyHist)
   const histRef = useRef(hist); histRef.current = hist
   const fromHistRef = useRef(false)
-  const alive = (id: string) => tracks.some(t => t.id === id)
+  // v1.464.0: карта «id трека → его номер». Раньше её здесь не было, и всё, что
+  // ниже, искало трек ПЕРЕБОРОМ всего склада.
+  //
+  // На тринадцати тысячах это и есть та беда, которую владелец принёс как
+  // «кнопки через раз нажимаются»: строки «Прошлый» и «Дальше» считаются на
+  // КАЖДУЮ перерисовку, а перерисовка идёт на каждый тик полосы времени —
+  // несколько раз в секунду. Каждый такой пересчёт делал несколько проходов по
+  // всем тринадцати тысячам, и главный поток просто не успевал заметить нажатие.
+  const byId = useMemo(() => {
+    const m = new Map<string, number>()
+    tracks.forEach((t, i) => m.set(t.id, i))
+    return m
+  }, [tracks])
+  const trackById = (id: string) => { const i = byId.get(id); return i == null ? null : tracks[i] ?? null }
+  const alive = (id: string) => byId.has(id)
   useEffect(() => {
     const id = cur?.id
     if (!id) return
@@ -2048,8 +2070,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // v1.432.0: и в ручной очереди тоже. Плейлист мог содержать трек, который
   // сервис не отдаёт наружу: очередь показывала «дальше — вот он», плеер до него
   // доходил и упирался.
+  // v1.464.0: и здесь был перебор всего склада на каждый элемент очереди, на
+  // каждой перерисовке. Ищем по карте.
   const manualLive = manual.filter(id => {
-    const t = tracks.find(x => x.id === id)
+    const t = trackById(id)
     return !!t && !unplayable(t)
   })
 
@@ -2172,11 +2196,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   //
   // Поиск по id внутри skip был вторым таким местом: перебор всего склада на
   // каждый рассматриваемый трек. Теперь номера берутся из карты.
-  const byId = useMemo(() => {
-    const m = new Map<string, number>()
-    tracks.forEach((t, i) => m.set(t.id, i))
-    return m
-  }, [tracks])
+
   // Порядок и поиск по складу — тоже не на каждый тик полосы времени, а только
   // когда меняется склад, метаданные или строка поиска.
   // v1.462.0: САМАЯ ДОРОГАЯ вещь во всём плеере — этот порядок. На складе в
@@ -2237,12 +2257,36 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     const names = tracks.slice(0, 2000).map(t => meta[t.url]?.title || t.name || '')
     return suggestQuery(libQ, names)[0] ?? ''
   }, [libQ, libAll.length, tracks, meta])
+  // v1.464.0: названия для подборки берутся через ссылку, а пересчёт идёт по
+  // редкому тику.
+  //
+  // Названия догружаются по одному, и каждое такое обновление раньше заставляло
+  // пересчитывать подборку заново — по всему складу. На тринадцати тысячах это
+  // сотни полных проходов подряд, между которыми окно не успевало ни
+  // перерисоваться, ни принять нажатие.
+  const metaRef = useRef(meta)
+  metaRef.current = meta
+  //
+  // Тик именно ставится один раз и обязательно срабатывает. Если бы он
+  // сбрасывался на каждом обновлении, то при непрерывной подгрузке названий он
+  // не наступил бы НИКОГДА — и подборка застыла бы на самом первом состоянии.
+  const [recoTick, setRecoTick] = useState(0)
+  const recoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (recoTimer.current) return
+    recoTimer.current = setTimeout(() => {
+      recoTimer.current = null
+      setRecoTick(n => n + 1)
+    }, 1500)
+  }, [meta])
+  useEffect(() => () => { if (recoTimer.current) clearTimeout(recoTimer.current) }, [])
   const reco = useMemo(() => {
     if (!cur || tracks.length < 2) return null
+    const m = metaRef.current
     const enriched = tracks.map(t => ({
       ...t,
-      name: meta[t.url]?.title || t.name,
-      author: meta[t.url]?.author || t.author,
+      name: m[t.url]?.title || t.name,
+      author: m[t.url]?.author || t.author,
     }))
     // v1.432.0: волна не предлагает то, что играть нечем — иначе очередь
     // показывала одно, а плеер играл другое (он такие треки обходит сам).
@@ -2252,7 +2296,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       skip: t => unplayable(tracks[byId.get(t.id) ?? -1]),
     })[0] ?? null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, byId, idx, myPlays, lastAt, meta, cur?.id, ytDenied, recentAt])
+  }, [tracks, byId, idx, myPlays, lastAt, recoTick, cur?.id, ytDenied, recentAt])
   const personalIdx = reco ? byId.get(reco.track.id) ?? -1 : -1
   // next() живёт в замыкании обработчиков (гарнитура, конец трека), поэтому
   // берёт значение через ссылку — иначе там останется номер с первого рендера.
@@ -2270,7 +2314,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // перемешивании очередь показывала одно, а кнопка играла другое.
   const qPrev = (() => {
     const r = histBack(hist, alive)
-    if (r) return tracks.find(t => t.id === r.target) ?? null
+    if (r) return trackById(r.target)
     return tracks.length > 1 ? tracks[(idx - 1 + tracks.length) % tracks.length] : null
   })()
   // v1.433.0: строка «Дальше» считается ТОЙ ЖЕ resolveNext, что и кнопка. До
@@ -2284,7 +2328,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // действием (см. resolveNext и всю историю этой болезни).
     if (repeat !== 'one') {
       const f = histForward(hist, alive)
-      if (f) return { label: 'Дальше — по истории', t: tracks.find(t => t.id === f.target) ?? null }
+      if (f) return { label: 'Дальше — по истории', t: trackById(f.target) }
     }
     const { arg } = nextInput()
     const act = resolveNext({ ...arg, personalIdx })

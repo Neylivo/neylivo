@@ -237,10 +237,21 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
   const now = i.now ?? Date.now()
   const DAY = 86_400_000
 
+  // v1.464.0: то, что не меняется от трека к треку, считаем один раз.
+  //
+  // Проход идёт по всему складу — у владельца это тринадцать тысяч. Всё, что
+  // здесь делается «лишний раз», умножается на тринадцать тысяч и превращается
+  // в замерший на секунды экран. Смысл ни одной строки ниже не меняется.
+  const recentPos = new Map<string, number>()
+  recent.forEach((id, n) => { if (!recentPos.has(id)) recentPos.set(id, n) })
+
   const out: Suggestion<T>[] = rest.map(t => {
     const mine = plays[t.id] ?? 0
-    const sameAuthor = !!curAuthor && norm(t.author) === curAuthor
-    const common = words(t.name ?? '').filter(w => curWords.has(w)).length
+    // Имя исполнителя чистилось трижды на каждый трек — теперь один раз.
+    const tAuthor = norm(t.author)
+    const sameAuthor = !!curAuthor && tAuthor === curAuthor
+    // Разбирать название на слова незачем, если сравнивать не с чем.
+    const common = curWords.size === 0 ? 0 : words(t.name ?? '').filter(w => curWords.has(w)).length
 
     let score = 0
     const reasons: [Why, number][] = []
@@ -276,7 +287,7 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
     // Контекст сессии: исполнитель, которого человек уже слушал в этот заход.
     // Слабее прямого совпадения с текущим треком, но именно он не даёт волне
     // скатиться к глобально популярному через полсотни песен.
-    if (!sameAuthor && sessionAuthors.has(norm(t.author))) { score += 30; reasons.push(['author', 30]) }
+    if (!sameAuthor && sessionAuthors.has(tAuthor)) { score += 30; reasons.push(['author', 30]) }
 
     // Общие прослушивания — только разрешитель ничьих. v1.440.0: вес срезан
     // втрое: на длинной сессии он оказывался единственным работающим сигналом и
@@ -287,12 +298,12 @@ export function recommend<T extends QueueTrack>(i: PersonalInput<T>): Suggestion
     // Только что игравшее — НЕЛЬЗЯ, пока не пройдёт окно. Внутри окна
     // сортируем по давности: если запрещено вообще всё (склад из трёх треков),
     // волна возьмёт самое давнее, а не остановится.
-    const r = recent.indexOf(t.id)
+    const r = recentPos.get(t.id) ?? -1
     if (r >= 0 && r < ban) score -= 10_000 - r * 100
     else if (r >= 0) score -= 60   // за окном повтор разрешён, но всё же не первым делом
 
     // Третий трек одного исполнителя подряд — это уже «зациклило».
-    if (streak >= AUTHOR_STREAK && !!streakAuthor && norm(t.author) === streakAuthor) {
+    if (streak >= AUTHOR_STREAK && !!streakAuthor && tAuthor === streakAuthor) {
       score -= 200
     }
 

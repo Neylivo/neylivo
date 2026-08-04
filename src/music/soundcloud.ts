@@ -103,11 +103,17 @@ function удача() { подрядОтказов = 0; ждатьДо = 0 }
 /** Сервис сейчас отдыхает — спрашивать бесполезно. */
 export function scResting(now = Date.now()): boolean { return now < ждатьДо }
 
-export async function scMeta(url: string): Promise<ScMeta | null> {
+/**
+ * @param force — спросить, даже если сервис «отдыхает».
+ *
+ * v1.464.0: отдых введён против ФОНОВОГО добора обложек ко всему складу. Но
+ * первая же версия отсекала и тот единственный трек, который человек только что
+ * включил, — и музыка «еле грузилась» целую минуту. Отдых нужен, чтобы фон не
+ * мешал главному, а не чтобы мешать главному самому.
+ */
+export async function scMeta(url: string, force = false): Promise<ScMeta | null> {
   if (cache[url]) return cache[url]
-  // Пока сервис отдыхает — даже не пробуем: каждый лишний запрос удлиняет
-  // отдых и мешает тому единственному треку, который человек включил.
-  if (scResting()) return null
+  if (!force && scResting()) return null
   let meta: ScMeta | null = null
   try {
     const r = await fetch('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(url))
