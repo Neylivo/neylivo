@@ -130,7 +130,21 @@ jobs:
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KS" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$KS" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            # v1.457.0: раньше здесь просто ставилось present=false, и сборка
+            # молча уходила подписываться ОТЛАДОЧНЫМ ключом. А он на каждом
+            # запуске новый: раннер — чистая машина, debug.keystore создаётся
+            # заново со случайным ключом. Значит каждая версия подписана иначе,
+            # и Android отказывается ставить её поверх прошлой со словами
+            # «конфликтует с другим пакетом». Владелец приносил ровно это.
+            #
+            # Молчать об этом нельзя: получается APK, который выглядит рабочим и
+            # не устанавливается никому, кто уже пользуется приложением.
+            echo "::error::Нет секрета ANDROID_KEYSTORE_BASE64 — APK было бы подписано одноразовым отладочным ключом, и обновление не встало бы поверх установленного (Android: «конфликтует с другим пакетом»). Добавь секреты ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+            exit 1
+          fi
 
       - name: Restore release keystore (if configured)
         if: steps.keystore.outputs.present == 'true'

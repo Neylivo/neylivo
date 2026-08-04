@@ -7224,3 +7224,6 @@ body.no-anim .vo-live::before { animation: none; }
   /* Переключатель «запретить / по умолчанию / разрешить» в правах канала. */
   .cset-tri button { width: 44px; height: 40px; }
 }
+
+/* v1.457.0: пояснение в карточке обновления про разовую переустановку. */
+.upd-note { font-size: 11px; color: var(--mut); line-height: 1.4; margin-top: 4px; }

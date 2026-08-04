@@ -32,9 +32,18 @@ android {
     }
     buildTypes {
         release {
-            // Без секретов ANDROID_KEYSTORE_* подписывается debug-ключом (APK всё равно
-            // ставится вручную), с секретами — постоянным release-ключом, чтобы новые
-            // версии ставились поверх старых без переустановки. См. .github/workflows/android.yml
+            // v1.457.0: отладочный ключ здесь — ЛОВУШКА, и об этом надо помнить.
+            //
+            // Он годится ровно для одного случая: собрать APK у себя на машине и
+            // поставить его руками. На сборочной машине debug.keystore создаётся
+            // заново при каждом запуске и содержит СЛУЧАЙНЫЙ ключ — значит каждая
+            // выпущенная версия подписана иначе, и Android отказывается ставить её
+            // поверх прошлой: «приложение конфликтует с другим пакетом». Выпуск в
+            // GitHub Actions теперь падает, если ключа нет (см. release.yml), — чтобы
+            // такой APK вообще не появлялся.
+            //
+            // С секретами ANDROID_KEYSTORE_* подпись постоянная, и обновления
+            // встают поверх без переустановки.
             signingConfig System.getenv("ANDROID_KEYSTORE_PATH") ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
