@@ -168,13 +168,45 @@ jobs:
       - name: Rename APK
         run: cp android/app/build/outputs/apk/release/app-release.apk "Ponoi-Setup-${{ steps.ver.outputs.name }}.apk"
 
+      # v1.467.1: прикладываем APK сами, с ожиданием и повтором.
+      #
+      # Что было. Обе задачи — сборщик установщика и сборщик APK — идут
+      # ПАРАЛЛЕЛЬНО, и обе создавали релиз: установщик через electron-builder,
+      # APK через action-gh-release. Кто успел первым, тот его и создал. На
+      # v1.467.0 они совпали, создание не удалось, и APK не приложился вовсе:
+      # релиз вышел с установщиком и без Android-сборки, а обновление на
+      # телефоне просто перестало предлагаться — молча, без единой ошибки.
+      #
+      # Теперь эта задача релиз НЕ создаёт, пока есть надежда, что его создаст
+      # соседняя: ждёт появления и загружает в готовый. Создаёт сама только
+      # если соседняя задача так и не справилась — иначе APK потерялся бы уже
+      # по другой причине.
       - name: Attach APK to GitHub Release (tag build)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: Ponoi-Setup-*.apk
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -u
+          APK=$(ls Ponoi-Setup-*.apk | head -1)
+          echo "APK: $APK"
+          for i in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              if gh release upload "$TAG" "$APK" --clobber; then
+                echo "APK приложен с попытки $i"
+                exit 0
+              fi
+              echo "загрузка не удалась, попытка $i"
+            else
+              echo "релиза ещё нет, ждём (попытка $i)"
+            fi
+            sleep 10
+          done
+          # Пять минут соседняя задача релиз так и не создала — создаём сами,
+          # иначе APK не увидит никто.
+          echo "создаём релиз сами"
+          gh release create "$TAG" "$APK" --title "$TAG" --notes "Android" || \
+            gh release upload "$TAG" "$APK" --clobber
 
       - name: Upload APK artifact (manual run)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
