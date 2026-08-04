@@ -25,7 +25,6 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
   game: string; isMe: boolean; steamId?: string | null; appId?: string | null; onClose: () => void
 }) {
   const [c, setC] = useState<Campaign | null>(() => loadCampaign(game))
-  const [editing, setEditing] = useState(false)
   const [text, setText] = useState(() => (loadCampaign(game)?.missions ?? []).map(m => m.name).join('\n'))
   const [pick, setPick] = useState<number | null>(null)
   const [q, setQ] = useState('')
@@ -79,13 +78,6 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
 
   const сохранить = (next: Campaign) => { setC(next); saveCampaign(next) }
 
-  function применитьСписок() {
-    const next = buildCampaign(game, text, c)
-    if (next.missions.length === 0) { setEditing(true); return }
-    сохранить(next)
-    setEditing(false)
-    toastOk(`Список сохранён: ${next.missions.length} миссий`)
-  }
 
   return (
     <Portal><div className="modal-overlay" onClick={onClose}>
@@ -103,21 +95,15 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
           </div>
         )}
 
+        {/* v1.461.0: поля «вставь список миссий» больше нет — по прямому
+            указанию владельца. Вбивать прохождение руками это работа, а не
+            удобство; приложение узнаёт вехи само (см. lib/campaign.ts). Если
+            узнать неоткуда — честно говорим почему, а не подсовываем работу. */}
         {ищем ? <div className="cmp-load">Смотрю, где ты сейчас…</div>
-          : (editing || (!авто && !c)) ? <>
-          <label className="modal-lbl">Список миссий — по одной в строке</label>
-          <div className="cset-hint" style={{ marginBottom: 8 }}>
-            Вставь список из вики или из меню игры. Нумерация и маркеры («1.», «-», «•») отбросятся сами,
-            повторы уберутся. Приложение не придумывает миссии за тебя: любой встроенный список был бы
-            написан по памяти, а значит с ошибками. До {MAX_MISSIONS} строк.
-          </div>
-          <textarea className="modal-in cmp-paste" value={text} onChange={e => setText(e.target.value)}
-            placeholder={'Пролог\n1. Побег из деревни\n2. Дорога на север\n…'} />
-          <div className="modal-foot">
-            {c && <button className="modal-ghost" onClick={() => { setEditing(false); setText(строки.map(m => m.name).join('\n')) }}>Отмена</button>}
-            <button className="modal-primary" onClick={применитьСписок}>Сохранить список</button>
-          </div>
-        </> : <>
+          : узлы.length === 0 ? <div className="cmp-load">
+              {auto?.why ? AUTO_WHY[auto.why] : 'Про эту игру приложению пока нечего показать.'}
+            </div>
+          : <>
           {/* Схема, а не список строк: пройденное позади, текущее выделено,
               дальнейшее приглушено — как читают карту прохождения. */}
           <CampaignFlow nodes={узлы} picked={узел?.id ?? null} onPick={n => {
@@ -176,10 +162,7 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
             </div>
           </div>
 
-          {isMe && !авто && <div className="modal-foot">
-            <button className="modal-ghost danger" onClick={() => { forgetCampaign(game); setC(null); setText(''); setEditing(true) }}>Забыть прохождение</button>
-            <button className="modal-ghost" onClick={() => { setText(строки.map(m => m.name).join('\n')); setEditing(true) }}>Править список</button>
-          </div>}
+
         </>}
       </div>
     </div></Portal>

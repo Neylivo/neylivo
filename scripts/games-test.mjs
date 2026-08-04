@@ -9,6 +9,7 @@
 // и проверяется здесь на настоящих кусках .acf — тех самых, что лежат у Steam.
 import { acfField, parseManifest, steamFolder, steamAppsDir, steamNameOf } from '../electron/steamName.cjs'
 import { parseAchievements, isPrivate, appIdFromManifest, steamAchievements } from '../electron/steamAchievements.cjs'
+import { steamIdFromLoginUsers, steamRoots, parseGoldberg, parseAchIni, parseSchema, candidatePaths, localProgress } from '../electron/localProgress.cjs'
 
 let pass = 0, fail = 0
 const ok = n => { pass++; console.log('  ok   ' + n) }
@@ -133,6 +134,114 @@ const r5 = await steamAchievements('76561198000000000', '1', async () => { throw
 check('обрыв связи назван своей причиной', () => !r5.ok && r5.why === 'net')
 const r6 = await steamAchievements('76561198000000000', '1', async () => '<playerstats></playerstats>')
 check('игра без достижений — не ошибка, а своя причина', () => !r6.ok && r6.why === 'empty')
+
+// ── v1.461.0: прохождение с диска — без Steam ID и без сети ──────────────────
+// Владелец сказал прямо: должно работать и «когда на пиратке играешь». У такого
+// человека профиля Steam для этой игры нет вовсе, а прохождение есть — оно
+// лежит у него же на диске, в файлах эмулятора.
+console.log('\n── Прохождение с диска ──')
+
+const VDF = `"users"
+{
+	"76561198000000001"
+	{
+		"AccountName"		"старый"
+		"Timestamp"		"1600000000"
+	}
+	"76561198000000002"
+	{
+		"AccountName"		"свежий"
+		"MostRecent"		"1"
+		"Timestamp"		"1700000000"
+	}
+}`
+
+check('SteamID берётся из файлов Steam, а не спрашивается', () =>
+  steamIdFromLoginUsers(VDF) === '76561198000000002')
+check('без записей учёток — null, а не выдуманный номер', () =>
+  steamIdFromLoginUsers('"users" {}') === null && steamIdFromLoginUsers('') === null)
+check('Steam ищется там, где он обычно стоит', () => {
+  const r = steamRoots({ 'ProgramFiles(x86)': 'C:\\PF86', ProgramFiles: 'C:\\PF' })
+  return r.length >= 2 && r[0].includes('PF86')
+})
+
+const GOLD = JSON.stringify({
+  ACH_PROLOG: { earned: true, earned_time: 1700000000 },
+  ACH_FINAL: { earned: false, earned_time: 0 },
+})
+check('достижения Goldberg читаются', () => {
+  const a = parseGoldberg(GOLD)
+  return a.length === 2 && a[0].id === 'ACH_PROLOG' && a[0].done && a[0].at === 1700000000000
+      && a[1].done === false
+})
+check('старый вид Goldberg (просто список) тоже читается', () =>
+  parseGoldberg('["A","B"]').length === 2 && parseGoldberg('["A"]')[0].done === true)
+check('мусор вместо файла не превращается в вехи', () =>
+  parseGoldberg('не json').length === 0 && parseGoldberg('').length === 0)
+
+const INI = `[SteamAchievements]
+Count=2
+[ACH_ONE]
+Achieved=1
+UnlockTime=1700000000
+[ACH_TWO]
+Achieved=0
+`
+check('достижения CODEX и подобных читаются', () => {
+  const a = parseAchIni(INI)
+  return a.length === 2 && a[0].id === 'ACH_ONE' && a[0].done && a[0].at === 1700000000000
+      && a[1].done === false
+})
+check('служебный раздел вехой не считается', () =>
+  parseAchIni(INI).every(a => a.id !== 'SteamAchievements'))
+
+const SCHEMA = JSON.stringify([
+  { name: 'ACH_ONE', displayName: { russian: 'Пролог' }, description: { russian: 'Выбраться' }, icon: 'a.jpg' },
+])
+check('названия вех берутся из файла рядом с игрой', () => {
+  const s2 = parseSchema(SCHEMA)
+  return s2.ACH_ONE.title === 'Пролог' && s2.ACH_ONE.desc === 'Выбраться'
+})
+
+check('места поиска включают и эмуляторы, и папку игры', () => {
+  const c = candidatePaths('1091500', 'D:\\Games\\X\\game.exe', { APPDATA: 'C:\\AD', PUBLIC: 'C:\\Pub' })
+  const все = c.map(x => x.path).join('|')
+  return все.includes('Goldberg') && все.includes('CODEX') && все.includes('ALI213')
+      && все.includes('steam_settings')
+})
+
+// Собираем всё вместе на поддельных файлах: настоящих на этой машине может не быть.
+const ФАЙЛЫ = {
+  'achievements.ini': INI,
+  'achievements.json': SCHEMA,
+}
+const читатель = p2 => {
+  const имя = String(p2).split(/[\\/]/).pop()
+  if (String(p2).includes('steam_settings')) return SCHEMA
+  if (имя === 'achievements.ini') return INI
+  throw new Error('нет файла')
+}
+const r = localProgress('1091500', 'D:\\Games\\X\\game.exe', { readFile: читатель, env: { APPDATA: 'C:\\AD', PUBLIC: 'C:\\Pub' } })
+check('прохождение собирается с диска целиком', () =>
+  r.ok && r.items.length === 2 && r.items[0].name === 'Пролог' && r.items[0].done === true)
+check('без файлов — честная причина, а не выдуманное прохождение', () => {
+  const пусто = localProgress('1', 'D:\\X\\g.exe', { readFile: () => { throw new Error('нет') }, env: {} })
+  return !пусто.ok && пусто.why === 'no-local'
+})
+check('без названий показываем метки достижений, а не выдумываем', () => {
+  const без = localProgress('1', null, {
+    readFile: p3 => (String(p3).includes('CODEX') ? INI : (() => { throw new Error('нет') })()),
+    env: { PUBLIC: 'C:\\Pub' },
+  })
+  return без.ok && без.items[0].name === 'ACH_ONE'
+})
+
+console.log('\n── Ломаем нарочно (диск) ──')
+check('проверка ловит требование Steam ID там, где он не нужен', () => {
+  // Смысл всей правки: прохождение читается вообще без учётной записи.
+  const r2 = localProgress('1091500', 'D:\\Games\\X\\game.exe', { readFile: читатель, env: { APPDATA: 'C:\\AD', PUBLIC: 'C:\\Pub' } })
+  return r2.ok && r2.items.length > 0
+})
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

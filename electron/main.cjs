@@ -75,6 +75,7 @@ function showMainWindow() {
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
 const { steamNameOf, steamAppIdOf } = require('./steamName.cjs')
 const { steamAchievements } = require('./steamAchievements.cjs')
+const { localProgress, localSteamId } = require('./localProgress.cjs')
 
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
@@ -263,10 +264,19 @@ async function findCover(name) {
 // Steam не разрешает браузеру читать свои ответы, и из страницы такой запрос
 // просто не состоится. Ключа не нужно — нужен публичный профиль.
 ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
-  const steamId = String((arg && arg.steamId) || '')
   // Номер игры берём из манифеста рядом с запущенной игрой: то же место,
   // откуда уже берём её настоящее название.
   const appId = String((arg && arg.appId) || '') || (curGameExe ? steamAppIdOf(curGameExe) : null)
+
+  // v1.461.0: СНАЧАЛА смотрим на диск. Это работает без Steam ID, без открытого
+  // профиля, без сети и — главное — для нелицензионных копий, где профиля Steam
+  // для этой игры нет вовсе, а прохождение у человека есть.
+  const свои = localProgress(appId, curGameExe)
+  if (свои.ok) return свои
+
+  // И только потом — профиль Steam. SteamID тоже больше не спрашиваем у
+  // человека: он записан в файлах самого Steam.
+  const steamId = String((arg && arg.steamId) || '') || localSteamId() || ''
   if (!appId) return { ok: false, why: 'no-appid' }
   return await steamAchievements(steamId, appId)
 })
