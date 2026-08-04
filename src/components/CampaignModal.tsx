@@ -13,7 +13,7 @@ import { Portal } from './Portal'
 import { toastOk } from '../lib/toast'
 import { loadAi, askAi, aiReady } from '../lib/gameAi'
 import { CampaignFlow } from './CampaignFlow'
-import { flowProgress, type FlowNode, type Placed } from '../lib/flow'
+import { flowProgress, flowPrompt, type FlowNode, type Placed } from '../lib/flow'
 import { copyText } from '../lib/copyMedia'
 import {
   loadCampaign, saveCampaign, forgetCampaign, buildCampaign, toggleMission, setNote,
@@ -50,22 +50,22 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
     return () => { жив = false }
   }, [game, steamId, appId])
 
+  // Что показываем: вехи из Steam, если они есть, иначе ручной список.
+  const авто = !!auto?.nodes.length
+  const узлы: FlowNode[] = авто ? auto!.nodes : nodesFromCampaign(c)
+  const прогресс = flowProgress(узлы)
+
   async function спросить() {
     if (busy || !q.trim()) return
     setBusy(true); setОтвет(''); setErr('')
     try {
       let acc = ''
-      await askAi(ai, askPrompt(c, q), piece => { acc += piece; setОтвет(acc) })
+      await askAi(ai, flowPrompt(game, узлы, q), piece => { acc += piece; setОтвет(acc) })
       if (!acc) setErr('Сервис ответил пустотой — попробуй ещё раз или другую модель')
     } catch (e: any) {
       setErr(e?.message ?? String(e))
     } finally { setBusy(false) }
   }
-
-  // Что показываем: вехи из Steam, если они есть, иначе ручной список.
-  const авто = !!auto?.nodes.length
-  const узлы: FlowNode[] = авто ? auto!.nodes : nodesFromCampaign(c)
-  const прогресс = flowProgress(узлы)
 
   const { done, total } = counts(c)
   const pct = percent(c)
@@ -162,7 +162,7 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
                     {busy ? 'Спрашиваю…' : 'Спросить'}
                   </button>
                 : <button className="pqs2-btn" disabled={!q.trim()}
-                    onClick={() => { copyText(askPrompt(c, q), 'Вопрос вместе с местом прохождения скопирован') }}>
+                    onClick={() => { copyText(flowPrompt(game, узлы, q), 'Вопрос вместе с местом прохождения скопирован') }}>
                     Скопировать вопрос
                   </button>}
             </div>
@@ -171,7 +171,7 @@ export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
             <div className="cset-hint">
               К вопросу прикладывается, где ты сейчас: игра, миссия и проценты, — и просьба не
               рассказывать сюжет вперёд. {aiReady(ai)
-                ? 'Отвечает ' + (ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI') + ' по твоему ключу — он лежит только на этом устройстве.'
+                ? 'Отвечает ' + (ai.provider === 'gemini' ? 'Gemini' : ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI') + ' по твоему ключу — он лежит только на этом устройстве.'
                 : 'Свой ключ ИИ задаётся в Настройках → Активность; без него вопрос просто копируется, чтобы вставить куда угодно.'}
             </div>
           </div>

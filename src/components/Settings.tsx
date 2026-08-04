@@ -23,7 +23,7 @@ import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint } from '../lib/crypto/keys'
 import { SignOutModal } from './SignOutModal'
 import { IS_MOBILE } from '../lib/mobile'
-import { loadAi, saveAi, DEFAULT_MODEL as AI_DEFAULT_MODEL } from '../lib/gameAi'
+import { loadAi, saveAi, DEFAULT_MODEL as AI_DEFAULT_MODEL, KEY_HELP as AI_KEY_HELP } from '../lib/gameAi'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
@@ -1319,19 +1319,21 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                     каждого человека. */}
                 <div className="pqs-sec-t">Подсказки по игре</div>
                 <div className="pqs2-desc">
-                  В панели прохождения можно спросить про место, где ты сейчас, — вопрос уйдёт вместе с игрой,
-                  миссией и процентами. Отвечает не Ponoi, а сервис по твоему ключу: он хранится только на этом
-                  устройстве и никуда больше не отправляется. Без ключа вопрос просто копируется — вставишь куда захочешь.
+                  В панели прохождения можно спросить про место, где ты сейчас. К вопросу само прикладывается всё,
+                  что приложение знает об игре: название, сколько пройдено и в процентах, текущая веха с описанием,
+                  последние пройденные и ближайшие впереди. Ничего, кроме игры, не уходит — ни имени, ни переписки.
+                  Отвечает не Ponoi, а сервис по твоему ключу: ключ хранится только на этом устройстве.
+                  У Gemini ключ бесплатный — с него проще всего начать.
                 </div>
                 <div className="pqs-seg">
-                  {([['openai', 'OpenAI'], ['anthropic', 'Anthropic']] as const).map(([v, label]) => (
+                  {([['gemini', 'Gemini'], ['openai', 'OpenAI'], ['anthropic', 'Anthropic']] as const).map(([v, label]) => (
                     <button key={v} className={'pqs-seg-btn' + (aiCfg.provider === v ? ' on' : '')}
                       onClick={() => setAiCfg(c => { const n = { ...c, provider: v, model: AI_DEFAULT_MODEL[v] }; saveAi(n); return n })}>{label}</button>
                   ))}
                 </div>
                 <input className="pqs-in" type="password" value={aiCfg.key}
                   onChange={e => setAiCfg(c => { const n = { ...c, key: e.target.value }; saveAi(n); return n })}
-                  placeholder={aiCfg.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} autoComplete="off" />
+                  placeholder={aiCfg.provider === 'gemini' ? 'AIza…' : aiCfg.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} autoComplete="off" />
                 <input className="pqs-in" value={aiCfg.model}
                   onChange={e => setAiCfg(c => { const n = { ...c, model: e.target.value }; saveAi(n); return n })}
                   placeholder="Модель" />
@@ -1339,7 +1341,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   onChange={e => setAiCfg(c => { const n = { ...c, base: e.target.value.trim() || undefined }; saveAi(n); return n })}
                   placeholder="Свой адрес сервиса — если он говорит на языке OpenAI (необязательно)" />
                 <div className="pqs-code-sub">
-                  Ключ виден только тебе и уходит напрямую в выбранный сервис. Удалить — очисти поле.
+                  {AI_KEY_HELP[aiCfg.provider]}. Ключ виден только тебе и уходит напрямую в выбранный сервис — удалить можно, очистив поле.
                 </div>
 
                 <div className="pqs-sec-t">Статистика Dota 2</div>

@@ -118,3 +118,65 @@ export function flowProgress(list: readonly FlowNode[]): { done: number; total: 
   const done = list.filter(n => n.done).length
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0 }
 }
+
+// ── v1.459.0: что рассказать ИИ о месте прохождения ─────────────────────────
+//
+// Владелец сформулировал прямо: «когда посылает запрос, сразу кидает и твой
+// прогресс, и все данные об игре». Здесь это и собирается — одним местом, из
+// тех же узлов, которые нарисованы на схеме. Иначе вышло бы привычное
+// расхождение: на экране одно, а ИИ рассказали другое.
+//
+// Что уходит: название игры, сколько пройдено и в процентах, текущая веха с её
+// описанием, последние пройденные (по ним видно, куда человек движется) и
+// ближайшие непройденные (по ним видно, что впереди). Список целиком не шлём:
+// у иных игр он на полтысячи строк, и это и дорого, и бесполезно.
+//
+// Чего НЕ уходит: ничего, кроме игры. Ни имени, ни переписки, ни серверов.
+
+/** Сколько соседних вех приложить к вопросу. */
+export const CTX_BEFORE = 6
+export const CTX_AFTER = 6
+
+export function flowContext(game: string, list: readonly FlowNode[], сколькоИграет?: string): string {
+  const ordered = orderNodes(list)
+  const { done, total, pct } = flowProgress(ordered)
+  if (total === 0) return game ? `Игра: ${game}.` : ''
+
+  const i = ordered.findIndex(n => !n.done)
+  const cur = i >= 0 ? ordered[i] : null
+  const части: string[] = [`Игра: ${game}.`]
+  if (сколькоИграет) части.push(`Сегодня в ней: ${сколькоИграет}.`)
+  части.push(total === done
+    ? `Пройдено полностью: все ${total} вех.`
+    : `Пройдено ${done} из ${total} — это ${pct}%.`)
+
+  if (cur) {
+    части.push(`Сейчас на вехе «${cur.title}»${cur.desc ? ` (${cur.desc})` : ''}.`)
+  }
+
+  const позади = ordered.slice(Math.max(0, i - CTX_BEFORE), i < 0 ? ordered.length : i)
+  if (позади.length) {
+    части.push('Уже пройдено недавно: ' + позади.map(n => n.title).join('; ') + '.')
+  }
+  const впереди = i >= 0 ? ordered.slice(i + 1, i + 1 + CTX_AFTER) : []
+  if (впереди.length) {
+    части.push('Ещё не пройдено: ' + впереди.map(n => n.title).join('; ') + '.')
+  }
+  return части.join(' ')
+}
+
+/** Полный текст вопроса: место прохождения + сам вопрос + правила ответа. */
+export function flowPrompt(game: string, list: readonly FlowNode[], question: string, играет?: string): string {
+  const q = String(question ?? '').trim()
+  if (!q) return ''
+  const ctx = flowContext(game, list, играет)
+  // Просьбы к модели — не украшение. Без первой она пересказывает сюжет вперёд и
+  // портит игру; без второй отвечает сочинением на три экрана, которое читать
+  // некогда, когда ты стоишь в игре и ждёшь.
+  const правила = [
+    'Отвечай коротко и по делу, на русском.',
+    'Не рассказывай, что будет дальше по сюжету, если об этом не спросили прямо: испортить сюжет хуже, чем не ответить.',
+    'Если не знаешь точно — так и скажи, не выдумывай названия предметов и мест.',
+  ].join(' ')
+  return ctx ? `${ctx}\n\nВопрос: ${q}\n\n${правила}` : `${q}\n\n${правила}`
+}

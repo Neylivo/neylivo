@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { flowContext, flowPrompt } from './flow'
 import { layoutFlow, orderNodes, linkPath, flowProgress, NODE_W, NODE_H } from './flow'
 import { makeSseReader, buildRequest, aiReady, whyFailed } from './gameAi'
 import { fromEdge, swipeDir, swipeAction } from './swipe'
@@ -2025,6 +2026,97 @@ check('проверка ловит раскладку в одну строку',
 check('проверка ловит наезд узлов друг на друга', () => {
   const l = layoutFlow(цепь(2, 0), 4)
   return l.nodes[1].x - l.nodes[0].x >= NODE_W
+})
+
+
+// -- v1.459.0: Gemini и что уходит вместе с вопросом -------------------------
+// Владелец попросил Gemini и чтобы к вопросу сразу шли прогресс и данные об
+// игре. У Google свой вид запроса и свой вид потока — значит своя ветка, и
+// значит своя проверка: молча собранный не так запрос выглядит как «ИИ не
+// работает».
+console.log('\n-- Gemini и контекст игры --')
+const gem = { provider: 'gemini' as const, key: 'AIzaKEY', model: 'gemini-2.0-flash' }
+const кусокG = (t: string) => 'data: ' + JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] }) + '\n\n'
+
+check('ключ уходит в адресе, а не заголовком', () => {
+  const r = buildRequest(gem, 'вопрос')
+  return r.url.includes('key=AIzaKEY') && !JSON.stringify(r.headers).includes('AIzaKEY')
+})
+check('просим именно поток', () => buildRequest(gem, 'в').url.includes('alt=sse'))
+check('модель подставляется в адрес', () =>
+  buildRequest(gem, 'в').url.includes('gemini-2.0-flash:streamGenerateContent'))
+check('вопрос уходит в теле по формату Google', () => {
+  const b = JSON.parse(buildRequest(gem, 'где ключ?').body)
+  return b.contents[0].parts[0].text === 'где ключ?'
+})
+check('свой адрес сервиса учитывается', () =>
+  buildRequest({ ...gem, base: 'https://мой.local' }, 'в').url.startsWith('https://мой.local'))
+
+check('ответ Gemini собирается по словам', () => {
+  const r = makeSseReader('gemini')
+  return [...r(кусокG('При')), ...r(кусокG('вет'))].join('') === 'Привет'
+})
+check('несколько кусков в одном ответе не теряются', () => {
+  const r = makeSseReader('gemini')
+  const j = 'data: ' + JSON.stringify({ candidates: [{ content: { parts: [{ text: 'а' }, { text: 'б' }] } }] }) + '\n\n'
+  return r(j).join('') === 'аб'
+})
+check('поток Gemini, порванный посреди JSON, не теряет слов', () => {
+  const r = makeSseReader('gemini')
+  const весь = кусокG('Ключ под ковром')
+  const где = Math.floor(весь.length / 2)
+  return [...r(весь.slice(0, где)), ...r(весь.slice(где))].join('') === 'Ключ под ковром'
+})
+check('чужой формат в ветке Gemini не читается как ответ', () => {
+  const r = makeSseReader('gemini')
+  return r('data: ' + JSON.stringify({ choices: [{ delta: { content: 'нет' } }] }) + '\n\n').length === 0
+})
+
+const вехи = [
+  { id: '1', title: 'Пролог', desc: 'Выбраться', done: true, at: 100 },
+  { id: '2', title: 'Дорога', done: true, at: 200 },
+  { id: '3', title: 'Замок', desc: 'Найти ключ', done: false },
+  { id: '4', title: 'Финал', done: false },
+]
+
+check('к вопросу уходит игра, прогресс и текущая веха', () => {
+  const t = flowContext('Игра', вехи)
+  return t.includes('Игра') && t.includes('2 из 4') && t.includes('50%')
+    && t.includes('Замок') && t.includes('Найти ключ')
+})
+check('уходит и то, что позади, и то, что впереди', () => {
+  const t = flowContext('Игра', вехи)
+  return t.includes('Пролог') && t.includes('Дорога') && t.includes('Финал')
+})
+check('пройденную игру описываем как пройденную', () =>
+  flowContext('Игра', вехи.map(n => ({ ...n, done: true }))).includes('полностью'))
+check('без вех уходит хотя бы название игры', () =>
+  flowContext('Игра', []) === 'Игра: Игра.')
+check('время за игрой прикладывается, когда известно', () =>
+  flowContext('Игра', вехи, '2 ч 15 м').includes('2 ч 15 м'))
+
+check('длинный список целиком не шлём', () => {
+  // У иных игр вех полтысячи: слать всё — это и дорого, и бесполезно.
+  const много = Array.from({ length: 400 }, (_, i) => ({ id: 'x' + i, title: 'Веха ' + i, done: i < 200 }))
+  const t = flowContext('Игра', много)
+  return t.length < 1200 && t.includes('200 из 400')
+})
+
+check('пустой вопрос никуда не уходит', () => flowPrompt('Игра', вехи, '  ') === '')
+check('модель просят не портить сюжет и не выдумывать', () => {
+  const t = flowPrompt('Игра', вехи, 'куда идти?')
+  return /испортить сюжет/.test(t) && /не выдумывай/.test(t) && t.includes('куда идти?')
+})
+
+console.log('\n-- Ломаем нарочно (Gemini) --')
+check('проверка ловит ключ, ушедший заголовком вместо адреса', () => {
+  const r = buildRequest(gem, 'в')
+  return !JSON.stringify(r.headers).includes(gem.key) && r.url.includes(gem.key)
+})
+check('проверка ловит вопрос без прогресса', () => {
+  const голый = flowPrompt('Игра', [], 'вопрос')
+  const полный = flowPrompt('Игра', вехи, 'вопрос')
+  return !голый.includes('50%') && полный.includes('50%')
 })
 
 
