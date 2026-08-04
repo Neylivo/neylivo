@@ -73,7 +73,8 @@ function showMainWindow() {
 // ---- Авто-детект игр (как в Discord) ----
 // Раз в 4 секунды (как в Discord) смотрим ОКНА Windows (PowerShell Get-Process). Рендереру шлём событие ТОЛЬКО
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
-const { steamNameOf } = require('./steamName.cjs')
+const { steamNameOf, steamAppIdOf } = require('./steamName.cjs')
+const { steamAchievements } = require('./steamAchievements.cjs')
 
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
@@ -258,6 +259,18 @@ async function findCover(name) {
   coverCache.set(name, url)
   return url
 }
+// v1.458.0: вехи прохождения из Steam. Запрос идёт отсюда, а не из окна:
+// Steam не разрешает браузеру читать свои ответы, и из страницы такой запрос
+// просто не состоится. Ключа не нужно — нужен публичный профиль.
+ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
+  const steamId = String((arg && arg.steamId) || '')
+  // Номер игры берём из манифеста рядом с запущенной игрой: то же место,
+  // откуда уже берём её настоящее название.
+  const appId = String((arg && arg.appId) || '') || (curGameExe ? steamAppIdOf(curGameExe) : null)
+  if (!appId) return { ok: false, why: 'no-appid' }
+  return await steamAchievements(steamId, appId)
+})
+
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
 // ---- v1.180.0: «Игровой Экспресс» (QuickLaunch) — поделиться сборкой Minecraft ----

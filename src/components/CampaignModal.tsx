@@ -7,21 +7,25 @@
 // Данные не выдумываются: список миссий вставляет человек, отметки ставит он же
 // (см. lib/campaign.ts — там же сказано, почему автоматического источника для
 // одиночных игр не существует). Приложение считает и показывает.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { toastOk } from '../lib/toast'
 import { loadAi, askAi, aiReady } from '../lib/gameAi'
+import { CampaignFlow } from './CampaignFlow'
+import { flowProgress, type FlowNode, type Placed } from '../lib/flow'
 import { copyText } from '../lib/copyMedia'
 import {
   loadCampaign, saveCampaign, forgetCampaign, buildCampaign, toggleMission, setNote,
   counts, percent, currentIndex, isComplete, fullLabel, askPrompt,
-  MAX_MISSIONS, type Campaign,
+  autoNodes, nodesFromCampaign, AUTO_WHY, MAX_MISSIONS, type Campaign, type AutoWhy,
 } from '../lib/campaign'
 
-export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boolean; onClose: () => void }) {
+export function CampaignModal({ game, isMe, steamId, appId, onClose }: {
+  game: string; isMe: boolean; steamId?: string | null; appId?: string | null; onClose: () => void
+}) {
   const [c, setC] = useState<Campaign | null>(() => loadCampaign(game))
-  const [editing, setEditing] = useState(() => !loadCampaign(game))
+  const [editing, setEditing] = useState(false)
   const [text, setText] = useState(() => (loadCampaign(game)?.missions ?? []).map(m => m.name).join('\n'))
   const [pick, setPick] = useState<number | null>(null)
   const [q, setQ] = useState('')
@@ -30,6 +34,21 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
   const [ответ, setОтвет] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // v1.458.0: вехи приложение узнаёт САМО — из Steam, по профилю человека.
+  // Ручной список остался запасным путём: для игр не из Steam и закрытого профиля.
+  const [auto, setAuto] = useState<{ nodes: FlowNode[]; why?: AutoWhy } | null>(null)
+  const [ищем, setИщем] = useState(true)
+  const [узел, setУзел] = useState<Placed | null>(null)
+
+  useEffect(() => {
+    let жив = true
+    autoNodes(steamId ?? null, appId ?? null).then(r => {
+      if (!жив) return
+      setAuto({ nodes: r.nodes, why: r.why })
+      setИщем(false)
+    })
+    return () => { жив = false }
+  }, [game, steamId, appId])
 
   async function спросить() {
     if (busy || !q.trim()) return
@@ -42,6 +61,11 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
       setErr(e?.message ?? String(e))
     } finally { setBusy(false) }
   }
+
+  // Что показываем: вехи из Steam, если они есть, иначе ручной список.
+  const авто = !!auto?.nodes.length
+  const узлы: FlowNode[] = авто ? auto!.nodes : nodesFromCampaign(c)
+  const прогресс = flowProgress(узлы)
 
   const { done, total } = counts(c)
   const pct = percent(c)
@@ -68,16 +92,19 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
       <div className="modal cmp" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="modal-title" style={{ margin: 0 }}>{game}</div>
-        <div className="cmp-sub">{total > 0 ? fullLabel(c) : 'Прохождение ещё не заведено'}</div>
+        <div className="cmp-sub">{прогресс.total > 0
+          ? `Пройдено ${прогресс.done} из ${прогресс.total} · ${прогресс.pct}%`
+          : (auto?.why ? AUTO_WHY[auto.why] : 'Прохождение ещё не заведено')}</div>
 
-        {total > 0 && (
-          <div className="cmp-bar" title={`${done} из ${total}`}>
-            <div className={'cmp-bar-fill' + (isComplete(c) ? ' full' : '')} style={{ width: pct + '%' }} />
-            <span className="cmp-bar-tx">{pct}%</span>
+        {прогресс.total > 0 && (
+          <div className="cmp-bar" title={`${прогресс.done} из ${прогресс.total}`}>
+            <div className={'cmp-bar-fill' + (прогресс.pct >= 100 ? ' full' : '')} style={{ width: прогресс.pct + '%' }} />
+            <span className="cmp-bar-tx">{прогресс.pct}%</span>
           </div>
         )}
 
-        {editing ? <>
+        {ищем ? <div className="cmp-load">Смотрю, где ты сейчас…</div>
+          : (editing || (!авто && !c)) ? <>
           <label className="modal-lbl">Список миссий — по одной в строке</label>
           <div className="cset-hint" style={{ marginBottom: 8 }}>
             Вставь список из вики или из меню игры. Нумерация и маркеры («1.», «-», «•») отбросятся сами,
@@ -91,30 +118,27 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
             <button className="modal-primary" onClick={применитьСписок}>Сохранить список</button>
           </div>
         </> : <>
-          <div className="cmp-list">
-            {строки.map((m, i) => (
-              <div key={i} className={'cmp-row' + (m.done ? ' done' : '') + (i === cur ? ' cur' : '') + (i === выбрана ? ' sel' : '')}
-                onClick={() => setPick(i)}>
-                <button className={'cmp-tick' + (m.done ? ' on' : '')} title={m.done ? 'Снять отметку' : 'Отметить пройденной'}
-                  onClick={e => { e.stopPropagation(); if (isMe) сохранить(toggleMission(c!, i)) }}
-                  disabled={!isMe}>
-                  {m.done ? <Icon name="check" size={13} /> : null}
-                </button>
-                <span className="cmp-num">{i + 1}</span>
-                <span className="cmp-nm">{m.name}</span>
-                {i === cur && <span className="cmp-here">сейчас здесь</span>}
-                {m.note && <Icon name="edit" size={12} />}
-              </div>
-            ))}
-          </div>
+          {/* Схема, а не список строк: пройденное позади, текущее выделено,
+              дальнейшее приглушено — как читают карту прохождения. */}
+          <CampaignFlow nodes={узлы} picked={узел?.id ?? null} onPick={n => {
+            setУзел(n)
+            // Отмечать можно только ручной список: вехи Steam отмечает сама игра,
+            // и врать про них галочкой нельзя.
+            if (!авто && isMe) сохранить(toggleMission(c!, n.step))
+          }} />
+          {!авто && <div className="cset-hint">Нажатие по вехе отмечает её пройденной — и всё, что до неё.</div>}
+          {авто && <div className="cset-hint">
+            Вехи и отметки берутся из твоего профиля Steam — отмечать вручную ничего не нужно.
+          </div>}
 
           {/* Советы внизу — свои заметки к выбранной миссии. Приложение их не
               сочиняет: подсказка, написанная приложением от себя, была бы
               выдумкой ровно там, где человек ждёт точности. */}
           <div className="cmp-note">
             <label className="modal-lbl">
-              {миссия ? `Заметки к миссии «${миссия.name}»` : 'Заметки'}
+              {узел ? `«${узел.title}»` : миссия ? `Заметки к «${миссия.name}»` : 'Заметки'}
             </label>
+            {узел?.desc && <div className="cmp-desc">{узел.desc}</div>}
             {isMe ? (
               <textarea className="modal-in" rows={3} value={миссия?.note ?? ''}
                 placeholder="Что помогло, куда идти, где спрятан ключ — это увидишь только ты"
@@ -152,7 +176,7 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
             </div>
           </div>
 
-          {isMe && <div className="modal-foot">
+          {isMe && !авто && <div className="modal-foot">
             <button className="modal-ghost danger" onClick={() => { forgetCampaign(game); setC(null); setText(''); setEditing(true) }}>Забыть прохождение</button>
             <button className="modal-ghost" onClick={() => { setText(строки.map(m => m.name).join('\n')); setEditing(true) }}>Править список</button>
           </div>}

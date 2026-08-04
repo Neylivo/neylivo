@@ -8,6 +8,7 @@
 // Теперь разбор манифеста Steam вынесен отдельным файлом (electron/steamName.cjs)
 // и проверяется здесь на настоящих кусках .acf — тех самых, что лежат у Steam.
 import { acfField, parseManifest, steamFolder, steamAppsDir, steamNameOf } from '../electron/steamName.cjs'
+import { parseAchievements, isPrivate, appIdFromManifest, steamAchievements } from '../electron/steamAchievements.cjs'
 
 let pass = 0, fail = 0
 const ok = n => { pass++; console.log('  ok   ' + n) }
@@ -87,6 +88,51 @@ check('проверка ловит возврат к имени папки', () 
   const папка = steamFolder('D:\\Steam\\steamapps\\common\\dota 2 beta\\dota2.exe')
   return папка === 'dota 2 beta' && steamNameOf('D:\\Steam\\steamapps\\common\\dota 2 beta\\dota2.exe', readDir, readFile) !== папка
 })
+
+// ── v1.458.0: вехи прохождения из профиля Steam ──────────────────────────────
+// Владелец сказал прямо: вбивать список миссий руками — не то. Настоящий
+// источник — достижения в его собственном профиле Steam: название, описание,
+// картинка и отметка «пройдено». Разбор ответа проверяется здесь.
+console.log('\n── Вехи прохождения из Steam ──')
+
+const XML = `<?xml version="1.0"?><playerstats>
+<achievements>
+<achievement closed="1"><iconClosed>https://x/a.jpg</iconClosed><iconOpen>https://x/b.jpg</iconOpen>
+<name><![CDATA[Пролог пройден]]></name><description><![CDATA[Выбраться из Найт-Сити]]></description>
+<unlockTimestamp>1700000000</unlockTimestamp></achievement>
+<achievement closed="0"><iconClosed>https://x/c.jpg</iconClosed>
+<name>Дальше некуда</name><description>Дойти до финала</description></achievement>
+</achievements></playerstats>`
+
+check('вехи разбираются с названием, описанием и отметкой', () => {
+  const a = parseAchievements(XML)
+  return a.length === 2 && a[0].name === 'Пролог пройден' && a[0].done === true
+    && a[0].desc === 'Выбраться из Найт-Сити' && a[1].done === false
+})
+check('время прохождения переводится в миллисекунды', () =>
+  parseAchievements(XML)[0].at === 1700000000000 && parseAchievements(XML)[1].at === 0)
+check('закрытый профиль виден как закрытый, а не как пустой', () =>
+  isPrivate('<playerstats><privacyState>private</privacyState></playerstats>') === true
+  && isPrivate(XML) === false)
+check('мусор вместо ответа не превращается в вехи', () =>
+  parseAchievements('не xml').length === 0 && parseAchievements('').length === 0)
+check('номер игры достаётся из имени манифеста', () =>
+  appIdFromManifest('appmanifest_1091500.acf') === '1091500'
+  && appIdFromManifest('libraryfolders.vdf') === null)
+
+const дай = async () => XML
+const r1 = await steamAchievements('76561198000000000', '1091500', дай)
+check('вехи приходят как готовый список', () => r1.ok && r1.items.length === 2)
+const r2 = await steamAchievements('короткий', '1091500', дай)
+check('кривой SteamID отсекается сразу', () => !r2.ok && r2.why === 'no-steamid')
+const r3 = await steamAchievements('76561198000000000', '', дай)
+check('без номера игры не спрашиваем', () => !r3.ok && r3.why === 'no-appid')
+const r4 = await steamAchievements('76561198000000000', '1', async () => '<privacyState>private</privacyState>')
+check('закрытый профиль назван своей причиной', () => !r4.ok && r4.why === 'private')
+const r5 = await steamAchievements('76561198000000000', '1', async () => { throw new Error('сеть') })
+check('обрыв связи назван своей причиной', () => !r5.ok && r5.why === 'net')
+const r6 = await steamAchievements('76561198000000000', '1', async () => '<playerstats></playerstats>')
+check('игра без достижений — не ошибка, а своя причина', () => !r6.ok && r6.why === 'empty')
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

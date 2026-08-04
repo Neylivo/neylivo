@@ -71,4 +71,23 @@ function steamNameOf(exePath, readDir = fs.readdirSync, readFile = fs.readFileSy
   return null
 }
 
-module.exports = { acfField, parseManifest, steamFolder, steamAppsDir, steamNameOf }
+/** v1.458.0: и номер игры в Steam — по нему приложение само тянет вехи
+ *  прохождения (см. steamAchievements.cjs). Тот же поиск, тот же файл. */
+function steamAppIdOf(exePath, readDir = fs.readdirSync, readFile = fs.readFileSync) {
+  const folder = steamFolder(exePath)
+  const dir = steamAppsDir(exePath)
+  if (!folder || !dir) return null
+  let files
+  try { files = readDir(dir) } catch { return null }
+  for (const f of files) {
+    const m2 = /^appmanifest_(\d+)\.acf$/i.exec(f)
+    if (!m2) continue
+    let text
+    try { text = String(readFile(path.join(dir, f), 'utf8')) } catch { continue }
+    const m = parseManifest(text)
+    if (m && m.installdir.toLowerCase() === folder.toLowerCase()) return m2[1]
+  }
+  return null
+}
+
+module.exports = { acfField, parseManifest, steamFolder, steamAppsDir, steamNameOf, steamAppIdOf }

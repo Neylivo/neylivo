@@ -7128,7 +7128,10 @@ body.no-anim .vo-live::before { animation: none; }
 /* v1.452.0: панель прохождения сюжетной игры (CampaignModal).
    Устроена как статистика CS2: не одна строка, а вся картина — полоса
    процентов, список миссий, текущая отдельно и свои заметки внизу. */
-.modal.cmp { width: min(680px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+/* v1.458.0: под схему нужно место — это карта прохождения, а не список.
+   На 680 пикселях от неё видно полтора ряда, и человек ездит вбок вместо
+   того, чтобы смотреть. */
+.modal.cmp { width: min(1180px, 96vw); max-height: 92vh; display: flex; flex-direction: column; }
 .cmp-sub { color: var(--mut); font-size: 13px; margin: 2px 0 12px; }
 .cmp-bar { position: relative; height: 22px; border-radius: 999px; background: var(--bg3); overflow: hidden; flex: none; }
 .cmp-bar-fill { position: absolute; inset: 0 auto 0 0; background: var(--brand, #5865f2); transition: width .25s var(--ease-out4, ease); }
@@ -7227,3 +7230,37 @@ body.no-anim .vo-live::before { animation: none; }
 
 /* v1.457.0: пояснение в карточке обновления про разовую переустановку. */
 .upd-note { font-size: 11px; color: var(--mut); line-height: 1.4; margin-top: 4px; }
+
+/* v1.458.0: схема прохождения (CampaignFlow) — вместо списка строк.
+   Пройденное позади и приглушено, текущее выделено, дальнейшее бледное:
+   так читают карту прохождения, а не перечень. */
+.flow-wrap { position: relative; flex: 1; min-height: 220px; display: flex; }
+.flow-box { flex: 1; overflow: auto; background: var(--bg3); border-radius: var(--r-md);
+  cursor: grab; overscroll-behavior: contain; }
+.flow-box:active { cursor: grabbing; }
+.flow-canvas { position: relative; }
+.flow-lines { position: absolute; inset: 0; pointer-events: none; }
+.flow-link { fill: none; stroke: rgba(var(--ov, 255,255,255),.16); stroke-width: 2; }
+.flow-link.done { stroke: color-mix(in srgb, var(--brand, #5865f2) 70%, transparent); }
+.flow-node { position: absolute; display: flex; align-items: center; gap: 9px; padding: 0 10px;
+  border-radius: var(--r-md); background: var(--bg2); border: 1px solid rgba(var(--ov, 255,255,255),.08);
+  cursor: pointer; box-sizing: border-box; overflow: hidden; }
+.flow-node:hover { border-color: rgba(var(--ov, 255,255,255),.22); }
+.flow-node.done { opacity: .62; }
+.flow-node.done .flow-nm { text-decoration: line-through; text-decoration-color: rgba(var(--ov, 255,255,255),.25); }
+.flow-node.cur { border-color: var(--brand, #5865f2); background: color-mix(in srgb, var(--brand, #5865f2) 16%, var(--bg2)); opacity: 1; }
+.flow-node.sel { box-shadow: 0 0 0 2px var(--brand, #5865f2); }
+.flow-ic { width: 34px; height: 34px; border-radius: var(--r-sm); flex: none; object-fit: cover; }
+.flow-ic.ph { display: flex; align-items: center; justify-content: center; background: var(--bg3); color: var(--mut); font-size: 12px; }
+.flow-nm { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.3; max-height: 34px; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.flow-here { position: absolute; right: 8px; top: 4px; font-size: 9.5px; font-weight: 800;
+  color: var(--brand, #5865f2); letter-spacing: .02em; }
+.flow-tools { position: absolute; right: 8px; bottom: 8px; z-index: 2; display: flex; gap: 6px; }
+.flow-tools button { width: 34px; height: 34px; border-radius: var(--r-sm); border: none;
+  background: var(--bg2); color: var(--tx); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cmp-load { padding: 28px 0; text-align: center; color: var(--mut); font-size: 13.5px; }
+.cmp-desc { font-size: 12.5px; color: var(--tx-2, #b5bac1); margin: -4px 0 8px; line-height: 1.45; }
+@media (max-width: 768px) {
+  .flow-tools button { width: 40px; height: 40px; }
+}

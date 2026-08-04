@@ -602,7 +602,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             throw new Error('wall save failed')
           }
         }} />}
-        {campOpen && curGame && <CampaignModal game={curGame.name} isMe={isMe} onClose={() => setCampOpen(false)} />}
+        {campOpen && curGame && <CampaignModal game={curGame.name} isMe={isMe} steamId={pp.steamId} onClose={() => setCampOpen(false)} />}
         {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} steamId={pp.steamId} isMe={isMe} onClose={() => setStatsOpen(false)} />}
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}

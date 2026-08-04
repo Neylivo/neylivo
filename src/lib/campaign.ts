@@ -279,3 +279,66 @@ export function listCampaigns(): Campaign[] {
     .filter(c => c && Array.isArray(c.missions))
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
 }
+
+// ── v1.458.0: приложение узнаёт вехи само ────────────────────────────────────
+//
+// Владелец сказал прямо: список руками — не то. И он прав: вбивать миссии
+// вручную это работа, а не удобство.
+//
+// Настоящий источник нашёлся: у Steam на каждую игру есть вехи (достижения) с
+// названием, описанием, картинкой и отметкой «пройдено» именно у этого
+// человека. Это не выдумка и не мой список по памяти — это его собственное
+// прохождение, лежащее в его собственном профиле.
+//
+// Тянет их главный процесс (electron/steamAchievements.cjs): Steam не разрешает
+// браузеру читать свои ответы, из окна такой запрос не состоится.
+//
+// Ручной список никуда не делся, но стал ЗАПАСНЫМ путём — для игр не из Steam и
+// для закрытого профиля.
+import type { FlowNode } from './flow'
+
+export type AutoWhy = 'no-desktop' | 'no-steamid' | 'no-appid' | 'private' | 'empty' | 'net'
+
+export interface AutoResult {
+  ok: boolean
+  nodes: FlowNode[]
+  why?: AutoWhy
+}
+
+/** Человеческое объяснение, почему само не получилось. Врать «не поддерживается»
+ *  нельзя: причины разные, и что делать — тоже разное. */
+export const AUTO_WHY: Record<AutoWhy, string> = {
+  'no-desktop': 'Само подтягивается только в приложении на компьютере — там Ponoi видит, во что ты играешь.',
+  'no-steamid': 'Не привязан SteamID64 — укажи его в Настройках → Активность, и вехи подтянутся сами.',
+  'no-appid': 'Эта игра не из Steam — для неё вехи взять неоткуда, но список можно завести вручную.',
+  'private': 'Профиль Steam закрыт: Steam не отдаёт достижения. Открой видимость игр в настройках приватности Steam.',
+  'empty': 'У этой игры в Steam нет достижений — вести прохождение можно вручную.',
+  'net': 'Не удалось спросить Steam — нет связи или он сейчас не отвечает.',
+}
+
+/** Спросить приложение о вехах текущей игры. */
+export async function autoNodes(steamId: string | null, appId?: string | null): Promise<AutoResult> {
+  const d = (window as any).ponoiDesktop
+  if (!d?.steamProgress) return { ok: false, nodes: [], why: 'no-desktop' }
+  if (!steamId) return { ok: false, nodes: [], why: 'no-steamid' }
+  try {
+    const r = await d.steamProgress({ steamId, appId })
+    if (!r?.ok) return { ok: false, nodes: [], why: (r?.why as AutoWhy) ?? 'net' }
+    const nodes: FlowNode[] = (r.items ?? []).map((a: any, i: number) => ({
+      id: 'st' + i,
+      title: String(a.name ?? ''),
+      desc: String(a.desc ?? ''),
+      icon: a.icon || undefined,
+      done: !!a.done,
+      at: Number(a.at) || 0,
+    }))
+    return { ok: nodes.length > 0, nodes, why: nodes.length ? undefined : 'empty' }
+  } catch { return { ok: false, nodes: [], why: 'net' } }
+}
+
+/** Ручной список — тем же видом узлов, чтобы схема рисовала и его. */
+export function nodesFromCampaign(c: Campaign | null | undefined): FlowNode[] {
+  return (c?.missions ?? []).map((m, i) => ({
+    id: 'm' + i, title: m.name, desc: m.note, done: m.done, at: 0,
+  }))
+}

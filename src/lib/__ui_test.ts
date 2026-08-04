@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { layoutFlow, orderNodes, linkPath, flowProgress, NODE_W, NODE_H } from './flow'
 import { makeSseReader, buildRequest, aiReady, whyFailed } from './gameAi'
 import { fromEdge, swipeDir, swipeAction } from './swipe'
 import { percent, counts, currentIndex, currentMission, isComplete, shortLabel, fullLabel, storyShare, shareLabel, parseMissions, buildCampaign, toggleMission, setNote, askContext, askPrompt, MAX_MISSIONS, MAX_MISSION_NAME } from './campaign'
@@ -1931,6 +1932,99 @@ check('проверка ловит разбор без накопления хв
   try { наивноПотерял = !JSON.parse(половина.slice(5).trim())?.choices } catch { наивноПотерял = true }
   const r = makeSseReader('openai')
   return наивноПотерял && r(половина).length === 0 && r(кусок('Ключ').slice(20)).join('') === 'Ключ'
+})
+
+
+// -- v1.458.0: схема прохождения -------------------------------------------
+// Прохождение показывалось списком, который человек вбивал сам. Теперь данные
+// приложение берёт из Steam, а показывает цепочкой узлов со связями. Раскладка
+// проверяется здесь: координаты «поплывут» при первой же правке разметки, а на
+// схеме из полусотни узлов глазами этого не увидеть.
+console.log('\n-- Схема прохождения --')
+const веха = (i: number, done: boolean, at = 0) => ({ id: 'a' + i, title: 'Веха ' + i, done, at })
+const цепь = (n: number, done: number) => Array.from({ length: n }, (_, i) => веха(i, i < done, i + 1))
+
+check('пройденные идут по времени прохождения', () => {
+  const r = orderNodes([веха(1, true, 300), веха(2, true, 100), веха(3, false)])
+  return r.map(n => n.id).join(',') === 'a2,a1,a3'
+})
+check('непройденные остаются в своём порядке', () => {
+  const r = orderNodes([веха(1, false), веха(2, false), веха(3, true, 5)])
+  return r.map(n => n.id).join(',') === 'a3,a1,a2'
+})
+
+check('текущая веха ровно одна — первая непройденная', () => {
+  const l = layoutFlow(цепь(10, 4))
+  const тек = l.nodes.filter(n => n.current)
+  return тек.length === 1 && тек[0].step === 4
+})
+check('когда пройдено всё — текущей нет', () =>
+  layoutFlow(цепь(5, 5)).nodes.every(n => !n.current))
+
+check('узлы не наезжают друг на друга', () => {
+  const l = layoutFlow(цепь(12, 3), 4)
+  for (let i = 0; i < l.nodes.length; i++) {
+    for (let j = i + 1; j < l.nodes.length; j++) {
+      const a = l.nodes[i], b = l.nodes[j]
+      const пересеклись = a.x < b.x + NODE_W && b.x < a.x + NODE_W
+        && a.y < b.y + NODE_H && b.y < a.y + NODE_H
+      if (пересеклись) return false
+    }
+  }
+  return true
+})
+check('ряды идут змейкой — конец ряда над началом следующего', () => {
+  const l = layoutFlow(цепь(8, 0), 4)
+  // Четвёртый узел (последний в первом ряду) и пятый (первый во втором) стоят
+  // в одном столбце: связь между ними короткая, а не через весь экран.
+  return l.nodes[3].x === l.nodes[4].x && l.nodes[4].y > l.nodes[3].y
+})
+check('всё помещается в объявленный размер', () => {
+  const l = layoutFlow(цепь(9, 2), 4)
+  return l.nodes.every(n => n.x >= 0 && n.y >= 0
+    && n.x + NODE_W <= l.width && n.y + NODE_H <= l.height)
+})
+check('связей на одну меньше, чем узлов', () => {
+  const l = layoutFlow(цепь(7, 3))
+  return l.links.length === 6 && l.links[0].from === l.nodes[0].id && l.links[0].to === l.nodes[1].id
+})
+check('пустая схема не ломается', () => {
+  const l = layoutFlow([])
+  return l.nodes.length === 0 && l.links.length === 0 && l.width > 0 && l.height > 0
+})
+
+check('линия внутри ряда идёт от края к краю', () => {
+  const l = layoutFlow(цепь(4, 0), 4)
+  const p = linkPath(l.nodes[0], l.nodes[1])
+  return p.x1 === l.nodes[0].x + NODE_W && p.x2 === l.nodes[1].x && p.y1 === p.y2
+})
+check('линия между рядами идёт сверху вниз', () => {
+  const l = layoutFlow(цепь(6, 0), 4)
+  const p = linkPath(l.nodes[3], l.nodes[4])
+  return p.y2 > p.y1 && p.x1 === p.x2
+})
+check('обратный ряд рисует линию в другую сторону', () => {
+  const l = layoutFlow(цепь(8, 0), 4)
+  // Во втором ряду узлы идут справа налево: линия должна выходить из левого края.
+  const p = linkPath(l.nodes[4], l.nodes[5])
+  return p.x1 === l.nodes[4].x && p.x2 === l.nodes[5].x + NODE_W
+})
+
+check('проценты считаются от пройденных вех', () => {
+  const r = flowProgress(цепь(20, 7))
+  return r.done === 7 && r.total === 20 && r.pct === 35
+})
+check('без вех процентов нет, а не деление на ноль', () => flowProgress([]).pct === 0)
+
+console.log('\n-- Ломаем нарочно (схема) --')
+check('проверка ловит раскладку в одну строку', () => {
+  // Одна строка на полсотни вех — это экран в двенадцать тысяч пикселей.
+  const l = layoutFlow(цепь(50, 0), 4)
+  return l.width < 1200 && l.height > 400
+})
+check('проверка ловит наезд узлов друг на друга', () => {
+  const l = layoutFlow(цепь(2, 0), 4)
+  return l.nodes[1].x - l.nodes[0].x >= NODE_W
 })
 
 

@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   onMatchEnd: (cb) => { ipcRenderer.removeAllListeners('ponoi-match-end'); ipcRenderer.on('ponoi-match-end', (_e, m) => cb(m)) },
   // Поиск обложки игры в магазине Steam (в main-процессе, без CORS).
   findCover: (name) => ipcRenderer.invoke('ponoi-find-cover', name),
+  // v1.458.0: вехи прохождения игры из Steam — приложение узнаёт их само.
+  steamProgress: (o) => ipcRenderer.invoke('ponoi-steam-progress', o),
   // Авто-обновление (v1.29.0): статус скачивания и команда «Перезапустить и обновить».
   onUpdate: (cb) => { ipcRenderer.removeAllListeners('ponoi-update'); ipcRenderer.on('ponoi-update', (_e, d) => cb(d)) },
   applyUpdate: () => ipcRenderer.send('ponoi-apply-update'),
