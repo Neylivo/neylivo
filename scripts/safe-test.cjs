@@ -237,6 +237,19 @@ app.whenReady().then(async () => {
   <div class="plugpanel"><div class="plugpanel-h"><span class="plugpanel-tag">плагин</span><b>Визуализатор</b></div>
     <div class="plugpanel-cbox" style="height:160px"><canvas class="plugpanel-canvas" width="600" height="160"></canvas></div>
   </div>
+  <!-- v1.468.0: личная передача. Код крупный и длинный, поле ввода кода и
+       кнопка «Получить» стоят в строку — на 390 пикселях это первое, что
+       выталкивается за край. -->
+  <div class="grant-claim"><input class="modal-in" value="ABCD-EFGH-2345"><button class="pqs2-btn">Получить</button></div>
+  <div class="grant-list"><div class="grant-item">
+    <div class="grant-item-h"><b>Плагин с длинным названием для проверки</b>
+      <span class="grant-code-sm">ABCD-EFGH-2345</span>
+      <button class="pqs2-btn ghost">к</button></div>
+    <div class="grant-item-d">осталось получений: 1 · именная · до 31.12.2026 · забрали: 1</div>
+    <div class="grant-item-a"><button class="pqs2-btn ghost">Отозвать</button>
+      <button class="pqs2-btn ghost danger">Удалить</button></div>
+  </div></div>
+  <div class="grant-code">ABCD-EFGH-2345</div>
   <div class="pqs-sec-t">Настройки</div>
   <div class="pqs-optrow"><div><div class="pqs-optt">Переключатель с длинным названием</div>
     <div class="pqs-optd">Пояснение под ним, тоже не короткое</div></div>

@@ -9,6 +9,8 @@ import { installPlugin } from '../lib/plugins/install'
 import { PanelCanvas } from './PluginPanels'
 import { taskList, subscribeTasks, stopTaskByUser } from '../lib/plugins/background'
 import { openSockets } from '../lib/plugins/wsHub'
+import { GrantCreate, GrantList, GrantClaimBox } from './PluginGrants'
+import { useAuth } from '../auth/AuthProvider'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { okCombo, setKeybind } from '../lib/plugins/registry'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin, pluginLogs, clearPluginLog } from '../lib/plugins/host'
@@ -229,7 +231,10 @@ export function PluginsSettings() {
   // v1.336.0: три вкладки вместо одной ленты. Каталог, то что уже стоит, и своё —
   // это три разных дела: чтобы дойти до своих плагинов, раньше надо было
   // пролистать весь каталог.
-  const [tab, setTab] = useState<'catalog' | 'installed' | 'mine'>('catalog')
+  const [tab, setTab] = useState<'catalog' | 'installed' | 'mine' | 'grants'>('catalog')
+  // v1.468.0: какой плагин передаём лично. Держим весь набор, а не один id:
+  // передаче нужен сам файл, а он лежит в записи плагина.
+  const [даём, setДаём] = useState<{ id: string; name: string; version: string; code: string } | null>(null)
   const [editing, setEditing] = useState<{ id?: string } | null>(null)
   const pages = useSettingsPages()
 
@@ -246,6 +251,7 @@ export function PluginsSettings() {
   // «Свои» — те, что поставлены не из чата и подписаны твоим именем: собранные
   // здесь конструктором. Чужой плагин, скачанный из каталога, своим не считается,
   // даже если ты его правил у себя.
+  const { user } = useAuth()
   const myName = (localStorage.getItem('ponoi_username') || '').trim().toLowerCase()
   // v1.363.0: свой — это сделанный в конструкторе, а не совпавший по имени
   // автора. Имя в шапке пишет тот, кто собрал файл: чужой плагин, подписанный
@@ -325,12 +331,29 @@ export function PluginsSettings() {
           <Icon name="edit" size={15} /> Свои
           {mine.length > 0 && <span className="sec-tab-n">{mine.length}</span>}
         </button>
+        {/* v1.468.0: личные передачи. Отдельной вкладкой, потому что это не про
+            установку и не про каталог: тут получают по коду и следят за своими
+            выданными кодами. */}
+        <button className={'sec-tab' + (tab === 'grants' ? ' on' : '')} onClick={() => setTab('grants')}>
+          <Icon name="link" size={15} /> Передачи
+        </button>
       </div>
 
       <input ref={fileRef} type="file" accept=".ponoi,.js,text/javascript" hidden
         onChange={e => void pickFile(e.target.files?.[0] ?? null)} />
 
       {tab === 'catalog' && <PluginCatalog inline />}
+
+      {tab === 'grants' && <>
+        <div className="pqs-sec-t">Получить по коду</div>
+        <div className="pqs-optd" style={{ margin: '4px 0 10px' }}>
+          Автор плагина может передать его лично — кодом, минуя каталог. Введи код,
+          который он тебе дал: разрешения плагин попросит те же, что и любой другой.
+        </div>
+        <GrantClaimBox onInstalled={() => { setVer(v => v + 1); setTab('installed') }} />
+        <div className="pqs-sec-t" style={{ marginTop: 18 }}>Мои передачи</div>
+        <GrantList />
+      </>}
 
       {tab === 'mine' && <>
         <div className="pqs-optd" style={{ margin: '12px 0' }}>
@@ -412,6 +435,13 @@ export function PluginsSettings() {
                 внутри плагина: таймер не видно ниоткуда, а эти строки — видно,
                 и рядом с каждой кнопка «остановить». */}
             <PluginBackground pluginId={p.manifest.id} />
+            {/* v1.468.0: отдать свой плагин одному человеку, минуя каталог.
+                Только для своих: передавать чужую работу нельзя. */}
+            {isMine(p) && <div className="plug-give">
+              <button className="pqs2-btn ghost" onClick={() => setДаём({
+                id: p.manifest.id, name: p.manifest.name, version: p.manifest.version, code: p.code,
+              })}><Icon name="link" size={14} /> Передать лично</button>
+            </div>}
             {err && <div className="plug-err"><Icon name="flag" size={14} /> {err}</div>}
             {logOpen === p.manifest.id && (() => {
               const lines = pluginLogs(p.manifest.id)
@@ -450,6 +480,10 @@ export function PluginsSettings() {
         <PluginEditor editId={editing.id} onClose={() => setEditing(null)}
           onSaved={() => { setVer(v => v + 1); setTab('installed') }} />
       )}
+
+      {/* v1.468.0: окно личной передачи — поверх всего, как и прочие окна. */}
+      {даём && user && <GrantCreate meId={user.id} pluginId={даём.id} name={даём.name}
+        version={даём.version} code={даём.code} onClose={() => setДаём(null)} />}
 
       {pending && (
         <PermissionGate

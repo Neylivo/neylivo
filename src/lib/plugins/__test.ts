@@ -1072,6 +1072,99 @@ for (const p of OFFICIAL_PLUGINS) {
     return перехват > 0 && показ > 0 && перехват < показ
   })
 
+  // ── Личная передача плагина (v1.468.0) ─────────────────────────────────
+  console.log('\n-- Личная передача плагина --')
+  {
+    const g = await import('./grantCodes')
+
+    check('код читается человеком: без похожих знаков', () => {
+      // Код переписывают с экрана и диктуют голосом. Ноль и буква O, единица и
+      // I/L в такой задаче — гарантированные ошибки.
+      for (const плохой of ['0', 'O', '1', 'I', 'L']) {
+        if (g.CODE_ALPHABET.includes(плохой)) throw new Error('в алфавите есть ' + плохой)
+      }
+      return g.CODE_ALPHABET.length >= 30
+    })
+
+    check('код достаточно длинный, чтобы его не перебрали', () => {
+      // Код — это пропуск к чужой работе. Считаем стойкость честно: сколько
+      // бит даёт длина при этом алфавите.
+      const бит = g.CODE_LEN * Math.log2(g.CODE_ALPHABET.length)
+      return бит >= 55
+    })
+
+    check('код берётся из криптографического источника, а не из Math.random', () => {
+      // Комментарии выкидываем: в самом файле про Math.random написано словами,
+      // и без этой чистки проверка ловила бы собственное пояснение вместо кода.
+      const src = readFileSync('src/lib/plugins/grantCodes.ts', 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1')
+      if (/Math\.random/.test(src)) throw new Error('в коде передачи есть Math.random')
+      return src.includes('crypto.getRandomValues')
+    })
+
+    check('генератор не сваливается в одни и те же знаки', () => {
+      // Подсовываем свой источник: проверяем разбор байтов, а не сам crypto.
+      let n = 0
+      const код = g.makeCode(len => Uint8Array.from({ length: len }, () => n++))
+      return код.length === g.CODE_LEN && new Set(код).size > 5
+    })
+
+    check('код узнаётся в любом виде, как его ни перепиши', () =>
+      g.normCode('abcd-efgh-2345') === 'ABCDEFGH2345'
+      && g.normCode('  ABCD EFGH 2345 ') === 'ABCDEFGH2345'
+      && g.prettyCode('ABCDEFGH2345') === 'ABCD-EFGH-2345')
+
+    check('очевидная описка ловится до похода в сеть', () =>
+      !g.looksLikeCode('ABCD') && !g.looksLikeCode('ABCDEFGH234O')
+      && g.looksLikeCode('abcd-efgh-2345'))
+
+    check('срок считается от сегодня, а не от начала месяца', () => {
+      // Границы месяца и года руками считают неправильно чаще всего.
+      const t = Date.UTC(2026, 11, 25, 12, 0, 0)
+      const iso = g.expiryFromDays(10, t)!
+      const d = new Date(iso)
+      return d.getUTCFullYear() === 2027 && d.getUTCMonth() === 0 && d.getUTCDate() === 4
+    })
+
+    check('«без срока» — это правда без срока, а не ноль дней', () =>
+      g.expiryFromDays(0) === null && g.expiryFromDays(-5) === null && g.expiryFromDays(NaN) === null)
+
+    check('число получений не выкрутить за пределы', () =>
+      g.clampUses(0) === 1 && g.clampUses(-3) === 1 && g.clampUses(99999) === g.MAX_USES
+      && g.clampUses('7') === 7 && g.clampUses('чепуха') === 1)
+
+    check('приложение прямо говорит, что это НЕ защита от копирования', () => {
+      // Соблазн промолчать тут большой, а молчание было бы обещанием, которого
+      // приложение выполнить не может: плагин — обычный JavaScript.
+      const t = g.GRANT_HONESTY
+      if (!/не защита от копирования/i.test(t)) throw new Error('нет прямой оговорки')
+      if (!/передать файл дальше/i.test(t)) throw new Error('не сказано, что файл уйдёт дальше')
+      return t.length > 150
+    })
+
+    check('честная оговорка стоит на экране передачи, а не только в коде', () => {
+      const ui = readFileSync('src/components/PluginGrants.tsx', 'utf8')
+      return ui.includes('GRANT_HONESTY')
+    })
+
+    check('полученный плагин проходит те же разрешения, что и любой другой', () => {
+      // За плагин заплатили — он от этого не стал безопаснее. Пропустить здесь
+      // экран разрешений было бы худшим решением во всей этой затее.
+      const ui = readFileSync('src/components/PluginGrants.tsx', 'utf8')
+      return ui.includes('PermissionGate') && ui.includes('parsePlugin')
+    })
+
+    check('содержимое передачи достаётся только через функцию базы', () => {
+      // Прямой select из таблицы отдал бы чужой плагин любому: правила закрыты,
+      // и обходить их клиентом нельзя.
+      const src = readFileSync('src/lib/plugins/grants.ts', 'utf8')
+      if (/from\('plugin_grants'\)[\s\S]{0,200}select\([^)]*payload/.test(src)) {
+        throw new Error('payload читается прямым запросом к таблице')
+      }
+      return src.includes("rpc('claim_plugin_grant'")
+    })
+  }
+
   console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

@@ -137,7 +137,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql'), 104: sql('104_automod_perm.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql'), 104: sql('104_automod_perm.sql'), 105: sql('105_plugin_grants.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -181,6 +181,7 @@ await db.exec(SRC[97])
 // она переобъявляет messages_insert и can_view_channel поверх них.
 await db.exec(SRC[103])
 await db.exec(SRC[104])
+await db.exec(SRC[105])
 await db.exec(SRC[98])
 // music_tracks заводится в 06, которую песочница целиком не применяет.
 await db.exec(`create table if not exists music_tracks (
@@ -1320,6 +1321,135 @@ await check('избранные эмодзи попали в публикаци�
   // Убираем роль, чтобы дальнейшие проверки видели прежнюю расстановку.
   await db.query(`delete from member_roles where role_id=$1`, [роль])
   await db.query(`delete from server_roles where id=$1`, [роль])
+}
+
+// ── Личная передача плагина (105, v1.468.0) ───────────────────────────────
+//
+// Здесь ошибка означает не «неудобно», а утечку чужой работы: плагин, сделанный
+// на заказ и проданный одному человеку, оказался бы доступен любому.
+{
+  const КОД = 'ABCDEFGH2345'
+  const ЧУЖОЙ = 'QRSTUVWX6789'
+
+  await db.query(
+    `insert into plugin_grants (code, author, plugin_id, plugin_name, plugin_version, payload, note)
+     values ($1,$2,'my-plug','Мой плагин','1.0.0','/** @id my-plug */ код','продано')`,
+    [КОД, OWNER])
+  // Именная: только для USER.
+  await db.query(
+    `insert into plugin_grants (code, author, to_user, plugin_id, plugin_name, payload)
+     values ($1,$2,$3,'named','Именной','код')`,
+    [ЧУЖОЙ, OWNER, USER])
+
+  await check('автор видит свои передачи', async () =>
+    (await as(OWNER, `select count(*)::int n from plugin_grants`)).rows[0].n === 2)
+
+  await check('чужие передачи не видны НИКОМУ, кроме автора', async () =>
+    (await as(USER, `select count(*)::int n from plugin_grants`)).rows[0].n === 0)
+
+  await check('содержимое чужой передачи не достать даже зная код', async () => {
+    // Самое важное правило всей таблицы: код — это пропуск для функции, а не
+    // ключ к строке. Прямой запрос по коду не должен отдавать ничего.
+    const r = await as(USER, `select payload from plugin_grants where code = $1`, [КОД])
+    return r.rows.length === 0
+  })
+
+  await check('получатель забирает по коду', async () => {
+    const r = await as(USER, `select * from claim_plugin_grant($1)`, [КОД])
+    return r.rows.length === 1 && r.rows[0].payload.includes('код') && r.rows[0].plugin_id === 'my-plug'
+  })
+
+  await check('получение отмечено — автор видит, кто забрал', async () =>
+    (await as(OWNER, `select count(*)::int n from plugin_grant_claims`)).rows[0].n === 1)
+
+  await check('повторный вызов тем же человеком не тратит вторую попытку', async () => {
+    // Иначе единственная попытка сгорала бы на осторожности человека: сразу
+    // после получения приложение показывает разрешения, и он может отказаться.
+    await as(USER, `select * from claim_plugin_grant($1)`, [КОД])
+    const left = (await db.query(`select uses_left from plugin_grants where code=$1`, [КОД])).rows[0].uses_left
+    return left === 0
+  })
+
+  await check('второму человеку уже не достанется', async () => {
+    try { await as(MOD, `select * from claim_plugin_grant($1)`, [КОД]); return false }
+    catch (e) { return /уже забрали/.test(String(e.message)) }
+  })
+
+  await check('именную передачу берёт только названный', async () => {
+    try { await as(MOD, `select * from claim_plugin_grant($1)`, [ЧУЖОЙ]); return false }
+    catch (e) { return /другому человеку/.test(String(e.message)) }
+  })
+
+  await check('названный человек её берёт', async () =>
+    (await as(USER, `select * from claim_plugin_grant($1)`, [ЧУЖОЙ])).rows.length === 1)
+
+  await check('отозванная передача больше не работает', async () => {
+    const c = 'REVOKED12345'
+    await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload)
+                    values ($1,$2,'r','Отзыв','код')`, [c, OWNER])
+    await as(OWNER, `update plugin_grants set revoked = true where code = $1`, [c])
+    try { await as(USER, `select * from claim_plugin_grant($1)`, [c]); return false }
+    catch (e) { return /не найден/.test(String(e.message)) }
+  })
+
+  await check('просроченная передача больше не работает', async () => {
+    const c = 'EXPIRED12345'
+    await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload, expires_at)
+                    values ($1,$2,'e','Срок','код', now() - interval '1 day')`, [c, OWNER])
+    try { await as(USER, `select * from claim_plugin_grant($1)`, [c]); return false }
+    catch (e) { return /срок/i.test(String(e.message)) }
+  })
+
+  await check('чужую передачу нельзя отозвать', async () => {
+    const c = 'NOTYOURS1234'
+    await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload)
+                    values ($1,$2,'n','Чужая','код')`, [c, OWNER])
+    await as(USER, `update plugin_grants set revoked = true where code = $1`, [c])
+    const r = await db.query(`select revoked from plugin_grants where code=$1`, [c])
+    return r.rows[0].revoked === false
+  })
+
+  await check('чужую передачу нельзя записать на себя', async () => {
+    const c = 'STEALME12345'
+    await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload)
+                    values ($1,$2,'s','Кража','код')`, [c, OWNER])
+    await as(USER, `update plugin_grants set author = $2 where code = $1`, [c, USER])
+    const r = await db.query(`select author from plugin_grants where code=$1`, [c])
+    return r.rows[0].author === OWNER
+  })
+
+  await check('запись о получении нельзя подделать вручную', async () => {
+    // Иначе можно было бы «отметиться» получателем чужой передачи и запутать
+    // автору весь след.
+    const g = (await db.query(`select id from plugin_grants where code=$1`, [КОД])).rows[0].id
+    try { await as(MOD, `insert into plugin_grant_claims(grant_id,user_id) values ($1,$2)`, [g, MOD]) }
+    catch { /* так и надо */ }
+    const n = (await db.query(`select count(*)::int n from plugin_grant_claims where grant_id=$1`, [g])).rows[0].n
+    return n === 1
+  })
+
+  await check('посмотреть передачу можно, не забирая её', async () => {
+    const c = 'PEEKONLY1234'
+    await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload)
+                    values ($1,$2,'p','Погляди','секретный код')`, [c, OWNER])
+    const r = await as(USER, `select * from peek_plugin_grant($1)`, [c])
+    const left = (await db.query(`select uses_left from plugin_grants where code=$1`, [c])).rows[0].uses_left
+    // Название видно, файл — нет, попытка не потрачена.
+    return r.rows[0].plugin_name === 'Погляди' && !('payload' in r.rows[0]) && left === 1
+  })
+
+  await check('свою же передачу забрать нельзя', async () => {
+    try { await as(OWNER, `select * from claim_plugin_grant($1)`, ['PEEKONLY1234']); return false }
+    catch (e) { return /твоя же/.test(String(e.message)) }
+  })
+
+  await check('огромный файл в передачу не влезет', async () => {
+    try {
+      await db.query(`insert into plugin_grants (code, author, plugin_id, plugin_name, payload)
+                      values ('TOOBIG123456',$1,'b','Большой',repeat('я', 600000))`, [OWNER])
+      return false
+    } catch { return true }
+  })
 }
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)

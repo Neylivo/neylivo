@@ -4880,6 +4880,14 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .plug-bg-row { flex-wrap: wrap; }
   .plug-bg-d { flex: 1 0 100%; }
   .plug-bg-row button { min-height: 40px; }
+  /* v1.468.0: личная передача. Кнопки вышли по 32 пикселя — пальцем не попасть,
+     поймано телефонным обходом. Код передачи на 390 пикселях в одну строку с
+     названием не помещается, поэтому уводим его своей строкой. */
+  .grant-claim button, .grant-item-a button, .grant-item-h button { min-height: 40px; }
+  .grant-claim { flex-wrap: wrap; }
+  .grant-claim .modal-in { flex: 1 0 100%; min-height: 40px; }
+  .grant-code-sm { flex: 1 0 100%; }
+  .grant-code { font-size: 22px; letter-spacing: 1px; }
 }
 
 /* v1.315.0: экран «Каналы и роли» */
@@ -6296,6 +6304,50 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   background: rgba(var(--ov, 255, 255, 255), .04);
 }
 .plugpanel-canvas { display: block; width: 100%; height: 100%; }
+
+/* ══ Личная передача плагина (v1.468.0) ════════════════════════════════════
+   Код — главное на экране: его сейчас перепишут или продиктуют. Поэтому он
+   крупный, моноширинный и с разрядкой. */
+.grant-modal { width: 460px; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.grant-plug { display: flex; align-items: center; gap: 8px; color: var(--mut); font-size: 13px; }
+.grant-ver { color: var(--mut); font-size: 12px; }
+.grant-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 26px; letter-spacing: 2px; text-align: center;
+  padding: 14px 10px; border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255, 255, 255), .07);
+  overflow-wrap: anywhere;
+}
+/* Честная оговорка стоит рядом с настройками передачи, а не мелким шрифтом
+   внизу: её и написали для того, чтобы прочитали. */
+.grant-honesty {
+  display: flex; gap: 8px; font-size: 12.5px; line-height: 1.45; color: var(--mut);
+  padding: 10px 12px; border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255, 255, 255), .05);
+}
+.grant-honesty svg { flex: none; margin-top: 2px; }
+.grant-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.grant-row .modal-in { max-width: 200px; }
+.grant-hint { color: var(--mut); font-size: 12px; margin-top: -4px; }
+.grant-note { color: var(--mut); font-size: 13px; line-height: 1.45; }
+
+.grant-claim { display: flex; gap: 8px; align-items: center; }
+.grant-claim .modal-in { flex: 1; min-width: 0; font-family: ui-monospace, monospace; letter-spacing: 1px; }
+.grant-empty { color: var(--mut); font-size: 13px; padding: 10px 0; line-height: 1.5; }
+.grant-list { display: flex; flex-direction: column; gap: 8px; }
+.grant-item {
+  padding: 10px 12px; border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255, 255, 255), .05);
+  display: flex; flex-direction: column; gap: 4px;
+}
+/* Отозванная и просроченная — приглушены, но не спрятаны: след о том, кому
+   отдавал, нужен и после того, как передача закончилась. */
+.grant-item.dead { opacity: .55; }
+.grant-item-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.grant-code-sm { font-family: ui-monospace, monospace; font-size: 13px; color: var(--mut); }
+.grant-item-d, .grant-item-n { color: var(--mut); font-size: 12.5px; }
+.grant-item-a { display: flex; gap: 8px; margin-top: 4px; }
+.plug-give { margin-top: 8px; }
 
 /* ══ Выбор сочетания клавиш (v1.467.0) ═════════════════════════════════════
    Кнопка показывает текущее сочетание, а в режиме ожидания — «Нажми
