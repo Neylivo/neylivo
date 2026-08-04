@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { aggregateSessions } from './activityStats'
 import { okColor, okColors, encodeTheme, decodeTheme, addPreset, removePreset, MAX_PRESETS } from './themePresets'
 import { shortReason, logLine } from './log'
 import { shouldDismiss } from './dismiss'
@@ -2248,6 +2249,81 @@ check('проверка ловит применение чужой строки 
   // Молча применить непонятную строку — значит перекрасить приложение неизвестно
   // во что и не сказать, почему.
   return decodeTheme('ponoi-theme:Взлом:zzzzzz-222222-333333-444444-555555-666666') === null
+})
+
+
+// -- v1.463.0: история активностей -------------------------------------------
+// Владелец принёс «немного сломана». Нашлось: из девяноста дней брались САМЫЕ
+// СТАРЫЕ пятьсот сессий, и у того, кто играет часто, недавнее в них не попадало
+// вовсе. Заодно подсчёт молча полагался на порядок строк из базы — а порядок
+// изменился. Здесь проверяются все семь величин: глазами их не разобрать.
+console.log('\n-- История активностей --')
+const ДЕНЬ = 86400000
+const СЕЙЧАС = Date.UTC(2026, 7, 4, 12)
+const сессия = (name: string, дней: number, часов = 1) => ({
+  name,
+  started_at: new Date(СЕЙЧАС - дней * ДЕНЬ).toISOString(),
+  ended_at: new Date(СЕЙЧАС - дней * ДЕНЬ + часов * 3600000).toISOString(),
+})
+
+check('порядок строк на входе не меняет итог', () => {
+  // Ровно та поломка: подсчёт полагался на «от старых к новым», а из базы теперь
+  // приходят свежие сверху.
+  const r = [сессия('Игра', 5), сессия('Игра', 1), сессия('Игра', 3)]
+  const прямо = aggregateSessions(r, СЕЙЧАС)
+  const наоборот = aggregateSessions([...r].reverse(), СЕЙЧАС)
+  return JSON.stringify(прямо) === JSON.stringify(наоборот)
+})
+check('последняя сессия — правда последняя', () => {
+  const r = aggregateSessions([сессия('Игра', 9), сессия('Игра', 2), сессия('Игра', 5)], СЕЙЧАС)
+  return r[0].last === СЕЙЧАС - 2 * ДЕНЬ
+})
+check('игры идут свежими сверху', () => {
+  const r = aggregateSessions([сессия('Старая', 20), сессия('Свежая', 1)], СЕЙЧАС)
+  return r[0].name === 'Свежая' && r[1].name === 'Старая'
+})
+check('во что не играли месяц — не показываем', () =>
+  aggregateSessions([сессия('Забытая', 40)], СЕЙЧАС).length === 0)
+check('сессии и общее время считаются', () => {
+  const r = aggregateSessions([сессия('Игра', 1, 2), сессия('Игра', 2, 3)], СЕЙЧАС)
+  return r[0].sessions === 2 && r[0].totalMs === 5 * 3600000
+})
+check('самая длинная сессия — марафон', () => {
+  const r = aggregateSessions([сессия('Игра', 1, 1), сессия('Игра', 2, 4)], СЕЙЧАС)
+  return r[0].longestMs === 4 * 3600000
+})
+check('серия дней подряд считается от последнего дня', () => {
+  const r = aggregateSessions([сессия('Игра', 3), сессия('Игра', 2), сессия('Игра', 1)], СЕЙЧАС)
+  return r[0].streak === 3
+})
+check('пропущенный день серию обрывает', () => {
+  const r = aggregateSessions([сессия('Игра', 5), сессия('Игра', 2), сессия('Игра', 1)], СЕЙЧАС)
+  return r[0].streak === 2
+})
+check('возвращение после долгой паузы видно', () => {
+  const r = aggregateSessions([сессия('Игра', 80), сессия('Игра', 1)], СЕЙЧАС)
+  return r[0].gapDays >= 78
+})
+check('новый игрок — тот, у кого первая сессия недавно', () => {
+  const новый = aggregateSessions([сессия('Игра', 3)], СЕЙЧАС)
+  const давний = aggregateSessions([сессия('Игра', 60), сессия('Игра', 1)], СЕЙЧАС)
+  return новый[0].isNew === true && давний[0].isNew === false
+})
+check('битые строки не роняют историю', () => {
+  const r = aggregateSessions([
+    { name: '', started_at: '', ended_at: null } as any,
+    { name: 'Игра', started_at: 'не дата', ended_at: null } as any,
+    сессия('Игра', 1),
+  ], СЕЙЧАС)
+  return r.length === 1 && r[0].sessions === 1
+})
+check('пустая история не ломается', () => aggregateSessions([], СЕЙЧАС).length === 0)
+
+console.log('\n-- Ломаем нарочно (история) --')
+check('проверка ловит подсчёт по порядку выдачи', () => {
+  // Если убрать сортировку внутри игры, «последняя сессия» станет случайной.
+  const r = aggregateSessions([сессия('Игра', 1), сессия('Игра', 7)], СЕЙЧАС)
+  return r[0].last === СЕЙЧАС - 1 * ДЕНЬ
 })
 
 

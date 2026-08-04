@@ -145,6 +145,9 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [campOpen, setCampOpen] = useState(false)   // v1.452.0: панель прохождения
+  // v1.463.0: игра, открытая ИЗ ИСТОРИИ. Без неё окно показывало бы ту, что
+  // играется сейчас, — то есть не то, по чему нажали.
+  const [histGame, setHistGame] = useState<string | null>(null)
   const [friendProfile, setFriendProfile] = useState<Profile | null>(null)
   const [gamePicker, setGamePicker] = useState<{ field: 'favGames'; mode: 'single' } | { field: WidgetField; mode: 'multi' } | null>(null)
   const [widgetCovers, setWidgetCovers] = useState<Record<string, string | null>>({})
@@ -506,7 +509,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   return (
                     <div className={'act-card fp-cur' + (statsAllowed || campaignAllowed ? ' clickable' : '')}
                       title={statsAllowed ? 'Статистика за 30 дней' : campaignAllowed ? 'Прохождение: миссии и проценты' : undefined}
-                      onClick={() => { if (statsAllowed) setStatsOpen(true); else if (campaignAllowed) setCampOpen(true) }}>
+                      onClick={() => {
+                        setHistGame(null)
+                        if (statsAllowed) setStatsOpen(true); else if (campaignAllowed) setCampOpen(true)
+                      }}>
                       <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
                       <div className="act-row">
                         {(curGame.cover ?? covers[curGame.name])
@@ -535,8 +541,23 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
               {isMe && <div className="fp-note">Здесь появится ваша активность за последние 30 дней.</div>}
               {recent === null ? <div className="fp-empty">Загрузка…</div>
               : recent.length === 0 ? <div className="fp-empty"><Icon name="gamepad" size={26} /> За последние 30 дней игр не замечено.{isMe ? ' Запусти игру — и она появится здесь.' : ''}</div>
-              : recent.map(g => (
-                <div key={g.name} className="fp-recent" title={'Всего за 30 дней: ' + fmtMs(g.totalMs) + ' · сессий: ' + g.sessions}>
+              : recent.map(g => {
+                // v1.463.0: по игре в истории можно нажать — откроется то же,
+                // что и по активности: статистика у сетевых игр, прохождение у
+                // сюжетных. Раньше строка была мёртвой картинкой: человек видел
+                // игру, тыкал в неё и ничего не происходило.
+                const сетевая = MATCH_TRACKED_GAMES.has(g.name)
+                const можно = сетевая ? (isMe || pp.gameStatsVisibility !== 'none') : isMe
+                return (
+                <div key={g.name} className={'fp-recent' + (можно ? ' clickable' : '')}
+                  title={можно
+                    ? (сетевая ? 'Статистика за 30 дней' : 'Прохождение: миссии и проценты')
+                    : 'Всего за 30 дней: ' + fmtMs(g.totalMs) + ' · сессий: ' + g.sessions}
+                  onClick={() => {
+                    if (!можно) return
+                    setHistGame(g.name)
+                    if (сетевая) setStatsOpen(true); else setCampOpen(true)
+                  }}>
                   {covers[g.name]
                     ? <img className="act-cover act-cover-sm" src={covers[g.name]!} alt="" />
                     : <span className="act-cover act-cover-sm act-cover-ph"><Icon name="gamepad" size={22} /></span>}
@@ -551,9 +572,13 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                       {g.isNew && <span><Icon name="user" size={13} /> Новый игрок</span>}
                       {g.longestMs >= 3 * 3600000 && <span><Icon name="flame" size={13} /> Марафон в {Math.floor(g.longestMs / 3600000)} ч.</span>}
                     </div>}
+                    {можно && <div className="act-meta"><span>
+                      <Icon name="list" size={13} /> {сетевая ? 'Статистика' : 'Прохождение'}
+                    </span></div>}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </>}
             {tab === 'wall' && <>
               <div className="fp-sect">Стена росписи</div>
@@ -602,8 +627,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
             throw new Error('wall save failed')
           }
         }} />}
-        {campOpen && curGame && <CampaignModal game={curGame.name} isMe={isMe} steamId={pp.steamId} onClose={() => setCampOpen(false)} />}
-        {statsOpen && curGame && <GameStatsModal userId={userId} gameName={curGame.name} steamId={pp.steamId} isMe={isMe} onClose={() => setStatsOpen(false)} />}
+        {campOpen && (histGame || curGame) && <CampaignModal game={histGame || curGame!.name} isMe={isMe} steamId={pp.steamId}
+          onClose={() => { setCampOpen(false); setHistGame(null) }} />}
+        {statsOpen && (histGame || curGame) && <GameStatsModal userId={userId} gameName={histGame || curGame!.name}
+          steamId={pp.steamId} isMe={isMe} onClose={() => { setStatsOpen(false); setHistGame(null) }} />}
       </div>
       {friendProfile && <ProfileCard userId={friendProfile.id} name={friendProfile.username} avatarUrl={friendProfile.avatar_url}
         status={statusOf(friendProfile.id)} initialTab="activity" onClose={() => setFriendProfile(null)} />}

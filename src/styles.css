@@ -7258,7 +7258,9 @@ body.no-anim .vo-live::before { animation: none; }
 .flow-ic.ph { display: flex; align-items: center; justify-content: center; background: var(--bg3); color: var(--mut); font-size: 12px; }
 .flow-nm { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.3; max-height: 34px; overflow: hidden;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.flow-here { position: absolute; right: 8px; top: 4px; font-size: 9.5px; font-weight: 800;
+/* v1.463.0: было 9.5px — мельче читаемого, а это единственная подпись, которая
+   говорит «ты здесь». */
+.flow-here { position: absolute; right: 8px; top: 4px; font-size: 11px; font-weight: 800;
   color: var(--brand, #5865f2); letter-spacing: .02em; }
 .flow-tools { position: absolute; right: 8px; bottom: 8px; z-index: 2; display: flex; gap: 6px; }
 .flow-tools button { width: 34px; height: 34px; border-radius: var(--r-sm); border: none;
@@ -7353,3 +7355,14 @@ body.no-anim .mus-blob.on { animation: none; }
 
 /* v1.462.0: число треков в шапке Трекотеки — сразу, а не по мере загрузки. */
 .mus2-lib-count { font-size: 12px; color: var(--mut); font-weight: 600; margin-left: 8px; flex: none; }
+
+/* v1.463.0: строка истории активностей теперь нажимается — открывает статистику
+   или прохождение. Раньше это была мёртвая картинка: человек тыкал в игру и
+   ничего не происходило. Показываем, что она живая. */
+.fp-recent.clickable { cursor: pointer; border-radius: var(--r-md); transition: background .12s var(--ease-out4, ease); }
+.fp-recent.clickable:hover { background: rgba(var(--ov, 255,255,255),.05); }
+@media (max-width: 768px) {
+  /* Палец, а не курсор: строка должна быть заметной целью. */
+  .fp-recent { padding: 8px 6px; }
+  .fp-recent.clickable:active { background: rgba(var(--ov, 255,255,255),.09); }
+}

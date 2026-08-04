@@ -1,6 +1,9 @@
 
 import { supabase } from './supabase'
 import { sessionMs } from './sessionTime'
+import { aggregateSessions, type RecentGame, type SessionRow } from './activityStats'
+export { aggregateSessions } from './activityStats'
+export type { RecentGame, SessionRow } from './activityStats'
 
 // История игровых сессий (миграция 14): пишем старт/конец своей игры,
 // читаем агрегат за 7 дней для вкладки «История активностей» в фулл-профиле.
@@ -59,56 +62,20 @@ export async function weekStats(userId: string): Promise<GameStat[]> {
 
 // «Недавняя активность» за 30 дней (окно выборки 90 дней — чтобы честно посчитать
 // стрик, «Нового игрока» и «Снова в деле спустя N мес.»). Формат 1-в-1 как в Discord.
-export interface RecentGame {
-  name: string
-  last: number        // старт последней сессии
-  totalMs: number
-  sessions: number
-  streak: number      // дней подряд, заканчивая днём последней сессии
-  longestMs: number   // самая длинная сессия
-  gapDays: number     // пауза перед последней сессией (для «Снова в деле…»)
-  isNew: boolean      // самая первая сессия игры была в последние 14 дней
-}
-
 export async function recentActivity(userId: string): Promise<RecentGame[]> {
   try {
     const from = new Date(Date.now() - 90 * 86400000).toISOString()
+    // v1.463.0: было ascending: true с тем же limit 500 — то есть из девяноста
+    // дней брались САМЫЕ СТАРЫЕ пятьсот сессий. У того, кто играет часто, всё
+    // недавнее в них просто не попадало, и «Недавняя активность» показывала
+    // старьё или пустоту. Ровно это владелец и принёс как «немного сломана».
     const { data } = await supabase.from('activity_sessions').select('name, started_at, ended_at')
       .eq('user_id', userId).gte('started_at', from)
-      .order('started_at', { ascending: true }).limit(500)
-    const by: Record<string, { s: number; e: number }[]> = {}
-    for (const r of (data ?? []) as any[]) {
-      const s = new Date(r.started_at).getTime()
-      // Держим и длительность: считать её из e - s заново значило бы обойти
-      // правило про брошенные записи, ради которого она и появилась.
-      ;(by[r.name] ?? (by[r.name] = [])).push({ s, e: s + sessionMs(r.started_at, r.ended_at) })
-    }
-    const out: RecentGame[] = []
-    const cutoff30 = Date.now() - 30 * 86400000
-    for (const name of Object.keys(by)) {
-      const rows = by[name]
-      const last = rows[rows.length - 1]
-      if (last.s < cutoff30) continue   // показываем только то, во что играли за 30 дней
-      const days = new Set(rows.map(r => Math.floor(r.s / 86400000)))
-      let streak = 1
-      const lastDay = Math.floor(last.s / 86400000)
-      while (days.has(lastDay - streak)) streak++
-      const prev = rows.length > 1 ? rows[rows.length - 2] : null
-      const dur = (r: { s: number; e: number }) => Math.max(0, r.e - r.s)
-      out.push({
-        name,
-        last: last.s,
-        totalMs: rows.reduce((a, r) => a + dur(r), 0),
-        sessions: rows.length,
-        streak,
-        longestMs: Math.max(...rows.map(dur)),
-        gapDays: prev ? Math.floor((last.s - prev.e) / 86400000) : 0,
-        isNew: rows[0].s > Date.now() - 14 * 86400000,
-      })
-    }
-    return out.sort((a, b) => b.last - a.last)
+      .order('started_at', { ascending: false }).limit(500)
+    return aggregateSessions((data ?? []) as SessionRow[])
   } catch { return [] }
 }
+
 
 // Каталог игр для пикера «Любимая игра» (v1.162.0, как в Discord) — реально
 // сыгранные на Ponoi игры, отсортированы по числу разных игроков. Пустой
