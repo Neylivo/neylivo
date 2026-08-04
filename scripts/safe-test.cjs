@@ -222,7 +222,21 @@ app.whenReady().then(async () => {
       <div class="plug-dot on"></div>
       <div class="plug-actions"><button class="pqs2-btn ghost">Настройки</button><button class="pqs2-btn ghost">Журнал</button><button class="pqs2-btn ghost danger">Удалить</button></div>
     </div>
-    <div class="plug-sub">Описание плагина одной строкой</div></div>
+    <div class="plug-sub">Описание плагина одной строкой</div>
+    <!-- v1.465.0: что плагин делает в фоне. Строка длинная нарочно: адрес
+         соединения и подпись задачи легко выталкивают кнопку «Остановить»
+         за край экрана, а по ней надо попадать пальцем. -->
+    <div class="plug-bg">
+      <div class="plug-bg-row"><span class="plug-bg-t">Проверка почты каждую минуту</span>
+        <span class="plug-bg-d">раз в 60 с · сработала 1387 раз</span>
+        <button class="pqs2-btn ghost">Остановить</button></div>
+      <div class="plug-bg-row"><span class="plug-bg-t">Соединение</span>
+        <span class="plug-bg-d">wss://очень-длинный-адрес-чужого-сервиса.example/socket/v2/stream</span></div>
+    </div></div>
+  <!-- Холст плагина: он тянется на всю ширину и не должен выталкивать панель. -->
+  <div class="plugpanel"><div class="plugpanel-h"><span class="plugpanel-tag">плагин</span><b>Визуализатор</b></div>
+    <div class="plugpanel-cbox" style="height:160px"><canvas class="plugpanel-canvas" width="600" height="160"></canvas></div>
+  </div>
   <div class="pqs-sec-t">Настройки</div>
   <div class="pqs-optrow"><div><div class="pqs-optt">Переключатель с длинным названием</div>
     <div class="pqs-optd">Пояснение под ним, тоже не короткое</div></div>
@@ -249,10 +263,20 @@ app.whenReady().then(async () => {
   // Переключатель растягивать нельзя — получится полоса с кружком у края.
   // Поэтому меряем не его размер, а то, куда попадёт палец: тыкаем на 5 пикселей
   // выше и ниже видимых границ и смотрим, попали ли по переключателю.
-  let tapH = 0
+  let tapH = 0, tapWhy = ''
   const tg = document.querySelector('.pqs-toggle')
   if (tg) {
+    // v1.465.0: сперва подводим переключатель к середине экрана.
+    //
+    // Зона нажатия меряется через elementFromPoint, а он видит ТОЛЬКО то, что
+    // сейчас в окне. Стоило добавить на стенд ещё один блок сверху — и
+    // переключатель уехал за нижний край, замер оборвался на полпути и показал
+    // 38 вместо 43. То есть замер зависел от длины страницы, а не от того, что
+    // проверяется. Такой «провал» хуже пропущенной поломки: он учит не верить
+    // проверкам.
+    tg.scrollIntoView({ block: 'center' })
     const b = tg.getBoundingClientRect()
+    if (b.top < 0 || b.bottom > innerHeight) tapWhy = 'переключатель не помещается в окно'
     const x = Math.round(b.left + b.width / 2)
     const hit = y => { const e = document.elementFromPoint(x, y); return !!e && (e === tg || tg.contains(e) || e.parentElement === tg) }
     let top = Math.round(b.top), bottom = Math.round(b.bottom)
@@ -262,7 +286,7 @@ app.whenReady().then(async () => {
   }
   return JSON.stringify({ win: innerWidth, out,
     cols: getComputedStyle(document.querySelector('.cat-grid')).gridTemplateColumns.trim().split(/\s+/).length,
-    btns, small, tapH, scroll: document.body.scrollWidth })
+    btns, small, tapH, tapWhy, scroll: document.body.scrollWidth })
 }</script>`)
   const plug = new BrowserWindow({ show: false, useContentSize: true, width: 390, height: 844,
     backgroundColor: '#313338', webPreferences: { partition: 'safe-plug-' + Date.now() } })
@@ -279,7 +303,7 @@ app.whenReady().then(async () => {
   // v1.445.0: переключатель настроек был 44×25, а кнопки в строках — 32 пикселя.
   // Попасть по такому можно, промахнуться проще.
   check('в настройках нет мелких кнопок и полей', pm.small.length === 0, pm.small.join('; '))
-  check('по переключателю можно попасть пальцем', pm.tapH >= 40, 'зона нажатия ' + pm.tapH + ' пикселей')
+  check('по переключателю можно попасть пальцем', pm.tapH >= 40 && !pm.tapWhy, 'зона нажатия ' + pm.tapH + ' пикселей' + (pm.tapWhy ? ' — ' + pm.tapWhy : ''))
 
   // ── v1.450.0: окно подтверждения поверх всего ────────────────────────────────
   // Владелец принёс: «Закрыть конструктор?» появляется ПОД меню плагинов, и

@@ -4873,6 +4873,13 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .plug-actions > button { flex: 1 1 0; min-height: 40px; justify-content: center; }
   .plug-name { flex: 1 1 100%; }
   .plug-card { padding: 14px; }
+  /* v1.465.0: строки «что плагин делает в фоне». Кнопка «Остановить» вышла
+     тридцати двух пикселей высотой — телефонный обход поймал это сразу же.
+     А ещё подпись задачи и адрес соединения на 390 пикселях в одну строку не
+     помещаются: раскладываем строку в две. */
+  .plug-bg-row { flex-wrap: wrap; }
+  .plug-bg-d { flex: 1 0 100%; }
+  .plug-bg-row button { min-height: 40px; }
 }
 
 /* v1.315.0: экран «Каналы и роли» */

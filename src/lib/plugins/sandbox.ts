@@ -25,10 +25,28 @@ export function isFnRef(v: unknown): v is FnRef {
  * делать это «на всякий случай» со всем подряд нельзя.
  */
 export interface Transferred { __transfer: Transferable }
+
+/**
+ * Что мы вообще умеем передавать. Список закрытый — и это не педантизм.
+ *
+ * Пометка опознаётся по обычному полю объекта, а такое поле может прийти откуда
+ * угодно: плагин кладёт в СВОЁ хранилище `{ __transfer: {...} }`, читает обратно
+ * — и ответ уезжает списком передачи. Непередаваемый объект в этом списке роняет
+ * postMessage, исключение глохнет в post(), и плагин ВИСИТ НАВСЕГДА без единой
+ * строчки в журнале. Поймано пробой при разборе выпуска.
+ *
+ * Поэтому пометке верим только тогда, когда под ней лежит то, что браузер
+ * действительно умеет передавать. Появится второй такой объект (MessagePort,
+ * ArrayBuffer) — его добавляют сюда осознанно, а не он проскакивает сам.
+ */
+function передаваемое(t: unknown): boolean {
+  return typeof OffscreenCanvas !== 'undefined' && t instanceof OffscreenCanvas
+}
+
 export function asTransfer(v: unknown): Transferable | null {
   if (!v || typeof v !== 'object') return null
   const t = (v as Transferred).__transfer
-  return t && typeof t === 'object' ? t : null
+  return передаваемое(t) ? (t as Transferable) : null
 }
 
 export interface SandboxHooks {

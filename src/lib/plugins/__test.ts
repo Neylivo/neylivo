@@ -1031,6 +1031,45 @@ for (const p of OFFICIAL_PLUGINS) {
     })
   }
 
+  check('перехватчик стоит на КАЖДОМ пути, которым текст уходит на сервер', () => {
+    // Дыра, найденная разбором выпуска v1.465.0: onBeforeSend ловил отправку, но
+    // не правку уже отправленного сообщения. Для шифрующего плагина это утечка —
+    // человек поправил сообщение, и на сервер ушёл открытый текст.
+    //
+    // Экранов с правкой три, и завтра может стать четыре. Поэтому проверка не
+    // перечисляет их поимённо, а ищет ВСЕ реализации editMsg и требует от каждой
+    // вызова перехватчика.
+    const { readdirSync } = require('node:fs') as typeof import('node:fs')
+    const дир = 'src/components'
+    const без: string[] = []
+    let нашли = 0
+    for (const f of readdirSync(дир)) {
+      if (!f.endsWith('.tsx')) continue
+      const src = readFileSync(дир + '/' + f, 'utf8')
+      const i = src.indexOf('async function editMsg(')
+      if (i < 0) continue
+      нашли++
+      // Тело функции — до следующего объявления на том же уровне.
+      const тело = src.slice(i, i + 1200)
+      if (!тело.includes('runBeforeSend')) без.push(f)
+    }
+    if (нашли < 3) throw new Error('путей правки нашлось подозрительно мало: ' + нашли)
+    if (без.length) throw new Error('правка идёт мимо перехватчика: ' + без.join(', '))
+    return true
+  })
+
+  check('перехват правки стоит ДО показа, а не после', () => {
+    // Иначе на экране осталось бы одно, а на сервере оказалось другое — та самая
+    // расходящаяся пара «показ и действие», из-за которой в этом проекте ломается
+    // чаще всего.
+    const src = readFileSync('src/components/ServerView.tsx', 'utf8')
+    const i = src.indexOf('async function editMsg(')
+    const тело = src.slice(i, i + 1200)
+    const перехват = тело.indexOf('runBeforeSend')
+    const показ = тело.indexOf('setMessages')
+    return перехват > 0 && показ > 0 && перехват < показ
+  })
+
   console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

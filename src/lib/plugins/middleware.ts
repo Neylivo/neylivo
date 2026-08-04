@@ -194,7 +194,7 @@ export function subscribeRendered(fn: () => void): () => void {
 function pokeWatchers() { renderWatchers.forEach(fn => { try { fn() } catch {} }) }
 
 /** Ключ считает и id, и сам текст: сообщение поправили — старый ответ негоден. */
-const renderKey = (id: string, content: string) => id + ' ' + content
+const renderKey = (id: string, content: string) => id + '\u0000' + content
 
 export function clearRenderCache() {
   renderCache.clear()

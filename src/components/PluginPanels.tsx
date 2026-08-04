@@ -30,7 +30,15 @@ export function PanelCanvas({ pluginId, row }: { pluginId: string; row: Extract<
       // Элемент не удаляем — он общий и переживает уход с экрана; убираем только
       // из этого места, иначе при возврате он оказался бы вставлен дважды.
       if (el.parentNode === host) host.removeChild(el)
-      emitToPlugin(pluginId, 'canvas', { key: row.key, width: el.width, height: el.height, visible: false })
+      // «Не видно» говорим, только если холста правда нет на экране. Один и тот
+      // же ключ можно объявить и в панели, и на своей странице настроек — тогда
+      // элемент один, и вставка во второе место просто ПЕРЕНОСИТ его из первого.
+      // Без этой проверки закрытие панели говорило бы «не видно» про холст,
+      // который в этот момент прекрасно виден в настройках, и плагин остановил
+      // бы анимацию посреди работы.
+      if (!el.isConnected) {
+        emitToPlugin(pluginId, 'canvas', { key: row.key, width: el.width, height: el.height, visible: false })
+      }
     }
   }, [pluginId, row.key, row.height])
   return <div className="plugpanel-cbox" ref={box} style={{ height: row.height }} />

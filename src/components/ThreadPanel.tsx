@@ -4,6 +4,8 @@
 // закреп/реакции/правка/вложения работают через те же функции reactions.ts,
 // что и у обычного канала — ничего не дублируем.
 import { useEffect, useRef, useState } from 'react'
+import { invokePlugin } from '../lib/plugins/host'
+import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { supabase } from '../lib/supabase'
 import { toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
@@ -151,6 +153,20 @@ export function ThreadPanel({ server, channel, thread, user, username, onClose, 
     }
   }
   async function editMsg(id: string, content: string) {
+    // v1.465.0: правка тоже проходит через перехватчики плагинов.
+    //
+    // Разбор выпуска нашёл дыру: onBeforeSend ловил отправку, но НЕ правку уже
+    // отправленного. Для шифрующего плагина это утечка — человек поправил
+    // сообщение, и на сервер ушёл открытый текст. Для приложения обещание
+    // «перехватчик видит то, что уходит» было бы наполовину ложным.
+    //
+    // Перехват стоит ДО показа: иначе на экране осталось бы одно, а на сервере
+    // оказалось другое — самая частая поломка в этом проекте.
+    if (hasInterceptors('send')) {
+      const r = await runBeforeSend(content, thread.id, (pid, fn, a) => invokePlugin(pid, fn, a))
+      if (r.cancel) { toastErr('Правка отменена плагином «' + (r.by ?? '?') + '»'); return }
+      content = r.content
+    }
     const prev = msgsRef.current.find(m => m.id === id)
     setMessages(ms => ms.map(m => (m.id === id ? ({ ...m, content, edited: true } as any) : m)))
     const ok = await editMessage('messages', id, content)
