@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { toastOk } from '../lib/toast'
+import { loadAi, askAi, aiReady } from '../lib/gameAi'
 import { copyText } from '../lib/copyMedia'
 import {
   loadCampaign, saveCampaign, forgetCampaign, buildCampaign, toggleMission, setNote,
@@ -24,6 +25,23 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
   const [text, setText] = useState(() => (loadCampaign(game)?.missions ?? []).map(m => m.name).join('\n'))
   const [pick, setPick] = useState<number | null>(null)
   const [q, setQ] = useState('')
+  // v1.453.0: ответ ИИ прямо здесь. Ключ свой, лежит на устройстве (lib/gameAi.ts).
+  const [ai] = useState(() => loadAi())
+  const [ответ, setОтвет] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function спросить() {
+    if (busy || !q.trim()) return
+    setBusy(true); setОтвет(''); setErr('')
+    try {
+      let acc = ''
+      await askAi(ai, askPrompt(c, q), piece => { acc += piece; setОтвет(acc) })
+      if (!acc) setErr('Сервис ответил пустотой — попробуй ещё раз или другую модель')
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally { setBusy(false) }
+  }
 
   const { done, total } = counts(c)
   const pct = percent(c)
@@ -113,15 +131,24 @@ export function CampaignModal({ game, isMe, onClose }: { game: string; isMe: boo
             <label className="modal-lbl">Спросить про это место</label>
             <div className="cmp-ask-row">
               <input className="modal-in" value={q} onChange={e => setQ(e.target.value)}
-                placeholder="Например: где найти ключ от ворот?" />
-              <button className="pqs2-btn" disabled={!q.trim()}
-                onClick={() => { copyText(askPrompt(c, q), 'Вопрос вместе с местом прохождения скопирован') }}>
-                Скопировать вопрос
-              </button>
+                placeholder="Например: где найти ключ от ворот?"
+                onKeyDown={e => { if (e.key === 'Enter' && q.trim() && !busy) void спросить() }} />
+              {aiReady(ai)
+                ? <button className="pqs2-btn" disabled={!q.trim() || busy} onClick={() => void спросить()}>
+                    {busy ? 'Спрашиваю…' : 'Спросить'}
+                  </button>
+                : <button className="pqs2-btn" disabled={!q.trim()}
+                    onClick={() => { copyText(askPrompt(c, q), 'Вопрос вместе с местом прохождения скопирован') }}>
+                    Скопировать вопрос
+                  </button>}
             </div>
+            {/* Ответ приходит по словам — ждать минуту, глядя в пустоту, незачем. */}
+            {(ответ || err) && <div className={'cmp-answer' + (err ? ' bad' : '')}>{err || ответ}</div>}
             <div className="cset-hint">
               К вопросу прикладывается, где ты сейчас: игра, миссия и проценты, — и просьба не
-              рассказывать сюжет вперёд. Вставь это в любой ИИ или в плагин с моделью.
+              рассказывать сюжет вперёд. {aiReady(ai)
+                ? 'Отвечает ' + (ai.provider === 'anthropic' ? 'Anthropic' : 'OpenAI') + ' по твоему ключу — он лежит только на этом устройстве.'
+                : 'Свой ключ ИИ задаётся в Настройках → Активность; без него вопрос просто копируется, чтобы вставить куда угодно.'}
             </div>
           </div>
 

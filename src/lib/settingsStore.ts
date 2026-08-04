@@ -33,6 +33,11 @@ export const ACCOUNT_KEYS = [
 export type AccountKey = typeof ACCOUNT_KEYS[number]
 export const isAccountKey = (k: string): k is AccountKey => (ACCOUNT_KEYS as readonly string[]).includes(k)
 
+// v1.453.0: на телефоне свайпы включены сразу, на компьютере — нет.
+const IS_MOBILE_DEFAULT = (() => {
+  try { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') } catch { return false }
+})()
+
 export interface Settings {
   theme: string
   accent: string
@@ -90,13 +95,18 @@ export interface Settings {
   pttMode: boolean
   keyPTT: string
   defaultServerNotif: 'all' | 'mentions' | 'mute'
-  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
+  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
+  /** v1.453.0: свайпы от края экрана (шторки на телефоне). */
+  swipes: boolean
 }
 
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
   micVol: 100, spkVol: 100, krisp: true, lang: 'ru', hideLastSeen: false,
+  // v1.453.0: свайпы от края открывают шторки на телефоне. По умолчанию
+  // включены только там: на компьютере жест от края мешал бы выделению.
+  swipes: IS_MOBILE_DEFAULT,
   // v1.387.0: всё шифрование выключено по умолчанию — решение владельца.
   //
   // Что это значит по-честному: содержимое личной переписки, вложений и звонков

@@ -48,6 +48,7 @@ import { ThreadPanel } from './ThreadPanel'
 import { ForumView } from './ForumView'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
 import { kbScrollDelta } from '../lib/keyboardInset'
+import { swipesOn, fromEdge, swipeDir, swipeAction, type SwipePoint } from '../lib/swipe'
 import { sysPin, parseSys } from '../lib/sysmsg'
 import { ActivityLabel } from './ActivityLabel'
 import { ChannelSettings } from './ChannelSettings'
@@ -680,6 +681,42 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     prevLen.current = messages.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
+
+  // v1.453.0: свайпы от края открывают и закрывают шторки — как во всех
+  // мессенджерах на телефоне. Раньше единственным способом сменить канал было
+  // прицелиться в маленькую кнопку в углу шапки.
+  //
+  // Что считается свайпом, решает lib/swipe.ts — одно правило на всё
+  // приложение. Слушаем на окне и в фазе всплытия: если палец начал внутри
+  // прокручиваемого списка, тот получит своё событие первым, а мы не мешаем.
+  useEffect(() => {
+    if (!swipesOn(IS_MOBILE)) return
+    let start: SwipePoint | null = null
+    let edge: 'left' | 'right' | null = null
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return
+      edge = fromEdge(e.clientX, window.innerWidth)
+      start = edge ? { x: e.clientX, y: e.clientY, t: Date.now() } : null
+    }
+    const up = (e: PointerEvent) => {
+      if (!start) return
+      const dir = swipeDir(start, { x: e.clientX, y: e.clientY, t: Date.now() })
+      start = null
+      // Свайп вправо начинают от левого края, влево — от правого: движение
+      // «из-под пальца в стену» жестом не считается.
+      if (!dir || (dir === 'right' && edge !== 'left') || (dir === 'left' && edge !== 'right')) return
+      const navOpen = document.body.classList.contains('mob-nav-open')
+      switch (swipeAction(dir, { navOpen, membersOpen: showMembers, hasMembers: !!srvSettings.members_in_list })) {
+        case 'open-nav': openMobNav(); break
+        case 'close-nav': closeMobNav(); break
+        case 'open-members': setShowMembers(true); break
+        case 'close-members': setShowMembers(false); break
+      }
+    }
+    window.addEventListener('pointerdown', down)
+    window.addEventListener('pointerup', up)
+    return () => { window.removeEventListener('pointerdown', down); window.removeEventListener('pointerup', up) }
+  }, [showMembers, srvSettings.members_in_list])
 
   // v1.443.0: клавиатура выехала — низ переписки уезжает под неё. Если человек
   // читал именно низ, подкручиваем список на ту же высоту; если он был выше,

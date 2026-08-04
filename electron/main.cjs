@@ -73,6 +73,8 @@ function showMainWindow() {
 // ---- Авто-детект игр (как в Discord) ----
 // Раз в 4 секунды (как в Discord) смотрим ОКНА Windows (PowerShell Get-Process). Рендереру шлём событие ТОЛЬКО
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
+const { steamNameOf } = require('./steamName.cjs')
+
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
   'csgo.exe': 'CS:GO',
@@ -1145,7 +1147,11 @@ function detectGame(proc, exePath, title) {
       if (!name || NOT_GAMES.has(name.toLowerCase())) break
       // exe бывает зарыт в служебную папку — тогда лучше заголовок окна
       if (/^(binaries|bin|win64|win32|x64|x86|client|shipping|game|live|retail|content)$/i.test(name)) name = cleanTitle(title) || name
-      name = prettyName(name)
+      // v1.453.0: у Steam рядом лежит манифест с НАСТОЯЩИМ названием — берём
+      // его вместо имени папки. Папка врёт чаще, чем кажется: «dota 2 beta»,
+      // «HogwartsLegacy», «NewWorld» — это папки, а не названия игр.
+      const exact = steamNameOf(exePath)
+      name = exact || prettyName(name)
       if (!isJunkName(name)) dirHit = { name, prio }
       break
     }

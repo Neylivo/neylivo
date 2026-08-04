@@ -23,6 +23,7 @@ import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint } from '../lib/crypto/keys'
 import { SignOutModal } from './SignOutModal'
 import { IS_MOBILE } from '../lib/mobile'
+import { loadAi, saveAi, DEFAULT_MODEL as AI_DEFAULT_MODEL } from '../lib/gameAi'
 import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
@@ -172,7 +173,11 @@ function ChatBgCard() {
   return (
     <div className="pqs-acc-card2">
       <div className="pqs-sec-t">Фон чата</div>
-      <Row title="Фоновое фото" desc="Поставить своё фото фоном чата (размытое, чтобы текст читался)">
+      {/* v1.453.0: на телефоне фона нет — говорим об этом здесь, а не оставляем
+          человека гадать, почему переключатель включён, а фона не видно. */}
+      <Row title="Фоновое фото" desc={IS_MOBILE
+        ? 'На телефоне фон чата не показывается: картинка под сообщениями съедает контраст, а размытие каждого кадра стоит плавности прокрутки. Настройка действует на компьютере.'
+        : 'Поставить своё фото фоном чата (размытое, чтобы текст читался)'}>
         <Toggle on={bg.on} onChange={v => setBg(setChatBgPrefs({ on: v }))} />
       </Row>
       <div className="pqs-pet-pick">
@@ -269,6 +274,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
   // v1.220.0: перенесён из приватного user_prefs в публичный profiles (prof.steamId) —
   // иначе статистику Dota никто, кроме владельца, всё равно не смог бы посчитать.
   function saveSteamId(v: string) { setProfD('steamId', v.trim() || null) }
+  // v1.453.0: настройки ИИ-подсказок по игре (ключ лежит на устройстве).
+  const [aiCfg, setAiCfg] = useState(() => loadAi())
+
   // v1.166.0: свои звуки — уведомление о сообщении, рингтон входящего, гудки
   // исходящего. Приватная account-настройка (см. src/lib/userPrefs.ts), синхронизируется
   // на все устройства. Пусто — играет встроенный тон/мелодия (src/lib/notify.ts, callSounds.ts).
@@ -952,6 +960,16 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
               {cat === 'appearance' && <>
                 <h2>Внешний вид</h2>
                 <div className="pqs2-desc">Темы и оформление приложения. Выбери готовую тему — или собери свою из любых цветов.</div>
+
+                {/* v1.453.0: управление жестами. На телефоне включено сразу — там это
+                    основной способ переключаться между каналами; на компьютере
+                    выключено, потому что движение от края мешало бы выделению. */}
+                <div className="pqs-sec-t">Управление</div>
+                <Row title="Свайпы от края экрана"
+                  desc="Провести пальцем от левого края — открыть каналы, от правого — участников. Тем же движением обратно они закрываются. Только на сенсорном экране.">
+                  <Toggle on={settings.swipes} onChange={v => set('swipes', v)} />
+                </Row>
+
                 <ChatBgCard />
 
                 <div className="pqs-custom">
@@ -1294,6 +1312,36 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 <div className="pqs2-desc">Показывай друзьям, во что играешь и чем занимаешься.</div>
                 <Row title="Своя активность" desc="Показывать пользовательский статус"><Toggle on={view.actOn} onChange={v => setD('actOn', v)} /></Row>
                 {view.actOn && <input className="pqs-in" value={view.actText} onChange={e => setD('actText', e.target.value)} placeholder="Например: Играет в Figma" />}
+                {/* v1.453.0: ИИ-подсказки по игре. Ключ свой и лежит ТОЛЬКО на этом
+                    устройстве: он не уходит ни в присутствие, ни в базу, ни на наш
+                    сервер — только в тот сервис, чей он есть. Своей модели у
+                    приложения нет: держать её значило бы платить за каждый вопрос
+                    каждого человека. */}
+                <div className="pqs-sec-t">Подсказки по игре</div>
+                <div className="pqs2-desc">
+                  В панели прохождения можно спросить про место, где ты сейчас, — вопрос уйдёт вместе с игрой,
+                  миссией и процентами. Отвечает не Ponoi, а сервис по твоему ключу: он хранится только на этом
+                  устройстве и никуда больше не отправляется. Без ключа вопрос просто копируется — вставишь куда захочешь.
+                </div>
+                <div className="pqs-seg">
+                  {([['openai', 'OpenAI'], ['anthropic', 'Anthropic']] as const).map(([v, label]) => (
+                    <button key={v} className={'pqs-seg-btn' + (aiCfg.provider === v ? ' on' : '')}
+                      onClick={() => setAiCfg(c => { const n = { ...c, provider: v, model: AI_DEFAULT_MODEL[v] }; saveAi(n); return n })}>{label}</button>
+                  ))}
+                </div>
+                <input className="pqs-in" type="password" value={aiCfg.key}
+                  onChange={e => setAiCfg(c => { const n = { ...c, key: e.target.value }; saveAi(n); return n })}
+                  placeholder={aiCfg.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'} autoComplete="off" />
+                <input className="pqs-in" value={aiCfg.model}
+                  onChange={e => setAiCfg(c => { const n = { ...c, model: e.target.value }; saveAi(n); return n })}
+                  placeholder="Модель" />
+                <input className="pqs-in" value={aiCfg.base ?? ''}
+                  onChange={e => setAiCfg(c => { const n = { ...c, base: e.target.value.trim() || undefined }; saveAi(n); return n })}
+                  placeholder="Свой адрес сервиса — если он говорит на языке OpenAI (необязательно)" />
+                <div className="pqs-code-sub">
+                  Ключ виден только тебе и уходит напрямую в выбранный сервис. Удалить — очисти поле.
+                </div>
+
                 <div className="pqs-sec-t">Статистика Dota 2</div>
                 <div className="pqs2-desc">Valve не отдаёт MMR через GSI — привяжи SteamID64, и статистика (MMR, последние матчи) подтянется из открытого API OpenDota.</div>
                 <input className="pqs-in" value={profView.steamId ?? ''} onChange={e => saveSteamId(e.target.value.replace(/[^0-9]/g, ''))}

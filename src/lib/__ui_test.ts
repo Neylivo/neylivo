@@ -17,6 +17,8 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { makeSseReader, buildRequest, aiReady, whyFailed } from './gameAi'
+import { fromEdge, swipeDir, swipeAction } from './swipe'
 import { percent, counts, currentIndex, currentMission, isComplete, shortLabel, fullLabel, storyShare, shareLabel, parseMissions, buildCampaign, toggleMission, setNote, askContext, askPrompt, MAX_MISSIONS, MAX_MISSION_NAME } from './campaign'
 import { mentionsMe, mentionsMyRole } from './mentions'
 import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
@@ -1816,6 +1818,119 @@ check('проверка ловит проценты, посчитанные от
 check('проверка ловит расхождение своей и чужой строки', () => {
   const c = кампания(13, 4)
   return shareLabel(storyShare(c)) === shortLabel(c) && shortLabel(c).includes('из 13')
+})
+
+
+// -- v1.453.0: свайпы на телефоне --------------------------------------------
+// Шторки открывались только кнопкой в углу шапки — то есть самое частое
+// действие на телефоне требовало прицелиться. Здесь проверяется, что жест
+// отличается от прокрутки и от дрожания руки.
+console.log('\n-- Свайпы --')
+const т = (x: number, y: number, t: number) => ({ x, y, t })
+
+check('от края экрана начинать можно', () =>
+  fromEdge(5, 390) === 'left' && fromEdge(385, 390) === 'right')
+check('из середины — нельзя', () => fromEdge(200, 390) === null)
+check('ровная протяжка вправо — свайп', () => swipeDir(т(5, 400, 0), т(140, 405, 200)) === 'right')
+check('ровная протяжка влево — свайп', () => swipeDir(т(385, 400, 0), т(250, 402, 200)) === 'left')
+check('прокрутка ленты свайпом не считается', () =>
+  swipeDir(т(5, 500, 0), т(30, 200, 200)) === null)
+check('диагональ с перевесом вниз не считается', () =>
+  swipeDir(т(5, 400, 0), т(80, 500, 200)) === null)
+check('дрожание руки не считается', () => swipeDir(т(5, 400, 0), т(35, 402, 120)) === null)
+check('слишком долгое движение не считается', () =>
+  swipeDir(т(5, 400, 0), т(200, 400, 5000)) === null)
+
+check('вправо у закрытых шторок открывает каналы', () =>
+  swipeAction('right', { navOpen: false, membersOpen: false, hasMembers: true }) === 'open-nav')
+check('влево при открытых каналах закрывает их', () =>
+  swipeAction('left', { navOpen: true, membersOpen: false, hasMembers: true }) === 'close-nav')
+check('влево у закрытых открывает участников', () =>
+  swipeAction('left', { navOpen: false, membersOpen: false, hasMembers: true }) === 'open-members')
+check('вправо при открытых участниках сначала закрывает их', () =>
+  // Иначе одним движением открылись бы обе шторки разом.
+  swipeAction('right', { navOpen: false, membersOpen: true, hasMembers: true }) === 'close-members')
+check('без списка участников влево ничего не делает', () =>
+  swipeAction('left', { navOpen: false, membersOpen: false, hasMembers: false }) === 'none')
+check('не свайп — ничего не делает', () =>
+  swipeAction(null, { navOpen: false, membersOpen: false, hasMembers: true }) === 'none')
+
+console.log('\n-- Ломаем нарочно (свайпы) --')
+check('проверка ловит свайп без перевеса по горизонтали', () => {
+  // Без перевеса шторка вылезала бы при обычной прокрутке ленты.
+  const почтиРовно = swipeDir(т(5, 400, 0), т(80, 460, 200))
+  return почтиРовно === null && swipeDir(т(5, 400, 0), т(140, 405, 200)) === 'right'
+})
+check('проверка ловит открытие обеих шторок одним движением', () =>
+  swipeAction('right', { navOpen: false, membersOpen: true, hasMembers: true }) !== 'open-nav')
+
+
+// -- v1.453.0: ИИ-подсказки по игре ------------------------------------------
+// Самое ломкое место — разбор потока: кусок из сети рвётся где угодно, в том
+// числе посреди JSON. Наивный разбор теряет такие обрывки, и это выглядит как
+// пропавшие слова в середине ответа — глазами не поймать.
+console.log('\n-- ИИ по игре --')
+const конф = { provider: 'openai' as const, key: 'k', model: 'm' }
+const кусок = (t: string) => 'data: ' + JSON.stringify({ choices: [{ delta: { content: t } }] }) + '\n\n'
+const кусокА = (t: string) => 'data: ' + JSON.stringify({ type: 'content_block_delta', delta: { text: t } }) + '\n\n'
+
+check('слова собираются по порядку', () => {
+  const r = makeSseReader('openai')
+  return [...r(кусок('При')), ...r(кусок('вет'))].join('') === 'Привет'
+})
+check('поток, порванный посреди JSON, не теряет слов', () => {
+  // Ровно это и терял наивный разбор.
+  const r = makeSseReader('openai')
+  const весь = кусок('Ключ') + кусок(' под ковром')
+  const где = Math.floor(весь.length / 2)
+  const out = [...r(весь.slice(0, где)), ...r(весь.slice(где))]
+  return out.join('') === 'Ключ под ковром'
+})
+check('порванный по буквам поток тоже собирается', () => {
+  const r = makeSseReader('openai')
+  const весь = кусок('абв')
+  let out: string[] = []
+  for (const ch of весь) out = out.concat(r(ch))
+  return out.join('') === 'абв'
+})
+check('конец потока не превращается в слово', () => {
+  const r = makeSseReader('openai')
+  return r('data: [DONE]\n\n').length === 0
+})
+check('мусор в потоке пропускается, а не роняет разбор', () => {
+  const r = makeSseReader('openai')
+  return r('data: не-json\n\n' + кусок('ок')).join('') === 'ок'
+})
+check('второй сервис разбирается своим способом', () => {
+  const r = makeSseReader('anthropic')
+  return r(кусокА('да')).join('') === 'да'
+      && makeSseReader('anthropic')(кусок('нет')).length === 0
+})
+
+check('запрос собирается под каждый сервис', () => {
+  const o = buildRequest(конф, 'вопрос')
+  const a = buildRequest({ ...конф, provider: 'anthropic' }, 'вопрос')
+  return o.url.includes('/v1/chat/completions') && o.headers.Authorization === 'Bearer k'
+      && a.url.includes('/v1/messages') && a.headers['x-api-key'] === 'k'
+      && JSON.parse(o.body).stream === true && JSON.parse(a.body).stream === true
+})
+check('свой адрес сервиса учитывается', () =>
+  buildRequest({ ...конф, base: 'https://моё.local' }, 'в').url.startsWith('https://моё.local'))
+check('без ключа спрашивать не идём', () =>
+  !aiReady({ ...конф, key: '' }) && !aiReady({ ...конф, key: '   ' }) && aiReady(конф))
+check('отказ объясняется по-человечески', () =>
+  /Ключ не принят/.test(whyFailed(401)) && /квота/.test(whyFailed(429))
+  && /не отвечает/.test(whyFailed(503)) && /модели/.test(whyFailed(404)))
+
+console.log('\n-- Ломаем нарочно (ИИ по игре) --')
+check('проверка ловит разбор без накопления хвоста', () => {
+  // Так выглядел бы наивный разбор: половину куска он просто выбросит.
+  const половина = кусок('Ключ').slice(0, 20)
+  // Наивный разбор попробует разобрать обрывок сразу и потеряет слово.
+  let наивноПотерял = true
+  try { наивноПотерял = !JSON.parse(половина.slice(5).trim())?.choices } catch { наивноПотерял = true }
+  const r = makeSseReader('openai')
+  return наивноПотерял && r(половина).length === 0 && r(кусок('Ключ').slice(20)).join('') === 'Ключ'
 })
 
 

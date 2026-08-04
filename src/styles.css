@@ -7154,3 +7154,19 @@ body.no-anim .vo-live::before { animation: none; }
   .cmp-ask-row { flex-direction: column; align-items: stretch; }
   .cmp-ask-row .pqs2-btn { min-height: 40px; }
 }
+
+/* v1.453.0: на телефоне фон чата не показываем — прямое указание владельца.
+   Почему это правильно и без указания: картинка под сообщениями съедает
+   контраст на маленьком экране (текст ложится на фотографию), а размытие
+   каждого кадра на слабом телефоне стоит плавности прокрутки. На большом
+   экране всё это заметно меньше, поэтому там фон остаётся как был. */
+@media (max-width: 768px) {
+  body.chatbg-on .chat { isolation: auto; overflow: visible; }
+  body.chatbg-on .chat::before, body.chatbg-on .chat::after { content: none; }
+}
+
+/* v1.453.0: ответ ИИ в панели прохождения — приходит по словам. */
+.cmp-answer { margin-top: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--bg3);
+  font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; max-height: 220px; overflow-y: auto;
+  overscroll-behavior: contain; }
+.cmp-answer.bad { background: rgba(242,63,67,.12); color: #f23f43; }

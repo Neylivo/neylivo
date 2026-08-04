@@ -17,7 +17,9 @@ import { mergeTracks } from './mergeTracks'
 import { sendTrackToFriend } from './shareTrack'
 import { trackScore, suggestQuery } from './fuzzy'
 import { buildDsp, readDsp, dspActive, type DspSettings, type DspChain } from './dsp'
-import { smartMix, mixSummary, MIX_SIZE } from './smartMix'
+// v1.453.0: «Подборка» убрана по просьбе владельца — кнопка ушла из Трекотеки.
+// Сам подбор никуда не делся: он и был подбором волны, который работает
+// дальше (см. recommend). Убрана именно кнопка, а не умение.
 import { emptyHist, pushPlayed, back as histBack, forward as histForward, recentIds, canForward, type Hist } from './history'
 import { loadLibrary, saveLibrary, libraryPlan } from './libCache'
 import { MIN_TRACK_SEC, tooShortWhy, audioDuration } from './minLength'
@@ -2801,30 +2803,6 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
             {tracks.length > 1 && !libQ.trim() && (
               <div className="mus2-lib-row">
                 <div className="mus2-lib-note">Сначала — то, что слушают чаще всего</div>
-                {/* v1.442.0: «Подборка» — собрать интересное одним нажатием.
-                    Тот же подбор, что у волны, просто вызванный подряд: свой
-                    второй алгоритм развёл бы «что советуют» и «что играет». */}
-                <button className="mus2-mixbtn" disabled={guest || tracks.length < 3}
-                  title="Собрать подборку под себя и включить"
-                  onClick={() => {
-                    const enriched = tracks.map(t => ({
-                      ...t, name: meta[t.url]?.title || t.name, author: meta[t.url]?.author || t.author,
-                    }))
-                    const mix = smartMix({
-                      tracks: enriched, plays: myPlays, lastAt, now: Date.now(),
-                      recent: recentRef.current, from: idx, size: MIX_SIZE,
-                      skip: t => unplayable(tracks.find(x => x.id === t.id)),
-                    })
-                    if (mix.length === 0) { toastErr('Не нашлось, из чего собрать подборку'); return }
-                    const [first, ...rest] = mix
-                    saveManual(rest.map(t => t.id))
-                    const i = byId.get(first.id) ?? -1
-                    if (i >= 0) { playAt(i); setPlaying(true) }
-                    setShowLib(false)
-                    toastOk('Подборка готова — ' + mixSummary(mix))
-                  }}>
-                  <Icon name="wand" size={15} /> Подборка
-                </button>
               </div>
             )}
             {(() => {
