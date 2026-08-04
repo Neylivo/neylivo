@@ -78,6 +78,8 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // Shared library ("Трекотека"): tracks live in the music_tracks table, visible
   // to everyone, and anyone can add. Realtime keeps every listener's list in sync.
   const [tracks, setTracks] = useState<Track[]>([])
+  /** v1.462.0: сколько треков в базе всего — показывается сразу. */
+  const [libTotal, setLibTotal] = useState<number | null>(null)
   const [idx, setIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [settings, setSettings] = useState(false)
@@ -846,12 +848,17 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       const snap = await loadLibrary()
       if (!ok) return
       if (snap) setTracks(prev => (prev.length ? mergeTracks(prev, snap.tracks) : snap.tracks))
+      // v1.462.0: общее число спрашиваем ВСЕГДА и сразу — это один дешёвый
+      // запрос, а без него человек не знает, сколько всего треков и кончится ли
+      // загрузка. Показ не ждёт: снимок уже на экране.
+      void tracksCount().then(n => { if (ok && typeof n === 'number') setLibTotal(n) })
 
       // Счёт спрашиваем ТОЛЬКО когда есть что с ним сверять: без снимка ответ
       // всё равно один — качать целиком, а лишний запрос отодвинул бы первую
       // страницу, ради которой всё и делалось.
       const count = snap ? await tracksCount() : null
       if (!ok) return
+      if (typeof count === 'number') setLibTotal(count)
       const plan = libraryPlan(snap, count, Date.now())
 
       if (plan.kind === 'incremental') {
@@ -1009,7 +1016,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // v1.79.0: тянем метаданные для всего, у чего нет обложки (раньше — только без любых метаданных).
     // v1.369.0: добираем и тем, у кого нет ссылки воспроизведения, а не только
     // обложки: у SoundCloud без неё трек играет через адрес страницы.
-    const missing = tracks.filter(t => !meta[t.url] && (!t.art || !t.play) && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
+    // v1.462.0: раньше сюда попадал ВЕСЬ склад, у которого нет обложки. На
+    // тринадцати тысячах это тринадцать тысяч запросов к чужим сервисам —
+    // очередь не кончалась никогда, а SoundCloud от такого потока просто
+    // перестаёт отвечать: именно поэтому «треки из SoundCloud не работают».
+    //
+    // Теперь спрашиваем только то, что человеку сейчас нужно: играющее,
+    // следующее, найденное поиском и показанное на экране. Остальное подтянется,
+    // когда до него долистают, — и не раньше.
+    const нужные = new Set<string>()
+    if (cur?.url) нужные.add(cur.url)
+    if (qNextUrlRef.current) нужные.add(qNextUrlRef.current)
+    for (const u of libFoundRef.current) нужные.add(u)
+    for (const u of libShownRef.current) нужные.add(u)
+    const missing = tracks.filter(t => нужные.has(t.url) && !meta[t.url] && (!t.art || !t.play)
+      && (isSoundcloudUrl(t.url) || isYouTubeUrl(t.url) || isAudiusUrl(t.url)))
     if (missing.length === 0) return
     // v1.445.0: сперва забираем всё, что уже лежит в кэше на устройстве, — разом
     // и без единого запроса. Раньше приложение узнавало о лежащем в кэше только
@@ -2158,13 +2179,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   }, [tracks])
   // Порядок и поиск по складу — тоже не на каждый тик полосы времени, а только
   // когда меняется склад, метаданные или строка поиска.
+  // v1.462.0: САМАЯ ДОРОГАЯ вещь во всём плеере — этот порядок. На складе в
+  // тринадцать тысяч он строит карту из тринадцати тысяч и сортирует их же.
+  //
+  // А зависел он от meta — то есть пересчитывался НА КАЖДУЮ подгруженную
+  // обложку, десятки раз в минуту, пока идёт добор данных. Отсюда и «лагает
+  // всё»: приложение полминуты подряд занято сортировкой одного и того же.
+  //
+  // Порядку метаданные не нужны вовсе: он считается по числу прослушиваний.
+  // Метаданные нужны только ПОИСКУ — и только когда в поиске что-то набрано.
+  const libOrdered = useMemo(() => libraryOrder(tracks), [tracks])
   const libAll = useMemo(() => {
     const q = libQ.trim()
-    // v1.406.0: склад выкладывается по прослушиваниям, а не по времени
-    // добавления: порядок добавления — это про того, кто когда принёс трек, а
-    // зашедшему послушать он не говорит ничего. Сортируется только показ: по
-    // порядку самого tracks считается номер играющего.
-    const ordered = libraryOrder(tracks)
+    const ordered = libOrdered
     if (!q) return ordered
     // v1.442.0: поиск прощает опечатки, другую раскладку и «ё» (см. fuzzy.ts).
     // Раньше сравнение шло через includes: одна лишняя буква — и трек «не
@@ -2179,7 +2206,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     }
     scored.sort((a, b) => b.s - a.s)
     return scored.map(x => x.t)
-  }, [tracks, meta, libQ])
+    // meta здесь остаётся: без него поиск не видит настоящих названий. Но
+    // пересчёт теперь бьёт только по НАЙДЕННОМУ, а не по всему складу, и только
+    // пока в поиске что-то набрано.
+  }, [libOrdered, meta, libQ])
 
   // v1.445.0: что сейчас найдено и что показано на экране склада — для очереди
   // подгрузки (music/metaPlan.ts). Через ссылки, а не через зависимости эффекта:
@@ -2716,6 +2746,16 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
             <b>Ponoi Music · Трекотека</b>
+            {/* v1.462.0: сколько всего треков — СРАЗУ, а не по мере загрузки.
+                Раньше здесь ничего не было, и человек смотрел, как список
+                бесконечно растёт, не понимая, сколько его ждёт и кончится ли
+                это вообще. Число берётся из базы одним запросом, независимо от
+                того, сколько строк уже приехало. */}
+            <span className="mus2-lib-count">
+              {libTotal != null
+                ? libTotal.toLocaleString('ru') + (tracks.length < libTotal ? ' · загружено ' + tracks.length.toLocaleString('ru') : '')
+                : (tracks.length ? tracks.length.toLocaleString('ru') : '…')}
+            </span>
             {/* v1.428.0: у склада появился второй отдел — плейлисты. Раньше они
                 жили одной строкой в узкой панели плеера: ни открыть, ни включить
                 целиком, ни переименовать.

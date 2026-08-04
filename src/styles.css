@@ -7350,3 +7350,6 @@ body.no-anim .mus-blob.on { animation: none; }
 @media (max-width: 768px) {
   .emoji-pop, .gif-pop { width: calc(100vw - 12px); max-width: none; height: 58vh; max-height: 58vh; }
 }
+
+/* v1.462.0: число треков в шапке Трекотеки — сразу, а не по мере загрузки. */
+.mus2-lib-count { font-size: 12px; color: var(--mut); font-weight: 600; margin-left: 8px; flex: none; }

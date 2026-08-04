@@ -76,20 +76,52 @@ function parseOembed(j: any): ScMeta | null {
 /** Track metadata via SoundCloud oEmbed (no API key needed). Cached in localStorage.
  *  v1.79.0: если прямой oEmbed молчит (блокировщик рекламы / SoundCloud заблокирован
  *  в сети) — пробуем noembed.com: он ходит к SoundCloud со своего сервера. */
+/**
+ * v1.462.0: отступление при отказах.
+ *
+ * На складе в тринадцать тысяч приложение раньше засыпало SoundCloud тысячами
+ * запросов подряд, и он переставал отвечать ВСЕМ — вот почему «треки из
+ * SoundCloud вообще не работают». Даже после того, как поток запросов урезан,
+ * нужна страховка: если сервис начал отказывать, надо перестать долбить его, а
+ * не продолжать с той же силой.
+ *
+ * Считаем отказы подряд. Три подряд — ждём, и с каждым разом дольше (до минуты).
+ * Один удачный ответ обнуляет счётчик.
+ */
+let подрядОтказов = 0
+let ждатьДо = 0
+const МАКС_ПАУЗА = 60_000
+
+function отказ() {
+  подрядОтказов++
+  if (подрядОтказов >= 3) {
+    ждатьДо = Date.now() + Math.min(МАКС_ПАУЗА, 2000 * 2 ** (подрядОтказов - 3))
+  }
+}
+function удача() { подрядОтказов = 0; ждатьДо = 0 }
+
+/** Сервис сейчас отдыхает — спрашивать бесполезно. */
+export function scResting(now = Date.now()): boolean { return now < ждатьДо }
+
 export async function scMeta(url: string): Promise<ScMeta | null> {
   if (cache[url]) return cache[url]
+  // Пока сервис отдыхает — даже не пробуем: каждый лишний запрос удлиняет
+  // отдых и мешает тому единственному треку, который человек включил.
+  if (scResting()) return null
   let meta: ScMeta | null = null
   try {
     const r = await fetch('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(url))
     if (r.ok) meta = parseOembed(await r.json())
-  } catch {}
+    else отказ()
+  } catch { отказ() }
   if (!meta) {
     try {
       const r = await fetch('https://noembed.com/embed?url=' + encodeURIComponent(url))
       if (r.ok) meta = parseOembed(await r.json())
     } catch {}
   }
-  if (meta) { cache[url] = meta; saveCache() }
+  if (meta) { cache[url] = meta; saveCache(); удача() }
+  else отказ()
   return meta
 }
 

@@ -32,6 +32,10 @@ export interface LibSnapshot {
 
 /** Сколько снимок считается годным без сверки. Дальше — перечитать целиком. */
 export const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+/** v1.462.0: насколько меньше строк в базе терпим, прежде чем перечитать всё.
+ *  Один-два удалённых трека — не повод качать тринадцать тысяч: они пропадут
+ *  сами при следующей полной сверке или по живому событию об удалении. */
+export const DELETED_TOLERANCE = 25
 
 /** Снимок склада с устройства. Ничего нет или мусор — вернём null. */
 export async function loadLibrary(): Promise<LibSnapshot | null> {
@@ -75,9 +79,27 @@ export type LibPlan =
 export function libraryPlan(snap: LibSnapshot | null, count: number | null, now: number): LibPlan {
   if (!snap || snap.tracks.length === 0) return { kind: 'full', why: 'no-cache' }
   if (now - snap.at > SNAPSHOT_TTL_MS) return { kind: 'full', why: 'stale' }
-  if (count === null) return { kind: 'full', why: 'no-count' }
-  if (count !== snap.tracks.length) return { kind: 'full', why: 'count-differs' }
   const since = newestAt(snap.tracks)
   // Без времени добавления не от чего оттолкнуться — тогда только целиком.
-  return since ? { kind: 'incremental', since } : { kind: 'full', why: 'no-cache' }
+  if (!since) return { kind: 'full', why: 'no-cache' }
+
+  // v1.462.0: раньше ЛЮБОЕ расхождение в числе треков означало «качать всё
+  // заново». На складе в тринадцать тысяч, куда каждый день кто-то добавляет
+  // песню, число не совпадает НИКОГДА — то есть весь склад качался целиком при
+  // каждом открытии. Владелец это и принёс: «бесконечно прогружается каждый раз
+  // абсолютно все треки».
+  //
+  // Но добавленное и так забирается по времени: incremental спрашивает всё, что
+  // появилось после самой свежей известной записи. То есть больше треков в базе
+  // — это ровно тот случай, ради которого incremental и сделан.
+  //
+  // Целиком перечитываем только когда снимок мог разойтись с базой ТАК, что по
+  // времени этого не догнать: если строк стало заметно МЕНЬШЕ (что-то удалили
+  // пачкой) — тогда в снимке остались треки, которых уже нет.
+  if (count !== null && count < snap.tracks.length - DELETED_TOLERANCE) {
+    return { kind: 'full', why: 'count-differs' }
+  }
+  // count === null (спросить не вышло) больше не повод качать тринадцать тысяч:
+  // снимок свежий, а новое доберёт incremental.
+  return { kind: 'incremental', since }
 }
