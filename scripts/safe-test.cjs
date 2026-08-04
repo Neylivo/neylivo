@@ -245,6 +245,12 @@ app.whenReady().then(async () => {
     <div><select class="modal-in"><option>Вариант</option></select></div></div>
   <div class="pqs-optrow"><div><div class="pqs-optt">Кнопка</div></div>
     <div><button class="pqs2-btn ghost">Нажать</button></div></div>
+  <!-- v1.467.0: выбор сочетания клавиш. Кнопка длинная («Нажми сочетание…»)
+       и на 390 пикселях легко выталкивает строку за край. -->
+  <div class="pqs-optrow"><div><div class="pqs-optt">Горячая клавиша вызова</div>
+    <div class="pqs-optd">Нужны два модификатора</div></div>
+    <div class="plug-keybind"><button class="pqs2-btn ghost">Нажми сочетание…</button>
+      <button class="pqs2-btn ghost danger">×</button></div></div>
  </div></div>
 </div></div></div>
 <script>window.__p = () => {

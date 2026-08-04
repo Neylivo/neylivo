@@ -6297,6 +6297,17 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 }
 .plugpanel-canvas { display: block; width: 100%; height: 100%; }
 
+/* ══ Выбор сочетания клавиш (v1.467.0) ═════════════════════════════════════
+   Кнопка показывает текущее сочетание, а в режиме ожидания — «Нажми
+   сочетание…». Ширина фиксированная, чтобы строка не прыгала при смене
+   надписи: «Не назначено» и «Ctrl+Shift+P» разной длины. */
+.plug-keybind { display: flex; align-items: center; gap: 6px; }
+.plug-keybind > button:first-child {
+  min-width: 150px; justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.plug-keybind > button.on { border-color: var(--c-accent); color: var(--c-accent); }
+
 /* ══ Что плагин делает в фоне (v1.465.0) ═══════════════════════════════════
    Строки на карточке плагина: фоновая задача и открытое соединение. Смысл в
    том, чтобы это было ВИДНО там же, где плагин выключают. */

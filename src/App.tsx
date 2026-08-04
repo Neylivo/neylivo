@@ -37,7 +37,7 @@ import { lazyNamed } from './lib/lazyScreen'
 // загрузки приходилось всем и каждый раз.
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 const Home = lazyNamed(() => import('./components/Home'), 'Home')
-import { startEnabledPlugins, invokePlugin } from './lib/plugins/host'
+import { startEnabledPlugins, invokePlugin, emitToPlugin, emitPluginEvent } from './lib/plugins/host'
 import { pluginsDisabled, setPluginsDisabled, getHotkeys } from './lib/plugins/registry'
 import { comboFromEvent, isComboComplete } from './lib/keybind'
 
@@ -403,6 +403,41 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // v1.467.0: плагины узнают, активно ли окно.
+  //
+  // Зачем это по-настоящему. Плагин с холстом крутит анимацию кадр за кадром. В
+  // свёрнутом окне это чистая трата батареи — а узнать о том, что на него никто
+  // не смотрит, ему было неоткуда. Событие canvas говорит только про свою
+  // панель, а это — про всё приложение целиком.
+  //
+  // Слушаем и focus/blur, и видимость вкладки: в браузере окно можно оставить
+  // «активным» и уйти на другую вкладку, а в десктопной сборке наоборот.
+  // Смена темы приходит обычным событием окна (см. settings.tsx): передаём её
+  // плагинам здесь — в одном месте с остальными системными событиями.
+  useEffect(() => {
+    const наТему = (e: Event) => emitPluginEvent('theme', (e as CustomEvent).detail ?? {})
+    window.addEventListener('ponoi-theme', наТему)
+    return () => window.removeEventListener('ponoi-theme', наТему)
+  }, [])
+
+  useEffect(() => {
+    let было: boolean | null = null
+    const сказать = () => {
+      const активно = document.visibilityState === 'visible' && document.hasFocus()
+      if (активно === было) return   // не будим плагины на каждый чих
+      было = активно
+      emitPluginEvent('focus', { focused: активно })
+    }
+    window.addEventListener('focus', сказать)
+    window.addEventListener('blur', сказать)
+    document.addEventListener('visibilitychange', сказать)
+    return () => {
+      window.removeEventListener('focus', сказать)
+      window.removeEventListener('blur', сказать)
+      document.removeEventListener('visibilitychange', сказать)
+    }
+  }, [])
+
   // v1.419.0: горячие клавиши плагинов.
   //
   // Слушатель один на приложение и читает реестр в момент нажатия: плагины
@@ -418,7 +453,12 @@ export default function App() {
       const hit = getHotkeys().find(h => h.combo.toLowerCase() === combo.toLowerCase())
       if (!hit) return
       e.preventDefault()
-      void invokePlugin(hit.pluginId, hit.onPress, [])
+      // v1.467.0: два вида клавиш, один разбор. Клавишу, выбранную человеком в
+      // настройках плагина, нельзя звать как функцию — у неё её нет; ей уходит
+      // событие. Ветка здесь одна и последняя: заведи мы для этого отдельный
+      // обработчик, два списка спорили бы за одно сочетание.
+      if (hit.settingsKey) emitToPlugin(hit.pluginId, 'keybind', { key: hit.settingsKey, combo: hit.combo })
+      else if (hit.onPress) void invokePlugin(hit.pluginId, hit.onPress, [])
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

@@ -9,6 +9,8 @@ import { installPlugin } from '../lib/plugins/install'
 import { PanelCanvas } from './PluginPanels'
 import { taskList, subscribeTasks, stopTaskByUser } from '../lib/plugins/background'
 import { openSockets } from '../lib/plugins/wsHub'
+import { comboFromEvent, isComboComplete } from '../lib/keybind'
+import { okCombo, setKeybind } from '../lib/plugins/registry'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin, pluginLogs, clearPluginLog } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
@@ -109,6 +111,14 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
             <img className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
           </div>
         )
+        // v1.467.0: выбор сочетания клавиш. Человек нажимает кнопку и жмёт
+        // сочетание — приложение его запоминает И РЕГИСТРИРУЕТ (см. setKeybind).
+        case 'keybind': return (
+          <div key={r.key} className="pqs-optrow">
+            <div><div className="pqs-optt">{r.label}</div>{r.description && <div className="pqs-optd">{r.description}</div>}</div>
+            <KeybindRow pluginId={pluginId} rowKey={r.key} value={String(valueOf(r) ?? '')} onSet={v => change(r.key, v)} />
+          </div>
+        )
         // v1.465.0: холст рисуется и здесь. Объявить его на своей странице и не
         // увидеть было бы тем самым расхождением «показ против действия».
         case 'canvas': return (
@@ -120,6 +130,54 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
       }
     })}
   </>
+}
+
+/**
+ * Выбор сочетания клавиш (v1.467.0).
+ *
+ * Плагин говорит «мне нужна клавиша вызова», а какая именно — решает человек.
+ * Нажал кнопку, нажал сочетание — записалось.
+ *
+ * Проверка та же, что у клавиш самого плагина (okCombo): нужны два модификатора.
+ * Иначе плагин отобрал бы у человека обычную букву, и виновника он бы не нашёл —
+ * клавиша просто перестала бы работать. Занятое другим плагином сочетание тоже
+ * не назначается, и об этом говорится вслух, а не молчанием.
+ */
+function KeybindRow({ pluginId, rowKey, value, onSet }: {
+  pluginId: string; rowKey: string; value: string; onSet: (v: string) => void
+}) {
+  const [ловим, setЛовим] = useState(false)
+  useEffect(() => {
+    if (!ловим) return
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault()
+      if (e.key === 'Escape') { setЛовим(false); return }
+      const combo = comboFromEvent(e)
+      if (!isComboComplete(combo)) return    // ждём, пока отпустят модификаторы
+      if (!okCombo(combo)) { toastErr('Нужны два модификатора — например Ctrl+Shift+P'); return }
+      if (!setKeybind(pluginId, rowKey, combo)) {
+        toastErr('Это сочетание уже занято другим плагином')
+        setЛовим(false)
+        return
+      }
+      onSet(combo)
+      setЛовим(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [ловим, pluginId, rowKey, onSet])
+
+  return (
+    <div className="plug-keybind">
+      <button className={'pqs2-btn ghost' + (ловим ? ' on' : '')} onClick={() => setЛовим(v => !v)}>
+        {ловим ? 'Нажми сочетание…' : (value || 'Не назначено')}
+      </button>
+      {value && !ловим && (
+        <button className="pqs2-btn ghost danger" title="Убрать сочетание"
+          onClick={() => { setKeybind(pluginId, rowKey, ''); onSet('') }}>×</button>
+      )}
+    </div>
+  )
 }
 
 /**

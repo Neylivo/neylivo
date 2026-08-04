@@ -63,6 +63,18 @@ export type SettingsRow =
    * OffscreenCanvas со своими пикселями, а не кусок страницы. См. canvasHub.ts.
    */
   | { type: 'canvas'; key: string; label: string; description?: string; height: number }
+  /**
+   * Сочетание клавиш, которое выбирает ЧЕЛОВЕК (v1.467.0).
+   *
+   * Отличие от ui.addHotkey: там клавишу назначает плагин и человек её не
+   * меняет. Здесь наоборот — плагин лишь говорит «мне нужна клавиша вызова», а
+   * какая именно, решает человек, прямо в настройках плагина.
+   *
+   * Строка не декоративная: выбранное сочетание приложение РЕГИСТРИРУЕТ, и по
+   * нажатию плагину приходит событие keybind. Иначе это была бы ровно та
+   * «настройка есть, а не работает», которой в этом проекте уже хватило.
+   */
+  | { type: 'keybind'; key: string; label: string; description?: string; value: string }
 
 /**
  * Куда плагин может поставить свою панель (v1.417.0).
@@ -104,7 +116,24 @@ export interface PluginPanel { pluginId: string; slot: PanelSlot; title: string;
  * текста и поиск приложения, причём молча — он не понял бы, какой из плагинов
  * съел его клавишу.
  */
-export interface PluginHotkey { pluginId: string; combo: string; description: string; onPress: FnRef }
+export interface PluginHotkey {
+  pluginId: string
+  combo: string
+  description: string
+  /** Что звать по нажатию. Нет — значит клавишу выбрал человек, см. settingsKey. */
+  onPress?: FnRef
+  /**
+   * v1.467.0: клавиша, выбранная ЧЕЛОВЕКОМ в настройках плагина (строка
+   * keybind). Тогда по нажатию плагину уходит событие keybind с этим ключом, а
+   * не вызов его функции.
+   *
+   * Почему одним списком с обычными горячими клавишами, а не своим. Нажатие
+   * разбирает одно место (App.tsx), и клавиши обоих видов обязаны спорить за
+   * сочетание друг с другом: заведи мы второй список, два плагина спокойно
+   * заняли бы одно и то же сочетание, и один из них молча перестал бы работать.
+   */
+  settingsKey?: string
+}
 
 /**
  * Свой пункт в меню по правой кнопке (v1.465.0).
@@ -126,6 +155,28 @@ export const CTX_TARGETS: Record<CtxTarget, string> = {
   user: 'Меню человека',
 }
 
+/**
+ * Кнопка в шапке приложения (v1.467.0).
+ *
+ * Зачем. Мест, откуда плагин мог получить управление, было четыре: команда в
+ * чате, кнопка у поля ввода, пункт меню сообщения и горячая клавиша. Все они
+ * привязаны к переписке. А шапка — единственное, что видно на любом экране: и в
+ * канале, и в личке. Именно туда просятся «переключить что-нибудь прямо
+ * сейчас» и «открыть своё окно».
+ *
+ * Рисует кнопку приложение, как и всё остальное: плагин присылает имя иконки из
+ * закрытого списка и подпись, своей разметки в шапке не появляется.
+ */
+export interface HeaderButton {
+  pluginId: string
+  key: string
+  icon: string
+  tooltip: string
+  onClick: FnRef
+  /** Подсветить кнопку (плагин сам решает, когда «включено»). */
+  active?: boolean
+}
+
 export interface ContextItem {
   pluginId: string
   key: string
@@ -143,10 +194,11 @@ interface Registry {
   panels: PluginPanel[]
   hotkeys: PluginHotkey[]
   ctxItems: ContextItem[]
+  headerButtons: HeaderButton[]
 }
 const reg: Registry = {
   composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [], hotkeys: [],
-  ctxItems: [],
+  ctxItems: [], headerButtons: [],
 }
 
 /**
@@ -190,6 +242,7 @@ export function setPluginsDisabled(on: boolean) {
     // плагины добавили в интерфейс: забытый список означает, что человек нажал
     // «выключить всё», а чужой пункт в меню остался.
     reg.ctxItems = []
+    reg.headerButtons = []
     // И то, что работает само: перехватчики сообщений, открытые соединения,
     // фоновые задачи, перекрашенное оформление, холсты. Ничего из этого не
     // умирает от того, что плагин перестали рисовать, — а «выключить все
@@ -295,6 +348,26 @@ export function okCombo(combo: string): boolean {
   return mods.includes('Ctrl') || mods.includes('Alt') || mods.includes('Meta')
 }
 
+/**
+ * Клавиша, выбранная человеком для строки keybind (v1.467.0).
+ *
+ * Отдельная функция, а не addHotkey: у этих клавиш другой владелец. Занятое
+ * сочетание здесь не ошибка, а причина не назначать — человек мог выбрать то
+ * же, что занял другой плагин, и ронять ему настройки за это неправильно.
+ * Возвращает, удалось ли.
+ */
+export function setKeybind(pluginId: string, settingsKey: string, combo: string): boolean {
+  reg.hotkeys = reg.hotkeys.filter(x => !(x.pluginId === pluginId && x.settingsKey === settingsKey))
+  const ok = !!combo && okCombo(combo)
+  if (ok && !reg.hotkeys.some(x => x.combo.toLowerCase() === combo.toLowerCase())) {
+    reg.hotkeys = [...reg.hotkeys, { pluginId, combo, description: settingsKey, settingsKey }]
+    notify()
+    return true
+  }
+  notify()
+  return false
+}
+
 export function addHotkey(h: PluginHotkey) {
   guard('hotkeys', reg.hotkeys, h.pluginId, reg.hotkeys.some(x => x.combo === h.combo && x.pluginId === h.pluginId))
   // Занятое другим плагином сочетание — ошибка, а не тихая подмена: иначе
@@ -322,6 +395,15 @@ export function addContextItem(c: ContextItem) {
   notify()
 }
 
+/** Кнопка в шапке. Считается вместе с кнопками у поля ввода: это один и тот же
+ *  вид вклада — «своя кнопка», — и предел у него общий. */
+export function addHeaderButton(b: HeaderButton) {
+  guard('buttons', [...reg.composerButtons, ...reg.headerButtons], b.pluginId,
+    reg.headerButtons.some(x => x.key === b.key && x.pluginId === b.pluginId))
+  reg.headerButtons = [...reg.headerButtons.filter(x => x.key !== b.key || x.pluginId !== b.pluginId), b]
+  notify()
+}
+
 export function setSettingsPage(p: PluginSettingsPage) {
   if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
   reg.settingsPages = [...reg.settingsPages.filter(x => x.pluginId !== p.pluginId), p]
@@ -337,6 +419,7 @@ export function clearPlugin(pluginId: string) {
   reg.panels = reg.panels.filter(x => x.pluginId !== pluginId)
   reg.hotkeys = reg.hotkeys.filter(x => x.pluginId !== pluginId)
   reg.ctxItems = reg.ctxItems.filter(x => x.pluginId !== pluginId)
+  reg.headerButtons = reg.headerButtons.filter(x => x.pluginId !== pluginId)
   const el = styleEls.get(pluginId)
   if (el) { el.remove(); styleEls.delete(pluginId) }
   notify()
@@ -358,3 +441,6 @@ export const getHotkeys = (): PluginHotkey[] => reg.hotkeys
 /** Пункты меню по правой кнопке для одного места (v1.465.0). */
 export const useContextItems = (target: CtxTarget) => useReg(() => reg.ctxItems.filter(c => c.target === target))
 export const getContextItems = (): ContextItem[] => reg.ctxItems
+/** Кнопки плагинов в шапке приложения (v1.467.0). */
+export const useHeaderButtons = () => useReg(() => reg.headerButtons)
+export const getHeaderButtons = (): HeaderButton[] => reg.headerButtons

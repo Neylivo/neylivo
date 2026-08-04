@@ -47,7 +47,7 @@ function loadPlugin(code: string) {
 }
 
 /** Виды строк, которые понимает приложение (см. SettingsRow в registry.ts). */
-const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image', 'canvas']
+const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image', 'canvas', 'keybind']
 
 /** Заглушка ponoi: записывает всё, что плагин попросил, и ничего не делает. */
 function stubPonoi() {
@@ -528,6 +528,8 @@ for (const p of OFFICIAL_PLUGINS) {
     'ui.addHotkey', 'messages.recent', 'messages.react', 'messages.remove',
     'servers', 'channels', 'open', 'status.set', 'status.get', 'sound.play',
     'storage.clear',
+    // v1.467.0
+    'ui.addHeaderButton', 'settings.registerSchema',
     // v1.465.0: семь новых возможностей.
     'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
     'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',

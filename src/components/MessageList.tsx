@@ -780,6 +780,20 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 {onReply && <button title="Ответить" onClick={() => onReply(m)}><Icon name="reply" size={18} /></button>}
                 {currentUser && <button title="Переслать" onClick={() => setFwdFor(m)}><Icon name="forward" size={18} /></button>}
                 {canReact !== false && <button title="Реакция" onClick={() => setPickFor(pickFor === m.id ? null : m.id)}><Icon name="smile" size={18} /></button>}
+                {/* v1.467.0: действия плагинов прямо при наведении, а не только
+                    в меню по правой кнопке. До этого путь к ним был в два
+                    действия — вызвать меню и найти пункт, — и ими попросту не
+                    пользовались, ровно как когда-то реакциями.
+
+                    Первые два: панель наведения узкая, и десяток чужих кнопок
+                    в ней перекрыл бы наши собственные. Остальные остаются в
+                    меню, где места сколько угодно. */}
+                {pluginActions.slice(0, 2).map(a => (
+                  <button key={'t' + a.pluginId + a.key} title={a.label + ' — плагин'}
+                    onClick={() => { void invokePlugin(a.pluginId, a.onClick, [{ id: m.id, author: m.author, content: m.content ?? '' }]) }}>
+                    <Icon name={a.icon} size={18} />
+                  </button>
+                ))}
                 {canReact !== false && rx.length === 0 && pickFor === m.id && <div className="rx-quick tools-quick">
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}

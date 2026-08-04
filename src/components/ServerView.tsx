@@ -1,4 +1,5 @@
 import { logErr, logWarn } from '../lib/log'
+import { PluginHeaderButtons } from './PluginHeaderButtons'
 import { invokePlugin } from '../lib/plugins/host'
 import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { toastErr, toastOk } from '../lib/toast'
@@ -1568,6 +1569,9 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
             </>
           })()}
           <div className="ph2-btns">
+            {/* v1.467.0: кнопки плагинов — первыми в ряду, чтобы не прыгали при
+                появлении наших собственных (счётчик закреплённых, участники). */}
+            <PluginHeaderButtons />
             {/* v1.320.0: в форуме кнопка «Ветки» не нужна — сам канал и есть список веток. */}
             {!isForum(curChannel) && <button className={'pin-btn' + (showThreads ? ' on' : '')} title="Ветки" onClick={() => { setShowPins(false); setShowSearch(false); setShowThreads(s => !s) }}><Icon name="threads" size={18} /></button>}
             <button className={'pin-btn' + (curChannel && chNotifModeOf(curChannel.id, server.id) !== notifModeOf(server.id) ? ' on' : '')} title="Уведомления канала" onClick={() => curChannel && setNotifForCh(curChannel)}><Icon name={curChannel && mutedCh[curChannel.id] ? 'bell-off' : 'bell'} size={18} /></button>

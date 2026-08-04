@@ -196,15 +196,44 @@ slot — старая заменится новой. Так и делают жи
 | color | выбор цвета | value (#rrggbb) |
 | image | картинка | value (https-ссылка) |
 | canvas | холст, который плагин рисует сам | height (40–600) |
+| keybind | сочетание клавиш, которое выбирает человек | value (например Ctrl+Shift+P) |
 
 У любой строки есть key (свой, уникальный внутри плагина) и label. description —
 необязательная поясняющая строчка. Значения toggle, text, select, slider и color
 человек меняет сам, они хранятся в хранилище плагина, и на каждое изменение
 плагину приходит событие settings с { key, value }.
 
+### Настройки одним объявлением (нужно settings)
+
+Самый простой способ сделать настройки: сказать, ЧТО нужно, а страницу соберёт
+приложение само.
+
+    const cfg = await ponoi.settings.registerSchema([
+      { key: 'auto_feed', type: 'toggle', title: 'Авто-кормление',
+        description: 'Питомцы кормятся сами', default: false },
+      { key: 'theme_color', type: 'color', title: 'Цвет', default: '#5865f2' },
+      { key: 'shortcut', type: 'keybind', title: 'Клавиша вызова', default: 'Ctrl+Shift+P' },
+    ])
+    // cfg — уже готовые значения: { auto_feed: false, theme_color: '#5865f2', … }
+
+Чем это лучше ponoi.ui.addSettingsPage. Тот принимает готовые строки: значение
+из хранилища доставать самому, значение по умолчанию подставлять самому и не
+забыть сделать это ДО первого обращения к настройке. Здесь всё это делает
+приложение: при первом запуске значения по умолчанию сразу ложатся в хранилище,
+а вызов возвращает текущие значения — читать их по одному не нужно.
+
+Дальше всё как обычно: человек меняет строку — плагину приходит событие settings
+с { key, value }, значение лежит в его хранилище.
+
+Строка keybind — не картинка: выбранное человеком сочетание приложение
+РЕГИСТРИРУЕТ, и по нажатию приходит событие keybind с { key, combo }. Нужны два
+модификатора (Ctrl+Shift+P годится, Ctrl+P нет), занятое другим плагином
+сочетание не назначается — об этом скажут вслух.
+
 ### Кнопки, меню и горячие клавиши (нужно ui)
 
     ponoi.ui.addComposerButton({ tooltip: 'Текст', icon: 'star', onClick: async () => {} })
+    ponoi.ui.addHeaderButton({ tooltip: 'Моё', icon: 'zap', active: false, onClick: async () => {} })
     ponoi.ui.addMessageAction({ label: 'Что-то', icon: 'star', onClick: async (msg) => {} })
     ponoi.ui.addHotkey({ combo: 'Ctrl+Shift+K', description: 'Что делает', onPress: async () => {} })
     ponoi.ui.addSettingsPage({ title: 'Мой плагин', rows: [ ... ] })
@@ -218,6 +247,13 @@ Ctrl+Shift+K годится, Ctrl+K и просто K — нет. Иначе п�
 skull, sword, rifle, car, compass, flag, tag, pin, link, code, list, search,
 image, camera, film, music, volume, bell, mail, lock, shield, crown, gamepad,
 message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
+
+Кнопка в шапке (addHeaderButton) видна на ЛЮБОМ экране — и в канале, и в личке,
+в отличие от кнопки у поля ввода. Туда просится всё, что хочется нажать «прямо
+сейчас»: открыть своё окно, что-нибудь переключить. active подсвечивает кнопку.
+
+Действия над сообщением (addMessageAction) видны и в меню по правой кнопке, и
+первые два — прямо в панели при наведении на сообщение.
 
 Кнопок и пунктов меню — не больше ${MAX_PER_PLUGIN.buttons} каждого вида,
 горячих клавиш — ${MAX_PER_PLUGIN.hotkeys}, команд — ${MAX_PER_PLUGIN.commands}.

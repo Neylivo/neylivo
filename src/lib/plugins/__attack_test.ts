@@ -762,6 +762,108 @@ console.log('\n── Пометка «передать, а не копиров�
   })
 }
 
+console.log('\n── Точки монтирования и настройки (v1.467.0) ──')
+{
+  const reg = await import('./registry')
+
+  await blocked('без права ui кнопку в шапку не поставить', () => {
+    const без = attacker(['settings'], 'hdr-no')
+    return без('ui.addHeaderButton', [{ tooltip: 'Моё', icon: 'zap', onClick: fn }])
+  })
+  await blocked('кнопка в шапке без обработчика не ставится', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'hdr-yes')
+    return d('ui.addHeaderButton', [{ tooltip: 'Моё', icon: 'zap' }])
+  })
+  await allowed('кнопка в шапке с обработчиком ставится', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'hdr-yes')
+    return d('ui.addHeaderButton', [{ tooltip: 'Моё', icon: 'zap', onClick: fn }])
+  })
+  await check('иконка не из списка заменяется, а не рисует пустоту', () => {
+    const b = reg.getHeaderButtons().find(x => x.pluginId === 'hdr-yes')
+    return !!b && reg.PLUGIN_ICONS.includes(b.icon as never)
+  })
+
+  await blocked('без права settings схему не объявить', () => {
+    const без = attacker(['ui'], 'sch-no')
+    return без('settings.registerSchema', [[{ key: 'a', type: 'toggle', title: 'А', default: true }]])
+  })
+  await blocked('пустая схема — отказ, а не молчаливая пустая страница', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'sch-empty')
+    return d('settings.registerSchema', [[]])
+  })
+  await blocked('схема из одного мусора — отказ', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'sch-junk')
+    return d('settings.registerSchema', [[{ key: 'x', type: 'html', title: '<img>' }]])
+  })
+
+  await check('значения по умолчанию сразу ложатся в хранилище', async () => {
+    // Ради этого всё и затевалось: до первого касания человеком настройка
+    // должна ИМЕТЬ значение, а не быть undefined.
+    const store2 = await import('./store')
+    const d = attacker([...ALL_PERMISSIONS], 'sch-def')
+    const знач: any = await d('settings.registerSchema', [[
+      { key: 'auto_feed', type: 'toggle', title: 'Авто', default: true },
+      { key: 'color', type: 'color', title: 'Цвет', default: '#5865f2' },
+    ]])
+    return store2.readStorage('sch-def', 'auto_feed') === true
+      && знач.auto_feed === true && знач.color === '#5865f2'
+  })
+
+  await check('сохранённое человеком сильнее значения по умолчанию', async () => {
+    // Иначе каждый перезапуск плагина затирал бы выбор человека — и выглядело
+    // бы это как «настройка не сохраняется».
+    const store2 = await import('./store')
+    // Плагин заводим ПЕРВЫМ: attacker пересоздаёт запись плагина с пустым
+    // хранилищем, и запись до него была бы стёрта — проверка провалилась бы на
+    // собственном порядке действий, а не на коде.
+    const d = attacker([...ALL_PERMISSIONS], 'sch-keep')
+    store2.writeStorage('sch-keep', 'auto_feed', false)
+    const знач: any = await d('settings.registerSchema', [[
+      { key: 'auto_feed', type: 'toggle', title: 'Авто', default: true },
+    ]])
+    return знач.auto_feed === false && store2.readStorage('sch-keep', 'auto_feed') === false
+  })
+
+  await check('клавиша из схемы правда регистрируется', async () => {
+    // Строка keybind, которая ничего не назначает, — та самая кнопка-обманка.
+    const d = attacker([...ALL_PERMISSIONS], 'kb-yes')
+    await d('settings.registerSchema', [[
+      { key: 'shortcut', type: 'keybind', title: 'Вызов', default: 'Ctrl+Shift+9' },
+    ]])
+    const h = reg.getHotkeys().find(x => x.pluginId === 'kb-yes' && x.settingsKey === 'shortcut')
+    return !!h && h.combo === 'Ctrl+Shift+9'
+  })
+
+  await check('кривое сочетание не назначается', () => {
+    // Один модификатор отобрал бы у человека привычную клавишу приложения.
+    reg.setKeybind('kb-bad', 'shortcut', 'Ctrl+P')
+    return !reg.getHotkeys().some(x => x.pluginId === 'kb-bad')
+  })
+
+  await check('занятое сочетание не отбирается у соседа', () => {
+    reg.setKeybind('kb-first', 'a', 'Ctrl+Alt+7')
+    const взял = reg.setKeybind('kb-second', 'b', 'Ctrl+Alt+7')
+    const у = reg.getHotkeys().filter(x => x.combo === 'Ctrl+Alt+7')
+    return взял === false && у.length === 1 && у[0].pluginId === 'kb-first'
+  })
+
+  await check('своё сочетание можно переназначить', () => {
+    // Проверка «всё запрещено» ничего не значит без обратного случая.
+    reg.setKeybind('kb-first', 'a', 'Ctrl+Alt+8')
+    const у = reg.getHotkeys().filter(x => x.pluginId === 'kb-first' && x.settingsKey === 'a')
+    return у.length === 1 && у[0].combo === 'Ctrl+Alt+8'
+  })
+
+  await check('нажатие разбирается ОДНИМ местом и знает про оба вида клавиш', () => {
+    // Два вида клавиш (от плагина и от человека) лежат одним списком нарочно:
+    // будь их два, оба плагина заняли бы одно сочетание и один молча умер бы.
+    const src = readFileSync('src/App.tsx', 'utf8')
+    const i = src.indexOf('getHotkeys()')
+    const тело = src.slice(i, i + 900)
+    return тело.includes('settingsKey') && тело.includes('invokePlugin')
+  })
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')

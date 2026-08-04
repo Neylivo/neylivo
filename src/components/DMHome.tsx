@@ -1,4 +1,5 @@
 import { logErr, logWarn } from '../lib/log'
+import { PluginHeaderButtons } from './PluginHeaderButtons'
 import { invokePlugin } from '../lib/plugins/host'
 import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { toastErr, toastOk } from '../lib/toast'
@@ -1431,6 +1432,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               </span>
             )}
             <div className="ph2-btns">
+              <PluginHeaderButtons />
               <button className={'pin-btn' + (showPins ? ' on' : '')} title="Закреплённые" onClick={() => setShowPins(s => !s)}><Icon name="pin" size={18} />{messages.filter(m => (m as any).pinned).length > 0 && <span className="pin-count">{messages.filter(m => (m as any).pinned).length}</span>}</button>
               {/* v1.223.0: групповые звонки — не в этой версии, кнопка звонка есть только 1-в-1 */}
               {!activeGroup && <button className="call-start" title="Позвонить" onClick={startCall}><Icon name="phone" size={18} /></button>}

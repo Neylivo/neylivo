@@ -8,6 +8,7 @@ import {
 import {
   addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
   setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, addContextItem, CTX_TARGETS, getRegistry,
+  addHeaderButton, setKeybind,
   type SettingsRow, type PanelSlot, type CtxTarget,
 } from './registry'
 // v1.465.0: семь новых возможностей — каждая своим файлом, здесь только ветка
@@ -68,6 +69,11 @@ export const PLUGIN_METHODS = [
   'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
   'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
   'background.every', 'background.stop', 'ui.setTheme', 'ui.clearTheme', 'ui.addContextMenu',
+  // v1.467.0. Точки монтирования и настройки одним объявлением:
+  //   ui.addHeaderButton       — своя кнопка в шапке, видна на любом экране;
+  //   settings.registerSchema  — страница настроек собирается приложением;
+  //   keybind                  — вид строки, не метод (см. ROW_TYPES).
+  'ui.addHeaderButton', 'settings.registerSchema', 'keybind',
 ] as const
 
 /**
@@ -201,6 +207,13 @@ function settingsRow(raw: any): SettingsRow | null {
     // v1.465.0: холст. Высота зажимается здесь же — панель с высотой в миллион
     // пикселей не должна уметь вытолкнуть с экрана всё остальное.
     case 'canvas': return { type: 'canvas', key, label, description, height: canvasHeight(raw.height) }
+    // v1.467.0: сочетание клавиш, которое выбирает человек. Кривое значение не
+    // отбрасываем вместе со строкой — строка нужна, чтобы человек мог назначить
+    // клавишу заново; просто показываем её пустой.
+    case 'keybind': {
+      const v = String(raw.value ?? '').trim()
+      return { type: 'keybind', key, label, description, value: okCombo(v) ? v : '' }
+    }
     case 'progress': return { type: 'progress', key, label, description, value: num(raw.value, 0, 100, 0) }
     case 'slider': {
       const min = num(raw.min, -1e6, 1e6, 0)
@@ -805,6 +818,68 @@ export function createDispatcher(
           onClick: fnRef(o?.onClick, 'пункт меню'),
         })
         return null
+      }
+
+      // ---- Кнопка в шапке приложения (нужно ui) ---------------------------
+      // Единственное место, видное на КАЖДОМ экране: и в канале, и в личке.
+      // Всё остальное, откуда плагин получал управление, привязано к переписке.
+      case 'ui.addHeaderButton': {
+        need('ui')
+        const o = args[0] as any
+        addHeaderButton({
+          pluginId: id,
+          key: str(o?.key ?? o?.tooltip, 60, 'кнопка шапки'),
+          icon: safeIcon(o?.icon),
+          tooltip: str(o?.tooltip, MAX_LABEL, 'подсказка кнопки'),
+          onClick: fnRef(o?.onClick, 'кнопка шапки'),
+          active: !!o?.active,
+        })
+        return null
+      }
+
+      // ---- Настройки одним объявлением (нужно settings) --------------------
+      //
+      // Зачем, если есть ui.addSettingsPage. Тот принимает ГОТОВЫЕ строки: их
+      // надо собрать руками, самому достать сохранённое значение из хранилища,
+      // самому подставить значение по умолчанию при первом запуске и самому же
+      // не забыть сделать это до первого обращения к настройке. На этом
+      // спотыкается каждый второй плагин: настройка «есть», а до первого
+      // касания человеком её значение undefined.
+      //
+      // Здесь плагин ОБЪЯВЛЯЕТ, чего хочет, а приложение само: подставляет
+      // значения по умолчанию в хранилище, читает уже сохранённое, строит
+      // страницу и назначает выбранные человеком клавиши. И сразу возвращает
+      // текущие значения — чтобы плагин не гадал и не читал их по одному.
+      case 'settings.registerSchema': {
+        need('settings')
+        const raw = Array.isArray(args[0]) ? args[0] : []
+        const rows: SettingsRow[] = []
+        const значения: Record<string, unknown> = {}
+        for (const r of raw.slice(0, 50) as any[]) {
+          const key = String(r?.key ?? '').trim().slice(0, 60)
+          if (!key) continue
+          const сохранено = readStorage(id, key)
+          const поумолчанию = r?.default
+          // Первый запуск: значение по умолчанию ложится в хранилище сразу, а не
+          // «когда-нибудь потом». Ради этого всё и затевалось.
+          if (сохранено === undefined && поумолчанию !== undefined) {
+            writeStorage(id, key, поумолчанию)
+          }
+          const value = сохранено === undefined ? поумолчанию : сохранено
+          const row = settingsRow({ ...r, key, label: r?.title ?? r?.label, value })
+          if (!row) continue
+          rows.push(row)
+          значения[key] = 'value' in row ? (row as any).value : value
+          // Строка keybind не просто показывает сочетание — приложение его
+          // РЕГИСТРИРУЕТ. Иначе это была бы настройка, которая ничего не делает.
+          if (row.type === 'keybind') {
+            need('ui')
+            setKeybind(id, key, String(row.value ?? ''))
+          }
+        }
+        if (!rows.length) throw new Denied('settings.registerSchema: ни одной понятной строки')
+        setSettingsPage({ pluginId: id, title: str(plugin.manifest.name, 60, 'заголовок настроек'), rows })
+        return значения
       }
 
       default:
