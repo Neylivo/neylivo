@@ -321,6 +321,50 @@ app.whenReady().then(async () => {
       'портала нет в ' + файл)
   }
 
+  // ── v1.454.0: сплошной обход экранов на телефоне ────────────────────────────
+  // Раньше телефонный вид проверялся точечно — там, где владелец уже споткнулся.
+  // Здесь наоборот: берётся десяток настоящих кусков разметки и каждый меряется
+  // на предмет трёх бед сразу — вылезло за край, мелко для пальца, нечитаемо
+  // мелкий шрифт. Так первым спотыкается стенд, а не человек.
+  //
+  // Что нашлось этим обходом в первый же запуск: кнопки в шапке чата 23×21,
+  // реакции 50×30, ячейки эмодзи 34×23, переключатели прав 28×24.
+  const БЛОКИ = {"чат: сообщение и поле ввода": "<div class=\"app\"><div class=\"chat\"><div class=\"msgs\"><div class=\"msg\"><div class=\"msg-gutter\"><span class=\"av-click\"></span></div><div class=\"msg-body\"><div class=\"msg-hdr\"><span class=\"nm\">ОченьДлинныйНик</span><span class=\"msg-time\">12:34</span></div><div class=\"msg-txt\">Обычное сообщение с длинным текстом, чтобы проверить края</div><div class=\"rx-bar\"><button class=\"rx\">A 3</button><button class=\"rx\">B 12</button></div></div></div></div><form class=\"composer cstyle-default\"><button class=\"attach-btn\">+</button><textarea></textarea><button class=\"ctool\">G</button><button class=\"send-tg\">^</button></form></div></div>", "чат: шапка": "<div class=\"app\"><div class=\"chat\"><div class=\"chat-head\"><button class=\"mob-burger\">=</button><span class=\"ph2-hash\">#</span><span class=\"ph2-name\">очень-длинное-название-канала</span><div class=\"ph2-btns\"><button>1</button><button>2</button><button>3</button><button>4</button></div></div></div></div>", "профиль: активность": "<div class=\"app\"><div class=\"pqs2-main\"><div class=\"pqs2-inner\"><div class=\"act-card fp-cur clickable\"><div class=\"act-head\"><span class=\"mpg-kind\">i</span>Играет в</div><div class=\"act-row\"><span class=\"act-cover act-cover-lg act-cover-ph\">i</span><div class=\"act-info\"><div class=\"act-name act-name-lg\">Игра с длинным названием издания</div><div class=\"act-mode\">режим</div><div class=\"act-meta\"><span class=\"act-time\">2 ч</span><span>x5 д. подряд</span><span>Миссия 8 из 24 · 29%</span></div></div></div></div></div></div></div>", "плеер": "<div class=\"app\"><div class=\"mus2\"><div class=\"mus2-now\"><div class=\"mus2-nowt\">Название трека, довольно длинное</div><div class=\"mus2-nowsub\">Исполнитель</div><div class=\"mus2-ctl\"><button>1</button><button class=\"big\">2</button><button>3</button><button>4</button></div></div></div></div>", "окно с полями и правами": "<div class=\"modal-overlay\"><div class=\"modal\"><div class=\"modal-title\">Настройки</div><label class=\"modal-lbl\">Название</label><input class=\"modal-in\" value=\"текст\"><div class=\"cset-tri\"><button class=\"deny\">x</button><button class=\"def\">/</button><button class=\"allow\">v</button></div><div class=\"modal-foot\"><button class=\"modal-ghost\">Отмена</button><button class=\"modal-primary\">Сохранить</button></div></div></div>", "выбор эмодзи": "<div class=\"ep2\"><div class=\"ep2-head\"><input class=\"ep2-search\"></div><div class=\"emoji-scroll\"><div class=\"ep2-grid\"><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button><button class=\"ep2-e\">A</button></div></div></div>", "участники и диалоги": "<div class=\"app\" data-open=\"1\"><div class=\"dm-side\"><div class=\"dm-item\"><span class=\"dm-av\"></span><div class=\"dm-tx\"><div class=\"dm-nm\">Собеседник с длинным именем</div><div class=\"dm-sub\">последнее сообщение</div></div><span class=\"dm-badge\">9</span></div></div><div class=\"members\"><div class=\"mem-grp\">В СЕТИ</div><div class=\"mem\"><span class=\"mem-av\"></span><span class=\"mem-nm\">Участник с очень длинным именем</span></div></div></div>"}
+  fs.writeFileSync(path.join(OUT, 'sweep.html'), `<!doctype html><meta charset=utf-8>
+<link rel=stylesheet href="styles-safe.css">
+<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}
+#stage{position:fixed;inset:0;overflow:hidden}</style>
+<div id="stage"></div>
+<script>window.__sweep = (БЛОКИ) => {
+  const stage = document.getElementById('stage')
+  const плохо = []
+  for (const [имя, разметка] of Object.entries(БЛОКИ)) {
+    stage.innerHTML = разметка
+    document.body.classList.toggle('mob-nav-open', разметка.includes('data-open'))
+    document.querySelectorAll('#stage *').forEach(e => {
+      const b = e.getBoundingClientRect()
+      if (b.width <= 0 || b.height <= 0) return
+      const cls = (typeof e.className === 'string' ? e.className : '') || e.tagName
+      if (b.right > innerWidth + 1 || b.left < -1) плохо.push(имя + ': вылез ' + cls)
+      if (/^(BUTTON|SELECT)$/.test(e.tagName) && b.height < 34) плохо.push(имя + ': мелкая кнопка ' + cls + ' ' + Math.round(b.width) + 'x' + Math.round(b.height))
+      const fz = parseFloat(getComputedStyle(e).fontSize)
+      if (e.children.length === 0 && e.textContent.trim() && fz < 11) плохо.push(имя + ': мелкий текст ' + cls + ' ' + fz)
+    })
+    if (document.documentElement.scrollWidth > innerWidth) плохо.push(имя + ': страница ездит вбок')
+  }
+  return JSON.stringify([...new Set(плохо)])
+}</script>`)
+  const sw = new BrowserWindow({ show: false, useContentSize: true, width: 390, height: 844,
+    backgroundColor: '#313338', webPreferences: { partition: 'safe-sweep-' + Date.now() } })
+  await sw.loadFile(path.join(OUT, 'sweep.html'))
+  await new Promise(r => setTimeout(r, 350))
+  const беды = JSON.parse(await sw.webContents.executeJavaScript(
+    'window.__sweep(' + JSON.stringify(БЛОКИ) + ')'))
+
+  console.log('\n── Сплошной обход экранов (390×844) ──')
+  check('экранов проверено: ' + Object.keys(БЛОКИ).length, Object.keys(БЛОКИ).length >= 7)
+  check('ничего не вылезает и не мелко для пальца', беды.length === 0, беды.slice(0, 4).join(' | '))
+
   console.log(failed ? '\nПРОВАЛЕНО: ' + failed : '\nИТОГ: все проверки пройдены')
   process.exit(failed ? 1 : 0)
 })

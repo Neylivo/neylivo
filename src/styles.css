@@ -3206,7 +3206,13 @@ body.no-anim .member-typing i { animation:none; }
   .channels, .dm-side { position:fixed; left:72px; top:0; bottom:0; z-index:var(--z-drawer, 61); width:calc(100vw - 112px); max-width:320px; transform:translateX(-150%); transition:transform .22s var(--ease-out4, ease); box-shadow:8px 0 24px rgba(0,0,0,.35); }
   body.mob-nav-open .servers, body.mob-nav-open .channels, body.mob-nav-open .dm-side { transform:none; }
   body.mob-nav-open .mob-backdrop { display:block; position:fixed; inset:0; z-index:var(--z-pop, 60); background:rgba(0,0,0,.55); }
-  .chat { width:100vw; min-width:100vw; }
+  /* v1.454.0: было 100vw — то есть во всю ШИРИНУ ЭКРАНА, мимо оболочки.
+     У телефона с боковым вырезом (а в горизонтальном положении это почти
+     любой современный) оболочка отступает от выреза, а переписка этот
+     отступ перешагивала и уезжала под вырез вместе с полем ввода.
+     Поймано сплошным обходом в стенде: ширина должна считаться от
+     оболочки, а не от экрана. */
+  .chat { width:100%; min-width:0; }
   /* Участники — выезжающая панель справа */
   .members { display:block; position:fixed; right:0; top:0; bottom:0; width:min(320px, 86vw); z-index:var(--z-drawer2, 62); box-shadow:-8px 0 24px rgba(0,0,0,.45); }
   /* Крупнее под палец + учёт вырезов экрана */
@@ -7170,3 +7176,22 @@ body.no-anim .vo-live::before { animation: none; }
   font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; max-height: 220px; overflow-y: auto;
   overscroll-behavior: contain; }
 .cmp-answer.bad { background: rgba(242,63,67,.12); color: #f23f43; }
+
+/* v1.454.0: то, по чему на телефоне трудно попасть пальцем.
+   Найдено сплошным обходом экранов в стенде 390×844 на настоящих стилях:
+   кнопки в шапке чата были 23×21 пикселя, реакции 50×30, ячейки эмодзи 34×23,
+   переключатели прав канала 28×24. Всё это нажимается ногтем, а не пальцем.
+   Блок стоит в конце файла намеренно: при равной силе выигрывает то, что ниже,
+   и мобильные правила, написанные выше базовых, не действовали бы вовсе — эту
+   ошибку я уже допускал в v1.445.0 и поймал только нарочной поломкой. */
+@media (max-width: 768px) {
+  /* Шапка чата: кнопки действий и «бургер» шторки. */
+  .ph2-btns button, .mob-burger { min-width: 40px; min-height: 40px; }
+  .ph2-btns { gap: 2px; }
+  /* Реакции под сообщением. Ширину не трогаем — их бывает много в ряд. */
+  .rx { min-height: 34px; padding: 4px 10px; }
+  /* Ячейка эмодзи в выборе. */
+  .ep2-e { min-width: 40px; min-height: 40px; font-size: 24px; }
+  /* Переключатель «запретить / по умолчанию / разрешить» в правах канала. */
+  .cset-tri button { width: 44px; height: 40px; }
+}
