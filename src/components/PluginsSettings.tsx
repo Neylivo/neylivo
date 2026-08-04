@@ -6,6 +6,9 @@ import { confirmUi } from '../lib/confirm'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
+import { PanelCanvas } from './PluginPanels'
+import { taskList, subscribeTasks, stopTaskByUser } from '../lib/plugins/background'
+import { openSockets } from '../lib/plugins/wsHub'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin, pluginLogs, clearPluginLog } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
@@ -106,9 +109,56 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
             <img className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
           </div>
         )
+        // v1.465.0: холст рисуется и здесь. Объявить его на своей странице и не
+        // увидеть было бы тем самым расхождением «показ против действия».
+        case 'canvas': return (
+          <div key={r.key} className="pqs-optrow plug-optcol">
+            <div><div className="pqs-optt">{r.label}</div>{r.description && <div className="pqs-optd">{r.description}</div>}</div>
+            <PanelCanvas pluginId={pluginId} row={r} />
+          </div>
+        )
       }
     })}
   </>
+}
+
+/**
+ * Что плагин делает в фоне (v1.465.0).
+ *
+ * Смысл этого блока — не украшение. Разрешение background само по себе не даёт
+ * плагину ничего такого, чего он не мог бы сделать обычным setInterval внутри
+ * себя. Разница ровно здесь: заведённую через ponoi.background задачу ВИДНО —
+ * с её сроком, с числом срабатываний и с кнопкой «остановить». Без этого блока
+ * всё разрешение было бы пустой пометкой на карточке.
+ *
+ * Показываем и открытые соединения: плагин, который висит на чужом сервере,
+ * тоже должен быть виден там, где его выключают.
+ */
+function PluginBackground({ pluginId }: { pluginId: string }) {
+  const [, bump] = useState(0)
+  useEffect(() => subscribeTasks(() => bump(v => v + 1)), [])
+  const tasks = taskList(pluginId)
+  const socks = openSockets().filter(s => s.pluginId === pluginId)
+  if (tasks.length === 0 && socks.length === 0) return null
+  return (
+    <div className="plug-bg">
+      {tasks.map(t => (
+        <div key={t.id} className="plug-bg-row">
+          <Icon name="clock" size={13} />
+          <span className="plug-bg-t">{t.label}</span>
+          <span className="plug-bg-d">раз в {Math.round(t.everyMs / 1000)} с · сработала {t.runs} раз</span>
+          <button className="pqs2-btn ghost" onClick={() => { stopTaskByUser(t.id); bump(v => v + 1) }}>Остановить</button>
+        </div>
+      ))}
+      {socks.map(s => (
+        <div key={s.id} className="plug-bg-row">
+          <Icon name="link" size={13} />
+          <span className="plug-bg-t">Соединение</span>
+          <span className="plug-bg-d notr" translate="no">{s.url.slice(0, 60)}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function PluginsSettings() {
@@ -299,6 +349,11 @@ export function PluginsSettings() {
             {/* v1.446.0: у включённого плагина пределы по частоте почти сняты —
                 напоминаем об этом там, где человек его выключает. */}
             {p.enabled && <div className="plug-note"><Icon name="shield" size={13} /> {LIMITS_WARNING_SHORT}</div>}
+            {/* v1.465.0: что плагин делает, когда на него никто не смотрит.
+                Ровно это и отличает разрешение background от обычного таймера
+                внутри плагина: таймер не видно ниоткуда, а эти строки — видно,
+                и рядом с каждой кнопка «остановить». */}
+            <PluginBackground pluginId={p.manifest.id} />
             {err && <div className="plug-err"><Icon name="flag" size={14} /> {err}</div>}
             {logOpen === p.manifest.id && (() => {
               const lines = pluginLogs(p.manifest.id)

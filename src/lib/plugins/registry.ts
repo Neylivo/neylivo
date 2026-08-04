@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FnRef } from './sandbox'
+import { cleanupAllPlugins } from './cleanup'
 
 // v1.286.0: реестр того, что плагины добавили в интерфейс. Плагин не рисует ничего
 // сам (он в воркере и до DOM не дотягивается) — он ЗАЯВЛЯЕТ, что хочет кнопку с
@@ -56,6 +57,12 @@ export type SettingsRow =
   | { type: 'color'; key: string; label: string; description?: string; value: string }
   /** Картинка по https-ссылке. Рисуется в рамке фиксированного размера. */
   | { type: 'image'; key: string; label: string; description?: string; value: string }
+  /**
+   * Холст (v1.465.0). Единственная строка, содержимое которой плагин рисует
+   * сам, — и единственная, где это безопасно: он получает отдельный
+   * OffscreenCanvas со своими пикселями, а не кусок страницы. См. canvasHub.ts.
+   */
+  | { type: 'canvas'; key: string; label: string; description?: string; height: number }
 
 /**
  * Куда плагин может поставить свою панель (v1.417.0).
@@ -99,6 +106,35 @@ export interface PluginPanel { pluginId: string; slot: PanelSlot; title: string;
  */
 export interface PluginHotkey { pluginId: string; combo: string; description: string; onPress: FnRef }
 
+/**
+ * Свой пункт в меню по правой кнопке (v1.465.0).
+ *
+ * Раньше плагин мог добавить пункт РОВНО в одно меню — меню сообщения
+ * (addMessageAction). Всё остальное, по чему человек щёлкает правой кнопкой,
+ * было плагину недоступно: ни выделенный текст, ни человек в списке. А это как
+ * раз то, где быстрые действия и нужны: перевести выделенное, сохранить в
+ * заметки, посмотреть о человеке.
+ *
+ * Места закрытым списком — по той же причине, что и места для панелей: «куда
+ * угодно» означало бы, что плагин рисует в чужих меню что попало.
+ */
+export type CtxTarget = 'message' | 'selection' | 'user'
+
+export const CTX_TARGETS: Record<CtxTarget, string> = {
+  message: 'Меню сообщения',
+  selection: 'Меню выделенного текста',
+  user: 'Меню человека',
+}
+
+export interface ContextItem {
+  pluginId: string
+  key: string
+  target: CtxTarget
+  icon: string
+  label: string
+  onClick: FnRef
+}
+
 interface Registry {
   composerButtons: ComposerButton[]
   messageActions: MessageAction[]
@@ -106,8 +142,12 @@ interface Registry {
   settingsPages: PluginSettingsPage[]
   panels: PluginPanel[]
   hotkeys: PluginHotkey[]
+  ctxItems: ContextItem[]
 }
-const reg: Registry = { composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [], hotkeys: [] }
+const reg: Registry = {
+  composerButtons: [], messageActions: [], commands: [], settingsPages: [], panels: [], hotkeys: [],
+  ctxItems: [],
+}
 
 /**
  * Сколько всего один плагин может добавить (v1.345.0).
@@ -146,6 +186,15 @@ export function setPluginsDisabled(on: boolean) {
     // плагина в чате и в плеере оставался на экране, будто ничего не выключали.
     reg.composerButtons = []; reg.messageActions = []; reg.commands = []; reg.settingsPages = []
     reg.panels = []; reg.hotkeys = []
+    // v1.465.0: пункты меню — туда же. Аварийный режим обязан снимать ВСЁ, что
+    // плагины добавили в интерфейс: забытый список означает, что человек нажал
+    // «выключить всё», а чужой пункт в меню остался.
+    reg.ctxItems = []
+    // И то, что работает само: перехватчики сообщений, открытые соединения,
+    // фоновые задачи, перекрашенное оформление, холсты. Ничего из этого не
+    // умирает от того, что плагин перестали рисовать, — а «выключить все
+    // плагины» человек нажимает именно тогда, когда что-то пошло не так.
+    cleanupAllPlugins()
   }
   notify()
 }
@@ -259,6 +308,20 @@ export function addHotkey(h: PluginHotkey) {
   notify()
 }
 
+/**
+ * Пункт меню по правой кнопке. Считается вместе с действиями над сообщением:
+ * это один и тот же вид вклада — «пункт в чужом меню», — и предел у него общий.
+ */
+export function addContextItem(c: ContextItem) {
+  guard('actions', [...reg.messageActions, ...reg.ctxItems], c.pluginId,
+    reg.ctxItems.some(x => x.key === c.key && x.pluginId === c.pluginId && x.target === c.target))
+  reg.ctxItems = [
+    ...reg.ctxItems.filter(x => x.key !== c.key || x.pluginId !== c.pluginId || x.target !== c.target),
+    c,
+  ]
+  notify()
+}
+
 export function setSettingsPage(p: PluginSettingsPage) {
   if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
   reg.settingsPages = [...reg.settingsPages.filter(x => x.pluginId !== p.pluginId), p]
@@ -273,6 +336,7 @@ export function clearPlugin(pluginId: string) {
   reg.settingsPages = reg.settingsPages.filter(x => x.pluginId !== pluginId)
   reg.panels = reg.panels.filter(x => x.pluginId !== pluginId)
   reg.hotkeys = reg.hotkeys.filter(x => x.pluginId !== pluginId)
+  reg.ctxItems = reg.ctxItems.filter(x => x.pluginId !== pluginId)
   const el = styleEls.get(pluginId)
   if (el) { el.remove(); styleEls.delete(pluginId) }
   notify()
@@ -291,3 +355,6 @@ export const usePanels = (slot: PanelSlot) => useReg(() => reg.panels.filter(p =
 /** Горячие клавиши плагинов (v1.419.0) — слушает App.tsx, показывает окно сочетаний. */
 export const useHotkeys = () => useReg(() => reg.hotkeys)
 export const getHotkeys = (): PluginHotkey[] => reg.hotkeys
+/** Пункты меню по правой кнопке для одного места (v1.465.0). */
+export const useContextItems = (target: CtxTarget) => useReg(() => reg.ctxItems.filter(c => c.target === target))
+export const getContextItems = (): ContextItem[] => reg.ctxItems

@@ -1,7 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePanels, type PanelSlot, type SettingsRow } from '../lib/plugins/registry'
 import { invokePlugin, emitToPlugin } from '../lib/plugins/host'
 import { readStorage, writeStorage } from '../lib/plugins/store'
+import { ensureCanvas } from '../lib/plugins/canvasHub'
+
+/**
+ * Холст плагина в панели (v1.465.0).
+ *
+ * Элемент здесь НЕ создаётся: он живёт в canvasHub и переживает любое число
+ * перерисовок. Причина — управление холстом отдаётся воркеру ровно один раз
+ * (transferControlToOffscreen нельзя позвать дважды), а панель размонтируется
+ * при каждом уходе с экрана. Создавай мы элемент тут — первый же переход в
+ * настройки убивал бы холст плагина навсегда.
+ *
+ * Поэтому компонент только ВСТАВЛЯЕТ готовый элемент в себя и говорит плагину,
+ * видно его сейчас или нет: пока не видно, крутить анимацию незачем — это
+ * впустую съеденная батарея на телефоне.
+ */
+export function PanelCanvas({ pluginId, row }: { pluginId: string; row: Extract<SettingsRow, { type: 'canvas' }> }) {
+  const box = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const host = box.current
+    if (!host) return
+    let el: HTMLCanvasElement
+    try { el = ensureCanvas(pluginId, row.key, row.height) } catch { return }
+    host.appendChild(el)
+    emitToPlugin(pluginId, 'canvas', { key: row.key, width: el.width, height: el.height, visible: true })
+    return () => {
+      // Элемент не удаляем — он общий и переживает уход с экрана; убираем только
+      // из этого места, иначе при возврате он оказался бы вставлен дважды.
+      if (el.parentNode === host) host.removeChild(el)
+      emitToPlugin(pluginId, 'canvas', { key: row.key, width: el.width, height: el.height, visible: false })
+    }
+  }, [pluginId, row.key, row.height])
+  return <div className="plugpanel-cbox" ref={box} style={{ height: row.height }} />
+}
 
 // v1.417.0: панели плагинов в самом приложении.
 //
@@ -93,6 +126,7 @@ function PanelRows({ pluginId, rows }: { pluginId: string; rows: SettingsRow[] }
         case 'image': return (
           <img key={r.key} className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
         )
+        case 'canvas': return <PanelCanvas key={r.key} pluginId={pluginId} row={r} />
         default: return null
       }
     })}

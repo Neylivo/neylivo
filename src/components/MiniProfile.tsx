@@ -16,6 +16,9 @@ import { lazyNamed } from '../lib/lazyScreen'
 const Settings = lazyNamed(() => import('./Settings'), 'Settings')
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
+// v1.465.0: свои пункты плагинов в меню человека.
+import { useContextItems } from '../lib/plugins/registry'
+import { invokePlugin } from '../lib/plugins/host'
 import { devMode } from '../lib/settings'
 import { isBotUser } from '../lib/botTag'
 import { UserTagBadge } from './TagEmoji'
@@ -76,6 +79,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   const [av, setAv] = useState<string | null | undefined>(data.avatarUrl)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [more, setMore] = useState(false)
+  const pluginUserItems = useContextItems('user')
   // v1.340.0: у бота профиль тот же, но действий с ним нет: подружиться,
   // написать или позвонить боту нельзя, и кнопки, которые всё равно ничего не
   // сделают, — та же кнопка-обманка. Вместо них — честная отметка «БОТ».
@@ -250,6 +254,14 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {more && <div className="mini-more">
             <button onClick={() => { navigator.clipboard?.writeText(uname || data.name); setMore(false) }}>Скопировать юзернейм</button>
             {devMode() && <button onClick={() => { navigator.clipboard?.writeText(data.userId); setMore(false) }}>Скопировать ID</button>}
+            {/* v1.465.0: пункты плагинов. Плагин получает id и имя — ровно то,
+                что и так на экране; ни почты, ни переписки этого человека. */}
+            {pluginUserItems.map(c => (
+              <button key={c.pluginId + ':' + c.key} onClick={() => {
+                void invokePlugin(c.pluginId, c.onClick, [{ id: data.userId, name: data.name }])
+                setMore(false)
+              }}>{c.label}</button>
+            ))}
           </div>}
         </div>}
         <ProfilePet p={pp} scale={0.3} card="mini" bannerH={74} />

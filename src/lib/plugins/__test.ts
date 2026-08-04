@@ -20,6 +20,7 @@ import {
 import { RECIPES, recipeDefaults, recipeReady } from './recipes'
 import { PLUGIN_SPEC, AI_PROMPT_PREFIX, BOT_SPEC, AI_BOT_PROMPT_PREFIX } from './spec'
 import { readFileSync } from 'node:fs'
+import { WORKER_BOOTSTRAP } from './bootstrap'
 
 // Исходник диспетчера читаем файлом: нам нужны имена его case-ветвей, а не то,
 // что он делает — вызвать их отсюда нельзя, там браузерное окружение.
@@ -46,7 +47,7 @@ function loadPlugin(code: string) {
 }
 
 /** Виды строк, которые понимает приложение (см. SettingsRow в registry.ts). */
-const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image']
+const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image', 'canvas']
 
 /** Заглушка ponoi: записывает всё, что плагин попросил, и ничего не делает. */
 function stubPonoi() {
@@ -125,6 +126,45 @@ function stubPonoi() {
     log: () => {},
   }
   return { ponoi, calls }
+}
+
+// v1.465.0: сам код песочницы — это СТРОКА, и ошибку в ней не поймает ни tsc,
+// ни сборка. Поймает её человек: ни один плагин не запустится, у всех разом.
+// Поэтому строку по-настоящему разбирают и по-настоящему выполняют с
+// подставным self — так же, как это делает воркер.
+{
+  check('код песочницы разбирается как JS', () => {
+    // new Function бросит SyntaxError на любой опечатке — это и есть разбор.
+    new Function(WORKER_BOOTSTRAP)
+    return WORKER_BOOTSTRAP.length > 1000
+  })
+  check('код песочницы выполняется и строит объект ponoi', () => {
+    const посланное: any[] = []
+    const self: any = {
+      postMessage: (m: any) => posted(m),
+      navigator: {},
+      addEventListener: () => {},
+    }
+    function posted(m: any) { посланное.push(m) }
+    // Всё, что песочница вырезает, должно существовать до вырезания — иначе
+    // delete/defineProperty упадут не на том, на чём мы проверяем.
+    for (const k of ['Worker', 'SharedWorker', 'importScripts', 'fetch', 'XMLHttpRequest',
+                     'WebSocket', 'EventSource', 'indexedDB', 'caches', 'openDatabase']) {
+      self[k] = () => {}
+    }
+    new Function('self', WORKER_BOOTSTRAP)(self)
+    // Загрузчик обязан повесить приёмник сообщений: без него плагин не получит
+    // ни своего кода, ни событий.
+    if (typeof self.onmessage !== 'function') throw new Error('нет self.onmessage')
+    return посланное.length === 0
+  })
+  check('в песочнице нет ни одного мостика мимо ponoi', () => {
+    // Список вырезаемого — в самом коде; проверяем, что он не поредел.
+    for (const нужно of ['Worker', 'importScripts', 'fetch', 'XMLHttpRequest', 'WebSocket', 'indexedDB']) {
+      if (!WORKER_BOOTSTRAP.includes("'" + нужно + "'")) throw new Error('перестали вырезать: ' + нужно)
+    }
+    return true
+  })
 }
 
 console.log('── Загрузчик песочницы ──')
@@ -488,6 +528,10 @@ for (const p of OFFICIAL_PLUGINS) {
     'ui.addHotkey', 'messages.recent', 'messages.react', 'messages.remove',
     'servers', 'channels', 'open', 'status.set', 'status.get', 'sound.play',
     'storage.clear',
+    // v1.465.0: семь новых возможностей.
+    'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
+    'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
+    'background.every', 'background.stop', 'ui.setTheme', 'ui.clearTheme', 'ui.addContextMenu',
   ]
 
 
@@ -550,7 +594,7 @@ for (const p of OFFICIAL_PLUGINS) {
     // Иначе проверка выше становится бесполезной: забыли добавить метод сюда —
     // и его отсутствие в инструкции никто не заметит.
     const src = DISPATCHER_SRC
-    const inCode = [...src.matchAll(/case '([a-z.]+)':/g)].map(m => m[1])
+    const inCode = [...src.matchAll(/case '([a-zA-Z.]+)':/g)].map(m => m[1])
     // В том же файле есть switch по видам строк — это не методы API.
     const real = inCode.filter(m => !ROW_TYPES.includes(m))
     const forgotten = real.filter(m => !SPEC_KNOWN_METHODS.includes(m))
@@ -725,6 +769,11 @@ for (const p of OFFICIAL_PLUGINS) {
         'notify': 'ponoi.notify()', 'voice': 'ponoi.voice.list()',
         'context': 'ponoi.me()', 'panel': 'ponoi.ui.addPanel()',
         'music': 'ponoi.music.state()', 'navigate': 'ponoi.open()', 'status': 'ponoi.status.set()',
+        // v1.465.0
+        'ipc': "ponoi.plugins.send('a','b',{})",
+        'messages.intercept': 'ponoi.messages.onBeforeSend(async()=>{})',
+        'background': 'ponoi.background.every(60000,async()=>{})',
+        'ui.theme': "ponoi.ui.setTheme({accent:'#ff4500'})",
       }
       const код = прим[p]
       if (!код) return true
@@ -780,16 +829,16 @@ for (const p of OFFICIAL_PLUGINS) {
   // оставались зелёными. «Настройка есть» не значит «работает».
   console.log('\n-- Плагину доступно то, что умеет приложение --')
   check('каждый метод диспетчера доступен из песочницы', () => {
-    const зовётся = new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-z.]+)'/g)].map(m => m[1]))
-    const ветви = [...new Set([...DISPATCHER_SRC.matchAll(/case '([a-z.]+)':/g)].map(m => m[1]))]
+    const зовётся = new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-zA-Z.]+)'/g)].map(m => m[1]))
+    const ветви = [...new Set([...DISPATCHER_SRC.matchAll(/case '([a-zA-Z.]+)':/g)].map(m => m[1]))]
       .filter(m => !ROW_TYPES.includes(m))
     const нет = ветви.filter(m => !зовётся.has(m))
     if (нет.length) throw new Error('приложение умеет, плагин позвать не может: ' + нет.join(', '))
     return true
   })
   check('песочница не зовёт того, чего приложение не умеет', () => {
-    const ветви = new Set([...DISPATCHER_SRC.matchAll(/case '([a-z.]+)':/g)].map(m => m[1]))
-    const зовётся = [...new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-z.]+)'/g)].map(m => m[1]))]
+    const ветви = new Set([...DISPATCHER_SRC.matchAll(/case '([a-zA-Z.]+)':/g)].map(m => m[1]))
+    const зовётся = [...new Set([...BOOTSTRAP_SRC.matchAll(/call\('([a-zA-Z.]+)'/g)].map(m => m[1]))]
     const лишние = зовётся.filter(m => !ветви.has(m))
     if (лишние.length) throw new Error('плагин зовёт несуществующее: ' + лишние.join(', '))
     return true
@@ -863,6 +912,141 @@ for (const p of OFFICIAL_PLUGINS) {
     const выдумка = 'sennd'
     return !(выдумка in LIMITS)
   })
+
+  // ── v1.465.0: семь новых возможностей ──────────────────────────────────
+  //
+  // Штурм (npm run test:attack) проверяет, что плохое не проходит. Здесь —
+  // что ХОРОШЕЕ работает и работает предсказуемо: цепочка перехватчиков в
+  // объявленном порядке, догон фоновых задач, полнота уборки.
+  console.log('\n-- Новые возможности плагинов (v1.465.0) --')
+
+  {
+    const mw = await import('./middleware')
+    const fake = (n: string) => ({ __fn: n }) as any
+
+    // Порядок важен по-настоящему: шифрующий и переводящий плагины дадут разный
+    // результат при разном порядке, и он не должен зависеть от случая.
+    const порядок: string[] = []
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'первый', kind: 'send', fn: fake('a') })
+    mw.addInterceptor({ pluginId: 'второй', kind: 'send', fn: fake('b') })
+    const цепочка = await mw.runBeforeSend('текст', 'ch1', async (pid, _fn, args) => {
+      порядок.push(pid)
+      return (args[0] as { content: string }).content + '+' + pid
+    })
+    mw.clearAllInterceptors()
+    check('цепочка перехватчиков идёт в порядке объявления', () =>
+      порядок.join(',') === 'первый,второй' && цепочка.content === 'текст+первый+второй')
+
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'первый', kind: 'send', fn: fake('a') })
+    mw.addInterceptor({ pluginId: 'второй', kind: 'send', fn: fake('b') })
+    const отмена = await mw.runBeforeSend('текст', null, async (pid) =>
+      pid === 'первый' ? { cancel: true } : 'не должно случиться')
+    mw.clearAllInterceptors()
+    check('отмена называет виновника и обрывает цепочку', () =>
+      отмена.cancel && отмена.by === 'первый')
+
+    mw.clearAllInterceptors()
+    check('пока перехватчиков нет, путь отправки прежний', () =>
+      mw.hasInterceptors('send') === false && mw.hasInterceptors('render') === false)
+
+    check('пустой текст после правки — это отмена, а не прежний текст', () =>
+      mw.applySendResult('было', '   ').cancel === true)
+
+    check('больше предела перехватчиков одного вида не поставить', () => {
+      mw.clearAllInterceptors()
+      for (let i = 0; i < mw.MAX_INTERCEPTORS; i++) {
+        mw.addInterceptor({ pluginId: 'жадный', kind: 'send', fn: fake('f' + i) })
+      }
+      try { mw.addInterceptor({ pluginId: 'жадный', kind: 'send', fn: fake('лишний') }); return false }
+      catch { return true }
+      finally { mw.clearAllInterceptors() }
+    })
+  }
+
+  {
+    const bg = await import('./background')
+    bg.clearAllTasks()
+    check('задача не срабатывает раньше своего срока', () => {
+      const сейчас = 1_000_000
+      const t = { id: 7, pluginId: 'x', everyMs: 5000, dueAt: сейчас + 1, runs: 0, label: 'з' }
+      return bg.dueNow([t], сейчас).run.length === 0
+    })
+    check('несколько задач с разными сроками считаются каждая по-своему', () => {
+      const сейчас = 1_000_000
+      const a = { id: 1, pluginId: 'x', everyMs: 1000, dueAt: сейчас - 10, runs: 0, label: 'a' }
+      const b = { id: 2, pluginId: 'x', everyMs: 9000, dueAt: сейчас + 5000, runs: 0, label: 'b' }
+      const r = bg.dueNow([a, b], сейчас)
+      return r.run.length === 1 && r.run[0].id === 1 && r.next.get(1) === сейчас + 1000
+    })
+    check('человек может остановить задачу, не спрашивая плагин', () => {
+      bg.clearAllTasks()
+      const t = bg.addTask('чей-то', 60000, 'моя')
+      const ok1 = bg.stopTaskByUser(t.id)
+      const ok2 = bg.stopTaskByUser(t.id)   // второй раз останавливать нечего
+      return ok1 === true && ok2 === false
+    })
+  }
+
+  {
+    const { THEME_VARS, THEME_VAR_NAMES, parseTheme, themeCss } = await import('./pluginTheme')
+    check('каждое имя цвета ведёт к настоящей переменной приложения', () => {
+      // Опечатка здесь = «цвет применился, ничего не изменилось».
+      const стили = readFileSync('src/lib/settings.tsx', 'utf8')
+      const нет = Object.values(THEME_VARS).filter(v => !стили.includes(`'${v}'`))
+      if (нет.length) throw new Error('приложение не знает таких переменных: ' + нет.join(', '))
+      return THEME_VAR_NAMES.length >= 7
+    })
+    check('ведущие дефисы в имени цвета прощаются', () =>
+      JSON.stringify(parseTheme({ '--accent': '#ff4500' })) === JSON.stringify(parseTheme({ accent: '#ff4500' })))
+    check('цвета плагина сильнее собственных настроек приложения', () => {
+      // Приложение пишет эти переменные прямо в стиль корня при каждой смене
+      // темы. Без !important первая же смена стирала бы цвета плагина, и
+      // выглядело бы это как «настройка есть, а не работает».
+      const css = themeCss('p', { accent: '#ff4500' })
+      return css.includes('!important') && css.includes(':root')
+    })
+  }
+
+  {
+    const cleanup = await import('./cleanup')
+    check('уборка знает про каждую подсистему, которая умеет убирать за всеми', () => {
+      // Настоящая защита от «добавили шестую и забыли»: ищем во ВСЕХ файлах
+      // плагинов функции вида clearAll…/closeAll…, и каждая обязана быть
+      // позвана из cleanup.ts. Иначе выключенный плагин продолжит работать.
+      const { readdirSync } = require('node:fs') as typeof import('node:fs')
+      const дир = 'src/lib/plugins'
+      const свод = readFileSync(дир + '/cleanup.ts', 'utf8')
+      const забытые: string[] = []
+      for (const f of readdirSync(дир)) {
+        if (!f.endsWith('.ts') || f.startsWith('__') || f === 'cleanup.ts') continue
+        const src = readFileSync(дир + '/' + f, 'utf8')
+        for (const m of src.matchAll(/export function ((?:clearAll|closeAll)\w*)/g)) {
+          if (!свод.includes(m[1])) забытые.push(f + ':' + m[1])
+        }
+      }
+      if (забытые.length) throw new Error('не позвано из cleanup.ts: ' + забытые.join(', '))
+      return cleanup.SUBSYSTEM_COUNT > 0
+    })
+  }
+
+  console.log('\n-- Ломаем нарочно (новые возможности) --')
+  {
+    const mw = await import('./middleware')
+    // Так выглядела бы ошибка: считать любой ложный ответ отменой. Тогда
+    // обработчик, забывший вернуть значение, отменял бы каждое сообщение.
+    const плохо = (r: unknown) => !r
+    const хорошо = mw.applySendResult('текст', undefined).cancel
+    check('«вернул ничего» не должно означать отмену', () => плохо(undefined) === true && хорошо === false)
+  }
+  {
+    const { checkTarget } = await import('./netGuard')
+    const цель = { hosts: ['a.example'], selfHost: 'ponoi.app', supaHost: '' }
+    check('проверка заметила бы, что схему перестали смотреть', () =>
+      // Если бы схема не проверялась, wss-адрес прошёл бы обычной проверкой https.
+      checkTarget('wss://a.example/x', цель) !== null)
+  }
 
   console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
   process.exit(fail ? 1 : 0)

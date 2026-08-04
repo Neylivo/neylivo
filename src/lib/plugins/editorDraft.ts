@@ -250,6 +250,21 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](message\.edit|message\.delete|reaction|typing)['"`]/, perms: ['messages.read'], what: 'подписка на события переписки' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](channel|voice)['"`]/, perms: ['context'],                   what: "ponoi.on('channel'/'voice')" },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]music['"`]/,           perms: ['music'],                     what: "ponoi.on('music')" },
+  // v1.465.0: семь новых возможностей. Каждая обязана быть здесь, иначе человек
+  // узнаёт о недостающем разрешении единственным способом, от которого этот
+  // определитель и должен спасать, — красной строкой на уже поставленном плагине.
+  { re: /\bponoi\s*\.\s*plugins\s*\.\s*send\s*\(/,           perms: ['ipc'],                       what: 'ponoi.plugins.send' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]ipc['"`]/,             perms: ['ipc'],                       what: "ponoi.on('ipc')" },
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*onBefore(Send|Render)\s*\(/, perms: ['messages.intercept'], what: 'ponoi.messages.onBeforeSend/Render' },
+  // Холст живёт в панели — без panel его негде показать, и getCanvas откажет.
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*getCanvas\s*\(/,           perms: ['panel'],                     what: 'ponoi.ui.getCanvas' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]canvas['"`]/,          perms: ['panel'],                     what: "ponoi.on('canvas')" },
+  { re: /\bponoi\s*\.\s*net\s*\.\s*ws\s*\(/,                 perms: ['net'],                       what: 'ponoi.net.ws' },
+  { re: /\bponoi\s*\.\s*background\s*\./,                     perms: ['background'],                what: 'ponoi.background' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*(setTheme|clearTheme)\s*\(/, perms: ['ui.theme'],                what: 'ponoi.ui.setTheme' },
+  // Пункт меню сообщения отдаёт само сообщение — значит, и чтение тоже.
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(\s*\{[^}]*target\s*:\s*['"`]message['"`]/, perms: ['ui', 'messages.read'], what: 'ponoi.ui.addContextMenu (message)' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(/,      perms: ['ui'],                        what: 'ponoi.ui.addContextMenu' },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

@@ -46,10 +46,20 @@ export type NetTarget = {
  *
  * Отдельной функцией — чтобы и обычный запрос, и поток спрашивали одно и то же.
  */
-export function checkTarget(rawUrl: string, t: NetTarget): string | null {
+/**
+ * v1.465.0: постоянное соединение (WebSocket) идёт через ЭТУ ЖЕ проверку.
+ *
+ * Разница ровно одна — схема: у запроса https, у соединения wss. Всё
+ * остальное — объявленные домены, запрет на самого Ponoi и его сервер — обязано
+ * совпадать до буквы, поэтому проверка одна, а схема — довод. Второй список
+ * правил рано или поздно разошёлся бы с первым, и это был бы готовый обход.
+ */
+export function checkTarget(rawUrl: string, t: NetTarget, scheme: 'https:' | 'wss:' = 'https:'): string | null {
   let url: URL
   try { url = new URL(String(rawUrl ?? '')) } catch { return 'Плохой адрес запроса.' }
-  if (url.protocol !== 'https:') return 'Разрешены только https-адреса.'
+  if (url.protocol !== scheme) {
+    return scheme === 'wss:' ? 'Разрешены только wss-адреса.' : 'Разрешены только https-адреса.'
+  }
   const host = url.hostname.toLowerCase()
   if (!t.hosts.some(h => h.toLowerCase() === host)) {
     return `Домен ${url.hostname} не объявлен в @hosts этого плагина.`

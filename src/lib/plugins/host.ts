@@ -1,8 +1,11 @@
 import { PluginSandbox, type FnRef } from './sandbox'
-import { createDispatcher, type HostContext } from './api'
+import { createDispatcher, taskHandlers, type HostContext } from './api'
 import { clearPlugin, pluginsDisabled } from './registry'
 import { loadPlugins, getPlugin, subscribePlugins } from './store'
 import type { InstalledPlugin } from './types'
+// v1.465.0: за плагином надо убирать не только то, что он добавил в интерфейс.
+import { cleanupPlugin } from './cleanup'
+import { setTaskRunner } from './background'
 
 // v1.286.0: связывает всё вместе — поднимает песочницы включённых плагинов, роутит
 // вызовы в api.ts, раздаёт события и гасит сломавшихся. Один плагин не должен
@@ -100,6 +103,8 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
     // по имени, а не держим ссылку: диспетчер создаётся раньше песочницы, и к
     // моменту первого потока плагин уже запущен.
     invoke: (ref, args) => invokePlugin(plugin.manifest.id, ref, args),
+    // v1.465.0: письмо соседнему плагину.
+    ipcSend: (from, to, event, data) => deliverIpc(from, to, event, data),
   }, ev => subs.add(ev))
   const sandbox = new PluginSandbox({
     onCall: dispatch,
@@ -131,6 +136,7 @@ function fail(id: string, message: string) {
   const r = running.get(id)
   if (r) { r.sandbox.kill(); running.delete(id) }
   clearPlugin(id)
+  cleanupPlugin(id)
   notify()
 }
 
@@ -138,7 +144,36 @@ export async function stopPlugin(id: string): Promise<void> {
   const r = running.get(id)
   if (r) { r.sandbox.kill(); running.delete(id) }
   clearPlugin(id)
+  cleanupPlugin(id)
   notify()
+}
+
+// Фоновая задача пришла по сроку — зовём обработчик плагина. Упавший обработчик
+// не убивает ни задачу, ни плагин: причина попадает в его журнал, и видно, что
+// именно ломается раз в минуту.
+setTaskRunner((pluginId, taskId) => {
+  const h = taskHandlers.get(taskId)
+  if (!h || h.pluginId !== pluginId) return
+  invokePlugin(pluginId, h.fn, []).catch(() => { /* уже записано в журнал */ })
+})
+
+/**
+ * Доставка письма между плагинами (v1.465.0).
+ *
+ * Два условия, и оба обязательны:
+ *   • адресат запущен — иначе доставлять некуда;
+ *   • адресат ПОДПИСАН на 'ipc' — а подписаться на него без разрешения ipc
+ *     нельзя (таблица событий в types.ts). Это и есть согласие получателя:
+ *     плагин, ни о чём не просивший, чужих данных не получит.
+ *
+ * Отправитель подставляется здесь и только здесь: в письме от плагина поля from
+ * нет вовсе, поэтому подделать его нельзя ничем.
+ */
+function deliverIpc(from: string, to: string, event: string, data: unknown): boolean {
+  const r = running.get(to)
+  if (!r || !r.subs.has('ipc')) return false
+  r.sandbox.emit('ipc', { from, event, data })
+  return true
 }
 
 /** Поднять все включённые плагины. Вызывается один раз при старте приложения. */

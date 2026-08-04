@@ -7,8 +7,18 @@ import {
 } from './limits'
 import {
   addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
-  setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, type SettingsRow, type PanelSlot,
+  setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, addContextItem, CTX_TARGETS, getRegistry,
+  type SettingsRow, type PanelSlot, type CtxTarget,
 } from './registry'
+// v1.465.0: семь новых возможностей — каждая своим файлом, здесь только ветка
+// диспетчера и проверка разрешения. Так же, как netGuard: правила отдельно от
+// транспорта, потому что проверять их надо отдельно.
+import { packIpc } from './ipc'
+import { addInterceptor } from './middleware'
+import { takeOffscreen, canvasHeight } from './canvasHub'
+import { openSocket, sendSocket, closeSocket } from './wsHub'
+import { addTask, removeTask } from './background'
+import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
@@ -46,8 +56,45 @@ export const PLUGIN_METHODS = [
   'commands.register', 'ui.addComposerButton', 'ui.addMessageAction', 'ui.addPanel',
   'ui.addSettingsPage', 'ui.addHotkey', 'ui.confirm', 'ui.prompt',
   // строки описания панели
-  'label', 'text', 'button', 'toggle', 'select', 'slider', 'color', 'image', 'progress', 'css',
+  'label', 'text', 'button', 'toggle', 'select', 'slider', 'color', 'image', 'progress', 'css', 'canvas',
+  // v1.465.0. Ни одна из этих семи не действует на других людей:
+  //   plugins.send    — письмо соседнему плагину на этом же устройстве;
+  //   messages.on*    — правка СВОИХ сообщений и того, что человек видит у себя;
+  //   ui.getCanvas    — свой холст в своей же панели;
+  //   net.ws*         — свой сокет на объявленный домен, теми же правилами;
+  //   background.*    — свой таймер, видимый человеку и им же выключаемый;
+  //   ui.setTheme     — цвета у себя на экране;
+  //   ui.addContextMenu — свой пункт в своём меню.
+  'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
+  'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
+  'background.every', 'background.stop', 'ui.setTheme', 'ui.clearTheme', 'ui.addContextMenu',
 ] as const
+
+/**
+ * Обработчики фоновых задач (v1.465.0).
+ *
+ * Задача живёт в background.ts — там сроки и догон, и там нет и не должно быть
+ * ни песочницы, ни меток функций. Метка обработчика лежит здесь, а зовёт её
+ * host.ts. Разделение то же, что и везде: правила отдельно от транспорта.
+ */
+export const taskHandlers = new Map<number, { pluginId: string; fn: FnRef }>()
+
+/**
+ * Строка-холст с таким ключом у этого плагина.
+ *
+ * Ищем и в панелях, и на странице настроек: холст рисуется в обоих местах, и
+ * «объявил на своей странице — не работает» было бы ровно тем расхождением
+ * между показом и действием, которое в этом проекте ломается чаще всего.
+ */
+function panelCanvasRow(pluginId: string, key: string): { height: number } | null {
+  const reg = getRegistry()
+  const везде: { pluginId: string; rows: SettingsRow[] }[] = [...reg.panels, ...reg.settingsPages]
+  for (const p of везде) {
+    if (p.pluginId !== pluginId) continue
+    for (const r of p.rows) if (r.type === 'canvas' && r.key === key) return { height: r.height }
+  }
+  return null
+}
 
 export interface HostContext {
   /** v1.445.0: позвать обработчик плагина. Нужен потоку: куски ответа надо
@@ -70,6 +117,12 @@ export interface HostContext {
   confirm?: (title: string, text: string, ok: string) => Promise<boolean>
   /** Спросить строку. null — человек отказался. */
   prompt?: (title: string, placeholder: string, value: string) => Promise<string | null>
+  /**
+   * v1.465.0: передать письмо другому плагину. Подставляет host.ts — там живут
+   * песочницы. Возвращает false, если адресат не запущен или не просил ipc:
+   * плагин должен видеть, что письмо не дошло, а не считать, что дошло.
+   */
+  ipcSend?: (from: string, to: string, event: string, data: unknown) => boolean
 }
 
 /** Сколько ждём ответа от чужого сайта и сколько байт согласны принять. */
@@ -145,6 +198,9 @@ function settingsRow(raw: any): SettingsRow | null {
     // здесь, а не в разметке: панель с value = 10^9 не должна уметь растянуть
     // экран, а слайдер с min больше max — стать неподвижным.
     case 'label': return { type: 'label', key, label, description, value: String(raw.value ?? '').slice(0, 200) }
+    // v1.465.0: холст. Высота зажимается здесь же — панель с высотой в миллион
+    // пикселей не должна уметь вытолкнуть с экрана всё остальное.
+    case 'canvas': return { type: 'canvas', key, label, description, height: canvasHeight(raw.height) }
     case 'progress': return { type: 'progress', key, label, description, value: num(raw.value, 0, 100, 0) }
     case 'slider': {
       const min = num(raw.min, -1e6, 1e6, 0)
@@ -603,6 +659,151 @@ export function createDispatcher(
         }
         if (spec.permission) need(spec.permission)
         onSubscribe(ev)
+        return null
+      }
+
+      // ═══ v1.465.0 ═══════════════════════════════════════════════════════
+      // Семь новых возможностей. Каждая внесена в PLUGIN_METHODS выше — то
+      // есть прошла через вопрос «а кого это заденет, кроме самого человека».
+
+      // ---- Разговор плагинов между собой (нужно ipc) ----------------------
+      // Разрешение нужно ОБОИМ концам: здесь проверяется отправитель, у
+      // получателя — при подписке на событие 'ipc' (таблица в types.ts).
+      // Наружу это не выходит никуда: письмо ходит между двумя воркерами.
+      case 'plugins.send': {
+        need('ipc')
+        rateLimit(id, 'ipc')
+        const to = str(args[0], 80, 'plugins.send: id плагина')
+        if (to === id) throw new Denied('Плагин не может слать письмо самому себе.')
+        // packIpc вырезает метки функций: доехавшая метка дала бы соседу
+        // кнопку, нажимающую чужой код с ЧУЖИМИ разрешениями (см. ipc.ts).
+        const { event, data } = packIpc(args[1], args[2])
+        if (!ctx.ipcSend) return false
+        return ctx.ipcSend(id, to, event, data)
+      }
+
+      // ---- Перехват сообщений (нужно messages.intercept) ------------------
+      // Самое сильное разрешение из всех: плагин видит каждое сообщение и
+      // может отправить не то, что человек набрал. Поэтому оно отдельное и
+      // помечено небезопасным — в одном списке с «писать от твоего имени» ему
+      // было бы не место, это сильнее.
+      case 'messages.onBeforeSend': {
+        need('messages.intercept')
+        addInterceptor({ pluginId: id, kind: 'send', fn: fnRef(args[0], 'onBeforeSend') })
+        return null
+      }
+      case 'messages.onBeforeRender': {
+        need('messages.intercept')
+        addInterceptor({ pluginId: id, kind: 'render', fn: fnRef(args[0], 'onBeforeRender') })
+        return null
+      }
+
+      // ---- Холст в панели (нужно panel) -----------------------------------
+      // Плагин получает не кусок страницы, а отдельный холст со своими
+      // пикселями: прочитать через него окно нельзя, нарисовать за пределами
+      // своей панели — тоже.
+      case 'ui.getCanvas': {
+        need('panel')
+        const key = str(args[0], 60, 'ui.getCanvas: ключ холста')
+        // Высоту берём из объявленной строки панели, а не из довода: холст
+        // живёт в панели, и если её нет — показывать его негде. Молча выдать
+        // холст, которого человек никогда не увидит, значит соврать.
+        const row = panelCanvasRow(id, key)
+        if (!row) {
+          throw new Denied(
+            `Холст «${key}» не объявлен. Добавь в панель строку { type: 'canvas', key: '${key}', height: 160 }.`,
+          )
+        }
+        // Пометка «передать, а не копировать» — см. sandbox.ts, asTransfer.
+        return { __transfer: takeOffscreen(id, key, row.height) }
+      }
+
+      // ---- Постоянное соединение (нужно net и @hosts) ---------------------
+      // Проверка адреса — тем же checkTarget, что у обычного запроса, только
+      // со схемой wss. Второго списка правил здесь нет намеренно.
+      case 'net.ws': {
+        need('net')
+        rateLimit(id, 'ws')
+        const url = String(args[0] ?? '')
+        const h = (args[1] ?? {}) as Record<string, unknown>
+        if (!ctx.invoke) throw new Denied('Соединение недоступно: приложение не может звать обработчики плагина.')
+        const invoke = ctx.invoke
+        const зовём = (ref: unknown, a: unknown[]) => {
+          if (isFnRef(ref)) void invoke(ref, a).catch(() => {})
+        }
+        return openSocket(id, url, netTarget(plugin), {
+          onOpen: () => зовём(h.onOpen, []),
+          onMessage: t => зовём(h.onMessage, [t]),
+          onClose: (code, reason) => зовём(h.onClose, [code, reason]),
+        })
+      }
+      case 'net.wsSend': {
+        need('net')
+        rateLimit(id, 'wssend')
+        return sendSocket(id, Number(args[0]), args[1])
+      }
+      case 'net.wsClose': {
+        need('net')
+        return closeSocket(id, Number(args[0]))
+      }
+
+      // ---- Работа по расписанию (нужно background) ------------------------
+      // Что это добавляет к обычному setInterval внутри плагина (он и раньше
+      // работал) — четырьмя пунктами написано в background.ts. Коротко: задачу
+      // видно человеку и он может её остановить.
+      case 'background.every': {
+        need('background')
+        const ms = Number(args[0])
+        const fn = fnRef(args[1], 'background.every: вторым доводом')
+        const task = addTask(id, ms, String(args[2] ?? ''))
+        taskHandlers.set(task.id, { pluginId: id, fn })
+        return task.id
+      }
+      case 'background.stop': {
+        need('background')
+        const tid = Number(args[0])
+        const ok = removeTask(id, tid)
+        if (ok) taskHandlers.delete(tid)
+        return ok
+      }
+
+      // ---- Цвета оформления (нужно ui.theme) ------------------------------
+      // Не CSS: словарь имён из закрытого списка и только #rrggbb. Вёрстку
+      // этим не сломать и чужое окно не подделать — в отличие от разрешения
+      // css, ради которого в приложении держится аварийный режим.
+      case 'ui.setTheme': {
+        need('ui.theme')
+        const colors = parseTheme(args[0])
+        applyPluginTheme(id, colors)
+        return true
+      }
+      case 'ui.clearTheme': {
+        need('ui.theme')
+        clearPluginTheme(id)
+        return true
+      }
+
+      // ---- Пункт меню по правой кнопке (нужно ui) -------------------------
+      case 'ui.addContextMenu': {
+        need('ui')
+        const o = args[0] as any
+        const target = String(o?.target ?? '') as CtxTarget
+        if (!(target in CTX_TARGETS)) {
+          throw new Denied(`Неизвестное место «${target}». Есть: ${Object.keys(CTX_TARGETS).join(', ')}.`)
+        }
+        // Пункт в меню сообщения даёт обработчику само сообщение — значит,
+        // сверх «добавлять кнопки» нужно ещё и разрешение на чтение. Ровно та
+        // же связка, что у ui.addMessageAction: иначе «добавлять кнопки» тихо
+        // открывало бы переписку в обход отдельного разрешения.
+        if (target === 'message') need('messages.read')
+        addContextItem({
+          pluginId: id,
+          key: str(o?.key ?? o?.label, 60, 'пункт меню'),
+          target,
+          icon: safeIcon(o?.icon),
+          label: str(o?.label, MAX_LABEL, 'подпись пункта меню'),
+          onClick: fnRef(o?.onClick, 'пункт меню'),
+        })
         return null
       }
 

@@ -504,5 +504,243 @@ console.log('\n── Чужое ──')
   })
 }
 
+// ── v1.465.0: семь новых возможностей под штурмом ──────────────────────────
+//
+// Каждая новая возможность — это новая поверхность. Проверяем не «работает ли
+// хорошее», а «не пролезает ли плохое»: чужие данные, чужие соединения, чужая
+// вёрстка, чужие задачи.
+
+console.log('\n── Разговор плагинов (ipc) ──')
+{
+  const { sanitizeIpc, hasFnRef, packIpc, IPC_MAX_BYTES } = await import('./ipc')
+
+  await check('метка функции вырезается на верхнем уровне', () =>
+    sanitizeIpc({ f: { __fn: 'cb1' } }) !== null && !hasFnRef(sanitizeIpc({ f: { __fn: 'cb1' } })))
+
+  await check('метка функции вырезается на любой глубине', () => {
+    // Это главная опасность обмена: доехавшая метка дала бы соседу право звать
+    // ЧУЖОЙ код с ЧУЖИМИ разрешениями — плагин без сети попросил бы соседа
+    // сходить в интернет за него.
+    const глубоко = { a: { b: { c: [{ d: { __fn: 'cb9' } }] } } }
+    return hasFnRef(глубоко) && !hasFnRef(sanitizeIpc(глубоко))
+  })
+
+  await check('сама функция тоже не проезжает', () =>
+    (sanitizeIpc({ go: () => 1 }) as any).go === null)
+
+  await check('огромное письмо не пройдёт', () => {
+    try { packIpc('ev', { s: 'я'.repeat(IPC_MAX_BYTES) }); return false } catch { return true }
+  })
+  await check('письмо без имени события не пройдёт', () => {
+    try { packIpc('', {}); return false } catch { return true }
+  })
+
+  const d = attacker([...ALL_PERMISSIONS], 'ipc-evil')
+  await blocked('без права ipc письмо не отправить', () => {
+    const без = attacker(['ui'], 'ipc-no')
+    return без('plugins.send', ['кто-то', 'ev', {}])
+  })
+  await blocked('самому себе слать нельзя', () => d('plugins.send', ['ipc-evil', 'ev', {}]))
+  await check('письмо несуществующему плагину не «доставляется»', async () => {
+    // ipcSend в стенде не подставлен — значит, честный false, а не вид доставки.
+    const r = await d('plugins.send', ['нет-такого', 'ev', {}])
+    return r === false
+  })
+}
+
+console.log('\n── Перехват сообщений ──')
+{
+  const mw = await import('./middleware')
+  mw.clearAllInterceptors()
+
+  await blocked('без права перехватчик не поставить', () => {
+    const без = attacker(['messages.read', 'messages.write'], 'mw-no')
+    return без('messages.onBeforeSend', [fn])
+  })
+
+  await check('упавший перехватчик не съедает сообщение', async () => {
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'падучий', kind: 'send', fn: fn as any })
+    const r = await mw.runBeforeSend('привет', null, async () => { throw new Error('я сломан') })
+    mw.clearAllInterceptors()
+    return r.content === 'привет' && !r.cancel
+  })
+
+  await check('молчащий перехватчик не подвешивает отправку', async () => {
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'молчун', kind: 'send', fn: fn as any })
+    const t0 = Date.now()
+    const r = await mw.runBeforeSend('привет', null, () => new Promise(() => {}))
+    mw.clearAllInterceptors()
+    // Ждём не дольше своего срока и отдаём исходный текст.
+    return r.content === 'привет' && !r.cancel && Date.now() - t0 < mw.BEFORE_SEND_MS + 1500
+  })
+
+  await check('мусор из перехватчика не подменяет текст', async () => {
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'мусорщик', kind: 'send', fn: fn as any })
+    const r = await mw.runBeforeSend('привет', null, async () => 42 as any)
+    mw.clearAllInterceptors()
+    return r.content === 'привет'
+  })
+
+  await check('отмена только явная, а не «вернул undefined»', () =>
+    mw.applySendResult('текст', undefined).cancel === false
+    && mw.applySendResult('текст', { cancel: 'да' }).cancel === false
+    && mw.applySendResult('текст', { cancel: true }).cancel === true)
+
+  await check('показ отменить нельзя — только текст', () =>
+    mw.applyRenderResult('видно', { cancel: true }) === 'видно')
+
+  await check('перехватчик не раздувает сообщение без предела', () =>
+    mw.applySendResult('a', 'я'.repeat(mw.MAX_CONTENT * 3)).content.length === mw.MAX_CONTENT)
+
+  await check('снятый перехватчик перестаёт править показ', () => {
+    mw.clearAllInterceptors()
+    mw.addInterceptor({ pluginId: 'снимаемый', kind: 'render', fn: fn as any })
+    const было = mw.hasInterceptors('render')
+    mw.clearInterceptors('снимаемый')
+    return было && !mw.hasInterceptors('render')
+  })
+}
+
+console.log('\n── Соединения (WebSocket) ──')
+{
+  const { checkTarget } = await import('./netGuard')
+  const цель = { hosts: ['evil.example'], selfHost: 'ponoi.app', supaHost: 'db.supabase.co' }
+  // Список запрещённых адресов ТОТ ЖЕ, что у обычного запроса и у потока:
+  // третий способ выйти в сеть обязан упираться в те же стены.
+  await check('соединение: чужой домен не пустят', () =>
+    checkTarget('wss://not-declared.example/s', цель, 'wss:') !== null)
+  await check('соединение: к самому приложению нельзя', () =>
+    checkTarget('wss://ponoi.app/s', цель, 'wss:') !== null)
+  await check('соединение: к нашему серверу нельзя', () =>
+    checkTarget('wss://db.supabase.co/s', цель, 'wss:') !== null)
+  await check('соединение: ws без шифрования не пустят', () =>
+    checkTarget('ws://evil.example/s', цель, 'wss:') !== null)
+  await check('соединение: https по адресу сокета не пустят', () =>
+    checkTarget('https://evil.example/s', цель, 'wss:') !== null)
+  await check('объявленный домен по wss — проходит', () =>
+    checkTarget('wss://evil.example/s', цель, 'wss:') === null)
+  // Проверка «всё запрещено» ничего не значит без обратного случая.
+  await check('обычный запрос по-прежнему требует https, а не wss', () =>
+    checkTarget('wss://evil.example/s', цель) !== null && checkTarget('https://evil.example/s', цель) === null)
+
+  await blocked('без права net соединение не открыть', () => {
+    const без = attacker(['ui'], 'ws-no')
+    return без('net.ws', ['wss://evil.example/s', {}])
+  })
+
+  const ws = await import('./wsHub')
+  await check('в чужое соединение писать нельзя', () => {
+    try { ws.sendSocket('чужой', 999999, 'привет'); return false } catch { return true }
+  })
+  await check('чужое соединение не закрыть', () => ws.closeSocket('чужой', 999999) === false)
+}
+
+console.log('\n── Цвета оформления ──')
+{
+  const { parseTheme, themeCss, THEME_VAR_NAMES } = await import('./pluginTheme')
+
+  await check('чужая переменная не пройдёт', () => {
+    try { parseTheme({ 'display': 'none' }); return false } catch { return true }
+  })
+  await check('выдуманное имя не пройдёт молча', () => {
+    // «Применилось, но ничего не изменилось» — худший ответ из возможных.
+    try { parseTheme({ 'bg-primary': '#101015' }); return false } catch { return true }
+  })
+  await check('не-цвет не пройдёт', () => {
+    for (const v of ['red', 'url(https://чужой)', '#fff', 'rgb(0,0,0)', '#101015;}body{display:none']) {
+      try { parseTheme({ accent: v }); return false } catch { /* так и надо */ }
+    }
+    return true
+  })
+  await check('именем плагина из комментария не выйти', () => {
+    // Имя плагина — единственное, что попадает в текст стилей от него. Опасны
+    // здесь не слова, а знаки: «*/» закрыло бы комментарий, «<» — весь тег
+    // style, «{}» открыло бы своё правило. Их и проверяем.
+    const css = themeCss('evil*/}</style><script>x{', { accent: '#ff4500' })
+    const шапка = css.split('\n')[0]
+    // Закрывающая «*/» в строке ровно одна — та, что поставили мы сами.
+    const закрытий = шапка.split('*/').length - 1
+    return закрытий === 1 && !шапка.includes('<') && !шапка.includes('{')
+      && !шапка.includes('}') && css.includes('#ff4500')
+  })
+  await check('настоящее имя цвета всё-таки работает', () =>
+    Object.keys(parseTheme({ accent: '#FF4500' })).length === 1 && THEME_VAR_NAMES.includes('accent'))
+  await blocked('без права ui.theme перекрасить нельзя', () => {
+    const без = attacker(['ui'], 'theme-no')
+    return без('ui.setTheme', [{ accent: '#ff4500' }])
+  })
+}
+
+console.log('\n── Фоновые задачи ──')
+{
+  const bg = await import('./background')
+  bg.clearAllTasks()
+
+  await blocked('без права background задачу не завести', () => {
+    const без = attacker(['ui'], 'bg-no')
+    return без('background.every', [60000, fn, 'задача'])
+  })
+  await check('слишком частую задачу не заведут', () => {
+    try { bg.addTask('жадный', 5, 'каждые 5 мс'); return false } catch { return true }
+  })
+  await check('задач больше предела не заведут', () => {
+    bg.clearAllTasks()
+    for (let i = 0; i < bg.MAX_TASKS; i++) bg.addTask('жадный', 60000, 'з' + i)
+    try { bg.addTask('жадный', 60000, 'лишняя'); return false } catch { return true }
+    finally { bg.clearAllTasks() }
+  })
+  await check('чужую задачу не остановить', () => {
+    bg.clearAllTasks()
+    const t = bg.addTask('честный', 60000, 'моя')
+    const чужой = bg.removeTask('вредный', t.id)
+    const свой = bg.removeTask('честный', t.id)
+    bg.clearAllTasks()
+    return чужой === false && свой === true
+  })
+  await check('проспавшая задача не выстреливает залпом', () => {
+    // Вкладку спрятали на час: сроков прошло семьсот, но сработать задача
+    // обязана один раз, а следующий срок — от СЕЙЧАС, а не от прошлого.
+    const сейчас = 1_000_000_000
+    const задача = { id: 1, pluginId: 'x', everyMs: 5000, dueAt: сейчас - 3_600_000, runs: 0, label: 'з' }
+    const r = bg.dueNow([задача], сейчас)
+    return r.run.length === 1 && r.next.get(1) === сейчас + 5000
+  })
+}
+
+console.log('\n── Холст ──')
+{
+  const cv = await import('./canvasHub')
+  await check('высота холста зажата в границы', () =>
+    cv.canvasHeight(100000) === cv.CANVAS_MAX_H && cv.canvasHeight(-5) === cv.CANVAS_MIN_H
+    && cv.canvasHeight('чепуха') === 160)
+  await blocked('без права panel холст не получить', () => {
+    const без = attacker(['ui'], 'cv-no')
+    return без('ui.getCanvas', ['viz'])
+  })
+  await blocked('необъявленный холст не выдаётся', () => {
+    // Иначе плагин получил бы холст, которого человек никогда не увидит, —
+    // то есть «работает» в отчёте и пусто на экране.
+    const d = attacker([...ALL_PERMISSIONS], 'cv-yes')
+    return d('ui.getCanvas', ['ниоткуда'])
+  })
+}
+
+console.log('\n── Уборка за плагином ──')
+{
+  const cleanup = await import('./cleanup')
+  const исходник = readFileSync('src/lib/plugins/cleanup.ts', 'utf8')
+  await check('уборка знает про все пять видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 5)
+  await check('на каждый вид есть и «за этим», и «за всеми»', () => {
+    // Два списка — это два места, где можно забыть строку. Здесь он один, и
+    // каждая запись обязана иметь обе половины.
+    const пар = [...исходник.matchAll(/\{\s*one:\s*\w+,\s*all:\s*\w+\s*\}/g)].length
+    return пар === cleanup.SUBSYSTEM_COUNT
+  })
+}
+
 console.log(`\nИТОГ: пройдено ${pass}, пробито ${fail}`)
 process.exit(fail ? 1 : 0)

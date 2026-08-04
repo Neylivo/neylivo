@@ -16,6 +16,21 @@ export function isFnRef(v: unknown): v is FnRef {
   return !!v && typeof v === 'object' && typeof (v as FnRef).__fn === 'string'
 }
 
+/**
+ * Пометка «это не копировать, а передать» (v1.465.0).
+ *
+ * Диспетчер возвращает { __transfer: холст }, и только по этой пометке значение
+ * уезжает списком передачи. Пометка нужна ровно потому, что передача —
+ * необратимое действие: переданный объект в приложении перестаёт быть годным, и
+ * делать это «на всякий случай» со всем подряд нельзя.
+ */
+export interface Transferred { __transfer: Transferable }
+export function asTransfer(v: unknown): Transferable | null {
+  if (!v || typeof v !== 'object') return null
+  const t = (v as Transferred).__transfer
+  return t && typeof t === 'object' ? t : null
+}
+
 export interface SandboxHooks {
   /** Плагин вызвал метод API. Вернуть значение или бросить — оба доедут до плагина. */
   onCall: (method: string, args: unknown[]) => Promise<unknown>
@@ -71,7 +86,13 @@ export class PluginSandbox {
   private async handleCall(id: number, method: string, args: unknown[]) {
     try {
       const value = await this.hooks.onCall(String(method), Array.isArray(args) ? args : [])
-      this.post({ k: 'res', id, ok: true, value })
+      // v1.465.0: холст не копируется, а ПЕРЕДАЁТСЯ. OffscreenCanvas нельзя
+      // клонировать структурно — обычный postMessage на нём падает с
+      // DataCloneError, и плагин получал бы невнятную ошибку вместо холста.
+      // Диспетчер помечает такой ответ, и только он едет списком передачи.
+      const t = asTransfer(value)
+      if (t) this.post({ k: 'res', id, ok: true, value: t }, [t])
+      else this.post({ k: 'res', id, ok: true, value })
     } catch (err: any) {
       this.post({ k: 'res', id, ok: false, error: err?.message ?? String(err) })
     }
@@ -105,9 +126,12 @@ export class PluginSandbox {
     this.post({ k: 'ev', name, data })
   }
 
-  private post(msg: unknown) {
+  private post(msg: unknown, transfer?: Transferable[]) {
     if (this.dead || !this.worker) return
-    try { this.worker.postMessage(msg) } catch { /* воркер уже мёртв — молча, вызывающему это не важно */ }
+    try {
+      if (transfer && transfer.length) this.worker.postMessage(msg, transfer)
+      else this.worker.postMessage(msg)
+    } catch { /* воркер уже мёртв — молча, вызывающему это не важно */ }
   }
 
   /** Остановить плагин. Все висящие вызовы честно отклоняются, а не текут. */

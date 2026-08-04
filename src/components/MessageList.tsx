@@ -12,8 +12,9 @@ import { useUserFonts, type UserFonts } from '../lib/userFonts'
 import { toastOk, toastErr } from '../lib/toast'
 import { parseSys, fmtCallDur, parseInviteMeta, parseQuickLaunchMeta, parseGameLinkMeta, type SysMsg } from '../lib/sysmsg'
 import { openGameLink, terrariaLaunch, steamConnectUrl } from '../lib/gameShare'
-import { useMessageActions } from '../lib/plugins/registry'
+import { useMessageActions, useContextItems } from '../lib/plugins/registry'
 import { invokePlugin, emitPluginEvent } from '../lib/plugins/host'
+import { renderedContent, subscribeRendered, hasInterceptors } from '../lib/plugins/middleware'
 import { setChatBridge } from '../lib/plugins/chatApi'
 import { useBackClose } from '../lib/mobileBack'
 import { QuickLaunchCard } from './QuickLaunchCard'
@@ -377,7 +378,10 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   const { settings } = useSettings()
   // v1.112.0: шрифты авторов (ник + сообщения) — видны всем; чужие отключаются настройкой.
   const fontsOf = useUserFonts(messages.map(m => m.author))
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // v1.465.0: в меню запоминается и выделенный текст. Спрашивать getSelection в
+  // момент отрисовки пунктов поздно: щелчок по пункту сбивает выделение, и
+  // плагин получил бы пустоту вместо того, что человек выделил.
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number; sel?: string } | null>(null)
   // v1.187.0: сообщения от игнорируемых (ЛС, см. DmCtxMenu.tsx) свёрнуты, пока не раскроют вручную.
   const [revealedIgnored, setRevealedIgnored] = useState<Set<string>>(new Set())
   const [pickFor, setPickFor] = useState<string | null>(null)
@@ -389,6 +393,26 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   const [, setEmojiVer] = useState(0)
   // v1.286.0: пункты меню сообщения, добавленные плагинами (см. lib/plugins/registry).
   const pluginActions = useMessageActions()
+  // v1.465.0: перехватчик показа. Ответ приходит из воркера асинхронно, поэтому
+  // первый раз рисуется исходный текст, а посчитанное приезжает следом и
+  // перерисовывает — иначе пришлось бы ждать чужой код на каждой перерисовке
+  // при прокрутке.
+  const [, setRenderVer] = useState(0)
+  useEffect(() => subscribeRendered(() => setRenderVer(v => v + 1)), [])
+  const shown = (m: UiMessage): string => {
+    const c = m.content ?? ''
+    if (!c || !hasInterceptors('render')) return c
+    return renderedContent(
+      { id: m.id, content: c, author: m.author, mine: m.author === currentUser },
+      (pid, fn, a) => invokePlugin(pid, fn, a),
+    )
+  }
+  const pluginCtx = useContextItems('message')
+  const pluginSel = useContextItems('selection')
+  /** Что человек выделил прямо сейчас. Пусто — выделения нет. */
+  const selNow = () => {
+    try { return (window.getSelection?.()?.toString() ?? '').trim().slice(0, 8000) } catch { return '' }
+  }
 
   // v1.286.0: событие 'message' для плагинов, подписавшихся с разрешением
   // messages.read. Два фильтра сразу: id не должен быть уже виденным (перерисовки,
@@ -667,7 +691,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                 e.preventDefault(); e.stopPropagation()
                 onSelectToggle?.(m.id, e.shiftKey)
               }) : undefined}
-              onContextMenu={e => { e.preventDefault(); if (selectMode) return; setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}
+              onContextMenu={e => { e.preventDefault(); if (selectMode) return; setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY, sel: selNow() }) }}
               /* v1.426.0: долгое нажатие открывает то же меню сообщения.
                  На телефоне меню не открывалось НИЧЕМ: правого щелчка там нет, а
                  долгое нажатие браузер отдаёт выделению текста и события
@@ -677,7 +701,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               /* v1.433.0: отсчёт общий (lib/longPress.ts). Здесь он отменялся
                  на первом же pointermove — то есть на дрожи руки, которая идёт
                  постоянно: меню на телефоне почти не открывалось. */
-              onPointerDown={e => { if (selectMode) return; startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at }) }) }}
+              onPointerDown={e => { if (selectMode) return; startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at, sel: selNow() }) }) }}
               onDoubleClick={e => {
                 // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
                 // двойным щелчком при этом не ломается: если что-то выделилось, человек
@@ -717,7 +741,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                     const long = isLongText(m.content)
                     const open = !!expanded[m.id]
                     return <>
-                      <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '') + (long && !open ? ' msg-clamp' : '')} style={{ fontFamily: uf.msg }}>{renderContent(m.content, roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}><Icon name="edit" size={11} /></span>}</div>
+                      <div className={'msg-txt' + (settings.bigEmoji && isEmojiOnly(m.content) ? ' big-emoji' : '') + (long && !open ? ' msg-clamp' : '')} style={{ fontFamily: uf.msg }}>{renderContent(shown(m), roleColors)}{m.edited && grouped && <span className="msg-edited" title={(m as any).edited_at ? 'Отредактировано ' + timeFull((m as any).edited_at) : 'Сообщение было отредактировано'}><Icon name="edit" size={11} /></span>}</div>
                       {long && <button className="msg-more" onClick={() => setExpanded(e => ({ ...e, [m.id]: !e[m.id] }))}>
                         {open ? 'Свернуть' : 'Показать полностью'}
                       </button>}
@@ -760,7 +784,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
                   {QUICK.map(e => <button key={e} onClick={() => { onReact?.(m.id, e); setPickFor(null) }}><Em>{e}</Em></button>)}
                 </div>}
                 {m.author === currentUser && onStartEdit && m.content && !fwd && <button title="Изменить" onClick={() => onStartEdit(m)}><Icon name="edit" size={18} /></button>}
-                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY }) }}><Icon name="more" size={18} /></button>
+                <button title="Ещё" onClick={e => { setPickFor(null); setMenu({ id: m.id, x: e.clientX, y: e.clientY, sel: selNow() }) }}><Icon name="more" size={18} /></button>
               </div>
             </div>
           </Fragment>
@@ -795,7 +819,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {/* v1.286.0: действия над сообщением от плагинов. Плагин получает только
               id, автора и текст — ни вложений, ни служебных полей. */}
-          {pluginActions.length > 0 ? <div className="ctx-sep" /> : null}
+          {pluginActions.length > 0 || pluginCtx.length > 0 || (pluginSel.length > 0 && menu.sel) ? <div className="ctx-sep" /> : null}
           {pluginActions.map(a => (
             <Fragment key={a.pluginId + ':' + a.key}>
               {item(a.label, a.icon, () => {
@@ -803,6 +827,27 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               })}
             </Fragment>
           ))}
+          {/* v1.465.0: пункты из ponoi.ui.addContextMenu. Для сообщения плагин
+              получает то же, что и в addMessageAction, — ни вложений, ни
+              служебных полей. */}
+          {pluginCtx.map(c => (
+            <Fragment key={'ctx:' + c.pluginId + ':' + c.key}>
+              {item(c.label, c.icon, () => {
+                void invokePlugin(c.pluginId, c.onClick, [{ id: menuMsg.id, author: menuMsg.author, content: menuMsg.content ?? '' }])
+              })}
+            </Fragment>
+          ))}
+          {/* Пункты для выделенного текста показываются только когда текст
+              действительно выделен: иначе это мёртвая строка в меню, которая
+              ничего не делает. Плагину уходит ровно выделенное, а не всё
+              сообщение — он просил «selection», а не «message». */}
+          {menu.sel ? pluginSel.map(c => (
+            <Fragment key={'sel:' + c.pluginId + ':' + c.key}>
+              {item(c.label, c.icon, () => {
+                void invokePlugin(c.pluginId, c.onClick, [{ text: menu.sel, messageId: menuMsg.id }])
+              })}
+            </Fragment>
+          )) : null}
           {img ? <>
             <div className="ctx-sep" />
             {isGif ? item('Скопировать гифку', 'image', () => { copyGif(img) })

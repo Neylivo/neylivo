@@ -100,6 +100,35 @@ const ponoi = {
     // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
     confirm: (opt) => call('ui.confirm', [opt || {}]),
     prompt: (opt) => call('ui.prompt', [opt || {}]),
+    // v1.465.0: свой пункт в меню по правой кнопке — сообщения, выделенного
+    // текста или человека.
+    addContextMenu: (opt) => call('ui.addContextMenu', [opt || {}]),
+    // v1.465.0: цвета оформления. Не CSS: словарь «имя цвета → #rrggbb», список
+    // имён закрытый (см. pluginTheme.ts). Вёрстку этим не сломать.
+    setTheme: (colors) => call('ui.setTheme', [colors || {}]),
+    clearTheme: () => call('ui.clearTheme', []),
+    // v1.465.0: холст панели. Возвращает НАСТОЯЩИЙ OffscreenCanvas — он не
+    // копируется, а передаётся сюда, поэтому дальше работает обычный
+    // getContext('2d'|'webgl') и всё, что к нему прилагается.
+    //
+    // Строку { type: 'canvas', key: '…' } надо сперва объявить в панели: холст
+    // живёт в ней, и без неё показывать его негде.
+    getCanvas: (key) => call('ui.getCanvas', [String(key)]),
+  },
+  // v1.465.0: разговор с другими плагинами. Разрешение ipc нужно ОБОИМ: и тому,
+  // кто шлёт, и тому, кто подписан на событие 'ipc'.
+  plugins: {
+    send: (pluginId, event, data) => call('plugins.send', [String(pluginId), String(event), data]),
+  },
+  // v1.465.0: работа по расписанию. Отличие от обычного setInterval здесь не в
+  // том, что «иначе не работало» (работало), а в том, что задачу видно человеку
+  // на карточке плагина и он может её остановить. См. background.ts.
+  background: {
+    every: (ms, handler, label) => {
+      if (typeof handler !== 'function') throw new Error('ponoi.background.every: вторым доводом нужна функция')
+      return call('background.every', [Number(ms), handler, String(label || '')])
+    },
+    stop: (id) => call('background.stop', [Number(id)]),
   },
   clipboard: {
     write: (text) => call('clipboard.write', [String(text)]),
@@ -128,6 +157,18 @@ const ponoi = {
     recent: (limit) => call('messages.recent', [Number(limit) || 20]),
     react: (messageId, emoji) => call('messages.react', [String(messageId), String(emoji)]),
     remove: (messageId) => call('messages.remove', [String(messageId)]),
+    // v1.465.0: перехватчики. Обработчик получает { content, channelId } и
+    // возвращает либо строку, либо { content }, либо { cancel: true }. Вернул
+    // что-то другое или упал — текст остаётся прежним: сломанный плагин не
+    // должен отбирать у человека возможность написать сообщение.
+    onBeforeSend: (fn) => {
+      if (typeof fn !== 'function') throw new Error('ponoi.messages.onBeforeSend: нужна функция')
+      return call('messages.onBeforeSend', [fn])
+    },
+    onBeforeRender: (fn) => {
+      if (typeof fn !== 'function') throw new Error('ponoi.messages.onBeforeRender: нужна функция')
+      return call('messages.onBeforeRender', [fn])
+    },
   },
   storage: {
     get: (key) => call('storage.get', [String(key)]),
@@ -156,6 +197,38 @@ const ponoi = {
     stream: (url, init, onChunk) => {
       if (typeof onChunk !== 'function') throw new Error('ponoi.net.stream: третьим доводом нужна функция — ей приходят куски ответа')
       return call('net.stream', [String(url), init || {}, onChunk])
+    },
+    // v1.465.0: постоянное соединение. Сам сокет живёт в приложении (в песочнице
+    // WebSocket вырезан вместе с fetch — иначе проверку домена можно было бы
+    // обойти), плагин получает ручку с send/close и обработчиками.
+    //
+    // Пришедшее до того, как повесили onMessage, не теряется, а ждёт в очереди:
+    // соединение открывается мгновенно, а обработчик вешают строкой ниже — без
+    // очереди первые сообщения пропадали бы, и это выглядело бы как «иногда не
+    // приходит».
+    ws: async (url) => {
+      const ждут = []
+      let наСообщение = null, наЗакрытие = null, наОткрытие = null
+      let закрыт = false
+      const id = await call('net.ws', [String(url), {
+        onOpen: () => { if (наОткрытие) наОткрытие() },
+        onMessage: (t) => { if (наСообщение) отдать(t); else ждут.push(t) },
+        onClose: (code, reason) => { закрыт = true; if (наЗакрытие) наЗакрытие(code, reason) },
+      }])
+      function отдать(t) { try { наСообщение(t) } catch (e) { self.postMessage({ k: 'err', error: String((e && e.message) || e) }) } }
+      return {
+        id: id,
+        get closed() { return закрыт },
+        send: (data) => call('net.wsSend', [id, typeof data === 'string' ? data : JSON.stringify(data)]),
+        close: () => call('net.wsClose', [id]),
+        onMessage: (fn) => {
+          наСообщение = fn
+          const очередь = ждут.splice(0, ждут.length)
+          for (const t of очередь) отдать(t)
+        },
+        onClose: (fn) => { наЗакрытие = fn },
+        onOpen: (fn) => { наОткрытие = fn },
+      }
     },
   },
   // v1.333.0: эффект своего голоса в звонке. Плагин только выбирает — обработка

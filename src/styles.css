@@ -6280,6 +6280,29 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 .plug-optcol { flex-direction: column; align-items: stretch; gap: 8px; }
 .plug-slider { display: flex; align-items: center; gap: 10px; max-width: 220px; }
 
+/* ══ Холст плагина (v1.465.0) ══════════════════════════════════════════════
+   Коробка держит высоту, объявленную плагином, а сам холст тянется на всю
+   ширину: буфер рисования у него постоянный (CANVAS_W), поэтому картинка
+   масштабируется, а не обрезается на узком экране телефона. */
+.plugpanel-cbox {
+  width: 100%; border-radius: var(--r-sm, 8px); overflow: hidden;
+  background: rgba(var(--ov, 255, 255, 255), .04);
+}
+.plugpanel-canvas { display: block; width: 100%; height: 100%; }
+
+/* ══ Что плагин делает в фоне (v1.465.0) ═══════════════════════════════════
+   Строки на карточке плагина: фоновая задача и открытое соединение. Смысл в
+   том, чтобы это было ВИДНО там же, где плагин выключают. */
+.plug-bg { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.plug-bg-row {
+  display: flex; align-items: center; gap: 8px; min-height: 32px;
+  padding: 6px 10px; border-radius: var(--r-sm, 8px);
+  background: rgba(var(--ov, 255, 255, 255), .05); font-size: 13px;
+}
+.plug-bg-t { font-weight: 600; }
+.plug-bg-d { color: var(--mut); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plug-bg-row button { flex: none; }
+
 /* ══ Гифки по бокам плеера (v1.418.0) ══════════════════════════════════════
    У них не было ни одного правила о том, ГДЕ им быть. Из-за этого они вставали
    обычными элементами в колонку плеера — над обложкой и под ней, распихивая

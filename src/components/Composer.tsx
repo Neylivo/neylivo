@@ -25,6 +25,7 @@ import { ShareBuildModal, type ShareCardCustom } from './ShareBuildModal'
 import { ShareGameLinkModal } from './ShareGameLinkModal'
 import { fetchServerBotCommands, invokeBotCommand, type BotCommand } from '../lib/botApi'
 import { useComposerButtons, useSlashCommands } from '../lib/plugins/registry'
+import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { invokePlugin, claimHostContext, releaseHostContext, emitPluginEvent } from '../lib/plugins/host'
 import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
@@ -602,7 +603,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       finally { setBusy(false); sendingRef.current = false }
       return
     }
-    const t = polish(applySlash(text.trim()))
+    let t = polish(applySlash(text.trim()))
     if ((!t && files.length === 0) || !user) return
     // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
     if (t && files.length === 0 && !t.replace(/[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g, '').trim()) return
@@ -637,6 +638,26 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     sendingRef.current = true
     setBusy(true)
     try {
+      // v1.465.0: перехватчики плагинов — последними, после всех проверок прав.
+      //
+      // Порядок важен: плагин правит то, что человек действительно имеет право
+      // отправить. Если бы перехват шёл раньше, плагин мог бы дописать @everyone
+      // человеку, которому упоминания запрещены, и проверка выше уже прошла бы.
+      //
+      // Ничего не делает, пока перехватчиков нет, — то есть у подавляющего
+      // большинства путь отправки остаётся ровно прежним, байт в байт.
+      if (t && hasInterceptors('send')) {
+        const r = await runBeforeSend(t, channelId ?? null,
+          (pid, fn, a) => invokePlugin(pid, fn, a))
+        if (r.cancel) {
+          // Отмена — это действие плагина, а не сбой сети: человек обязан
+          // понять, ПОЧЕМУ его сообщение не ушло, и кто именно его отменил.
+          toastErr('Сообщение отменено плагином «' + (r.by ?? '?') + '»')
+          setBusy(false); sendingRef.current = false
+          return
+        }
+        t = r.content
+      }
       let attach: { url: string; type: string } | undefined
       const pendingFiles = files
       if (files.length) {
