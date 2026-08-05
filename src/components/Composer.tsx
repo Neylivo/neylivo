@@ -30,6 +30,8 @@ import { invokePlugin, claimHostContext, releaseHostContext, emitPluginEvent } f
 import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { slashPrefix, parseSlash, buildArgs, splitArgs, argHint } from '../lib/slashCmd'
+import { shouldSend } from '../lib/sendKey'
+import { IS_MOBILE } from '../lib/mobile'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 // v1.352.0: подсказка эмодзи по «:», как в Discord и Telegram. Разбор хвоста
@@ -972,17 +974,22 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             if (e.key === 'ArrowUp' && !e.altKey && !text && !isEditing) { e.preventDefault(); window.dispatchEvent(new Event('ponoi-edit-last')); return }
             if (e.key === 'Escape') { setEmoji(false); setGif(false); if (isEditing) onCancelEdit?.(); else onCancelReply?.(); return }
             if (e.key === 'Enter') {
-              const hasCtrl = e.ctrlKey || e.metaKey
-              // v1.163.0: textarea больше не отправляет форму сама по Enter (как раньше
-              // делал однострочный input) — многострочность даёт Shift+Enter/обычный
-              // Enter вставить перенос, смотря по режиму settings.sendKey.
-              if (settings.sendKey === 'ctrl') {
-                if (hasCtrl) { e.preventDefault(); submit(e as any) }
-                // иначе — обычный Enter вставляет перенос строки (поведение textarea по умолчанию)
-              } else if (!e.shiftKey && !hasCtrl) {
-                e.preventDefault(); submit(e as any)
-              }
-              // Shift+Enter (или Ctrl+Enter в режиме 'enter') — перенос строки по умолчанию
+              // v1.484.0: решает одна функция (lib/sendKey.ts), а не набор
+              // условий здесь. На телефоне обычный Enter больше НЕ отправляет:
+              // при вставке из буфера и автозамене экранная клавиатура шлёт
+              // такое же событие, и сообщение уходило само — владелец принёс
+              // это как «вставляешь, а оно сразу отправляется».
+              const отправить = shouldSend({
+                ctrl: e.ctrlKey || e.metaKey,
+                shift: e.shiftKey,
+                // Набор ещё идёт: подтверждение слова выглядит как Enter.
+                composing: (e.nativeEvent as any)?.isComposing === true
+                  || (e.nativeEvent as any)?.keyCode === 229,
+                mobile: IS_MOBILE,
+                sendKey: settings.sendKey === 'ctrl' ? 'ctrl' : 'enter',
+              })
+              if (отправить) { e.preventDefault(); submit(e as any) }
+              // Иначе — перенос строки: поведение textarea по умолчанию.
             }
           }} />
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { isComposingKey } from '../lib/sendKey'
 import { supabase } from '../lib/supabase'
 import { openThread } from '../lib/friends'
 import { myServers } from '../lib/servers'
@@ -142,7 +143,7 @@ export function ForwardModal({ src, meId, meName, onClose }:
         </div>
         <input className="modal-in fwd-comment" placeholder="Добавить комментарий (необязательно)" value={comment}
           onChange={e => setComment(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send() } }} />
+          onKeyDown={e => { if (e.key === 'Enter' && !isComposingKey(e)) { e.preventDefault(); send() } }} />
         <div className="modal-foot">
           <button className="modal-ghost" onClick={onClose}>Отмена</button>
           <button className="modal-primary" disabled={!count || busy} onClick={send}>

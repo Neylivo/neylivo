@@ -1,5 +1,6 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { isComposingKey } from '../lib/sendKey'
 import { Avatar } from './Avatar'
 import { supabase } from '../lib/supabase'
 import { useBackClose } from '../lib/mobileBack'
@@ -370,7 +371,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
           {!isMe && !isBot && <div className="mini-msgbox">
                 <input placeholder={'Сообщение для @' + data.name} value={msg}
                   onChange={e => setMsg(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') sendDm(); if (e.key === 'Escape') onClose() }} />
+                  onKeyDown={e => { if (e.key === 'Enter' && !isComposingKey(e)) sendDm(); if (e.key === 'Escape') onClose() }} />
                 <span className="mini-msgbox-smile"><Icon name="smile" size={18} /></span>
               </div>}
         </div>

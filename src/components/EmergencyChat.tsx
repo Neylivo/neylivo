@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isComposingKey } from '../lib/sendKey'
 import { Icon } from './icons'
 import {
   ecToken, ecUsername, ecLogout, ecRegister, ecLogin, ecFetchMessages, ecSendMessage, ecConnect, type EcMessage,
@@ -83,7 +84,7 @@ export function EmergencyChat({ onClose }: { onClose: () => void }) {
             {err && <div className="ec-err">{err}</div>}
             <div className="ec-composer">
               <input className="modal-in" placeholder="Написать в аварийный чат…" value={text}
-                onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send() }} />
+                onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !isComposingKey(e)) send() }} />
               <button className="modal-primary" onClick={send} disabled={!text.trim()}>Отправить</button>
             </div>
             <button className="ec-logout" onClick={() => { ecLogout(); setUsername(null); setMessages([]) }}>Выйти из аварийного чата</button>

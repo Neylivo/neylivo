@@ -2361,5 +2361,47 @@ console.log('\n── Отметка «просмотрено» (v1.477.0) ─�
     !seen('не дата' as never, метка(Date.now())))
 }
 
+console.log('\n── Отправка по Enter (v1.484.0) ──')
+{
+  const { shouldSend, isComposingKey } = await import('./sendKey')
+  const к = (o: Partial<Parameters<typeof shouldSend>[0]>) => shouldSend({
+    ctrl: false, shift: false, composing: false, mobile: false, sendKey: 'enter', ...o,
+  })
+
+  check('на компьютере обычный Enter отправляет, как и раньше', () => к({}) === true)
+  check('на ТЕЛЕФОНЕ обычный Enter не отправляет — это перенос строки', () =>
+    к({ mobile: true }) === false)
+  check('на телефоне Ctrl+Enter всё же отправляет — если есть настоящая клавиатура', () =>
+    к({ mobile: true, ctrl: true }) === true)
+  check('пока клавиатура набирает слово, не отправляем нигде', () =>
+    к({ composing: true }) === false && к({ composing: true, ctrl: true }) === false)
+  check('Shift+Enter — всегда перенос строки', () =>
+    к({ shift: true }) === false && к({ shift: true, mobile: true }) === false)
+  check('в режиме «Ctrl+Enter» обычный Enter не отправляет', () =>
+    к({ sendKey: 'ctrl' }) === false && к({ sendKey: 'ctrl', ctrl: true }) === true)
+
+  check('набор распознаётся обоими признаками', () =>
+    isComposingKey({ nativeEvent: { isComposing: true } })
+    && isComposingKey({ nativeEvent: { keyCode: 229 } })
+    && !isComposingKey({ nativeEvent: { keyCode: 13 } })
+    && !isComposingKey({}))
+
+  const { readFileSync } = await import('node:fs')
+  check('поле ввода спрашивает правило, а не решает само', () => {
+    const src = readFileSync('src/components/Composer.tsx', 'utf8')
+    // Прежний набор условий прямо в обработчике: из-за него «не отправлять на
+    // телефоне» пришлось бы дописывать в двух местах сразу.
+    return src.includes('shouldSend({') && !/settings\.sendKey === 'ctrl'\) \{\s*\n\s*if \(hasCtrl\)/.test(src)
+  })
+  check('все поля, которые отправляют сообщение, знают про набор', () => {
+    for (const f of ['src/components/EmergencyChat.tsx', 'src/components/MiniProfile.tsx',
+                     'src/components/ForwardModal.tsx']) {
+      const s = readFileSync(f, 'utf8')
+      if (!s.includes('isComposingKey')) throw new Error('без проверки набора: ' + f)
+    }
+    return true
+  })
+}
+
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
