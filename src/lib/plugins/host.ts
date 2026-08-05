@@ -6,6 +6,7 @@ import type { InstalledPlugin } from './types'
 // v1.465.0: за плагином надо убирать не только то, что он добавил в интерфейс.
 import { cleanupPlugin } from './cleanup'
 import { setTaskRunner } from './background'
+import { CtxHolder } from './hostCtx'
 
 // v1.286.0: связывает всё вместе — поднимает песочницы включённых плагинов, роутит
 // вызовы в api.ts, раздаёт события и гасит сломавшихся. Один плагин не должен
@@ -59,34 +60,25 @@ export function clearPluginLog(id: string) { logs.delete(id); notify() }
 
 // Контекст подставляет приложение: он зависит от того, какой канал открыт сейчас,
 // поэтому живёт изменяемой ссылкой, а не копируется в каждый плагин при старте.
-let ctx: HostContext = {
+const ПУСТО: HostContext = {
   sendMessage: async () => { throw new Error('Нет открытого канала') },
   toast: () => {},
 }
+// v1.469.0: правило владения вынесено в hostCtx.ts. Не ради красоты: с этой
+// версии система плагинов грузится не сразу, и до её загрузки владение помнит
+// прослойка (bridge.ts). Две копии правила разошлись бы — и вернулась бы
+// поломка «плагин пишет не в тот чат», против которой правило и написано.
+const держатель = new CtxHolder<HostContext>(ПУСТО)
+const ctx = { get current() { return держатель.current() } }
 
-// v1.293.0: у контекста есть ВЛАДЕЛЕЦ, и это важно.
-//
-// Полей ввода на экране одновременно до трёх: личка, канал сервера и открытая
-// ветка — все смонтированы разом. Раньше каждое из них просто присваивало контекст
-// на каждом своём рендере, и побеждало то, которое отрисовалось последним. То есть
-// плагин, отправляющий сообщение, мог написать не в тот чат, который человек видит
-// перед собой, — причём непредсказуемо, от рендера к рендеру.
-//
-// Теперь владельцем становится то поле ввода, с которым человек работает
-// последним (по фокусу), а на пустое место может встать любое — иначе до первого
-// клика по полю плагину было бы некуда писать.
-let ctxOwner: string | null = null
-
+// v1.293.0: у контекста есть ВЛАДЕЛЕЦ, и это важно — см. hostCtx.ts, там
+// написано, против какой поломки это правило.
 export function claimHostContext(owner: string, next: HostContext, force: boolean) {
-  if (!force && ctxOwner !== null && ctxOwner !== owner) return
-  ctxOwner = owner
-  ctx = next
+  держатель.claim(owner, next, force)
 }
 
 export function releaseHostContext(owner: string) {
-  if (ctxOwner !== owner) return
-  ctxOwner = null
-  ctx = { sendMessage: async () => { throw new Error('Нет открытого канала') }, toast: () => {} }
+  держатель.release(owner)
 }
 
 export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
@@ -97,8 +89,8 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
   // Диспетчер создаётся один раз, а не на каждый вызов: внутри него живут проверки
   // разрешений, и пересобирать их на каждый чих незачем.
   const dispatch = createDispatcher(plugin, {
-    sendMessage: text => ctx.sendMessage(text),
-    toast: text => ctx.toast(text),
+    sendMessage: text => ctx.current.sendMessage(text),
+    toast: text => ctx.current.toast(text),
     // v1.445.0: поток отдаёт куски ответа обработчику плагина. Ищем песочницу
     // по имени, а не держим ссылку: диспетчер создаётся раньше песочницы, и к
     // моменту первого потока плагин уже запущен.
@@ -216,7 +208,7 @@ export async function invokePlugin(pluginId: string, ref: FnRef, args: unknown[]
   } catch (err: any) {
     // Упавший обработчик — не повод убивать плагин целиком (в отличие от ошибки
     // при загрузке): показываем причину и живём дальше.
-    ctx.toast(`Плагин «${getPlugin(pluginId)?.manifest.name ?? pluginId}»: ${err?.message ?? err}`)
+    ctx.current.toast(`Плагин «${getPlugin(pluginId)?.manifest.name ?? pluginId}»: ${err?.message ?? err}`)
     throw err
   }
 }

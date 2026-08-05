@@ -1,5 +1,5 @@
 import { getPlugin, upsertPlugin } from './store'
-import { startPlugin } from './host'
+import { ensureHost } from './bridge'
 import type { PluginManifest } from './types'
 
 // v1.286.0: установка одна на два пути — из файла в настройках и из карточки в чате.
@@ -19,5 +19,16 @@ export async function installPlugin(manifest: PluginManifest, code: string, sour
     authoredHere,
     storage: prev?.storage ?? {},
   })
-  await startPlugin(getPlugin(manifest.id)!)
+  // v1.469.0: система плагинов подгружается здесь, а не статически.
+  //
+  // Этот файл зовут из карточки плагина В ПЕРЕПИСКЕ — то есть из самого горячего
+  // кода, который грузится всем и всегда. Статическая ссылка отсюда утаскивала
+  // всю систему плагинов в стартовую сборку даже тем, у кого плагинов нет вовсе;
+  // ради этого разведения вся правка и делалась, и ловилось это только замером.
+  //
+  // Через прослойку, а не прямым import: она заодно передаёт хосту накопленное
+  // владение полем ввода, и только что поставленный плагин сразу знает, в какой
+  // чат писать, — а не с первого клика по полю.
+  const host = await ensureHost()
+  await host.startPlugin(getPlugin(manifest.id)!)
 }

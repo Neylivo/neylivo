@@ -37,7 +37,7 @@ import { lazyNamed } from './lib/lazyScreen'
 // загрузки приходилось всем и каждый раз.
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 const Home = lazyNamed(() => import('./components/Home'), 'Home')
-import { startEnabledPlugins, invokePlugin, emitToPlugin, emitPluginEvent } from './lib/plugins/host'
+import { startEnabledPlugins, invokePlugin, emitToPlugin, emitPluginEvent } from './lib/plugins/bridge'
 import { pluginsDisabled, setPluginsDisabled, getHotkeys } from './lib/plugins/registry'
 import { comboFromEvent, isComboComplete } from './lib/keybind'
 

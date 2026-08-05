@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePanels, type PanelSlot, type SettingsRow } from '../lib/plugins/registry'
-import { invokePlugin, emitToPlugin } from '../lib/plugins/host'
+import { invokePlugin, emitToPlugin } from '../lib/plugins/bridge'
 import { readStorage, writeStorage } from '../lib/plugins/store'
 import { ensureCanvas } from '../lib/plugins/canvasHub'
 

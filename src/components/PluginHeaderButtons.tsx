@@ -1,5 +1,5 @@
 import { useHeaderButtons } from '../lib/plugins/registry'
-import { invokePlugin } from '../lib/plugins/host'
+import { invokePlugin } from '../lib/plugins/bridge'
 import { Icon } from './icons'
 
 // v1.467.0: кнопки плагинов в шапке приложения.

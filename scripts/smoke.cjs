@@ -61,7 +61,13 @@ const ignorable = (m) => IGNORE.some(re => re.test(m))
 
 // Куски, которых при старте быть НЕ должно: ради этого делались v1.288–v1.289,
 // и без проверки один неосторожный статический импорт вернёт всё назад незаметно.
-const MUST_BE_LAZY = ['livekit-client', 'Settings-', 'ServerSettings-', 'MusicPlayer-', 'CallRoom-', 'GameStatsModal-', 'WallDraw-', 'EmergencyChat-', 'DevPortal-', 'model-viewer-', 'e2ee.worker-']
+// v1.469.0: система плагинов. Ей место в ленивом куске: у человека БЕЗ плагинов
+// она не делает ничего, а весит больше сотни килобайт. До этой версии она ехала
+// в стартовой сборке всем и всегда — потому что её звали из чата, из шапки и из
+// карточки плагина в переписке. Поймать это можно было только замером, поэтому
+// здесь и стоит сторож: одна статическая ссылка из горячего кода — и всё
+// вернётся, причём молча.
+const MUST_BE_LAZY = ['livekit-client', 'Settings-', 'ServerSettings-', 'MusicPlayer-', 'CallRoom-', 'GameStatsModal-', 'WallDraw-', 'EmergencyChat-', 'DevPortal-', 'model-viewer-', 'e2ee.worker-', 'host-']
 
 const problems = []
 const assets = []

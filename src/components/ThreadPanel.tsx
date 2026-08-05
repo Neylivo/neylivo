@@ -4,7 +4,7 @@
 // закреп/реакции/правка/вложения работают через те же функции reactions.ts,
 // что и у обычного канала — ничего не дублируем.
 import { useEffect, useRef, useState } from 'react'
-import { invokePlugin } from '../lib/plugins/host'
+import { invokePlugin } from '../lib/plugins/bridge'
 import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { supabase } from '../lib/supabase'
 import { toastErr } from '../lib/toast'

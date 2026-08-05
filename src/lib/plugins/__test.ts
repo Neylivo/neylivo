@@ -1165,6 +1165,106 @@ for (const p of OFFICIAL_PLUGINS) {
     })
   }
 
+  // ── Система плагинов вне стартовой сборки (v1.469.0) ───────────────────
+  console.log('\n-- Правило владения полем ввода и ленивая загрузка --')
+  {
+    const { CtxHolder } = await import('./hostCtx')
+
+    // Правило существует против настоящей поломки (v1.293.0): полей ввода на
+    // экране до трёх — личка, канал и ветка, — и плагин писал не в тот чат,
+    // который человек видит. Проверяем именно те случаи, из-за которых оно есть.
+    check('на пустое место встаёт любой', () => {
+      const h = new CtxHolder<string>('пусто')
+      h.claim('личка', 'ЛИЧКА', false)
+      return h.current() === 'ЛИЧКА' && h.currentOwner() === 'личка'
+    })
+
+    check('чужое владение мягкой заявкой не отнимается', () => {
+      // Именно это и ломалось: последний отрисовавшийся забирал контекст себе.
+      const h = new CtxHolder<string>('пусто')
+      h.claim('личка', 'ЛИЧКА', false)
+      h.claim('канал', 'КАНАЛ', false)
+      return h.current() === 'ЛИЧКА'
+    })
+
+    check('фокус перебивает: с кем человек работает, тот и владеет', () => {
+      const h = new CtxHolder<string>('пусто')
+      h.claim('личка', 'ЛИЧКА', false)
+      h.claim('канал', 'КАНАЛ', true)
+      return h.current() === 'КАНАЛ' && h.currentOwner() === 'канал'
+    })
+
+    check('свою заявку можно обновить и без фокуса', () => {
+      // Поле ввода перерисовалось — контекст должен обновиться, а не застрять.
+      const h = new CtxHolder<string>('пусто')
+      h.claim('канал', 'КАНАЛ-1', false)
+      h.claim('канал', 'КАНАЛ-2', false)
+      return h.current() === 'КАНАЛ-2'
+    })
+
+    check('отпускает только владелец', () => {
+      const h = new CtxHolder<string>('пусто')
+      h.claim('канал', 'КАНАЛ', false)
+      h.release('личка')
+      const чужой = h.current()
+      h.release('канал')
+      return чужой === 'КАНАЛ' && h.current() === 'пусто' && !h.has()
+    })
+
+    check('после отпускания место снова свободно', () => {
+      const h = new CtxHolder<string>('пусто')
+      h.claim('канал', 'КАНАЛ', false)
+      h.release('канал')
+      h.claim('личка', 'ЛИЧКА', false)
+      return h.current() === 'ЛИЧКА'
+    })
+
+    check('правило владения существует в ОДНОМ экземпляре', () => {
+      // Две копии разошлись бы, и вернулась бы поломка «плагин пишет не в тот
+      // чат»: до загрузки системы плагинов владение помнит прослойка, после —
+      // хост, и правило у них обязано быть буквально одно.
+      const host = readFileSync('src/lib/plugins/host.ts', 'utf8')
+      const bridge = readFileSync('src/lib/plugins/bridge.ts', 'utf8')
+      if (!host.includes('CtxHolder') || !bridge.includes('CtxHolder')) {
+        throw new Error('кто-то из двоих не пользуется общим правилом')
+      }
+      // И ни один из них не должен решать сам, кто владелец.
+      for (const [имя, src] of [['host.ts', host], ['bridge.ts', bridge]] as const) {
+        if (/if\s*\(\s*!force\s*&&/.test(src)) throw new Error('в ' + имя + ' своя копия правила')
+      }
+      return true
+    })
+
+    check('горячий код зовёт прослойку, а не саму систему плагинов', () => {
+      // Одна статическая ссылка из чата, шапки или карточки плагина в переписке
+      // утаскивает всю систему плагинов в стартовую сборку — всем и всегда,
+      // включая тех, у кого плагинов нет. Ловится это только замером, поэтому
+      // проверка и стоит здесь, а сторож на вес — в smoke.cjs.
+      const { readdirSync } = require('node:fs') as typeof import('node:fs')
+      const горячие = [
+        'src/components/Composer.tsx', 'src/components/MessageList.tsx',
+        'src/components/ServerView.tsx', 'src/components/DMHome.tsx',
+        'src/components/ThreadPanel.tsx', 'src/components/MiniProfile.tsx',
+        'src/components/PluginPanels.tsx', 'src/components/PluginHeaderButtons.tsx',
+        'src/components/CallRoom.tsx', 'src/App.tsx',
+        'src/music/MusicPlayer.tsx', 'src/lib/plugins/install.ts',
+      ]
+      void readdirSync
+      const плохие = горячие.filter(f => /from '[^']*plugins\/host'/.test(readFileSync(f, 'utf8')))
+      if (плохие.length) throw new Error('тянут систему плагинов статически: ' + плохие.join(', '))
+      return true
+    })
+
+    check('прослойка не будит систему плагинов ради события', () => {
+      // Иначе первое же входящее сообщение утащило бы её за собой, и всё
+      // разведение потеряло бы смысл.
+      const bridge = readFileSync('src/lib/plugins/bridge.ts', 'utf8')
+      const i = bridge.indexOf('export function emitPluginEvent')
+      const тело = bridge.slice(i, i + 260)
+      return тело.includes('host?.') && !тело.includes('поднять')
+    })
+  }
+
   console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

@@ -1,6 +1,6 @@
 import { logErr, logWarn } from '../lib/log'
 import { PluginHeaderButtons } from './PluginHeaderButtons'
-import { invokePlugin } from '../lib/plugins/host'
+import { invokePlugin } from '../lib/plugins/bridge'
 import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { toastErr, toastOk } from '../lib/toast'
 import { setActiveDm, useBadgeCount } from '../lib/badge'

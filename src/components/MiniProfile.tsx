@@ -18,7 +18,7 @@ import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
 // v1.465.0: свои пункты плагинов в меню человека.
 import { useContextItems } from '../lib/plugins/registry'
-import { invokePlugin } from '../lib/plugins/host'
+import { invokePlugin } from '../lib/plugins/bridge'
 import { devMode } from '../lib/settings'
 import { isBotUser } from '../lib/botTag'
 import { UserTagBadge } from './TagEmoji'
