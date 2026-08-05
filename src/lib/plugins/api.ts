@@ -21,6 +21,8 @@ import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
 import { openApp, updateApp, closeApp, isMode, APP_MODES } from './apps'
+import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
+import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
@@ -78,6 +80,13 @@ export const PLUGIN_METHODS = [
   // v1.471.0: своя область экрана. Действует только на экран самого человека:
   // ни другим людям, ни серверу от неё ничего не достаётся.
   'apps.create', 'apps.update', 'apps.close',
+  // v1.472.0: плагин как библиотека для других плагинов. Наружу это не выходит
+  // никуда: вызов ходит между двумя воркерами на этом же устройстве.
+  'services.register', 'services.unregister', 'services.connect', 'services.call',
+  // v1.472.0: своё хранилище таблицами. Данные плагина и только его: имя
+  // плагина входит в ключ и подставляется здесь, а не приходит от него.
+  'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
+  'db.count', 'db.clear', 'db.tables',
 ] as const
 
 /**
@@ -132,7 +141,16 @@ export interface HostContext {
    * песочницы. Возвращает false, если адресат не запущен или не просил ipc:
    * плагин должен видеть, что письмо не дошло, а не считать, что дошло.
    */
-  ipcSend?: (from: string, to: string, event: string, data: unknown) => boolean
+  ipcSend?: (from: string, to: string, event: string, data: unknown) => boolean
+
+  /**
+   * v1.472.0: позвать обработчик В ДРУГОМ плагине. Нужно службам: вызов идёт из
+   * одного плагина, а выполняется в другом.
+   *
+   * Отдельно от invoke, который зовёт обработчик СВОЕГО плагина: перепутать эти
+   * два — значит позвать чужую функцию в своей песочнице, где её нет.
+   */
+  invokeIn?: (pluginId: string, ref: FnRef, args: unknown[]) => Promise<unknown>
 }
 
 /** Сколько ждём ответа от чужого сайта и сколько байт согласны принять. */
@@ -929,6 +947,105 @@ export function createDispatcher(
       case 'apps.close': {
         need('apps')
         return closeApp(id, Number(args[0]))
+      }
+
+      // ---- Плагин как библиотека (нужно ipc) ------------------------------
+      //
+      // Разрешение то же, что у обмена письмами, и по той же причине: это
+      // разговор двух плагинов на одном устройстве. Нужно ОБОИМ — тому, кто
+      // предлагает, и тому, кто зовёт.
+      //
+      // Функции при регистрации никуда не едут: у приложения остаются метки, по
+      // которым оно умеет позвать их обратно. Вызывающий получает не ссылку на
+      // чужой код, а право попросить приложение позвать метод по имени.
+      case 'services.register': {
+        need('ipc')
+        const name = checkName(args[0])
+        const raw = (args[1] ?? {}) as Record<string, unknown>
+        const methods = new Map<string, FnRef>()
+        for (const [k, v] of Object.entries(raw)) {
+          if (!isFnRef(v)) continue
+          if (methods.size >= MAX_METHODS) break
+          methods.set(String(k).slice(0, 60), v)
+        }
+        registerService(id, name, methods)
+        return [...methods.keys()]
+      }
+      case 'services.unregister': {
+        need('ipc')
+        return unregisterService(id, String(args[0] ?? ''))
+      }
+      case 'services.connect': {
+        need('ipc')
+        // Отдаём только ИМЕНА методов: по ним вызывающий соберёт у себя объект.
+        // Ни одной метки функции наружу не уходит.
+        const names = serviceMethods(String(args[0] ?? ''))
+        if (!names) throw new Denied(`Служба «${args[0]}» не найдена — плагин, который её предлагает, не запущен.`)
+        return names
+      }
+      case 'services.call': {
+        need('ipc')
+        rateLimit(id, 'ipc')
+        const svc = findService(String(args[0] ?? ''))
+        if (!svc) throw new Denied(`Служба «${args[0]}» не найдена.`)
+        const ref = svc.methods.get(String(args[1] ?? ''))
+        if (!ref) throw new Denied(`У службы «${svc.name}» нет метода «${args[1]}».`)
+        if (!ctx.invoke) throw new Denied('Вызов службы недоступен: приложение не может звать обработчики плагина.')
+        // Доводы чистим ровно так же, как письма: метка функции, доехавшая до
+        // чужого плагина, дала бы ему право звать наш код с нашими правами.
+        const { data } = packIpc('call', args[2])
+        if (!ctx.invokeIn) throw new Denied('Вызов службы недоступен.')
+        const ответ = await ctx.invokeIn(svc.pluginId, ref, [data, id])
+        // И ответ тоже: он идёт обратно в чужой плагин.
+        return packIpc('reply', ответ).data
+      }
+
+      // ---- Своё хранилище таблицами (нужно storage) -----------------------
+      //
+      // Разрешение то же, что у ponoi.storage: это те же данные плагина на этом
+      // же устройстве, просто их стало можно хранить по-человечески. Заводить
+      // ради этого второе разрешение значило бы спрашивать человека дважды об
+      // одном и том же.
+      //
+      // Имя плагина подставляется ЗДЕСЬ и входит в ключ: чужую таблицу нельзя
+      // ни прочитать, ни назвать — её имени просто нет в его пространстве.
+      case 'db.insert': {
+        need('storage')
+        return await dbInsert(id, String(args[0] ?? ''), args[1])
+      }
+      case 'db.get': {
+        need('storage')
+        return await dbGet(id, String(args[0] ?? ''), String(args[1] ?? ''))
+      }
+      case 'db.all': {
+        need('storage')
+        return await dbAll(id, String(args[0] ?? ''), Number(args[1]) || 1000)
+      }
+      case 'db.where': {
+        need('storage')
+        const op = args[2]
+        if (!isOp(op)) throw new Denied(`Неизвестное условие «${op}». Есть: ${OPS.join(', ')}.`)
+        return await dbWhere(id, String(args[0] ?? ''), String(args[1] ?? ''), op, args[3], Number(args[4]) || 1000)
+      }
+      case 'db.update': {
+        need('storage')
+        return await dbUpdate(id, String(args[0] ?? ''), String(args[1] ?? ''), args[2])
+      }
+      case 'db.remove': {
+        need('storage')
+        return await dbRemove(id, String(args[0] ?? ''), String(args[1] ?? ''))
+      }
+      case 'db.count': {
+        need('storage')
+        return await dbCount(id, String(args[0] ?? ''))
+      }
+      case 'db.clear': {
+        need('storage')
+        return await dbClear(id, String(args[0] ?? ''))
+      }
+      case 'db.tables': {
+        need('storage')
+        return await dbTables(id)
       }
 
       default:

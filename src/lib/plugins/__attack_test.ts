@@ -968,12 +968,124 @@ console.log('\n── Своя область экрана (v1.471.0) ──')
   A.clearAllApps()
 }
 
+console.log('\n── Плагин как библиотека (v1.472.0) ──')
+{
+  const S = await import('./services')
+  S.clearAllServices()
+
+  await blocked('без права ipc службу не завести', () => {
+    const без = attacker(['ui'], 'svc-no')
+    return без('services.register', ['math', { f: fn }])
+  })
+  await blocked('служба без единого метода не заводится', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-empty')
+    return d('services.register', ['пусто', {}])
+  })
+  await blocked('имя службы с пробелами и кавычками не проходит', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-name')
+    return d('services.register', ['ой "какое" имя', { f: fn }])
+  })
+  await allowed('обычная служба заводится', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-ok')
+    return d('services.register', ['math-utils', { урон: fn, броня: fn }])
+  })
+
+  await check('чужое имя службы не отобрать молча', async () => {
+    // Иначе второй плагин тихо занял бы имя, и оба выглядели бы сломанными.
+    const чужой = attacker([...ALL_PERMISSIONS], 'svc-thief')
+    try { await чужой('services.register', ['math-utils', { урон: fn }]); return false }
+    catch { /* так и надо */ }
+    return S.findService('math-utils')?.pluginId === 'svc-ok'
+  })
+
+  await check('свою службу можно перерегистрировать', async () => {
+    // Проверка «всё запрещено» ничего не значит без обратного случая: плагин
+    // перезапускается и заводит службу заново — это нормально.
+    const свой = attacker([...ALL_PERMISSIONS], 'svc-ok')
+    await свой('services.register', ['math-utils', { урон: fn, броня: fn, крит: fn }])
+    return S.serviceMethods('math-utils')?.length === 3
+  })
+
+  await check('наружу уходят только ИМЕНА методов, не сами функции', async () => {
+    // Метка функции, доехавшая до чужого плагина, дала бы ему право звать наш
+    // код с нашими разрешениями. Это главное правило всей затеи.
+    const зовущий = attacker([...ALL_PERMISSIONS], 'svc-caller')
+    const имена = await зовущий('services.connect', ['math-utils']) as unknown[]
+    if (!Array.isArray(имена)) throw new Error('connect вернул не список')
+    return имена.every(x => typeof x === 'string')
+  })
+
+  await blocked('к несуществующей службе не подключиться', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-caller')
+    return d('services.connect', ['нет-такой'])
+  })
+  await blocked('несуществующий метод службы не позвать', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-caller')
+    return d('services.call', ['math-utils', 'нетТакого', {}])
+  })
+
+  await check('чужую службу нельзя снять', () => {
+    // Иначе один плагин выключал бы другому его библиотеку.
+    const снял = S.unregisterService('svc-thief', 'math-utils')
+    return снял === false && !!S.findService('math-utils')
+  })
+
+  await check('функция не проедет в доводах вызова', async () => {
+    // Доводы чистятся тем же, чем письма: метка функции вырезается.
+    const { sanitizeIpc, hasFnRef } = await import('./ipc')
+    const довод = { обычное: 1, ловушка: { __fn: 'cb9' } }
+    return hasFnRef(довод) && !hasFnRef(sanitizeIpc(довод))
+  })
+
+  await check('служба исчезает вместе с выключенным плагином', async () => {
+    // Останься запись — её метки вели бы в остановленный плагин, и чужой вызов
+    // молча висел бы до срока.
+    const { cleanupPlugin } = await import('./cleanup')
+    cleanupPlugin('svc-ok')
+    return S.findService('math-utils') === null
+  })
+
+  await check('служб у одного плагина не больше предела', async () => {
+    S.clearAllServices()
+    const d = attacker([...ALL_PERMISSIONS], 'svc-many')
+    for (let i = 0; i < S.MAX_SERVICES; i++) await d('services.register', ['s' + i, { f: fn }])
+    try { await d('services.register', ['лишняя', { f: fn }]); return false }
+    catch { return true }
+    finally { S.clearAllServices() }
+  })
+}
+
+console.log('\n── База плагина (v1.472.0) ──')
+{
+  const без = attacker(['ui', 'panel'], 'db-no')
+  for (const m of ['db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove', 'db.count', 'db.clear', 'db.tables']) {
+    await blocked('без права storage нельзя ' + m, () => без(m, ['t', {}]))
+  }
+
+  const D = await import('./db')
+  await check('имя плагина не подставляется из его же данных', () => {
+    // Ключ строки собирается ЗДЕСЬ из имени плагина, и плагин на него не влияет
+    // ничем: ни полем в строке, ни именем таблицы (оно проверено отдельно).
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    const i = src.indexOf("case 'db.insert'")
+    const тело = src.slice(i, i + 260)
+    // Первым доводом идёт id плагина, а не что-то из args.
+    return /dbInsert\(id,/.test(тело)
+  })
+  await check('условие отбора — из закрытого списка', () => {
+    // Иначе «неизвестное условие» тихо возвращало бы пустоту, и плагин искал бы
+    // ошибку у себя.
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    return src.includes('isOp(op)') && D.OPS.length >= 6
+  })
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')
   const исходник = readFileSync('src/lib/plugins/cleanup.ts', 'utf8')
-  await check('уборка знает про все шесть видов оставленного', () =>
-    cleanup.SUBSYSTEM_COUNT === 6)
+  await check('уборка знает про все семь видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 7)
   await check('на каждый вид есть и «за этим», и «за всеми»', () => {
     // Два списка — это два места, где можно забыть строку. Здесь он один, и
     // каждая запись обязана иметь обе половины.

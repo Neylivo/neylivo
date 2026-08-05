@@ -531,6 +531,9 @@ for (const p of OFFICIAL_PLUGINS) {
     // v1.467.0
     'ui.addHeaderButton', 'settings.registerSchema',
     'apps.create', 'apps.update', 'apps.close',
+    'services.register', 'services.unregister', 'services.connect', 'services.call',
+    'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
+    'db.count', 'db.clear', 'db.tables',
     // v1.465.0: семь новых возможностей.
     'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
     'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
@@ -1265,6 +1268,72 @@ for (const p of OFFICIAL_PLUGINS) {
       const тело = bridge.slice(i, i + 260)
       return тело.includes('host?.') && !тело.includes('поднять')
     })
+  }
+
+  // ── База плагина и WebAssembly (v1.472.0) ──────────────────────────────
+  console.log('\n-- База плагина --')
+  {
+    const D = await import('./db')
+
+    check('условие «равно» не путает типы', () =>
+      D.matches({ n: 1 }, 'n', '=', 1) && !D.matches({ n: 1 }, 'n', '=', '1'))
+
+    check('сравнения по порядку работают у чисел и дат', () =>
+      D.matches({ n: 5 }, 'n', '>', 3) && D.matches({ n: 3 }, 'n', '>=', 3)
+      && !D.matches({ n: 3 }, 'n', '>', 3)
+      && D.matches({ d: new Date(2000, 0, 2) }, 'd', '>', new Date(2000, 0, 1)))
+
+    check('у строк «больше» ничего не находит, а не отвечает наугад', () => {
+      // Порядок строк зависит от языка и регистра: «Я» больше «а» или меньше —
+      // вопрос без единственного ответа, и молча выбирать один из них нельзя.
+      return !D.matches({ s: 'бета' }, 's', '>', 'альфа')
+        && !D.matches({ s: 'бета' }, 's', '<', 'альфа')
+    })
+
+    check('отсутствующее поле ничего не находит и ничего не роняет', () =>
+      !D.matches({}, 'нет', '=', 1) && !D.matches({}, 'нет', '>', 0)
+      && !D.matches({}, 'нет', 'contains', 'а'))
+
+    check('поиск по подстроке — только у строк', () =>
+      D.matches({ s: 'Plasma Rifle' }, 's', 'contains', 'Rifle')
+      && D.matches({ s: 'Plasma' }, 's', 'startsWith', 'Pla')
+      && !D.matches({ s: 123 }, 's', 'contains', '2'))
+
+    check('неизвестное условие не считается за правду', () =>
+      !D.matches({ n: 1 }, 'n', 'выдумка' as never, 1) && !D.isOp('выдумка'))
+
+    check('имя таблицы проверяется, а не берётся как есть', () => {
+      // Имя входит в ключ записи. Кавычки и разделители там ни к чему.
+      for (const плохое of ['', '  ', 'моя таблица', 'а/б', 'я'.repeat(100)]) {
+        try { D.checkTable(плохое); return false } catch { /* так и надо */ }
+      }
+      return D.checkTable(' inventory ') === 'inventory'
+    })
+
+    check('в разделителе ключа не обычный знак, а невидимый', () => {
+      // Иначе плагин с именем, содержащим разделитель, залез бы в чужую
+      // таблицу: ключи склеиваются строкой.
+      const src = readFileSync('src/lib/plugins/db.ts', 'utf8')
+      // Ищем ровно запись escape-последовательностью: настоящий нулевой байт в
+      // исходнике — отдельная беда, из-за него файл считается двоичным.
+      if (src.includes(' ')) throw new Error('в db.ts настоящий нулевой байт вместо записи escape')
+      return src.includes("const SEP = '\\u0000'")
+    })
+  }
+
+  console.log('\n-- WebAssembly в песочнице --')
+  {
+    // WASM работал всегда: воркеру он доступен, и в списке вырезаемого его нет.
+    // Проверка не даёт этому измениться молча — а живая проба (Electron)
+    // подтвердила, что модуль правда собирается и считает.
+    check('WebAssembly не вырезан из песочницы', () => {
+      const kill = BOOTSTRAP_SRC.slice(BOOTSTRAP_SRC.indexOf('const KILL = ['),
+        BOOTSTRAP_SRC.indexOf(']', BOOTSTRAP_SRC.indexOf('const KILL = [')))
+      if (/WebAssembly/.test(kill)) throw new Error('WebAssembly попал в список вырезаемого')
+      return kill.includes('fetch') && kill.includes('WebSocket')
+    })
+    check('в инструкции сказано, что WebAssembly работает', () =>
+      PLUGIN_SPEC.includes('WebAssembly') && /разрешения не нужно|отдельного разрешения/.test(PLUGIN_SPEC))
   }
 
   console.log('\n-- Ломаем нарочно (новые возможности) --')

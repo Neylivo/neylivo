@@ -133,6 +133,42 @@ const ponoi = {
     update: (id, patch) => call('apps.update', [Number(id), patch || {}]),
     close: (id) => call('apps.close', [Number(id)]),
   },
+  // v1.472.0: своё хранилище таблицами. ponoi.storage — это пары ключ-значение
+  // на несколько килобайт; здесь настоящие таблицы с отбором.
+  //
+  // Вид записи цепочкой (table('x').where(...).get()) собирается прямо здесь: он
+  // читается куда лучше, чем db.where('x', 'qty', '>', 0), а приложению всё
+  // равно уходит один вызов.
+  db: {
+    table: (name) => ({
+      insert: (row) => call('db.insert', [String(name), row]),
+      get: (id) => call('db.get', [String(name), String(id)]),
+      all: (limit) => call('db.all', [String(name), Number(limit) || 1000]),
+      update: (id, patch) => call('db.update', [String(name), String(id), patch || {}]),
+      remove: (id) => call('db.remove', [String(name), String(id)]),
+      count: () => call('db.count', [String(name)]),
+      clear: () => call('db.clear', [String(name)]),
+      where: (field, op, value) => ({
+        get: (limit) => call('db.where', [String(name), String(field), String(op), value, Number(limit) || 1000]),
+      }),
+    }),
+    tables: () => call('db.tables', []),
+  },
+  // v1.472.0: плагин как библиотека. register оставляет функции У СЕБЯ —
+  // наружу уходят только метки, по которым приложение зовёт их обратно.
+  // connect отдаёт имена методов, и объект собирается здесь же, на месте.
+  services: {
+    register: (name, methods) => call('services.register', [String(name), methods || {}]),
+    unregister: (name) => call('services.unregister', [String(name)]),
+    connect: async (name) => {
+      const имена = await call('services.connect', [String(name)])
+      const обёртка = {}
+      for (const м of имена) {
+        обёртка[м] = (arg) => call('services.call', [String(name), м, arg])
+      }
+      return обёртка
+    },
+  },
   // v1.465.0: разговор с другими плагинами. Разрешение ipc нужно ОБОИМ: и тому,
   // кто шлёт, и тому, кто подписан на событие 'ipc'.
   plugins: {

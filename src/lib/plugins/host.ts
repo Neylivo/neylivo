@@ -96,7 +96,10 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
     // моменту первого потока плагин уже запущен.
     invoke: (ref, args) => invokePlugin(plugin.manifest.id, ref, args),
     // v1.465.0: письмо соседнему плагину.
-    ipcSend: (from, to, event, data) => deliverIpc(from, to, event, data),
+    ipcSend: (from, to, event, data) => deliverIpc(from, to, event, data),
+    // v1.472.0: вызов метода службы выполняется в ЧУЖОМ плагине — том, кто её
+    // предлагает. Поэтому отдельно от invoke, который зовёт обработчик своего.
+    invokeIn: (pid, ref, a2) => invokePlugin(pid, ref, a2),
   }, ev => subs.add(ev))
   const sandbox = new PluginSandbox({
     onCall: dispatch,
