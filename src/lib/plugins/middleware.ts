@@ -112,15 +112,11 @@ export function applyRenderResult(before: string, result: unknown): string {
 
 const list: Interceptor[] = []
 /** Сколько перехватчиков одного вида может завести один плагин. */
-export const MAX_INTERCEPTORS = 4
 
 export class InterceptLimit extends Error {}
 
 export function addInterceptor(i: Interceptor) {
   const mine = list.filter(x => x.pluginId === i.pluginId && x.kind === i.kind).length
-  if (mine >= MAX_INTERCEPTORS) {
-    throw new InterceptLimit(`Перехватчиков «${i.kind}» у одного плагина не больше ${MAX_INTERCEPTORS}`)
-  }
   list.push(i)
 }
 

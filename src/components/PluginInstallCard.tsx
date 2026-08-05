@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
-import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
+import { parsePlugin } from '../lib/plugins/manifest'
 import { getPlugin } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
 import { PermissionGate } from './PluginPermissionGate'
@@ -31,7 +31,8 @@ export function PluginInstallCard({ url, sizeLabel }: { url: string; sizeLabel?:
         if (!res.ok) throw new Error('не удалось скачать файл')
         // Читаем как текст, но с потолком: карточка не должна тянуть в память
         // что-то огромное только потому, что кто-то переименовал архив в .ponoi.
-        const text = (await res.text()).slice(0, MAX_PLUGIN_BYTES + 1)
+        // v1.489.0: длину файла плагина больше не режем и не проверяем.
+        const text = await res.text()
         if (!ok) return
         setCode(text)
         setManifest(parsePlugin(text))

@@ -29,11 +29,8 @@
 import type { FnRef } from './sandbox'
 
 /** Сколько служб может завести один плагин. */
-export const MAX_SERVICES = 8
 /** Сколько методов в одной службе. */
-export const MAX_METHODS = 40
 /** Длина имени службы. */
-export const MAX_SERVICE_NAME = 60
 
 export class ServiceError extends Error {}
 
@@ -61,7 +58,6 @@ const NAME_BAD = /[\u0000-\u001f\u007f/\\]/
 export function checkName(raw: unknown): string {
   const s = String(raw ?? '').trim()
   if (!s) throw new ServiceError('Службе нужно имя')
-  if (s.length > MAX_SERVICE_NAME) throw new ServiceError(`Имя длиннее ${MAX_SERVICE_NAME} знаков`)
   if (NAME_BAD.test(s)) throw new ServiceError('В имени службы не может быть черты пути и невидимых знаков')
   return s
 }
@@ -82,11 +78,7 @@ export function registerService(pluginId: string, name: string, methods: Map<str
   }
   let мои = 0
   for (const [, s] of services) if (s.pluginId === pluginId) мои++
-  if (!было && мои >= MAX_SERVICES) {
-    throw new ServiceError(`Служб у одного плагина не больше ${MAX_SERVICES}.`)
-  }
   if (methods.size === 0) throw new ServiceError('В службе нет ни одного метода')
-  if (methods.size > MAX_METHODS) throw new ServiceError(`Методов в службе не больше ${MAX_METHODS}.`)
   const s: Service = { name: n, pluginId, methods }
   services.set(n, s)
   return s

@@ -19,7 +19,6 @@ import { ALL_PERMISSIONS, PluginParseError, type Permission, type PluginManifest
 
 /** Потолок размера файла. Плагин — это логика, а не ассеты; всё, что больше, почти
  *  наверняка попытка запихнуть в чат бинарник под видом плагина. */
-export const MAX_PLUGIN_BYTES = 512 * 1024
 
 // Длины поджаты под то, как поля реально показываются в списке и на экране
 // установки: без потолка чужой плагин может расползтись на весь экран.
@@ -82,9 +81,6 @@ function parsePermissions(raw: string | undefined): Permission[] {
 }
 
 export function parsePlugin(code: string): PluginManifest {
-  if (code.length > MAX_PLUGIN_BYTES) {
-    throw new PluginParseError(`Файл слишком большой (${Math.round(code.length / 1024)} КБ, максимум ${MAX_PLUGIN_BYTES / 1024} КБ).`)
-  }
   const tags = readTags(code)
 
   const id = (tags.id || '').toLowerCase()

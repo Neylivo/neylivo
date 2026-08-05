@@ -32,7 +32,7 @@ export interface AnyMsg {
 }
 
 /** Сколько сообщений можно забрать за раз. */
-export const ANY_MAX = 500
+// v1.489.0: потолка нет — сколько плагин попросил, столько и отдадим.
 
 export class AnyChatError extends Error {}
 
@@ -51,7 +51,7 @@ const проверитьId = (v: unknown): string => {
  */
 export async function anyRecent(channelId: unknown, limit: number): Promise<AnyMsg[]> {
   const id = проверитьId(channelId)
-  const n = Math.min(ANY_MAX, Math.max(1, Math.round(Number(limit) || 50)))
+  const n = Math.max(1, Math.round(Number(limit) || 50))
   const { data, error } = await supabase
     .from('messages')
     .select('id,author,author_name,content,created_at')

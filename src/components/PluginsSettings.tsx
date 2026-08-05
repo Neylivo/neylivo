@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
-import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
+import { parsePlugin } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
 import { PanelCanvas, AssetImg, KeybindRow } from './PluginPanels'
@@ -244,7 +244,6 @@ export function PluginsSettings() {
   async function pickFile(f: File | null) {
     if (fileRef.current) fileRef.current.value = ''
     if (!f) return
-    if (f.size > MAX_PLUGIN_BYTES) { toastErr(`Файл больше ${MAX_PLUGIN_BYTES / 1024} КБ.`); return }
     try {
       const code = await f.text()
       setPending({ manifest: parsePlugin(code), code })

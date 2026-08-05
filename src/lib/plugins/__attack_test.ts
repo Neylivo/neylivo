@@ -31,7 +31,7 @@ const { NET_HEADERS } = await import('./netGuard')
 // v1.446.0: пределы подняты, и числа в штурме больше НЕ пишутся руками —
 // они берутся оттуда же, откуда их берёт приложение. Иначе проверка
 // стережёт вчерашние числа, а не сегодняшнее правило.
-const { LIMITS, MAX_PER_PLUGIN, MAX_RECENT, MAX_CSS, MAX_STORAGE_VALUE } = await import('./limits')
+// v1.489.0: чисел пределов больше нет — их и не из чего брать.
 const { readFileSync } = await import('node:fs')
 const registry = await import('./registry')
 const { upsertPlugin, loadPlugins } = await import('./store')
@@ -174,16 +174,20 @@ console.log('\n── Новые возможности (v1.419.0) ──')
     try { await b('ui.addHotkey', [{ combo: 'Ctrl+Shift+K', description: 'подмена', onPress: fn }]); return false }
     catch { return true }
   })
-  await check('горячих клавиш не больше положенного на плагин', async () => {
+  // v1.489.0: счёта горячих клавиш больше нет. Проверяем, что его правда нет —
+  // и что все они по-прежнему уходят вместе с плагином.
+  await check('горячих клавиш можно сколько угодно, и все уходят с плагином', async () => {
     const d = attacker([...ALL_PERMISSIONS], 'hk-flood')
     let added = 0
-    // Пробуем на десяток больше, чем позволено: сколько бы ни был предел,
-    // перешагнуть его нельзя.
-    for (let i = 0; i < MAX_PER_PLUGIN.hotkeys + 10; i++) {
+    for (let i = 0; i < 200; i++) {
       const c = 'Ctrl+Alt+' + String.fromCharCode(65 + (i % 26)) + (i < 26 ? '' : i)
-      try { await d('ui.addHotkey', [{ combo: c, description: 'x', onPress: fn }]); added++ } catch { /* предел */ }
+      try { await d('ui.addHotkey', [{ combo: c, description: 'x', onPress: fn }]); added++ } catch { /* занято другим */ }
     }
-    return added <= MAX_PER_PLUGIN.hotkeys
+    if (added < 150) throw new Error('предел никуда не делся: взяли только ' + added)
+    registry.clearPlugin('hk-flood')
+    const осталось = registry.getRegistry().hotkeys.filter(h => h.pluginId === 'hk-flood').length
+    if (осталось) throw new Error('после уборки осталось ' + осталось)
+    return true
   })
 
   // v1.480.0: место 'chat' больше не полоса над полем ввода, а свободный
@@ -292,7 +296,9 @@ console.log('\n── Открытый чат: что можно и чего н�
     // Вернуть настоящий мост обязательно: иначе проверки ниже спрашивали бы
     // эту заглушку и «прошли» бы, ничего не проверив.
     setChatBridge('chat-open', открытый)
-    return asked <= MAX_RECENT
+    // v1.489.0: потолка нет — сколько попросил, столько и спросим у чата.
+    // Главное здесь не число, а что спрашивают ОТКРЫТЫЙ чат, а не любой.
+    return asked === 100000
   })
   await check('чужой чат недоступен, даже зная его id', async () => {
     // Никакого способа назвать другой чат у плагина нет: адресат берётся из
@@ -405,8 +411,12 @@ console.log('\n── Наводнение интерфейса ──')
   try { for (let i = 0; i < 5000; i++) await d('ui.addComposerButton', [{ key: 'k' + i, tooltip: 'x', onClick: fn }]) }
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().composerButtons.length - before
-  await check(`кнопок композера не больше разумного (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => added <= MAX_PER_PLUGIN.buttons)
+  await check(`кнопок композера сколько угодно (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
+    () => added === 5000 && !err)
+  await check('и все они уходят вместе с плагином', () => {
+    registry.clearPlugin('evil')
+    return registry.getRegistry().composerButtons.filter(b => b.pluginId === 'evil').length === 0
+  })
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil2')
@@ -415,8 +425,12 @@ console.log('\n── Наводнение интерфейса ──')
   try { for (let i = 0; i < 3000; i++) await d('commands.register', ['ко' + i, 'опис', fn]) }
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().commands.length - before
-  await check(`команд не больше разумного (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => added <= MAX_PER_PLUGIN.commands)
+  await check(`команд сколько угодно (добавлено ${added}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
+    () => added === 3000 && !err)
+  await check('и все они уходят вместе с плагином', () => {
+    registry.clearPlugin('evil2')
+    return registry.getRegistry().commands.filter(c => c.pluginId === 'evil2').length === 0
+  })
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil3')
@@ -425,7 +439,11 @@ console.log('\n── Наводнение интерфейса ──')
   try { for (let i = 0; i < 3000; i++) await d('ui.addMessageAction', [{ key: 'a' + i, label: 'x', onClick: fn }]) }
   catch (e: any) { err = String(e?.message ?? e) }
   const added = registry.getRegistry().messageActions.length - before
-  await check(`действий над сообщением не больше разумного (добавлено ${added})`, () => added <= MAX_PER_PLUGIN.actions)
+  await check(`действий над сообщением сколько угодно (добавлено ${added})`, () => added === 3000 && !err)
+  await check('и все они уходят вместе с плагином', () => {
+    registry.clearPlugin('evil3')
+    return registry.getRegistry().messageActions.filter(a => a.pluginId === 'evil3').length === 0
+  })
 }
 
 console.log('\n── Наводнение чатом и уведомлениями ──')
@@ -433,23 +451,33 @@ console.log('\n── Наводнение чатом и уведомления�
   const d = attacker([...ALL_PERMISSIONS], 'evil4')
   sent.length = 0
   let err = ''
-  // Пробуем вдвое больше, чем позволено: предел подняли, но он есть.
-  try { for (let i = 0; i < LIMITS.send.times * 2; i++) await d('messages.send', ['спам ' + i]) }
+  // v1.489.0: предела на отправку больше нет — по прямому указанию владельца.
+  //
+  // Проверка стала не про «упрётся», а про «не упрётся»: молча вернувшийся
+  // предел был бы хуже его отсутствия — автор плагина увидел бы, что половина
+  // сообщений просто исчезла.
+  try { for (let i = 0; i < 500; i++) await d('messages.send', ['поток ' + i]) }
   catch (e: any) { err = String(e?.message ?? e) }
-  await check(`поток сообщений упирается в предел (ушло ${sent.length}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
-    () => sent.length <= LIMITS.send.times)
+  await check(`поток сообщений НЕ упирается ни во что (ушло ${sent.length}${err ? ', отказ: ' + err.slice(0, 40) : ''})`,
+    () => sent.length === 500 && !err)
 }
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil5')
   toasts.length = 0
-  try { for (let i = 0; i < LIMITS.notify.times * 2; i++) await d('notify', ['бум ' + i]) } catch { /* отказ — тоже защита */ }
-  await check(`поток уведомлений упирается в предел (показано ${toasts.length})`, () => toasts.length <= LIMITS.notify.times)
+  try { for (let i = 0; i < 500; i++) await d('notify', ['бум ' + i]) } catch { /* не должно быть */ }
+  await check(`поток уведомлений тоже ничем не ограничен (показано ${toasts.length})`, () => toasts.length === 500)
 }
 
 console.log('\n── Оформление ──')
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil6')
-  await blocked('гигантский css не примут', () => d('css', ['a{}'.repeat(MAX_CSS)]))
+  // v1.489.0: размера css больше нет. Но способ снять его — обязан остаться:
+  // непрозрачный слой поверх всего это самый простой способ сделать Ponoi
+  // неработающим «законными» средствами.
+  await check('гигантский css принимают', async () => {
+    await d('css', ['a{}'.repeat(200000)])
+    return true
+  })
   // Накрыть приложение непрозрачным слоем и не дать до него добраться — самый
   // простой способ сделать Ponoi неработающим, при этом «легальными» средствами.
   await check('после вредного css остаётся способ его снять', async () => {
@@ -463,7 +491,10 @@ console.log('\n── Оформление ──')
 console.log('\n── Хранилище ──')
 {
   const d = attacker([...ALL_PERMISSIONS], 'evil7')
-  await blocked('огромное значение в хранилище не влезет', () => d('storage.set', ['k', 'я'.repeat(MAX_STORAGE_VALUE)]))
+  await check('огромное значение в хранилище принимают', async () => {
+    await d('storage.set', ['k', 'я'.repeat(4 * 1024 * 1024)])
+    return true
+  })
 }
 
 console.log('\n── Чужое ──')
@@ -696,11 +727,19 @@ console.log('\n── Фоновые задачи ──')
   await check('слишком частую задачу не заведут', () => {
     try { bg.addTask('жадный', 5, 'каждые 5 мс'); return false } catch { return true }
   })
-  await check('задач больше предела не заведут', () => {
+  // v1.489.0: числа задач больше нет. Осталось главное — их ВИДНО и любую
+  // можно остановить: ровно этим фоновая задача и отличается от setInterval
+  // внутри плагина, который не видно ниоткуда.
+  await check('задач сколько угодно, и каждую видно и можно остановить', () => {
     bg.clearAllTasks()
-    for (let i = 0; i < bg.MAX_TASKS; i++) bg.addTask('жадный', 60000, 'з' + i)
-    try { bg.addTask('жадный', 60000, 'лишняя'); return false } catch { return true }
-    finally { bg.clearAllTasks() }
+    for (let i = 0; i < 50; i++) bg.addTask('жадный', 60000, 'з' + i)
+    const мои = bg.taskList('жадный')
+    if (мои.length !== 50) throw new Error('завелось только ' + мои.length)
+    for (const з of мои) bg.stopTaskByUser(з.id)
+    const осталось = bg.taskList('жадный').length
+    bg.clearAllTasks()
+    if (осталось) throw new Error('после остановки осталось ' + осталось)
+    return true
   })
   await check('чужую задачу не остановить', () => {
     bg.clearAllTasks()
@@ -723,8 +762,10 @@ console.log('\n── Фоновые задачи ──')
 console.log('\n── Холст ──')
 {
   const cv = await import('./canvasHub')
-  await check('высота холста зажата в границы', () =>
-    cv.canvasHeight(100000) === cv.CANVAS_MAX_H && cv.canvasHeight(-5) === cv.CANVAS_MIN_H
+  // v1.489.0: высоту холста больше не зажимаем. Но числом она быть обязана:
+  // «чепуха» вместо высоты — это не свобода, а холст, который не нарисуется.
+  await check('высота холста какая угодно, но всё-таки число', () =>
+    cv.canvasHeight(100000) === 100000 && cv.canvasHeight(-5) === 1
     && cv.canvasHeight('чепуха') === 160)
   await blocked('без права panel холст не получить', () => {
     const без = attacker(['ui'], 'cv-no')
@@ -936,15 +977,20 @@ console.log('\n── Своя область экрана (v1.471.0) ──')
       && закрытие === true && A.appList('app-self').length === 0
   })
 
-  await check('окон у одного плагина не больше предела', async () => {
+  // v1.489.0: числа окон больше нет. Проверяем, что его правда нет — и что все
+  // они уходят вместе с плагином: без предела уборка важнее, чем была.
+  await check('окон сколько угодно, и все уходят вместе с плагином', async () => {
     A.clearAllApps()
     const d = attacker([...ALL_PERMISSIONS], 'app-many')
-    for (let i = 0; i < A.MAX_APPS_PER_PLUGIN; i++) {
-      await d('apps.create', [{ title: 'Окно ' + i, mode: 'window' }])
+    for (let i = 0; i < 30; i++) await d('apps.create', [{ title: 'Окно ' + i, mode: 'window' }])
+    if (A.appList('app-many').length !== 30) {
+      throw new Error('открылось только ' + A.appList('app-many').length)
     }
-    try { await d('apps.create', [{ title: 'Лишнее', mode: 'window' }]); return false }
-    catch { return true }
-    finally { A.clearAllApps() }
+    A.clearApps('app-many')
+    const осталось = A.appList('app-many').length
+    A.clearAllApps()
+    if (осталось) throw new Error('после уборки осталось ' + осталось)
+    return true
   })
 
   await check('человек закрывает окно, не спрашивая плагин', () => {
@@ -1067,13 +1113,15 @@ console.log('\n── Плагин как библиотека (v1.472.0) ──
     return S.findService('math-utils') === null
   })
 
-  await check('служб у одного плагина не больше предела', async () => {
+  await check('служб сколько угодно, и все уходят вместе с плагином', async () => {
     S.clearAllServices()
     const d = attacker([...ALL_PERMISSIONS], 'svc-many')
-    for (let i = 0; i < S.MAX_SERVICES; i++) await d('services.register', ['s' + i, { f: fn }])
-    try { await d('services.register', ['лишняя', { f: fn }]); return false }
-    catch { return true }
-    finally { S.clearAllServices() }
+    for (let i = 0; i < 40; i++) await d('services.register', ['s' + i, { f: fn }])
+    S.clearServices('svc-many')
+    const осталось = S.serviceList().filter(s => s.pluginId === 'svc-many').length
+    S.clearAllServices()
+    if (осталось) throw new Error('после уборки осталось ' + осталось)
+    return true
   })
 }
 

@@ -30,11 +30,8 @@ import { STORE_ROWS as STORE, запрос, лавка as лавкаБазы } f
 // теперь не наш, а браузера: сколько влезет на устройстве, столько и можно.
 // Число остаётся не как «нельзя больше», а как защита от зациклившегося
 // плагина, который пишет в базу в бесконечном цикле.
-export const MAX_ROWS = 1_000_000
 /** Сколько знаков в одной строке (после превращения в JSON). */
-export const MAX_ROW_BYTES = 256 * 1024
 /** Длина имени таблицы. */
-export const MAX_TABLE_NAME = 60
 
 export class DbError extends Error {}
 
@@ -56,7 +53,6 @@ const TABLE_BAD = /[\u0000-\u001f\u007f/\\]/
 export function checkTable(raw: unknown): string {
   const s = String(raw ?? '').trim()
   if (!s) throw new DbError('Таблице нужно имя')
-  if (s.length > MAX_TABLE_NAME) throw new DbError(`Имя таблицы длиннее ${MAX_TABLE_NAME} знаков`)
   if (TABLE_BAD.test(s)) throw new DbError('В имени таблицы не может быть черты пути и невидимых знаков')
   return s
 }
@@ -132,7 +128,6 @@ function проверитьРазмер(v: unknown): Record<string, unknown> {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw new DbError('Строка таблицы — это объект')
   let s = ''
   try { s = JSON.stringify(v) } catch { throw new DbError('Такую строку сохранить нельзя') }
-  if (s.length > MAX_ROW_BYTES) throw new DbError(`Строка длиннее ${Math.round(MAX_ROW_BYTES / 1024)} КБ`)
   return JSON.parse(s) as Record<string, unknown>
 }
 
@@ -160,7 +155,7 @@ const СВЕРЯТЬСЯ_КАЖДЫЕ = 256
 async function сколькоСтрок(pluginId: string, t: string): Promise<number> {
   const key = tkey(pluginId, t)
   const было = счётчики.get(key)
-  if (было === undefined || было % СВЕРЯТЬСЯ_КАЖДЫЕ === 0 || было >= MAX_ROWS - СВЕРЯТЬСЯ_КАЖДЫЕ) {
+  if (было === undefined || было % СВЕРЯТЬСЯ_КАЖДЫЕ === 0) {
     const точно = await dbCount(pluginId, t)
     счётчики.set(key, точно)
     return точно
@@ -174,7 +169,6 @@ export async function dbInsert(pluginId: string, table: string, row: unknown): P
   const id = номер(v.id)
   v.id = id
   const было = await сколькоСтрок(pluginId, t)
-  if (было >= MAX_ROWS) throw new DbError(`В таблице уже ${MAX_ROWS} строк — больше нельзя.`)
   const st = await лавка('readwrite')
   await дело(st, st.put({ k: rkey(pluginId, t, id), t: tkey(pluginId, t), id, v } as Запись), () => null)
   счётчики.set(tkey(pluginId, t), было + 1)
@@ -191,7 +185,8 @@ export async function dbGet(pluginId: string, table: string, id: string): Promis
 export async function dbAll(pluginId: string, table: string, limit = 1000): Promise<Record<string, unknown>[]> {
   const t = checkTable(table)
   const rows = await таблица(pluginId, t)
-  return rows.slice(0, Math.max(1, Math.min(MAX_ROWS, limit))).map(r => r.v)
+  // v1.489.0: потолка выдачи нет — сколько попросили, столько и вернём.
+  return rows.slice(0, Math.max(1, limit)).map(r => r.v)
 }
 
 export async function dbWhere(
@@ -203,7 +198,7 @@ export async function dbWhere(
   if (!f) throw new DbError('Не сказано, по какому полю отбирать')
   const rows = await таблица(pluginId, t)
   const out: Record<string, unknown>[] = []
-  const край = Math.max(1, Math.min(MAX_ROWS, limit))
+  const край = Math.max(1, limit)
   for (const r of rows) {
     if (matches(r.v, f, op, value)) { out.push(r.v); if (out.length >= край) break }
   }

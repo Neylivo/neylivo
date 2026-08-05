@@ -17,11 +17,8 @@
 import { checkTarget, type NetTarget } from './netGuard'
 
 /** Сколько соединений разом на плагин. Больше — это уже не интеграция. */
-export const MAX_SOCKETS = 8
 /** Сколько знаков в одном отправляемом сообщении. */
-export const MAX_WS_SEND = 256 * 1024
 /** Сколько знаков берём из входящего: остальное режется, а не роняет вкладку. */
-export const MAX_WS_RECV = 1024 * 1024
 
 export class WsError extends Error {}
 
@@ -58,9 +55,6 @@ export function countFor(pluginId: string): number {
 export function openSocket(pluginId: string, rawUrl: string, target: NetTarget, ev: WsEvents): number {
   const bad = checkTarget(rawUrl, target, 'wss:')
   if (bad) throw new WsError(bad)
-  if (countFor(pluginId) >= MAX_SOCKETS) {
-    throw new WsError(`Уже открыто ${MAX_SOCKETS} соединений — закрой ненужные (ws.close()).`)
-  }
   const url = String(rawUrl)
   let ws: WebSocket
   try { ws = new WebSocket(url) } catch (e: any) { throw new WsError('Не удалось открыть соединение: ' + (e?.message ?? e)) }
@@ -74,7 +68,8 @@ export function openSocket(pluginId: string, rawUrl: string, target: NetTarget, 
     // и не строит на этом логику.
     const d = e.data
     if (typeof d !== 'string') return
-    ev.onMessage(d.length > MAX_WS_RECV ? d.slice(0, MAX_WS_RECV) : d)
+    // v1.489.0: пришедшее не обрезаем — сколько прислали, столько и отдадим.
+    ev.onMessage(d)
   }
   const bye = (code: number, reason: string) => {
     if (!socks.has(id)) return    // уже закрыли — второй раз не сообщаем
@@ -96,7 +91,6 @@ export function sendSocket(pluginId: string, id: number, data: unknown): boolean
   if (s.pluginId !== pluginId) throw new WsError('Это соединение принадлежит другому плагину')
   if (s.ws.readyState !== WebSocket.OPEN) throw new WsError('Соединение ещё не открыто или уже закрывается')
   const text = typeof data === 'string' ? data : JSON.stringify(data ?? null)
-  if (text.length > MAX_WS_SEND) throw new WsError(`Сообщение длиннее ${MAX_WS_SEND / 1024} КБ`)
   s.ws.send(text)
   return true
 }

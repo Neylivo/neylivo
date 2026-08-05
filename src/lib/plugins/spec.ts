@@ -1,20 +1,17 @@
 import { PLUGIN_EVENTS } from './types'
 import {
-  LIMITS, MAX_STORAGE_VALUE, MAX_RECENT, MAX_PER_PLUGIN,
-  NET_MAX_BYTES, NET_TIMEOUT_MS, NET_STREAM_MS, NET_STREAM_IDLE_MS, NET_STREAM_MAX_BYTES,
-  INVOKE_TIMEOUT_MS,
+  NET_TIMEOUT_MS, NET_STREAM_MS, NET_STREAM_IDLE_MS, INVOKE_TIMEOUT_MS,
 } from './limits'
 import { PANEL_SLOTS, CTX_TARGETS } from './registry'
 // v1.465.0: числа новых возможностей — тоже из одного источника с приложением.
-import { MAX_SOCKETS } from './wsHub'
+// v1.489.0: чисел почти не осталось — пределы сняты (limits.ts).
 import { IPC_MAX_BYTES } from './ipc'
-import { BEFORE_SEND_MS, BEFORE_RENDER_MS, MAX_INTERCEPTORS } from './middleware'
+import { BEFORE_SEND_MS, BEFORE_RENDER_MS } from './middleware'
 import { CANVAS_W } from './canvasHub'
-import { MIN_EVERY_MS, MAX_TASKS } from './background'
+import { MIN_EVERY_MS } from './background'
 import { THEME_VAR_NAMES } from './pluginTheme'
-import { APP_MODES, MAX_APPS_PER_PLUGIN } from './apps'
-import { OPS, MAX_ROWS } from './db'
-import { MAX_ASSET_BYTES, MAX_ASSETS, MAX_ASSETS_TOTAL } from './assets'
+import { APP_MODES } from './apps'
+import { OPS } from './db'
 import { DEADZONE } from './gamepads'
 // v1.360.0: полное описание формата плагина — одним текстом.
 //
@@ -40,14 +37,11 @@ const EVENT_DOC_TABLE = [
     `| ${name} | ${e.when} | ${e.payload} | ${e.permission ?? '—'} |`),
 ].join('\n')
 
-// v1.446.0: числа пределов берутся из таблицы (limits.ts), а не пишутся в
-// тексте руками. Их подняли в v1.446.0, а инструкция осталась со старыми — и
-// это худший вид расхождения: ИИ читает её и пишет плагин под предел, которого
-// уже нет. Проверка на это есть в __test.ts.
-const lim = (k: keyof typeof LIMITS) => {
-  const l = LIMITS[k]
-  return `${l.times} раз за ${Math.round(l.windowMs / 1000)} с`
-}
+// v1.489.0: пределов больше нет, и в инструкции их тоже нет.
+//
+// Это не мелочь: ИИ читает этот текст и пишет плагин ПО НЕМУ. Оставь тут «до
+// 500 сообщений за раз» — и написанный по инструкции плагин сам себя ограничит
+// там, где ограничения уже сняты. Числа остались только у сроков ожидания.
 const mb = (b: number) => (b >= 1024 * 1024 ? Math.round(b / 1024 / 1024) + ' МБ' : Math.round(b / 1024) + ' КБ')
 const sec = (ms: number) => (ms >= 60_000 ? Math.round(ms / 60_000) + ' мин' : Math.round(ms / 1000) + ' с')
 
@@ -182,7 +176,7 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
 ### Сообщения
 
     await ponoi.messages.send('текст')                 // нужно messages.write
-    const last = await ponoi.messages.recent(20)       // нужно messages.read, до ${MAX_RECENT}
+    const last = await ponoi.messages.recent(20)       // нужно messages.read
     // last: [{ id, author, authorName, content, mine, at }] — то же, что на экране
     await ponoi.messages.react(id, '👍')               // нужно messages.write
     await ponoi.messages.remove(id)                    // нужно messages.write
@@ -191,7 +185,8 @@ recent, react и remove работают с ОТКРЫТЫМ сейчас чат
 send. Если чат не открыт, вызов бросает ошибку. Убрать можно только своё
 сообщение: чужое не даст ни приложение, ни база.
 
-Отправка ограничена: не чаще ${lim('send')}.
+Как часто отправлять — не ограничено. Отвечает за поток сообщений человек,
+от чьего имени они уходят, а не плагин: не превращай это в спам.
 
 ### События
 
@@ -308,8 +303,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 Действия над сообщением (addMessageAction) видны и в меню по правой кнопке, и
 первые два — прямо в панели при наведении на сообщение.
 
-Кнопок и пунктов меню — не больше ${MAX_PER_PLUGIN.buttons} каждого вида,
-горячих клавиш — ${MAX_PER_PLUGIN.hotkeys}, команд — ${MAX_PER_PLUGIN.commands}.
+Кнопок, пунктов меню, горячих клавиш и команд — сколько нужно, счёта нет.
 
 ### Спросить человека (нужно ui)
 
@@ -347,7 +341,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
     const keys = await ponoi.storage.keys()
     await ponoi.storage.clear()
 
-Одно значение — не больше ${mb(MAX_STORAGE_VALUE)}. Хранится на этом устройстве, между устройствами
+Размер значения не ограничен. Хранится на этом устройстве, между устройствами
 не синхронизируется. Чужое хранилище недоступно.
 
 ### Обстановка (нужно context)
@@ -363,7 +357,8 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
     await ponoi.open({ dmId })                  // открыть диалог по его id
     await ponoi.open({ userId, userName })      // открыть личку с человеком
 
-Не чаще ${lim('open')}: переход уводит человека с того, на что он смотрит.
+Переход уводит человека с того, на что он смотрит, — делай это по его просьбе,
+а не по таймеру.
 
 ### Активность (нужно status)
 
@@ -376,7 +371,7 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 
 ### Уведомления и звук (нужно notify)
 
-    await ponoi.notify('текст')          // не чаще ${lim('notify')}
+    await ponoi.notify('текст')
     await ponoi.sound.play('message')    // 'message' или 'chime', 5 раз за 10 с
 
 ### Буфер обмена (нужно ui)
@@ -404,8 +399,8 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
       body: JSON.stringify({ a: 1 }),
     })
 
-Только https и только домены, перечисленные в @hosts. Не чаще ${lim('net')},
-ответ — не больше ${mb(NET_MAX_BYTES)}, ожидание — ${sec(NET_TIMEOUT_MS)}. Заголовки — из
+Только https и только домены, перечисленные в @hosts.
+размер ответа не ограничен, ожидание — ${sec(NET_TIMEOUT_MS)}. Заголовки — из
 разрешённых: Content-Type, Accept, Authorization, X-Api-Key, X-Auth-Token,
 User-Agent, Accept-Language, Anthropic-Version, Anthropic-Beta,
 OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и его серверу
@@ -426,8 +421,8 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 Для чего это. Обычный ponoi.net.fetch ждёт ВЕСЬ ответ целиком, а ИИ-модель
 отвечает по слову: поток отдаёт её ответ по мере поступления. У потока и сроки
 свои: ${sec(NET_STREAM_MS)} на весь
-ответ, ${sec(NET_STREAM_IDLE_MS)} на очередной кусок (замолчал — обрываем),
-до ${mb(NET_STREAM_MAX_BYTES)} всего, не чаще ${lim('netstream')}.
+ответ и ${sec(NET_STREAM_IDLE_MS)} на очередной кусок (замолчал — обрываем).
+Сколько всего придёт байт и как часто открывать поток — не ограничено.
 
 Правила выхода наружу — те же самые: https, только @hosts, те же заголовки,
 без куки, к самому Ponoi нельзя. Ключ от модели плагин приносит свой; храни
@@ -451,8 +446,8 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 таймеру — значит опаздывать и жечь батарею.
 
 Правила ровно те же, что у обычного запроса, только схема wss: домен обязан
-быть в @hosts, к самому Ponoi нельзя. Соединений разом — до ${MAX_SOCKETS} на
-плагин, открывать не чаще ${lim('ws')}, слать не чаще ${lim('wssend')}.
+быть в @hosts, к самому Ponoi нельзя. Соединений разом сколько угодно, у
+плагин; как часто открывать и сколько слать — не ограничено.
 Приходящее — только текст. Всё, что плагин открыл, закрывается, когда его
 выключают.
 
@@ -479,7 +474,7 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 from подставляет приложение — подделать имя отправителя нельзя. Функции через
 письмо не проходят: они вырезаются. Это не придирка — доехавшая функция дала бы
 соседу право звать твой код с ТВОИМИ разрешениями. Письмо — до
-${IPC_MAX_BYTES / 1024} КБ, не чаще ${lim('ipc')}.
+${IPC_MAX_BYTES / 1024} КБ — это не предел, а защита от бесконечной ссылки на саму себя.
 
 ### Своё хранилище таблицами (нужно storage)
 
@@ -515,7 +510,7 @@ db.update, db.remove, db.count и db.clear; звать их напрямую н�
 тысяч строк это доли миллисекунды, для миллионов — нет. Обещать здесь SQL было
 бы враньём.
 
-Строк в одной таблице до ${MAX_ROWS}, одна строка до 256 КБ. Данные переживают
+Ни числа строк, ни их размера не ограничено. Данные переживают
 выключение плагина и пропадают, когда плагин удаляют.
 
 ### Свои файлы: картинки, звуки, шрифты, данные (нужно storage)
@@ -557,8 +552,8 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 Разметка (HTML, SVG, XML) отвергается: внутри неё может быть код. Неопознанное
 тоже отвергается — с объяснением, а не молча.
 
-Один файл до ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} МБ, файлов до ${MAX_ASSETS},
-всего до ${Math.round(MAX_ASSETS_TOTAL / 1024 / 1024)} МБ на плагин. Как и таблицы,
+Ни размера файла, ни их числа, ни общего места не ограничено — пока не
+кончится место на диске, и тогда откажет сама база. Как и таблицы,
 файлы переживают выключение плагина и пропадают, когда плагин удаляют.
 
 ### Геймпад (нужно input)
@@ -701,7 +696,7 @@ onBeforeSend ловит ВСЁ, что уходит на сервер: и нов
 исходный текст. Отмена — только явная, { cancel: true }; вернуть undefined и
 надеяться на отмену нельзя. Пустой текст после правки тоже считается отменой.
 Ждём ответа ${BEFORE_SEND_MS / 1000} с при отправке и ${BEFORE_RENDER_MS / 1000} с
-при показе. Перехватчиков каждого вида — до ${MAX_INTERCEPTORS} на плагин.
+при показе. Число перехватчиков не ограничено.
 
 ### Своя область экрана (нужно apps)
 
@@ -731,7 +726,7 @@ ${APP_DOC_TABLE}
 Содержимое — те же строки, что в панели, включая холст: плагин по-прежнему
 ничего не рисует сам.
 
-Окон у одного плагина — до ${MAX_APPS_PER_PLUGIN}. На телефоне window
+Окон сколько угодно и любого размера. На телефоне window
 разворачивается во весь экран, а pip становится шторкой снизу — таскать окошки
 пальцем по маленькому экрану незачем.
 
@@ -829,7 +824,7 @@ ${APP_DOC_TABLE}
 карточке плагина, с её сроком и кнопкой «остановить», а ошибки в ней попадают в
 журнал плагина, а не тонут молча.
 
-Не чаще раза в ${MIN_EVERY_MS / 1000} с и не реже раза в сутки, до ${MAX_TASKS}
+Не чаще раза в ${MIN_EVERY_MS / 1000} с, дальше как угодно редко и сколько угодно
 задач на плагин. Всё снимается, когда плагин выключают.
 
 ### Цвета оформления (нужно ui.theme)
@@ -876,9 +871,8 @@ ${CTX_DOC_TABLE}
     await ponoi.music.queue(trackId)   // поставить следующим; false — нет такого трека
     await ponoi.music.add(url)         // добавить ссылку в Трекотеку
 
-Управлять можно не чаще ${lim('music')}, добавлять треки — не чаще
-${lim('music.add')}: Трекотека общая, и плагин с ошибкой в цикле завалил бы её у
-всех. Каждое добавление отдельно подтверждает человек — это не предел, а согласие.
+Как часто управлять и добавлять — не ограничено. Но Трекотека ОБЩАЯ, её видят
+все. Каждое добавление отдельно подтверждает человек — это не предел, а согласие.
 Самого звука плагину не достаётся ни в каком виде.
 
 ### Тяжёлые вычисления: WebAssembly

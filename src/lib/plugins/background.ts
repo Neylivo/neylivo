@@ -29,9 +29,7 @@
 /** Чаще этого нельзя: секундный круг — уже достаточно для «моментально». */
 export const MIN_EVERY_MS = 1000
 /** Реже — незачем: сутки в миллисекундах. */
-export const MAX_EVERY_MS = 24 * 60 * 60 * 1000
 /** Сколько задач у одного плагина. */
-export const MAX_TASKS = 8
 
 export class BackgroundError extends Error {}
 
@@ -113,10 +111,8 @@ export function addTask(pluginId: string, everyMs: number, label: string): Task 
   if (!Number.isFinite(ms) || ms < MIN_EVERY_MS) {
     throw new BackgroundError(`Слишком часто: не чаще раза в ${MIN_EVERY_MS / 1000} с.`)
   }
-  if (ms > MAX_EVERY_MS) throw new BackgroundError('Слишком редко: не реже раза в сутки.')
   let mine = 0
   for (const [, t] of tasks) if (t.pluginId === pluginId) mine++
-  if (mine >= MAX_TASKS) throw new BackgroundError(`Фоновых задач у одного плагина не больше ${MAX_TASKS}.`)
 
   const t: Task = {
     id: ++seq, pluginId, everyMs: ms, dueAt: Date.now() + ms, runs: 0,

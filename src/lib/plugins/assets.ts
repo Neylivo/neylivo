@@ -32,14 +32,6 @@ import { STORE_ASSETS as STORE, запрос, лавка } from './idb'
 
 export class AssetError extends Error {}
 
-/** Один файл целиком. Больше — это уже не «ресурс плагина», а хранилище. */
-export const MAX_ASSET_BYTES = 32 * 1024 * 1024
-/** Сколько файлов у одного плагина. */
-export const MAX_ASSETS = 5000
-/** Сколько всего места на плагин. Половина обычной квоты браузера на origin. */
-export const MAX_ASSETS_TOTAL = 4 * 1024 * 1024 * 1024
-/** Длина имени файла. */
-export const MAX_ASSET_NAME = 120
 
 /** Разделитель в составном ключе — тот же приём, что в db.ts. */
 const SEP = '\u0000'
@@ -60,7 +52,6 @@ const NAME_BAD = /[\u0000-\u001f\u007f/\\]/
 export function checkAssetName(raw: unknown): string {
   const s = String(raw ?? '').trim()
   if (!s) throw new AssetError('Файлу нужно имя')
-  if (s.length > MAX_ASSET_NAME) throw new AssetError(`Имя длиннее ${MAX_ASSET_NAME} знаков`)
   if (s.includes('..')) throw new AssetError('В имени файла не может быть «..»')
   if (NAME_BAD.test(s)) throw new AssetError('В имени файла не может быть черты пути и невидимых знаков')
   return s
@@ -227,22 +218,13 @@ export async function assetPut(pluginId: string, name: string, data: unknown): P
   const buf = typeof Blob !== 'undefined' && data instanceof Blob
     ? await data.arrayBuffer()
     : bytesFrom(data)
-  if (buf.byteLength > MAX_ASSET_BYTES) {
-    throw new AssetError(`Файл больше ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} МБ`)
-  }
+  // v1.489.0: ни размера файла, ни их числа, ни общего места больше не
+  // считаем. Было 32 МБ на файл, 5000 файлов и 4 ГБ на плагин.
+  //
+  // Место на диске при этом не бесконечно, и когда оно кончится, откажет уже
+  // сама база — с внятной ошибкой, которая уйдёт плагину как есть. Это честнее
+  // выдуманного потолка: отказывает то, что и правда кончилось.
   const вид = sniffAsset(buf)
-
-  const было = await свои(pluginId)
-  const прежний = было.find(r => r.name === n)
-  if (!прежний && было.length >= MAX_ASSETS) {
-    throw new AssetError(`У плагина уже ${MAX_ASSETS} файлов — больше нельзя.`)
-  }
-  // Перезапись своего же файла не должна считаться за прибавку: иначе плагин,
-  // обновляющий один и тот же файл, упирался бы в общий предел на ровном месте.
-  const занято = было.reduce((s, r) => s + r.size, 0) - (прежний?.size ?? 0)
-  if (занято + buf.byteLength > MAX_ASSETS_TOTAL) {
-    throw new AssetError(`Место кончилось: у плагина может быть до ${Math.round(MAX_ASSETS_TOTAL / 1024 / 1024)} МБ файлов`)
-  }
 
   const rec: Запись = {
     k: ключ(pluginId, n), p: pluginId, name: n,

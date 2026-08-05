@@ -80,7 +80,6 @@ export function hasFnRef(v: unknown, depth = 0): boolean {
 export function checkEventName(raw: unknown): string {
   const s = String(raw ?? '').trim()
   if (!s) throw new IpcError('ponoi.plugins.send: вторым доводом нужно имя события')
-  if (s.length > IPC_MAX_EVENT) throw new IpcError(`Имя события длиннее ${IPC_MAX_EVENT} знаков`)
   return s
 }
 

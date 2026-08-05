@@ -227,7 +227,6 @@ const reg: Registry = {
  * ни один осмысленный плагин столько не просит.
  */
 // v1.446.0: было 5/5/15/5 — большому плагину не хватало на один экран.
-import { MAX_PER_PLUGIN } from './limits'
 
 /** Снимок для проверок — приложению он не нужен, оно читает через хуки. */
 export const getRegistry = (): Registry => reg
@@ -304,17 +303,20 @@ export function setPluginCss(pluginId: string, css: string) {
 /** Ошибка «плагин просит слишком много» — текст уходит прямо ему. */
 export class PluginLimit extends Error {}
 
-function guard(kind: keyof typeof MAX_PER_PLUGIN, list: { pluginId: string }[], pluginId: string, replacing: boolean) {
+/**
+ * v1.489.0: счёта кнопок, действий, команд и горячих клавиш больше нет.
+ *
+ * Было «не больше 60 кнопок на плагин» и так далее. Владелец сказал: «убери
+ * полностью все ограничение плагинов», — счёт убран.
+ *
+ * Проверка осталась ровно одна, и она не про количество: АВАРИЙНЫЙ РЕЖИМ. Это
+ * третья из границ, которые владелец назвал нерушимыми сам, — запуск с Shift
+ * отключает сторонние плагины целиком. Пропусти её здесь — и в безопасном
+ * режиме плагин по-прежнему смог бы завести себе кнопку, то есть режим
+ * перестал бы быть безопасным.
+ */
+function guard(_kind: string, _list: { pluginId: string }[], _pluginId: string, _replacing: boolean) {
   if (disabled) throw new PluginLimit('Плагины выключены аварийным режимом')
-  if (replacing) return
-  const mine = list.filter(x => x.pluginId === pluginId).length
-  const max = MAX_PER_PLUGIN[kind]
-  if (mine >= max) {
-    const what = kind === 'buttons' ? 'кнопок'
-      : kind === 'actions' ? 'действий над сообщением'
-      : kind === 'hotkeys' ? 'горячих клавиш' : 'команд'
-    throw new PluginLimit(`Плагин просит слишком много ${what}: больше ${max} нельзя.`)
-  }
 }
 
 export function addComposerButton(b: ComposerButton) {

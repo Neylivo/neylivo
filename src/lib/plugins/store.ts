@@ -6,9 +6,13 @@ import type { InstalledPlugin } from './types'
 // чего делать не стоит. Заодно не нужна ни таблица, ни миграция.
 
 const KEY = 'ponoi.plugins'
-/** Потолок на всё хранилище плагинов: в localStorage около 5 МБ на origin, и выжрать
- *  его целиком нельзя — там же лежат настройки, черновики и кэши приложения. */
-const MAX_TOTAL_BYTES = 2 * 1024 * 1024
+// v1.489.0: своего потолка на хранилище плагинов больше нет.
+//
+// Было 2 МБ, выдуманные с запасом от браузерных пяти. Владелец сказал «убери
+// полностью все ограничение плагинов» — выдуманное число ушло. Настоящая
+// граница осталась там, где она и есть: в самом браузере. Когда место правда
+// кончится, setItem бросит своё — и мы скажем об этом человеческими словами,
+// вместо того чтобы отказывать заранее по числу из головы.
 
 const listeners = new Set<() => void>()
 export function subscribePlugins(fn: () => void): () => void {
@@ -40,9 +44,6 @@ export function loadPlugins(): InstalledPlugin[] {
  */
 function persist(list: InstalledPlugin[], silent = false) {
   const json = JSON.stringify(list)
-  if (json.length > MAX_TOTAL_BYTES) {
-    throw new Error('Не хватает места: суммарный размер плагинов больше 2 МБ. Удали ненужные.')
-  }
   try {
     localStorage.setItem(KEY, json)
   } catch {

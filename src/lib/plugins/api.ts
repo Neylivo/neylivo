@@ -2,8 +2,7 @@ import { PLUGIN_EVENTS, PLUGIN_EVENT_NAMES, type InstalledPlugin, type Permissio
 import { isFnRef, type FnRef } from './sandbox'
 import { checkTarget, checkMethod, pickHeaders, normMethod, type NetTarget } from './netGuard'
 import {
-  LIMITS, MAX_STORAGE_VALUE, MAX_CSS, MAX_LABEL,
-  NET_TIMEOUT_MS, NET_MAX_BYTES, NET_STREAM_MS, NET_STREAM_IDLE_MS, NET_STREAM_MAX_BYTES,
+  NET_TIMEOUT_MS, NET_STREAM_MS, NET_STREAM_IDLE_MS,
 } from './limits'
 import {
   addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
@@ -21,20 +20,20 @@ import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
 import { openApp, updateApp, closeApp, isMode, APP_MODES, appList, widgetOf, setWidgetOf, appGeometry, screenSize } from './apps'
-import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
+import { registerService, unregisterService, findService, serviceMethods, checkName } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 // v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
 // раньше: правила и хранение отдельно, ветка диспетчера здесь.
 import {
   assetPut, assetGet, assetInfo, assetList, assetRemove, assetClear, assetUrl,
-  isAssetRef, assetRefName, checkAssetName, ASSET_PREFIX, MAX_ASSET_BYTES,
+  isAssetRef, assetRefName, checkAssetName, ASSET_PREFIX,
 } from './assets'
 import { readPads, watchGamepads } from './gamepads'
 // v1.481.0: любой канал, а не только открытый.
 import { anyRecent, anySend, anyChannels } from './anyChat'
 import { askDialog, dialogRows } from './dialog'
 import { musicBridge } from './musicApi'
-import { chatBridge, MAX_RECENT } from './chatApi'
+import { chatBridge } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
 import { readStorage, writeStorage, deleteStorage, listStorage } from './store'
 import { pluginLog } from './host'
@@ -204,42 +203,28 @@ export interface HostContext {
 
 class Denied extends Error {}
 
-/**
- * Ограничение частоты (v1.345.0).
- *
- * Отправка сообщений и уведомления раньше не были ничем ограничены: плагин мог
- * за секунду выплюнуть в канал сотню сообщений от имени человека — и забанят
- * за это человека, а не плагин. Считаем по скользящему окну, отдельно для
- * каждого плагина и каждого действия.
- */
-const RATE: Record<string, number[]> = {}
-/**
- * v1.446.0: числа больше не пишутся по месту — они лежат в одной таблице
- * (limits.ts). Раньше четырнадцать пределов были разбросаны по файлу, и поднять
- * их «все» означало найти все четырнадцать и ни одного не пропустить.
- *
- * Сами пределы подняты в десятки раз: это защита от зациклившегося плагина, а
- * не от плагина вообще. Совсем убрать их нельзя — цикл без конца подвесил бы
- * приложение, и человек не добрался бы до кнопки «выключить».
- */
-function rateLimit(pluginId: string, kind: string) {
-  const l = LIMITS[kind]
-  if (!l) return   // неизвестный вид — не выдумываем предел из головы
-  const key = pluginId + ':' + kind
-  const now = Date.now()
-  const arr = (RATE[key] ??= []).filter(t => now - t < l.windowMs)
-  if (arr.length >= l.times) {
-    RATE[key] = arr
-    throw new Denied(`Слишком часто: ${l.what} можно не больше ${l.times} раз за ${Math.round(l.windowMs / 1000)} с.`)
-  }
-  arr.push(now)
-  RATE[key] = arr
-}
+// v1.489.0: ограничения частоты здесь больше нет.
+//
+// Оно жило тут с v1.345.0 и считало по скользящему окну, сколько раз плагин
+// успел отправить, отреагировать, сходить в интернет. Владелец сказал: «убери
+// полностью все ограничение плагинов» — и это ровно оно.
+//
+// Чем это отличается от сроков ожидания, которые остались (limits.ts): те
+// стерегут, чтобы не ответивший плагин не повесил ПРИЛОЖЕНИЕ. А здесь считалось
+// то, сколько плагину можно, — этого больше нет нигде.
 
-function str(v: unknown, max: number, what: string): string {
+/**
+ * Строка от плагина. Пустую не принимаем — это почти всегда его же ошибка, и
+ * молча подставить вместо неё пустое место значит спрятать ошибку от автора.
+ *
+ * v1.489.0: длину БОЛЬШЕ НЕ РЕЖЕМ. Второй параметр остался только затем, чтобы
+ * не переписывать полсотни вызовов; он ни на что не влияет. Подпись кнопки в
+ * тысячу знаков — дело плагина и того, кто его поставил.
+ */
+function str(v: unknown, _max: number, what: string): string {
   const s = String(v ?? '').trim()
   if (!s) throw new Denied(`${what}: пустое значение`)
-  return s.length > max ? s.slice(0, max) : s
+  return s
 }
 
 function fnRef(v: unknown, what: string): FnRef {
@@ -350,7 +335,6 @@ export function createDispatcher(
       case 'css': {
         need('css')
         const css = String(args[0] ?? '')
-        if (css.length > MAX_CSS) throw new Denied(`Слишком много CSS (больше ${Math.round(MAX_CSS / 1024)} КБ).`)
         setPluginCss(id, css)
         return null
       }
@@ -362,7 +346,7 @@ export function createDispatcher(
           pluginId: id,
           key: str(o?.key ?? o?.tooltip, 60, 'кнопка'),
           icon: safeIcon(o?.icon),
-          tooltip: str(o?.tooltip, MAX_LABEL, 'подсказка кнопки'),
+          tooltip: str(o?.tooltip, 0, 'подсказка кнопки'),
           onClick: fnRef(o?.onClick, 'кнопка композера'),
         })
         return null
@@ -379,7 +363,7 @@ export function createDispatcher(
           pluginId: id,
           key: str(o?.key ?? o?.label, 60, 'действие'),
           icon: safeIcon(o?.icon),
-          label: str(o?.label, MAX_LABEL, 'подпись действия'),
+          label: str(o?.label, 0, 'подпись действия'),
           onClick: fnRef(o?.onClick, 'действие над сообщением'),
         })
         return null
@@ -439,7 +423,6 @@ export function createDispatcher(
         need('music')
         const b = musicBridge()
         if (!b) return false
-        rateLimit(id, 'music')
         if (method === 'music.play') b.play()
         else if (method === 'music.pause') b.pause()
         else if (method === 'music.next') b.next()
@@ -467,7 +450,6 @@ export function createDispatcher(
          * что человек и так делает своими кнопками у себя (см. PLUGIN_METHODS
          * ниже — там же список и его смысл).
          */
-        rateLimit(id, 'music.add')
         const b = musicBridge()
         if (!b) throw new Denied('Плеер сейчас не открыт — добавлять некуда.')
         const link = str(args[0], 500, 'ссылка на трек')
@@ -508,12 +490,12 @@ export function createDispatcher(
         need('messages.read')
         const b = chatBridge(ctx.channel?.()?.id)
         if (!b) throw new Denied('Сейчас не открыт ни один чат — читать нечего.')
-        const n = Math.min(Math.max(Math.round(Number(args[0]) || 20), 1), MAX_RECENT)
+        // v1.489.0: потолка нет — сколько попросил, столько и отдадим.
+        const n = Math.max(Math.round(Number(args[0]) || 20), 1)
         return b.recent(n)
       }
       case 'messages.react': {
         need('messages.write')
-        rateLimit(id, 'react')
         const b = chatBridge(ctx.channel?.()?.id)
         if (!b) throw new Denied('Сейчас не открыт ни один чат.')
         const why = await b.react(str(args[0], 60, 'id сообщения'), str(args[1], 16, 'эмодзи'))
@@ -522,7 +504,6 @@ export function createDispatcher(
       }
       case 'messages.remove': {
         need('messages.write')
-        rateLimit(id, 'remove')
         const b = chatBridge(ctx.channel?.()?.id)
         if (!b) throw new Denied('Сейчас не открыт ни один чат.')
         const why = await b.remove(str(args[0], 60, 'id сообщения'))
@@ -543,7 +524,6 @@ export function createDispatcher(
         need('navigate')
         // Переход уводит человека с того, на что он смотрит: в цикле это
         // сделало бы приложение неуправляемым.
-        rateLimit(id, 'open')
         const o = (args[0] ?? {}) as any
         const ok = pluginOpen({
           serverId: o.serverId ? String(o.serverId).slice(0, 60) : undefined,
@@ -558,7 +538,6 @@ export function createDispatcher(
 
       case 'status.set': {
         need('status')
-        rateLimit(id, 'status')
         return await pluginSetStatus(String(args[0] ?? ''))
       }
       case 'status.get': {
@@ -570,7 +549,6 @@ export function createDispatcher(
         // Звук — то же беспокойство, что и уведомление, поэтому и разрешение то
         // же самое, и ограничение частоты своё.
         need('notify')
-        rateLimit(id, 'sound')
         const name = String(args[0] ?? 'chime')
         if (!(PLUGIN_SOUND_NAMES as readonly string[]).includes(name)) {
           throw new Denied(`Нет такого звука «${name}». Есть: ${PLUGIN_SOUND_NAMES.join(', ')}.`)
@@ -627,7 +605,6 @@ export function createDispatcher(
         need('messages.write')
         // Человек пишет руками в лучшем случае несколько сообщений за десять
         // секунд — плагину столько же и хватит.
-        rateLimit(id, 'send')
         await ctx.sendMessage(String(args[0] ?? '').slice(0, 4000))
         return null
       }
@@ -662,7 +639,6 @@ export function createDispatcher(
 
       case 'notify': {
         need('notify')
-        rateLimit(id, 'notify')
         ctx.toast(String(args[0] ?? '').slice(0, 200))
         return null
       }
@@ -676,7 +652,6 @@ export function createDispatcher(
         const key = str(args[0], 100, 'ключ')
         let json: string
         try { json = JSON.stringify(args[1] ?? null) } catch { throw new Denied('Значение нельзя сохранить: в нём есть циклическая ссылка.') }
-        if (json.length > MAX_STORAGE_VALUE) throw new Denied(`Значение больше ${Math.round(MAX_STORAGE_VALUE / 1024)} КБ.`)
         writeStorage(id, key, JSON.parse(json))
         return null
       }
@@ -696,7 +671,6 @@ export function createDispatcher(
         need('net')
         // Запросы наружу — тоже поток: без потолка плагин превращается в
         // маленький ддос-клиент с чужого компьютера.
-        rateLimit(id, 'net')
         return await pluginFetch(plugin, String(args[0] ?? ''), args[1] as any)
       }
 
@@ -711,7 +685,6 @@ export function createDispatcher(
       // и зовутся отсюда, а не переписаны заново.
       case 'net.stream': {
         need('net')
-        rateLimit(id, 'netstream')
         return await pluginStream(plugin, String(args[0] ?? ''), args[1] as any,
           fnRef(args[2], 'net.stream: третьим доводом'), ctx)
       }
@@ -736,7 +709,6 @@ export function createDispatcher(
       // окно рисует приложение, а плагин получает только ответ.
       case 'ui.confirm': {
         need('ui')
-        rateLimit(id, 'ask')
         const o = (args[0] ?? {}) as any
         if (!ctx.confirm) return false
         return await ctx.confirm(
@@ -748,7 +720,6 @@ export function createDispatcher(
 
       case 'ui.prompt': {
         need('ui')
-        rateLimit(id, 'ask')
         const o = (args[0] ?? {}) as any
         if (!ctx.prompt) return null
         return await ctx.prompt(
@@ -760,7 +731,6 @@ export function createDispatcher(
 
       case 'clipboard.write': {
         need('ui')
-        rateLimit(id, 'clip')
         const t = String(args[0] ?? '').slice(0, 10_000)
         if (!t) throw new Denied('Нечего копировать.')
         await navigator.clipboard?.writeText(t)
@@ -802,7 +772,6 @@ export function createDispatcher(
       // Наружу это не выходит никуда: письмо ходит между двумя воркерами.
       case 'plugins.send': {
         need('ipc')
-        rateLimit(id, 'ipc')
         const to = str(args[0], 80, 'plugins.send: id плагина')
         if (to === id) throw new Denied('Плагин не может слать письмо самому себе.')
         // packIpc вырезает метки функций: доехавшая метка дала бы соседу
@@ -857,7 +826,6 @@ export function createDispatcher(
       // со схемой wss. Второго списка правил здесь нет намеренно.
       case 'net.ws': {
         need('net')
-        rateLimit(id, 'ws')
         const url = String(args[0] ?? '')
         const h = (args[1] ?? {}) as Record<string, unknown>
         if (!ctx.invoke) throw new Denied('Соединение недоступно: приложение не может звать обработчики плагина.')
@@ -873,7 +841,6 @@ export function createDispatcher(
       }
       case 'net.wsSend': {
         need('net')
-        rateLimit(id, 'wssend')
         return sendSocket(id, Number(args[0]), args[1])
       }
       case 'net.wsClose': {
@@ -935,7 +902,7 @@ export function createDispatcher(
           key: str(o?.key ?? o?.label, 60, 'пункт меню'),
           target,
           icon: safeIcon(o?.icon),
-          label: str(o?.label, MAX_LABEL, 'подпись пункта меню'),
+          label: str(o?.label, 0, 'подпись пункта меню'),
           onClick: fnRef(o?.onClick, 'пункт меню'),
         })
         return null
@@ -951,7 +918,7 @@ export function createDispatcher(
           pluginId: id,
           key: str(o?.key ?? o?.tooltip, 60, 'кнопка шапки'),
           icon: safeIcon(o?.icon),
-          tooltip: str(o?.tooltip, MAX_LABEL, 'подсказка кнопки'),
+          tooltip: str(o?.tooltip, 0, 'подсказка кнопки'),
           onClick: fnRef(o?.onClick, 'кнопка шапки'),
           active: !!o?.active,
         })
@@ -1129,7 +1096,6 @@ export function createDispatcher(
         const methods = new Map<string, FnRef>()
         for (const [k, v] of Object.entries(raw)) {
           if (!isFnRef(v)) continue
-          if (methods.size >= MAX_METHODS) break
           methods.set(String(k).slice(0, 60), v)
         }
         registerService(id, name, methods)
@@ -1149,7 +1115,6 @@ export function createDispatcher(
       }
       case 'services.call': {
         need('ipc')
-        rateLimit(id, 'ipc')
         const svc = findService(String(args[0] ?? ''))
         if (!svc) throw new Denied(`Служба «${args[0]}» не найдена.`)
         const ref = svc.methods.get(String(args[1] ?? ''))
@@ -1228,7 +1193,6 @@ export function createDispatcher(
       case 'assets.fetch': {
         need('storage')
         need('net')
-        rateLimit(id, 'net')
         return await assetFetch(plugin, String(args[0] ?? ''), String(args[1] ?? ''))
       }
       case 'assets.get': {
@@ -1257,7 +1221,6 @@ export function createDispatcher(
       case 'assets.play': {
         need('storage')
         need('notify')
-        rateLimit(id, 'sound')
         return await playAsset(id, String(args[0] ?? ''), Number(args[1]))
       }
 
@@ -1280,7 +1243,6 @@ export function createDispatcher(
 
       case 'ui.dialog': {
         need('ui')
-        rateLimit(id, 'ask')
         const o = (args[0] ?? {}) as any
         const rows = dialogRows(
           (Array.isArray(o.rows) ? o.rows : []).map(settingsRow).filter(Boolean) as SettingsRow[],
@@ -1323,7 +1285,6 @@ export function createDispatcher(
       }
       case 'messages.anySend': {
         need('messages.any')
-        rateLimit(id, 'send')
         return await anySend(args[0], String(args[1] ?? ''))
       }
 
@@ -1372,13 +1333,13 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
     const res = await fetch(url.toString(), {
       method,
       headers,
-      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? '').slice(0, NET_MAX_BYTES),
+      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? ''),
       signal: ctl.signal,
       // Без куки и без авторизации — запрос от имени никого.
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     })
-    const text = (await res.text()).slice(0, NET_MAX_BYTES)
+    const text = await res.text()
     return { ok: res.ok, status: res.status, body: text }
   } catch (err: any) {
     if (err?.name === 'AbortError') throw new Denied(`Сайт не ответил за ${NET_TIMEOUT_MS / 1000} с.`)
@@ -1411,9 +1372,6 @@ async function assetFetch(plugin: InstalledPlugin, name: string, rawUrl: string)
     const buf = await res.arrayBuffer()
     // Предел проверяется и здесь, и в assetPut. Здесь — чтобы сказать про
     // СКАЧАННОЕ, а не про «файл»: причина у человека разная.
-    if (buf.byteLength > MAX_ASSET_BYTES) {
-      throw new Denied(`Скачано ${Math.round(buf.byteLength / 1024 / 1024)} МБ — больше ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} МБ нельзя.`)
-    }
     return await assetPut(plugin.manifest.id, name, buf)
   } catch (err: any) {
     if (err?.name === 'AbortError') throw new Denied(`Сайт не ответил за ${NET_TIMEOUT_MS / 1000} с.`)
@@ -1495,7 +1453,7 @@ async function pluginStream(
     const res = await fetch(url.toString(), {
       method,
       headers,
-      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? '').slice(0, NET_MAX_BYTES),
+      body: method === 'GET' || method === 'DELETE' ? undefined : String(init?.body ?? ''),
       signal: ctl.signal,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
@@ -1504,7 +1462,7 @@ async function pluginStream(
     if (!body) {
       // Поток не дали — отдаём то, что есть, одним куском: лучше так, чем
       // молча вернуть пустоту.
-      const text = (await res.text()).slice(0, NET_STREAM_MAX_BYTES)
+      const text = await res.text()
       if (text) await callChunk(ctx, onChunk, text)
       return { ok: res.ok, status: res.status, bytes: text.length }
     }
@@ -1519,11 +1477,6 @@ async function pluginStream(
       const piece = dec.decode(value, { stream: true })
       if (!piece) continue
       total += piece.length
-      if (total > NET_STREAM_MAX_BYTES) {
-        // Дальше не читаем: иначе бесконечный поток съест память вкладки.
-        try { await reader.cancel() } catch { /* уже закрыт */ }
-        throw new Denied(`Ответ длиннее ${Math.round(NET_STREAM_MAX_BYTES / 1024 / 1024)} МБ — поток прерван.`)
-      }
       // Обработчик упал — прекращаем поток. Продолжать сыпать куски в сломанный
       // обработчик бессмысленно, а тишина скрыла бы поломку от автора плагина.
       try { await callChunk(ctx, onChunk, piece) }

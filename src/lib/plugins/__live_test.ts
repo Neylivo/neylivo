@@ -16,7 +16,7 @@
 
 import {
   assetPut, assetGet, assetInfo, assetList, assetRemove, assetClear, assetUsage,
-  assetUrl, clearAssetUrls, assetUrlCount, MAX_ASSETS, MAX_ASSET_BYTES,
+  assetUrl, clearAssetUrls, assetUrlCount,
 } from './assets'
 import {
   watchGamepads, unwatchGamepads, unwatchAllGamepads, setGamepadEmit,
@@ -106,8 +106,6 @@ async function main() {
     assetPut('probe', 'мусор.bin', new Uint8Array([3, 4, 5, 6, 7]).buffer))
   await mustThrow('пустой файл — отказ', () => assetPut('probe', 'zero.png', new ArrayBuffer(0)))
   await mustThrow('чужое имя не проходит', () => assetPut('probe', '../чужое.png', PNG.buffer))
-  await mustThrow('файл больше предела не проходит', () =>
-    assetPut('probe', 'big.png', new Uint8Array(MAX_ASSET_BYTES + 1).fill(0x89).buffer))
 
   // ---- 6. Чужого не видно ---------------------------------------------------
   await assetPut('probe2', 'sprite.png', WAV().buffer)

@@ -21,10 +21,10 @@
 import type { SettingsRow } from './registry'
 
 /** Сколько строк в одном окне. Больше — это уже не вопрос, а экран. */
-export const MAX_DIALOG_ROWS = 20
 /** Сколько окон плагин может открыть разом. Ровно одно: очередь из вопросов,
  *  которую нельзя закрыть, — это захват экрана. */
-export const MAX_OPEN_DIALOGS = 1
+// v1.489.0: числа открытых окон-вопросов больше нет — их можно сколько
+// угодно, показывается последнее. Раньше стояло «одно за раз».
 
 export class DialogError extends Error {}
 
@@ -56,7 +56,8 @@ const РАЗРЕШЁННЫЕ = new Set(['label', 'text', 'toggle', 'select', 'sl
  * полей, и ничего больше.
  */
 export function dialogRows(rows: SettingsRow[]): SettingsRow[] {
-  return rows.filter(r => РАЗРЕШЁННЫЕ.has(r.type)).slice(0, MAX_DIALOG_ROWS)
+  // v1.489.0: строк в окне-вопросе сколько угодно.
+  return rows.filter(r => РАЗРЕШЁННЫЕ.has(r.type))
 }
 
 /** Значения по умолчанию — то, что вернётся, если человек ничего не трогал. */
@@ -79,9 +80,6 @@ let seq = 1
  * «человек ничего не менял» — разные вещи, и плагин должен уметь их различать.
  */
 export function askDialog(spec: DialogSpec): Promise<Record<string, unknown> | null> {
-  if (открыто >= MAX_OPEN_DIALOGS) {
-    return Promise.reject(new DialogError('Окно плагина уже открыто — дождись ответа на него.'))
-  }
   if (typeof window === 'undefined') return Promise.resolve(null)
   открыто++
   return new Promise(resolve => {

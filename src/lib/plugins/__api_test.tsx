@@ -106,7 +106,8 @@ export async function onLoad(ponoi) {
 // Плавающее окно проверено «Змейкой» (test:snake). Здесь — остальные три:
 // вкладка, полный экран и окошко в углу. Проверяется не «объявлено», а
 // НАРИСОВАНО и там, где обещано: у полного экрана это весь экран, у окошка —
-// угол. Одному плагину больше трёх окон нельзя, поэтому их ровно три.
+// угол. Их ровно три — по одному на вид, а не потому что больше нельзя:
+// с v1.489.0 числа окон не ограничено вовсе.
 async function видыОкон(host: Host) {
   const id = await поднять(host, `/**
  * @name Окна
@@ -737,7 +738,7 @@ export async function onLoad(ponoi) {
   await пауза(300)
 
   const окно = () => document.querySelector('.plugapp-window') as HTMLElement | null
-  const шапка = () => окно()!.querySelector('.plugapp-h') as HTMLElement
+  const шапка = () => окно()!.querySelector('.plugapp-h') as HTMLElement | null
   const вид = (el: Element) => getComputedStyle(el)
   const прозрачен = (c: string) => c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c)
 
@@ -775,25 +776,24 @@ export async function onLoad(ponoi) {
     вид(окно()!).boxShadow + ' / ' + вид(окно()!).borderTopWidth)
   ok('подложка прозрачная насквозь', прозрачен(вид(окно()!).backgroundColor),
     вид(окно()!).backgroundColor)
-  ok('шапки на виду нет', вид(шапка()).opacity === '0', вид(шапка()).opacity)
-  // Но она НЕ удалена: окно без единой подписи и без крестика — это способ
-  // выдать себя за приложение и не дать себя закрыть.
-  ok('шапка при этом осталась в разметке, а не удалена',
-    !!шапка() && (шапка().textContent ?? '').includes('probe-frameless'),
-    шапка().textContent ?? '')
+  // v1.489.0: нашего в окне нет НИЧЕГО. Владелец решил так: «не надо бояться,
+  // главное чтобы не было лишнего». Проверяем буквально: ни шапки, ни подписи,
+  // ни крестика — и при наведении тоже, а то «убрал» легко превращается в
+  // «спрятал до наведения», как было в прошлой версии.
+  ok('шапки нет вовсе', !шапка())
+  ok('и подписи с крестиком тоже нет',
+    !окно()!.querySelector('.plugapp-by') && !окно()!.querySelector('.plugapp-x'))
 
-  // Настоящее наведение: указатель на шапку окна.
   const r0 = окно()!.getBoundingClientRect()
   await мышь('mouseMove', r0.left + r0.width / 2, r0.top + 10)
   await пауза(250)
-  ok('подвёл мышь — шапка вернулась', вид(шапка()).opacity === '1', вид(шапка()).opacity)
-  ok('в ней видно, чьё это окно, и есть чем закрыть',
-    (окно()!.querySelector('.plugapp-by')?.textContent ?? '') === 'probe-frameless'
-      && !!окно()!.querySelector('.plugapp-x'),
-    окно()!.querySelector('.plugapp-by')?.textContent ?? 'нет подписи')
+  ok('и при наведении ничего не появляется', !шапка() && !окно()!.querySelector('.plugapp-x'))
   await мышь('mouseMove', 5, 700)
-  await пауза(250)
-  ok('увёл мышь — шапка снова спряталась', вид(шапка()).opacity === '0', вид(шапка()).opacity)
+  await пауза(200)
+
+  ok('внутри окна — только то, что положил плагин',
+    (окно()!.textContent ?? '').indexOf('probe-frameless') < 0,
+    (окно()!.textContent ?? '').slice(0, 60))
 
   ok('resizable: false — ручек по краям нет', !окно()!.querySelector('.plugapp-rz'))
 
@@ -874,14 +874,12 @@ export async function onLoad(ponoi) {
 
   // ── Рамку можно вернуть на ходу.
   emitToPlugin(id, 'settings', { key: 'frame', value: true })
-  // Ждём именно ПОДЛОЖКУ, а не шапку: указатель после перетаскивания стоит над
-  // окном, и шапка у него видна по наведению — то есть по ней не отличить
-  // «рамка вернулась» от «на окно навели». На это я и попался.
-  await ждать(() => !прозрачен(вид(окно()!).backgroundColor))
-  ok('рамка возвращается на ходу',
-    !прозрачен(вид(окно()!).backgroundColor) && вид(окно()!).boxShadow !== 'none'
-      && вид(шапка()).position !== 'absolute',
-    вид(окно()!).backgroundColor + ' / ' + вид(шапка()).position)
+  await ждать(() => !!шапка())
+  ok('рамка возвращается на ходу — вместе с шапкой, подписью и крестиком',
+    !!шапка() && !прозрачен(вид(окно()!).backgroundColor)
+      && (окно()!.querySelector('.plugapp-by')?.textContent ?? '') === 'probe-frameless'
+      && !!окно()!.querySelector('.plugapp-x'),
+    вид(окно()!).backgroundColor + ' / ' + (шапка()?.textContent ?? 'нет шапки'))
 
   // ── Esc закрывает всегда.
   окно()!.focus()
@@ -968,6 +966,86 @@ export async function onLoad(ponoi) {
   forgetPlaces()
 }
 
+// ── 13. Пределов нет по-настоящему (v1.489.0) ──────────────────────────────
+//
+// Прямое указание владельца: «убери полностью все ограничение плагинов».
+// Единичные проверки стерегут, что чисел не осталось в коде. Здесь — что их не
+// осталось В ЖИЗНИ: настоящий жадный плагин в настоящей песочнице берёт больше,
+// чем ему когда-либо позволялось, и получает всё.
+//
+// Почему это важнее, чем кажется. Вернувшийся предел не падает — он молча
+// отдаёт меньше. Автор плагина увидел бы не отказ, а тихо пропавшую половину
+// работы, и искал бы ошибку у себя.
+async function пределовНет(host: Host) {
+  const { clearAllApps } = await import('./apps')
+  clearAllApps()
+  const id = await поднять(host, `/**
+ * @name Жадный
+ * @id probe-greedy
+ * @version 1.0.0
+ * @author проба
+ * @description Проба снятых пределов
+ * @permissions *
+ */
+export async function onLoad(ponoi) {
+  // Окон было не больше трёх на плагин и шести всего.
+  let окон = 0
+  for (let i = 0; i < 12; i++) {
+    try { await ponoi.apps.create({ mode: 'window', title: 'Окно ' + i, width: 120, height: 90, x: 5, y: 5 }); окон++ }
+    catch (e) { ponoi.log('окно отказ:' + e.message); break }
+  }
+  ponoi.log('окон:' + окон)
+
+  // Команд было не больше двухсот.
+  let команд = 0
+  for (let i = 0; i < 400; i++) {
+    try { await ponoi.commands.register('жад' + i, 'проба', function () {}); команд++ } catch { break }
+  }
+  ponoi.log('команд:' + команд)
+
+  // Значение в хранилище — не больше 4 МБ.
+  try {
+    await ponoi.storage.set('громада', 'я'.repeat(6 * 1024 * 1024))
+    ponoi.log('хранилище:да')
+  } catch (e) { ponoi.log('хранилище:' + e.message) }
+
+  // Подпись кнопки резалась до 120 знаков.
+  await ponoi.ui.addComposerButton({ key: 'длинная', tooltip: 'д'.repeat(500), onClick: function () {} })
+  ponoi.log('готово')
+}
+`)
+  await ждать(() => журнал(host, id).some(l => l.includes('готово')), 20000)
+  await пауза(400)
+
+  const число = (нач: string) => Number((строка(host, id, нач) || '').slice(нач.length)) || 0
+  ok('окон открылось столько, сколько попросил плагин', число('окон:') === 12,
+    строка(host, id, 'окон:') + ' | ' + (строка(host, id, 'окно отказ:') || 'отказов нет'))
+  ok('и все двенадцать нарисованы на экране',
+    document.querySelectorAll('.plugapp-window').length === 12,
+    String(document.querySelectorAll('.plugapp-window').length))
+  ok('команд завелось столько, сколько просил', число('команд:') === 400, строка(host, id, 'команд:'))
+  ok('огромное значение в хранилище приняли', строка(host, id, 'хранилище:') === 'хранилище:да',
+    строка(host, id, 'хранилище:'))
+
+  const кн = getRegistry().composerButtons.find(b => b.pluginId === id)
+  ok('подпись кнопки не обрезана', (кн?.tooltip ?? '').length === 500,
+    String((кн?.tooltip ?? '').length))
+
+  // И — обратная сторона свободы: всё это обязано уйти вместе с плагином.
+  await host.stopPlugin(id)
+  await пауза(400)
+  ok('всё нажитое уходит вместе с выключенным плагином',
+    appList(id).length === 0
+      && getRegistry().commands.filter(c => c.pluginId === id).length === 0
+      && getRegistry().composerButtons.filter(b => b.pluginId === id).length === 0,
+    `окон ${appList(id).length}, команд ${getRegistry().commands.filter(c => c.pluginId === id).length}`)
+  ok('и с экрана они тоже пропали', document.querySelectorAll('.plugapp-window').length === 0,
+    String(document.querySelectorAll('.plugapp-window').length))
+
+  removePlugin(id)
+  clearAllApps()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -1001,6 +1079,8 @@ async function main() {
   await безРамки(host)
   lines.push(''); lines.push('── Все виды строк ──'); out()
   await всеСтроки(host)
+  lines.push(''); lines.push('── Пределов нет ──'); out()
+  await пределовНет(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

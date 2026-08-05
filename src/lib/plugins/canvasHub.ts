@@ -24,10 +24,6 @@
 /** Ширина буфера рисования. Панель узкая, больше незачем; по CSS холст тянется
  *  на всю ширину, то есть картинка масштабируется, а не обрезается. */
 export const CANVAS_W = 600
-export const CANVAS_MIN_H = 40
-export const CANVAS_MAX_H = 600
-/** Сколько холстов на плагин: панелей у него до трёх, по несколько холстов в каждой. */
-export const MAX_CANVAS = 8
 
 export class CanvasError extends Error {}
 
@@ -44,7 +40,8 @@ const keyOf = (pluginId: string, key: string) => pluginId + '\u0000' + key
 export function canvasHeight(raw: unknown): number {
   const n = Math.round(Number(raw))
   if (!Number.isFinite(n)) return 160
-  return Math.min(CANVAS_MAX_H, Math.max(CANVAS_MIN_H, n))
+  // v1.489.0: высоту холста больше не зажимаем — какую попросил, такая и будет.
+  return Math.max(1, n)
 }
 
 function countFor(pluginId: string): number {
@@ -69,9 +66,6 @@ export function ensureCanvas(pluginId: string, key: string, height: number): HTM
       have.el.height = height
     }
     return have.el
-  }
-  if (countFor(pluginId) >= MAX_CANVAS) {
-    throw new CanvasError(`Холстов у одного плагина не больше ${MAX_CANVAS}.`)
   }
   if (typeof document === 'undefined') throw new CanvasError('Холст недоступен вне окна')
   const el = document.createElement('canvas')

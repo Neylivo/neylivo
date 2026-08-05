@@ -8,7 +8,7 @@
 //
 // Запуск: npm run test:plugins
 import { auditPlugin, auditBadge, hiddenCode, unusedPerms, AUDIT_NOTE, AUDITED_PERMISSIONS } from './audit'
-import { LIMITS, MAX_RECENT, MAX_PER_PLUGIN, LIMITS_WARNING, LIMITS_WARNING_SHORT } from './limits'
+import { LIMITS_WARNING, LIMITS_WARNING_SHORT } from './limits'
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
 import { ALL_PERMISSIONS, PLUGIN_EVENTS } from './types'
@@ -957,68 +957,105 @@ for (const p of OFFICIAL_PLUGINS) {
   // Самое опасное здесь — опечатка в названии предела: rateLimit молча
   // пропускает неизвестный вид, то есть ограничение исчезает целиком и
   // незаметно. Эта проверка ровно про это.
-  console.log('\n-- Пределы плагинов --')
+  // ── Пределов больше нет (v1.489.0) ──────────────────────────────────────
+  //
+  // Прямое указание владельца: «убери полностью все ограничение плагинов».
+  // Раньше здесь стерегли таблицу пределов — теперь стережём, что её нет ни в
+  // каком виде. Молча вернувшийся предел был бы хуже прежнего: автор плагина
+  // увидел бы не отказ, а тихо пропавшую половину работы.
+  console.log('\n-- Пределов у плагинов нет --')
 
-  check('у каждого предела в коде есть строка в таблице', () => {
-    const used = [...DISPATCHER_SRC.matchAll(/rateLimit\(id, '([a-z.]+)'\)/g)].map(m => m[1])
-    if (used.length < 10) throw new Error('пределов в коде подозрительно мало: ' + used.length)
-    const нет = [...new Set(used)].filter(k => !(k in LIMITS))
-    if (нет.length) throw new Error('нет в таблице (предел ИСЧЕЗ): ' + нет.join(', '))
+  check('в диспетчере не осталось ограничений частоты', () => {
+    const следы = [...DISPATCHER_SRC.matchAll(/rateLimit\(/g)].length
+    if (следы) throw new Error('ограничение частоты вернулось, вызовов: ' + следы)
     return true
   })
 
-  check('в таблице нет пределов, которых никто не зовёт', () => {
-    // Мёртвая строка в таблице — это ложное обещание: выглядит как ограничение,
-    // а не ограничивает ничего.
-    const used = new Set([...DISPATCHER_SRC.matchAll(/rateLimit\(id, '([a-z.]+)'\)/g)].map(m => m[1]))
-    const лишние = Object.keys(LIMITS).filter(k => !used.has(k))
-    if (лишние.length) throw new Error('в таблице есть, в коде не зовётся: ' + лишние.join(', '))
+  check('и самой таблицы пределов больше нет', () => {
+    const src = readFileSync('src/lib/plugins/limits.ts', 'utf8')
+    if (/export const LIMITS\b/.test(src)) throw new Error('таблица пределов вернулась')
+    for (const имя of ['MAX_PER_PLUGIN', 'MAX_RECENT', 'MAX_STORAGE_VALUE', 'MAX_CSS', 'MAX_LABEL']) {
+      if (src.includes(имя)) throw new Error('вернулся предел ' + имя)
+    }
     return true
   })
 
-  check('ни один предел не выключен в ноль', () =>
-    Object.values(LIMITS).every(l => l.times > 0 && l.windowMs > 0))
-
-  check('у каждого предела есть человеческое название', () =>
-    Object.values(LIMITS).every(l => typeof l.what === 'string' && l.what.length > 3))
-
-  check('пределы правда подняты, а не остались прежними', () => {
-    // Смысл выпуска: было 5 сообщений за 10 с и 5 потоков в минуту.
-    return LIMITS.send.times >= 100 && LIMITS.netstream.times >= 100
-      && LIMITS.net.times >= 400 && MAX_RECENT >= 400
+  check('счётчиков «больше N нельзя» не осталось ни в одном модуле', () => {
+    // Ищем по всей системе плагинов. Список файлов тут не годится: завтра
+    // появится новый модуль со своим потолком, и проверка его не увидит.
+    const плохо: string[] = []
+    const обход = (дир: string) => {
+      for (const имя of readdirSync(дир)) {
+        const путь = дир + '/' + имя
+        if (statSync(путь).isDirectory()) { обход(путь); continue }
+        if (!/[.]ts$/.test(имя) || имя.startsWith('__')) continue
+        const src = readFileSync(путь, 'utf8')
+        for (const m of src.matchAll(/^export const (MAX_[A-Z_]+|CANVAS_MAX_H) = /gm)) {
+          // Оставленное намеренно: это не «сколько плагину можно», а защита от
+          // бесконечной ссылки на саму себя при разборе данных.
+          // Оставлено намеренно, и это НЕ «сколько плагину можно»:
+          //   MAX_UPLOAD_GROWTH, MAX_CONTENT — защита от перехватчика, который
+          //     раздувает чужое сообщение вместо того, чтобы его поправить;
+          //   IPC_MAX_* — глубина разбора данных, защита от ссылки на саму
+          //     себя: без неё падает приложение, а не плагин;
+          //   MAX_USES, MAX_DAYS — срок жизни кода передачи, это про ссылку, а
+          //     не про возможности плагина.
+          const оставлено = ['MAX_UPLOAD_GROWTH', 'MAX_CONTENT', 'MAX_USES', 'MAX_DAYS']
+          if (оставлено.includes(m[1]) || m[1].startsWith('IPC_MAX')) continue
+          плохо.push(имя + ': ' + m[1])
+        }
+      }
+    }
+    обход('src/lib/plugins')
+    if (плохо.length) throw new Error('потолки вернулись: ' + плохо.join(', '))
+    return true
   })
 
-  check('приложение предупреждает о снятых пределах', () =>
+  check('справка в приложении не обещает пределов', () => {
+    // Она пролежала со времён v1.345.0 и после v1.446.0 обещала «5 сообщений
+    // за 10 с» и «64 КБ на значение» — когда в коде было в сотню раз больше.
+    // Такое расхождение никто не замечает годами: числа выглядят убедительно.
+    const g = readFileSync('src/components/PluginGuide.tsx', 'utf8')
+    const следы = [/\d+ \/ 10 с/, /\d+ \/ мин/, /64 КБ/, /Своих команд/]
+      .filter(re => re.test(g)).map(String)
+    if (следы.length) throw new Error('в справке снова пределы: ' + следы.join(' '))
+    return /Их нет/.test(g)
+  })
+
+  check('сроки ожидания при этом остались', () => {
+    // Это НЕ предел плагина, а граница между ним и приложением: не ответивший
+    // плагин обязан вешать себя, а не отправку сообщений у человека.
+    const src = readFileSync('src/lib/plugins/limits.ts', 'utf8')
+    return /INIT_TIMEOUT_MS/.test(src) && /INVOKE_TIMEOUT_MS/.test(src)
+      && /NET_TIMEOUT_MS/.test(src)
+  })
+
+  check('приложение говорит прямо, что ограничений нет', () =>
     LIMITS_WARNING.length > 80 && /от твоего имени/.test(LIMITS_WARNING)
-    && LIMITS_WARNING_SHORT.length > 20)
+    && /нет ограничений/.test(LIMITS_WARNING) && LIMITS_WARNING_SHORT.length > 20)
 
-  check('числа в тексте пределов не написаны руками', () => {
-    // Сообщение об отказе собирается из самой таблицы: иначе оно однажды
-    // назовёт число, которого больше нет.
-    return /\$\{l\.times\}/.test(DISPATCHER_SRC) && /\$\{l\.what\}/.test(DISPATCHER_SRC)
+  check('и говорит это ДО установки, а не после', () => {
+    const gate = readFileSync('src/components/PluginPermissionGate.tsx', 'utf8')
+    const card = readFileSync('src/components/PluginsSettings.tsx', 'utf8')
+    return gate.includes('LIMITS_WARNING') && card.includes('LIMITS_WARNING')
   })
 
-  check('инструкция называет сегодняшние пределы, а не вчерашние', () => {
+  check('инструкция не обещает пределов, которых больше нет', () => {
     // Худший вид расхождения: ИИ читает инструкцию и пишет плагин под предел,
-    // которого уже нет. Поймано разбором в v1.446.0 — числа подняли, а в
-    // инструкции они остались старыми сразу в восьми местах.
-    const должно = [
-      String(LIMITS.send.times), String(LIMITS.net.times), String(LIMITS.notify.times),
-      String(LIMITS.music.times), String(MAX_PER_PLUGIN.commands), String(MAX_RECENT),
-    ]
-    const нет = должно.filter(n => !PLUGIN_SPEC.includes(n))
-    if (нет.length) throw new Error('в инструкции нет чисел: ' + нет.join(', '))
-    const старое = /не чаще 5 сообщений|не чаще 20 запросов|не больше 1 МБ|не больше 64 КБ|команд — 15/
-    if (старое.test(PLUGIN_SPEC)) throw new Error('в инструкции остался старый предел')
+    // которого нет. В v1.446.0 это поймалось разбором — числа подняли, а в
+    // инструкции они остались старыми сразу в восьми местах. Теперь пределов
+    // нет вовсе, и в тексте их тоже быть не должно.
+    const следы = [
+      /не чаще \d+ раз за/, /не больше \d+ МБ/, /файлов до \d/,
+      /Окон у одного плагина/, /Перехватчиков каждого вида/,
+      /Строк в одной таблице до/,
+    ].filter(re => re.test(PLUGIN_SPEC)).map(String)
+    if (следы.length) throw new Error('в инструкции остались пределы: ' + следы.join(' '))
     return true
   })
 
-  console.log('\n-- Ломаем нарочно (пределы) --')
-  check('проверка заметила бы предел с опечаткой в названии', () => {
-    // Опечатка означает не «строгий предел», а ОТСУТСТВИЕ предела.
-    const выдумка = 'sennd'
-    return !(выдумка in LIMITS)
-  })
+  check('и говорит прямо, что их нет', () =>
+    /не ограничен/.test(PLUGIN_SPEC) && /сколько угодно/.test(PLUGIN_SPEC))
 
   // ── v1.465.0: семь новых возможностей ──────────────────────────────────
   //
@@ -1061,14 +1098,17 @@ for (const p of OFFICIAL_PLUGINS) {
     check('пустой текст после правки — это отмена, а не прежний текст', () =>
       mw.applySendResult('было', '   ').cancel === true)
 
-    check('больше предела перехватчиков одного вида не поставить', () => {
+    check('перехватчиков сколько угодно, и все уходят с плагином', () => {
       mw.clearAllInterceptors()
-      for (let i = 0; i < mw.MAX_INTERCEPTORS; i++) {
+      for (let i = 0; i < 50; i++) {
         mw.addInterceptor({ pluginId: 'жадный', kind: 'send', fn: fake('f' + i) })
       }
-      try { mw.addInterceptor({ pluginId: 'жадный', kind: 'send', fn: fake('лишний') }); return false }
-      catch { return true }
-      finally { mw.clearAllInterceptors() }
+      if (!mw.hasInterceptors('send')) throw new Error('ни одного не завелось')
+      mw.clearInterceptors('жадный')
+      const осталось = mw.hasInterceptors('send')
+      mw.clearAllInterceptors()
+      if (осталось) throw new Error('после уборки перехватчики остались')
+      return true
     })
   }
 
@@ -1404,7 +1444,10 @@ for (const p of OFFICIAL_PLUGINS) {
 
     check('имя таблицы проверяется, а не берётся как есть', () => {
       // Имя входит в ключ записи. Разделители и черта пути там ни к чему.
-      for (const плохое of ['', '  ', 'а/б', 'а\\б', 'я'.repeat(100)]) {
+      // v1.489.0: длинного имени больше не боимся — длина не вредна ничем.
+      // Отказ остался ровно там, где имя ЛОМАЕТ ключ записи: пустое и с чертой
+      // пути.
+      for (const плохое of ['', '  ', 'а/б', 'а\\б']) {
         try { D.checkTable(плохое); return false } catch { /* так и надо */ }
       }
       // v1.474.0: кириллица разрешена. Белый список из латиницы валил
@@ -1493,7 +1536,7 @@ for (const p of OFFICIAL_PLUGINS) {
     })
 
     check('имя файла проверяется, а не берётся как есть', () => {
-      for (const плохое of ['', '   ', '../чужое', 'а/б', 'а\\б', 'я'.repeat(200)]) {
+      for (const плохое of ['', '   ', '../чужое', 'а/б', 'а\\б']) {
         try { A.checkAssetName(плохое); return false } catch { /* так и надо */ }
       }
       // Кириллица разрешена нарочно: плагины здесь пишут по-русски, и
@@ -1816,40 +1859,40 @@ console.log('\n-- Окно без рамки и прозрачное (v1.487.0) 
       && !A.updateApp('чужой', a.id, { frameless: true })
   })
 
-  // ── Граница, которую нельзя открывать ────────────────────────────────────
+  // ── Лишнего нет, а выход есть (v1.489.0) ─────────────────────────────────
   //
-  // «Без рамки» означает «шапки не видно», а НЕ «шапки нет». Разница
-  // принципиальная: окно во весь экран без единой подписи и без крестика — это
-  // способ выдать себя за само приложение и не дать себя закрыть. Поэтому
-  // шапка прячется прозрачностью и возвращается при наведении.
-  check('шапка у безрамочного окна прячется, а не удаляется', () => {
-    if (/frameless[^{]*\.plugapp-h[^}]*display\s*:\s*none/.test(css)) {
-      throw new Error('в стилях есть правило, убирающее шапку совсем')
+  // У безрамочного окна нашего не остаётся НИЧЕГО: ни шапки, ни подписи, ни
+  // крестика. Так решил владелец: «не надо бояться, главное чтобы не было
+  // лишнего», — и сперва я делал иначе, пряча шапку до наведения.
+  //
+  // Но окно, которое нечем убрать, — это не «чисто», это ловушка. Поэтому
+  // выходов остаётся ТРИ, и ни один ничего не занимает на экране. Проверки
+  // ниже — про каждый из них.
+  check('у безрамочного окна нашей шапки нет вовсе', () => {
+    if (!/\{!app\.frameless && <div className=\{'plugapp-h'/.test(cmp)) {
+      throw new Error('шапка рисуется и у безрамочного окна')
     }
-    if (/frameless[^{]*\.plugapp-h[^}]*visibility\s*:\s*hidden/.test(css)) {
-      throw new Error('шапка спрятана видимостью — её тогда не вернуть наведением')
+    // И в стилях её больше не прячут: прятать нечего.
+    if (/\.plugapp\.frameless[^{]*\.plugapp-h\s*\{/.test(css)) {
+      throw new Error('в стилях осталось правило для шапки безрамочного окна')
     }
-    return /\.plugapp\.frameless[^{]*\.plugapp-h\s*\{[^}]*opacity\s*:\s*0/.test(css)
-      && /\.plugapp\.frameless:hover[^{]*\{[^}]*opacity\s*:\s*1/.test(css)
+    return true
   })
 
-  check('и в разметке она есть всегда, при любом виде окна', () => {
-    // Ни одного условия вокруг шапки: она рисуется у всех окон одинаково.
-    const шапок = (cmp.match(/className=\{'plugapp-h'/g) ?? []).length
-    return шапок === 1 && cmp.includes('plugapp-by') && cmp.includes('plugapp-x')
+  check('выход первый: Esc закрывает окно любого вида', () =>
+    /e\.key === 'Escape'/.test(cmp) && /closeAppByUser\(app\.id\)/.test(cmp))
+
+  check('выход второй: на телефоне окно закрывает системная «назад»', () => {
+    if (!cmp.includes('useBackClose')) {
+      throw new Error('«назад» окно плагина не закрывает — на телефоне выхода не остаётся вовсе')
+    }
+    return /useBackClose\(true, \(\) => closeAppByUser\(app\.id\)\)/.test(cmp)
   })
 
-  check('на телефоне шапку безрамочного окна видно всегда', () => {
-    // Прятать её до наведения можно там, где есть чем наводить. На телефоне
-    // нет ни наведения, ни Esc — окно превратилось бы в заслонку, которую
-    // нечем убрать.
-    const телефон = css.slice(css.indexOf('@media (max-width: 768px)'))
-    return /\.plugapp\.frameless[^{]*\.plugapp-h\s*\{[^}]*opacity\s*:\s*1/.test(телефон)
+  check('выход третий: окно видно в настройках плагина, и там есть «Закрыть»', () => {
+    const s = readFileSync('src/components/PluginsSettings.tsx', 'utf8')
+    return s.includes('appList(pluginId)') && /closeAppByUser/.test(s)
   })
-
-  check('Esc закрывает окно независимо от его вида', () =>
-    /Escape[^\n]*closeAppByUser|closeAppByUser[^\n]*Escape/.test(cmp)
-    || /e\.key === 'Escape'/.test(cmp))
 
   // ── Ещё одна граница: движение окна не должно выглядеть как закрытие ─────
   //
