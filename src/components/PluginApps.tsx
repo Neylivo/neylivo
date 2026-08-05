@@ -69,6 +69,11 @@ function AppFrame({ app }: { app: PluginApp }) {
     }
   }, [app.id, app.pluginId, app.mode, app.w, app.h])
 
+  // Фокус — сразу на окно (v1.474.0). Иначе клавиши достались бы ему только
+  // после того, как человек догадается щёлкнуть по окну, и игра выглядела бы
+  // сломанной ровно до этого щелчка.
+  useEffect(() => { ref.current?.focus({ preventScroll: true }) }, [app.id])
+
   // Esc закрывает — как любое окно приложения. Плагин перехватить это не может.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAppByUser(app.id) }
@@ -87,8 +92,37 @@ function AppFrame({ app }: { app: PluginApp }) {
       }
     : {}
 
+  // v1.474.0: клавиши — плагину, но только пока фокус внутри ЕГО окна.
+  //
+  // Зачем. ui.addHotkey требует Ctrl или Alt (иначе плагин отобрал бы обычные
+  // буквы у всего приложения), а игре нужны стрелки и пробел. Без этого окно во
+  // весь экран с холстом было бы картинкой, которой нельзя управлять.
+  //
+  // Почему это не шпион за набором. Слушаем не окно браузера, а ЭТОТ
+  // прямоугольник: набор в чате, поиск и любое поле ввода живут снаружи, и
+  // сюда их события не всплывают. Esc не отдаём вовсе — он закрывает окно, и
+  // перехватить его плагин не должен.
+  const клавиша = (e: React.KeyboardEvent, down: boolean) => {
+    if (e.key === 'Escape') return
+    // Стрелки и пробел прокручивают страницу под окном — для игры это значит
+    // «нажал вверх, уехал экран». Отменяем, раз уж фокус здесь.
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'].includes(e.key)) {
+      e.preventDefault()
+    }
+    emitToPlugin(app.pluginId, 'key', {
+      id: app.id, key: e.key, code: e.code, down, repeat: e.repeat,
+      shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey,
+    })
+  }
+
   return (
-    <div ref={ref} className={'plugapp plugapp-' + app.mode + (dragging ? ' dragging' : '')} style={style}>
+    <div ref={ref} className={'plugapp plugapp-' + app.mode + (dragging ? ' dragging' : '')} style={style}
+      // Окно должно уметь принимать фокус — иначе клавиш ему не достанется
+      // вовсе. Фокус ставится сам при открытии: игра обязана работать сразу, а
+      // не после того, как человек догадается щёлкнуть по ней.
+      tabIndex={-1}
+      onKeyDown={e => клавиша(e, true)}
+      onKeyUp={e => клавиша(e, false)}>
       <div className={'plugapp-h' + (плавает ? ' draggable' : '')}
         onPointerDown={плавает ? start : undefined}>
         <Icon name={app.icon} size={16} />

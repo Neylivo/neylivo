@@ -20,7 +20,7 @@ import { takeOffscreen, canvasHeight } from './canvasHub'
 import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
-import { openApp, updateApp, closeApp, isMode, APP_MODES } from './apps'
+import { openApp, updateApp, closeApp, isMode, APP_MODES, appList } from './apps'
 import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 // v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
@@ -118,12 +118,21 @@ export const taskHandlers = new Map<number, { pluginId: string; fn: FnRef }>()
  * «объявил на своей странице — не работает» было бы ровно тем расхождением
  * между показом и действием, которое в этом проекте ломается чаще всего.
  */
-function panelCanvasRow(pluginId: string, key: string): { height: number } | null {
+function panelCanvasRow(pluginId: string, key: string): { height: number; где: 'panel' | 'app' } | null {
   const reg = getRegistry()
-  const везде: { pluginId: string; rows: SettingsRow[] }[] = [...reg.panels, ...reg.settingsPages]
+  // v1.474.0: и в СВОИХ ОКНАХ тоже. В v1.471.0 про окна плагина было написано
+  // «содержимое описывается теми же строками, включая холст — через него и
+  // делается всё живое», и это было неправдой: холст в окне здесь не искали, и
+  // ui.getCanvas отвечал «не объявлен» на объявленный холст. То есть игру,
+  // редактор и визуализатор — ровно то, ради чего окна и делались, — написать
+  // было нельзя. Нашлось при попытке написать настоящий плагин с игрой.
+  const везде: { pluginId: string; rows: SettingsRow[]; где: 'panel' | 'app' }[] = [
+    ...[...reg.panels, ...reg.settingsPages].map(p => ({ ...p, где: 'panel' as const })),
+    ...appList().map(a => ({ pluginId: a.pluginId, rows: a.rows, где: 'app' as const })),
+  ]
   for (const p of везде) {
     if (p.pluginId !== pluginId) continue
-    for (const r of p.rows) if (r.type === 'canvas' && r.key === key) return { height: r.height }
+    for (const r of p.rows) if (r.type === 'canvas' && r.key === key) return { height: r.height, где: p.где }
   }
   return null
 }
@@ -758,22 +767,26 @@ export function createDispatcher(
         return null
       }
 
-      // ---- Холст в панели (нужно panel) -----------------------------------
+      // ---- Холст в панели или в своём окне (нужно panel либо apps) --------
       // Плагин получает не кусок страницы, а отдельный холст со своими
       // пикселями: прочитать через него окно нельзя, нарисовать за пределами
       // своей панели — тоже.
       case 'ui.getCanvas': {
-        need('panel')
         const key = str(args[0], 60, 'ui.getCanvas: ключ холста')
-        // Высоту берём из объявленной строки панели, а не из довода: холст
-        // живёт в панели, и если её нет — показывать его негде. Молча выдать
-        // холст, которого человек никогда не увидит, значит соврать.
+        // Высоту берём из объявленной строки, а не из довода: холст живёт в
+        // панели или в окне плагина, и если их нет — показывать его негде.
+        // Молча выдать холст, которого человек никогда не увидит, значит
+        // соврать.
         const row = panelCanvasRow(id, key)
         if (!row) {
           throw new Denied(
-            `Холст «${key}» не объявлен. Добавь в панель строку { type: 'canvas', key: '${key}', height: 160 }.`,
+            `Холст «${key}» не объявлен. Добавь строку { type: 'canvas', key: '${key}', height: 160 } в панель или в своё окно.`,
           )
         }
+        // v1.474.0: разрешение спрашивается по тому, ГДЕ холст объявлен.
+        // Требовать «свою панель в плеере и чате» от игры, у которой панели
+        // нет вовсе, значило бы врать человеку на экране разрешений.
+        need(row.где === 'app' ? 'apps' : 'panel')
         // Пометка «передать, а не копировать» — см. sandbox.ts, asTransfer.
         return { __transfer: takeOffscreen(id, key, row.height) }
       }

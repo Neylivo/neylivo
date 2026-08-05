@@ -1097,6 +1097,24 @@ console.log('\n── Свои файлы и геймпад (v1.473.0) ──')
     attacker(['storage', 'net'], 'gp-no')('input.gamepads', []))
   await blocked('без права input нельзя подписаться на геймпад', () =>
     attacker(['storage'], 'gp-no-sub')('subscribe', ['gamepad']))
+  // v1.474.0: клавиши в своём окне. Без окна их и быть не может, поэтому
+  // разрешение то же — apps. Иначе подписка на 'key' стала бы способом читать
+  // набор, не открывая ничего.
+  await blocked('без права apps нельзя подписаться на клавиши', () =>
+    attacker(['ui', 'panel', 'input'], 'key-no-sub')('subscribe', ['key']))
+  await allowed('с правом apps подписка на клавиши проходит', () =>
+    attacker(['apps'], 'key-yes-sub')('subscribe', ['key']))
+  await check('клавиши шлёт только окно плагина, а не всё приложение', () => {
+    // Слушай мы окно браузера — плагин видел бы набор в чате, то есть стал бы
+    // клавиатурным шпионом. Слушать надо ЕГО прямоугольник.
+    const src = readFileSync('src/components/PluginApps.tsx', 'utf8')
+    // Слушатель на окне есть — но только ради Esc, который закрывает окно. Он
+    // не имеет права ничего отдавать плагину.
+    const i = src.indexOf("window.addEventListener('keydown'")
+    const тело = i < 0 ? '' : src.slice(Math.max(0, i - 200), i + 200)
+    if (i >= 0 && (!тело.includes('Escape') || тело.includes('emitToPlugin'))) return false
+    return src.includes('onKeyDown') && src.includes("emitToPlugin(app.pluginId, 'key'")
+  })
 
   const A = await import('./assets')
   await check('скачивание идёт теми же правилами, что и обычный запрос', () => {

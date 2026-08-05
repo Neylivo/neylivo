@@ -256,8 +256,12 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   { re: /\bponoi\s*\.\s*plugins\s*\.\s*send\s*\(/,           perms: ['ipc'],                       what: 'ponoi.plugins.send' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]ipc['"`]/,             perms: ['ipc'],                       what: "ponoi.on('ipc')" },
   { re: /\bponoi\s*\.\s*messages\s*\.\s*onBefore(Send|Render)\s*\(/, perms: ['messages.intercept'], what: 'ponoi.messages.onBeforeSend/Render' },
-  // Холст живёт в панели — без panel его негде показать, и getCanvas откажет.
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*getCanvas\s*\(/,           perms: ['panel'],                     what: 'ponoi.ui.getCanvas' },
+  // Холст живёт либо в панели, либо в своём окне — и разрешение нужно ровно то,
+  // где он объявлен (api.ts, ui.getCanvas). Поэтому «panel» просим только у
+  // того, кто окон не открывает: игре, живущей в своём окне, чужая панель в
+  // плеере и чате не нужна, и требовать её значило бы врать на экране
+  // разрешений. Условие смотрит на весь код целиком — отсюда просмотр вперёд.
+  { re: /^(?![\s\S]*\bponoi\s*\.\s*apps\s*\.)[\s\S]*\bponoi\s*\.\s*ui\s*\.\s*getCanvas\s*\(/, perms: ['panel'], what: 'ponoi.ui.getCanvas' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]canvas['"`]/,          perms: ['panel'],                     what: "ponoi.on('canvas')" },
   { re: /\bponoi\s*\.\s*net\s*\.\s*ws\s*\(/,                 perms: ['net'],                       what: 'ponoi.net.ws' },
   { re: /\bponoi\s*\.\s*background\s*\./,                     perms: ['background'],                what: 'ponoi.background' },
