@@ -882,3 +882,22 @@ export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
   { id: 'ponoi-snake', emoji: '🐍', summary: 'Настоящая игра в своём окне: клавиши, геймпад, рекорды', code: SNAKE },
   { id: 'ponoi-soft-light', emoji: '🌙', summary: 'Приглушает цвета приложения — вечером глазам легче', code: SOFT },
 ]
+
+
+/**
+ * Наш ли это плагин (v1.486.0).
+ *
+ * Сверяем КОД, а не @id и не @author. Иначе кто угодно назвал бы свой файл
+ * «ponoi-snake» с автором «Ponoi» и получил зелёную отметку и спокойный экран
+ * установки — то есть отметка «от создателей» стала бы способом обмана.
+ *
+ * Пробелы по краям и переводы строк не считаем: файл мог пройти через чат,
+ * буфер обмена и редактор, а от этого он не перестаёт быть нашим.
+ */
+const ровно = (s: string) => String(s ?? '').replace(/\r\n?/g, '\n').trim()
+
+export function isOfficialCode(code: string): boolean {
+  const c = ровно(code)
+  if (!c) return false
+  return OFFICIAL_PLUGINS.some(p => ровно(p.code) === c)
+}

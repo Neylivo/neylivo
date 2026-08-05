@@ -5,6 +5,7 @@ import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type Inst
 import { LIMITS_WARNING } from '../lib/plugins/limits'
 import { missingPermissions } from '../lib/plugins/editorDraft'
 import { installRisks, highRisk } from '../lib/plugins/audit'
+import { isOfficialCode } from '../lib/plugins/official'
 
 // v1.333.0: вынесено из PluginsSettings.tsx отдельным файлом. Каталог плагинов
 // показывает тот же экран разрешений, а импорт «каталог -> настройки -> каталог»
@@ -26,7 +27,11 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
   // он что-то сделал не так или плагин кривой.
   const willFail = code ? missingPermissions(code, manifest.permissions) : []
   const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
-  const risks = installRisks(manifest, code ?? '')
+  // v1.486.0: наш плагин или чужой. Опознаём ПО КОДУ: назвать свой файл
+  // «ponoi-snake» с автором «Ponoi» может кто угодно, а совпасть с нашим кодом
+  // до буквы — нет.
+  const наш = isOfficialCode(code ?? '')
+  const risks = installRisks(manifest, code ?? '', наш)
   const высокий = highRisk(risks)
   return (
     <Portal><div className="modal-overlay" onClick={onCancel}>
@@ -51,6 +56,15 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
           </span>
         </div>
 
+        {наш && (
+          <div className="plug-perm risk-ok" style={{ marginTop: 12 }}>
+            <span className="risk-dot">🟢</span>
+            <span>
+              <b>Это плагин от создателей Ponoi.</b> Его код идёт в самой сборке приложения —
+              он не скачивается, не обновляется со стороны и не может подмениться.
+            </span>
+          </div>
+        )}
         <label className="modal-lbl">Плагин сможет</label>
         {risks.length === 0 && <div className="cset-hint">Ничего особенного — плагин ничего не запрашивает.</div>}
         {/* v1.481.0: не список разрешений, а список РИСКОВ — красным то, что

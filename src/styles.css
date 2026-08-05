@@ -7741,3 +7741,6 @@ body.no-anim .mus-blob.on { animation: none; }
 
 /* v1.485.0: кнопки над списком разрешений в конструкторе плагина. */
 .ped-perm-acts { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px; }
+
+/* v1.486.0: наш плагин на экране установки — зелёной строкой, а не красными. */
+.plug-perm.risk-ok { background: rgba(59, 165, 93, .10); border-left: 3px solid #3ba55d; }

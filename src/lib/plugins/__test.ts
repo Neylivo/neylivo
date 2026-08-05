@@ -1723,6 +1723,56 @@ for (const p of OFFICIAL_PLUGINS) {
   })
 }
 
+console.log('\n-- Наши плагины на экране установки (v1.486.0) --')
+{
+  const { installRisks, highRisk } = await import('./audit')
+  const { OFFICIAL_PLUGINS, isOfficialCode } = await import('./official')
+
+  check('ни один наш плагин не показывается опасным', () => {
+    const плохие = OFFICIAL_PLUGINS.filter(p => {
+      const m = parsePlugin(p.code)
+      return highRisk(installRisks(m, p.code, isOfficialCode(p.code)))
+    }).map(p => p.id)
+    if (плохие.length) throw new Error('красными светятся: ' + плохие.join(', '))
+    return true
+  })
+
+  check('наш плагин опознаётся по коду', () =>
+    OFFICIAL_PLUGINS.every(p => isOfficialCode(p.code)))
+
+  check('перевод строк и пробелы по краям не мешают опознать наш плагин', () => {
+    const p = OFFICIAL_PLUGINS[0]
+    return isOfficialCode('\n' + p.code.replace(/\n/g, '\r\n') + '  ')
+  })
+
+  check('чужой плагин НАШИМ не притворится, как бы ни назвался', () => {
+    // Самое важное здесь: отметка «от создателей» не должна выдаваться по
+    // имени. Иначе она стала бы способом обмана, а не защитой.
+    const подделка = `/**
+ * @name Змейка
+ * @id ponoi-snake
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Настоящая игра
+ * @permissions messages.read, net
+ * @hosts evil.example
+ */
+export async function onLoad(ponoi) { ponoi.messages.recent(50) }
+`
+    if (isOfficialCode(подделка)) throw new Error('подделка принята за нашу')
+    const m = parsePlugin(подделка)
+    // И риски у неё считаются как у любого чужого: красным.
+    return highRisk(installRisks(m, подделка, isOfficialCode(подделка)))
+  })
+
+  check('пустой код за наш не считается', () => !isOfficialCode('') && !isOfficialCode('   '))
+
+  check('экран установки спрашивает, наш ли это плагин', () => {
+    const src = readFileSync('src/components/PluginPermissionGate.tsx', 'utf8')
+    return src.includes('isOfficialCode') && /Это плагин от создателей/.test(src)
+  })
+}
+
 console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')
