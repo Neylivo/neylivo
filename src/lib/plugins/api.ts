@@ -23,6 +23,13 @@ import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
 import { openApp, updateApp, closeApp, isMode, APP_MODES } from './apps'
 import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
+// v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
+// раньше: правила и хранение отдельно, ветка диспетчера здесь.
+import {
+  assetPut, assetGet, assetInfo, assetList, assetRemove, assetClear, assetUrl,
+  isAssetRef, assetRefName, checkAssetName, ASSET_PREFIX, MAX_ASSET_BYTES,
+} from './assets'
+import { readPads, watchGamepads } from './gamepads'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
@@ -87,6 +94,12 @@ export const PLUGIN_METHODS = [
   // плагина входит в ключ и подставляется здесь, а не приходит от него.
   'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
   'db.count', 'db.clear', 'db.tables',
+  // v1.473.0: свои файлы. Лежат на устройстве человека, видны только своему
+  // плагину, и ССЫЛКИ на них наружу не уходит — плагин знает только имя.
+  'assets.put', 'assets.fetch', 'assets.get', 'assets.info', 'assets.list',
+  'assets.remove', 'assets.clear', 'assets.play',
+  // v1.473.0: геймпад. Только чтение устройства, которое человек воткнул сам.
+  'input.gamepads',
 ] as const
 
 /**
@@ -141,8 +154,8 @@ export interface HostContext {
    * песочницы. Возвращает false, если адресат не запущен или не просил ipc:
    * плагин должен видеть, что письмо не дошло, а не считать, что дошло.
    */
-  ipcSend?: (from: string, to: string, event: string, data: unknown) => boolean
-
+  ipcSend?: (from: string, to: string, event: string, data: unknown) => boolean
+
   /**
    * v1.472.0: позвать обработчик В ДРУГОМ плагине. Нужно службам: вызов идёт из
    * одного плагина, а выполняется в другом.
@@ -252,6 +265,15 @@ function settingsRow(raw: any): SettingsRow | null {
       // Только https: с data: и javascript: в src плагин рисовал бы в окне уже
       // не картинку. Тот же разбор, что у @icon в шапке (manifest.ts).
       const v = String(raw.value ?? raw.url ?? '').trim().slice(0, 500)
+      // v1.473.0: свой файл — «asset:имя». Настоящего адреса здесь НЕТ и не
+      // будет: его подставляет приложение при показе, для своего же плагина
+      // (см. assets.ts, правило 2). Имя проверяем сразу, чтобы плагин узнал об
+      // ошибке при постановке строки, а не увидел пустую рамку.
+      if (isAssetRef(v)) {
+        const имя = assetRefName(v)
+        try { checkAssetName(имя) } catch { return null }
+        return { type: 'image', key, label, description, value: ASSET_PREFIX + имя }
+      }
       let u: URL
       try { u = new URL(v) } catch { return null }
       if (u.protocol !== 'https:') return null
@@ -694,6 +716,9 @@ export function createDispatcher(
         }
         if (spec.permission) need(spec.permission)
         onSubscribe(ev)
+        // v1.473.0: геймпады опрашиваются кадрами и только пока их кто-то
+        // слушает. Подписка — единственный момент, когда это известно.
+        if (ev === 'gamepad') watchGamepads(id)
         return null
       }
 
@@ -1048,6 +1073,63 @@ export function createDispatcher(
         return await dbTables(id)
       }
 
+      // ═══ v1.473.0: свои файлы ═══════════════════════════════════════════
+      //
+      // Разрешение то же, что у хранилища и таблиц: это данные плагина на
+      // устройстве человека, и отдельного согласия «можно хранить ещё и
+      // файлы» просить не за что. А вот скачивание — это уже сеть, и там
+      // нужны оба разрешения и объявленный домен.
+      //
+      // Наружу не уходит ни одной ссылки: плагин знает только имя. См.
+      // assets.ts, правило 2.
+      case 'assets.put': {
+        need('storage')
+        return await assetPut(id, String(args[0] ?? ''), args[1])
+      }
+      case 'assets.fetch': {
+        need('storage')
+        need('net')
+        rateLimit(id, 'net')
+        return await assetFetch(plugin, String(args[0] ?? ''), String(args[1] ?? ''))
+      }
+      case 'assets.get': {
+        need('storage')
+        return await assetGet(id, String(args[0] ?? ''))
+      }
+      case 'assets.info': {
+        need('storage')
+        return await assetInfo(id, String(args[0] ?? ''))
+      }
+      case 'assets.list': {
+        need('storage')
+        return await assetList(id)
+      }
+      case 'assets.remove': {
+        need('storage')
+        return await assetRemove(id, String(args[0] ?? ''))
+      }
+      case 'assets.clear': {
+        need('storage')
+        return await assetClear(id)
+      }
+      // Играть свой звук. Разрешение notify — то же, что у ponoi.sound.play:
+      // звук слышит человек, и это единственное, чем он отличается от чтения
+      // файла. Картинку и шрифт здесь играть нечем — отказываем прямо.
+      case 'assets.play': {
+        need('storage')
+        need('notify')
+        rateLimit(id, 'sound')
+        return await playAsset(id, String(args[0] ?? ''), Number(args[1]))
+      }
+
+      // ---- Геймпад (нужно input) -----------------------------------------
+      // Только чтение и только то устройство, которое человек воткнул сам.
+      // Опрос идёт в приложении: у воркера getGamepads нет и быть не может.
+      case 'input.gamepads': {
+        need('input')
+        return readPads()
+      }
+
       default:
         throw new Denied(`Неизвестный метод ponoi.${method}`)
     }
@@ -1102,6 +1184,65 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * v1.473.0: скачать файл один раз и положить к себе.
+ *
+ * Зачем отдельно от net.fetch. Тот отдаёт ТЕКСТ: картинка, звук или шрифт,
+ * прочитанные как текст, портятся необратимо — вернуть из этого байты уже
+ * нельзя. Пропускать двоичное через обычный запрос значит заставлять каждого
+ * писать base64 руками и молча ломаться на первом же неверном байте.
+ *
+ * Правила выхода наружу ровно те же и берутся оттуда же (netGuard.ts): только
+ * https, только домены из @hosts, никогда к самому Ponoi, без куки.
+ */
+async function assetFetch(plugin: InstalledPlugin, name: string, rawUrl: string): Promise<unknown> {
+  const { method, headers } = prepareNet(plugin, rawUrl, { method: 'GET' })
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), NET_TIMEOUT_MS)
+  try {
+    const res = await fetch(new URL(rawUrl).toString(), {
+      method, headers, signal: ctl.signal, credentials: 'omit', referrerPolicy: 'no-referrer',
+    })
+    if (!res.ok) throw new Denied(`Сайт ответил ${res.status} — файл не скачан.`)
+    const buf = await res.arrayBuffer()
+    // Предел проверяется и здесь, и в assetPut. Здесь — чтобы сказать про
+    // СКАЧАННОЕ, а не про «файл»: причина у человека разная.
+    if (buf.byteLength > MAX_ASSET_BYTES) {
+      throw new Denied(`Скачано ${Math.round(buf.byteLength / 1024 / 1024)} МБ — больше ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} МБ нельзя.`)
+    }
+    return await assetPut(plugin.manifest.id, name, buf)
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Denied(`Сайт не ответил за ${NET_TIMEOUT_MS / 1000} с.`)
+    if (err instanceof Denied) throw err
+    throw new Denied('Не удалось скачать файл: ' + (err?.message ?? String(err)))
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Сыграть свой звук (v1.473.0).
+ *
+ * Адрес файла собирается ЗДЕСЬ и здесь же остаётся: плагину уходит только «да».
+ * Громкость своя, но в пределах общей громкости приложения — иначе плагин мог
+ * бы играть громче, чем человек разрешил всему остальному.
+ */
+async function playAsset(pluginId: string, name: string, volume: number): Promise<boolean> {
+  const info = await assetInfo(pluginId, name)
+  if (!info) throw new Denied(`Файла «${name}» у плагина нет.`)
+  if (info.kind !== 'audio' && info.kind !== 'video') {
+    throw new Denied(`Файл «${name}» это ${info.type} — играть тут нечего.`)
+  }
+  const url = await assetUrl(pluginId, name)
+  if (!url) throw new Denied(`Файла «${name}» у плагина нет.`)
+  const { getSettings } = await import('../settings')
+  const своя = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1
+  const audio = new Audio(url)
+  audio.volume = ((getSettings().spkVol ?? 100) / 100) * своя
+  await audio.play().catch(() => { throw new Denied('Браузер не дал сыграть звук.') })
+  return true
 }
 
 /**

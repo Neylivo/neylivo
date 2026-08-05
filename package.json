@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.472.0",
+  "version": "1.473.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,6 +19,7 @@
     "test:db": "node scripts/db-test/rls-test.mjs",
     "test:plugins": "esbuild src/lib/plugins/__test.ts --bundle --platform=node --format=cjs --outfile=dist-plugin-test/t.cjs && node dist-plugin-test/t.cjs",
     "test:settings": "esbuild src/lib/__settings_test.ts --bundle --platform=node --format=esm --outfile=dist-settings-test/t.mjs && node dist-settings-test/t.mjs",
+    "test:live": "esbuild src/lib/plugins/__live_test.ts --bundle --format=iife --outfile=dist-live-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/live-test.cjs",
     "test:attack": "esbuild src/lib/plugins/__attack_test.ts --bundle --platform=node --format=esm --outfile=dist-attack-test/t.mjs && node dist-attack-test/t.mjs",
     "deploy:functions": "node scripts/deploy-functions.mjs",
     "test:ui": "esbuild src/lib/__ui_test.ts --bundle --platform=node --format=esm --outfile=dist-ui-test/t.mjs && node dist-ui-test/t.mjs",

@@ -58,6 +58,11 @@ function packArgs(v, depth) {
     return { __fn: h }
   }
   if (Array.isArray(v)) return v.map(x => packArgs(x, depth + 1))
+  // v1.473.0: двоичное едет как есть. Разбирать его по полям нельзя: у
+  // ArrayBuffer своих полей нет вовсе, и картинка, отданная в ponoi.assets.put,
+  // приезжала бы в приложение пустым объектом — то есть молча портилась.
+  // postMessage такие значения умеет копировать сам.
+  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v) || (typeof Blob !== 'undefined' && v instanceof Blob)) return v
   if (v && typeof v === 'object') {
     const out = {}
     for (const k of Object.keys(v)) out[k] = packArgs(v[k], depth + 1)
@@ -153,6 +158,44 @@ const ponoi = {
       }),
     }),
     tables: () => call('db.tables', []),
+  },
+  // v1.473.0: свои файлы — картинки, звуки, шрифты, данные. Плагин это один
+  // файл кода: спрайту, звуку и шрифту в нём места нет, и до сих пор их
+  // приходилось держать на чужом сайте, откуда они однажды пропадают.
+  //
+  // Ссылки на файл наружу НЕ уходит: плагин знает только имя. В панели он
+  // пишет { type: 'image', value: 'asset:имя' }, настоящий адрес подставляет
+  // приложение при показе — своему же плагину.
+  assets: {
+    put: (name, data) => call('assets.put', [String(name), data]),
+    // Скачать один раз и пользоваться без интернета. Отдельно от net.fetch:
+    // тот отдаёт текст, а картинка, прочитанная как текст, портится навсегда.
+    fetch: (name, url) => call('assets.fetch', [String(name), String(url)]),
+    get: (name) => call('assets.get', [String(name)]),
+    info: (name) => call('assets.info', [String(name)]),
+    list: () => call('assets.list', []),
+    remove: (name) => call('assets.remove', [String(name)]),
+    clear: () => call('assets.clear', []),
+    play: (name, volume) => call('assets.play', [String(name), volume === undefined ? 1 : Number(volume)]),
+    // Готовая картинка для холста. Собирается ЗДЕСЬ, из полученных байтов:
+    // createImageBitmap в воркере есть, и городить это каждому вручную незачем.
+    image: async (name) => {
+      const buf = await call('assets.get', [String(name)])
+      if (!buf) throw new Error('Файла «' + name + '» у плагина нет')
+      return await createImageBitmap(new Blob([buf]))
+    },
+    // Свой файл текстом — для JSON, уровней, таблиц.
+    text: async (name) => {
+      const buf = await call('assets.get', [String(name)])
+      if (!buf) throw new Error('Файла «' + name + '» у плагина нет')
+      return new TextDecoder().decode(buf)
+    },
+  },
+  // v1.473.0: геймпад. Опрашивает приложение — у воркера getGamepads нет и быть
+  // не может. Плагину уходят ИЗМЕНЕНИЯ через ponoi.on('gamepad'), а этот вызов
+  // отдаёт состояние прямо сейчас: игре, которая рисует кадр, нужно именно оно.
+  input: {
+    gamepads: () => call('input.gamepads', []),
   },
   // v1.472.0: плагин как библиотека. register оставляет функции У СЕБЯ —
   // наружу уходят только метки, по которым приложение зовёт их обратно.

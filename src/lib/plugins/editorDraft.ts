@@ -268,6 +268,18 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   // v1.471.0: своя область экрана.
   { re: /\bponoi\s*\.\s*apps\s*\./,                           perms: ['apps'],                      what: 'ponoi.apps' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]app['"`]/,             perms: ['apps'],                      what: "ponoi.on('app')" },
+  // v1.472.0: таблицы — то же хранилище, то же разрешение. Без строки здесь
+  // плагин на ponoi.db молча получал бы отказ при первой же записи.
+  { re: /\bponoi\s*\.\s*db\s*\./,                             perms: ['storage'],                   what: 'ponoi.db' },
+  { re: /\bponoi\s*\.\s*services\s*\./,                       perms: ['ipc'],                       what: 'ponoi.services' },
+  // v1.473.0: свои файлы. Скачивание — это ещё и сеть, поэтому у него своя
+  // строка ВЫШЕ общей: иначе она бы до него не дошла, и плагин узнал бы о
+  // недостающем «net» уже на живом отказе.
+  { re: /\bponoi\s*\.\s*assets\s*\.\s*fetch\s*\(/,           perms: ['storage', 'net'],            what: 'ponoi.assets.fetch' },
+  { re: /\bponoi\s*\.\s*assets\s*\.\s*play\s*\(/,            perms: ['storage', 'notify'],         what: 'ponoi.assets.play' },
+  { re: /\bponoi\s*\.\s*assets\s*\./,                         perms: ['storage'],                   what: 'ponoi.assets' },
+  { re: /\bponoi\s*\.\s*input\s*\./,                          perms: ['input'],                     what: 'ponoi.input' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]gamepad['"`]/,         perms: ['input'],                     what: "ponoi.on('gamepad')" },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

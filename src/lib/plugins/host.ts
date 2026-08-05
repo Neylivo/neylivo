@@ -6,6 +6,10 @@ import type { InstalledPlugin } from './types'
 // v1.465.0: за плагином надо убирать не только то, что он добавил в интерфейс.
 import { cleanupPlugin } from './cleanup'
 import { setTaskRunner } from './background'
+import { setGamepadEmit } from './gamepads'
+// v1.473.0: адрес своего файла плагина отдаётся наружу отсюда — чтобы у панели
+// был ОДИН вход в систему плагинов, а не второй ленивый (см. bridge.ts).
+export { assetUrl as assetUrlFor } from './assets'
 import { CtxHolder } from './hostCtx'
 
 // v1.286.0: связывает всё вместе — поднимает песочницы включённых плагинов, роутит
@@ -96,7 +100,7 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
     // моменту первого потока плагин уже запущен.
     invoke: (ref, args) => invokePlugin(plugin.manifest.id, ref, args),
     // v1.465.0: письмо соседнему плагину.
-    ipcSend: (from, to, event, data) => deliverIpc(from, to, event, data),
+    ipcSend: (from, to, event, data) => deliverIpc(from, to, event, data),
     // v1.472.0: вызов метода службы выполняется в ЧУЖОМ плагине — том, кто её
     // предлагает. Поэтому отдельно от invoke, который зовёт обработчик своего.
     invokeIn: (pid, ref, a2) => invokePlugin(pid, ref, a2),
@@ -146,6 +150,12 @@ export async function stopPlugin(id: string): Promise<void> {
 // Фоновая задача пришла по сроку — зовём обработчик плагина. Упавший обработчик
 // не убивает ни задачу, ни плагин: причина попадает в его журнал, и видно, что
 // именно ломается раз в минуту.
+// v1.473.0: события геймпада. Опрос живёт в gamepads.ts и ничего не знает ни о
+// плагинах, ни о подписках — он только замечает изменения. Кому их отдать,
+// знает вот это место, и оно же единственное: emitPluginEvent сам разошлёт
+// событие ровно тем, кто на него подписался.
+setGamepadEmit(ev => emitPluginEvent('gamepad', ev))
+
 setTaskRunner((pluginId, taskId) => {
   const h = taskHandlers.get(taskId)
   if (!h || h.pluginId !== pluginId) return

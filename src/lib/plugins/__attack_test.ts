@@ -1080,12 +1080,97 @@ console.log('\n── База плагина (v1.472.0) ──')
   })
 }
 
+console.log('\n── Свои файлы и геймпад (v1.473.0) ──')
+{
+  const без = attacker(['ui', 'panel'], 'as-no')
+  for (const m of ['assets.put', 'assets.get', 'assets.info', 'assets.list', 'assets.remove', 'assets.clear']) {
+    await blocked('без права storage нельзя ' + m, () => без(m, ['f.png', 'AAA']))
+  }
+  // Скачивание — это ещё и сеть. Одного хранилища мало: иначе плагин без «net»
+  // ходил бы наружу через ресурсы, минуя всю проверку доменов.
+  await blocked('со storage, но без net скачать файл нельзя', () =>
+    attacker(['storage'], 'as-nonet')('assets.fetch', ['f.png', 'https://evil.example/f.png']))
+  // Звук слышит человек — разрешение то же, что у ponoi.sound.play.
+  await blocked('со storage, но без notify играть файл нельзя', () =>
+    attacker(['storage'], 'as-nonotify')('assets.play', ['a.mp3', 1]))
+  await blocked('без права input нельзя увидеть геймпады', () =>
+    attacker(['storage', 'net'], 'gp-no')('input.gamepads', []))
+  await blocked('без права input нельзя подписаться на геймпад', () =>
+    attacker(['storage'], 'gp-no-sub')('subscribe', ['gamepad']))
+
+  const A = await import('./assets')
+  await check('скачивание идёт теми же правилами, что и обычный запрос', () => {
+    // Иначе ресурсы стали бы дырой в обход @hosts: «скачай мне картинку с
+    // любого адреса» — это тот же выход наружу, только другим словом.
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    const i = src.indexOf('async function assetFetch')
+    const тело = src.slice(i, i + 900)
+    return тело.includes('prepareNet(') && тело.includes("credentials: 'omit'")
+  })
+  await check('имя плагина в ключ файла подставляет приложение', () => {
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    const i = src.indexOf("case 'assets.put'")
+    return /assetPut\(id,/.test(src.slice(i, i + 200))
+  })
+  await check('чужое имя в имени файла не проходит', () => {
+    // Ключ склеивается строкой, поэтому разделитель и «..» в имени запрещены.
+    for (const плохое of ['../../чужой', 'папка/файл.png', 'папка\\файл.png']) {
+      try { A.checkAssetName(плохое); return false } catch { /* так и надо */ }
+    }
+    return true
+  })
+  await check('разметка не станет ресурсом, как её ни назови', () => {
+    const текст = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer
+    for (const s of ['<svg><script>fetch("//evil")</script></svg>', '<!doctype html><script>x</script>']) {
+      try { A.sniffAsset(текст(s)); return false } catch { /* так и надо */ }
+    }
+    return true
+  })
+  await check('в панель не попадёт чужой адрес под видом своего файла', async () => {
+    const d = attacker([...ALL_PERMISSIONS], 'as-panel')
+    // Место занято прежними проверками — их панели уже стоят, а больше трёх в
+    // одном месте приложение не пускает. Берём своё, пустое.
+    await d('ui.addPanel', [{
+      slot: 'library', title: 'П', rows: [
+        { type: 'image', key: 'свой', label: 'свой', value: 'asset:sprite.png' },
+        { type: 'image', key: 'вверх', label: 'вверх', value: 'asset:../чужое.png' },
+        { type: 'image', key: 'blob', label: 'blob', value: 'blob:https://ponoi/aaa' },
+        { type: 'image', key: 'data', label: 'data', value: 'data:image/svg+xml,<svg onload=alert(1)>' },
+        { type: 'image', key: 'js', label: 'js', value: 'javascript:alert(1)' },
+      ],
+    }])
+    const panel = registry.getRegistry().panels.find(p => p.pluginId === 'as-panel')
+    const ключи = (panel?.rows ?? []).map((r: any) => r.key)
+    return ключи.length === 1 && ключи[0] === 'свой'
+  })
+  await check('ссылку на файл плагину не отдаёт ни один метод', () => {
+    // Правило 2 из assets.ts. Появись метод, отдающий адрес, — файл уехал бы
+    // сообщением или на чужой сайт, и вернуть это было бы уже нельзя.
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    const ветки = [...src.matchAll(/case '(assets\.[a-z]+)'/g)].map(m => m[1])
+    if (!ветки.includes('assets.put')) throw new Error('ветки ресурсов не нашлись — проверка смотрит не туда')
+    return !ветки.includes('assets.url')
+  })
+  await check('геймпады перестают опрашиваться вместе с выключенным плагином', async () => {
+    const { cleanupPlugin } = await import('./cleanup')
+    const G = await import('./gamepads')
+    G.unwatchAllGamepads()
+    await attacker([...ALL_PERMISSIONS], 'gp-watch')('subscribe', ['gamepad'])
+    if (G.gamepadsWatching() !== 1) return false
+    cleanupPlugin('gp-watch')
+    return G.gamepadsWatching() === 0
+  })
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')
   const исходник = readFileSync('src/lib/plugins/cleanup.ts', 'utf8')
-  await check('уборка знает про все семь видов оставленного', () =>
-    cleanup.SUBSYSTEM_COUNT === 7)
+  // Число пишется руками нарочно: убыль строки в cleanup.ts — это выключенный
+  // плагин, который продолжает работать, и заметить это должно ЗДЕСЬ, а не
+  // человек по севшей батарее. v1.473.0: прибавились адреса файлов и геймпады.
+  await check('уборка знает про все девять видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 9)
   await check('на каждый вид есть и «за этим», и «за всеми»', () => {
     // Два списка — это два места, где можно забыть строку. Здесь он один, и
     // каждая запись обязана иметь обе половины.

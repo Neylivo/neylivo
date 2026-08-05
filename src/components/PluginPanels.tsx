@@ -1,8 +1,41 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePanels, type PanelSlot, type SettingsRow } from '../lib/plugins/registry'
-import { invokePlugin, emitToPlugin } from '../lib/plugins/bridge'
+import { invokePlugin, emitToPlugin, pluginAssetUrl } from '../lib/plugins/bridge'
 import { readStorage, writeStorage } from '../lib/plugins/store'
 import { ensureCanvas } from '../lib/plugins/canvasHub'
+
+/**
+ * Картинка в строке панели (v1.473.0).
+ *
+ * Обычная https-ссылка показывается как есть. А «asset:имя» — это СВОЙ файл
+ * плагина, и настоящего адреса у плагина нет: он знает только имя, а адрес
+ * собирает приложение здесь и для этого же плагина. Так ссылку неоткуда взять
+ * ни другому плагину, ни сообщению, ни чужому сайту (см. assets.ts, правило 2).
+ *
+ * Адрес спрашивается через прослойку (bridge.ts), а не у самого хранилища.
+ * Вход в систему плагинов из горячего кода должен быть ОДИН: свой ленивый
+ * импорт отсюда — это второй вход в ту же систему, а два входа в неё уже
+ * однажды кончились тем, что она уехала в стартовую сборку всем (v1.469.0).
+ */
+export function AssetImg(
+  { pluginId, src, alt, className }: { pluginId: string; src: string; alt: string; className?: string },
+) {
+  const свой = src.startsWith('asset:')
+  const [url, setUrl] = useState<string | null>(свой ? null : src)
+  useEffect(() => {
+    if (!свой) { setUrl(src); return }
+    let живо = true
+    setUrl(null)
+    pluginAssetUrl(pluginId, src.slice('asset:'.length))
+      .then(u => { if (живо) setUrl(u) })
+      .catch(() => { if (живо) setUrl(null) })
+    return () => { живо = false }
+  }, [pluginId, src, свой])
+  // Пока адреса нет — пустая рамка, а не <img src="">: пустой src браузер
+  // считает ссылкой на саму страницу и честно её скачивает.
+  if (!url) return <span className={className} aria-label={alt} />
+  return <img className={className} src={url} alt={alt} loading="lazy" />
+}
 
 /**
  * Холст плагина в панели (v1.465.0).
@@ -132,7 +165,7 @@ export function PanelRows({ pluginId, rows }: { pluginId: string; rows: Settings
           </div>
         )
         case 'image': return (
-          <img key={r.key} className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
+          <AssetImg key={r.key} pluginId={pluginId} className="plugpanel-img" src={r.value} alt={r.label} />
         )
         case 'canvas': return <PanelCanvas key={r.key} pluginId={pluginId} row={r} />
         default: return null

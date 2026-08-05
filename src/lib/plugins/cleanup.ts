@@ -28,6 +28,8 @@ import { clearPluginTheme, clearAllThemes } from './pluginTheme'
 import { clearCanvases, clearAllCanvases } from './canvasHub'
 import { clearApps, clearAllApps } from './apps'
 import { clearServices, clearAllServices } from './services'
+import { clearAssetUrls, clearAllAssetUrls } from './assets'
+import { unwatchGamepads, unwatchAllGamepads } from './gamepads'
 
 /** Всё, что плагин оставляет после себя вне интерфейса. По одной паре на вид:
  *  «убрать за этим» и «убрать за всеми». */
@@ -43,6 +45,14 @@ const SUBSYSTEMS: { one: (id: string) => void; all: () => void }[] = [
   // v1.472.0: службы. Останься запись в реестре — её метки функций вели бы в
   // остановленный плагин, и чужой вызов молча висел бы до срока.
   { one: clearServices, all: clearAllServices },
+  // v1.473.0: адреса файлов живут в окне и сами не пропадают — это течь
+  // памяти на каждое включение-выключение плагина. Сами файлы остаются: их
+  // убирает удаление плагина, а не выключение.
+  { one: clearAssetUrls, all: clearAllAssetUrls },
+  // v1.473.0: опрос геймпадов идёт кадрами. Забудь мы его снять — приложение
+  // продолжало бы будить себя шестьдесят раз в секунду ради выключенного
+  // плагина, и человек увидел бы только севшую батарею.
+  { one: unwatchGamepads, all: unwatchAllGamepads },
 ]
 
 export const SUBSYSTEM_COUNT = SUBSYSTEMS.length

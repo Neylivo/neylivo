@@ -14,6 +14,8 @@ import { MIN_EVERY_MS, MAX_TASKS } from './background'
 import { THEME_VAR_NAMES } from './pluginTheme'
 import { APP_MODES, MAX_APPS_PER_PLUGIN } from './apps'
 import { OPS, MAX_ROWS } from './db'
+import { MAX_ASSET_BYTES, MAX_ASSETS, MAX_ASSETS_TOTAL } from './assets'
+import { DEADZONE } from './gamepads'
 // v1.360.0: полное описание формата плагина — одним текстом.
 //
 // Зачем отдельным файлом. Человек, который не пишет код, всё равно может сделать
@@ -135,6 +137,7 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
 | background | работать по расписанию с закрытой панелью |
 | ui.theme | менять цвета оформления приложения |
 | apps | своё окно, вкладка или полный экран поверх приложения |
+| input | видеть геймпады, подключённые к устройству |
 
 ## Что умеет объект ponoi
 
@@ -204,7 +207,7 @@ slot — старая заменится новой. Так и делают жи
 | progress | полоса заполнения | value (0–100) |
 | slider | ползунок с числом | value, min, max, step |
 | color | выбор цвета | value (#rrggbb) |
-| image | картинка | value (https-ссылка) |
+| image | картинка | value (https-ссылка или свой файл: 'asset:имя') |
 | canvas | холст, который плагин рисует сам | height (40–600) |
 | keybind | сочетание клавиш, которое выбирает человек | value (например Ctrl+Shift+P) |
 
@@ -455,6 +458,66 @@ db.update, db.remove, db.count и db.clear; звать их напрямую н�
 
 Строк в одной таблице до ${MAX_ROWS}, одна строка до 256 КБ. Данные переживают
 выключение плагина и пропадают, когда плагин удаляют.
+
+### Свои файлы: картинки, звуки, шрифты, данные (нужно storage)
+
+Плагин — это один файл кода, и спрайту, звуку или шрифту в нём места нет.
+ponoi.assets — свой склад файлов на устройстве человека:
+
+    // положить своими руками: байты, Uint8Array, base64 или data:-строка
+    await ponoi.assets.put('level1.json', JSON.stringify(уровень))
+    // или скачать ОДИН РАЗ и дальше пользоваться без интернета
+    await ponoi.assets.fetch('sprite.png', 'https://мой-сайт/sprite.png')  // нужно ещё net и @hosts
+
+    const инфо = await ponoi.assets.info('sprite.png')   // { name, type, kind, size, at }
+    const все = await ponoi.assets.list()
+    await ponoi.assets.remove('sprite.png')
+    await ponoi.assets.clear()
+
+Как этим пользоваться:
+
+    // на холсте
+    const bmp = await ponoi.assets.image('sprite.png')   // готовый ImageBitmap
+    ctx.drawImage(bmp, 0, 0)
+    // текстом (JSON, уровни, таблицы)
+    const уровень = JSON.parse(await ponoi.assets.text('level1.json'))
+    // сырые байты
+    const buf = await ponoi.assets.get('sprite.png')     // ArrayBuffer
+    // звуком (нужно ещё notify), громкость 0…1 в пределах общей громкости
+    await ponoi.assets.play('hit.mp3', 0.6)
+    // картинкой в панели или в настройках
+    { type: 'image', key: 'pic', label: 'Спрайт', value: 'asset:sprite.png' }
+
+ССЫЛКИ НА ФАЙЛ ПЛАГИН НЕ ПОЛУЧАЕТ — ни blob:, ни data:. Он знает только имя, а
+настоящий адрес подставляет приложение при показе и только своему же плагину.
+Поэтому файл нельзя ни отправить сообщением, ни отдать чужому сайту, ни
+подсунуть другому плагину.
+
+ВИД ФАЙЛА ОПРЕДЕЛЯЕТСЯ ПО СОДЕРЖИМОМУ, а не по имени: png, jpeg, gif, webp,
+bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
+Разметка (HTML, SVG, XML) отвергается: внутри неё может быть код. Неопознанное
+тоже отвергается — с объяснением, а не молча.
+
+Один файл до ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} МБ, файлов до ${MAX_ASSETS},
+всего до ${Math.round(MAX_ASSETS_TOTAL / 1024 / 1024)} МБ на плагин. Как и таблицы,
+файлы переживают выключение плагина и пропадают, когда плагин удаляют.
+
+### Геймпад (нужно input)
+
+    const pads = await ponoi.input.gamepads()
+    // [{ index, id, buttons: [0…1], axes: [-1…1] }] — состояние прямо сейчас
+
+    ponoi.on('gamepad', (e) => {
+      // e.kind: 'connect' | 'disconnect' | 'button' | 'axis'
+      // e.index, e.id, e.which (номер кнопки или ручки), e.pressed, e.value
+    })
+
+Приходят только ИЗМЕНЕНИЯ: нажали, отпустили, сдвинули ручку. У ручек своя
+мёртвая зона (${DEADZONE}) — лежащий на столе геймпад молчит. Пока на 'gamepad'
+никто не подписан, приложение геймпады не опрашивает вовсе.
+
+Браузер показывает геймпад не сразу после подключения, а после первого нажатия
+на нём — это его правило, не наше: до нажатия список будет пустым.
 
 ### Плагин как библиотека для других плагинов (нужно ipc)
 

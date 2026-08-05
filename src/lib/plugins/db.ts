@@ -23,10 +23,7 @@
 //
 // Проверки: src/lib/plugins/__test.ts и __attack_test.ts.
 
-/** Как называется база и хранилище. Меняются только вместе с версией схемы. */
-const DB_NAME = 'ponoi_plugin_db'
-const STORE = 'rows'
-const DB_VERSION = 1
+import { STORE_ROWS as STORE, запрос, лавка as лавкаБазы } from './idb'
 
 /** Сколько строк в одной таблице у одного плагина. */
 export const MAX_ROWS = 50_000
@@ -91,28 +88,11 @@ function типЧисло(v: unknown): number | null {
 }
 
 // ── Сама база ───────────────────────────────────────────────────────────────
-
-let открытая: Promise<IDBDatabase> | null = null
-
-function открыть(): Promise<IDBDatabase> {
-  if (открытая) return открытая
-  открытая = new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') { reject(new DbError('База недоступна в этом окружении')); return }
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(STORE)) {
-        const st = db.createObjectStore(STORE, { keyPath: 'k' })
-        // Индекс по «плагин + таблица»: именно он делает отбор таблицы дешёвым
-        // независимо от того, сколько всего строк в базе.
-        st.createIndex('byTable', 't', { unique: false })
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(new DbError('Не удалось открыть базу: ' + (req.error?.message ?? '')))
-  })
-  return открытая
-}
+//
+// v1.473.0: открытие базы переехало в idb.ts. Не ради красоты: с появлением
+// ресурсов хранилищ стало два, а открывать одну базу из двух файлов с разными
+// версиями схемы значит получить заблокированное соединение и зависшее
+// приложение. Схему знает одно место, здесь только своё хранилище.
 
 const tkey = (pluginId: string, table: string) => pluginId + SEP + table
 const rkey = (pluginId: string, table: string, id: string) => pluginId + SEP + table + SEP + id
@@ -121,15 +101,11 @@ interface Запись { k: string; t: string; id: string; v: Record<string, unk
 
 function дело<T>(store: IDBObjectStore, req: IDBRequest, map: (r: IDBRequest) => T): Promise<T> {
   void store
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(map(req))
-    req.onerror = () => reject(new DbError(req.error?.message ?? 'ошибка базы'))
-  })
+  return запрос(req, map)
 }
 
 async function лавка(mode: IDBTransactionMode): Promise<IDBObjectStore> {
-  const db = await открыть()
-  return db.transaction(STORE, mode).objectStore(STORE)
+  return лавкаБазы(STORE, mode)
 }
 
 /** Все строки одной таблицы. Здесь и работает настоящий индекс. */

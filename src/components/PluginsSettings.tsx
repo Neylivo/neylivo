@@ -6,7 +6,7 @@ import { confirmUi } from '../lib/confirm'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
-import { PanelCanvas } from './PluginPanels'
+import { PanelCanvas, AssetImg } from './PluginPanels'
 import { taskList, subscribeTasks, stopTaskByUser } from '../lib/plugins/background'
 import { openSockets } from '../lib/plugins/wsHub'
 import { GrantCreate, GrantList, GrantClaimBox } from './PluginGrants'
@@ -110,7 +110,7 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
         case 'image': return (
           <div key={r.key} className="pqs-optrow plug-optcol">
             <div><div className="pqs-optt">{r.label}</div>{r.description && <div className="pqs-optd">{r.description}</div>}</div>
-            <img className="plugpanel-img" src={r.value} alt={r.label} loading="lazy" />
+            <AssetImg pluginId={pluginId} className="plugpanel-img" src={r.value} alt={r.label} />
           </div>
         )
         // v1.467.0: выбор сочетания клавиш. Человек нажимает кнопку и жмёт
@@ -303,6 +303,18 @@ export function PluginsSettings() {
     if (!await confirmUi(`Удалить плагин «${name}» вместе с его данными?`, { okText: 'Удалить', danger: true })) return
     await stopPlugin(id)
     removePlugin(id)
+    // v1.473.0: «вместе с его данными» — это обещание, и до этой версии оно не
+    // выполнялось. removePlugin убирает запись и хранилище ключ-значение, а
+    // таблицы (v1.472.0) и файлы оставались в IndexedDB навсегда: удалил плагин,
+    // а его гигабайт лежит. Хуже того, поставь человек тот же плагин снова — он
+    // нашёл бы там свои прежние данные, которые человек считал удалёнными.
+    //
+    // Грузится по требованию: экран плагинов не должен тянуть базу к себе.
+    try {
+      const [db, assets] = await Promise.all([import('../lib/plugins/db'), import('../lib/plugins/assets')])
+      await db.dbDropAll(id)
+      await assets.assetClear(id)
+    } catch { /* базы может не быть вовсе — плагин всё равно удалён */ }
     toastOk('Плагин удалён')
   }
 

@@ -538,6 +538,9 @@ for (const p of OFFICIAL_PLUGINS) {
     'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
     'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
     'background.every', 'background.stop', 'ui.setTheme', 'ui.clearTheme', 'ui.addContextMenu',
+    // v1.473.0: свои файлы и геймпад.
+    'assets.put', 'assets.fetch', 'assets.get', 'assets.info', 'assets.list',
+    'assets.remove', 'assets.clear', 'assets.play', 'input.gamepads',
   ]
 
 
@@ -781,6 +784,8 @@ for (const p of OFFICIAL_PLUGINS) {
         'background': 'ponoi.background.every(60000,async()=>{})',
         'ui.theme': "ponoi.ui.setTheme({accent:'#ff4500'})",
         'apps': "ponoi.apps.create({mode:'window'})",
+        // v1.473.0
+        'input': 'ponoi.input.gamepads()',
       }
       const код = прим[p]
       if (!код) return true
@@ -1318,6 +1323,206 @@ for (const p of OFFICIAL_PLUGINS) {
       // исходнике — отдельная беда, из-за него файл считается двоичным.
       if (src.includes(' ')) throw new Error('в db.ts настоящий нулевой байт вместо записи escape')
       return src.includes("const SEP = '\\u0000'")
+    })
+
+    check('ни в одном файле системы плагинов нет настоящего нулевого байта', () => {
+      // v1.473.0: проверка выше смотрела на один файл, а беда общая. Настоящий
+      // нулевой байт в исходнике появляется сам собой при правке (редактор
+      // вставляет знак вместо записи escape), после чего файл считается
+      // двоичным: его перестают показывать поиск и разбор различий, и правка
+      // рядом делается вслепую. За эту версию так вышло дважды.
+      const { readdirSync } = require('node:fs') as typeof import('node:fs')
+      const дир = 'src/lib/plugins/'
+      const виноватые = readdirSync(дир)
+        .filter(f => f.endsWith('.ts') && f !== '__test.ts')   // здесь он нарочно, вот в этой проверке
+        .filter(f => readFileSync(дир + f, 'utf8').includes(String.fromCharCode(0)))
+      if (виноватые.length) throw new Error('настоящий нулевой байт в: ' + виноватые.join(', '))
+      return true
+    })
+  }
+
+  // ── Свои файлы плагина (v1.473.0) ───────────────────────────────────────
+  //
+  // Сама база здесь недоступна (IndexedDB в Node нет), поэтому проверяется то,
+  // на чём всё держится и где легче всего ошибиться: опознание вида по
+  // содержимому, разбор присланного и правила имени.
+  console.log('\n-- Свои файлы плагина --')
+  {
+    const A = await import('./assets')
+    const байты = (...b: number[]) => new Uint8Array(b).buffer
+    const текст = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer
+
+    check('картинки опознаются по первым байтам', () =>
+      A.sniffAsset(байты(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2)).type === 'image/png'
+      && A.sniffAsset(байты(0xff, 0xd8, 0xff, 0xe0, 1)).type === 'image/jpeg'
+      && A.sniffAsset(байты(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)).type === 'image/gif')
+
+    check('WebP и WAV не путаются, хотя начинаются одинаково', () => {
+      const riff = (хвост: number[]) => new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, ...хвост]).buffer
+      const w = A.sniffAsset(riff([0x57, 0x45, 0x42, 0x50]))
+      const a = A.sniffAsset(riff([0x57, 0x41, 0x56, 0x45]))
+      return w.type === 'image/webp' && w.kind === 'image'
+        && a.type === 'audio/wav' && a.kind === 'audio'
+    })
+
+    check('mp4 опознаётся по метке не с начала файла', () =>
+      A.sniffAsset(байты(0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32)).kind === 'video')
+
+    check('разметка отвергается, и сказано почему', () => {
+      for (const s of ['<!DOCTYPE html><html>', '<svg xmlns="x"><script/></svg>', '  <?xml version="1"?>']) {
+        try { A.sniffAsset(текст(s)); return false } catch (e: any) {
+          if (!/разметк/i.test(e.message)) return false
+        }
+      }
+      return true
+    })
+
+    check('картинка с разметкой внутри — это разметка, а не картинка', () => {
+      // Имя файла ни на что не влияет: смотрим только на содержимое.
+      try { A.sniffAsset(текст('<svg onload="alert(1)"></svg>')); return false } catch { return true }
+    })
+
+    check('JSON и текст проходят, двоичный мусор — нет', () => {
+      if (A.sniffAsset(текст('{"a":1}')).type !== 'application/json') return false
+      if (A.sniffAsset(текст('обычный текст')).type !== 'text/plain') return false
+      try { A.sniffAsset(байты(0x03, 0x04, 0x05, 0x06, 0x07)); return false } catch { return true }
+    })
+
+    check('пустой файл — отказ, а не запись в ноль байт', () => {
+      try { A.sniffAsset(new ArrayBuffer(0)); return false } catch { return true }
+    })
+
+    check('имя файла проверяется, а не берётся как есть', () => {
+      for (const плохое of ['', '   ', '../чужое', 'а/б', 'а\\б', 'я'.repeat(200)]) {
+        try { A.checkAssetName(плохое); return false } catch { /* так и надо */ }
+      }
+      // Кириллица разрешена нарочно: плагины здесь пишут по-русски, и
+      // «спрайт.png» должен работать.
+      return A.checkAssetName(' sprite.png ') === 'sprite.png'
+        && A.checkAssetName('спрайт героя.png') === 'спрайт героя.png'
+    })
+
+    check('байты берутся и из массива, и из base64, и из data:', () => {
+      const из = (v: unknown) => new Uint8Array(A.bytesFrom(v))
+      const прямо = из(new Uint8Array([1, 2, 3]))
+      const b64 = из('data:image/png;base64,AAECAw==')
+      const txt = из('привет')
+      return прямо.length === 3 && прямо[2] === 3
+        && b64.length === 4 && b64[3] === 3
+        && txt.length > 6 && new TextDecoder().decode(txt) === 'привет'
+    })
+
+    check('кусок большого массива берётся именно куском', () => {
+      // Uint8Array может смотреть в СЕРЕДИНУ чужого буфера. Возьми мы .buffer
+      // целиком — в файл уехало бы всё, включая чужие байты до и после.
+      const целое = new Uint8Array([9, 9, 1, 2, 3, 9, 9])
+      const кусок = celoe(целое)
+      const got = new Uint8Array(A.bytesFrom(кусок))
+      return got.length === 3 && got[0] === 1 && got[2] === 3
+      function celoe(b: Uint8Array) { return b.subarray(2, 5) }
+    })
+
+    check('ссылка на файл не выдаётся плагину ни одним методом', () => {
+      // Правило 2 из assets.ts: плагин знает только имя. Появись здесь метод,
+      // отдающий адрес, файл можно было бы отправить сообщением или на чужой
+      // сайт — а вернуть это назад уже нельзя.
+      const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+      const ветки = [...src.matchAll(/case '(assets\.[a-z]+)'/g)].map(m => m[1])
+      if (!ветки.includes('assets.put')) throw new Error('ветки ресурсов не нашлись — проверка смотрит не туда')
+      return !ветки.includes('assets.url')
+        && !/case 'assets\.[a-z]+': \{[^}]*return await assetUrl/.test(src)
+    })
+
+    check('приложение показывает свой файл, а не его адрес из плагина', () => {
+      // Картинку в панели рисует общий компонент, и «asset:» он разбирает сам,
+      // подставляя адрес своего же плагина. Иначе плагину пришлось бы отдать
+      // настоящую ссылку — то есть нарушить правило 2.
+      const panels = readFileSync('src/components/PluginPanels.tsx', 'utf8')
+      const settings = readFileSync('src/components/PluginsSettings.tsx', 'utf8')
+      const bridge = readFileSync('src/lib/plugins/bridge.ts', 'utf8')
+      // И спрашивает адрес через прослойку: свой ленивый импорт отсюда был бы
+      // вторым входом в систему плагинов (см. bridge.ts, v1.469.0).
+      return panels.includes('function AssetImg') && /asset:/.test(panels)
+        && panels.includes('pluginAssetUrl') && !panels.includes("import('../lib/plugins/assets')")
+        && bridge.includes('assetUrlFor') && settings.includes('AssetImg')
+    })
+  }
+
+  // ── Геймпад (v1.473.0) ──────────────────────────────────────────────────
+  //
+  // Живого геймпада у меня нет, и это ровно тот случай, когда всю смысловую
+  // часть надо вынести в чистую функцию и проверить её без железа.
+  console.log('\n-- Геймпад --')
+  {
+    const G = await import('./gamepads')
+    const пад = (buttons: number[], axes: number[] = [], index = 0): any =>
+      ({ index, id: 'проба', buttons, axes })
+
+    check('изменений нет — событий нет', () =>
+      G.diffPads([пад([0, 0], [0, 0])], [пад([0, 0], [0, 0])]).length === 0)
+
+    check('нажатие и отпускание — два разных события', () => {
+      const вниз = G.diffPads([пад([0])], [пад([1])])
+      const вверх = G.diffPads([пад([1])], [пад([0])])
+      return вниз.length === 1 && вниз[0].kind === 'button' && вниз[0].pressed === true
+        && вверх.length === 1 && вверх[0].pressed === false
+    })
+
+    check('удержание не шлёт событие каждый кадр', () =>
+      G.diffPads([пад([1])], [пад([1])]).length === 0)
+
+    check('подключение и отключение замечаются', () => {
+      const вкл = G.diffPads([], [пад([0])])
+      const выкл = G.diffPads([пад([0])], [])
+      return вкл.length === 1 && вкл[0].kind === 'connect'
+        && выкл.length === 1 && выкл[0].kind === 'disconnect'
+    })
+
+    check('нажатая при подключении кнопка не считается нажатием', () => {
+      // Иначе игра получала бы «выстрел» в момент подключения геймпада.
+      const ev = G.diffPads([], [пад([1, 1])])
+      return ev.length === 1 && ev[0].kind === 'connect'
+    })
+
+    check('мёртвая зона глушит лежащий на столе геймпад', () =>
+      G.deadzone(0.1) === 0 && G.deadzone(-0.1) === 0
+      && G.deadzone(1) === 1 && G.deadzone(-1) === -1
+      && G.deadzone(0.5) > 0 && G.deadzone(0.5) < 0.5)
+
+    check('дрожание ручки на сотую не становится событием', () =>
+      G.diffPads([пад([], [0.5])], [пад([], [0.51])]).length === 0
+      && G.diffPads([пад([], [0.5])], [пад([], [0.7])]).length === 1)
+
+    check('курок наполовину виден как значение, а не как «нажат»', () => {
+      const ev = G.diffPads([пад([0])], [пад([0.3])])
+      return ev.length === 0            // 0.3 — ещё не нажатие
+        && G.diffPads([пад([0])], [пад([0.9])]).length === 1
+    })
+
+    check('второй геймпад не путается с первым', () => {
+      const было = [пад([0], [], 0), пад([0], [], 1)]
+      const стало = [пад([0], [], 0), пад([1], [], 1)]
+      const ev = G.diffPads(было, стало)
+      return ev.length === 1 && ev[0].index === 1
+    })
+
+    check('без геймпадов и без API опрос отвечает пустым списком, а не падает', () =>
+      Array.isArray(G.readPads()) && G.readPads().length === 0)
+
+    check('пока никто не подписан, опроса нет', () => {
+      if (G.gamepadsWatching() !== 0) return false
+      G.watchGamepads('a'); G.watchGamepads('b')
+      if (G.gamepadsWatching() !== 2) return false
+      G.unwatchGamepads('a')
+      if (G.gamepadsWatching() !== 1) return false
+      G.unwatchAllGamepads()
+      return G.gamepadsWatching() === 0
+    })
+
+    check('события уходят наружу одним местом', () => {
+      // Иначе появилось бы второе, и одно из них однажды забыли бы снять.
+      const host = readFileSync('src/lib/plugins/host.ts', 'utf8')
+      return /setGamepadEmit\(/.test(host) && host.includes("emitPluginEvent('gamepad'")
     })
   }
 

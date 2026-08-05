@@ -87,6 +87,23 @@ export async function invokePlugin(pluginId: string, ref: FnRef, args: unknown[]
   return h.invokePlugin(pluginId, ref, args)
 }
 
+/**
+ * Настоящий адрес своего файла плагина — для картинки в его панели (v1.473.0).
+ *
+ * Почему через прослойку. Строка панели пишется как «asset:имя», и превратить
+ * её в адрес умеет только система плагинов. Вход в неё из горячего кода должен
+ * быть ОДИН — вот этот файл: свой ленивый импорт из панели был бы вторым
+ * входом в ту же систему, а два входа в неё уже однажды кончились тем, что она
+ * уехала в стартовую сборку всем (v1.469.0).
+ *
+ * Ничего лишнего это не грузит: панель плагина существует только тогда, когда
+ * плагин запущен, то есть система уже загружена.
+ */
+export async function pluginAssetUrl(pluginId: string, name: string): Promise<string | null> {
+  const h = host ?? await поднять()
+  return h.assetUrlFor(pluginId, name)
+}
+
 export function claimHostContext(owner: string, next: HostContext, force: boolean): void {
   if (host) { host.claimHostContext(owner, next, force); return }
   // Правило НЕ переписываем — отдаём его тому же классу, что и у хоста. Копия
