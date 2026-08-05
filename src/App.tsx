@@ -38,6 +38,7 @@ import { lazyNamed } from './lib/lazyScreen'
 const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'EmergencyChat')
 const Home = lazyNamed(() => import('./components/Home'), 'Home')
 import { startEnabledPlugins, invokePlugin, emitToPlugin, emitPluginEvent } from './lib/plugins/bridge'
+import { PluginApps } from './components/PluginApps'
 import { pluginsDisabled, setPluginsDisabled, getHotkeys } from './lib/plugins/registry'
 import { comboFromEvent, isComboComplete } from './lib/keybind'
 
@@ -481,6 +482,10 @@ export default function App() {
     if (verClicks.current.length >= 3) { verClicks.current = []; setShowLog(true) }
   }
   return <>
+    {/* v1.471.0: области плагинов — окна, вкладки, полный экран. Здесь, в
+        самом верху приложения: окно во весь экран не должно зависеть от того,
+        какой экран открыт. Пока областей нет, не рисует ничего. */}
+    <PluginApps />
     <Toasts />
     <ConfirmHost />
     {/* v1.450.0: всё, что обязано лежать ПОВЕРХ всего, выносится порталом.

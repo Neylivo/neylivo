@@ -7547,3 +7547,74 @@ body.no-anim .mus-blob.on { animation: none; }
   .fp-recent { padding: 8px 6px; }
   .fp-recent.clickable:active { background: rgba(var(--ov, 255,255,255),.09); }
 }
+
+/* ══ Своя область экрана у плагина (v1.471.0) ══════════════════════════════
+   Четыре вида — окно, картинка-в-картинке, вкладка и полный экран — это один
+   и тот же прямоугольник в разных местах. Поэтому и правил здесь один набор,
+   а различается только положение. */
+.plugapps { position: fixed; inset: 0; z-index: 900; pointer-events: none; }
+.plugapps > * { pointer-events: auto; }
+
+.plugapp {
+  position: absolute; display: flex; flex-direction: column;
+  background: var(--c-content, #313338);
+  border: 1px solid rgba(var(--ov, 255, 255, 255), .1);
+  border-radius: var(--r-lg, 12px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+/* Плавающее окно по умолчанию — по центру; человек утащит куда захочет. */
+.plugapp-window { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.plugapp-window[style*="left"] { transform: none; }
+/* Маленькое окошко — в углу, где ему и место, и всегда поверх остальных. */
+.plugapp-pip { width: 300px !important; height: 200px !important; z-index: 2; }
+/* Вкладка занимает рабочую область, полный экран — всё окно целиком. */
+.plugapp-tab { inset: 0; border-radius: 0; border: none; }
+.plugapp-fullscreen { inset: 0; border-radius: 0; border: none; }
+.plugapp.dragging { user-select: none; box-shadow: 0 18px 52px rgba(0, 0, 0, .6); }
+
+/* Шапка. Её нельзя убрать из разметки: без неё окно во весь экран стало бы
+   способом подделать приложение и не дать себя закрыть. */
+.plugapp-h {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 10px 12px; min-height: 44px;
+  background: rgba(var(--ov, 255, 255, 255), .05);
+  border-bottom: 1px solid rgba(var(--ov, 255, 255, 255), .08);
+}
+.plugapp-h.draggable { cursor: grab; }
+.plugapp.dragging .plugapp-h { cursor: grabbing; }
+.plugapp-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plugapp-tag {
+  flex: none; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--mut); padding: 2px 7px; border-radius: 999px;
+  background: rgba(var(--ov, 255, 255, 255), .08);
+}
+.plugapp-x {
+  flex: none; width: 30px; height: 30px; border: none; border-radius: var(--r-sm, 8px);
+  background: transparent; color: var(--mut); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.plugapp-x:hover { background: rgba(var(--ov, 255, 255, 255), .1); color: var(--tx); }
+.plugapp-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Телефон. Блок ПОСЛЕ основных правил намеренно — иначе он молча не работал бы.
+   Таскать окошки пальцем по маленькому экрану бессмысленно, поэтому окно и
+   картинка-в-картинке разворачиваются: первое — на весь экран, вторая —
+   шторкой снизу, как всё остальное в приложении на телефоне. */
+@media (max-width: 768px) {
+  .plugapp-window { inset: 0; width: auto !important; height: auto !important;
+    transform: none; border-radius: 0; border: none; }
+  .plugapp-pip { left: 0; right: 0; bottom: 0; top: auto;
+    width: auto !important; height: 45% !important;
+    border-radius: var(--r-lg, 12px) var(--r-lg, 12px) 0 0; }
+  .plugapp-h { min-height: 48px; padding-top: calc(10px + env(safe-area-inset-top)); }
+  .plugapp-pip .plugapp-h { padding-top: 10px; }
+  .plugapp-tab .plugapp-h, .plugapp-fullscreen .plugapp-h, .plugapp-window .plugapp-h {
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+  .plugapp-body { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .plugapp-x { width: 40px; height: 40px; }
+  /* Кнопки внутри окна плагина — как и везде на телефоне: не ниже сорока
+     пикселей. Поймано телефонным обходом: вышло 32. */
+  .plugapp-body .plugpanel-btn, .plugapp-body button { min-height: 40px; }
+  .plugapp-body .pqs-toggle { min-height: 0; }
+}

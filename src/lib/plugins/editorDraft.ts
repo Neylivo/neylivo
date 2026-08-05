@@ -265,6 +265,9 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   // Пункт меню сообщения отдаёт само сообщение — значит, и чтение тоже.
   { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(\s*\{[^}]*target\s*:\s*['"`]message['"`]/, perms: ['ui', 'messages.read'], what: 'ponoi.ui.addContextMenu (message)' },
   { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(/,      perms: ['ui'],                        what: 'ponoi.ui.addContextMenu' },
+  // v1.471.0: своя область экрана.
+  { re: /\bponoi\s*\.\s*apps\s*\./,                           perms: ['apps'],                      what: 'ponoi.apps' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]app['"`]/,             perms: ['apps'],                      what: "ponoi.on('app')" },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

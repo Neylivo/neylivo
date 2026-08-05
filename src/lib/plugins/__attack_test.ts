@@ -864,12 +864,116 @@ console.log('\n── Точки монтирования и настройки 
   })
 }
 
+console.log('\n── Своя область экрана (v1.471.0) ──')
+{
+  const A = await import('./apps')
+  A.clearAllApps()
+
+  await blocked('без права apps окно не открыть', () => {
+    const без = attacker(['ui', 'panel'], 'app-no')
+    return без('apps.create', [{ title: 'Моё', mode: 'window' }])
+  })
+  await blocked('выдуманный вид окна не проходит', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'app-mode')
+    return d('apps.create', [{ title: 'Моё', mode: 'везде' }])
+  })
+  await allowed('окно с известным видом открывается', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'app-ok')
+    return d('apps.create', [{ title: 'Моё', mode: 'window', rows: [] }])
+  })
+
+  await check('в окно попадают только известные строки', async () => {
+    // Ровно как в панели: строка с чужим типом — это попытка нарисовать своё.
+    A.clearAllApps()
+    const d = attacker([...ALL_PERMISSIONS], 'app-rows')
+    const id = await d('apps.create', [{ title: 'Т', mode: 'tab', rows: [
+      { type: 'toggle', key: 'a', label: 'Норм', value: true },
+      { type: 'html', key: 'b', label: '<img src=x onerror=alert(1)>' },
+    ] }]) as number
+    const app = A.appList('app-rows').find(x => x.id === id)
+    return !!app && app.rows.length === 1 && app.rows[0].type === 'toggle'
+  })
+
+  await check('размер окна зажат в границы', async () => {
+    A.clearAllApps()
+    const d = attacker([...ALL_PERMISSIONS], 'app-size')
+    const id = await d('apps.create', [{ title: 'Т', mode: 'window', width: 999999, height: -50 }]) as number
+    const app = A.appList('app-size').find(x => x.id === id)!
+    return app.w === A.MAX_W && app.h === A.MIN_H
+  })
+
+  await check('чужое окно не переписать и не закрыть', async () => {
+    // Иначе один плагин перебором номеров подменял бы содержимое другого.
+    A.clearAllApps()
+    const свой = attacker([...ALL_PERMISSIONS], 'app-owner')
+    const id = await свой('apps.create', [{ title: 'Моё', mode: 'window' }]) as number
+    const чужой = attacker([...ALL_PERMISSIONS], 'app-thief')
+    const правка = await чужой('apps.update', [id, { title: 'Украдено' }])
+    const закрытие = await чужой('apps.close', [id])
+    const app = A.appList('app-owner').find(x => x.id === id)
+    return правка === false && закрытие === false && !!app && app.title === 'Моё'
+  })
+
+  await check('своё окно правится и закрывается', async () => {
+    // Проверка «всё запрещено» ничего не значит без обратного случая.
+    A.clearAllApps()
+    const d = attacker([...ALL_PERMISSIONS], 'app-self')
+    const id = await d('apps.create', [{ title: 'Моё', mode: 'window' }]) as number
+    const правка = await d('apps.update', [id, { title: 'Новое', mode: 'pip' }])
+    const app = A.appList('app-self').find(x => x.id === id)!
+    const закрытие = await d('apps.close', [id])
+    return правка === true && app.title === 'Новое' && app.mode === 'pip'
+      && закрытие === true && A.appList('app-self').length === 0
+  })
+
+  await check('окон у одного плагина не больше предела', async () => {
+    A.clearAllApps()
+    const d = attacker([...ALL_PERMISSIONS], 'app-many')
+    for (let i = 0; i < A.MAX_APPS_PER_PLUGIN; i++) {
+      await d('apps.create', [{ title: 'Окно ' + i, mode: 'window' }])
+    }
+    try { await d('apps.create', [{ title: 'Лишнее', mode: 'window' }]); return false }
+    catch { return true }
+    finally { A.clearAllApps() }
+  })
+
+  await check('человек закрывает окно, не спрашивая плагин', () => {
+    A.clearAllApps()
+    const app = A.openApp('чей-то', { title: 'Т', mode: 'fullscreen', icon: 'zap', rows: [] })
+    const ok1 = A.closeAppByUser(app.id)
+    const ok2 = A.closeAppByUser(app.id)
+    return ok1 === true && ok2 === false
+  })
+
+  await check('шапку с крестиком плагин убрать не может', () => {
+    // Единственная защита от «полный экран вместо приложения»: шапку рисуем мы,
+    // и в разметке она безусловна — не за флагом, который плагин мог бы снять.
+    const ui = readFileSync('src/components/PluginApps.tsx', 'utf8')
+    const i = ui.indexOf('<div className={\'plugapp-h\'')
+    const j = ui.indexOf('</div>', i)
+    const шапка = ui.slice(i, j)
+    if (!шапка.includes('plugapp-x')) throw new Error('в шапке нет кнопки закрытия')
+    if (/\{\s*\w+\s*&&\s*<button className="plugapp-x"/.test(ui)) throw new Error('крестик за условием')
+    return ui.includes('Escape') && ui.includes('closeAppByUser')
+  })
+
+  await check('окно исчезает вместе с выключенным плагином', async () => {
+    // Оно нарисовано приложением и само по себе не пропадёт.
+    A.clearAllApps()
+    A.openApp('уходящий', { title: 'Т', mode: 'window', icon: 'zap', rows: [] })
+    const { cleanupPlugin } = await import('./cleanup')
+    cleanupPlugin('уходящий')
+    return A.appList('уходящий').length === 0
+  })
+  A.clearAllApps()
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')
   const исходник = readFileSync('src/lib/plugins/cleanup.ts', 'utf8')
-  await check('уборка знает про все пять видов оставленного', () =>
-    cleanup.SUBSYSTEM_COUNT === 5)
+  await check('уборка знает про все шесть видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 6)
   await check('на каждый вид есть и «за этим», и «за всеми»', () => {
     // Два списка — это два места, где можно забыть строку. Здесь он один, и
     // каждая запись обязана иметь обе половины.

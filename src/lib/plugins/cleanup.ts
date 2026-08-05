@@ -26,6 +26,7 @@ import { closeAllFor, closeAllSockets } from './wsHub'
 import { clearTasks, clearAllTasks } from './background'
 import { clearPluginTheme, clearAllThemes } from './pluginTheme'
 import { clearCanvases, clearAllCanvases } from './canvasHub'
+import { clearApps, clearAllApps } from './apps'
 
 /** Всё, что плагин оставляет после себя вне интерфейса. По одной паре на вид:
  *  «убрать за этим» и «убрать за всеми». */
@@ -35,6 +36,9 @@ const SUBSYSTEMS: { one: (id: string) => void; all: () => void }[] = [
   { one: clearTasks, all: clearAllTasks },
   { one: clearPluginTheme, all: clearAllThemes },
   { one: clearCanvases, all: clearAllCanvases },
+  // v1.471.0: окно плагина не исчезает от того, что плагин выключили: оно
+  // нарисовано приложением и осталось бы висеть поверх экрана.
+  { one: clearApps, all: clearAllApps },
 ]
 
 export const SUBSYSTEM_COUNT = SUBSYSTEMS.length

@@ -530,6 +530,7 @@ for (const p of OFFICIAL_PLUGINS) {
     'storage.clear',
     // v1.467.0
     'ui.addHeaderButton', 'settings.registerSchema',
+    'apps.create', 'apps.update', 'apps.close',
     // v1.465.0: семь новых возможностей.
     'plugins.send', 'messages.onBeforeSend', 'messages.onBeforeRender',
     'ui.getCanvas', 'net.ws', 'net.wsSend', 'net.wsClose',
@@ -776,6 +777,7 @@ for (const p of OFFICIAL_PLUGINS) {
         'messages.intercept': 'ponoi.messages.onBeforeSend(async()=>{})',
         'background': 'ponoi.background.every(60000,async()=>{})',
         'ui.theme': "ponoi.ui.setTheme({accent:'#ff4500'})",
+        'apps': "ponoi.apps.create({mode:'window'})",
       }
       const код = прим[p]
       if (!код) return true

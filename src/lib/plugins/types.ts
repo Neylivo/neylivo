@@ -30,11 +30,12 @@ export type Permission =
   | 'messages.intercept' // менять сообщения до отправки и до показа
   | 'background'      // работать по расписанию, когда его панель закрыта
   | 'ui.theme'        // менять цвета оформления
+  | 'apps'            // своя область экрана: окно, вкладка, полный экран
 
 export const ALL_PERMISSIONS: Permission[] = [
   'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify', 'voice', 'context',
   'panel', 'music', 'navigate', 'status',
-  'ipc', 'messages.intercept', 'background', 'ui.theme',
+  'ipc', 'messages.intercept', 'background', 'ui.theme', 'apps',
 ]
 
 /** Человеческое описание разрешения — ровно то, что читает человек перед установкой. */
@@ -77,6 +78,10 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   'messages.intercept': 'Читать и МЕНЯТЬ твои сообщения до отправки и до показа',
   'background': 'Работать по расписанию, даже когда его окно закрыто',
   'ui.theme': 'Менять цвета оформления приложения',
+  // v1.471.0: своя область экрана. Формулировка честная про самое неприятное —
+  // окно во весь экран. Подделать им приложение всё же нельзя: шапка с именем
+  // плагина и кнопкой закрытия рисуется нами и убрать её плагин не может.
+  'apps': 'Открывать своё окно, вкладку или полный экран поверх приложения',
 }
 
 /**
@@ -221,6 +226,14 @@ export const PLUGIN_EVENTS: Record<string, PluginEventSpec> = {
     permission: null,
     payload: '{ key, combo }',
     when: 'нажато сочетание, выбранное человеком в настройках этого плагина',
+  },
+  // v1.471.0: что стало с областью плагина. Закрыть её может человек — и плагин
+  // обязан об этом узнать, иначе он будет думать, что его окно всё ещё открыто,
+  // и рисовать в никуда.
+  'app': {
+    permission: 'apps',
+    payload: '{ id, mode, open, width, height }',
+    when: 'твоё окно открылось, сменило вид или его закрыл человек',
   },
 }
 

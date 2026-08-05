@@ -20,6 +20,7 @@ import { takeOffscreen, canvasHeight } from './canvasHub'
 import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
+import { openApp, updateApp, closeApp, isMode, APP_MODES } from './apps'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
@@ -74,6 +75,9 @@ export const PLUGIN_METHODS = [
   //   settings.registerSchema  — страница настроек собирается приложением;
   //   keybind                  — вид строки, не метод (см. ROW_TYPES).
   'ui.addHeaderButton', 'settings.registerSchema', 'keybind',
+  // v1.471.0: своя область экрана. Действует только на экран самого человека:
+  // ни другим людям, ни серверу от неё ничего не достаётся.
+  'apps.create', 'apps.update', 'apps.close',
 ] as const
 
 /**
@@ -880,6 +884,51 @@ export function createDispatcher(
         if (!rows.length) throw new Denied('settings.registerSchema: ни одной понятной строки')
         setSettingsPage({ pluginId: id, title: str(plugin.manifest.name, 60, 'заголовок настроек'), rows })
         return значения
+      }
+
+      // ---- Своя область экрана (нужно apps) -------------------------------
+      //
+      // Плавающее окно, вкладка, полный экран и картинка-в-картинке — это ОДНО
+      // и то же с разным полем mode. Четыре отдельные возможности разошлись бы
+      // между собой через пару версий; см. apps.ts, там про это подробно.
+      //
+      // Содержимое — те же строки, что в панели, включая холст: плагин
+      // по-прежнему ничего не рисует сам. Даже во весь экран у окна остаётся
+      // наша шапка с именем плагина и кнопкой закрытия — иначе «полный экран»
+      // стал бы способом подделать приложение целиком.
+      case 'apps.create': {
+        need('apps')
+        const o = args[0] as any
+        const mode = String(o?.mode ?? 'window')
+        if (!isMode(mode)) {
+          throw new Denied(`Неизвестный вид окна «${mode}». Есть: ${Object.keys(APP_MODES).join(', ')}.`)
+        }
+        const rows = (Array.isArray(o?.rows) ? o.rows : []).slice(0, 40).map(settingsRow).filter(Boolean) as SettingsRow[]
+        const app = openApp(id, {
+          title: str(o?.title ?? plugin.manifest.name, 60, 'заголовок окна'),
+          mode, icon: safeIcon(o?.icon), rows, w: o?.width, h: o?.height,
+        })
+        return app.id
+      }
+      case 'apps.update': {
+        need('apps')
+        const o = (args[1] ?? {}) as any
+        const patch: Parameters<typeof updateApp>[2] = {}
+        if (o.title !== undefined) patch.title = str(o.title, 60, 'заголовок окна')
+        if (o.rows !== undefined) {
+          patch.rows = (Array.isArray(o.rows) ? o.rows : []).slice(0, 40).map(settingsRow).filter(Boolean) as SettingsRow[]
+        }
+        if (o.mode !== undefined) {
+          if (!isMode(o.mode)) throw new Denied(`Неизвестный вид окна «${o.mode}».`)
+          patch.mode = o.mode
+        }
+        if (o.width !== undefined) patch.w = o.width
+        if (o.height !== undefined) patch.h = o.height
+        return updateApp(id, Number(args[0]), patch)
+      }
+      case 'apps.close': {
+        need('apps')
+        return closeApp(id, Number(args[0]))
       }
 
       default:

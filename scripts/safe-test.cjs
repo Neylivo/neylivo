@@ -250,6 +250,16 @@ app.whenReady().then(async () => {
       <button class="pqs2-btn ghost danger">Удалить</button></div>
   </div></div>
   <div class="grant-code">ABCD-EFGH-2345</div>
+  <!-- v1.471.0: своя область плагина. Шапка с крестиком должна быть нажимаема
+       пальцем, а содержимое не должно вылезать за край. -->
+  <div class="plugapp plugapp-pip" style="position:relative;inset:auto;width:auto!important;height:auto!important">
+    <div class="plugapp-h"><b>Игра с очень длинным названием, которое не влезает</b>
+      <span class="plugapp-tag">плагин</span><button class="plugapp-x">×</button></div>
+    <div class="plugapp-body">
+      <div class="plugpanel-cbox" style="height:120px"><canvas class="plugpanel-canvas" width="600" height="120"></canvas></div>
+      <button class="pqs2-btn ghost plugpanel-btn">Заново</button>
+    </div>
+  </div>
   <div class="pqs-sec-t">Настройки</div>
   <div class="pqs-optrow"><div><div class="pqs-optt">Переключатель с длинным названием</div>
     <div class="pqs-optd">Пояснение под ним, тоже не короткое</div></div>

@@ -124,6 +124,15 @@ const ponoi = {
   settings: {
     registerSchema: (rows) => call('settings.registerSchema', [Array.isArray(rows) ? rows : []]),
   },
+  // v1.471.0: своя область экрана — окно, вкладка, полный экран или маленькое
+  // окошко в углу. Отличаются только полем mode. Содержимое описывается теми же
+  // строками, что и панель, включая { type: 'canvas' } — через него и делается
+  // всё живое: игры, редакторы, визуализаторы.
+  apps: {
+    create: (opt) => call('apps.create', [opt || {}]),
+    update: (id, patch) => call('apps.update', [Number(id), patch || {}]),
+    close: (id) => call('apps.close', [Number(id)]),
+  },
   // v1.465.0: разговор с другими плагинами. Разрешение ipc нужно ОБОИМ: и тому,
   // кто шлёт, и тому, кто подписан на событие 'ipc'.
   plugins: {

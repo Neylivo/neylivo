@@ -56,7 +56,7 @@ export function PanelCanvas({ pluginId, row }: { pluginId: string; row: Extract<
 // плагина попросту нет. Значения строк хранятся в его собственном хранилище,
 // как и на его странице настроек, и при изменении плагин получает событие.
 
-function PanelRows({ pluginId, rows }: { pluginId: string; rows: SettingsRow[] }) {
+export function PanelRows({ pluginId, rows }: { pluginId: string; rows: SettingsRow[] }) {
   // То, что видно человеку, держим локально: плагин описывает строки один раз
   // при загрузке и не обязан перерисовывать их на каждое нажатие.
   const [local, setLocal] = useState<Record<string, unknown>>({})
