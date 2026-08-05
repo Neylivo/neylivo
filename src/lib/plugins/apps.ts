@@ -83,6 +83,26 @@ export interface PluginApp {
   max: boolean
   /** Размер и место ДО разворота, чтобы вернуть их обратно. */
   before: { x: number | null; y: number | null; w: number; h: number } | null
+  /**
+   * Окно без рамки (v1.487.0).
+   *
+   * Шапка, рамка и тень убираются: остаётся голое содержимое. Нужно всему, что
+   * рисуется целиком само, — часам, накладке поверх игры, шару, который летает
+   * между двумя окнами: наша шапка в таком окне выглядит чужой наклейкой.
+   *
+   * ЧТО ПРИ ЭТОМ НЕ ПРОПАДАЕТ. Шапка не удаляется, а прячется до наведения:
+   * подвёл указатель — снова видно имя плагина и крестик. Плюс Esc закрывает
+   * окно всегда, и перехватить его плагин не может (см. PluginApps.tsx). Без
+   * этого «без рамки» означало бы окно, которое не убрать и которое выдаёт себя
+   * за само приложение.
+   */
+  frameless: boolean
+  /** Прозрачная подложка: фон, рамка и тень убираются совсем. */
+  transparent: boolean
+  /** Спрятано ли окно (apps.hide). Не закрыто: содержимое и холст живы. */
+  hidden: boolean
+  /** Переезжать и менять размер плавно, а не мгновенно. */
+  smooth: boolean
 }
 
 /**
@@ -153,6 +173,7 @@ export function clampSize(v: unknown, min: number, max: number, fallback: number
 export function openApp(pluginId: string, a: {
   title: string; mode: AppMode; icon: string; rows: SettingsRow[]; w?: unknown; h?: unknown
   x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
+  frameless?: unknown; transparent?: unknown; smooth?: unknown
 }): PluginApp {
   let mine = 0
   for (const [, x] of apps) if (x.pluginId === pluginId) mine++
@@ -186,6 +207,10 @@ export function openApp(pluginId: string, a: {
     minW, minH,
     max: !!(было && было.max),
     before: null,
+    frameless: !!a.frameless,
+    transparent: !!a.transparent,
+    hidden: false,
+    smooth: !!a.smooth,
   }
   apps.set(app.id, app)
   notify()
@@ -199,12 +224,20 @@ export function openApp(pluginId: string, a: {
 export function updateApp(pluginId: string, id: number, patch: {
   title?: string; rows?: SettingsRow[]; mode?: AppMode; w?: unknown; h?: unknown
   x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
+  frameless?: unknown; transparent?: unknown; hidden?: unknown; smooth?: unknown
 }): boolean {
   const a = apps.get(id)
   if (!a || a.pluginId !== pluginId) return false
   if (patch.title !== undefined) a.title = patch.title
   if (patch.rows !== undefined) a.rows = patch.rows
   if (patch.mode !== undefined) a.mode = patch.mode
+  // v1.487.0: вид окна плагин меняет на лету — и рамку, и прозрачность, и то,
+  // видно ли его вообще. Всё это про ЕГО собственный прямоугольник: ни чужого
+  // окна, ни приложения вокруг это не касается.
+  if (patch.frameless !== undefined) a.frameless = !!patch.frameless
+  if (patch.transparent !== undefined) a.transparent = !!patch.transparent
+  if (patch.hidden !== undefined) a.hidden = !!patch.hidden
+  if (patch.smooth !== undefined) a.smooth = !!patch.smooth
   if (patch.minW !== undefined) a.minW = clampSize(patch.minW, MIN_W, MAX_W, a.minW)
   if (patch.minH !== undefined) a.minH = clampSize(patch.minH, MIN_H, MAX_H, a.minH)
   if (patch.resizable !== undefined) a.resizable = !!patch.resizable

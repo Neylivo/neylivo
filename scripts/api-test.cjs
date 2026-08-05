@@ -53,7 +53,15 @@ fs.copyFileSync(path.join(__dirname, '..', 'src', 'styles.css'), path.join(OUT, 
 fs.writeFileSync(path.join(OUT, 'index.html'),
   '<!doctype html><meta charset=utf-8><link rel=stylesheet href="styles.css">'
   + '<style>html,body{margin:0;height:100%;font:12px monospace;background:#111;color:#ddd}'
-  + '#out{white-space:pre;position:relative;z-index:1}</style>'
+  // v1.487.0: pointer-events отключён у полотна вывода.
+  //
+  // Оно занимает всю страницу и лежит поверх всего, что рисуют плагины, — и
+  // настоящая мышь попадала в НЕГО, а не в окно плагина. Выглядело это как
+  // «перетаскивание не работает и наведение не работает»: обе проверки падали
+  // на ровном месте, хотя ломался стенд, а не приложение. К самому приложению
+  // это отношения не имеет: там поверх окон плагинов не лежит текстовое
+  // полотно во весь экран.
+  + '#out{white-space:pre;position:relative;z-index:1;pointer-events:none}</style>'
   + `<script>window.__порт = ${PORT}</script>`
   + '<div id=root></div><pre id=out>идёт…</pre><script src="t.js"></script>')
 
@@ -156,10 +164,34 @@ server.listen(PORT, HOST, async () => {
   await app.whenReady()
   const win = new BrowserWindow({ show: true, width: 900, height: 800, webPreferences: { backgroundThrottling: false } })
   await win.loadFile(path.join(OUT, 'index.html'))
+
+  // v1.487.0: настоящая мышь по просьбе из страницы.
+  //
+  // Зачем это здесь, а не в самой проверке. Событие, собранное руками
+  // (dispatchEvent), проходит через обработчики — но НЕ двигает указатель. А
+  // безрамочное окно тем и живёт, что шапка у него появляется при наведении:
+  // правило :hover ставит браузер по настоящему положению мыши, и подделать
+  // его из страницы нельзя никак. Проверить «шапка возвращается, когда
+  // подводишь» можно только настоящим вводом, и он бывает только отсюда.
+  let lastMouse = 0
+  const mousePump = setInterval(async () => {
+    try {
+      const raw = await win.webContents.executeJavaScript(
+        'window.__mouseReq ? JSON.stringify(window.__mouseReq) : ""')
+      if (!raw) return
+      const q = JSON.parse(raw)
+      if (q.n <= lastMouse) return
+      lastMouse = q.n
+      win.webContents.sendInputEvent({ type: q.kind, x: q.x, y: q.y, button: 'left', clickCount: 1 })
+      await win.webContents.executeJavaScript('window.__mouseAck = ' + q.n)
+    } catch { /* страница ещё грузится или уже закрылась */ }
+  }, 20)
+
   for (let i = 0; i < 500; i++) {
     await new Promise(r => setTimeout(r, 200))
     if (await win.webContents.executeJavaScript('!!window.__done')) break
   }
+  clearInterval(mousePump)
   console.log(await win.webContents.executeJavaScript("document.getElementById('out').textContent"))
   const failed = await win.webContents.executeJavaScript('window.__failed || 0')
   process.exit(failed ? 1 : 0)

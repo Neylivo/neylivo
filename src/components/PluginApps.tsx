@@ -137,6 +137,26 @@ function useDragResize(app: PluginApp) {
     holdApp(app.id, true)
     setDrag({ dx: e.clientX - r.left, dy: e.clientY - r.top })
   }
+  /**
+   * Взять окно за ТЕЛО, а не за шапку (v1.487.0).
+   *
+   * Нужно безрамочному окну: шапки на виду у него нет, и без этого его нельзя
+   * было бы сдвинуть вовсе — то есть «поставь куда угодно» перестало бы
+   * работать ровно там, где оно нужнее всего.
+   *
+   * По кнопке, полю и ползунку окно НЕ едет: иначе любое нажатие в плагине
+   * превращалось бы в перетаскивание, и нажать что-либо стало бы нельзя.
+   *
+   * Список нарочно короткий — только то, что человек и правда нажимает. Ставить
+   * сюда всё подряд («а вдруг») опаснее, чем кажется: каждая лишняя строка —
+   * это кусок окна, за который его больше не сдвинуть, и «поставь куда угодно»
+   * незаметно перестаёт работать.
+   */
+  const startBodyDrag = (e: React.PointerEvent) => {
+    const t = e.target as HTMLElement | null
+    if (t?.closest('button, input, select, textarea, a, [role="slider"], .plugapp-rz')) return
+    startDrag(e)
+  }
   const startResize = (side: string) => (e: React.PointerEvent) => {
     const el = ref.current
     if (!el) return
@@ -145,14 +165,14 @@ function useDragResize(app: PluginApp) {
     holdApp(app.id, true)
     setRz({ side, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, left: r.left, top: r.top })
   }
-  return { ref, startDrag, startResize, dragging: !!drag || !!rz, подсказка }
+  return { ref, startDrag, startBodyDrag, startResize, dragging: !!drag || !!rz, подсказка }
 }
 
 /** Восемь ручек по краям — как у любого окна. */
 const СТОРОНЫ = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
 
 function AppFrame({ app }: { app: PluginApp }) {
-  const { ref, startDrag, startResize, dragging, подсказка } = useDragResize(app)
+  const { ref, startDrag, startBodyDrag, startResize, dragging, подсказка } = useDragResize(app)
   const плавает = app.mode === 'window' || app.mode === 'pip' || app.mode === 'widget'
 
   // Плагин узнаёт, что его окно открылось и что с ним стало: закрыть окно может
@@ -169,7 +189,10 @@ function AppFrame({ app }: { app: PluginApp }) {
   // плагин получал бы вчерашние координаты.
   const тянули = useRef(false)
   const где = () => {
-    const r = ref.current?.getBoundingClientRect()
+    const r = app.hidden ? null : ref.current?.getBoundingClientRect()
+    // Спрятанное окно меряется в нули (display: none), и записать эти нули в
+    // модель значило бы сказать плагину «твоё окно схлопнулось» — при живом
+    // окне, которое сейчас вернётся. Пока спрятано, отдаём то, что помним.
     const о = {
       x: Math.round(r?.left ?? app.x ?? 0), y: Math.round(r?.top ?? app.y ?? 0),
       width: Math.round(r?.width ?? app.w), height: Math.round(r?.height ?? app.h),
@@ -177,22 +200,57 @@ function AppFrame({ app }: { app: PluginApp }) {
     // Кладём измеренное в модель: у неподвинутого окна место задаёт вёрстка
     // («по центру»), и в модели там null — плагин получал бы null вместо
     // координат.
-    setAppRect(app.id, { x: о.x, y: о.y, w: о.width, h: о.height })
+    if (r) setAppRect(app.id, { x: о.x, y: о.y, w: о.width, h: о.height })
     return о
   }
+  // ОТКРЫЛОСЬ И ЗАКРЫЛОСЬ — ровно по разу на окно.
+  //
+  // v1.487.0: здесь была поломка, из-за которой плагин «ломался при
+  // перетаскивании», — и владелец её видел, но объяснял иначе.
+  //
+  // В v1.485.0 место окна попало в зависимости ЭТОГО эффекта, вместе с уборкой,
+  // которая шлёт open: false. React зовёт уборку перед каждым новым запуском —
+  // то есть на каждое движение окна плагин получал «твоё окно ЗАКРЫЛИ», а
+  // следом «открыли». Плагины на это отвечают по документации: `if (!e.open)`
+  // — и останавливаются. Наша же «Змейка» так и написана: подвинул окно — игра
+  // кончилась.
+  //
+  // Поэтому открытие и переезд разведены по разным эффектам. Уборка осталась
+  // только там, где она и значит закрытие.
   useEffect(() => {
     emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
     return () => {
       emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: false, ...где() })
     }
-    // Место окна тоже в зависимостях: без него событие о ПЕРЕЕЗДЕ не уходило
-    // вовсе — плагин узнавал только про открытие и закрытие.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.id, app.pluginId, app.mode, app.w, app.h, app.x, app.y])
+  }, [app.id, app.pluginId])
+
+  // ПЕРЕЕЗД И РАЗМЕР. Отдельно и без уборки: окно никуда не делось.
+  const первый = useRef(true)
+  useEffect(() => {
+    if (первый.current) { первый.current = false; return }
+    // Пока окно держат рукой, кадры шлёт цикл ниже — здесь вышла бы двойня.
+    if (dragging) return
+    const о = где()
+    emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...о })
+    emitToPlugin(app.pluginId, 'app:move', { id: app.id, mode: app.mode, ...о })
+    emitToPlugin(app.pluginId, 'app:moveend', { id: app.id, mode: app.mode, ...о })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.mode, app.w, app.h, app.x, app.y, app.hidden])
 
   // Пока окно двигают или тянут — шлём место кадрами. Не чаще кадра: событие
   // уходит в воркер, и слать его на каждое движение мыши значит будить плагин
   // сотню раз в секунду ради того же самого.
+  //
+  // v1.487.0: у движения теперь СВОИ имена — 'app:move' на каждом кадре и
+  // 'app:moveend' один раз, когда отпустили.
+  //
+  // Зачем отдельно от 'app'. То событие рассказывает обо всём сразу: открылось,
+  // закрылось, сменило вид, переехало. Плагин, которому нужна только рамка под
+  // мышкой, вынужден был на каждое движение разбирать «а это вообще про что» —
+  // и, что хуже, не мог понять, тянут окно прямо сейчас или уже отпустили.
+  // 'app' при этом никуда не делся и приходит как раньше: плагины, написанные
+  // под v1.485, не ломаются.
   useEffect(() => {
     if (!dragging) {
       // Отпустили — сообщаем окончательное место. Но ТОЛЬКО если правда
@@ -200,14 +258,19 @@ function AppFrame({ app }: { app: PluginApp }) {
       // плагин получал по два «открыто» на каждое окно.
       if (тянули.current) {
         тянули.current = false
-        emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
+        const о = где()
+        emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...о })
+        emitToPlugin(app.pluginId, 'app:move', { id: app.id, mode: app.mode, ...о })
+        emitToPlugin(app.pluginId, 'app:moveend', { id: app.id, mode: app.mode, ...о })
       }
       return
     }
     тянули.current = true
     let кадр = 0
     const шаг = () => {
-      emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
+      const о = где()
+      emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...о })
+      emitToPlugin(app.pluginId, 'app:move', { id: app.id, mode: app.mode, ...о })
       кадр = requestAnimationFrame(шаг)
     }
     кадр = requestAnimationFrame(шаг)
@@ -260,9 +323,21 @@ function AppFrame({ app }: { app: PluginApp }) {
         bottom: app.y === null && app.mode === 'pip' ? 20 : undefined,
       }
     : {}
+  // Спрятанное окно не убирается из разметки: холст живёт в нём, и снять его
+  // значило бы показать плагину «холст пропал», а вернуть — начать заново.
+  if (app.hidden) style.display = 'none'
+
+  const классы = 'plugapp plugapp-' + app.mode
+    + (dragging ? ' dragging' : '')
+    + (app.frameless ? ' frameless' : '')
+    + (app.transparent ? ' transparent' : '')
+    + (app.smooth && !dragging ? ' smooth' : '')
 
   return (
-    <div ref={ref} className={'plugapp plugapp-' + app.mode + (dragging ? ' dragging' : '')} style={style}
+    <div ref={ref} className={классы} style={style}
+      // Безрамочное окно берётся за тело: шапки на виду у него нет, и без
+      // этого его нельзя было бы сдвинуть вовсе.
+      onPointerDown={плавает && app.frameless ? startBodyDrag : undefined}
       // Окно должно уметь принимать фокус — иначе клавиш ему не достанется
       // вовсе. Фокус ставится сам при открытии: игра обязана работать сразу, а
       // не после того, как человек догадается щёлкнуть по ней.
@@ -271,7 +346,12 @@ function AppFrame({ app }: { app: PluginApp }) {
       onKeyUp={e => клавиша(e, false)}>
       {/* Подсказка прилипания: полупрозрачная тень там, куда встанет окно. */}
       {подсказка && <div className={'plugapp-snap ' + подсказка} />}
-      <div className={'plugapp-h' + (плавает ? ' draggable' : '')}
+      {/* Шапка у безрамочного окна не удаляется, а ПРЯЧЕТСЯ до наведения.
+          Совсем убрать её нельзя: окно без единой подписи и без крестика — это
+          способ выдать себя за само приложение и не дать себя закрыть. А так
+          на виду её нет ровно до того мгновения, когда человек ищет, за что
+          взяться и чем закрыть. */}
+      <div className={'plugapp-h' + (плавает ? ' draggable' : '') + (app.frameless ? ' ghost' : '')}
         onPointerDown={плавает ? startDrag : undefined}
         onDoubleClick={плавает ? () => toggleMaxApp(app.id, {
           w: document.documentElement.clientWidth, h: document.documentElement.clientHeight,

@@ -92,6 +92,9 @@ export const PLUGIN_METHODS = [
   'apps.create', 'apps.update', 'apps.close',
   // v1.485.0: своё окно видно плагину — место, размер, экран.
   'apps.where', 'apps.all', 'apps.screen',
+  // v1.487.0: спрятать окно и показать снова. Не закрытие: содержимое и холст
+  // остаются живыми, иначе «спрятал на секунду» стоило бы плагину всей картинки.
+  'apps.hide', 'apps.show',
   // v1.472.0: плагин как библиотека для других плагинов. Наружу это не выходит
   // никуда: вызов ходит между двумя воркерами на этом же устройстве.
   'services.register', 'services.unregister', 'services.connect', 'services.call',
@@ -1028,6 +1031,11 @@ export function createDispatcher(
           x: o?.x, y: o?.y,
           resizable: o?.resizable,
           minW: o?.minWidth, minH: o?.minHeight,
+          // v1.487.0: окно без нашей рамки и с прозрачной подложкой. Шапка при
+          // этом не исчезает, а прячется до наведения (см. PluginApps.tsx и
+          // styles.css) — иначе окно во весь экран без подписи и без крестика
+          // стало бы способом подделать приложение и не дать себя закрыть.
+          frameless: o?.frameless, transparent: o?.transparent, smooth: o?.smooth,
         })
         return app.id
       }
@@ -1050,7 +1058,19 @@ export function createDispatcher(
         if (o.resizable !== undefined) patch.resizable = o.resizable
         if (o.minWidth !== undefined) patch.minW = o.minWidth
         if (o.minHeight !== undefined) patch.minH = o.minHeight
-return updateApp(id, Number(args[0]), patch)
+        if (o.frameless !== undefined) patch.frameless = o.frameless
+        if (o.transparent !== undefined) patch.transparent = o.transparent
+        if (o.hidden !== undefined) patch.hidden = o.hidden
+        if (o.smooth !== undefined) patch.smooth = o.smooth
+        return updateApp(id, Number(args[0]), patch)
+      }
+      // v1.487.0: спрятать и показать. Отдельными вызовами, а не только флагом
+      // в update: «спрячь окно» — это одно действие, и писать его через
+      // объект настроек значит прятать намерение за подробностями.
+      case 'apps.hide':
+      case 'apps.show': {
+        need('apps')
+        return updateApp(id, Number(args[0]), { hidden: method === 'apps.hide' })
       }
       // v1.485.0: где стоит окно и какой оно величины. Без этого плагин не мог
       // знать ничего о перетаскивании — окно уезжало, а он рисовал по старым
@@ -1063,13 +1083,25 @@ return updateApp(id, Number(args[0]), patch)
           id: g.id, mode: g.mode, title: g.title,
           x: g.x, y: g.y, width: g.w, height: g.h,
           max: g.max, screenWidth: g.screenW, screenHeight: g.screenH,
+          // v1.487.0: вид окна плагин тоже должен уметь прочитать — иначе
+          // «переключи рамку» он может только вслепую, по своей памяти.
+          frameless: g.frameless, transparent: g.transparent,
+          hidden: g.hidden, resizable: g.resizable, smooth: g.smooth,
         }
       }
       case 'apps.all': {
         need('apps')
-        return appList(id).map(a => ({
-          id: a.id, mode: a.mode, title: a.title, x: a.x, y: a.y, width: a.w, height: a.h, max: a.max,
-        }))
+        // Через appGeometry, а не по модели напрямую: у неподвинутого окна x и
+        // y в модели пустые (место ему задаёт вёрстка), и список выдавал бы
+        // null там, где на экране стоит настоящий прямоугольник.
+        return appList(id).map(a => {
+          const g = appGeometry(id, a.id) ?? a
+          return {
+            id: a.id, mode: a.mode, title: a.title,
+            x: g.x, y: g.y, width: g.w, height: g.h, max: a.max,
+            frameless: a.frameless, transparent: a.transparent, hidden: a.hidden,
+          }
+        })
       }
       case 'apps.screen': {
         need('apps')

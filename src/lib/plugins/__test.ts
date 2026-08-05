@@ -617,7 +617,7 @@ for (const p of OFFICIAL_PLUGINS) {
     'ui.addHeaderButton', 'settings.registerSchema',
     'apps.create', 'apps.update', 'apps.close',
     // v1.485.0
-    'apps.where', 'apps.all', 'apps.screen',
+    'apps.where', 'apps.all', 'apps.screen', 'apps.hide', 'apps.show',
     'services.register', 'services.unregister', 'services.connect', 'services.call',
     'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
     'db.count', 'db.clear', 'db.tables',
@@ -1771,6 +1771,112 @@ export async function onLoad(ponoi) { ponoi.messages.recent(50) }
     const src = readFileSync('src/components/PluginPermissionGate.tsx', 'utf8')
     return src.includes('isOfficialCode') && /Это плагин от создателей/.test(src)
   })
+}
+
+console.log('\n-- Окно без рамки и прозрачное (v1.487.0) --')
+{
+  const A = await import('./apps')
+  const css = readFileSync('src/styles.css', 'utf8')
+  const cmp = readFileSync('src/components/PluginApps.tsx', 'utf8')
+
+  const открыть = (o: any = {}) => {
+    A.clearAllApps()
+    return A.openApp('пр', { title: 'Окно', mode: 'window', icon: 'star', rows: [], ...o })
+  }
+
+  check('без просьбы окно остаётся обычным', () => {
+    const a = открыть()
+    return !a.frameless && !a.transparent && !a.hidden && !a.smooth
+  })
+
+  check('плагин просит окно без рамки и прозрачное — получает', () => {
+    const a = открыть({ frameless: true, transparent: true, smooth: true })
+    return a.frameless && a.transparent && a.smooth
+  })
+
+  check('рамку можно вернуть на ходу', () => {
+    const a = открыть({ frameless: true })
+    A.updateApp('пр', a.id, { frameless: false, transparent: false })
+    return !A.appList('пр')[0].frameless
+  })
+
+  check('спрятать — это НЕ закрыть: окно живо и номер прежний', () => {
+    const a = открыть()
+    A.updateApp('пр', a.id, { hidden: true })
+    const после = A.appList('пр')
+    if (после.length !== 1 || после[0].id !== a.id) throw new Error('окно пропало')
+    if (!после[0].hidden) throw new Error('не спряталось')
+    A.updateApp('пр', a.id, { hidden: false })
+    return !A.appList('пр')[0].hidden
+  })
+
+  check('чужое окно не спрятать и не раздеть', () => {
+    const a = открыть()
+    return !A.updateApp('чужой', a.id, { hidden: true })
+      && !A.updateApp('чужой', a.id, { frameless: true })
+  })
+
+  // ── Граница, которую нельзя открывать ────────────────────────────────────
+  //
+  // «Без рамки» означает «шапки не видно», а НЕ «шапки нет». Разница
+  // принципиальная: окно во весь экран без единой подписи и без крестика — это
+  // способ выдать себя за само приложение и не дать себя закрыть. Поэтому
+  // шапка прячется прозрачностью и возвращается при наведении.
+  check('шапка у безрамочного окна прячется, а не удаляется', () => {
+    if (/frameless[^{]*\.plugapp-h[^}]*display\s*:\s*none/.test(css)) {
+      throw new Error('в стилях есть правило, убирающее шапку совсем')
+    }
+    if (/frameless[^{]*\.plugapp-h[^}]*visibility\s*:\s*hidden/.test(css)) {
+      throw new Error('шапка спрятана видимостью — её тогда не вернуть наведением')
+    }
+    return /\.plugapp\.frameless[^{]*\.plugapp-h\s*\{[^}]*opacity\s*:\s*0/.test(css)
+      && /\.plugapp\.frameless:hover[^{]*\{[^}]*opacity\s*:\s*1/.test(css)
+  })
+
+  check('и в разметке она есть всегда, при любом виде окна', () => {
+    // Ни одного условия вокруг шапки: она рисуется у всех окон одинаково.
+    const шапок = (cmp.match(/className=\{'plugapp-h'/g) ?? []).length
+    return шапок === 1 && cmp.includes('plugapp-by') && cmp.includes('plugapp-x')
+  })
+
+  check('на телефоне шапку безрамочного окна видно всегда', () => {
+    // Прятать её до наведения можно там, где есть чем наводить. На телефоне
+    // нет ни наведения, ни Esc — окно превратилось бы в заслонку, которую
+    // нечем убрать.
+    const телефон = css.slice(css.indexOf('@media (max-width: 768px)'))
+    return /\.plugapp\.frameless[^{]*\.plugapp-h\s*\{[^}]*opacity\s*:\s*1/.test(телефон)
+  })
+
+  check('Esc закрывает окно независимо от его вида', () =>
+    /Escape[^\n]*closeAppByUser|closeAppByUser[^\n]*Escape/.test(cmp)
+    || /e\.key === 'Escape'/.test(cmp))
+
+  // ── Ещё одна граница: движение окна не должно выглядеть как закрытие ─────
+  //
+  // В v1.485.0 место окна попало в зависимости эффекта С УБОРКОЙ — и React звал
+  // уборку на каждое движение. Плагину приходило «твоё окно закрыли», и наша же
+  // «Змейка» кончалась от перетаскивания собственного окна.
+  check('открытие и переезд окна разведены по разным эффектам', () => {
+    const i = cmp.indexOf("open: false, ...")
+    if (i < 0) throw new Error('не нашёл, где сообщается о закрытии окна')
+    // Зависимости эффекта, в котором живёт уборка.
+    const хвост = cmp.slice(i, i + 600)
+    const деп = /\}, \[([^\]]*)\]\)/.exec(хвост)
+    if (!деп) throw new Error('не нашёл зависимостей эффекта с уборкой')
+    if (/app\.(x|y|w|h)\b/.test(деп[1])) {
+      throw new Error('место окна снова в зависимостях эффекта с уборкой: ' + деп[1])
+    }
+    return true
+  })
+
+  const { PLUGIN_EVENTS } = await import('./types')
+  check('у движения окна свои события, и они объявлены', () => {
+    return !!PLUGIN_EVENTS['app:move'] && !!PLUGIN_EVENTS['app:moveend']
+      && PLUGIN_EVENTS['app:move'].permission === 'apps'
+      && PLUGIN_EVENTS['app:moveend'].permission === 'apps'
+  })
+
+  A.clearAllApps()
 }
 
 console.log('\n-- Ломаем нарочно (новые возможности) --')

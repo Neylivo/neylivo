@@ -7593,6 +7593,44 @@ body.no-anim .mus-blob.on { animation: none; }
 .plugapp-widget .plugapp-x { width: 24px; height: 24px; font-size: 16px; }
 .plugapp-widget .plugapp-body { padding: 8px 10px 10px; gap: 8px; }
 
+/* v1.487.0: окно без рамки и с прозрачной подложкой.
+   Нужно всему, что рисует себя целиком само: часам, накладке поверх игры,
+   шару, летающему между двумя окнами. Наша шапка в таком окне выглядит чужой
+   наклейкой, а фон и тень — рамкой вокруг того, что рамки не предполагало.
+
+   ЧЕГО ЗДЕСЬ НЕТ И НЕ ДОЛЖНО БЫТЬ: правила, убирающего шапку СОВСЕМ. Она
+   прячется (opacity: 0) и возвращается при наведении — вместе с именем плагина
+   и крестиком. Окно без единой подписи, которое нечем закрыть, — это способ
+   выдать себя за само приложение, а не оформление. */
+.plugapp.frameless {
+  background: transparent; border: none; box-shadow: none; overflow: visible;
+}
+.plugapp.frameless .plugapp-h {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+  opacity: 0; pointer-events: none; transition: opacity .12s ease;
+  background: rgba(0, 0, 0, .55); border-bottom: none;
+  border-radius: var(--r-lg, 12px) var(--r-lg, 12px) 0 0;
+  min-height: 32px; padding: 4px 6px 4px 10px;
+}
+/* Наведением — и только им. :focus-within здесь НЕ годится, хотя у виджета
+   рядом стоит именно он: окно забирает фокус себе сразу при открытии (иначе
+   игре не достанется клавиш), то есть focus-within у него верен ВСЕГДА — и
+   шапка не пряталась вовсе. Поймано живой пробой: «шапки на виду нет — 1».
+   Для клавиатуры оставлен :has — он ловит фокус на кнопке ВНУТРИ окна, а не на
+   самой раме; плюс Esc закрывает окно в любом случае. */
+.plugapp.frameless:hover .plugapp-h,
+.plugapp.frameless:has(.plugapp-body :focus) .plugapp-h { opacity: 1; pointer-events: auto; }
+.plugapp.frameless .plugapp-body { padding: 0; }
+.plugapp.transparent { background: transparent; border: none; box-shadow: none; }
+.plugapp.transparent .plugapp-body { background: transparent; }
+/* Плавный переезд — по просьбе плагина (apps.update({ smooth: true })).
+   Во время перетаскивания класс снимается: окно должно идти ЗА пальцем, а не
+   догонять его с задержкой. */
+.plugapp.smooth { transition: left .18s ease, top .18s ease, width .18s ease, height .18s ease; }
+/* Тень при перетаскивании безрамочному окну не возвращаем: она и есть та
+   рамка, от которой плагин отказался. */
+.plugapp.frameless.dragging, .plugapp.transparent.dragging { box-shadow: none; }
+
 /* Вкладка занимает рабочую область, полный экран — всё окно целиком. */
 .plugapp-tab { inset: 0; border-radius: 0; border: none; }
 .plugapp-fullscreen { inset: 0; border-radius: 0; border: none; }
@@ -7679,6 +7717,18 @@ body.no-anim .mus-blob.on { animation: none; }
      пикселей. Поймано телефонным обходом: вышло 32. */
   .plugapp-body .plugpanel-btn, .plugapp-body button { min-height: 40px; }
   .plugapp-body .pqs-toggle { min-height: 0; }
+  /* v1.487.0: на телефоне безрамочное окно шапку НЕ прячет.
+     Прятать её до наведения можно там, где есть чем наводить. На телефоне
+     наведения нет, Esc нет, а окно разворачивается во весь экран — то есть
+     «без рамки» превратилось бы в заслонку на весь экран, которую нечем
+     убрать. Это ровно та ловушка, из-за которой на телефоне уже ломался
+     выход назад. */
+  .plugapp.frameless .plugapp-h {
+    position: relative; opacity: 1; pointer-events: auto;
+    min-height: 48px; padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    background: rgba(var(--ov, 255, 255, 255), .05); border-radius: 0;
+  }
 }
 
 /* v1.475.0: окно-вопрос плагина. Те же кости, что у подтверждения (.cfm-*), но

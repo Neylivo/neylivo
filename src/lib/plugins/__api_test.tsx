@@ -681,6 +681,220 @@ export async function onLoad(ponoi) {
   forgetPlaces()
 }
 
+// ── 11. Окно без рамки, прозрачное и прячущееся (v1.487.0) ──────────────────
+//
+// Проверяем не «поле выставилось», а ВИД на экране: настоящие вычисленные
+// стили, настоящее наведение мышью, настоящее перетаскивание.
+//
+// Мышь тут не поддельная: события, собранные dispatchEvent, проходят через
+// обработчики, но указателя не двигают — а шапка безрамочного окна появляется
+// именно по :hover, который браузер ставит по настоящему положению мыши.
+// Поэтому ввод просим у стенда (scripts/api-test.cjs).
+let мышьН = 0
+async function мышь(kind: 'mouseMove' | 'mouseDown' | 'mouseUp', x: number, y: number) {
+  const n = ++мышьН
+  ;(window as any).__mouseReq = { kind, x: Math.round(x), y: Math.round(y), n }
+  for (let i = 0; i < 100 && (window as any).__mouseAck !== n; i++) await пауза(20)
+  await пауза(30)
+}
+
+async function безРамки(host: Host) {
+  const { forgetPlaces } = await import('./apps')
+  const { emitToPlugin } = await import('./bridge')
+  forgetPlaces()
+
+  const id = await поднять(host, `/**
+ * @name Без рамки
+ * @id probe-frameless
+ * @version 1.0.0
+ * @author проба
+ * @description Проба безрамочного окна
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  const окно = await ponoi.apps.create({
+    mode: 'window', title: 'Голое окно', width: 300, height: 220, x: 150, y: 150,
+    frameless: true, transparent: true, resizable: false,
+    rows: [
+      { type: 'label', key: 'l', label: 'Внутри', value: 'тут' },
+      { type: 'button', key: 'b', label: 'Нажми', onClick: function () { ponoi.log('нажали кнопку') } },
+    ],
+  })
+  ponoi.log('окно:' + окно)
+  ponoi.on('app', function (e) { ponoi.log('app:' + (e.open ? 'открыто' : 'ЗАКРЫТО')) })
+  ponoi.on('app:move', function (e) { ponoi.log('move:' + e.x + ',' + e.y) })
+  ponoi.on('app:moveend', function (e) { ponoi.log('moveend:' + e.x + ',' + e.y) })
+  ponoi.on('settings', async function (e) {
+    if (e.key === 'hide') await ponoi.apps.hide(окно)
+    if (e.key === 'show') await ponoi.apps.show(окно)
+    if (e.key === 'frame') await ponoi.apps.update(окно, { frameless: false, transparent: false })
+    if (e.key === 'where') ponoi.log('где:' + JSON.stringify(await ponoi.apps.where(окно)))
+    ponoi.log('сделано:' + e.key)
+  })
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(300)
+
+  const окно = () => document.querySelector('.plugapp-window') as HTMLElement | null
+  const шапка = () => окно()!.querySelector('.plugapp-h') as HTMLElement
+  const вид = (el: Element) => getComputedStyle(el)
+  const прозрачен = (c: string) => c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c)
+
+  // Сначала уводим настоящий указатель подальше: он мог остаться над окном с
+  // прошлой проверки, и «шапки не видно» прошло бы или упало по случайности.
+  await мышь('mouseMove', 5, 760)
+  await пауза(200)
+  // Если стенд не умеет двигать настоящую мышь, все проверки ниже прошли бы
+  // «сами собой» — и молча. Пусть это будет видно отдельной строкой.
+  ok('стенд отвечает на просьбы о настоящей мыши', (window as any).__mouseAck === мышьН,
+    'ждали ' + мышьН + ', ответ ' + String((window as any).__mouseAck))
+  // И попадает ТУДА, куда просили: система вправе мерить свои координаты
+  // иначе, чем страница, и промах мимо на десяток пикселей выглядел бы как
+  // «перетаскивание не работает».
+  let попал = ''
+  const ловец = (e: PointerEvent) => { попал = Math.round(e.clientX) + ',' + Math.round(e.clientY) }
+  window.addEventListener('pointerdown', ловец, true)
+  await мышь('mouseDown', 400, 600); await мышь('mouseUp', 400, 600)
+  window.removeEventListener('ointerdown' as any, ловец, true)
+  window.removeEventListener('pointerdown', ловец, true)
+  ok('и попадает туда, куда просили', попал === '400,600', 'просили 400,600, пришло ' + (попал || 'ничего'))
+  // И попадает В ОКНО, а не во что-то, что лежит поверх него. Проверка не
+  // праздная: полотно вывода этого же стенда однажды закрыло собой окно
+  // плагина целиком, и «перетаскивание не работает» оказалось поломкой стенда.
+  {
+    const r = окно()!.getBoundingClientRect()
+    const п = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    ok('в центре окна — само окно, а не что-то поверх него', !!п && окно()!.contains(п),
+      п ? п.tagName + '.' + String(п.className) : 'ничего')
+  }
+
+  ok('безрамочное окно нарисовано', !!окно())
+  ok('рамки и тени у него нет',
+    вид(окно()!).boxShadow === 'none' && вид(окно()!).borderTopWidth === '0px',
+    вид(окно()!).boxShadow + ' / ' + вид(окно()!).borderTopWidth)
+  ok('подложка прозрачная насквозь', прозрачен(вид(окно()!).backgroundColor),
+    вид(окно()!).backgroundColor)
+  ok('шапки на виду нет', вид(шапка()).opacity === '0', вид(шапка()).opacity)
+  // Но она НЕ удалена: окно без единой подписи и без крестика — это способ
+  // выдать себя за приложение и не дать себя закрыть.
+  ok('шапка при этом осталась в разметке, а не удалена',
+    !!шапка() && (шапка().textContent ?? '').includes('probe-frameless'),
+    шапка().textContent ?? '')
+
+  // Настоящее наведение: указатель на шапку окна.
+  const r0 = окно()!.getBoundingClientRect()
+  await мышь('mouseMove', r0.left + r0.width / 2, r0.top + 10)
+  await пауза(250)
+  ok('подвёл мышь — шапка вернулась', вид(шапка()).opacity === '1', вид(шапка()).opacity)
+  ok('в ней видно, чьё это окно, и есть чем закрыть',
+    (окно()!.querySelector('.plugapp-by')?.textContent ?? '') === 'probe-frameless'
+      && !!окно()!.querySelector('.plugapp-x'),
+    окно()!.querySelector('.plugapp-by')?.textContent ?? 'нет подписи')
+  await мышь('mouseMove', 5, 700)
+  await пауза(250)
+  ok('увёл мышь — шапка снова спряталась', вид(шапка()).opacity === '0', вид(шапка()).opacity)
+
+  ok('resizable: false — ручек по краям нет', !окно()!.querySelector('.plugapp-rz'))
+
+  // ── Перетаскивание за ТЕЛО. Шапки на виду нет, и без этого окно нельзя было
+  // бы сдвинуть вовсе.
+  const было = журнал(host, id).filter(l => l.includes('ЗАКРЫТО')).length
+  const r1 = окно()!.getBoundingClientRect()
+  const цх = r1.left + r1.width / 2, цу = r1.top + r1.height / 2
+  await мышь('mouseMove', цх, цу)
+  await мышь('mouseDown', цх, цу)
+  for (let i = 1; i <= 6; i++) await мышь('mouseMove', цх + i * 12, цу + i * 8)
+  await пауза(120)
+  const движения = журнал(host, id).filter(l => l.includes('move:')).length
+  await мышь('mouseUp', цх + 72, цу + 48)
+  await пауза(300)
+
+  const r2 = окно()!.getBoundingClientRect()
+  ok('безрамочное окно двигается за тело, а не только за шапку',
+    Math.round(r2.left) !== Math.round(r1.left) && Math.round(r2.top) !== Math.round(r1.top),
+    `${Math.round(r1.left)},${Math.round(r1.top)} → ${Math.round(r2.left)},${Math.round(r2.top)}`)
+  ok('о движении плагину сообщали КАДРАМИ, а не один раз', движения >= 2, 'событий move: ' + движения)
+  const конец = журнал(host, id).filter(l => l.includes('moveend:')).pop() ?? ''
+  ok('в конце пришло окончательное место',
+    конец.includes(String(Math.round(r2.left)) + ',' + String(Math.round(r2.top))),
+    конец + ' при ' + Math.round(r2.left) + ',' + Math.round(r2.top))
+
+  // САМОЕ ВАЖНОЕ ЗДЕСЬ. С v1.485.0 место окна лежало в зависимостях того же
+  // эффекта, что и уборка, — и React звал уборку на каждое движение. Плагину
+  // приходило «твоё окно ЗАКРЫЛИ», и написанный по документации плагин
+  // останавливался: наша же «Змейка» кончалась от перетаскивания окна.
+  ok('при перетаскивании плагину НЕ говорят, что окно закрыли',
+    журнал(host, id).filter(l => l.includes('ЗАКРЫТО')).length === было,
+    'ложных закрытий: ' + (журнал(host, id).filter(l => l.includes('ЗАКРЫТО')).length - было))
+
+  // ── А вот кнопка внутри окна должна НАЖИМАТЬСЯ, а не тащить окно за собой.
+  // Иначе «двигается за любое место» означало бы, что в окне ничего не нажать.
+  {
+    const к = окно()!.querySelector('.plugpanel-btn') as HTMLElement
+    const rк = к.getBoundingClientRect()
+    const до = окно()!.getBoundingClientRect()
+    const кх = rк.left + rк.width / 2, ку = rк.top + rк.height / 2
+    // Нажимаем с дрожью в пару пикселей — рука дрожит у всех, и щелчок от
+    // этого щелчком быть не перестаёт.
+    await мышь('mouseMove', кх, ку)
+    await мышь('mouseDown', кх, ку)
+    await мышь('mouseMove', кх + 2, ку + 1)
+    await мышь('mouseUp', кх + 2, ку + 1)
+    await пауза(300)
+    const после = окно()!.getBoundingClientRect()
+    ok('нажатие на кнопку внутри окна НЕ тащит окно',
+      Math.round(до.left) === Math.round(после.left) && Math.round(до.top) === Math.round(после.top),
+      `${Math.round(до.left)},${Math.round(до.top)} → ${Math.round(после.left)},${Math.round(после.top)}`)
+    ok('и сама кнопка при этом срабатывает',
+      журнал(host, id).some(l => l.includes('нажали кнопку')))
+  }
+
+  // ── Спрятать и показать. Это не закрытие: окно живо, номер прежний.
+  const номер = appList(id)[0].id
+  emitToPlugin(id, 'settings', { key: 'hide', value: true })
+  await ждать(() => !!окно() && вид(окно()!).display === 'none')
+  ok('спрятанное окно не видно', вид(окно()!).display === 'none', вид(окно()!).display)
+  ok('но оно живо, а не закрыто', appList(id).length === 1 && appList(id)[0].id === номер,
+    JSON.stringify(appList(id).map(a => a.id)))
+  ok('плагину не сказали, что его закрыли',
+    журнал(host, id).filter(l => l.includes('ЗАКРЫТО')).length === было)
+
+  emitToPlugin(id, 'settings', { key: 'where', value: 1 })
+  await пауза(300)
+  ok('плагин видит, что окно спрятано', /"hidden":true/.test(строка(host, id, 'где:')),
+    строка(host, id, 'где:').slice(0, 120))
+
+  emitToPlugin(id, 'settings', { key: 'show', value: true })
+  await ждать(() => !!окно() && вид(окно()!).display !== 'none')
+  ok('показали обратно — окно на прежнем месте',
+    вид(окно()!).display !== 'none'
+      && Math.round(окно()!.getBoundingClientRect().left) === Math.round(r2.left),
+    `${Math.round(окно()!.getBoundingClientRect().left)} при ${Math.round(r2.left)}`)
+
+  // ── Рамку можно вернуть на ходу.
+  emitToPlugin(id, 'settings', { key: 'frame', value: true })
+  // Ждём именно ПОДЛОЖКУ, а не шапку: указатель после перетаскивания стоит над
+  // окном, и шапка у него видна по наведению — то есть по ней не отличить
+  // «рамка вернулась» от «на окно навели». На это я и попался.
+  await ждать(() => !прозрачен(вид(окно()!).backgroundColor))
+  ok('рамка возвращается на ходу',
+    !прозрачен(вид(окно()!).backgroundColor) && вид(окно()!).boxShadow !== 'none'
+      && вид(шапка()).position !== 'absolute',
+    вид(окно()!).backgroundColor + ' / ' + вид(шапка()).position)
+
+  // ── Esc закрывает всегда.
+  окно()!.focus()
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await пауза(250)
+  ok('Esc закрывает безрамочное окно', !окно() && appList(id).length === 0,
+    String(appList(id).length))
+
+  await host.stopPlugin(id)
+  removePlugin(id)
+  forgetPlaces()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -710,6 +924,8 @@ async function main() {
   await свободныйВиджет(host)
   lines.push(''); lines.push('── Плагин видит своё окно ──'); out()
   await окноГдеСтоит(host)
+  lines.push(''); lines.push('── Окно без рамки ──'); out()
+  await безРамки(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
