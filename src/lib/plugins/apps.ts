@@ -64,6 +64,63 @@ export interface PluginApp {
   /** Где стоит окно — человек его двигает, плагин на это не влияет. */
   x: number | null
   y: number | null
+  /**
+   * Можно ли тянуть за края (v1.479.0). По умолчанию да: «окно, размер
+   * которого не поменять» — это не окно, а картинка. Плагин может отказаться
+   * от растягивания, если у него всё нарисовано под один размер.
+   */
+  resizable: boolean
+  /** Ниже этого окно не сожмётся: содержимое должно оставаться видимым. */
+  minW: number
+  minH: number
+  /** Развёрнуто ли на весь экран — по двойному щелчку по шапке. */
+  max: boolean
+  /** Размер и место ДО разворота, чтобы вернуть их обратно. */
+  before: { x: number | null; y: number | null; w: number; h: number } | null
+}
+
+/**
+ * Память о месте окна (v1.479.0).
+ *
+ * Зачем. Человек поставил окно туда, где ему удобно, — и при следующем
+ * открытии оно снова оказывалось посреди экрана. То есть настройка была, но не
+ * держалась дольше одного раза, а это худший вид настройки.
+ *
+ * Ключ — плагин и заголовок окна, а не его номер: номер выдаётся заново при
+ * каждом открытии. Хранится на устройстве: место окна — дело этого экрана, и
+ * на телефоне оно другое.
+ */
+const МЕСТА_КЛЮЧ = 'ponoi_plugin_app_places_v1'
+type Место = { x: number | null; y: number | null; w: number; h: number; max?: boolean }
+
+function читатьМеста(): Record<string, Место> {
+  try {
+    const v = JSON.parse(localStorage.getItem(МЕСТА_КЛЮЧ) || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch { return {} }
+}
+
+function писатьМесто(ключ: string, м: Место) {
+  try {
+    const все = читатьМеста()
+    все[ключ] = м
+    // Не даём списку расти вечно: помним последние полсотни окон.
+    const ключи = Object.keys(все)
+    if (ключи.length > 50) for (const k of ключи.slice(0, ключи.length - 50)) delete все[k]
+    localStorage.setItem(МЕСТА_КЛЮЧ, JSON.stringify(все))
+  } catch { /* переполнено — просто не запомним */ }
+}
+
+export const placeKey = (pluginId: string, title: string) => pluginId + '\u0000' + title
+
+/** Забытое место окна — для проверок и для восстановления при открытии. */
+export function savedPlace(pluginId: string, title: string): Место | null {
+  flushPlaces()
+  return читатьМеста()[placeKey(pluginId, title)] ?? null
+}
+
+export function forgetPlaces() {
+  try { localStorage.removeItem(МЕСТА_КЛЮЧ) } catch {}
 }
 
 const apps = new Map<number, PluginApp>()
@@ -89,6 +146,7 @@ export function clampSize(v: unknown, min: number, max: number, fallback: number
 
 export function openApp(pluginId: string, a: {
   title: string; mode: AppMode; icon: string; rows: SettingsRow[]; w?: unknown; h?: unknown
+  x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
 }): PluginApp {
   let mine = 0
   for (const [, x] of apps) if (x.pluginId === pluginId) mine++
@@ -98,12 +156,28 @@ export function openApp(pluginId: string, a: {
   if (apps.size >= MAX_APPS_TOTAL) {
     throw new AppError(`На экране уже ${MAX_APPS_TOTAL} окон от плагинов.`)
   }
+  // v1.479.0: место и размер берём из памяти этого устройства, если человек их
+  // уже выбирал. Плагин своим размером их не перебивает: он предлагает
+  // размер по умолчанию, а решает человек — и его решение должно держаться.
+  const было = savedPlace(pluginId, a.title)
+  const minW = clampSize(a.minW, MIN_W, MAX_W, MIN_W)
+  const minH = clampSize(a.minH, MIN_H, MAX_H, MIN_H)
   const app: PluginApp = {
     id: ++seq, pluginId,
     title: a.title, mode: a.mode, icon: a.icon, rows: a.rows,
-    w: clampSize(a.w, MIN_W, MAX_W, 480),
-    h: clampSize(a.h, MIN_H, MAX_H, 360),
-    x: null, y: null,
+    // Размер по умолчанию свой у каждого вида: окошко в углу должно быть
+    // маленьким, обычное окно — рабочим. Раньше это стояло в стилях жёстко и
+    // мешало человеку менять размер (см. .plugapp-pip в styles.css).
+    w: было ? clampSize(было.w, minW, MAX_W, 480) : clampSize(a.w, minW, MAX_W, a.mode === 'pip' ? 300 : 480),
+    h: было ? clampSize(было.h, minH, MAX_H, 360) : clampSize(a.h, minH, MAX_H, a.mode === 'pip' ? 200 : 360),
+    // Плагин МОЖЕТ предложить место (например, чтобы окно не легло на другое
+    // своё), но память человека главнее.
+    x: было ? было.x : (a.x === undefined ? null : clampSize(a.x, 0, 10000, 0)),
+    y: было ? было.y : (a.y === undefined ? null : clampSize(a.y, 0, 10000, 0)),
+    resizable: a.resizable === undefined ? true : !!a.resizable,
+    minW, minH,
+    max: !!(было && было.max),
+    before: null,
   }
   apps.set(app.id, app)
   notify()
@@ -116,17 +190,30 @@ export function openApp(pluginId: string, a: {
  */
 export function updateApp(pluginId: string, id: number, patch: {
   title?: string; rows?: SettingsRow[]; mode?: AppMode; w?: unknown; h?: unknown
+  x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
 }): boolean {
   const a = apps.get(id)
   if (!a || a.pluginId !== pluginId) return false
   if (patch.title !== undefined) a.title = patch.title
   if (patch.rows !== undefined) a.rows = patch.rows
   if (patch.mode !== undefined) a.mode = patch.mode
-  if (patch.w !== undefined) a.w = clampSize(patch.w, MIN_W, MAX_W, a.w)
-  if (patch.h !== undefined) a.h = clampSize(patch.h, MIN_H, MAX_H, a.h)
+  if (patch.minW !== undefined) a.minW = clampSize(patch.minW, MIN_W, MAX_W, a.minW)
+  if (patch.minH !== undefined) a.minH = clampSize(patch.minH, MIN_H, MAX_H, a.minH)
+  if (patch.resizable !== undefined) a.resizable = !!patch.resizable
+  if (patch.w !== undefined) a.w = clampSize(patch.w, a.minW, MAX_W, a.w)
+  if (patch.h !== undefined) a.h = clampSize(patch.h, a.minH, MAX_H, a.h)
+  // Место плагин двигать МОЖЕТ, но только пока человек сам его не трогал:
+  // иначе плагин возвращал бы окно на своё место после каждого перетаскивания.
+  if (!двигали.has(id)) {
+    if (patch.x !== undefined) a.x = clampSize(patch.x, 0, 10000, a.x ?? 0)
+    if (patch.y !== undefined) a.y = clampSize(patch.y, 0, 10000, a.y ?? 0)
+  }
   notify()
   return true
 }
+
+/** Окна, которые человек двигал или растягивал руками. */
+const двигали = new Set<number>()
 
 export function closeApp(pluginId: string, id: number): boolean {
   const a = apps.get(id)
@@ -150,7 +237,110 @@ export function moveApp(id: number, x: number, y: number) {
   if (!a) return
   a.x = x
   a.y = y
+  двигали.add(id)
+  запомнить(a)
   notify()
+}
+
+/** Человек потянул за край. Размер — его дело, как и место. */
+export function resizeApp(id: number, w: number, h: number, x?: number, y?: number) {
+  const a = apps.get(id)
+  if (!a || !a.resizable) return
+  a.w = clampSize(w, a.minW, MAX_W, a.w)
+  a.h = clampSize(h, a.minH, MAX_H, a.h)
+  // Тянут за левый или верхний край — окно ещё и переезжает.
+  if (x !== undefined) a.x = Math.max(0, Math.round(x))
+  if (y !== undefined) a.y = Math.max(0, Math.round(y))
+  a.max = false
+  двигали.add(id)
+  запомнить(a)
+  notify()
+}
+
+/**
+ * Развернуть на весь экран и обратно — двойным щелчком по шапке.
+ *
+ * Это НЕ режим fullscreen: тот выбирает плагин, а этот — человек, и вернуть
+ * окно он может тем же движением. Прежние размер и место запоминаются, иначе
+ * «развернул — свернул» теряло бы обжитое место.
+ */
+export function toggleMaxApp(id: number, screen: { w: number; h: number }): boolean {
+  const a = apps.get(id)
+  if (!a) return false
+  if (a.max && a.before) {
+    a.x = a.before.x; a.y = a.before.y; a.w = a.before.w; a.h = a.before.h
+    a.max = false
+    a.before = null
+  } else {
+    a.before = { x: a.x, y: a.y, w: a.w, h: a.h }
+    a.x = 0; a.y = 0
+    a.w = clampSize(screen.w, a.minW, MAX_W, a.w)
+    a.h = clampSize(screen.h, a.minH, MAX_H, a.h)
+    a.max = true
+  }
+  двигали.add(id)
+  запомнить(a)
+  notify()
+  return a.max
+}
+
+/** Прижать окно к половине экрана — как в Windows, перетаскиванием к краю. */
+export function snapApp(id: number, side: 'left' | 'right' | 'top' | 'bottom', screen: { w: number; h: number }) {
+  const a = apps.get(id)
+  if (!a) return
+  const пополам = side === 'left' || side === 'right'
+  a.w = clampSize(пополам ? Math.round(screen.w / 2) : screen.w, a.minW, MAX_W, a.w)
+  a.h = clampSize(пополам ? screen.h : Math.round(screen.h / 2), a.minH, MAX_H, a.h)
+  a.x = side === 'right' ? screen.w - a.w : 0
+  a.y = side === 'bottom' ? screen.h - a.h : 0
+  a.max = false
+  двигали.add(id)
+  запомнить(a)
+  notify()
+}
+
+/**
+ * Запомнить место — но НЕ на каждое движение мыши.
+ *
+ * v1.479.0: перетаскивание окна вызывает это по нескольку десятков раз в
+ * секунду, и каждый вызов — это JSON.stringify всего списка окон и запись в
+ * localStorage. Запись синхронная: на слабой машине она и есть та «тормозящая
+ * мышь», которой быть не должно. Пишем не чаще раза в треть секунды, а
+ * последнее положение дописываем обязательно — иначе потерялось бы ровно то,
+ * на чём человек остановился.
+ */
+let когдаПисали = 0
+let отложено: ReturnType<typeof setTimeout> | null = null
+/** Что не успели записать. Держим отдельно от таймера: отменить таймер и
+ *  ПОТЕРЯТЬ последнее положение — ровно та ошибка, которую поймала проба. */
+let ждёт: { ключ: string; м: Место } | null = null
+
+function записатьСейчас() {
+  if (!ждёт) return
+  писатьМесто(ждёт.ключ, ждёт.м)
+  ждёт = null
+  когдаПисали = Date.now()
+}
+
+function запомнить(a: PluginApp) {
+  if (a.mode !== 'window' && a.mode !== 'pip') return
+  ждёт = { ключ: placeKey(a.pluginId, a.title), м: { x: a.x, y: a.y, w: a.w, h: a.h, max: a.max } }
+  if (Date.now() - когдаПисали >= 300) { записатьСейчас(); return }
+  if (отложено) clearTimeout(отложено)
+  отложено = setTimeout(() => { отложено = null; записатьСейчас() }, 300)
+}
+
+/**
+ * Дописать отложенное немедленно.
+ *
+ * Нужно всем, кто спрашивает «а где стоит окно» сразу после того, как его
+ * подвинули: проверки, закрытие окна, уборка за плагином. Без этого последнее
+ * движение человека терялось бы — и настройка, которая теряется, хуже, чем её
+ * отсутствие.
+ */
+export function flushPlaces() {
+  if (отложено) { clearTimeout(отложено); отложено = null }
+  записатьСейчас()
 }
 
 export function appList(pluginId?: string): PluginApp[] {

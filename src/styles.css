@@ -7566,8 +7566,13 @@ body.no-anim .mus-blob.on { animation: none; }
 /* Плавающее окно по умолчанию — по центру; человек утащит куда захочет. */
 .plugapp-window { left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .plugapp-window[style*="left"] { transform: none; }
-/* Маленькое окошко — в углу, где ему и место, и всегда поверх остальных. */
-.plugapp-pip { width: 300px !important; height: 200px !important; z-index: 2; }
+/* Маленькое окошко — в углу, где ему и место, и всегда поверх остальных.
+   v1.479.0: размер больше НЕ прибит !important. Из-за него окошко нельзя было
+   растянуть вовсе: ручки по краям работали, модель менялась, а на экране
+   ничего не двигалось — ровно то расхождение показа и действия, которое в этом
+   проекте ломается чаще всего. Размер по умолчанию теперь задаётся при
+   открытии (apps.ts), а дальше им распоряжается человек. */
+.plugapp-pip { z-index: 2; }
 /* Вкладка занимает рабочую область, полный экран — всё окно целиком. */
 .plugapp-tab { inset: 0; border-radius: 0; border: none; }
 .plugapp-fullscreen { inset: 0; border-radius: 0; border: none; }
@@ -7584,11 +7589,44 @@ body.no-anim .mus-blob.on { animation: none; }
 .plugapp-h.draggable { cursor: grab; }
 .plugapp.dragging .plugapp-h { cursor: grabbing; }
 .plugapp-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v1.479.0: имя плагина в шапке вместо ярлыка «плагин».
+   Владелец попросил убрать надпись — она шумела; но подпись «чьё это окно»
+   нужна: окно во весь экран без неё стало бы способом выдать себя за само
+   приложение. Поэтому имя, тихо, справа, мелким. */
+.plugapp-by {
+  flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--mut); opacity: .75;
+}
+/* Ярлык остался для окна-вопроса (PluginDialog): там он на своём месте —
+   модальное окно поверх всего и правда должно называть себя. */
 .plugapp-tag {
   flex: none; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--mut); padding: 2px 7px; border-radius: 999px;
   background: rgba(var(--ov, 255, 255, 255), .08);
 }
+
+/* v1.479.0: ручки по краям. Восемь штук, как у обычного окна: за угол тянется
+   и ширина, и высота, за сторону — что-то одно. Ширина полосы 8 пикселей —
+   меньше не поймать мышью, больше мешает содержимому. */
+.plugapp-rz { position: absolute; z-index: 3; }
+.plugapp-rz.n { top: 0; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+.plugapp-rz.s { bottom: 0; left: 8px; right: 8px; height: 8px; cursor: ns-resize; }
+.plugapp-rz.w { left: 0; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+.plugapp-rz.e { right: 0; top: 8px; bottom: 8px; width: 8px; cursor: ew-resize; }
+.plugapp-rz.nw { left: 0; top: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.plugapp-rz.se { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.plugapp-rz.ne { right: 0; top: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.plugapp-rz.sw { left: 0; bottom: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+
+/* Подсказка прилипания: видно, куда окно встанет, ДО того как отпустил. */
+.plugapp-snap {
+  position: fixed; z-index: 1; pointer-events: none;
+  background: rgba(88, 101, 242, .18);
+  border: 2px solid var(--brand, #5865f2); border-radius: var(--r-lg, 12px);
+}
+.plugapp-snap.left { left: 0; top: 0; width: 50vw; height: 100vh; }
+.plugapp-snap.right { right: 0; top: 0; width: 50vw; height: 100vh; }
+.plugapp-snap.top { inset: 0; }
 .plugapp-x {
   flex: none; width: 30px; height: 30px; border: none; border-radius: var(--r-sm, 8px);
   background: transparent; color: var(--mut); font-size: 20px; line-height: 1; cursor: pointer;
@@ -7613,6 +7651,10 @@ body.no-anim .mus-blob.on { animation: none; }
   }
   .plugapp-body { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .plugapp-x { width: 40px; height: 40px; }
+  /* v1.479.0: ручек по краям на телефоне нет. Окно там и так во весь экран, а
+     полоска в восемь пикселей у самого края — это не «потянуть за угол», а
+     промах мимо содержимого. */
+  .plugapp-rz { display: none; }
   /* Кнопки внутри окна плагина — как и везде на телефоне: не ниже сорока
      пикселей. Поймано телефонным обходом: вышло 32. */
   .plugapp-body .plugpanel-btn, .plugapp-body button { min-height: 40px; }

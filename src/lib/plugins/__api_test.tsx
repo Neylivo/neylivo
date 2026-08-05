@@ -395,6 +395,169 @@ export async function onLoad(ponoi) {
   removePlugin(id); removePlugin(без)
 }
 
+
+// ── 8. Окно ставится куда и как угодно (v1.479.0) ───────────────────────────
+//
+// Раньше окно можно было только таскать: размер задавал плагин, место
+// забывалось при закрытии, развернуть было нечем. Проверяем не «функция
+// вызвалась», а РЕЗУЛЬТАТ на экране: где стоит прямоугольник и какого он
+// размера.
+async function окноКудаУгодно(host: Host) {
+  const { forgetPlaces, savedPlace, moveApp, resizeApp, toggleMaxApp, snapApp } = await import('./apps')
+  forgetPlaces()
+
+  const id = await поднять(host, `/**
+ * @name Окно
+ * @id probe-place
+ * @version 1.0.0
+ * @author проба
+ * @description Проба места окна
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  const id = await ponoi.apps.create({
+    mode: 'window', title: 'Своё место', width: 420, height: 300,
+    minWidth: 260, minHeight: 180,
+    rows: [{ type: 'label', key: 'l', label: 'Строка', value: 'тут' }],
+  })
+  ponoi.log('открыто:' + id)
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(200)
+  const окно = () => document.querySelector('.plugapp-window') as HTMLElement | null
+  const r = () => окно()!.getBoundingClientRect()
+  ok('окно открылось с тем размером, что попросил плагин',
+    Math.round(r().width) === 420 && Math.round(r().height) === 300,
+    `${Math.round(r().width)}x${Math.round(r().height)}`)
+
+  ok('слова «плагин» рядом с окном больше нет',
+    !окно()!.querySelector('.plugapp-tag') && !/плагин/i.test(окно()!.querySelector('.plugapp-h')!.textContent ?? ''),
+    окно()!.querySelector('.plugapp-h')!.textContent ?? '')
+  ok('но видно, чьё это окно — имя плагина в шапке',
+    (окно()!.querySelector('.plugapp-by')?.textContent ?? '') === 'probe-place',
+    окно()!.querySelector('.plugapp-by')?.textContent ?? 'нет подписи')
+
+  const номер = appList(id)[0].id
+
+  // Перетаскивание руками — через ту же дорогу, которой ходит указатель.
+  moveApp(номер, 120, 90)
+  await пауза(150)
+  ok('окно встало туда, куда его поставили',
+    Math.round(r().left) === 120 && Math.round(r().top) === 90,
+    `${Math.round(r().left)},${Math.round(r().top)}`)
+
+  // Растягивание за край.
+  resizeApp(номер, 700, 480)
+  await пауза(150)
+  ok('окно тянется за край', Math.round(r().width) === 700 && Math.round(r().height) === 480,
+    `${Math.round(r().width)}x${Math.round(r().height)}`)
+
+  resizeApp(номер, 50, 40)
+  await пауза(150)
+  ok('меньше своего наименьшего размера окно не сжимается',
+    Math.round(r().width) === 260 && Math.round(r().height) === 180,
+    `${Math.round(r().width)}x${Math.round(r().height)}`)
+
+  // Разворот и возврат.
+  const экран = { w: document.documentElement.clientWidth, h: document.documentElement.clientHeight }
+  toggleMaxApp(номер, экран)
+  await пауза(150)
+  ok('разворот занимает весь экран',
+    Math.round(r().width) >= экран.w - 2 && Math.round(r().height) >= экран.h - 2,
+    `${Math.round(r().width)}x${Math.round(r().height)} при ${экран.w}x${экран.h}`)
+  toggleMaxApp(номер, экран)
+  await пауза(150)
+  ok('второй разворот возвращает прежний размер и место',
+    Math.round(r().width) === 260 && Math.round(r().left) === 120,
+    `${Math.round(r().width)} на ${Math.round(r().left)}`)
+
+  // Прилипание к половине экрана.
+  snapApp(номер, 'right', экран)
+  await пауза(150)
+  ok('прилипание к правому краю занимает половину экрана',
+    Math.abs(r().width - экран.w / 2) < 3 && Math.abs(r().right - экран.w) < 3,
+    `${Math.round(r().width)} шириной, правый край ${Math.round(r().right)}`)
+
+  // Память места: закрываем и открываем заново.
+  const место = savedPlace('probe-place', 'Своё место')
+  ok('место и размер записаны на устройстве', !!место && место.w === Math.round(r().width),
+    JSON.stringify(место))
+
+  await host.stopPlugin(id)
+  await пауза(150)
+  await host.startPlugin({
+    manifest: parsePlugin(`/**
+ * @name Окно
+ * @id probe-place
+ * @version 1.0.0
+ * @author проба
+ * @description Проба места окна
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  await ponoi.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
+    minWidth: 260, minHeight: 180, rows: [] })
+}
+`),
+    code: `/**
+ * @name Окно
+ * @id probe-place
+ * @version 1.0.0
+ * @author проба
+ * @description Проба места окна
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  await ponoi.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
+    minWidth: 260, minHeight: 180, rows: [] })
+}
+`,
+    enabled: true, installedAt: '', sourceUserId: null, storage: {},
+  } as any)
+  await ждать(() => appList('probe-place').length === 1)
+  await пауза(250)
+  ok('при следующем открытии окно встаёт туда же, куда его поставил человек',
+    Math.abs(r().width - (место?.w ?? 0)) < 3 && Math.abs(r().left - (место?.x ?? 0)) < 3,
+    `${Math.round(r().left)},${Math.round(r().top)} ${Math.round(r().width)}x${Math.round(r().height)}`)
+
+
+  // Окошко в углу (pip) тоже растягивается. Раньше его размер был прибит в
+  // стилях через !important: ручки работали, модель менялась, а на экране
+  // ничего — то самое расхождение показа и действия.
+  {
+    const id2 = await поднять(host, `/**
+ * @name Уголок
+ * @id probe-pip
+ * @version 1.0.0
+ * @author проба
+ * @description Проба окошка в углу
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  await ponoi.apps.create({ mode: 'pip', title: 'Уголок', rows: [] })
+}
+`)
+    await ждать(() => appList(id2).length === 1)
+    await пауза(250)
+    const уголок = () => (document.querySelector('.plugapp-pip') as HTMLElement).getBoundingClientRect()
+    ok('окошко в углу открывается маленьким',
+      Math.round(уголок().width) === 300 && Math.round(уголок().height) === 200,
+      `${Math.round(уголок().width)}x${Math.round(уголок().height)}`)
+    resizeApp(appList(id2)[0].id, 520, 380)
+    await пауза(200)
+    ok('окошко в углу ТОЖЕ тянется, а не прибито размером',
+      Math.round(уголок().width) === 520 && Math.round(уголок().height) === 380,
+      `${Math.round(уголок().width)}x${Math.round(уголок().height)}`)
+    await host.stopPlugin(id2)
+    removePlugin(id2)
+  }
+
+  await host.stopPlugin('probe-place')
+  removePlugin('probe-place')
+  forgetPlaces()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -418,6 +581,8 @@ async function main() {
   await оформление(host)
   lines.push(''); lines.push('── Плеер и голос ──'); out()
   await плеерИГолос(host)
+  lines.push(''); lines.push('── Окно куда угодно ──'); out()
+  await окноКудаУгодно(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

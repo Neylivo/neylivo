@@ -1000,6 +1000,13 @@ export function createDispatcher(
         const app = openApp(id, {
           title: str(o?.title ?? plugin.manifest.name, 60, 'заголовок окна'),
           mode, icon: safeIcon(o?.icon), rows, w: o?.width, h: o?.height,
+          // v1.479.0: окно настраивается гибко. Место и размер плагин
+          // ПРЕДЛАГАЕТ — решает человек, и его решение помнится между
+          // запусками (apps.ts). Растягивание можно запретить, если у плагина
+          // всё нарисовано под один размер.
+          x: o?.x, y: o?.y,
+          resizable: o?.resizable,
+          minW: o?.minWidth, minH: o?.minHeight,
         })
         return app.id
       }
@@ -1017,7 +1024,12 @@ export function createDispatcher(
         }
         if (o.width !== undefined) patch.w = o.width
         if (o.height !== undefined) patch.h = o.height
-        return updateApp(id, Number(args[0]), patch)
+                if (o.x !== undefined) patch.x = o.x
+        if (o.y !== undefined) patch.y = o.y
+        if (o.resizable !== undefined) patch.resizable = o.resizable
+        if (o.minWidth !== undefined) patch.minW = o.minWidth
+        if (o.minHeight !== undefined) patch.minH = o.minHeight
+return updateApp(id, Number(args[0]), patch)
       }
       case 'apps.close': {
         need('apps')
