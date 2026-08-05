@@ -20,7 +20,7 @@ import { takeOffscreen, canvasHeight } from './canvasHub'
 import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
-import { openApp, updateApp, closeApp, isMode, APP_MODES, appList, widgetOf, setWidgetOf } from './apps'
+import { openApp, updateApp, closeApp, isMode, APP_MODES, appList, widgetOf, setWidgetOf, appGeometry, screenSize } from './apps'
 import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 // v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
@@ -90,6 +90,8 @@ export const PLUGIN_METHODS = [
   // v1.471.0: своя область экрана. Действует только на экран самого человека:
   // ни другим людям, ни серверу от неё ничего не достаётся.
   'apps.create', 'apps.update', 'apps.close',
+  // v1.485.0: своё окно видно плагину — место, размер, экран.
+  'apps.where', 'apps.all', 'apps.screen',
   // v1.472.0: плагин как библиотека для других плагинов. Наружу это не выходит
   // никуда: вызов ходит между двумя воркерами на этом же устройстве.
   'services.register', 'services.unregister', 'services.connect', 'services.call',
@@ -1050,6 +1052,30 @@ export function createDispatcher(
         if (o.minHeight !== undefined) patch.minH = o.minHeight
 return updateApp(id, Number(args[0]), patch)
       }
+      // v1.485.0: где стоит окно и какой оно величины. Без этого плагин не мог
+      // знать ничего о перетаскивании — окно уезжало, а он рисовал по старым
+      // координатам.
+      case 'apps.where': {
+        need('apps')
+        const g = appGeometry(id, Number(args[0]))
+        if (!g) return null
+        return {
+          id: g.id, mode: g.mode, title: g.title,
+          x: g.x, y: g.y, width: g.w, height: g.h,
+          max: g.max, screenWidth: g.screenW, screenHeight: g.screenH,
+        }
+      }
+      case 'apps.all': {
+        need('apps')
+        return appList(id).map(a => ({
+          id: a.id, mode: a.mode, title: a.title, x: a.x, y: a.y, width: a.w, height: a.h, max: a.max,
+        }))
+      }
+      case 'apps.screen': {
+        need('apps')
+        return screenSize()
+      }
+
       case 'apps.close': {
         need('apps')
         return closeApp(id, Number(args[0]))

@@ -57,6 +57,17 @@ function readTags(code: string): Record<string, string> {
 function parsePermissions(raw: string | undefined): Permission[] {
   if (!raw) return []
   const out: Permission[] = []
+  // v1.485.0: звёздочка — «все разрешения».
+  //
+  // Владелец попросил, чтобы добавлять разрешения было легче. Самая частая
+  // морока у автора плагина именно эта: написал код, забыл дописать строку в
+  // шапке — и плагин падает на первом же вызове, причём человек видит не
+  // «автор забыл», а «приложение сломалось».
+  //
+  // Прятать это не приходится: на экране установки такой плагин показывается
+  // всеми красными строками сразу и требует нажать «Я понимаю риски». То есть
+  // легче становится автору, а человек видит РОВНО то же, что и раньше.
+  if (raw.split(/[,\s]+/).some(x => x.trim() === '*')) return [...ALL_PERMISSIONS]
   for (const part of raw.split(/[,\s]+/).filter(Boolean)) {
     const p = part.toLowerCase()
     // Неизвестное разрешение — именно ошибка, а не молчаливый пропуск: иначе плагин,
@@ -93,7 +104,13 @@ export function parsePlugin(code: string): PluginManifest {
   for (const h of hosts) {
     if (!HOST_RE.test(h)) throw new PluginParseError(`Плохой домен в @hosts: «${cut(h, 40)}».`)
   }
-  if (permissions.includes('net') && hosts.length === 0) {
+  // v1.485.0: со звёздочкой это НЕ ошибка автора. «@permissions *» значит «дай
+  // всё, чтобы не перечислять руками», и требовать после этого ещё и список
+  // сайтов — ровно та морока, от которой звёздочка и избавляет. Сеть при этом
+  // не открывается сама собой: без @hosts плагину просто некуда идти, и на
+  // экране установки так и написано — «ни один сайт не объявлен».
+  const звёздочка = (tags.permissions || '').split(/[,\s]+/).some(x => x.trim() === '*')
+  if (permissions.includes('net') && hosts.length === 0 && !звёздочка) {
     throw new PluginParseError('Плагин просит разрешение net, но не указал ни одного домена в @hosts.')
   }
 

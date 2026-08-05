@@ -330,6 +330,28 @@ export function PluginEditor({ editId, onClose, onSaved }: {
 
         {mode === 'code' && <>
         <label className="modal-lbl">Что плагину разрешено</label>
+        {/* v1.485.0: разрешения больше не надо расставлять галочками вручную.
+            Приложение и так ЗНАЕТ, что зовёт код (missingPermissions), — и
+            раньше только показывало это красной строкой, оставляя человека
+            щёлкать самому. Теперь оно может проставить их одним нажатием. */}
+        <div className="ped-perm-acts">
+          {missing.length > 0 && (
+            <button type="button" className="pqs2-btn" onClick={() => {
+              setD(prev => ({
+                ...prev,
+                permissions: [...prev.permissions, ...missing.map(m => m.perm).filter(x => !prev.permissions.includes(x))],
+              }))
+            }}>Добавить недостающие — {missing.length}</button>
+          )}
+          {unused.length > 0 && (
+            <button type="button" className="pqs2-btn ghost" onClick={() => {
+              setD(prev => ({ ...prev, permissions: prev.permissions.filter(x => !unused.includes(x)) }))
+            }}>Убрать лишние — {unused.length}</button>
+          )}
+          <button type="button" className="pqs2-btn ghost" onClick={() => {
+            setD(prev => ({ ...prev, permissions: [...ALL_PERMISSIONS] }))
+          }} title="То же самое, что @permissions * в шапке">Разрешить всё</button>
+        </div>
         <div className="ped-perms">
           {ALL_PERMISSIONS.map(p => (
             <label key={p} className={'ped-perm' + (d.permissions.includes(p) ? ' on' : '') + (SENSITIVE_PERMISSIONS.includes(p) ? ' warn' : '')}>

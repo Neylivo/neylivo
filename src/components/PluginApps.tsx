@@ -3,7 +3,7 @@ import { Icon } from './icons'
 import { PanelRows } from './PluginPanels'
 import { emitToPlugin } from '../lib/plugins/bridge'
 import {
-  appList, subscribeApps, closeAppByUser, moveApp, resizeApp, toggleMaxApp, snapApp,
+  appList, subscribeApps, closeAppByUser, moveApp, resizeApp, toggleMaxApp, snapApp, holdApp, setAppRect,
   type PluginApp,
 } from '../lib/plugins/apps'
 
@@ -78,6 +78,7 @@ function useDragResize(app: PluginApp) {
       if (e.clientY <= SNAP_PX) toggleMaxApp(app.id, экран())
       else if (e.clientX <= SNAP_PX) snapApp(app.id, 'left', экран())
       else if (e.clientX >= sw - SNAP_PX) snapApp(app.id, 'right', экран())
+      holdApp(app.id, false)
       setПодсказка(null)
       setDrag(null)
     }
@@ -116,6 +117,7 @@ function useDragResize(app: PluginApp) {
       const р = размер.current
       if (р) resizeApp(app.id, р.w, р.h, р.x, р.y)
       размер.current = null
+      holdApp(app.id, false)
       setRz(null)
     }
     window.addEventListener('pointermove', move)
@@ -130,6 +132,9 @@ function useDragResize(app: PluginApp) {
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
+    // Пока окно в руке у человека, движения плагина игнорируются: иначе окно
+    // дёргалось бы прямо под пальцем (v1.485.0).
+    holdApp(app.id, true)
     setDrag({ dx: e.clientX - r.left, dy: e.clientY - r.top })
   }
   const startResize = (side: string) => (e: React.PointerEvent) => {
@@ -137,6 +142,7 @@ function useDragResize(app: PluginApp) {
     if (!el) return
     e.stopPropagation()
     const r = el.getBoundingClientRect()
+    holdApp(app.id, true)
     setRz({ side, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, left: r.left, top: r.top })
   }
   return { ref, startDrag, startResize, dragging: !!drag || !!rz, подсказка }
@@ -151,14 +157,63 @@ function AppFrame({ app }: { app: PluginApp }) {
 
   // Плагин узнаёт, что его окно открылось и что с ним стало: закрыть окно может
   // человек, и не сказать об этом значило бы оставить плагин рисовать в никуда.
-  useEffect(() => {
-    emitToPlugin(app.pluginId, 'app', {
-      id: app.id, mode: app.mode, open: true, width: app.w, height: app.h,
-    })
-    return () => {
-      emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: false, width: app.w, height: app.h })
+  // v1.485.0: событие теперь несёт и МЕСТО окна, и приходит при каждом
+  // перемещении, а не только при открытии.
+  //
+  // Зачем. Плагин живёт в отдельном воркере и о перетаскивании не знал ничего:
+  // окно уезжало под мышкой, а плагин продолжал считать, что оно на старом
+  // месте. Всё, что связано с положением окон, было невозможно.
+  //
+  // Место берём из ЭЛЕМЕНТА, а не из модели: пока человек тянет, модель
+  // отстаёт нарочно (мы двигаем сам элемент ради плавности), и без этого
+  // плагин получал бы вчерашние координаты.
+  const тянули = useRef(false)
+  const где = () => {
+    const r = ref.current?.getBoundingClientRect()
+    const о = {
+      x: Math.round(r?.left ?? app.x ?? 0), y: Math.round(r?.top ?? app.y ?? 0),
+      width: Math.round(r?.width ?? app.w), height: Math.round(r?.height ?? app.h),
     }
-  }, [app.id, app.pluginId, app.mode, app.w, app.h])
+    // Кладём измеренное в модель: у неподвинутого окна место задаёт вёрстка
+    // («по центру»), и в модели там null — плагин получал бы null вместо
+    // координат.
+    setAppRect(app.id, { x: о.x, y: о.y, w: о.width, h: о.height })
+    return о
+  }
+  useEffect(() => {
+    emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
+    return () => {
+      emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: false, ...где() })
+    }
+    // Место окна тоже в зависимостях: без него событие о ПЕРЕЕЗДЕ не уходило
+    // вовсе — плагин узнавал только про открытие и закрытие.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.id, app.pluginId, app.mode, app.w, app.h, app.x, app.y])
+
+  // Пока окно двигают или тянут — шлём место кадрами. Не чаще кадра: событие
+  // уходит в воркер, и слать его на каждое движение мыши значит будить плагин
+  // сотню раз в секунду ради того же самого.
+  useEffect(() => {
+    if (!dragging) {
+      // Отпустили — сообщаем окончательное место. Но ТОЛЬКО если правда
+      // отпустили: без этой проверки событие уходило на каждую перерисовку, и
+      // плагин получал по два «открыто» на каждое окно.
+      if (тянули.current) {
+        тянули.current = false
+        emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
+      }
+      return
+    }
+    тянули.current = true
+    let кадр = 0
+    const шаг = () => {
+      emitToPlugin(app.pluginId, 'app', { id: app.id, mode: app.mode, open: true, ...где() })
+      кадр = requestAnimationFrame(шаг)
+    }
+    кадр = requestAnimationFrame(шаг)
+    return () => cancelAnimationFrame(кадр)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging, app.id])
 
   // Фокус — сразу на окно (v1.474.0). Иначе клавиши достались бы ему только
   // после того, как человек догадается щёлкнуть по окну, и игра выглядела бы

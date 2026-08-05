@@ -616,6 +616,8 @@ for (const p of OFFICIAL_PLUGINS) {
     // v1.467.0
     'ui.addHeaderButton', 'settings.registerSchema',
     'apps.create', 'apps.update', 'apps.close',
+    // v1.485.0
+    'apps.where', 'apps.all', 'apps.screen',
     'services.register', 'services.unregister', 'services.connect', 'services.call',
     'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
     'db.count', 'db.clear', 'db.tables',

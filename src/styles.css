@@ -7737,3 +7737,7 @@ body.no-anim .mus-blob.on { animation: none; }
    вкладкой — человек открывал профиль и решал, что активности нет. */
 .pc-tab-live { display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:6px;
   background:var(--green,#3ba55d); vertical-align:middle; }
+
+
+/* v1.485.0: кнопки над списком разрешений в конструкторе плагина. */
+.ped-perm-acts { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px; }

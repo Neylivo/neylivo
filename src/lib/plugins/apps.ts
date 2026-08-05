@@ -210,9 +210,17 @@ export function updateApp(pluginId: string, id: number, patch: {
   if (patch.resizable !== undefined) a.resizable = !!patch.resizable
   if (patch.w !== undefined) a.w = clampSize(patch.w, a.minW, MAX_W, a.w)
   if (patch.h !== undefined) a.h = clampSize(patch.h, a.minH, MAX_H, a.h)
-  // Место плагин двигать МОЖЕТ, но только пока человек сам его не трогал:
-  // иначе плагин возвращал бы окно на своё место после каждого перетаскивания.
-  if (!двигали.has(id)) {
+  // v1.485.0: место плагин двигает СВОБОДНО.
+  //
+  // Раньше здесь стоял запрет: тронул окно человек — и плагин больше не мог
+  // его переставить. Правило было моё, и владелец прямо попросил снять: «дай
+  // полный доступ делать как угодно». Оно и мешало по делу — окно, которое
+  // плагин анимирует (например, гоняет шар между двумя окнами), после первого
+  // же перетаскивания застывало.
+  //
+  // Что осталось: пока человек ДЕРЖИТ окно мышью, движение плагина
+  // игнорируется (см. тащат ниже) — иначе окно дёргалось бы прямо под рукой.
+  if (!тащат.has(id)) {
     if (patch.x !== undefined) a.x = clampSize(patch.x, 0, 10000, a.x ?? 0)
     if (patch.y !== undefined) a.y = clampSize(patch.y, 0, 10000, a.y ?? 0)
   }
@@ -220,8 +228,13 @@ export function updateApp(pluginId: string, id: number, patch: {
   return true
 }
 
-/** Окна, которые человек двигал или растягивал руками. */
-const двигали = new Set<number>()
+/** Окна, которые человек ДЕРЖИТ прямо сейчас: пока держит, плагин их не двигает. */
+const тащат = new Set<number>()
+
+/** Человек взял окно в руку / отпустил. Зовёт компонент окна. */
+export function holdApp(id: number, держит: boolean) {
+  if (держит) тащат.add(id); else тащат.delete(id)
+}
 
 export function closeApp(pluginId: string, id: number): boolean {
   const a = apps.get(id)
@@ -245,7 +258,6 @@ export function moveApp(id: number, x: number, y: number) {
   if (!a) return
   a.x = x
   a.y = y
-  двигали.add(id)
   запомнить(a)
   notify()
 }
@@ -260,7 +272,6 @@ export function resizeApp(id: number, w: number, h: number, x?: number, y?: numb
   if (x !== undefined) a.x = Math.max(0, Math.round(x))
   if (y !== undefined) a.y = Math.max(0, Math.round(y))
   a.max = false
-  двигали.add(id)
   запомнить(a)
   notify()
 }
@@ -286,7 +297,6 @@ export function toggleMaxApp(id: number, screen: { w: number; h: number }): bool
     a.h = clampSize(screen.h, a.minH, MAX_H, a.h)
     a.max = true
   }
-  двигали.add(id)
   запомнить(a)
   notify()
   return a.max
@@ -302,7 +312,6 @@ export function snapApp(id: number, side: 'left' | 'right' | 'top' | 'bottom', s
   a.x = side === 'right' ? screen.w - a.w : 0
   a.y = side === 'bottom' ? screen.h - a.h : 0
   a.max = false
-  двигали.add(id)
   запомнить(a)
   notify()
 }
@@ -368,6 +377,51 @@ export const widgetOf = (pluginId: string): number | undefined => виджеты
 export const setWidgetOf = (pluginId: string, id: number) => { виджеты.set(pluginId, id) }
 export function forgetWidget(pluginId: string) { виджеты.delete(pluginId) }
 export function forgetAllWidgets() { виджеты.clear() }
+
+/**
+ * Где окно НА САМОМ ДЕЛЕ — измеренное окном приложения.
+ *
+ * Зачем отдельно от x/y модели. Пока человек не двигал окно, его место задаёт
+ * не модель, а вёрстка: «по центру», «в углу». В модели там null, и плагин
+ * получал бы null вместо координат — то есть ровно ту беду, ради которой всё
+ * это и делается. Компонент меряет себя и кладёт настоящий прямоугольник сюда.
+ */
+const прямоугольники = new Map<number, { x: number; y: number; w: number; h: number }>()
+
+export function setAppRect(id: number, r: { x: number; y: number; w: number; h: number }) {
+  прямоугольники.set(id, r)
+}
+
+/**
+ * Где стоит окно и какого оно размера (v1.485.0).
+ *
+ * Зачем. Плагин живёт в отдельном воркере: перетаскивание обрабатывает
+ * приложение, а плагин об этом не знал ничего. Владелец описал это точно:
+ * «плагин считает, что окна стоят на месте». Нарисовать что-то, связанное с
+ * положением окон, было невозможно.
+ *
+ * Отдаём только СВОИ окна: чужие — не его дело.
+ */
+export function appGeometry(pluginId: string, id: number): (PluginApp & { screenW: number; screenH: number }) | null {
+  const a = apps.get(id)
+  if (!a || a.pluginId !== pluginId) return null
+  const r = прямоугольники.get(id)
+  return {
+    ...a,
+    // Измеренное главнее модели: оно и есть то, что человек видит на экране.
+    x: r ? r.x : a.x,
+    y: r ? r.y : a.y,
+    w: r ? r.w : a.w,
+    h: r ? r.h : a.h,
+    screenW: экранШ(), screenH: экранВ(),
+  }
+}
+
+const экранШ = () => (typeof document === 'undefined' ? 0 : document.documentElement.clientWidth)
+const экранВ = () => (typeof document === 'undefined' ? 0 : document.documentElement.clientHeight)
+
+/** Размер экрана — чтобы плагин мог посчитать, куда ставить окно. */
+export const screenSize = () => ({ w: экранШ(), h: экранВ() })
 
 export function appList(pluginId?: string): PluginApp[] {
   const all = [...apps.values()]

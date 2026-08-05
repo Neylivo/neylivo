@@ -145,6 +145,15 @@ const ponoi = {
     create: (opt) => call('apps.create', [opt || {}]),
     update: (id, patch) => call('apps.update', [Number(id), patch || {}]),
     close: (id) => call('apps.close', [Number(id)]),
+    // v1.485.0: где стоит окно. Возвращает { x, y, width, height, mode, max,
+    // screenWidth, screenHeight } — или null, если окна нет.
+    where: (id) => call('apps.where', [Number(id)]),
+    /** Все свои окна с их местом и размером. */
+    all: () => call('apps.all', []),
+    /** Размер экрана — чтобы посчитать, куда поставить окно. */
+    screen: () => call('apps.screen', []),
+    /** Подвинуть своё окно. То же, что update({ x, y }), но короче. */
+    move: (id, x, y) => call('apps.update', [Number(id), { x: Number(x), y: Number(y) }]),
   },
   // v1.472.0: своё хранилище таблицами. ponoi.storage — это пары ключ-значение
   // на несколько килобайт; здесь настоящие таблицы с отбором.

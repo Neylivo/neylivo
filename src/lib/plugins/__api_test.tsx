@@ -632,6 +632,55 @@ export async function onLoad(ponoi) {
   forgetPlaces()
 }
 
+
+// ── 10. Плагин видит своё окно (v1.485.0) ───────────────────────────────────
+//
+// Владелец описал беду точно: «плагин считает, что окна стоят на месте».
+// Перетаскивание обрабатывает приложение, плагин живёт в отдельном потоке — и
+// координат не знал вовсе. Проверяем именно это: что он их получает и что
+// может двигать окно сам.
+async function окноГдеСтоит(host: Host) {
+  const { forgetPlaces, moveApp } = await import('./apps')
+  forgetPlaces()
+  const id = await поднять(host, `/**
+ * @name Где окно
+ * @id probe-where
+ * @version 1.0.0
+ * @author проба
+ * @description Проба координат окна
+ * @permissions *
+ */
+export async function onLoad(ponoi) {
+  const окно = await ponoi.apps.create({ mode: 'window', title: 'Где я', width: 320, height: 200, rows: [] })
+  self.окно = окно
+  const о = await ponoi.apps.where(окно)
+  ponoi.log('где:' + JSON.stringify({ x: о.x, y: о.y, w: о.width, h: о.height }))
+  ponoi.log('экран:' + JSON.stringify(await ponoi.apps.screen()))
+  ponoi.on('app', function (e) { ponoi.log('событие:' + e.x + ',' + e.y) })
+  self.двинь = function (x, y) { return ponoi.apps.move(окно, x, y) }
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(400)
+
+  ok('плагин узнал, где стоит его окно', /где:\{"x":\d+,"y":\d+,"w":320,"h":200\}/.test(строка(host, id, 'где:')),
+    строка(host, id, 'где:'))
+  ok('плагин знает размер экрана', /экран:\{"w":\d+,"h":\d+\}/.test(строка(host, id, 'экран:')),
+    строка(host, id, 'экран:'))
+
+  // Человек тащит окно — плагину должно прийти новое место.
+  const было = журнал(host, id).filter(l => l.includes('событие:')).length
+  moveApp(appList(id)[0].id, 250, 170)
+  await пауза(400)
+  const событие = журнал(host, id).filter(l => l.includes('событие:')).pop() ?? ''
+  ok('о переезде окна плагину сообщили', событие.includes('250,170'), событие)
+  ok('событий стало больше, а не одно на всё время', журнал(host, id).filter(l => l.includes('событие:')).length > было)
+
+  await host.stopPlugin(id)
+  removePlugin(id)
+  forgetPlaces()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -659,6 +708,8 @@ async function main() {
   await окноКудаУгодно(host)
   lines.push(''); lines.push('── Свободный виджет ──'); out()
   await свободныйВиджет(host)
+  lines.push(''); lines.push('── Плагин видит своё окно ──'); out()
+  await окноГдеСтоит(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
