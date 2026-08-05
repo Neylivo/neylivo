@@ -981,9 +981,21 @@ console.log('\n── Плагин как библиотека (v1.472.0) ──
     const d = attacker([...ALL_PERMISSIONS], 'svc-empty')
     return d('services.register', ['пусто', {}])
   })
-  await blocked('имя службы с пробелами и кавычками не проходит', () => {
+  // v1.476.0: правило имени стало таким же, как у таблиц и файлов, — запрещено
+  // ровно то, чем можно навредить (разделитель ключа и черта пути), а не всё
+  // незнакомое. Прежний белый список из латиницы валил службу «матан», и
+  // нашлось это живой пробой, а не рассуждением.
+  await blocked('в имени службы нет невидимых знаков', () => {
     const d = attacker([...ALL_PERMISSIONS], 'svc-name')
-    return d('services.register', ['ой "какое" имя', { f: fn }])
+    return d('services.register', ['ой\u0000имя', { f: fn }])
+  })
+  await blocked('в имени службы нет черты пути', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-name2')
+    return d('services.register', ['папка/имя', { f: fn }])
+  })
+  await allowed('служба может называться по-русски', () => {
+    const d = attacker([...ALL_PERMISSIONS], 'svc-ru')
+    return d('services.register', ['мой матан', { f: fn }])
   })
   await allowed('обычная служба заводится', () => {
     const d = attacker([...ALL_PERMISSIONS], 'svc-ok')

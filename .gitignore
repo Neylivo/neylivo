@@ -28,4 +28,6 @@ dist-music-test/
 dist-safe-test/
 dist-live-test/
 dist-snake-test/
+dist-api-test/
+scripts/api-test-certs/
 dist-bench/
