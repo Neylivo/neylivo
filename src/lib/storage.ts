@@ -1,9 +1,38 @@
 import { supabase } from './supabase'
+import { runUploadHooks } from './plugins/bridge'
 import { contentTypeOf } from './fileType'
 export { contentTypeOf } from './fileType'
 
+
+/**
+ * Перехватчики вложений (v1.475.0).
+ *
+ * Единственная точка: обе загрузки (обычная и с прогрессом) идут через неё, и
+ * все четыре экрана, которые отправляют файлы, — тоже. Раскидай мы это по
+ * вызывающим, один из них однажды забыли бы, и плагин, снимающий геометку с
+ * фотографий, молча не работал бы в личных сообщениях.
+ *
+ * У человека без плагинов здесь ничего не происходит: прослойка отвечает сразу,
+ * не загружая систему плагинов (bridge.ts).
+ */
+export class UploadCancelled extends Error {
+  constructor(public by: string | null) {
+    super('Отправку файла отменил плагин')
+  }
+}
+
+async function черезПлагины(file: File): Promise<File> {
+  const r = await runUploadHooks(file)
+  // Отмена обязана быть ЗАМЕТНОЙ. Молча не отправить файл, который человек
+  // только что выбрал, — худшее из возможного: он решит, что сломано
+  // приложение, и не свяжет это с плагином.
+  if (r.cancel) throw new UploadCancelled(r.by)
+  return r.file
+}
+
 // Uploads a file into <bucket>/<uid>/<timestamp>_<name> and returns its public URL.
-export async function uploadTo(bucket: string, uid: string, file: File): Promise<string> {
+export async function uploadTo(bucket: string, uid: string, fileRaw: File): Promise<string> {
+  const file = await черезПлагины(fileRaw)
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${uid}/${Date.now()}_${safe}`
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -27,7 +56,8 @@ export const isVideo = (f: File | string) =>
 
 // Загрузка с прогрессом: XMLHttpRequest даёт события progress, которых нет в supabase-js.
 // Заголовки и путь те же, что использует supabase.storage.upload, поэтому политики бакета работают как раньше.
-export async function uploadWithProgress(bucket: string, uid: string, file: File, onProgress?: (p: number) => void): Promise<string> {
+export async function uploadWithProgress(bucket: string, uid: string, fileRaw: File, onProgress?: (p: number) => void): Promise<string> {
+  const file = await черезПлагины(fileRaw)
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${uid}/${Date.now()}_${safe}`
   const base = import.meta.env.VITE_SUPABASE_URL as string

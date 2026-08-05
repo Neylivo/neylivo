@@ -29,7 +29,7 @@ import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { invokePlugin, claimHostContext, releaseHostContext, emitPluginEvent } from '../lib/plugins/bridge'
 import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
-import { slashPrefix, parseSlash, buildArgs } from '../lib/slashCmd'
+import { slashPrefix, parseSlash, buildArgs, splitArgs, argHint } from '../lib/slashCmd'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
 // v1.352.0: подсказка эмодзи по «:», как в Discord и Telegram. Разбор хвоста
@@ -425,6 +425,62 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     ? pluginCmds.filter(c => c.name.startsWith(slashTyping)).slice(0, 8)
     : []
 
+  // v1.475.0: подсказка по доводам команды плагина.
+  //
+  // Она появляется ПОСЛЕ имени команды — то есть там, где человек до сих пор
+  // видел пустоту и должен был откуда-то знать, что писать дальше. Значения
+  // берутся либо из объявленных плагином (options), либо у него самого
+  // (onComplete): второе нужно всему, что зависит от живых данных — списку
+  // треков, каналов, заметок.
+  const набранная = parseSlash(text)
+  const активная = набранная && /\s/.test(text)
+    ? pluginCmds.find(c => c.name === набранная.name && (c.args?.length ?? 0) > 0)
+    : undefined
+  const состояние = активная ? splitArgs(набранная!.rest, активная.args!) : null
+  const текущийДовод = активная && состояние && состояние.current >= 0
+    ? активная.args![состояние.current] : null
+  const [подсказки, setПодсказки] = useState<{ value: string; label: string }[]>([])
+
+  useEffect(() => {
+    if (!активная || !текущийДовод || !состояние) { setПодсказки([]); return }
+    // Свои значения — сразу, без похода в плагин.
+    if (текущийДовод.options?.length) {
+      const p = состояние.prefix.toLowerCase()
+      setПодсказки(текущийДовод.options.filter(o => o.label.toLowerCase().includes(p)).slice(0, 8))
+      return
+    }
+    if (!активная.complete) { setПодсказки([]); return }
+    // Плагин спрашивается с задержкой: он может ходить в сеть, и дёргать его на
+    // каждую букву — верный способ подвесить поле ввода.
+    let живо = true
+    const t = setTimeout(async () => {
+      try {
+        const r = await invokePlugin(активная.pluginId, активная.complete!, [
+          текущийДовод.name, состояние.prefix, состояние.values,
+        ])
+        if (!живо) return
+        const список = (Array.isArray(r) ? r : []).slice(0, 8).map((v: any) => ({
+          value: String(v?.value ?? v).slice(0, 60),
+          label: String(v?.label ?? v?.value ?? v).slice(0, 60),
+        }))
+        setПодсказки(список)
+      } catch { if (живо) setПодсказки([]) }
+    }, 180)
+    return () => { живо = false; clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text])
+
+  /** Подставить значение в набираемый довод. */
+  function pickArg(v: string) {
+    if (!активная || !состояние) return
+    const без = состояние.prefix ? text.slice(0, text.length - состояние.prefix.length) : text
+    // Пробел после — чтобы сразу набирался следующий довод. У последнего его не
+    // ставим: он забирает остаток строки, и лишний пробел там только мешает.
+    const последний = состояние.current >= активная.args!.length - 1
+    setText(без + v + (последний ? '' : ' '))
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
   /** Команда плагина: /имя остаток-строки. Вернёт true, если команда нашлась и отработала. */
   async function runPluginCommand(cmdText: string): Promise<boolean> {
     const m = /^\/([\p{L}\p{N}_-]+)(?:\s+([\s\S]*))?$/u.exec(cmdText.trim())
@@ -435,7 +491,13 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     try {
       // Аргументы отдаём одной строкой: плагин сам решает, как их разбирать, — в
       // отличие от команд ботов, где раскладка по options задана заранее.
-      await invokePlugin(cmd.pluginId, cmd.handler, [(m[2] ?? '').trim()])
+      //
+      // v1.475.0: а если плагин ОПИСАЛ доводы — вторым доводом идут они же,
+      // разложенные по именам. Первый остался строкой нарочно: плагины,
+      // написанные по прежней инструкции, не должны сломаться.
+      const хвост = (m[2] ?? '').trim()
+      const разложены = cmd.args?.length ? splitArgs(хвост, cmd.args).values : undefined
+      await invokePlugin(cmd.pluginId, cmd.handler, разложены ? [хвост, разложены] : [хвост])
       setText(''); keepDraft('')
     } catch { /* причину уже показал invokePlugin */ }
     finally { setCmdBusy(false) }
@@ -753,6 +815,26 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       <form className={'composer cstyle-' + (settings.composerStyle || 'default')} onSubmit={submit}>
         {/* v1.286.0: команды плагинов — отдельным списком над командами ботов, чтобы
             было сразу видно, что это твоё локальное, а не с сервера. */}
+        {/* v1.475.0: доводы набираемой команды. Человек видит, что от него
+            хотят, прямо в поле ввода — а не гадает после «/опрос». */}
+        {активная && состояние && <div className="mention-pop cmdargs-pop">
+          <div className="mention-h">
+            /{активная.name}{' '}
+            {argHint(активная.args!, состояние.current).map(a => (
+              <span key={a.name} className={'cmdarg' + (a.on ? ' on' : '') + (a.req ? ' req' : '')}>
+                {'<' + a.name + '>'}
+              </span>
+            ))}
+            {текущийДовод?.description && <span className="mut cmdarg-d">{текущийДовод.description}</span>}
+          </div>
+          {подсказки.map(s => (
+            <div key={s.value} className="mention-it"
+              onMouseDown={e => { e.preventDefault(); pickArg(s.value) }}>
+              {s.label}
+              {s.label !== s.value && <span className="mut" style={{ marginLeft: 'auto', fontSize: 12 }}>{s.value}</span>}
+            </div>
+          ))}
+        </div>}
         {pluginCmdSugg.length > 0 && <div className="mention-pop">
           <div className="mention-h">Команды плагинов</div>
           {pluginCmdSugg.map(c => (

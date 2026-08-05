@@ -39,6 +39,7 @@ const EmergencyChat = lazyNamed(() => import('./components/EmergencyChat'), 'Eme
 const Home = lazyNamed(() => import('./components/Home'), 'Home')
 import { startEnabledPlugins, invokePlugin, emitToPlugin, emitPluginEvent } from './lib/plugins/bridge'
 import { PluginApps } from './components/PluginApps'
+import { PluginDialogHost } from './components/PluginDialog'
 import { pluginsDisabled, setPluginsDisabled, getHotkeys } from './lib/plugins/registry'
 import { comboFromEvent, isComboComplete } from './lib/keybind'
 
@@ -488,6 +489,10 @@ export default function App() {
     <PluginApps />
     <Toasts />
     <ConfirmHost />
+    {/* v1.475.0: окно-вопрос плагина. Рядом с ConfirmHost и по той же причине:
+        оно обязано жить над всем приложением, а не в открытом чате — иначе
+        плагин со своей страницы настроек спросить человека не мог бы. */}
+    <PluginDialogHost />
     {/* v1.450.0: всё, что обязано лежать ПОВЕРХ всего, выносится порталом.
         Причина та же, из-за которой окно подтверждения пряталось под
         конструктором плагинов: оболочка приложения (#root, position: fixed) —

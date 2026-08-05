@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FnRef } from './sandbox'
+import type { CmdArg } from '../slashCmd'
 import { cleanupAllPlugins } from './cleanup'
 
 // v1.286.0: реестр того, что плагины добавили в интерфейс. Плагин не рисует ничего
@@ -26,7 +27,23 @@ export function safeIcon(name: unknown): string {
 
 export interface ComposerButton { pluginId: string; key: string; icon: string; tooltip: string; onClick: FnRef }
 export interface MessageAction { pluginId: string; key: string; icon: string; label: string; onClick: FnRef }
-export interface SlashCommand { pluginId: string; name: string; description: string; handler: FnRef }
+/**
+ * Команда плагина в поле ввода.
+ *
+ * v1.475.0: у неё появились ДОВОДЫ — плагин описывает их данными, приложение
+ * показывает подсказку прямо в поле ввода и, если плагин умеет, спрашивает у
+ * него значения на лету (complete). Раньше человек, набравший «/опрос», видел
+ * пустоту и должен был откуда-то знать, что писать дальше.
+ */
+export interface SlashCommand {
+  pluginId: string
+  name: string
+  description: string
+  handler: FnRef
+  args?: CmdArg[]
+  /** Обработчик подсказок. Зовётся, пока человек печатает довод. */
+  complete?: FnRef
+}
 export interface PluginSettingsPage { pluginId: string; title: string; rows: SettingsRow[] }
 
 /**

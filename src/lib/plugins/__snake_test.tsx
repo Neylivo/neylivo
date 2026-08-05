@@ -17,6 +17,7 @@
 // спрашивалось чужое («своя панель в плеере» у игры, у которой панели нет).
 import { createRoot } from 'react-dom/client'
 import { PluginApps } from '../../components/PluginApps'
+import { PluginDialogHost } from '../../components/PluginDialog'
 import { OFFICIAL_PLUGINS } from './official'
 import { parsePlugin } from './manifest'
 import { upsertPlugin, removePlugin } from './store'
@@ -55,7 +56,7 @@ async function main() {
   }
   upsertPlugin(plugin)
 
-  createRoot(document.getElementById('root')!).render(<PluginApps />)
+  createRoot(document.getElementById('root')!).render(<><PluginApps /><PluginDialogHost /></>)
   // Поднимаем плагин ТЕМ ЖЕ путём, что и приложение, — через прослойку. Зови мы
   // host напрямую, прослойка не узнала бы о нём, и её emitToPlugin молча ничего
   // не делал бы: окно плагина шлёт клавиши именно через неё. На этом проба и
@@ -119,12 +120,164 @@ async function main() {
   // здесь плагин заставит смоук ругаться на «утечку» системы плагинов.
   removePlugin('ponoi-snake')
 
+  await окноВопрос(host)
+  await перехватВложений(host)
+
   lines.push('')
   lines.push('журнал: ' + журнал.join(' / '))
   lines.push(`ИТОГ страницы: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
   out()
   ;(window as any).__failed = failed
   ;(window as any).__done = true
+}
+
+/**
+ * Окно-вопрос плагина (v1.475.0).
+ *
+ * Проверяется настоящим щелчком по настоящим кнопкам: плагин просит форму,
+ * человек её заполняет, плагин получает значения. Тут легко сделать вид, что
+ * работает, — вернуть значения по умолчанию, не глядя на то, что человек
+ * ввёл, — поэтому поле МЕНЯЕТСЯ, и ответ сверяется с новым значением.
+ */
+async function окноВопрос(host: Awaited<ReturnType<typeof ensureHost>>) {
+  const КОД = `/**
+ * @name Опросчик
+ * @id probe-dialog
+ * @version 1.0.0
+ * @author проба
+ * @description Проба окна-вопроса
+ * @permissions ui
+ */
+export async function onLoad(ponoi) {
+  ponoi.ui.dialog({
+    title: 'Как настроить', text: 'Пояснение', ok: 'Сохранить',
+    rows: [
+      { type: 'text', key: 'имя', label: 'Имя', value: 'было' },
+      { type: 'toggle', key: 'звук', label: 'Со звуком', value: true },
+      { type: 'button', key: 'лишняя', label: 'Не должна попасть', onClick: function () {} },
+    ],
+  }).then(function (ответ) {
+    ponoi.log('ответ:' + JSON.stringify(ответ))
+  }, function (e) { ponoi.log('отказ:' + e.message) })
+}
+`
+  const m = parsePlugin(КОД)
+  const p: any = {
+    manifest: m, code: КОД, enabled: true,
+    installedAt: new Date().toISOString(), sourceUserId: null, storage: {},
+  }
+  upsertPlugin(p)
+  await host.startPlugin(p)
+  for (let i = 0; i < 40 && !document.querySelector('.pdlg-box'); i++) await пауза(100)
+
+  const окно = document.querySelector('.pdlg-box')
+  ok('окно-вопрос открылось', !!окно)
+  ok('в шапке написано, какой плагин спрашивает',
+    !!окно && /Опросчик/.test(окно.querySelector('.plugapp-tag')?.textContent ?? ''),
+    окно?.querySelector('.plugapp-tag')?.textContent ?? '')
+  const поля = окно?.querySelectorAll('.pdlg-row') ?? ([] as any)
+  ok('кнопка в окно-вопрос не попала', поля.length === 2, 'строк: ' + поля.length)
+
+  // Меняем поле по-настоящему: через нативный сеттер, иначе React не заметит.
+  const input = окно!.querySelector('input.cfm-input') as HTMLInputElement
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  setter.call(input, 'стало')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await пауза(100)
+  ;(окно!.querySelector('.cfm-ok') as HTMLButtonElement).click()
+  await пауза(400)
+
+  const журнал = host.pluginLogs('probe-dialog').map(l => l.text)
+  const ответ = журнал.filter(l => l.startsWith('ответ:')).pop() ?? ''
+  ok('плагин получил то, что ввёл человек, а не значения по умолчанию',
+    ответ.includes('"имя":"стало"') && ответ.includes('"звук":true'), ответ)
+  ok('окно закрылось после ответа', !document.querySelector('.pdlg-box'))
+
+  // Отказ — это null, а не пустой объект: «отменил» и «ничего не менял» разные
+  // вещи, и плагин обязан их различать.
+  await host.stopPlugin('probe-dialog')
+  await host.startPlugin(p)
+  for (let i = 0; i < 40 && !document.querySelector('.pdlg-box'); i++) await пауза(100)
+  ;(document.querySelector('.cfm-cancel') as HTMLButtonElement).click()
+  await пауза(400)
+  // Берём ПОСЛЕДНЮЮ запись: журнал плагина переживает его перезапуск, и первая
+  // строка тут — ответ из прошлого окна.
+  const ответ2 = host.pluginLogs('probe-dialog').map(l => l.text).filter(l => l.startsWith('ответ:')).pop() ?? ''
+  ok('отказ приходит как null', ответ2 === 'ответ:null', ответ2)
+
+  await host.stopPlugin('probe-dialog')
+  removePlugin('probe-dialog')
+}
+
+
+/**
+ * Перехват вложений (v1.475.0) — официальным плагином «Чистка фотографий».
+ *
+ * Проверяется то, ради чего он и сделан: из фотографии пропадает геометка, а
+ * картинка остаётся картинкой. Метку EXIF мы вставляем сами — иначе проверять
+ * было бы нечего, и «работает» означало бы «ничего не сломалось».
+ */
+async function перехватВложений(host: Awaited<ReturnType<typeof ensureHost>>) {
+  const чистка = OFFICIAL_PLUGINS.find(p => p.id === 'ponoi-photo-clean')!
+  const m = parsePlugin(чистка.code)
+  ok('плагин чистки просит перехват вложений', m.permissions.includes('messages.upload' as never),
+    m.permissions.join(','))
+
+  const p: any = {
+    manifest: m, code: чистка.code, enabled: true,
+    installedAt: new Date().toISOString(), sourceUserId: null, storage: {},
+  }
+  upsertPlugin(p)
+  await host.startPlugin(p)
+  await пауза(400)
+  ok('плагин чистки запустился', !host.pluginError('ponoi-photo-clean'),
+    String(host.pluginError('ponoi-photo-clean')))
+
+  // Настоящая картинка → настоящий JPEG.
+  const c = document.createElement('canvas')
+  c.width = 60; c.height = 40
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#c02020'; ctx.fillRect(0, 0, 60, 40)
+  ctx.fillStyle = '#2040c0'; ctx.fillRect(10, 10, 20, 20)
+  const jpeg = await new Promise<Blob>(r => c.toBlob(b => r(b!), 'image/jpeg', 0.95))
+  const голый = new Uint8Array(await jpeg.arrayBuffer())
+
+  // Вставляем блок EXIF с «геометкой» сразу после начала файла — так он и
+  // лежит в снимке с телефона.
+  const метка = new TextEncoder().encode('Exif\0\0MakeApple GPSLatitude 55.75')
+  const app1 = new Uint8Array(4 + метка.length)
+  app1[0] = 0xff; app1[1] = 0xe1
+  app1[2] = ((метка.length + 2) >> 8) & 0xff; app1[3] = (метка.length + 2) & 0xff
+  app1.set(метка, 4)
+  const сЭкзифом = new Uint8Array(голый.length + app1.length)
+  сЭкзифом.set(голый.slice(0, 2), 0)
+  сЭкзифом.set(app1, 2)
+  сЭкзифом.set(голый.slice(2), 2 + app1.length)
+
+  const есть = (b: Uint8Array) => new TextDecoder('latin1').decode(b).includes('GPSLatitude')
+  ok('в подготовленной фотографии геометка правда есть', есть(сЭкзифом))
+
+  const файл = new File([сЭкзифом], 'фото.jpg', { type: 'image/jpeg' })
+  const r = await host.runUploadHooksHere(файл)
+  ok('отправку не отменили', !r.cancel)
+  const после = new Uint8Array(await r.file.arrayBuffer())
+  ok('геометка из фотографии пропала', !есть(после),
+    `было ${сЭкзифом.length} Б, стало ${после.length} Б`)
+  ok('это по-прежнему картинка, а не мусор',
+    после[0] === 0xff && после[1] === 0xd8 && (await createImageBitmap(new Blob([после]))).width === 60)
+
+  // Чужие файлы плагин трогать не должен.
+  const текст = new File([new TextEncoder().encode('просто текст')], 'з.txt', { type: 'text/plain' })
+  const r2 = await host.runUploadHooksHere(текст)
+  ok('файл не своего вида остаётся нетронутым', r2.file === текст && !r2.cancel)
+
+  // Без единого перехватчика путь обязан остаться прежним — это про всех, у
+  // кого плагинов нет вовсе.
+  await host.stopPlugin('ponoi-photo-clean')
+  const r3 = await host.runUploadHooksHere(файл)
+  ok('без плагинов файл идёт тем же путём, что и раньше', r3.file === файл && !r3.cancel)
+
+  removePlugin('ponoi-photo-clean')
 }
 
 main().catch(e => {

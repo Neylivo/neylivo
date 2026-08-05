@@ -6,6 +6,7 @@ import type { InstalledPlugin } from './types'
 // v1.465.0: за плагином надо убирать не только то, что он добавил в интерфейс.
 import { cleanupPlugin } from './cleanup'
 import { setTaskRunner } from './background'
+import { runBeforeUpload, hasInterceptors } from './middleware'
 import { setGamepadEmit } from './gamepads'
 // v1.473.0: адрес своего файла плагина отдаётся наружу отсюда — чтобы у панели
 // был ОДИН вход в систему плагинов, а не второй ленивый (см. bridge.ts).
@@ -193,6 +194,30 @@ export async function startEnabledPlugins(): Promise<void> {
     // десяток одновременно стартующих воркеров на слабой машине только мешал бы
     // друг другу. Плагинов единицы — разница неощутима.
     try { await startPlugin(p) } catch { /* причина уже записана в errors, идём дальше */ }
+  }
+}
+
+/**
+ * Прогнать файл через перехватчики вложений (v1.475.0).
+ *
+ * Здесь, а не в прослойке: сюда стекаются песочницы, и звать обработчик плагина
+ * умеет только это место. Прослойка спрашивает нас, только если система вообще
+ * загружена, — у человека без плагинов этот код не выполняется никогда.
+ */
+export async function runUploadHooksHere(file: File): Promise<{ file: File; cancel: boolean; by: string | null }> {
+  if (!hasInterceptors('upload')) return { file, cancel: false, by: null }
+  const bytes = await file.arrayBuffer()
+  const out = await runBeforeUpload(
+    { name: file.name, type: file.type, size: bytes.byteLength, bytes },
+    (pid, fn, args) => invokePlugin(pid, fn, args),
+  )
+  if (out.cancel) return { file, cancel: true, by: out.by }
+  if (out.bytes === bytes && out.name === file.name && out.type === file.type) {
+    return { file, cancel: false, by: null }
+  }
+  return {
+    file: new File([out.bytes], out.name, { type: out.type || file.type }),
+    cancel: false, by: null,
   }
 }
 

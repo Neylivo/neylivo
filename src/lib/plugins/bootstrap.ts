@@ -105,6 +105,9 @@ const ponoi = {
     // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
     confirm: (opt) => call('ui.confirm', [opt || {}]),
     prompt: (opt) => call('ui.prompt', [opt || {}]),
+    // v1.475.0: целая форма вместо одного вопроса. Ответ — объект со
+    // значениями строк, либо null, если человек отказался.
+    dialog: (opt) => call('ui.dialog', [opt || {}]),
     // v1.465.0: свой пункт в меню по правой кнопке — сообщения, выделенного
     // текста или человека.
     addContextMenu: (opt) => call('ui.addContextMenu', [opt || {}]),
@@ -245,7 +248,12 @@ const ponoi = {
     play: (name) => call('sound.play', [String(name || 'chime')]),
   },
   commands: {
-    register: (name, description, handler) => call('commands.register', [String(name), String(description), handler]),
+    // v1.475.0: два вида записи. Прежний — имя, описание, обработчик. Новый —
+    // один объект с доводами и подсказками; они и показываются человеку прямо
+    // в поле ввода, пока он печатает.
+    register: (a, description, handler) => (a && typeof a === 'object'
+      ? call('commands.register', [a])
+      : call('commands.register', [String(a), String(description), handler])),
   },
   messages: {
     send: (text) => call('messages.send', [String(text)]),
@@ -265,6 +273,14 @@ const ponoi = {
     onBeforeRender: (fn) => {
       if (typeof fn !== 'function') throw new Error('ponoi.messages.onBeforeRender: нужна функция')
       return call('messages.onBeforeRender', [fn])
+    },
+    // v1.475.0: файл ДО отправки в сеть. Обработчик получает
+    // { name, type, size, bytes } и возвращает { bytes }, { bytes, name, type }
+    // или { cancel: true }. Вернул что-то другое или упал — файл уходит как
+    // был: сломанный плагин не должен отбирать возможность отправить файл.
+    onUpload: (fn) => {
+      if (typeof fn !== 'function') throw new Error('ponoi.messages.onUpload: нужна функция')
+      return call('messages.onUpload', [fn])
     },
   },
   storage: {

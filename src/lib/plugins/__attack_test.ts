@@ -1180,6 +1180,35 @@ console.log('\n── Свои файлы и геймпад (v1.473.0) ──')
   })
 }
 
+console.log('\n── Команды с доводами (v1.475.0) ──')
+{
+  const d = attacker([...ALL_PERMISSIONS], 'cmd-args')
+  await allowed('команда заводится объектом', () => d('commands.register', [{
+    name: 'опрос', description: 'Создать опрос', onRun: fn,
+    args: [{ name: 'вопрос', required: true }, { name: 'варианты', options: [{ value: 'да', label: 'Да' }] }],
+    onComplete: fn,
+  }]))
+  await check('доводы дошли до приложения, а не потерялись', () => {
+    const c = registry.getRegistry().commands.find(x => x.name === 'опрос')
+    return !!c && c.args?.length === 2 && c.args[0].required === true
+      && c.args[1].options?.[0].value === 'да' && !!c.complete
+  })
+  await allowed('прежний вид записи по-прежнему работает', () =>
+    d('commands.register', ['старая', 'описание', fn]))
+  await check('у команды без доводов их и нет', () => {
+    const c = registry.getRegistry().commands.find(x => x.name === 'старая')
+    return !!c && (c.args?.length ?? 0) === 0 && !c.complete
+  })
+  await blocked('без права commands команду с доводами тоже нельзя', () =>
+    attacker(['ui'], 'cmd-no')('commands.register', [{ name: 'нельзя', description: 'x', onRun: fn }]))
+  await check('доводов не больше восьми', async () => {
+    const много = Array.from({ length: 30 }, (_, i) => ({ name: 'a' + i }))
+    await d('commands.register', [{ name: 'многодоводов', description: 'x', onRun: fn, args: много }])
+    const c = registry.getRegistry().commands.find(x => x.name === 'многодоводов')
+    return (c?.args?.length ?? 0) === 8
+  })
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')
@@ -1187,8 +1216,8 @@ console.log('\n── Уборка за плагином ──')
   // Число пишется руками нарочно: убыль строки в cleanup.ts — это выключенный
   // плагин, который продолжает работать, и заметить это должно ЗДЕСЬ, а не
   // человек по севшей батарее. v1.473.0: прибавились адреса файлов и геймпады.
-  await check('уборка знает про все девять видов оставленного', () =>
-    cleanup.SUBSYSTEM_COUNT === 9)
+  await check('уборка знает про все десять видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 10)
   await check('на каждый вид есть и «за этим», и «за всеми»', () => {
     // Два списка — это два места, где можно забыть строку. Здесь он один, и
     // каждая запись обязана иметь обе половины.

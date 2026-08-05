@@ -33,11 +33,13 @@ export type Permission =
   | 'apps'            // своя область экрана: окно, вкладка, полный экран
   // v1.473.0
   | 'input'           // видеть геймпады, подключённые к устройству
+  // v1.475.0
+  | 'messages.upload' // видеть и МЕНЯТЬ файлы до отправки
 
 export const ALL_PERMISSIONS: Permission[] = [
   'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify', 'voice', 'context',
   'panel', 'music', 'navigate', 'status',
-  'ipc', 'messages.intercept', 'background', 'ui.theme', 'apps', 'input',
+  'ipc', 'messages.intercept', 'background', 'ui.theme', 'apps', 'input', 'messages.upload',
 ]
 
 /** Человеческое описание разрешения — ровно то, что читает человек перед установкой. */
@@ -88,6 +90,10 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   // подключил сам, и плагин видит только нажатия, — но название геймпада вместе
   // с «net» это ещё одна примета устройства, поэтому разрешение отдельное.
   'input': 'Видеть геймпады и джойстики, подключённые к устройству',
+  // v1.475.0: перехват вложений. Формулировка нарочно прямая: это не
+  // «обработка файлов», это возможность отправить не тот файл, который человек
+  // выбрал. Ради этого же оно и нужно — снять с фотографии геометку.
+  'messages.upload': 'Видеть и МЕНЯТЬ файлы, которые ты отправляешь',
 }
 
 /**
@@ -102,6 +108,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   // подменяет отправляемое. Фоновая работа — потому что плагин действует тогда,
   // когда человек на него не смотрит и не свяжет странность с ним.
   'messages.intercept', 'background',
+  // v1.475.0: перехват вложений — плагин видит каждый отправляемый файл.
+  'messages.upload',
 ]
 
 /**

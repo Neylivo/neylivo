@@ -9,7 +9,7 @@
 // Запуск: npm run test:slash
 export {}
 
-import { slashPrefix, parseSlash, buildArgs } from './slashCmd'
+import { slashPrefix, parseSlash, buildArgs, splitArgs, argHint } from './slashCmd'
 
 let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
@@ -90,6 +90,47 @@ check('свой довод по имени text главнее подстрах�
   const a = buildArgs('привет мир', [{ name: 'text' }])
   return a.text === 'привет'
 })
+
+console.log('\n── Доводы команды и подсказки (v1.475.0) ──')
+{
+  const доводы = [
+    { name: 'вопрос', required: true },
+    { name: 'варианты' },
+  ]
+  check('пока довод набирается, он ещё не значение', () => {
+    const s = splitArgs('пиц', доводы)
+    return s.current === 0 && s.prefix === 'пиц' && s.values['вопрос'] === undefined
+  })
+  check('пробел после слова переводит к следующему доводу', () => {
+    const s = splitArgs('пицца ', доводы)
+    return s.values['вопрос'] === 'пицца' && s.current === 1 && s.prefix === ''
+  })
+  check('последний довод забирает весь остаток', () => {
+    // Иначе «/опрос пицца да, нет, может» дошло бы до плагина как «да,».
+    const s = splitArgs('пицца да, нет, может', доводы)
+    return s.values['вопрос'] === 'пицца' && s.values['варианты'] === 'да, нет, может'
+  })
+  check('единственный довод — это вся строка', () => {
+    const s = splitArgs('позвонить маме', [{ name: 'что' }])
+    return s.values['что'] === 'позвонить маме' && s.current === 0
+  })
+  check('пустая строка — набирается первый довод', () => {
+    const s = splitArgs('', доводы)
+    return s.current === 0 && s.prefix === '' && Object.keys(s.values).length === 0
+  })
+  check('без объявленных доводов подсказывать нечего', () => {
+    const s = splitArgs('что угодно', [])
+    return s.current === -1 && Object.keys(s.values).length === 0
+  })
+  check('подсказка выделяет текущий довод и помнит обязательные', () => {
+    const h = argHint(доводы, 1)
+    return h.length === 2 && h[0].req === true && h[0].on === false && h[1].on === true
+  })
+  check('за пределы списка доводов подсказка не уезжает', () => {
+    const s = splitArgs('a b c d e ', доводы)
+    return s.current === доводы.length - 1
+  })
+}
 
 console.log('\n── Ломаем нарочно ──')
 check('проверка заметила бы возврат к \\w', () => {

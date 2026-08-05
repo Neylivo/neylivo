@@ -104,6 +104,19 @@ export async function pluginAssetUrl(pluginId: string, name: string): Promise<st
   return h.assetUrlFor(pluginId, name)
 }
 
+/**
+ * Прогнать файл через перехватчики плагинов (v1.475.0).
+ *
+ * Зовётся из загрузки файлов (storage.ts) — то есть из самого горячего кода,
+ * который есть у КАЖДОГО, включая тех, у кого плагинов нет. Поэтому здесь
+ * ранний выход: система плагинов не загружена — значит, и перехватчиков нет,
+ * и файл уходит ровно тем же путём, что до этой версии. Ничего не грузим.
+ */
+export async function runUploadHooks(file: File): Promise<{ file: File; cancel: boolean; by: string | null }> {
+  if (!host) return { file, cancel: false, by: null }
+  return host.runUploadHooksHere(file)
+}
+
 export function claimHostContext(owner: string, next: HostContext, force: boolean): void {
   if (host) { host.claimHostContext(owner, next, force); return }
   // Правило НЕ переписываем — отдаём его тому же классу, что и у хоста. Копия

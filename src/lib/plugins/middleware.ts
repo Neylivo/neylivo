@@ -32,9 +32,22 @@ export const MAX_CONTENT = 8000
 
 export interface Interceptor {
   pluginId: string
-  kind: 'send' | 'render'
+  kind: 'send' | 'render' | 'upload'
   fn: FnRef
 }
+
+/**
+ * Сколько ждём перехватчик вложения (v1.475.0).
+ *
+ * Больше, чем у сообщения, и намеренно: здесь не правка строки, а работа с
+ * файлом — сжать картинку на десять мегапикселей или переложить видео честно
+ * стоит секунд. Но не бесконечно: замерший перехватчик не должен означать
+ * «файл не отправляется никогда».
+ */
+export const BEFORE_UPLOAD_MS = 20000
+/** Насколько перехватчик может РАЗДУТЬ файл. Он для сжатия и чистки, а не для
+ *  того, чтобы вместо картинки на 2 МБ уехало 200. */
+export const MAX_UPLOAD_GROWTH = 2
 
 /** Что уходит перехватчику и что он может вернуть. */
 export interface SendCtx {
@@ -125,13 +138,58 @@ export function clearAllInterceptors() {
   clearRenderCache()
 }
 
-export function interceptors(kind: 'send' | 'render'): Interceptor[] {
+export function interceptors(kind: 'send' | 'render' | 'upload'): Interceptor[] {
   return list.filter(x => x.kind === kind)
+}
+
+/**
+ * Разбор ответа перехватчика вложения (v1.475.0).
+ *
+ * Чистой функцией по той же причине, что и у сообщения: ошибка здесь означает,
+ * что человек отправил НЕ ТОТ файл, и заметить это почти невозможно. Правила:
+ *
+ *   • вернул { bytes }            → это новое содержимое файла;
+ *   • вернул { bytes, name, type }→ ещё и имя с видом;
+ *   • вернул { cancel: true }     → файл не уходит вовсе;
+ *   • вернул что угодно ещё       → файл остаётся прежним.
+ *
+ * Чего мы НЕ делаем: не верим размеру на слово (берём длину байтов), не даём
+ * раздуть файл больше чем вдвое и не пускаем пустоту — «перехватчик вернул
+ * ноль байт» это поломка плагина, а не «человек отправил пустой файл».
+ */
+export function applyUploadResult(
+  before: { name: string; type: string; size: number },
+  result: unknown,
+): { bytes: ArrayBuffer | null; name: string; type: string; cancel: boolean } {
+  const нет = { bytes: null, name: before.name, type: before.type, cancel: false }
+  if (!result || typeof result !== 'object') return нет
+  const r = result as Record<string, unknown>
+  if (r.cancel === true) return { ...нет, cancel: true }
+
+  let bytes: ArrayBuffer | null = null
+  if (r.bytes instanceof ArrayBuffer) bytes = r.bytes
+  else if (ArrayBuffer.isView(r.bytes)) {
+    const v = r.bytes as ArrayBufferView
+    bytes = v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength) as ArrayBuffer
+  }
+  if (!bytes) return нет
+  if (bytes.byteLength === 0) return нет
+  if (bytes.byteLength > before.size * MAX_UPLOAD_GROWTH + 64 * 1024) return нет
+
+  // Имя и вид меняются только вместе с содержимым: переименовать чужой файл,
+  // не тронув его, перехватчику незачем.
+  const name = typeof r.name === 'string' && r.name.trim()
+    ? r.name.trim().replace(/[\\/\u0000-\u001f]/g, '_').slice(0, 120)
+    : before.name
+  const type = typeof r.type === 'string' && /^[\w.+-]+\/[\w.+-]+$/.test(r.type)
+    ? r.type.slice(0, 80)
+    : before.type
+  return { bytes, name, type, cancel: false }
 }
 
 /** Есть ли вообще перехватчики: пока их нет, ни одна цепочка не строится и
  *  отправка идёт ровно тем же путём, что и до этой версии. */
-export const hasInterceptors = (kind: 'send' | 'render') => list.some(x => x.kind === kind)
+export const hasInterceptors = (kind: 'send' | 'render' | 'upload') => list.some(x => x.kind === kind)
 
 /** Ждать чужой код можно только со сроком: зациклившийся перехватчик иначе
  *  навсегда съедает кнопку «отправить». */
@@ -168,6 +226,34 @@ export async function runBeforeSend(
     cur = out.content
   }
   return { content: cur, cancel: false, by: null }
+}
+
+/**
+ * Прогнать файл через перехватчики (v1.475.0).
+ *
+ * Порядок тот же, что у сообщений: по очереди, каждый видит результат
+ * предыдущего. Упавший или замерший перехватчик НЕ отменяет отправку — файл
+ * уходит как был. Отмена бывает только явной ({ cancel: true }), и о ней
+ * приложение обязано сказать человеку: молча не отправить файл, который он
+ * только что выбрал, — худшее из возможного.
+ */
+export async function runBeforeUpload(
+  file: { name: string; type: string; size: number; bytes: ArrayBuffer },
+  invoke: (pluginId: string, fn: FnRef, args: unknown[]) => Promise<unknown>,
+): Promise<{ bytes: ArrayBuffer; name: string; type: string; cancel: boolean; by: string | null }> {
+  let cur = { ...file }
+  for (const i of interceptors('upload')) {
+    const res = await withTimeout(
+      invoke(i.pluginId, i.fn, [{ name: cur.name, type: cur.type, size: cur.bytes.byteLength, bytes: cur.bytes }])
+        .catch(() => null),
+      BEFORE_UPLOAD_MS,
+      null,
+    )
+    const out = applyUploadResult({ name: cur.name, type: cur.type, size: cur.bytes.byteLength }, res)
+    if (out.cancel) return { ...cur, cancel: true, by: i.pluginId }
+    cur = { name: out.name, type: out.type, size: out.bytes ? out.bytes.byteLength : cur.size, bytes: out.bytes ?? cur.bytes }
+  }
+  return { bytes: cur.bytes, name: cur.name, type: cur.type, cancel: false, by: null }
 }
 
 // ── Показ: посчитанное запоминается ─────────────────────────────────────────

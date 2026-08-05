@@ -284,6 +284,9 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   { re: /\bponoi\s*\.\s*assets\s*\./,                         perms: ['storage'],                   what: 'ponoi.assets' },
   { re: /\bponoi\s*\.\s*input\s*\./,                          perms: ['input'],                     what: 'ponoi.input' },
   { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]gamepad['"`]/,         perms: ['input'],                     what: "ponoi.on('gamepad')" },
+  // v1.475.0: перехват вложений и окно-вопрос.
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*onUpload\s*\(/, perms: ['messages.upload'],           what: 'ponoi.messages.onUpload' },
+  { re: /\bponoi\s*\.\s*ui\s*\.\s*dialog\s*\(/,          perms: ['ui'],                        what: 'ponoi.ui.dialog' },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

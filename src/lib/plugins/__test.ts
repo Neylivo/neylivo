@@ -60,6 +60,7 @@ function stubPonoi() {
     notified: [] as string[],
     panels: [] as any[],
     hotkeys: [] as string[],
+    hooks: [] as string[],
   }
   const ponoi: any = {
     css: (t: string) => { calls.css++; if (typeof t !== 'string') throw new Error('css: не строка') },
@@ -98,6 +99,12 @@ function stubPonoi() {
       recent: async () => [],
       react: async () => true,
       remove: async () => true,
+      // v1.475.0: перехватчики. Заглушка обязана уметь их принять — иначе
+      // официальный плагин, который ими пользуется, падает здесь на
+      // «не функция», а не на своей ошибке.
+      onBeforeSend: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onBeforeSend: нужна функция'); calls.hooks.push('send') },
+      onBeforeRender: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onBeforeRender: нужна функция'); calls.hooks.push('render') },
+      onUpload: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onUpload: нужна функция'); calls.hooks.push('upload') },
     },
     storage: { get: async () => null, set: async () => {}, remove: async () => {}, keys: async () => [], clear: async () => {} },
     net: { fetch: async () => ({ ok: true, status: 200, body: '' }), json: async () => ({ ok: true, status: 200, data: {} }) },
@@ -541,6 +548,8 @@ for (const p of OFFICIAL_PLUGINS) {
     // v1.473.0: свои файлы и геймпад.
     'assets.put', 'assets.fetch', 'assets.get', 'assets.info', 'assets.list',
     'assets.remove', 'assets.clear', 'assets.play', 'input.gamepads',
+    // v1.475.0
+    'ui.dialog', 'messages.onUpload',
   ]
 
 
@@ -786,6 +795,7 @@ for (const p of OFFICIAL_PLUGINS) {
         'apps': "ponoi.apps.create({mode:'window'})",
         // v1.473.0
         'input': 'ponoi.input.gamepads()',
+        'messages.upload': 'ponoi.messages.onUpload(async()=>{})',
       }
       const код = прим[p]
       if (!код) return true

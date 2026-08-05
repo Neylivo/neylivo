@@ -30,6 +30,7 @@ import {
   isAssetRef, assetRefName, checkAssetName, ASSET_PREFIX, MAX_ASSET_BYTES,
 } from './assets'
 import { readPads, watchGamepads } from './gamepads'
+import { askDialog, dialogRows } from './dialog'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
 import { pluginServers, pluginChannels, pluginOpen, pluginSetStatus, pluginGetStatus, pluginPlaySound, PLUGIN_SOUND_NAMES } from './appApi'
@@ -100,6 +101,11 @@ export const PLUGIN_METHODS = [
   'assets.remove', 'assets.clear', 'assets.play',
   // v1.473.0: геймпад. Только чтение устройства, которое человек воткнул сам.
   'input.gamepads',
+  // v1.475.0: своё окно-вопрос. Форма из тех же строк, что панель; ответ —
+  // значения полей, и ничего больше.
+  'ui.dialog',
+  // v1.475.0: перехват вложений — своё разрешение, помеченное опасным.
+  'messages.onUpload',
 ] as const
 
 /**
@@ -546,7 +552,12 @@ export function createDispatcher(
 
       case 'commands.register': {
         need('commands')
-        const name = str(args[0], 32, 'имя команды').toLowerCase().replace(/^\//, '')
+        // v1.475.0: команду можно завести и объектом — с доводами и подсказками.
+        // Прежний вид (имя, описание, обработчик) продолжает работать: плагины,
+        // написанные по старой инструкции, никуда не делись.
+        const объект = args[0] && typeof args[0] === 'object' && !isFnRef(args[0])
+        const o = (объект ? args[0] : {}) as any
+        const name = str(объект ? o.name : args[0], 32, 'имя команды').toLowerCase().replace(/^\//, '')
         // Буквы ЛЮБОГО алфавита, не только латиница: приложение русскоязычное, и
         // /привет — ровно то, что человек напишет первым делом. Пробелы и знаки
         // по-прежнему нельзя: имя команды должно кончаться там же, где начинаются
@@ -558,7 +569,28 @@ export function createDispatcher(
         // Команды глобальны: молча перехватить чужую — способ подменить поведение
         // другого плагина, поэтому конфликт виден плагину сразу как ошибка.
         if (owner && owner !== id) throw new Denied(`Команда /${name} уже занята другим плагином.`)
-        addCommand({ pluginId: id, name, description: str(args[1], 100, 'описание команды'), handler: fnRef(args[2], 'команда') })
+        addCommand({
+          pluginId: id, name,
+          description: str(объект ? o.description : args[1], 100, 'описание команды'),
+          handler: fnRef(объект ? (o.onRun ?? o.handler) : args[2], 'команда'),
+          // Доводы описываются данными, как и всё остальное: приложение по ним
+          // рисует подсказку в поле ввода, а плагин получает разложенные
+          // значения. Больше восьми — это уже не команда, а анкета.
+          args: (Array.isArray(o.args) ? o.args : []).slice(0, 8).map((a: any) => ({
+            name: str(a?.name, 24, 'имя довода'),
+            description: String(a?.description ?? '').slice(0, 80),
+            required: !!a?.required,
+            placeholder: String(a?.placeholder ?? '').slice(0, 40),
+            options: Array.isArray(a?.options)
+              ? a.options.slice(0, 25).map((v: any) => ({
+                  value: String(v?.value ?? v).slice(0, 60),
+                  label: String(v?.label ?? v?.value ?? v).slice(0, 60),
+                }))
+              : undefined,
+          })),
+          // Подсказки на лету: приложение зовёт это, пока человек печатает.
+          complete: o.onComplete && isFnRef(o.onComplete) ? (o.onComplete as FnRef) : undefined,
+        })
         return null
       }
 
@@ -1133,6 +1165,41 @@ export function createDispatcher(
         need('notify')
         rateLimit(id, 'sound')
         return await playAsset(id, String(args[0] ?? ''), Number(args[1]))
+      }
+
+      // ---- Своё окно-вопрос (нужно ui) ------------------------------------
+      // Отличие от ui.confirm/ui.prompt: там один вопрос и один ответ, здесь
+      // целая форма. Рисует её приложение теми же строками, что и панель, —
+      // чужой разметки в модальном окне не появляется.
+      // ---- Перехват вложения (нужно messages.upload) ----------------------
+      // Самое сильное после перехвата сообщений: плагин видит КАЖДЫЙ файл,
+      // который человек отправляет, и может подменить его содержимое. Ради
+      // этого разрешение отдельное и помечено опасным.
+      //
+      // Зачем это нужно по-настоящему: убрать из фотографии геометку и модель
+      // телефона, сжать картинку перед отправкой, наложить водяной знак.
+      case 'messages.onUpload': {
+        need('messages.upload')
+        addInterceptor({ pluginId: id, kind: 'upload', fn: fnRef(args[0], 'messages.onUpload') })
+        return null
+      }
+
+      case 'ui.dialog': {
+        need('ui')
+        rateLimit(id, 'ask')
+        const o = (args[0] ?? {}) as any
+        const rows = dialogRows(
+          (Array.isArray(o.rows) ? o.rows : []).map(settingsRow).filter(Boolean) as SettingsRow[],
+        )
+        return await askDialog({
+          pluginId: id,
+          pluginName: plugin.manifest.name,
+          title: str(o.title ?? 'Вопрос', 60, 'title'),
+          text: String(o.text ?? '').slice(0, 500),
+          okText: str(o.ok ?? 'Готово', 20, 'ok'),
+          cancelText: str(o.cancel ?? 'Отмена', 20, 'cancel'),
+          rows,
+        })
       }
 
       // ---- Геймпад (нужно input) -----------------------------------------

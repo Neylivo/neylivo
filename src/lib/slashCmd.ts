@@ -53,3 +53,77 @@ export function buildArgs(rest: string, options: { name: string }[]): Record<str
   if (rest && args.text === undefined) args.text = rest
   return args
 }
+
+// ── Доводы команды и подсказки к ним (v1.475.0) ─────────────────────────────
+//
+// Зачем. Команда плагина умела ровно одно: получить хвост строки текстом.
+// Человек, набравший «/опрос», видел пустоту и должен был откуда-то знать, что
+// писать дальше. Теперь плагин описывает доводы, а приложение показывает их
+// прямо в поле ввода и подсказывает значения.
+//
+// Разбор — чистой функцией, потому что именно здесь легко ошибиться незаметно:
+// «какой довод сейчас набирается» зависит от пробела в конце, а «последний
+// довод забирает остаток» — от того, что доводов может быть меньше, чем слов.
+
+/** Один довод команды — то, что объявил плагин. */
+export interface CmdArg {
+  name: string
+  description?: string
+  required?: boolean
+  placeholder?: string
+  /** Готовые значения. Если их нет, спрашиваем плагин (onComplete). */
+  options?: { value: string; label: string }[]
+}
+
+export interface ArgState {
+  /** Значения по именам доводов. Последний довод забирает весь остаток. */
+  values: Record<string, string>
+  /** Какой довод человек набирает прямо сейчас (-1 — уже ни одного). */
+  current: number
+  /** Что он успел набрать в этом доводе. */
+  prefix: string
+}
+
+/**
+ * Разложить хвост строки по доводам.
+ *
+ * Правило «последний забирает остаток» — не мелочь: без него «/напомни через
+ * час позвонить маме» теряло бы всё после первого пробела, и плагин получал бы
+ * «позвонить» вместо «позвонить маме».
+ */
+export function splitArgs(rest: string, args: CmdArg[]): ArgState {
+  const values: Record<string, string> = {}
+  if (args.length === 0) return { values, current: -1, prefix: '' }
+
+  const хвостПоследнему = (i: number) => i === args.length - 1
+  const части = rest.split(/\s+/)
+  // Пробел в конце означает «этот довод дописан, идёт следующий».
+  const дописан = /\s$/.test(rest) || rest === ''
+  const набрано = rest.trim() === '' ? 0 : части.filter(Boolean).length
+
+  let оставшееся = rest.trimStart()
+  for (let i = 0; i < args.length; i++) {
+    if (хвостПоследнему(i)) {
+      if (оставшееся.trim()) values[args[i].name] = оставшееся.trim()
+      break
+    }
+    const m = /^(\S+)(\s+)?([\s\S]*)$/.exec(оставшееся)
+    if (!m) break
+    // Слово считается дописанным доводом, только если после него есть пробел:
+    // иначе человек ещё его печатает.
+    if (!m[2] && !дописан) break
+    values[args[i].name] = m[1]
+    оставшееся = m[3]
+  }
+
+  const current = дописан
+    ? Math.min(набрано, args.length - 1)
+    : Math.min(Math.max(набрано - 1, 0), args.length - 1)
+  const prefix = дописан ? '' : (части[части.length - 1] ?? '')
+  return { values, current, prefix }
+}
+
+/** Подпись подсказки: «/имя <довод> <довод>» с выделенным текущим. */
+export function argHint(args: CmdArg[], current: number): { name: string; on: boolean; req: boolean }[] {
+  return args.map((a, i) => ({ name: a.name, on: i === current, req: !!a.required }))
+}

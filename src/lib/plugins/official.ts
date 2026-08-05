@@ -403,11 +403,82 @@ export async function onLoad(ponoi) {
 }
 `
 
+// ── 7. Чистка фотографий ───────────────────────────────────────────────────
+//
+// v1.475.0: первый плагин на перехвате вложений — и настоящая польза, а не
+// показ возможности. В обычной фотографии с телефона лежат координаты места
+// съёмки, модель телефона и точное время. Человек отправляет её в чат и
+// раздаёт это всё вместе с картинкой, не зная.
+const EXIF = `/**
+ * @name Чистка фотографий
+ * @id ponoi-photo-clean
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Убирает из фотографий геометку, модель телефона и время съёмки перед отправкой. Может заодно сжимать большие снимки.
+ * @permissions messages.upload, settings, storage
+ */
+export async function onLoad(ponoi) {
+  const наст = async () => ({
+    чистить: (await ponoi.storage.get('чистить')) !== false,
+    сжимать: (await ponoi.storage.get('сжимать')) === true,
+    сторона: Number(await ponoi.storage.get('сторона')) || 2048,
+  })
+
+  await ponoi.ui.addSettingsPage({
+    title: 'Чистка фотографий',
+    rows: [
+      { type: 'toggle', key: 'чистить', label: 'Убирать метаданные',
+        description: 'Геометка, модель телефона, время съёмки', value: (await наст()).чистить },
+      { type: 'toggle', key: 'сжимать', label: 'Уменьшать большие снимки',
+        description: 'Длинная сторона не больше выбранной', value: (await наст()).сжимать },
+      { type: 'slider', key: 'сторона', label: 'Длинная сторона, пикселей',
+        value: (await наст()).сторона, min: 720, max: 4096, step: 64 },
+    ],
+  })
+  ponoi.on('settings', async (e) => { await ponoi.storage.set(e.key, e.value) })
+
+  ponoi.messages.onUpload(async (файл) => {
+    const s = await наст()
+    if (!s.чистить && !s.сжимать) return
+    // Трогаем только то, что умеем разобрать обратно в картинку. Всё
+    // остальное — чужие файлы, и их дело не наше.
+    if (!/^image\\/(jpeg|png|webp)$/.test(файл.type)) return
+
+    let bmp
+    try { bmp = await createImageBitmap(new Blob([файл.bytes])) }
+    catch (e) { return }   // не картинка на самом деле — пусть уходит как есть
+
+    let ш = bmp.width, в = bmp.height
+    if (s.сжимать && Math.max(ш, в) > s.сторона) {
+      const k = s.сторона / Math.max(ш, в)
+      ш = Math.round(ш * k); в = Math.round(в * k)
+    }
+    const c = new OffscreenCanvas(ш, в)
+    const ctx = c.getContext('2d')
+    ctx.drawImage(bmp, 0, 0, ш, в)
+
+    // Перерисовка и есть чистка: в новом файле остаются только пиксели.
+    // Прозрачность у JPEG теряется, поэтому png с прозрачностью не трогаем.
+    const png = файл.type === 'image/png'
+    const blob = await c.convertToBlob(png ? { type: 'image/png' } : { type: 'image/jpeg', quality: 0.92 })
+    const bytes = await blob.arrayBuffer()
+
+    // Если стало ТЯЖЕЛЕЕ и мы ничего не уменьшали — оставляем как было:
+    // «почистил» не должно означать «раздул файл вдвое».
+    if (bytes.byteLength >= файл.bytes.byteLength && ш === bmp.width) return
+
+    const имя = файл.name.replace(/\\.(jpe?g|png|webp)$/i, '') + (png ? '.png' : '.jpg')
+    return { bytes: bytes, name: имя, type: png ? 'image/png' : 'image/jpeg' }
+  })
+}
+`
+
 export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
   { id: 'ponoi-voice-changer', emoji: '🎙️', summary: 'Робот, эхо, рация и ещё два голоса прямо в звонке', code: VOICE },
   { id: 'ponoi-dice', emoji: '🎲', summary: 'Кубик, монетка и «выбери за меня» в чате', code: DICE },
   { id: 'ponoi-timer', emoji: '⏰', summary: 'Напоминание через заданное время', code: TIMER },
   { id: 'ponoi-afk', emoji: '💤', summary: 'Отвечает за тебя тем, кто упомянул, пока тебя нет', code: AFK },
+  { id: 'ponoi-photo-clean', emoji: '🧼', summary: 'Снимает с фотографий геометку и модель телефона перед отправкой', code: EXIF },
   { id: 'ponoi-snake', emoji: '🐍', summary: 'Настоящая игра в своём окне: клавиши, геймпад, рекорды', code: SNAKE },
   { id: 'ponoi-soft-light', emoji: '🌙', summary: 'Приглушает резкий текст — ночью читать легче', code: SOFT },
 ]
