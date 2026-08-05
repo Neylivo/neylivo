@@ -243,9 +243,9 @@ app.whenReady().then(async () => {
   <div class="grant-claim"><input class="modal-in" value="ABCD-EFGH-2345"><button class="pqs2-btn">Получить</button></div>
   <div class="grant-list"><div class="grant-item">
     <div class="grant-item-h"><b>Плагин с длинным названием для проверки</b>
-      <span class="grant-code-sm">ABCD-EFGH-2345</span>
-      <button class="pqs2-btn ghost">к</button></div>
-    <div class="grant-item-d">осталось получений: 1 · именная · до 31.12.2026 · забрали: 1</div>
+      <span class="grant-badge">можно забрать 1</span></div>
+    <div class="grant-item-code"><code>ABCD-EFGH-2345</code><button class="pqs2-btn ghost">к</button></div>
+    <div class="grant-item-d">именная · до 31.12.2026 · забрали: 1</div>
     <div class="grant-item-a"><button class="pqs2-btn ghost">Отозвать</button>
       <button class="pqs2-btn ghost danger">Удалить</button></div>
   </div></div>
@@ -312,6 +312,61 @@ app.whenReady().then(async () => {
   await plug.loadFile(path.join(OUT, 'plug.html'))
   await new Promise(r => setTimeout(r, 400))
   const pm = JSON.parse(await plug.webContents.executeJavaScript('window.__p()'))
+
+  // ── v1.470.0: до всего ли можно долистать ────────────────────────────────────
+  //
+  // Владелец: «настройки на телефоне не листаются, дальше плагинов не видно» — и
+  // это было буквально так. Список разделов вырастал во всё своё содержимое
+  // (2081 пиксель в области на 748), собственная прокрутка при этом не
+  // включалась — элемент ведь не ограничен по высоте, — а родитель не
+  // прокручивается вовсе. Половина разделов, включая «Выйти», была недостижима.
+  //
+  // Обычная проверка на переполнение такое не ловит: элементы «влезают» в свой
+  // же раздутый контейнер. Ловить надо иначе — попыткой ДОЛИСТАТЬ до последнего.
+  fs.writeFileSync(path.join(OUT, 'scroll.html'), `<!doctype html><meta charset=utf-8>
+<link rel=stylesheet href="styles-safe.css">
+<style>*{animation:none!important;transition:none!important}html,body{margin:0;height:100%;background:#313338}</style>
+<div class="pqs2-overlay"><div class="pqs2 mob-nav">
+  <div class="pqs2-head"><button class="pqs2-back">‹</button><b>Настройки</b></div>
+  <div class="pqs2-body">
+    <div class="pqs2-side"><div class="pqs2-nav">
+      ${Array.from({ length: 9 }, (_, g) => '<div>' + Array.from({ length: 4 }, (_, i) =>
+        '<div class="pqs2-item"><span class="pqs2-item-ic">o</span>Раздел ' + (g * 4 + i + 1) + '</div>').join('') + '</div>').join('')}
+      <div class="pqs2-item danger" id="последний">Выйти</div></div></div>
+  </div>
+</div></div>
+<script>window.__s = () => {
+  const out = {}
+  for (const [имя, sel, хвост] of [['список разделов', '.pqs2-side', '#последний']]) {
+    const box = document.querySelector(sel), tail = document.querySelector(хвост)
+    box.scrollTop = 0
+    const до = box.scrollTop
+    box.scrollTop = 99999
+    const r = tail.getBoundingClientRect()
+    out[имя] = { двигается: box.scrollTop - до, виден: r.top >= 0 && r.bottom <= innerHeight,
+                 низ: Math.round(r.bottom), окно: innerHeight,
+                 высота: Math.round(box.clientHeight) }
+  }
+  return JSON.stringify(out)
+}</script>`)
+  const scr = new BrowserWindow({ show: false, useContentSize: true, width: 390, height: 844,
+    backgroundColor: '#313338', webPreferences: { partition: 'safe-scroll-' + Date.now() } })
+  await scr.loadFile(path.join(OUT, 'scroll.html'))
+  await new Promise(r => setTimeout(r, 300))
+  const sm = JSON.parse(await scr.webContents.executeJavaScript('window.__s()'))
+
+  console.log('\n── До всего ли можно долистать ──')
+  for (const [имя, d] of Object.entries(sm)) {
+    // Признак «надо прокручивать» тут не годится: при поломке список
+    // раздувается во всё содержимое, scrollHeight сравнивается с clientHeight, и
+    // признак становится ложным — проверка успокаивала бы ровно там, где сломано.
+    // Настоящий признак: сама область не выше экрана.
+    check(имя + ': область не выше экрана', d.высота <= d.окно,
+      'высота области ' + d.высота + ' при экране ' + d.окно)
+    check(имя + ': до последней строки можно добраться', d.виден,
+      'низ последней строки ' + d.низ + ' при экране ' + d.окно)
+  }
+  scr.destroy()
 
   console.log('\n── Плагины и боты на телефоне ──')
   check('ничего не вылезает за край экрана', pm.out.length === 0, pm.out.join('; '))

@@ -57,7 +57,13 @@ export function GrantCreate({ meId, pluginId, name, version, code, onClose }: {
   }
 
   return (
-    <div className="modal-back" onClick={onClose}>
+    // v1.470.0: как только код создан, щелчок мимо окна его больше НЕ закрывает.
+    //
+    // Владелец: «код пропадает сразу». Так и было: любое касание за пределами
+    // окна закрывало его вместе с только что созданным кодом — а это единственный
+    // экран, где он показан крупно, и человек как раз собирался его скопировать.
+    // Теперь уйти отсюда можно только осознанно: кнопкой «Готово» или крестиком.
+    <div className="modal-back" onClick={() => { if (!готово) onClose() }}>
       <div className="modal grant-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-h"><b>Передать лично</b>
           <button className="modal-x" onClick={onClose}>×</button></div>
@@ -66,36 +72,49 @@ export function GrantCreate({ meId, pluginId, name, version, code, onClose }: {
           <span className="grant-ver">{version}</span></div>
 
         {готово ? <>
-          {/* Код показывается один раз крупно: его сейчас скопируют и отдадут. */}
           <div className="grant-code notr" translate="no">{prettyCode(готово)}</div>
-          <button className="pqs2-btn" onClick={() => {
-            navigator.clipboard?.writeText(prettyCode(готово))
-            toastOk('Код скопирован')
-          }}><Icon name="copy" size={16} /> Скопировать код</button>
-          <div className="grant-note">
-            Отдай этот код тому, кому передаёшь. Он введёт его в «Плагины → Получить по коду».
+          <div className="grant-acts">
+            <button className="pqs2-btn" onClick={() => {
+              navigator.clipboard?.writeText(prettyCode(готово))
+              toastOk('Код скопирован')
+            }}><Icon name="copy" size={16} /> Скопировать</button>
+            <button className="pqs2-btn ghost" onClick={onClose}>Готово</button>
           </div>
-          <button className="pqs2-btn ghost" onClick={onClose}>Готово</button>
+          <div className="grant-note">
+            Отдай этот код тому, кому передаёшь. Он введёт его в «Плагины → Передачи».
+          </div>
+          {/* И прямо говорим, что код никуда не денется: иначе закрыть это окно
+              страшно, а страх на ровном месте — тоже поломка. */}
+          <div className="grant-hint">
+            <Icon name="clock" size={13} /> Код не пропадёт — он всегда есть в списке «Мои передачи».
+          </div>
         </> : <>
           <div className="grant-honesty"><Icon name="shield" size={14} /> {GRANT_HONESTY}</div>
 
-          <label className="grant-row">
-            <span>Сколько раз можно забрать</span>
-            <input className="modal-in" type="number" min={1} max={1000} value={uses}
-              onChange={e => setUses(clampUses(e.target.value))} />
-          </label>
-          <label className="grant-row">
-            <span>Перестанет работать через (дней)</span>
-            <input className="modal-in" type="number" min={0} max={MAX_DAYS} value={days}
-              onChange={e => setDays(Math.max(0, Math.min(MAX_DAYS, Number(e.target.value) || 0)))} />
-          </label>
-          <div className="grant-hint">0 — без срока.</div>
-          <label className="grant-row">
-            <span>Записка для себя</span>
-            <input className="modal-in" placeholder="например: продано @ник" value={note}
-              maxLength={300} onChange={e => setNote(e.target.value)} />
-          </label>
-          <div className="grant-hint">Записку видишь только ты.</div>
+          {/* v1.470.0: строки те же, что во всём остальном приложении
+              (.pqs-optrow с подписью и пояснением). Свои — с жирной подписью
+              во всю ширину — спорили с заголовком окна и выглядели чужими, а
+              пояснения висели сами по себе, оторванные от своих полей. */}
+          <div className="grant-fields">
+            <label className="pqs-optrow">
+              <div><div className="pqs-optt">Сколько раз можно забрать</div>
+                <div className="pqs-optd">Обычно один — одному человеку</div></div>
+              <input className="modal-in grant-num" type="number" min={1} max={1000} value={uses}
+                onChange={e => setUses(clampUses(e.target.value))} />
+            </label>
+            <label className="pqs-optrow">
+              <div><div className="pqs-optt">Перестанет работать через</div>
+                <div className="pqs-optd">Дней. 0 — без срока</div></div>
+              <input className="modal-in grant-num" type="number" min={0} max={MAX_DAYS} value={days}
+                onChange={e => setDays(Math.max(0, Math.min(MAX_DAYS, Number(e.target.value) || 0)))} />
+            </label>
+            <label className="pqs-optrow">
+              <div><div className="pqs-optt">Записка для себя</div>
+                <div className="pqs-optd">Кому и за что. Видишь только ты</div></div>
+              <input className="modal-in grant-note-in" placeholder="продано @ник" value={note}
+                maxLength={300} onChange={e => setNote(e.target.value)} />
+            </label>
+          </div>
 
           <div className="modal-btns">
             <button className="pqs2-btn ghost" onClick={onClose}>Отмена</button>
@@ -135,22 +154,31 @@ export function GrantList() {
         const мертва = g.revoked || истёк || g.uses_left <= 0
         return (
           <div key={g.id} className={'grant-item' + (мертва ? ' dead' : '')}>
+            {/* v1.470.0: имя, код и состояние — тремя ровными строками.
+                Раньше они лежали одной строкой с переносом, и на узком экране
+                кнопка «скопировать» оставалась висеть сама по себе. */}
             <div className="grant-item-h">
               <b className="notr" translate="no">{g.plugin_name}</b>
-              <span className="grant-code-sm notr" translate="no">{prettyCode(g.code)}</span>
+              <span className={'grant-badge' + (мертва ? ' dead' : '')}>
+                {g.revoked ? 'отозвана'
+                  : истёк ? 'срок истёк'
+                  : g.uses_left <= 0 ? 'забрали'
+                  : `можно забрать ${g.uses_left}`}
+              </span>
+            </div>
+            <div className="grant-item-code">
+              <code className="notr" translate="no">{prettyCode(g.code)}</code>
               <button className="pqs2-btn ghost" title="Скопировать код"
                 onClick={() => { navigator.clipboard?.writeText(prettyCode(g.code)); toastOk('Код скопирован') }}>
                 <Icon name="copy" size={14} />
               </button>
             </div>
             <div className="grant-item-d">
-              {g.revoked ? 'отозвана'
-                : истёк ? 'срок истёк'
-                : g.uses_left <= 0 ? 'забрали, попыток не осталось'
-                : `осталось получений: ${g.uses_left}`}
-              {g.to_user && ' · именная'}
-              {g.expires_at && !истёк && ' · до ' + new Date(g.expires_at).toLocaleDateString()}
-              {взяли.length > 0 && ` · забрали: ${взяли.length}`}
+              {[
+                g.to_user ? 'именная' : null,
+                g.expires_at && !истёк ? 'до ' + new Date(g.expires_at).toLocaleDateString() : null,
+                взяли.length > 0 ? `забрали: ${взяли.length}` : null,
+              ].filter(Boolean).join(' · ') || 'ещё не забирали'}
             </div>
             {g.note && <div className="grant-item-n">{g.note}</div>}
             <div className="grant-item-a">

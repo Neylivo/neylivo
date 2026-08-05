@@ -4502,7 +4502,19 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .pqs2-body { flex-direction: column; }
   .pqs2.mob-nav .pqs2-main { display: none; }
   .pqs2.mob-content .pqs2-side { display: none; }
-  .pqs2-side { width: 100%; background: transparent; padding: 12px 12px calc(24px + env(safe-area-inset-bottom)); }
+  /* v1.470.0: список разделов на телефоне НЕ ЛИСТАЛСЯ.
+     Владелец: «дальше плагинов не видно» — и это было буквально так.
+     От базового правила списку доставалось flex: none, а в колонке это значит
+     «высотой во всё содержимое»: список вырастал на 2081 пиксель в области на
+     748, собственный overflow-y при этом не срабатывал (элемент ведь не
+     ограничен), а родитель не прокручивается вовсе. Всё, что не помещалось на
+     первый экран, было недостижимо — включая «Выйти».
+     Теперь список занимает остаток высоты и листается сам. */
+  .pqs2-side {
+    width: 100%; background: transparent;
+    padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  }
   .pqs2-head { padding-top: calc(env(safe-area-inset-top)); height: calc(52px + env(safe-area-inset-top)); }
   .pqs2-back { display: none; width: 36px; height: 36px; border: none; border-radius:50%; background: transparent;
     color: var(--tx); align-items: center; justify-content: center; cursor: pointer; margin-right: 4px; flex: none; }
@@ -4880,14 +4892,6 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .plug-bg-row { flex-wrap: wrap; }
   .plug-bg-d { flex: 1 0 100%; }
   .plug-bg-row button { min-height: 40px; }
-  /* v1.468.0: личная передача. Кнопки вышли по 32 пикселя — пальцем не попасть,
-     поймано телефонным обходом. Код передачи на 390 пикселях в одну строку с
-     названием не помещается, поэтому уводим его своей строкой. */
-  .grant-claim button, .grant-item-a button, .grant-item-h button { min-height: 40px; }
-  .grant-claim { flex-wrap: wrap; }
-  .grant-claim .modal-in { flex: 1 0 100%; min-height: 40px; }
-  .grant-code-sm { flex: 1 0 100%; }
-  .grant-code { font-size: 22px; letter-spacing: 1px; }
 }
 
 /* v1.315.0: экран «Каналы и роли» */
@@ -6305,49 +6309,120 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 }
 .plugpanel-canvas { display: block; width: 100%; height: 100%; }
 
-/* ══ Личная передача плагина (v1.468.0) ════════════════════════════════════
-   Код — главное на экране: его сейчас перепишут или продиктуют. Поэтому он
-   крупный, моноширинный и с разрядкой. */
-.grant-modal { width: 460px; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
-.grant-plug { display: flex; align-items: center; gap: 8px; color: var(--mut); font-size: 13px; }
-.grant-ver { color: var(--mut); font-size: 12px; }
-.grant-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 26px; letter-spacing: 2px; text-align: center;
-  padding: 14px 10px; border-radius: var(--r-md, 10px);
-  background: rgba(var(--ov, 255, 255, 255), .07);
-  overflow-wrap: anywhere;
+/* ══ Личная передача плагина (v1.468.0, вид доведён в v1.470.0) ════════════
+   Владелец: «почини чтобы было красиво». Смотрел снимками экрана, а не на
+   глаз: подписи в форме были тяжелее заголовка окна, пояснения висели
+   оторванно от своих полей, а в списке имя, код и кнопка рассыпались на три
+   строки. Теперь форма собрана теми же строками, что и все настройки
+   (.pqs-optrow), а карточка передачи читается сверху вниз: имя и состояние,
+   код, подробности, действия. */
+.grant-modal { width: 460px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.grant-plug {
+  display: flex; align-items: center; gap: 8px; font-size: 14px;
+  padding-bottom: 12px; border-bottom: 1px solid rgba(var(--ov, 255, 255, 255), .08);
 }
+.grant-plug b { font-weight: 700; }
+.grant-ver { color: var(--mut); font-size: 12px; }
+
+/* Код — главное на экране: его сейчас перепишут или продиктуют. Крупный,
+   моноширинный, с разрядкой и в рамке цвета акцента, чтобы взгляд шёл к нему. */
+.grant-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 27px; font-weight: 600; letter-spacing: 3px; text-align: center;
+  padding: 18px 12px; border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255, 255, 255), .06);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 45%, transparent);
+  overflow-wrap: anywhere; user-select: all;
+}
+.grant-acts { display: flex; gap: 8px; }
+.grant-acts .pqs2-btn { flex: 1; justify-content: center; }
+
 /* Честная оговорка стоит рядом с настройками передачи, а не мелким шрифтом
    внизу: её и написали для того, чтобы прочитали. */
 .grant-honesty {
-  display: flex; gap: 8px; font-size: 12.5px; line-height: 1.45; color: var(--mut);
-  padding: 10px 12px; border-radius: var(--r-md, 10px);
+  display: flex; gap: 9px; font-size: 12.5px; line-height: 1.5; color: var(--mut);
+  padding: 11px 13px; border-radius: var(--r-md, 10px);
   background: rgba(var(--ov, 255, 255, 255), .05);
 }
-.grant-honesty svg { flex: none; margin-top: 2px; }
-.grant-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.grant-row .modal-in { max-width: 200px; }
-.grant-hint { color: var(--mut); font-size: 12px; margin-top: -4px; }
-.grant-note { color: var(--mut); font-size: 13px; line-height: 1.45; }
+.grant-honesty svg { flex: none; margin-top: 2px; opacity: .8; }
 
+/* Поля — обычные строки настроек. Первая без верхней черты, последняя без нижней:
+   внутри окна рамка по краям выглядит обрывком. */
+.grant-fields .pqs-optrow { padding: 12px 0; }
+.grant-fields .pqs-optrow:first-child { padding-top: 0; }
+.grant-fields .pqs-optrow:last-child { border-bottom: none; padding-bottom: 0; }
+.grant-modal .modal-btns { margin-top: 4px; }
+.grant-num { width: 92px; text-align: center; flex: none; }
+.grant-note-in { width: 190px; flex: none; }
+
+.grant-note { color: var(--mut); font-size: 13px; line-height: 1.5; }
+.grant-hint { display: flex; align-items: center; gap: 6px; color: var(--mut); font-size: 12.5px; }
+.grant-hint svg { flex: none; opacity: .7; }
+
+/* ── Получить по коду ── */
 .grant-claim { display: flex; gap: 8px; align-items: center; }
-.grant-claim .modal-in { flex: 1; min-width: 0; font-family: ui-monospace, monospace; letter-spacing: 1px; }
-.grant-empty { color: var(--mut); font-size: 13px; padding: 10px 0; line-height: 1.5; }
-.grant-list { display: flex; flex-direction: column; gap: 8px; }
+.grant-claim .modal-in {
+  flex: 1; min-width: 0;
+  font-family: ui-monospace, Consolas, monospace; letter-spacing: 1.5px;
+}
+.grant-empty { color: var(--mut); font-size: 13px; padding: 12px 0; line-height: 1.55; }
+
+/* ── Мои передачи ── */
+.grant-list { display: flex; flex-direction: column; gap: 10px; }
 .grant-item {
-  padding: 10px 12px; border-radius: var(--r-md, 10px);
+  padding: 12px 14px; border-radius: var(--r-md, 10px);
   background: rgba(var(--ov, 255, 255, 255), .05);
-  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid rgba(var(--ov, 255, 255, 255), .06);
+  display: flex; flex-direction: column; gap: 8px;
 }
 /* Отозванная и просроченная — приглушены, но не спрятаны: след о том, кому
    отдавал, нужен и после того, как передача закончилась. */
-.grant-item.dead { opacity: .55; }
-.grant-item-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.grant-code-sm { font-family: ui-monospace, monospace; font-size: 13px; color: var(--mut); }
-.grant-item-d, .grant-item-n { color: var(--mut); font-size: 12.5px; }
-.grant-item-a { display: flex; gap: 8px; margin-top: 4px; }
-.plug-give { margin-top: 8px; }
+.grant-item.dead { opacity: .6; }
+.grant-item-h { display: flex; align-items: center; gap: 10px; }
+.grant-item-h b { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grant-badge {
+  flex: none; font-size: 11.5px; font-weight: 600; padding: 3px 9px;
+  border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+  color: var(--tx-hi, #fff);
+}
+.grant-badge.dead { background: rgba(var(--ov, 255, 255, 255), .1); color: var(--mut); }
+/* Код с кнопкой «скопировать» — одной строкой и всегда вместе. */
+.grant-item-code { display: flex; align-items: center; gap: 8px; }
+.grant-item-code code {
+  /* Ширину ограничиваем: на широком окне поле кода растягивалось через всю
+     карточку, и кнопка «скопировать» уезжала от него на другой край. */
+  flex: 1; max-width: 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  font-family: ui-monospace, Consolas, monospace; font-size: 14px; letter-spacing: 1px;
+  padding: 7px 10px; border-radius: var(--r-sm, 8px);
+  background: rgba(var(--ov, 255, 255, 255), .06); user-select: all;
+}
+.grant-item-code .pqs2-btn { flex: none; }
+.grant-item-d, .grant-item-n { color: var(--mut); font-size: 12.5px; line-height: 1.45; }
+.grant-item-n { font-style: italic; }
+.grant-item-a { display: flex; gap: 8px; }
+.plug-give { margin-top: 10px; }
+
+/* Телефон. Блок стоит ПОСЛЕ базовых правил намеренно: раньше он лежал выше, и
+   всё, что спорило с ними за одно свойство, молча не работало — ширина поля
+   кода, перенос строки. Работали только те правила, которым не с чем было
+   спорить (высота кнопок), поэтому и выглядело это как «половина применилась».
+   Та же ловушка ловила меня в v1.443.0; здесь она записана прямо на месте. */
+@media (max-width: 768px) {
+  .grant-modal { gap: 12px; }
+  .grant-code { font-size: 22px; letter-spacing: 2px; padding: 15px 10px; }
+  /* Поле кода — своей строкой во всю ширину: «Код передачи, например…» в одну
+     строку с кнопкой обрезается до неузнаваемости. */
+  .grant-claim { flex-wrap: wrap; }
+  .grant-claim .modal-in { flex: 1 0 100%; min-height: 40px; }
+  .grant-claim button { min-height: 40px; width: 100%; justify-content: center; }
+  .grant-item-a button, .grant-item-code button { min-height: 40px; }
+  .grant-acts .pqs2-btn { min-height: 40px; }
+  /* Поля формы: подпись и поле в одну строку на 390 пикселях не уживаются. */
+  .grant-fields .pqs-optrow { flex-wrap: wrap; }
+  .grant-num, .grant-note-in { width: 100%; min-height: 40px; }
+}
+
 
 /* ══ Выбор сочетания клавиш (v1.467.0) ═════════════════════════════════════
    Кнопка показывает текущее сочетание, а в режиме ожидания — «Нажми
