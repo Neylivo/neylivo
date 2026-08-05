@@ -186,9 +186,17 @@ console.log('\n── Новые возможности (v1.419.0) ──')
     return added <= MAX_PER_PLUGIN.hotkeys
   })
 
-  // Панель в чате — новое место; выдуманное по-прежнему не проходит.
-  await allowed('панель в чате ставится', () =>
+  // v1.480.0: место 'chat' больше не полоса над полем ввода, а свободный
+  // виджет — то есть содержимое уезжает не в reg.panels, а в окна (apps.ts).
+  // Проверки ниже смотрят туда же, куда теперь смотрит приложение: иначе они
+  // проверяли бы пустоту и молча зеленели.
+  await allowed('панель в чате ставится (и становится виджетом)', () =>
     all('ui.addPanel', [{ slot: 'chat', title: 'Уголок', rows: [] }]))
+  await check('панель «в чат» открылась свободным виджетом', async () => {
+    const { appList } = await import('./apps')
+    const w = appList('all-perms-419')
+    return w.length === 1 && w[0].mode === 'widget' && w[0].title === 'Уголок'
+  })
 
   await check('в панель не проходит картинка с чужим протоколом', async () => {
     await all('ui.addPanel', [{ slot: 'chat', title: 'Т', rows: [
@@ -196,8 +204,9 @@ console.log('\n── Новые возможности (v1.419.0) ──')
       { type: 'image', key: 'bad2', label: 'зло', value: 'data:image/svg+xml,<svg onload=alert(1)>' },
       { type: 'image', key: 'ok', label: 'норм', value: 'https://example.com/i.png' },
     ] }])
-    const panel = registry.getRegistry().panels.find((x: any) => x.slot === 'chat' && x.pluginId === 'all-perms-419')
-    return !!panel && panel.rows.length === 1 && panel.rows[0].type === 'image'
+    const { appList } = await import('./apps')
+    const w = appList('all-perms-419')[0]
+    return !!w && w.rows.length === 1 && w.rows[0].type === 'image'
   })
 
   await check('числа в строках приводятся к своим границам', async () => {
@@ -220,7 +229,8 @@ console.log('\n── Новые возможности (v1.419.0) ──')
     await all('ui.addPanel', [{ slot: 'chat', title: 'Г', rows: [
       { type: 'slider', key: 'bad', label: 'плохо', value: 5, min: 10, max: 1, step: 1 },
     ] }])
-    const panel = registry.getRegistry().panels.find((x: any) => x.slot === 'chat' && x.pluginId === 'all-perms-419')
+    const { appList } = await import('./apps')
+    const panel = appList('all-perms-419')[0]
     return !!panel && panel.rows.length === 0
   })
 
@@ -1228,8 +1238,8 @@ console.log('\n── Уборка за плагином ──')
   // Число пишется руками нарочно: убыль строки в cleanup.ts — это выключенный
   // плагин, который продолжает работать, и заметить это должно ЗДЕСЬ, а не
   // человек по севшей батарее. v1.473.0: прибавились адреса файлов и геймпады.
-  await check('уборка знает про все десять видов оставленного', () =>
-    cleanup.SUBSYSTEM_COUNT === 10)
+  await check('уборка знает про все одиннадцать видов оставленного', () =>
+    cleanup.SUBSYSTEM_COUNT === 11)
   await check('на каждый вид есть и «за этим», и «за всеми»', () => {
     // Два списка — это два места, где можно забыть строку. Здесь он один, и
     // каждая запись обязана иметь обе половины.

@@ -1718,7 +1718,12 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
         {/* v1.419.0: уголок плагина над полем ввода — то место, на которое
             человек смотрит всё время. Без него панели годились только для
             музыки, то есть для экрана, где он бывает изредка. */}
-        {curChannel && !isForum(curChannel) && <PluginPanels slot="chat" />}
+        {/* v1.480.0: полосы плагинов над полем ввода больше нет.
+            Владелец сказал прямо: «уродски», — и он прав. Она занимала место
+            у всех и всегда, даже когда плагину надо было показать одну
+            строчку. Всё, что плагины ставили сюда, теперь живёт свободным
+            виджетом: стоит там, куда его поставил человек, и им же
+            двигается (см. apps.ts, mode: 'widget'). */}
         {curChannel && !isForum(curChannel) && canPostHere && !verifyBlockReason() && !((curChannel as any).settings?.nsfw && !nsfwOk.has(curChannel.id)) && <Composer placeholder={'Написать в #' + curChannel.name} onSend={sendMsg} draftKey={curChannel.id}
           serverId={server.id} channelId={curChannel.id} channelName={curChannel.name} serverName={server.name}
           canAttachFiles={canAttachFiles} canMentionEveryone={hasPerm(myPerms, PERM.MENTION_EVERYONE) || isOwner}

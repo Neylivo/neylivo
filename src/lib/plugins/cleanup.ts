@@ -26,7 +26,7 @@ import { closeAllFor, closeAllSockets } from './wsHub'
 import { clearTasks, clearAllTasks } from './background'
 import { clearPluginTheme, clearAllThemes } from './pluginTheme'
 import { clearCanvases, clearAllCanvases } from './canvasHub'
-import { clearApps, clearAllApps } from './apps'
+import { clearApps, clearAllApps, forgetWidget, forgetAllWidgets } from './apps'
 import { clearServices, clearAllServices } from './services'
 import { clearAssetUrls, clearAllAssetUrls } from './assets'
 import { unwatchGamepads, unwatchAllGamepads } from './gamepads'
@@ -43,6 +43,10 @@ const SUBSYSTEMS: { one: (id: string) => void; all: () => void }[] = [
   // v1.471.0: окно плагина не исчезает от того, что плагин выключили: оно
   // нарисовано приложением и осталось бы висеть поверх экрана.
   { one: clearApps, all: clearAllApps },
+  // v1.480.0: и память о том, какой виджет чей, — иначе после
+  // перезапуска плагина его ui.addPanel обновлял бы уже закрытое окно
+  // и на экране не появлялось бы ничего.
+  { one: forgetWidget, all: forgetAllWidgets },
   // v1.472.0: службы. Останься запись в реестре — её метки функций вели бы в
   // остановленный плагин, и чужой вызов молча висел бы до срока.
   { one: clearServices, all: clearAllServices },

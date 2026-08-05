@@ -20,7 +20,7 @@ import { takeOffscreen, canvasHeight } from './canvasHub'
 import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
-import { openApp, updateApp, closeApp, isMode, APP_MODES, appList } from './apps'
+import { openApp, updateApp, closeApp, isMode, APP_MODES, appList, widgetOf, setWidgetOf } from './apps'
 import { registerService, unregisterService, findService, serviceMethods, checkName, MAX_METHODS } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 // v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
@@ -387,6 +387,11 @@ export function createDispatcher(
       // v1.417.0: своя панель в приложении. Строки те же, что у страницы
       // настроек, и рисует их приложение: плагин описывает, что показать, но
       // сам в окно не попадает — иначе песочница потеряла бы смысл.
+      // v1.480.0: панель «в чат» больше не полоса над полем ввода — она
+      // становится СВОБОДНЫМ ВИДЖЕТОМ. Плагины, написанные под slot: 'chat',
+      // менять не нужно: приложение само открывает им виджет и обновляет его
+      // теми же строками. Пропасть панель не может — она переезжает туда, куда
+      // её поставит человек.
       case 'ui.addPanel': {
         need('panel')
         const o = args[0] as any
@@ -395,7 +400,17 @@ export function createDispatcher(
           throw new Denied(`Неизвестное место «${slot}». Есть: ${Object.keys(PANEL_SLOTS).join(', ')}.`)
         }
         const rows = (Array.isArray(o?.rows) ? o.rows : []).slice(0, 20).map(settingsRow).filter(Boolean) as SettingsRow[]
-        setPanel({ pluginId: id, slot, title: str(o?.title ?? plugin.manifest.name, 40, 'заголовок панели'), rows })
+        // Место 'chat' теперь означает «свой виджет»: одна штука на плагин,
+        // повторный вызов её обновляет.
+        const заголовок = str(o?.title ?? plugin.manifest.name, 40, 'заголовок панели')
+        if (slot === 'chat') {
+          const был = widgetOf(id)
+          if (был !== undefined && updateApp(id, был, { title: заголовок, rows })) return null
+          const w = openApp(id, { title: заголовок, mode: 'widget', icon: safeIcon(o?.icon), rows })
+          setWidgetOf(id, w.id)
+          return null
+        }
+        setPanel({ pluginId: id, slot, title: заголовок, rows })
         return null
       }
 

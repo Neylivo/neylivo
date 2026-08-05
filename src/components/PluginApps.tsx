@@ -147,7 +147,7 @@ const СТОРОНЫ = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
 
 function AppFrame({ app }: { app: PluginApp }) {
   const { ref, startDrag, startResize, dragging, подсказка } = useDragResize(app)
-  const плавает = app.mode === 'window' || app.mode === 'pip'
+  const плавает = app.mode === 'window' || app.mode === 'pip' || app.mode === 'widget'
 
   // Плагин узнаёт, что его окно открылось и что с ним стало: закрыть окно может
   // человек, и не сказать об этом значило бы оставить плагин рисовать в никуда.
@@ -228,7 +228,7 @@ function AppFrame({ app }: { app: PluginApp }) {
             подписи окно во весь экран стало бы способом выдать себя за само
             приложение. Имя отвечает на этот вопрос и не мешает. */}
         <span className="plugapp-by notr" translate="no">{app.pluginId}</span>
-        {плавает && <button className="plugapp-x" title={app.max ? 'Свернуть' : 'Развернуть'}
+        {плавает && app.mode !== 'widget' && <button className="plugapp-x" title={app.max ? 'Свернуть' : 'Развернуть'}
           onPointerDown={e => e.stopPropagation()}
           onClick={() => toggleMaxApp(app.id, {
             w: document.documentElement.clientWidth, h: document.documentElement.clientHeight,
@@ -262,7 +262,7 @@ export function PluginApps() {
   if (list.length === 0) return null
   // Вкладки и полный экран рисуются поверх, плавающие — над ними: человек
   // только что взял окно в руку, оно и должно быть сверху.
-  const порядок = { tab: 0, fullscreen: 1, window: 2, pip: 3 } as const
+  const порядок = { tab: 0, fullscreen: 1, window: 2, widget: 3, pip: 4 } as const
   return (
     <div className="plugapps">
       {[...list].sort((a, b) => порядок[a.mode] - порядок[b.mode]).map(a => (

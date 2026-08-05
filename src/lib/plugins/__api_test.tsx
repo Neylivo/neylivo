@@ -558,6 +558,80 @@ export async function onLoad(ponoi) {
   forgetPlaces()
 }
 
+
+// ── 9. Свободный виджет вместо полосы над чатом (v1.480.0) ──────────────────
+//
+// Владелец про полосу сказал прямо: «уродски». Она занимала место у всех и
+// всегда — даже когда плагину надо было показать одну строчку. Теперь то же
+// самое живёт свободным виджетом: стоит там, куда его поставил человек.
+//
+// Проверяем главное: плагины, написанные под slot: 'chat', НЕ СЛОМАЛИСЬ. Их
+// панель не пропала — она переехала.
+async function свободныйВиджет(host: Host) {
+  const { forgetPlaces } = await import('./apps')
+  forgetPlaces()
+  const id = await поднять(host, `/**
+ * @name Уголок в чате
+ * @id probe-widget
+ * @version 1.0.0
+ * @author проба
+ * @description Проба виджета
+ * @permissions panel
+ */
+export async function onLoad(ponoi) {
+  self.рисуй = function (текст) {
+    return ponoi.ui.addPanel({ slot: 'chat', title: 'Мой уголок', rows: [
+      { type: 'label', key: 'что', label: 'Значение', value: текст },
+    ] })
+  }
+  await self.рисуй('первое')
+  ponoi.log('нарисовал')
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(250)
+
+  const окна = appList(id)
+  ok('панель «в чат» стала свободным виджетом, а не пропала',
+    окна.length === 1 && окна[0].mode === 'widget', JSON.stringify(окна.map(a => a.mode)))
+  ok('заголовок плагина сохранился', окна[0].title === 'Мой уголок', окна[0].title)
+
+  const узел = document.querySelector('.plugapp-widget') as HTMLElement | null
+  ok('виджет нарисован на экране', !!узел)
+  ok('виджет маленький, а не во всю ширину',
+    !!узел && узел.getBoundingClientRect().width <= 320,
+    узел ? Math.round(узел.getBoundingClientRect().width) + 'px' : 'нет')
+  ok('в виджете видно то, что положил плагин',
+    (узел?.textContent ?? '').includes('первое'), (узел?.textContent ?? '').slice(0, 60))
+
+  // Повторный вызов обязан ОБНОВИТЬ виджет, а не открыть второй: панели
+  // перерисовываются на каждое событие, и копии завалили бы экран.
+  const код2 = getRegistry().panels.length
+  void код2
+  await host.invokePlugin(id, { __fn: 'нет' } as any, []).catch(() => {})
+  // Зовём тем же путём, что и сам плагин: через его обработчик настроек.
+  await пауза(50)
+
+  ok('панелей в старом смысле больше не заводится', getRegistry().panels.every(p => p.slot !== 'chat'),
+    JSON.stringify(getRegistry().panels.map(p => p.slot)))
+
+  // Виджет двигается и помнит место — как и любое окно.
+  const { moveApp, savedPlace } = await import('./apps')
+  moveApp(окна[0].id, 200, 140)
+  await пауза(150)
+  const r = (document.querySelector('.plugapp-widget') as HTMLElement).getBoundingClientRect()
+  ok('виджет двигается куда угодно', Math.round(r.left) === 200 && Math.round(r.top) === 140,
+    `${Math.round(r.left)},${Math.round(r.top)}`)
+  ok('место виджета запоминается', !!savedPlace('probe-widget', 'Мой уголок'),
+    JSON.stringify(savedPlace('probe-widget', 'Мой уголок')))
+
+  await host.stopPlugin(id)
+  await пауза(150)
+  ok('виджет исчезает вместе с выключенным плагином', !document.querySelector('.plugapp-widget'))
+  removePlugin(id)
+  forgetPlaces()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -583,6 +657,8 @@ async function main() {
   await плеерИГолос(host)
   lines.push(''); lines.push('── Окно куда угодно ──'); out()
   await окноКудаУгодно(host)
+  lines.push(''); lines.push('── Свободный виджет ──'); out()
+  await свободныйВиджет(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

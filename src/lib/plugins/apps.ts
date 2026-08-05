@@ -32,13 +32,19 @@ import type { SettingsRow } from './registry'
  * Список закрытый — по той же причине, что у панелей и пунктов меню: «где
  * угодно» означало бы, что плагин распоряжается экраном.
  */
-export type AppMode = 'window' | 'pip' | 'tab' | 'fullscreen'
+export type AppMode = 'window' | 'pip' | 'tab' | 'fullscreen' | 'widget'
 
 export const APP_MODES: Record<AppMode, string> = {
   window: 'Плавающее окно, его можно двигать',
   pip: 'Маленькое окошко в углу поверх всего',
   tab: 'Отдельная вкладка в рабочей области',
   fullscreen: 'Во весь экран поверх приложения',
+  // v1.480.0: свободный виджет — маленькая штука без тяжёлой шапки, которую
+  // человек ставит куда хочет. Появился вместо полосы над полем ввода:
+  // владелец сказал про неё прямо — «уродски», и он прав. Полоса занимала
+  // место у всех и всегда, а виджет стоит там, где его поставили, и только у
+  // того, кто его поставил.
+  widget: 'Свободный виджет — куда поставишь, там и будет',
 }
 
 /** Сколько областей может открыть один плагин. Больше — это уже не приложение. */
@@ -168,8 +174,10 @@ export function openApp(pluginId: string, a: {
     // Размер по умолчанию свой у каждого вида: окошко в углу должно быть
     // маленьким, обычное окно — рабочим. Раньше это стояло в стилях жёстко и
     // мешало человеку менять размер (см. .plugapp-pip в styles.css).
-    w: было ? clampSize(было.w, minW, MAX_W, 480) : clampSize(a.w, minW, MAX_W, a.mode === 'pip' ? 300 : 480),
-    h: было ? clampSize(было.h, minH, MAX_H, 360) : clampSize(a.h, minH, MAX_H, a.mode === 'pip' ? 200 : 360),
+    w: было ? clampSize(было.w, minW, MAX_W, 480)
+      : clampSize(a.w, minW, MAX_W, a.mode === 'pip' ? 300 : a.mode === 'widget' ? 280 : 480),
+    h: было ? clampSize(было.h, minH, MAX_H, 360)
+      : clampSize(a.h, minH, MAX_H, a.mode === 'pip' ? 200 : a.mode === 'widget' ? 160 : 360),
     // Плагин МОЖЕТ предложить место (например, чтобы окно не легло на другое
     // своё), но память человека главнее.
     x: было ? было.x : (a.x === undefined ? null : clampSize(a.x, 0, 10000, 0)),
@@ -323,7 +331,7 @@ function записатьСейчас() {
 }
 
 function запомнить(a: PluginApp) {
-  if (a.mode !== 'window' && a.mode !== 'pip') return
+  if (a.mode !== 'window' && a.mode !== 'pip' && a.mode !== 'widget') return
   ждёт = { ключ: placeKey(a.pluginId, a.title), м: { x: a.x, y: a.y, w: a.w, h: a.h, max: a.max } }
   if (Date.now() - когдаПисали >= 300) { записатьСейчас(); return }
   if (отложено) clearTimeout(отложено)
@@ -342,6 +350,24 @@ export function flushPlaces() {
   if (отложено) { clearTimeout(отложено); отложено = null }
   записатьСейчас()
 }
+
+/**
+ * Виджет плагина, выросший из панели «в чат» (v1.480.0).
+ *
+ * Один на плагин: повторный ui.addPanel обновляет его, а не открывает второй.
+ * Иначе плагин, рисующий панель заново на каждое событие (а так делают все),
+ * за минуту завалил бы экран копиями.
+ *
+ * Карта лежит ЗДЕСЬ, а не рядом с диспетчером: за плагином убирает cleanup.ts,
+ * а он зовётся из горячего кода. Потяни он api.ts — вся система плагинов
+ * уехала бы в стартовую сборку всем и каждому (так и вышло, поймал смоук).
+ */
+const виджеты = new Map<string, number>()
+
+export const widgetOf = (pluginId: string): number | undefined => виджеты.get(pluginId)
+export const setWidgetOf = (pluginId: string, id: number) => { виджеты.set(pluginId, id) }
+export function forgetWidget(pluginId: string) { виджеты.delete(pluginId) }
+export function forgetAllWidgets() { виджеты.clear() }
 
 export function appList(pluginId?: string): PluginApp[] {
   const all = [...apps.values()]
