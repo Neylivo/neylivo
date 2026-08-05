@@ -29,6 +29,8 @@ export const KEY = 'ponoi_settings'
 export const ACCOUNT_KEYS = [
   'notifSystem', 'notifSounds', 'mentionsOnly', 'unreadBadge', 'notifFriendRequests',
   'hideLastSeen', 'defaultServerNotif',
+  // v1.477.0: отметка «просмотрено» — про человека, а не про устройство.
+  'readReceipts',
 ] as const
 export type AccountKey = typeof ACCOUNT_KEYS[number]
 export const isAccountKey = (k: string): k is AccountKey => (ACCOUNT_KEYS as readonly string[]).includes(k)
@@ -53,6 +55,9 @@ export interface Settings {
   mentionsOnly: boolean
   unreadBadge: boolean
   notifFriendRequests: boolean
+  /** Показывать собеседнику, что я прочитал. Выключено — своя отметка не
+   *  пишется и чужая не показывается: в обе стороны или никак (v1.477.0). */
+  readReceipts: boolean
   micVol: number
   spkVol: number
   /** ИИ-шумоподавление (Krisp) в звонке. v1.409.0 */
@@ -95,7 +100,8 @@ export interface Settings {
   pttMode: boolean
   keyPTT: string
   defaultServerNotif: 'all' | 'mentions' | 'mute'
-  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
+  composerStyle: 'default' | 'outline' | 'glass' | 'neon' | 'compact'
+
   /** v1.453.0: свайпы от края экрана (шторки на телефоне). */
   swipes: boolean
 }
@@ -103,6 +109,7 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   theme: 'dark', accent: '#5865f2', custom: DEFAULT_CUSTOM, compact: false, fontPx: 16, zoom: 100, animations: true, autoTheme: false, systemTheme: false,
   notifSystem: true, notifSounds: true, mentionsOnly: false, unreadBadge: true, notifFriendRequests: true,
+  readReceipts: true,
   micVol: 100, spkVol: 100, krisp: true, lang: 'ru', hideLastSeen: false,
   // v1.453.0: свайпы от края открывают шторки на телефоне. По умолчанию
   // включены только там: на компьютере жест от края мешал бы выделению.

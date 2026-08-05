@@ -259,6 +259,9 @@ const ponoi = {
     send: (text) => call('messages.send', [String(text)]),
     // v1.419.0: то, что уже на экране, и то, что человек делает с сообщением
     // сам. Работает только с открытым чатом — тем же, куда пишет send.
+    // v1.477.0: просмотрено ли моё сообщение — { at, seenLabel, on }.
+    // null означает «это не личный разговор» или «отметки выключены».
+    readState: () => call('messages.readState', []),
     recent: (limit) => call('messages.recent', [Number(limit) || 20]),
     react: (messageId, emoji) => call('messages.react', [String(messageId), String(emoji)]),
     remove: (messageId) => call('messages.remove', [String(messageId)]),

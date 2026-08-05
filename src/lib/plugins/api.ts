@@ -103,7 +103,7 @@ export const PLUGIN_METHODS = [
   'input.gamepads',
   // v1.475.0: своё окно-вопрос. Форма из тех же строк, что панель; ответ —
   // значения полей, и ничего больше.
-  'ui.dialog',
+  'ui.dialog', 'messages.readState',
   // v1.475.0: перехват вложений — своё разрешение, помеченное опасным.
   'messages.onUpload',
 ] as const
@@ -160,6 +160,11 @@ export interface HostContext {
   me?: () => { id: string; name: string } | null
   /** Какой канал открыт. null — никакой (например, открыты настройки). */
   channel?: () => { id: string; name: string; serverId: string | null; serverName: string | null } | null
+  /**
+   * v1.477.0: докуда дочитал собеседник в ОТКРЫТОМ личном разговоре.
+   * Подставляет экран личных сообщений; в канале и без разговора — null.
+   */
+  readState?: () => Promise<{ at: number | null; seenLabel: string | null; on: boolean } | null>
   /** Спросить у человека «да/нет». Возвращает его ответ. */
   confirm?: (title: string, text: string, ok: string) => Promise<boolean>
   /** Спросить строку. null — человек отказался. */
@@ -1205,6 +1210,15 @@ export function createDispatcher(
       // ---- Геймпад (нужно input) -----------------------------------------
       // Только чтение и только то устройство, которое человек воткнул сам.
       // Опрос идёт в приложении: у воркера getGamepads нет и быть не может.
+      // ---- Просмотрено ли моё сообщение (нужно messages.read) -------------
+      // Отметка приходит от приложения: у плагина нет и не будет доступа к
+      // базе. Отдаём только то, что и так видно человеку в открытом у него
+      // разговоре, — докуда дочитал собеседник.
+      case 'messages.readState': {
+        need('messages.read')
+        return ctx.readState ? await ctx.readState() : null
+      }
+
       case 'input.gamepads': {
         need('input')
         return readPads()

@@ -50,6 +50,15 @@ function loadPlugin(code: string) {
 const ROW_TYPES = ['toggle', 'text', 'select', 'button', 'label', 'progress', 'slider', 'color', 'image', 'canvas', 'keybind']
 
 /** Заглушка ponoi: записывает всё, что плагин попросил, и ничего не делает. */
+/** Пустой холст: плагину важно, что вызовы не падают, а не что нарисовано. */
+function рисовалка() {
+  const ничего = () => {}
+  return new Proxy({}, {
+    get: (_t, k) => (k === 'canvas' ? { width: 600, height: 160 } : ничего),
+    set: () => true,
+  }) as any
+}
+
 function stubPonoi() {
   const calls = {
     commands: [] as string[],
@@ -61,6 +70,11 @@ function stubPonoi() {
     panels: [] as any[],
     hotkeys: [] as string[],
     hooks: [] as string[],
+    canvases: [] as string[],
+    dialogs: [] as string[],
+    apps: [] as string[],
+    headerButtons: [] as string[],
+    themes: [] as string[],
   }
   const ponoi: any = {
     css: (t: string) => { calls.css++; if (typeof t !== 'string') throw new Error('css: не строка') },
@@ -82,17 +96,79 @@ function stubPonoi() {
         if (!o?.slot) throw new Error('addPanel: не сказано место (slot)')
         calls.panels.push(o)
       },
+      // v1.465.0/1.471.0/1.475.0: холст, окно и окно-вопрос. Плагин, который
+      // ими пользуется, обязан доходить здесь до конца, а не падать на
+      // «не функция» — иначе проверка ловит не свою ошибку.
+      getCanvas: async (key: string) => {
+        if (!key) throw new Error('getCanvas: нужен ключ холста')
+        calls.canvases.push(String(key))
+        return { width: 600, height: 160, getContext: () => рисовалка() }
+      },
+      dialog: async (o: any) => {
+        if (!o?.title || !Array.isArray(o.rows)) throw new Error('dialog: нужны title и rows')
+        calls.dialogs.push(o.title)
+        return null
+      },
+      addHeaderButton: (o: any) => {
+        if (!o?.key || typeof o.onClick !== 'function') throw new Error('addHeaderButton: нужны key и onClick')
+        calls.headerButtons.push(String(o.key))
+      },
+      setTheme: async (c: any) => {
+        if (!c || typeof c !== 'object') throw new Error('setTheme: нужен словарь цветов')
+        calls.themes.push(Object.keys(c).join(','))
+      },
+      clearTheme: async () => {},
       addHotkey: (o: any) => {
         if (!o?.combo || typeof o.onPress !== 'function') throw new Error('addHotkey: нужны combo и onPress')
         calls.hotkeys.push(o.combo)
       },
     },
     commands: {
-      register: async (name: string, desc: string, handler: any) => {
-        if (typeof handler !== 'function') throw new Error('команда без обработчика')
-        if (!desc) throw new Error('команда без описания')
-        calls.commands.push(name)
+      // v1.475.0: два вида записи — прежний и объектом с доводами. Заглушка
+      // обязана понимать оба, иначе плагин на новой записи падает здесь на
+      // «команда без обработчика», хотя написан правильно.
+      register: async (a: any, desc?: string, handler?: any) => {
+        const объект = a && typeof a === 'object'
+        const имя = объект ? a.name : a
+        const опис = объект ? a.description : desc
+        const обр = объект ? (a.onRun ?? a.handler) : handler
+        if (typeof обр !== 'function') throw new Error('команда без обработчика')
+        if (!опис) throw new Error('команда без описания')
+        if (объект && a.args && !Array.isArray(a.args)) throw new Error('args: нужен список')
+        calls.commands.push(имя)
       },
+    },
+    apps: {
+      create: async (o: any) => {
+        if (!o?.mode) throw new Error('apps.create: не сказан вид окна (mode)')
+        calls.apps.push(o.mode)
+        return calls.apps.length
+      },
+      update: async () => true,
+      close: async () => true,
+    },
+    db: {
+      table: () => ({
+        insert: async () => 'id1', get: async () => null, all: async () => [],
+        update: async () => true, remove: async () => true, count: async () => 0,
+        clear: async () => 0, where: () => ({ get: async () => [] }),
+      }),
+      tables: async () => [],
+    },
+    assets: {
+      put: async () => ({ name: 'f', type: 'image/png', kind: 'image', size: 1, at: 0 }),
+      fetch: async () => ({ name: 'f', type: 'image/png', kind: 'image', size: 1, at: 0 }),
+      get: async () => new ArrayBuffer(1), info: async () => null, list: async () => [],
+      remove: async () => true, clear: async () => 0, play: async () => true,
+      image: async () => ({ width: 1, height: 1 }), text: async () => '',
+    },
+    background: {
+      every: async (ms: number, fn: any) => {
+        if (typeof fn !== 'function') throw new Error('background.every: нужна функция')
+        if (!(ms >= 1000)) throw new Error('background.every: слишком часто')
+        return 1
+      },
+      stop: async () => true,
     },
     messages: {
       send: async (t: string) => { calls.sent.push(String(t)) },
@@ -105,6 +181,8 @@ function stubPonoi() {
       onBeforeSend: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onBeforeSend: нужна функция'); calls.hooks.push('send') },
       onBeforeRender: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onBeforeRender: нужна функция'); calls.hooks.push('render') },
       onUpload: async (fn: any) => { if (typeof fn !== 'function') throw new Error('onUpload: нужна функция'); calls.hooks.push('upload') },
+      // v1.477.0: «прочитал ли собеседник». В заглушке — «личка не открыта».
+      readState: async () => null,
     },
     storage: { get: async () => null, set: async () => {}, remove: async () => {}, keys: async () => [], clear: async () => {} },
     net: { fetch: async () => ({ ok: true, status: 200, body: '' }), json: async () => ({ ok: true, status: 200, data: {} }) },
@@ -196,9 +274,9 @@ console.log('\n── Плагины от нас ──')
 const expected: Record<string, { commands?: string[]; settings?: boolean; events?: string[]; css?: boolean }> = {
   'ponoi-voice-changer': { commands: ['голос'], settings: true, events: ['settings'] },
   'ponoi-dice': { commands: ['кубик', 'монетка', 'выбери'] },
-  'ponoi-timer': { commands: ['таймер'] },
-  'ponoi-afk': { settings: true, events: ['message'] },
-  'ponoi-soft-light': { settings: true, css: true, events: ['settings'] },
+  'ponoi-timer': { commands: ['напомни'] },
+  'ponoi-afk': { events: ['message'] },
+  'ponoi-soft-light': { settings: true, events: ['settings'] },
 }
 
 for (const p of OFFICIAL_PLUGINS) {
@@ -550,6 +628,8 @@ for (const p of OFFICIAL_PLUGINS) {
     'assets.remove', 'assets.clear', 'assets.play', 'input.gamepads',
     // v1.475.0
     'ui.dialog', 'messages.onUpload',
+    // v1.477.0
+    'messages.readState',
   ]
 
 

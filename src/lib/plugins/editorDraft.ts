@@ -239,6 +239,10 @@ const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
   { re: /\bponoi\s*\.\s*clipboard\s*\./,                      perms: ['ui'],                        what: 'ponoi.clipboard' },
   { re: /\bponoi\s*\.\s*music\s*\./,                          perms: ['music'],                     what: 'ponoi.music' },
   { re: /\bponoi\s*\.\s*messages\s*\.\s*recent\s*\(/,        perms: ['messages.read'],             what: 'ponoi.messages.recent' },
+  // v1.477.0: «прочитал ли собеседник» — это про открытый разговор, и
+  // разрешение то же, что на чтение сообщений.
+  { re: /\bponoi\s*\.\s*messages\s*\.\s*readState\s*\(/,     perms: ['messages.read'],             what: 'ponoi.messages.readState' },
+  { re: /\bponoi\s*\.\s*on\s*\(\s*['\"`]read['\"`]/,          perms: ['messages.read'],             what: "ponoi.on('read')" },
   { re: /\bponoi\s*\.\s*messages\s*\.\s*(react|remove)\s*\(/, perms: ['messages.write'],            what: 'ponoi.messages.react/remove' },
   { re: /\bponoi\s*\.\s*(me|channel|servers|channels)\s*\(/,  perms: ['context'],                   what: 'ponoi.me/channel/servers/channels' },
   { re: /\bponoi\s*\.\s*open\s*\(/,                           perms: ['navigate'],                  what: 'ponoi.open' },

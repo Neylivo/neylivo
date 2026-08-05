@@ -95,7 +95,7 @@ function slowModeSeconds(label?: string): number {
   return m[2] === 'с' ? n : m[2] === 'м' ? n * 60 : n * 3600
 }
 
-export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode, automodCheck, channelName, serverName }:
+export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onType, mentionables, mentionableRoles, draftKey, editingTarget, onSaveEdit, onCancelEdit, serverId, channelId, canAttachFiles, canMentionEveryone, canMentionRoles, slowMode, automodCheck, channelName, serverName, readState }:
   // v1.185.0: files — сырые файлы для отправки «как в Discord»: composer отдаёт
   // локальный blob-превью сразу (attach.url), а саму заливку на сервер и подмену
   // на настоящий URL делает вызывающая сторона (sendMsg в ServerView/DMHome) уже
@@ -118,6 +118,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     // v1.360.0: названия нужны плагинам с разрешением «context» — чтобы понимать,
     // где они работают. Необязательные: у ветки и лички своего названия нет.
     channelName?: string; serverName?: string
+    // v1.477.0: докуда дочитал собеседник. Есть только в личке — в канале
+    // отметки «просмотрено» нет и быть не может: читателей там много.
+    readState?: () => { at: number | null; seenLabel: string | null; on: boolean } | null
     // v1.198.0: права ATTACH_FILES/MENTION_EVERYONE — undefined (ЛС, где прав нет) значит «можно».
     canAttachFiles?: boolean; canMentionEveryone?: boolean
     // v1.239.0: MENTION_ROLES — недоступно по умолчанию (в отличие от MENTION_EVERYONE),
@@ -382,6 +385,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   // на каждом рендере, и эффект срабатывал бы вхолостую без конца.
   const onSendRef = useRef(onSend)
   onSendRef.current = onSend
+  // Через ref по той же причине, что и onSend: родитель пересоздаёт функцию
+  // на каждом рендере, а контекст плагина захватывается один раз.
+  const readStateRef = useRef(readState)
+  readStateRef.current = readState
   const claimCtx = (force: boolean) => claimHostContext(ctxIdRef.current, {
     sendMessage: async text => { await onSendRef.current(text) },
     toast: msg => toast(msg),
@@ -393,6 +400,9 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       : null),
     confirm: (title, text, ok) => confirmUi(text ? title + '\n' + text : title, { okText: ok }),
     prompt: (title, placeholder, value) => promptUi(title, { placeholder, initial: value }),
+    // v1.477.0: плагин спрашивает — приложение отвечает. Своей дороги к базе
+    // у плагина нет и не будет.
+    readState: async () => (readStateRef.current ? readStateRef.current() : null),
   }, force)
   useEffect(() => {
     const id = ctxIdRef.current

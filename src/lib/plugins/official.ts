@@ -68,90 +68,168 @@ export async function onLoad(ponoi) {
 
 // ── 2. Кубик и монетка ─────────────────────────────────────────────────────
 const DICE = `/**
- * @name Кубик и монетка
+ * @name Кубик и жребий
  * @id ponoi-dice
  * @version 1.0.0
  * @author Ponoi
- * @description /кубик, /монетка и /выбери — быстро решить спор прямо в чате.
+ * @description Кубик, монетка и «выбери за меня» — с подсказками прямо в поле ввода: видно, что писать дальше.
  * @permissions commands, messages.write
  */
 export async function onLoad(ponoi) {
   const rnd = (n) => Math.floor(Math.random() * n)
 
-  await ponoi.commands.register('кубик', 'Бросить кубик: /кубик или /кубик 20', async (arg) => {
-    const sides = Math.min(1000, Math.max(2, parseInt(String(arg || '6'), 10) || 6))
-    await ponoi.messages.send('🎲 Кубик на ' + sides + ': выпало ' + (rnd(sides) + 1))
+  // v1.477.0: команда объявляет ДОВОДЫ — приложение показывает их в поле ввода
+  // и подсказывает значения. Раньше человек, набравший «/кубик», видел пустоту.
+  await ponoi.commands.register({
+    name: 'кубик',
+    description: 'Бросить кубик',
+    args: [{
+      name: 'граней',
+      description: 'сколько граней, по умолчанию 6',
+      options: [
+        { value: '6', label: 'обычный, 6' },
+        { value: '20', label: 'ролевой, 20' },
+        { value: '100', label: 'сотка, 100' },
+      ],
+    }],
+    onRun: async (строка) => {
+      const sides = Math.min(1000, Math.max(2, parseInt(строка, 10) || 6))
+      await ponoi.messages.send('🎲 Кубик на ' + sides + ': выпало ' + (rnd(sides) + 1))
+    },
   })
 
   await ponoi.commands.register('монетка', 'Орёл или решка', async () => {
     await ponoi.messages.send(rnd(2) ? '🪙 Орёл' : '🪙 Решка')
   })
 
-  await ponoi.commands.register('выбери', 'Выбрать одно из: /выбери чай | кофе | сон', async (arg) => {
-    const parts = String(arg || '').split(/[|,]/).map(s => s.trim()).filter(Boolean)
-    if (parts.length < 2) { await ponoi.messages.send('Дай хотя бы два варианта через |'); return }
-    await ponoi.messages.send('🤔 Я выбираю: **' + parts[rnd(parts.length)] + '**')
+  await ponoi.commands.register({
+    name: 'выбери',
+    description: 'Выбрать одно из нескольких',
+    args: [{ name: 'варианты', required: true, placeholder: 'чай | кофе | сон' }],
+    onRun: async (строка) => {
+      const parts = String(строка || '').split(/[|,]/).map(s => s.trim()).filter(Boolean)
+      if (parts.length < 2) { await ponoi.messages.send('Дай хотя бы два варианта через |'); return }
+      await ponoi.messages.send('🤔 Я выбираю: **' + parts[rnd(parts.length)] + '**')
+    },
   })
 }
 `
 
 // ── 3. Таймер ──────────────────────────────────────────────────────────────
 const TIMER = `/**
- * @name Таймер
+ * @name Напоминания
  * @id ponoi-timer
  * @version 1.0.0
  * @author Ponoi
- * @description /таймер 10м чай — напомнит уведомлением, когда время выйдет.
- * @permissions commands, notify
+ * @description /напомни 10м заварить чай. Напоминания переживают перезапуск приложения — они лежат на этом устройстве, а не в памяти.
+ * @permissions commands, notify, storage, background, settings
  */
 export async function onLoad(ponoi) {
-  // Живёт, пока открыто приложение: таймер на выключенном компьютере не сработал
-  // бы всё равно, а обещать «напомню через сутки» и не напомнить — обман.
-  await ponoi.commands.register('таймер', 'Напомнить через время: /таймер 10м заварить чай', async (arg) => {
-    const m = String(arg || '').trim().match(/^(\\d+)\\s*([сcмmчh]?)\\s*(.*)$/i)
-    if (!m) { ponoi.notify('Формат: /таймер 10м текст'); return }
-    const n = parseInt(m[1], 10)
-    const unit = (m[2] || 'м').toLowerCase()
-    const mult = (unit === 'с' || unit === 'c') ? 1000 : (unit === 'ч' || unit === 'h') ? 3600000 : 60000
-    const ms = n * mult
-    if (!n || ms > 12 * 3600000) { ponoi.notify('От 1 секунды до 12 часов'); return }
-    const text = (m[3] || '').trim() || 'Время вышло';
-    ponoi.notify('Таймер поставлен: ' + n + (unit || 'м'))
-    setTimeout(() => ponoi.notify('⏰ ' + text), ms)
+  // v1.477.0: раньше это был setTimeout — то есть напоминание умирало вместе с
+  // закрытым приложением, о чём человек узнавал ровно тогда, когда оно не
+  // сработало. Теперь срок лежит в таблице, а проверяет его фоновая задача.
+  const таблица = () => ponoi.db.table('напоминания')
+
+  async function проверить() {
+    const сейчас = Date.now()
+    const все = await таблица().all(200)
+    for (const н of все) {
+      if (Number(н.когда) > сейчас) continue
+      ponoi.notify('⏰ ' + (н.текст || 'Время вышло'))
+      await таблица().remove(н.id)
+    }
+  }
+
+  async function показать() {
+    const все = (await таблица().all(200)).sort((a, b) => a.когда - b.когда)
+    await ponoi.ui.addSettingsPage({
+      title: 'Напоминания',
+      rows: все.length === 0
+        ? [{ type: 'label', key: 'нет', label: 'Пока пусто', value: 'Ставится командой /напомни' }]
+        : все.slice(0, 20).map(н => ({
+            type: 'label', key: 'н' + н.id,
+            label: new Date(н.когда).toLocaleString(),
+            value: String(н.текст || ''),
+          })),
+    })
+  }
+
+  await ponoi.background.every(20000, проверить, 'напоминания')
+  await проверить()
+  await показать()
+
+  await ponoi.commands.register({
+    name: 'напомни',
+    description: 'Напомнить через время',
+    args: [
+      { name: 'через', required: true, description: '10м, 30с, 2ч',
+        options: [{ value: '5м', label: 'через 5 минут' }, { value: '30м', label: 'через полчаса' }, { value: '1ч', label: 'через час' }] },
+      { name: 'о чём', placeholder: 'заварить чай' },
+    ],
+    onRun: async (строка) => {
+      const m = String(строка || '').trim().match(/^(\\d+)\\s*([сcмmчh]?)\\s*([\\s\\S]*)$/i)
+      if (!m) { ponoi.notify('Формат: /напомни 10м текст'); return }
+      const n = parseInt(m[1], 10)
+      const unit = (m[2] || 'м').toLowerCase()
+      const mult = (unit === 'с' || unit === 'c') ? 1000 : (unit === 'ч' || unit === 'h') ? 3600000 : 60000
+      const ms = n * mult
+      if (!n || ms > 7 * 24 * 3600000) { ponoi.notify('От 1 секунды до недели'); return }
+      await таблица().insert({ когда: Date.now() + ms, текст: (m[3] || '').trim() || 'Время вышло' })
+      await показать()
+      ponoi.notify('Напомню через ' + n + unit)
+    },
   })
 }
 `
 
 // ── 4. Автоответ «меня нет» ────────────────────────────────────────────────
 const AFK = `/**
- * @name Автоответ «меня нет»
+ * @name Меня нет
  * @id ponoi-afk
  * @version 1.0.0
  * @author Ponoi
- * @description Пока включён, отвечает один раз каждому, кто тебя упомянул: «отошёл, скоро буду».
- * @permissions messages.read, messages.write, settings, storage, notify
+ * @description Ставит твою активность «Отошёл» и отвечает один раз каждому, кто тебя упомянул. Включается кнопкой в шапке.
+ * @permissions messages.read, messages.write, status, ui, notify, storage
  */
 export async function onLoad(ponoi) {
-  const answered = new Set()
+  // v1.477.0: раньше это была страница настроек с переключателем — то есть
+  // включать «меня нет» надо было, уже уходя, через три экрана. Теперь кнопка
+  // в шапке и один вопрос, а заодно приложение показывает другим «Отошёл»:
+  // половина смысла была именно в этом, и её не было.
+  let включён = false
+  const отвечено = new Set()
+  const текст = async () => (await ponoi.storage.get('текст')) || 'Отошёл — отвечу, как вернусь.'
 
-  const text = async () => (await ponoi.storage.get('text')) || 'Отошёл — отвечу, как вернусь.';
-  const isOn = async () => !!(await ponoi.storage.get('on'))
+  async function переключить() {
+    if (включён) {
+      включён = false
+      отвечено.clear()
+      await ponoi.status.set('')
+      ponoi.notify('С возвращением')
+      return
+    }
+    const ответ = await ponoi.ui.dialog({
+      title: 'Отойти',
+      text: 'Отвечу за тебя один раз каждому, кто упомянет.',
+      ok: 'Отойти',
+      rows: [
+        { type: 'text', key: 'текст', label: 'Что отвечать', value: await текст() },
+        { type: 'text', key: 'активность', label: 'Активность', value: 'Отошёл' },
+      ],
+    })
+    if (!ответ) return
+    await ponoi.storage.set('текст', String(ответ.текст || ''))
+    await ponoi.status.set(String(ответ.активность || 'Отошёл'))
+    включён = true
+    ponoi.notify('Отвечаю за тебя')
+  }
 
-  await ponoi.ui.addSettingsPage({
-    title: 'Автоответ «меня нет»',
-    rows: [
-      { type: 'toggle', key: 'on', label: 'Включён', description: 'Отвечать на упоминания, пока тебя нет', value: await isOn() },
-      { type: 'text', key: 'text', label: 'Текст ответа', placeholder: 'Отошёл — отвечу, как вернусь.', value: await text() },
-      { type: 'button', key: 'reset', label: 'Отвечать всем заново', description: 'Каждому отвечаем один раз — это сбрасывает память', onClick: () => { answered.clear(); ponoi.notify('Готово') } },
-    ],
-  })
+  await ponoi.ui.addHeaderButton({ key: 'afk', icon: 'clock', tooltip: 'Меня нет', onClick: переключить })
 
-  await ponoi.on('message', async (msg) => {
-    if (!(await isOn())) return
-    if (!msg.mentionsMe) return
-    if (answered.has(msg.author)) return
-    answered.add(msg.author)
-    await ponoi.messages.send(await text())
+  ponoi.on('message', async (msg) => {
+    if (!включён || !msg.mentionsMe || отвечено.has(msg.author)) return
+    отвечено.add(msg.author)
+    await ponoi.messages.send(await текст())
   })
 }
 `
@@ -162,30 +240,34 @@ const SOFT = `/**
  * @id ponoi-soft-light
  * @version 1.0.0
  * @author Ponoi
- * @description Убирает резкий белый текст и жёсткие границы — глазам ночью легче. Сила настраивается.
- * @permissions css, settings, storage
+ * @description Приглушает цвета приложения — глазам вечером легче. Без своих стилей: меняются только цвета, вёрстка не трогается.
+ * @permissions ui.theme, settings, storage
  */
 export async function onLoad(ponoi) {
-  const level = async () => String((await ponoi.storage.get('level')) || 'mid')
-
-  function css(l) {
-    const dim = l === 'low' ? '0.90' : l === 'high' ? '0.72' : '0.82';
-    const soft = l === 'low' ? '0.06' : l === 'high' ? '0.16' : '0.10';
-    return [
-      '.msg-txt, .me-nm, .ch-nm { filter: brightness(' + dim + '); }',
-      '.msg:hover { background: rgba(var(--ov), ' + soft + ') !important; }',
-      '.ch, .plug-card, .devp-card { border-radius: 10px; }',
-    ].join('\\n')
+  // v1.477.0: раньше плагин ставил свой CSS — то есть лез в чужую вёрстку и
+  // ломался бы от любой правки разметки. Теперь он меняет ЦВЕТА через
+  // безопасный набор имён: сломать этим ничего нельзя.
+  const НАБОРЫ = {
+    low:  { 'bg-content': '#31333a', 'bg-main': '#2a2c33', 'text': '#cfd2d6', 'text-muted': '#8d939c' },
+    mid:  { 'bg-content': '#2b2d33', 'bg-main': '#25272d', 'text': '#c2c6cb', 'text-muted': '#848a93' },
+    high: { 'bg-content': '#232529', 'bg-main': '#1e2024', 'text': '#b3b8be', 'text-muted': '#79808a' },
   }
 
-  await ponoi.css(css(await level()))
+  const сила = async () => String((await ponoi.storage.get('сила')) || 'mid')
+
+  async function применить() {
+    const s = await сила()
+    if (s === 'off') { await ponoi.ui.clearTheme(); return }
+    await ponoi.ui.setTheme(НАБОРЫ[s] || НАБОРЫ.mid)
+  }
 
   await ponoi.ui.addSettingsPage({
     title: 'Мягкий свет',
     rows: [{
-      type: 'select', key: 'level', label: 'Сила', description: 'Насколько приглушать текст',
-      value: await level(),
+      type: 'select', key: 'сила', label: 'Сила', description: 'Насколько приглушать',
+      value: await сила(),
       options: [
+        { value: 'off', label: 'Выключено' },
         { value: 'low', label: 'Слегка' },
         { value: 'mid', label: 'Средне' },
         { value: 'high', label: 'Сильно' },
@@ -194,7 +276,390 @@ export async function onLoad(ponoi) {
   })
 
   ponoi.on('settings', async (e) => {
-    if (e.key === 'level') await ponoi.css(css(String(e.value)))
+    if (e.key !== 'сила') return
+    await ponoi.storage.set('сила', String(e.value))
+    await применить()
+  })
+
+  await применить()
+}
+`
+
+// ── 8. Прочитано ───────────────────────────────────────────────────────────
+//
+// v1.477.0. Показывает то, чего в приложении не было вовсе: прочитал ли
+// собеседник твоё сообщение. Данные даёт приложение (см. lib/dmReads.ts и
+// миграцию 106) — своей дороги к базе у плагина нет и не будет.
+const READS = `/**
+ * @name Прочитано
+ * @id ponoi-read-receipts
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Показывает в личной переписке, когда собеседник её прочитал. Работает в обе стороны: не показываешь свою отметку — не видишь чужую.
+ * @permissions panel, messages.read, context, notify
+ */
+export async function onLoad(ponoi) {
+  let последнее = null
+
+  async function рисуй() {
+    const s = await ponoi.messages.readState()
+    let текст
+    if (!s) текст = 'Только в личной переписке'
+    else if (!s.on) текст = 'Отметки выключены в настройках'
+    else текст = s.seenLabel || 'Пока не прочитано'
+    последнее = s
+    await ponoi.ui.addPanel({
+      slot: 'chat',
+      title: 'Прочитано',
+      rows: [
+        { type: 'label', key: 'состояние', label: 'Собеседник', value: текст },
+        { type: 'button', key: 'обновить', label: 'Проверить сейчас', onClick: рисуй },
+      ],
+    })
+  }
+
+  await рисуй()
+  // Событием, а не опросом: приложение само скажет, когда отметка изменилась.
+  ponoi.on('read', async (e) => {
+    await рисуй()
+    if (!последнее || !последнее.at) ponoi.notify('Твоё сообщение прочитали')
+  })
+  ponoi.on('channel', рисуй)
+}
+`
+
+// ── 9. Заметки ─────────────────────────────────────────────────────────────
+//
+// v1.477.0. Показывает окно-вкладку и таблицы: заметок может быть тысяча, и
+// хранилище «ключ-значение» для такого не годится.
+const NOTES = `/**
+ * @name Заметки
+ * @id ponoi-notes
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Свои заметки прямо в Ponoi: отдельная вкладка, поиск, сколько угодно записей. Хранятся на этом устройстве.
+ * @permissions apps, storage, commands, ui
+ */
+export async function onLoad(ponoi) {
+  let окно = null, поиск = ''
+
+  const все = async () => (await ponoi.db.table('заметки').all(500))
+    .sort((a, b) => (b.когда || 0) - (a.когда || 0))
+
+  async function строки() {
+    const список = (await все()).filter(z => !поиск || String(z.текст).toLowerCase().includes(поиск))
+    const r = [
+      { type: 'text', key: 'поиск', label: 'Поиск', placeholder: 'по словам', value: поиск },
+      { type: 'button', key: 'новая', label: '+ Новая заметка', onClick: новая },
+      { type: 'label', key: 'сколько', label: 'Всего', value: String((await все()).length) },
+    ]
+    for (const z of список.slice(0, 40)) {
+      r.push({ type: 'label', key: 'z' + z.id, label: new Date(z.когда).toLocaleString(), value: String(z.текст).slice(0, 90) })
+      r.push({ type: 'button', key: 'u' + z.id, label: 'Убрать', onClick: async () => {
+        await ponoi.db.table('заметки').remove(z.id)
+        await обновить()
+      } })
+    }
+    return r
+  }
+
+  async function новая() {
+    const ответ = await ponoi.ui.dialog({
+      title: 'Новая заметка', ok: 'Сохранить',
+      rows: [{ type: 'text', key: 'текст', label: 'Текст', value: '' }],
+    })
+    if (!ответ || !String(ответ.текст || '').trim()) return
+    await ponoi.db.table('заметки').insert({ текст: String(ответ.текст).trim(), когда: Date.now() })
+    await обновить()
+  }
+
+  async function обновить() {
+    if (окно === null) return
+    await ponoi.apps.update(окно, { rows: await строки() })
+  }
+
+  async function открыть() {
+    if (окно !== null) { await обновить(); return }
+    окно = await ponoi.apps.create({ mode: 'tab', title: 'Заметки', icon: 'list', rows: await строки() })
+  }
+
+  ponoi.on('settings', async (e) => {
+    if (e.key === 'поиск') { поиск = String(e.value || '').toLowerCase(); await обновить() }
+  })
+  ponoi.on('app', (e) => { if (!e.open) окно = null })
+
+  await ponoi.commands.register('заметки', 'Открыть свои заметки', открыть)
+  await ponoi.ui.addComposerButton({ key: 'заметки', icon: 'list', tooltip: 'Заметки', onClick: открыть })
+}
+`
+
+// ── 10. Секретка ───────────────────────────────────────────────────────────
+//
+// v1.477.0. Показывает перехват сообщений — самое сильное разрешение из всех.
+// Личная переписка в Ponoi и так шифруется; смысл этого плагина в другом: он
+// прячет текст в ОБЩЕМ канале, где шифрования нет, — и прочитать его смогут
+// только те, кому ты сказал слово.
+const SECRET = `/**
+ * @name Секретка
+ * @id ponoi-secret
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Прячет твои сообщения в канале за секретным словом: пишешь !с текст — уходит шифром, а у тех, кто знает слово, читается обычным текстом.
+ * @permissions messages.intercept, settings, storage
+ */
+export async function onLoad(ponoi) {
+  const МЕТКА = 'сек1:'
+
+  const слово = async () => String((await ponoi.storage.get('слово')) || '')
+
+  // Простой обратимый шифр на слове. ЧЕСТНО: это не защита от того, кто знает,
+  // что делает, — сервер видит длину и время, а слово подбирается перебором.
+  // Это ширма от чужих глаз в общем канале, и так и написано на странице.
+  function шифр(текст, ключ) {
+    const t = new TextEncoder().encode(текст)
+    const k = new TextEncoder().encode(ключ)
+    const out = new Uint8Array(t.length)
+    for (let i = 0; i < t.length; i++) out[i] = t[i] ^ k[i % k.length] ^ (i * 7 & 0xff)
+    let s = ''
+    for (const b of out) s += String.fromCharCode(b)
+    return btoa(s)
+  }
+  function расшифр(строка, ключ) {
+    try {
+      const bin = atob(строка)
+      const k = new TextEncoder().encode(ключ)
+      const out = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i) ^ k[i % k.length] ^ (i * 7 & 0xff)
+      const t = new TextDecoder('utf-8', { fatal: true }).decode(out)
+      return t
+    } catch (e) { return null }
+  }
+
+  await ponoi.ui.addSettingsPage({
+    title: 'Секретка',
+    rows: [
+      { type: 'text', key: 'слово', label: 'Секретное слово', description: 'Знают его — прочитают. Одно на всех, кому пишешь.', value: await слово() },
+      { type: 'label', key: 'как', label: 'Как писать', value: 'Начни сообщение с !с — например: !с встречаемся в семь' },
+      { type: 'label', key: 'честно', label: 'Честно', value: 'Это ширма от чужих глаз, а не настоящая защита: слово подбирается перебором' },
+    ],
+  })
+  ponoi.on('settings', async (e) => { if (e.key === 'слово') await ponoi.storage.set('слово', String(e.value || '')) })
+
+  ponoi.messages.onBeforeSend(async (ctx) => {
+    const k = await слово()
+    if (!k || ctx.content.slice(0, 3) !== '!с ') return
+    return { content: МЕТКА + шифр(ctx.content.slice(3), k) }
+  })
+
+  ponoi.messages.onBeforeRender(async (ctx) => {
+    if (ctx.content.slice(0, МЕТКА.length) !== МЕТКА) return
+    const k = await слово()
+    const т = k ? расшифр(ctx.content.slice(МЕТКА.length), k) : null
+    return { content: т === null ? '🔒 секретка (не то слово)' : '🔓 ' + т }
+  })
+}
+`
+
+// ── 11. Погода ─────────────────────────────────────────────────────────────
+//
+// v1.477.0. Показывает сеть: единственный плагин от нас, который вообще куда-то
+// ходит. Сервис выбран без ключа и без учётной записи (open-meteo) — иначе
+// «поставил и не работает, пока не заведёшь ключ».
+const WEATHER = `/**
+ * @name Погода
+ * @id ponoi-weather
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Погода в твоём городе — панелью в чате и командой /погода. Без ключей и регистрации.
+ * @permissions panel, commands, net, storage, settings, messages.write
+ * @hosts api.open-meteo.com, geocoding-api.open-meteo.com
+ */
+export async function onLoad(ponoi) {
+  const ВИД = { 0: 'ясно ☀️', 1: 'почти ясно 🌤', 2: 'облачно 🌥', 3: 'пасмурно ☁️',
+    45: 'туман 🌫', 48: 'туман 🌫', 51: 'морось 🌦', 61: 'дождь 🌧', 63: 'дождь 🌧',
+    65: 'ливень 🌧', 71: 'снег 🌨', 73: 'снег 🌨', 75: 'снегопад 🌨', 80: 'ливни 🌦',
+    95: 'гроза ⛈', 96: 'гроза с градом ⛈' }
+
+  const город = async () => String((await ponoi.storage.get('город')) || 'Москва')
+
+  async function найтиГород(имя) {
+    const r = await ponoi.net.fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=' + encodeURIComponent(имя))
+    const j = JSON.parse(r.body)
+    const m = j && j.results && j.results[0]
+    return m ? { lat: m.latitude, lon: m.longitude, имя: m.name } : null
+  }
+
+  async function погода() {
+    const место = await найтиГород(await город())
+    if (!место) return null
+    const r = await ponoi.net.fetch('https://api.open-meteo.com/v1/forecast?current_weather=true&latitude=' + место.lat + '&longitude=' + место.lon)
+    const j = JSON.parse(r.body)
+    const c = j && j.current_weather
+    if (!c) return null
+    return { имя: место.имя, темп: Math.round(c.temperature), ветер: Math.round(c.windspeed), вид: ВИД[c.weathercode] || 'непонятно' }
+  }
+
+  async function рисуй() {
+    let строка = 'смотрю…'
+    try {
+      const п = await погода()
+      строка = п ? п.темп + '°, ' + п.вид : 'не нашёл город'
+    } catch (e) { строка = 'нет связи' }
+    await ponoi.ui.addPanel({
+      slot: 'chat', title: 'Погода',
+      rows: [
+        { type: 'label', key: 'сейчас', label: await город(), value: строка },
+        { type: 'button', key: 'обновить', label: 'Обновить', onClick: рисуй },
+      ],
+    })
+  }
+
+  await ponoi.ui.addSettingsPage({
+    title: 'Погода',
+    rows: [{ type: 'text', key: 'город', label: 'Город', placeholder: 'Москва', value: await город() }],
+  })
+  ponoi.on('settings', async (e) => {
+    if (e.key !== 'город') return
+    await ponoi.storage.set('город', String(e.value || ''))
+    await рисуй()
+  })
+
+  await ponoi.commands.register({
+    name: 'погода',
+    description: 'Погода в городе',
+    args: [{ name: 'город', description: 'по умолчанию — из настроек' }],
+    onRun: async (строка) => {
+      const имя = строка.trim()
+      if (имя) await ponoi.storage.set('город', имя)
+      const п = await погода()
+      await ponoi.messages.send(п ? ('Погода, ' + п.имя + ': ' + п.темп + '°, ' + п.вид + ', ветер ' + п.ветер + ' км/ч') : 'Не нашёл такой город')
+    },
+  })
+
+  await рисуй()
+}
+`
+
+// ── 12. Волны музыки ───────────────────────────────────────────────────────
+//
+// v1.477.0. Показывает холст: единственное место, где плагин рисует сам. Своего
+// звука ему не дают (и не дадут — см. types.ts), поэтому картинка идёт от того,
+// что приложение сообщает о треке: смена, пауза, продолжение.
+const VIZ = `/**
+ * @name Волны музыки
+ * @id ponoi-music-waves
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Живая картинка в плеере: волны идут, пока играет музыка, и замирают на паузе.
+ * @permissions panel, music
+ */
+export async function onLoad(ponoi) {
+  let ctx = null, играет = false, фаза = 0, кадр = null, видно = false
+
+  await ponoi.ui.addPanel({
+    slot: 'player', title: 'Волны',
+    rows: [{ type: 'canvas', key: 'волны', label: 'Волны', height: 90 }],
+  })
+  const холст = await ponoi.ui.getCanvas('волны')
+  ctx = холст.getContext('2d')
+
+  function рисуй() {
+    кадр = null
+    if (!ctx) return
+    const ш = холст.width, в = холст.height
+    ctx.clearRect(0, 0, ш, в)
+    ctx.lineWidth = 2
+    for (let сл = 0; сл < 3; сл++) {
+      ctx.beginPath()
+      ctx.strokeStyle = сл === 0 ? '#5865f2' : сл === 1 ? '#7aa2ff' : '#3a4bd8'
+      for (let x = 0; x <= ш; x += 4) {
+        const a = (в / 2 - 6) * (0.4 + 0.3 * сл)
+        const y = в / 2 + Math.sin((x / ш) * Math.PI * (2 + сл) + фаза * (1 + сл * 0.3)) * a
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+    if (играет) фаза += 0.08
+    // Пока панель не видно — не рисуем вовсе: это батарея на телефоне.
+    if (видно && играет) кадр = setTimeout(рисуй, 40)
+  }
+
+  function пуск() { if (кадр === null) рисуй() }
+
+  ponoi.on('canvas', (e) => { видно = !!e.visible; if (видно) пуск() })
+  ponoi.on('music', (e) => { играет = !!e.playing; пуск() })
+  const сейчас = await ponoi.music.now()
+  играет = !!(сейчас && сейчас.playing)
+  рисуй()
+}
+`
+
+// ── 7. Чистка фотографий ───────────────────────────────────────────────────
+//
+// v1.475.0: первый плагин на перехвате вложений — и настоящая польза, а не
+// показ возможности. В обычной фотографии с телефона лежат координаты места
+// съёмки, модель телефона и точное время. Человек отправляет её в чат и
+// раздаёт это всё вместе с картинкой, не зная.
+const EXIF = `/**
+ * @name Чистка фотографий
+ * @id ponoi-photo-clean
+ * @version 1.0.0
+ * @author Ponoi
+ * @description Убирает из фотографий геометку, модель телефона и время съёмки перед отправкой. Может заодно сжимать большие снимки.
+ * @permissions messages.upload, settings, storage
+ */
+export async function onLoad(ponoi) {
+  const наст = async () => ({
+    чистить: (await ponoi.storage.get('чистить')) !== false,
+    сжимать: (await ponoi.storage.get('сжимать')) === true,
+    сторона: Number(await ponoi.storage.get('сторона')) || 2048,
+  })
+
+  await ponoi.ui.addSettingsPage({
+    title: 'Чистка фотографий',
+    rows: [
+      { type: 'toggle', key: 'чистить', label: 'Убирать метаданные',
+        description: 'Геометка, модель телефона, время съёмки', value: (await наст()).чистить },
+      { type: 'toggle', key: 'сжимать', label: 'Уменьшать большие снимки',
+        description: 'Длинная сторона не больше выбранной', value: (await наст()).сжимать },
+      { type: 'slider', key: 'сторона', label: 'Длинная сторона, пикселей',
+        value: (await наст()).сторона, min: 720, max: 4096, step: 64 },
+    ],
+  })
+  ponoi.on('settings', async (e) => { await ponoi.storage.set(e.key, e.value) })
+
+  ponoi.messages.onUpload(async (файл) => {
+    const s = await наст()
+    if (!s.чистить && !s.сжимать) return
+    // Трогаем только то, что умеем разобрать обратно в картинку. Всё
+    // остальное — чужие файлы, и их дело не наше.
+    if (!/^image\\/(jpeg|png|webp)$/.test(файл.type)) return
+
+    let bmp
+    try { bmp = await createImageBitmap(new Blob([файл.bytes])) }
+    catch (e) { return }   // не картинка на самом деле — пусть уходит как есть
+
+    let ш = bmp.width, в = bmp.height
+    if (s.сжимать && Math.max(ш, в) > s.сторона) {
+      const k = s.сторона / Math.max(ш, в)
+      ш = Math.round(ш * k); в = Math.round(в * k)
+    }
+    const c = new OffscreenCanvas(ш, в)
+    const ctx = c.getContext('2d')
+    ctx.drawImage(bmp, 0, 0, ш, в)
+
+    // Перерисовка и есть чистка: в новом файле остаются только пиксели.
+    // Прозрачность у JPEG теряется, поэтому png с прозрачностью не трогаем.
+    const png = файл.type === 'image/png'
+    const blob = await c.convertToBlob(png ? { type: 'image/png' } : { type: 'image/jpeg', quality: 0.92 })
+    const bytes = await blob.arrayBuffer()
+
+    // Если стало ТЯЖЕЛЕЕ и мы ничего не уменьшали — оставляем как было:
+    // «почистил» не должно означать «раздул файл вдвое».
+    if (bytes.byteLength >= файл.bytes.byteLength && ш === bmp.width) return
+
+    const имя = файл.name.replace(/\\.(jpe?g|png|webp)$/i, '') + (png ? '.png' : '.jpg')
+    return { bytes: bytes, name: имя, type: png ? 'image/png' : 'image/jpeg' }
   })
 }
 `
@@ -403,82 +868,17 @@ export async function onLoad(ponoi) {
 }
 `
 
-// ── 7. Чистка фотографий ───────────────────────────────────────────────────
-//
-// v1.475.0: первый плагин на перехвате вложений — и настоящая польза, а не
-// показ возможности. В обычной фотографии с телефона лежат координаты места
-// съёмки, модель телефона и точное время. Человек отправляет её в чат и
-// раздаёт это всё вместе с картинкой, не зная.
-const EXIF = `/**
- * @name Чистка фотографий
- * @id ponoi-photo-clean
- * @version 1.0.0
- * @author Ponoi
- * @description Убирает из фотографий геометку, модель телефона и время съёмки перед отправкой. Может заодно сжимать большие снимки.
- * @permissions messages.upload, settings, storage
- */
-export async function onLoad(ponoi) {
-  const наст = async () => ({
-    чистить: (await ponoi.storage.get('чистить')) !== false,
-    сжимать: (await ponoi.storage.get('сжимать')) === true,
-    сторона: Number(await ponoi.storage.get('сторона')) || 2048,
-  })
-
-  await ponoi.ui.addSettingsPage({
-    title: 'Чистка фотографий',
-    rows: [
-      { type: 'toggle', key: 'чистить', label: 'Убирать метаданные',
-        description: 'Геометка, модель телефона, время съёмки', value: (await наст()).чистить },
-      { type: 'toggle', key: 'сжимать', label: 'Уменьшать большие снимки',
-        description: 'Длинная сторона не больше выбранной', value: (await наст()).сжимать },
-      { type: 'slider', key: 'сторона', label: 'Длинная сторона, пикселей',
-        value: (await наст()).сторона, min: 720, max: 4096, step: 64 },
-    ],
-  })
-  ponoi.on('settings', async (e) => { await ponoi.storage.set(e.key, e.value) })
-
-  ponoi.messages.onUpload(async (файл) => {
-    const s = await наст()
-    if (!s.чистить && !s.сжимать) return
-    // Трогаем только то, что умеем разобрать обратно в картинку. Всё
-    // остальное — чужие файлы, и их дело не наше.
-    if (!/^image\\/(jpeg|png|webp)$/.test(файл.type)) return
-
-    let bmp
-    try { bmp = await createImageBitmap(new Blob([файл.bytes])) }
-    catch (e) { return }   // не картинка на самом деле — пусть уходит как есть
-
-    let ш = bmp.width, в = bmp.height
-    if (s.сжимать && Math.max(ш, в) > s.сторона) {
-      const k = s.сторона / Math.max(ш, в)
-      ш = Math.round(ш * k); в = Math.round(в * k)
-    }
-    const c = new OffscreenCanvas(ш, в)
-    const ctx = c.getContext('2d')
-    ctx.drawImage(bmp, 0, 0, ш, в)
-
-    // Перерисовка и есть чистка: в новом файле остаются только пиксели.
-    // Прозрачность у JPEG теряется, поэтому png с прозрачностью не трогаем.
-    const png = файл.type === 'image/png'
-    const blob = await c.convertToBlob(png ? { type: 'image/png' } : { type: 'image/jpeg', quality: 0.92 })
-    const bytes = await blob.arrayBuffer()
-
-    // Если стало ТЯЖЕЛЕЕ и мы ничего не уменьшали — оставляем как было:
-    // «почистил» не должно означать «раздул файл вдвое».
-    if (bytes.byteLength >= файл.bytes.byteLength && ш === bmp.width) return
-
-    const имя = файл.name.replace(/\\.(jpe?g|png|webp)$/i, '') + (png ? '.png' : '.jpg')
-    return { bytes: bytes, name: имя, type: png ? 'image/png' : 'image/jpeg' }
-  })
-}
-`
-
 export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
   { id: 'ponoi-voice-changer', emoji: '🎙️', summary: 'Робот, эхо, рация и ещё два голоса прямо в звонке', code: VOICE },
-  { id: 'ponoi-dice', emoji: '🎲', summary: 'Кубик, монетка и «выбери за меня» в чате', code: DICE },
-  { id: 'ponoi-timer', emoji: '⏰', summary: 'Напоминание через заданное время', code: TIMER },
-  { id: 'ponoi-afk', emoji: '💤', summary: 'Отвечает за тебя тем, кто упомянул, пока тебя нет', code: AFK },
+  { id: 'ponoi-dice', emoji: '🎲', summary: 'Кубик и жребий с подсказками доводов в поле ввода', code: DICE },
+  { id: 'ponoi-timer', emoji: '⏰', summary: 'Напоминания, которые переживают перезапуск приложения', code: TIMER },
+  { id: 'ponoi-afk', emoji: '💤', summary: 'Кнопка «меня нет»: активность и ответ упомянувшим', code: AFK },
+  { id: 'ponoi-read-receipts', emoji: '👀', summary: 'Видно, когда собеседник прочитал твоё сообщение в личке', code: READS },
+  { id: 'ponoi-notes', emoji: '📝', summary: 'Свои заметки отдельной вкладкой, с поиском', code: NOTES },
+  { id: 'ponoi-secret', emoji: '🔐', summary: 'Прячет сообщения в канале за секретным словом', code: SECRET },
+  { id: 'ponoi-weather', emoji: '🌦', summary: 'Погода панелью в чате и командой, без ключей', code: WEATHER },
+  { id: 'ponoi-music-waves', emoji: '🌊', summary: 'Живые волны в плеере, пока играет музыка', code: VIZ },
   { id: 'ponoi-photo-clean', emoji: '🧼', summary: 'Снимает с фотографий геометку и модель телефона перед отправкой', code: EXIF },
   { id: 'ponoi-snake', emoji: '🐍', summary: 'Настоящая игра в своём окне: клавиши, геймпад, рекорды', code: SNAKE },
-  { id: 'ponoi-soft-light', emoji: '🌙', summary: 'Приглушает резкий текст — ночью читать легче', code: SOFT },
+  { id: 'ponoi-soft-light', emoji: '🌙', summary: 'Приглушает цвета приложения — вечером глазам легче', code: SOFT },
 ]

@@ -137,7 +137,7 @@ const SABOTAGE = {
   botghost: [/delete from server_members where user_id = old\.bot_user_id;/, ''],
   botkick: [/if exists \(select 1 from bot_apps where bot_user_id = p_target\) then raise exception 'target_is_bot'; end if;/g, ''],
 }
-const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql'), 104: sql('104_automod_perm.sql'), 105: sql('105_plugin_grants.sql') }
+const SRC = { 86: sql('86_join_messages.sql'), 81: sql('81_forums.sql'), 82: sql('82_server_rules.sql'), 83: sql('83_verification_level.sql'), 84: sql('84_public_servers.sql'), 85: sql('85_perm_fixes.sql'), 87: sql('87_perm_fixes2.sql'), 88: sql('88_gifs_private.sql'), 89: sql('89_catalogs.sql'), 90: sql('90_catalog_banner.sql'), 91: sql('91_bot_profile.sql'), 92: sql('92_simple_bot.sql'), 93: sql('93_profile_banner.sql'), 95: sql('95_bot_membership.sql'), 96: sql('96_bots_not_kickable.sql'), 97: sql('97_bot_delete_cleanup.sql'), 98: sql('98_key_backup.sql'), 99: sql('99_music_no_dupes.sql'), 100: sql('100_music_plays.sql'), 101: sql('101_security_fixes.sql'), 102: sql('102_music_lyrics.sql'), 103: sql('103_channel_perms.sql'), 104: sql('104_automod_perm.sql'), 105: sql('105_plugin_grants.sql'), 106: sql('106_dm_reads.sql') }
 if (process.env.SABOTAGE) {
   const name = process.env.SABOTAGE
   const s = SABOTAGE[name]
@@ -183,6 +183,16 @@ await db.exec(SRC[103])
 await db.exec(SRC[104])
 await db.exec(SRC[105])
 await db.exec(SRC[98])
+// v1.477.0: отметки «просмотрено». dm_threads заводится в 02, которую песочница
+// целиком не применяет, — поднимаем ровно то, на что ссылается миграция.
+await db.exec(`create table if not exists dm_threads (
+  id uuid primary key default gen_random_uuid(),
+  user_a uuid not null references auth.users on delete cascade,
+  user_b uuid not null references auth.users on delete cascade);
+alter table dm_threads enable row level security;
+drop policy if exists dt_read on dm_threads;
+create policy dt_read on dm_threads for select using (auth.uid() = user_a or auth.uid() = user_b);`)
+await db.exec(SRC[106])
 // music_tracks заводится в 06, которую песочница целиком не применяет.
 await db.exec(`create table if not exists music_tracks (
   id uuid primary key default gen_random_uuid(), url text not null, name text not null,
@@ -1321,6 +1331,56 @@ await check('избранные эмодзи попали в публикаци�
   // Убираем роль, чтобы дальнейшие проверки видели прежнюю расстановку.
   await db.query(`delete from member_roles where role_id=$1`, [роль])
   await db.query(`delete from server_roles where id=$1`, [роль])
+}
+
+// ── Отметки «просмотрено» (106, v1.477.0) ─────────────────────────────────
+//
+// Это отметка о ЧЕЛОВЕКЕ: когда он что-то читал. Значит, правила должны быть
+// строже обычного — и проверять их надо на настоящей базе, а не на словах.
+{
+  const [алиса, боб, чужой] = [USER, OTHER, MOD]
+  await db.exec(`insert into dm_threads (id, user_a, user_b)
+    values ('00000000-0000-0000-0000-0000000000d1', '${алиса}', '${боб}')`)
+  const тред = '00000000-0000-0000-0000-0000000000d1'
+
+  await check('свою отметку поставить можно', async () => {
+    await as(алиса, `insert into dm_reads (thread_id, user_id) values ('${тред}', '${алиса}')`)
+    return true
+  })
+
+  await refused('чужую отметку поставить нельзя', () =>
+    as(боб, `insert into dm_reads (thread_id, user_id) values ('${тред}', '${алиса}')`))
+
+  await check('собеседник видит отметку', async () => {
+    const r = await as(боб, `select user_id from dm_reads where thread_id = '${тред}'`)
+    return r.rows.length === 1
+  })
+
+  await check('посторонний не видит ничего', async () => {
+    const r = await as(чужой, `select user_id from dm_reads where thread_id = '${тред}'`)
+    return r.rows.length === 0
+  })
+
+  await refused('посторонний не может поставить отметку в чужой разговор', () =>
+    as(чужой, `insert into dm_reads (thread_id, user_id) values ('${тред}', '${чужой}')`))
+
+  await check('свою отметку можно передвинуть', async () => {
+    await as(алиса, `update dm_reads set read_at = now() where thread_id = '${тред}' and user_id = '${алиса}'`)
+    return true
+  })
+
+  await check('чужую отметку не передвинуть', async () => {
+    await as(боб, `update dm_reads set read_at = now() - interval '1 day' where user_id = '${алиса}'`)
+    const r = await as(алиса, `select read_at from dm_reads where user_id = '${алиса}'`)
+    // Правило не бросает исключение — оно просто НЕ ДАЁТ строку тронуть.
+    return r.rows.length === 1 && Date.now() - new Date(r.rows[0].read_at).getTime() < 60000
+  })
+
+  await check('свою отметку можно убрать — это способ передумать', async () => {
+    await as(алиса, `delete from dm_reads where thread_id = '${тред}' and user_id = '${алиса}'`)
+    const r = await as(боб, `select user_id from dm_reads where thread_id = '${тред}'`)
+    return r.rows.length === 0
+  })
 }
 
 // ── Личная передача плагина (105, v1.468.0) ───────────────────────────────

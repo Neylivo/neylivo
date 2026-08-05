@@ -1,6 +1,6 @@
 import { logErr, logWarn } from '../lib/log'
 import { PluginHeaderButtons } from './PluginHeaderButtons'
-import { invokePlugin } from '../lib/plugins/bridge'
+import { invokePlugin, emitPluginEvent } from '../lib/plugins/bridge'
 import { runBeforeSend, hasInterceptors } from '../lib/plugins/middleware'
 import { toastErr, toastOk } from '../lib/toast'
 import { setActiveDm, useBadgeCount } from '../lib/badge'
@@ -54,6 +54,7 @@ import { getMsgs, putMsgs, getCachedThreadId, rememberThreadId } from '../lib/ms
 import { getDmRead, setDmRead, isDmPinned, isDmClosed, isDmMuted, isDmIgnored, friendNickOf, reopenDm, closeDm } from '../lib/userPrefs'
 import { useAvatarOf, avatarOf } from '../lib/avatars'
 import { uploadWithProgress } from '../lib/storage'
+import { markRead, theirRead, watchReads, seenLabel, readReceiptsOn, type ReadMark } from '../lib/dmReads'
 import { DmCtxMenu } from './DmCtxMenu'
 import { isBlockedWith } from '../lib/block'
 import type { Server } from '../types'
@@ -119,6 +120,48 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   const [threadId, setThreadId] = useState<string | null>(null)
   // v1.100.0: сообщаем модулю бейджа, какой диалог открыт — его входящие кружок не увеличивают.
   useEffect(() => { setActiveDm(threadId); return () => setActiveDm(null) }, [threadId])
+
+  // v1.477.0: «просмотрено».
+  //
+  // Свою отметку ставим, только когда разговор ОТКРЫТ И ОКНО В ФОКУСЕ: иначе
+  // «прочитано» означало бы «у него была открыта вкладка», а это враньё —
+  // человек мог отойти. Чужую отметку читаем один раз и дальше слушаем живьём.
+  const [чужаяОтметка, setЧужаяОтметка] = useState<ReadMark | null>(null)
+  // Сколько сообщений мы уже видели в этом разговоре — по этому числу
+  // переставляем свою отметку. Ссылаться прямо на messages здесь нельзя: он
+  // объявлен ниже.
+  const [приходило, setПриходило] = useState(0)
+  useEffect(() => {
+    setЧужаяОтметка(null)
+    if (!threadId || !meId) return
+    let живо = true
+    void theirRead(threadId, meId).then(m => { if (живо) setЧужаяОтметка(m) })
+    const снять = watchReads(threadId, meId, m => {
+      if (!живо) return
+      setЧужаяОтметка(m)
+      // Плагину — событием, а не опросом: узнавать «прочитано ли» по таймеру
+      // не должен никто.
+      emitPluginEvent('read', { at: m.at, seenLabel: seenLabel(m.at, m) })
+    })
+    return () => { живо = false; снять() }
+  }, [threadId, meId])
+
+  useEffect(() => {
+    if (!threadId || !meId) return
+    const отметить = () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return
+      void markRead(threadId, meId)
+    }
+    отметить()
+    // Ещё раз при возвращении в окно и при новом сообщении: человек читает
+    // тогда, когда смотрит, а не тогда, когда открыл вкладку.
+    window.addEventListener('focus', отметить)
+    document.addEventListener('visibilitychange', отметить)
+    return () => {
+      window.removeEventListener('focus', отметить)
+      document.removeEventListener('visibilitychange', отметить)
+    }
+  }, [threadId, meId, приходило])
   const [messages, setMessages] = useState<DMMessage[]>([])
   // v1.295.0: свой публичный ключ публикуется при каждом запуске — устройство
   // должно быть видимо собеседникам, иначе им некуда шифровать. Ошибку не роняем
@@ -713,6 +756,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
     // v1.69.0: ЛС всегда открывается в самом низу — на последних сообщениях (как в Discord).
     pendingScroll.current = 'bottom'
     setMessages(list)
+    setПриходило(list.length)
     // Разделитель «НОВОЕ»: первое чужое сообщение после последнего визита в ЛС.
     const lastRead = getDmRead(t.id)
     const firstNew = lastRead ? list.find(m => m.author !== meId && new Date(m.created_at).getTime() > lastRead) : undefined
@@ -1499,6 +1543,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               в ЛС просто не работало — без единого слова почему. serverId здесь
               нет намеренно: у лички его и не бывает. */}
           <Composer placeholder={activeGroup ? 'Написать в ' + groupLabel(activeGroup) : 'Написать @' + active!.name} onSend={sendMsg} draftKey={threadId ? 'dm_' + threadId : undefined}
+            readState={() => ({
+              at: чужаяОтметка?.at ?? null,
+              seenLabel: чужаяОтметка ? seenLabel(чужаяОтметка.at, чужаяОтметка) : null,
+              on: readReceiptsOn(),
+            })}
             channelId={threadId ?? undefined}
             channelName={activeGroup ? groupLabel(activeGroup) : ('@' + active!.name)}
             mentionables={activeGroup ? [...groupMembers.map(m => m.display_name || m.username), username] : [active!.name, username]}

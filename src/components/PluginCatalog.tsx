@@ -99,6 +99,11 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
   const withCount = (c: Card): Card => ({ ...c, installs: counts[c.id] ?? c.installs ?? 0 })
   const official = officialCards().map(withCount)
   const community = (rows ?? []).map(toCard).map(withCount)
+  // Порядок общий: сначала то, что чаще ставят, при равенстве — по названию.
+  // Официальность на место в списке НЕ влияет: она видна отметкой, и этого
+  // достаточно (v1.477.0).
+  const все = [...official, ...community].sort((a, b) =>
+    (b.installs ?? 0) - (a.installs ?? 0) || a.name.localeCompare(b.name))
   const term = q.trim().toLowerCase()
   const match = (c: Card) =>
     !term || c.name.toLowerCase().includes(term) || c.summary.toLowerCase().includes(term) || c.author.toLowerCase().includes(term)
@@ -140,21 +145,22 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
         </div>
 
         <div className="cat-body">
-          <div className="cat-sec">От создателей Ponoi</div>
-          <div className="cat-grid">
-            {official.filter(match).map(c => (
-              <CardView key={c.id} c={c} onOpen={() => setDetail(c)} onInstall={() => beginInstall(c)} />
-            ))}
+          {/* v1.477.0: одна полка вместо двух.
+              Раньше плагины «от создателей» стояли отдельным списком сверху —
+              то есть всегда впереди всех, сколько бы их ни было и что бы ни
+              выложили люди. Прямое указание владельца: пусть стоят рядом с
+              остальными, а «своё» видно по отметке на карточке.
+              Порядок общий и понятный: по числу установок, при равенстве —
+              по названию. Отметка «От создателей» никуда не делась: её
+              рисует сама карточка (auditBadge), и она же означает «код
+              наш», а не «мы его хвалим». */}
+          <div className="cat-sec">
+            Плагины{все.length > 0 && ` — ${все.length}`}
           </div>
-
-          <div className="cat-sec">Выложили люди{community.length > 0 && ` — ${community.length}`}</div>
           {rows === null && <div className="cat-hint">Загружаю…</div>}
           {err && <div className="cat-hint">{err}</div>}
-          {rows !== null && !err && community.length === 0 && (
-            <div className="cat-hint">Пока никто ничего не выложил. Первым можешь стать ты — кнопка «Выложить свой».</div>
-          )}
           <div className="cat-grid">
-            {community.filter(match).map(c => (
+            {все.filter(match).map(c => (
               <CardView key={c.id} c={c} onOpen={() => setDetail(c)} onInstall={() => beginInstall(c)}
                 onRemove={user && c.authorId === user.id ? async () => {
                   if (!await confirmUi(`Убрать «${c.name}» из каталога? Установленный у людей плагин останется у них.`, { okText: 'Убрать', danger: true })) return
@@ -163,6 +169,9 @@ export function PluginCatalog({ inline: _inline }: { inline?: boolean }) {
                 } : undefined} />
             ))}
           </div>
+          {rows !== null && !err && community.length === 0 && (
+            <div className="cat-hint">Своё сюда тоже можно — кнопка «Выложить свой».</div>
+          )}
         </div>
 
         {detail && <DetailModal c={detail} onClose={() => setDetail(null)} onInstall={() => { beginInstall(detail); setDetail(null) }} />}
