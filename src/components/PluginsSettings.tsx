@@ -6,13 +6,12 @@ import { confirmUi } from '../lib/confirm'
 import { parsePlugin, MAX_PLUGIN_BYTES } from '../lib/plugins/manifest'
 import { loadPlugins, removePlugin, setEnabled, subscribePlugins, getPlugin, writeStorage, readStorage } from '../lib/plugins/store'
 import { installPlugin } from '../lib/plugins/install'
-import { PanelCanvas, AssetImg } from './PluginPanels'
+import { PanelCanvas, AssetImg, KeybindRow } from './PluginPanels'
 import { taskList, subscribeTasks, stopTaskByUser } from '../lib/plugins/background'
 import { openSockets } from '../lib/plugins/wsHub'
+import { appList, subscribeApps, closeAppByUser, updateApp, APP_MODES } from '../lib/plugins/apps'
 import { GrantCreate, GrantList, GrantClaimBox } from './PluginGrants'
 import { useAuth } from '../auth/AuthProvider'
-import { comboFromEvent, isComboComplete } from '../lib/keybind'
-import { okCombo, setKeybind } from '../lib/plugins/registry'
 import { startPlugin, stopPlugin, pluginError, isRunning, subscribePluginState, invokePlugin, emitToPlugin, pluginLogs, clearPluginLog } from '../lib/plugins/host'
 import { useSettingsPages, type SettingsRow } from '../lib/plugins/registry'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest } from '../lib/plugins/types'
@@ -135,54 +134,6 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
 }
 
 /**
- * Выбор сочетания клавиш (v1.467.0).
- *
- * Плагин говорит «мне нужна клавиша вызова», а какая именно — решает человек.
- * Нажал кнопку, нажал сочетание — записалось.
- *
- * Проверка та же, что у клавиш самого плагина (okCombo): нужны два модификатора.
- * Иначе плагин отобрал бы у человека обычную букву, и виновника он бы не нашёл —
- * клавиша просто перестала бы работать. Занятое другим плагином сочетание тоже
- * не назначается, и об этом говорится вслух, а не молчанием.
- */
-function KeybindRow({ pluginId, rowKey, value, onSet }: {
-  pluginId: string; rowKey: string; value: string; onSet: (v: string) => void
-}) {
-  const [ловим, setЛовим] = useState(false)
-  useEffect(() => {
-    if (!ловим) return
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault()
-      if (e.key === 'Escape') { setЛовим(false); return }
-      const combo = comboFromEvent(e)
-      if (!isComboComplete(combo)) return    // ждём, пока отпустят модификаторы
-      if (!okCombo(combo)) { toastErr('Нужны два модификатора — например Ctrl+Shift+P'); return }
-      if (!setKeybind(pluginId, rowKey, combo)) {
-        toastErr('Это сочетание уже занято другим плагином')
-        setЛовим(false)
-        return
-      }
-      onSet(combo)
-      setЛовим(false)
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [ловим, pluginId, rowKey, onSet])
-
-  return (
-    <div className="plug-keybind">
-      <button className={'pqs2-btn ghost' + (ловим ? ' on' : '')} onClick={() => setЛовим(v => !v)}>
-        {ловим ? 'Нажми сочетание…' : (value || 'Не назначено')}
-      </button>
-      {value && !ловим && (
-        <button className="pqs2-btn ghost danger" title="Убрать сочетание"
-          onClick={() => { setKeybind(pluginId, rowKey, ''); onSet('') }}>×</button>
-      )}
-    </div>
-  )
-}
-
-/**
  * Что плагин делает в фоне (v1.465.0).
  *
  * Смысл этого блока — не украшение. Разрешение background само по себе не даёт
@@ -193,13 +144,21 @@ function KeybindRow({ pluginId, rowKey, value, onSet }: {
  *
  * Показываем и открытые соединения: плагин, который висит на чужом сервере,
  * тоже должен быть виден там, где его выключают.
+ *
+ * v1.488.0: и ОКНА — включая спрятанные. Повод прямой: в v1.487.0 у плагина
+ * появилось право спрятать своё окно (apps.hide). Спрятанное окно живо: оно
+ * считает, рисует, держит холст — а увидеть его человеку было негде вообще.
+ * Право прятаться без строчки «спрятано, показать» — это способ работать
+ * незаметно, и давать его молча нельзя.
  */
 function PluginBackground({ pluginId }: { pluginId: string }) {
   const [, bump] = useState(0)
   useEffect(() => subscribeTasks(() => bump(v => v + 1)), [])
+  useEffect(() => subscribeApps(() => bump(v => v + 1)), [])
   const tasks = taskList(pluginId)
   const socks = openSockets().filter(s => s.pluginId === pluginId)
-  if (tasks.length === 0 && socks.length === 0) return null
+  const окна = appList(pluginId)
+  if (tasks.length === 0 && socks.length === 0 && окна.length === 0) return null
   return (
     <div className="plug-bg">
       {tasks.map(t => (
@@ -215,6 +174,23 @@ function PluginBackground({ pluginId }: { pluginId: string }) {
           <Icon name="link" size={13} />
           <span className="plug-bg-t">Соединение</span>
           <span className="plug-bg-d notr" translate="no">{s.url.slice(0, 60)}</span>
+        </div>
+      ))}
+      {окна.map(a => (
+        <div key={a.id} className="plug-bg-row">
+          <Icon name={a.hidden ? 'moon' : 'expand'} size={13} />
+          <span className="plug-bg-t notr" translate="no">{a.title}</span>
+          <span className="plug-bg-d">
+            {APP_MODES[a.mode].split(',')[0].toLowerCase()}{a.hidden ? ' · спрятано' : ''}
+          </span>
+          {a.hidden && (
+            <button className="pqs2-btn ghost" onClick={() => { updateApp(pluginId, a.id, { hidden: false }); bump(v => v + 1) }}>
+              Показать
+            </button>
+          )}
+          <button className="pqs2-btn ghost" onClick={() => { closeAppByUser(a.id); bump(v => v + 1) }}>
+            Закрыть
+          </button>
         </div>
       ))}
     </div>

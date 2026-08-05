@@ -62,7 +62,11 @@ export function HotkeysModal({ onClose }: { onClose: () => void }) {
           <div className="hk-list">
             {plugKeys.map(h => (
               <div key={h.pluginId + h.combo} className="hk-row">
-                <span className="hk-what">{h.description} <span className="plugpanel-tag">плагин</span></span>
+                {/* v1.488.0: раздел и так называется «От плагинов» — ярлык
+                    «плагин» на каждой строке повторял заголовок и не отвечал
+                    на единственный интересный тут вопрос: от КАКОГО. */}
+                <span className="hk-what">{h.description}{' '}
+                  <span className="plugpanel-by notr" translate="no">{h.pluginId}</span></span>
                 <span className="hk-keys">{h.combo.split('+').map((k, i, a) => (
                   <span key={i}><kbd>{k}</kbd>{i < a.length - 1 ? ' + ' : ''}</span>
                 ))}</span>

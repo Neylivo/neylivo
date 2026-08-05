@@ -6267,10 +6267,13 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
 }
 .plugpanel-h { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
-.plugpanel-tag {
-  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
-  color: var(--mut); border: 1px solid rgba(var(--ov, 255,255,255), .18);
-  border-radius: 999px; padding: 1px 6px;
+.plugpanel-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* v1.488.0: имя плагина вместо ярлыка «ПЛАГИН» — тихо, справа, мелким.
+   Ровно так же, как в шапке окна плагина (.plugapp-by): подпись «чьё это»
+   нужна, крик заглавными — нет. */
+.plugpanel-by {
+  flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--mut); opacity: .75;
 }
 .plugpanel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .plugpanel-btn { align-self: flex-start; }

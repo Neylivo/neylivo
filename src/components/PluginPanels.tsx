@@ -3,6 +3,9 @@ import { usePanels, type PanelSlot, type SettingsRow } from '../lib/plugins/regi
 import { invokePlugin, emitToPlugin, pluginAssetUrl } from '../lib/plugins/bridge'
 import { readStorage, writeStorage } from '../lib/plugins/store'
 import { ensureCanvas } from '../lib/plugins/canvasHub'
+import { comboFromEvent, isComboComplete } from '../lib/keybind'
+import { okCombo, setKeybind } from '../lib/plugins/registry'
+import { toastErr } from '../lib/toast'
 
 /**
  * Картинка в строке панели (v1.473.0).
@@ -168,6 +171,15 @@ export function PanelRows({ pluginId, rows }: { pluginId: string; rows: Settings
           <AssetImg key={r.key} pluginId={pluginId} className="plugpanel-img" src={r.value} alt={r.label} />
         )
         case 'canvas': return <PanelCanvas key={r.key} pluginId={pluginId} row={r} />
+        // v1.488.0: сочетание клавиш умеет рисоваться и здесь — в панели и в
+        // окне плагина, а не только на странице настроек.
+        case 'keybind': return (
+          <div key={r.key} className="plugpanel-row">
+            <span>{r.label}</span>
+            <KeybindRow pluginId={pluginId} rowKey={r.key} value={String(valueOf(r) ?? '')}
+              onSet={v => change(r.key, v)} />
+          </div>
+        )
         default: return null
       }
     })}
@@ -181,15 +193,74 @@ export function PluginPanels({ slot }: { slot: PanelSlot }) {
     <div className="plugpanels">
       {panels.map(p => (
         <div key={p.pluginId + ':' + p.slot} className="plugpanel">
-          {/* Заголовок с пометкой «плагин»: человек должен видеть, что этот
-              уголок нарисован не приложением, а поставленным им плагином. */}
+          {/* v1.488.0: вместо ярлыка «ПЛАГИН» — имя того, чьё это.
+              Владелец про этот ярлык сказал прямо: «уродски», — и был прав:
+              заглавные буквы в рамочке кричали громче самого содержимого, а
+              отвечали при этом не на тот вопрос. Человеку важно не то, что
+              перед ним «плагин» вообще, а КАКОЙ. Окна перешли на имя ещё в
+              v1.479.0 — панели остались с ярлыком, и это была единственная
+              часть плагина, которая всё ещё так выглядела. */}
           <div className="plugpanel-h">
-            <span className="plugpanel-tag">плагин</span>
             <b className="notr" translate="no">{p.title}</b>
+            <span className="plugpanel-by notr" translate="no">{p.pluginId}</span>
           </div>
           <PanelRows pluginId={p.pluginId} rows={p.rows} />
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Выбор сочетания клавиш (v1.467.0).
+ *
+ * Живёт ЗДЕСЬ, а не на странице настроек плагина, хотя написан был для
+ * неё. Причина простая: строки у панели, у окна плагина и у страницы
+ * настроек одни и те же, и рисовальщиков у них два. Пока keybind знал
+ * только один из них, плагин мог описать строку в своём окне — и не
+ * увидеть ничего. Ни ошибки, ни пустого места: просто null.
+ *
+ * Плагин говорит «мне нужна клавиша вызова», а какая именно — решает человек.
+ * Нажал кнопку, нажал сочетание — записалось.
+ *
+ * Проверка та же, что у клавиш самого плагина (okCombo): нужны два модификатора.
+ * Иначе плагин отобрал бы у человека обычную букву, и виновника он бы не нашёл —
+ * клавиша просто перестала бы работать. Занятое другим плагином сочетание тоже
+ * не назначается, и об этом говорится вслух, а не молчанием.
+ */
+export function KeybindRow({ pluginId, rowKey, value, onSet }: {
+  pluginId: string; rowKey: string; value: string; onSet: (v: string) => void
+}) {
+  const [ловим, setЛовим] = useState(false)
+  useEffect(() => {
+    if (!ловим) return
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault()
+      if (e.key === 'Escape') { setЛовим(false); return }
+      const combo = comboFromEvent(e)
+      if (!isComboComplete(combo)) return    // ждём, пока отпустят модификаторы
+      if (!okCombo(combo)) { toastErr('Нужны два модификатора — например Ctrl+Shift+P'); return }
+      if (!setKeybind(pluginId, rowKey, combo)) {
+        toastErr('Это сочетание уже занято другим плагином')
+        setЛовим(false)
+        return
+      }
+      onSet(combo)
+      setЛовим(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [ловим, pluginId, rowKey, onSet])
+
+  return (
+    <div className="plug-keybind">
+      <button className={'pqs2-btn ghost' + (ловим ? ' on' : '')} onClick={() => setЛовим(v => !v)}>
+        {ловим ? 'Нажми сочетание…' : (value || 'Не назначено')}
+      </button>
+      {value && !ловим && (
+        <button className="pqs2-btn ghost danger" title="Убрать сочетание"
+          onClick={() => { setKeybind(pluginId, rowKey, ''); onSet('') }}>×</button>
+      )}
     </div>
   )
 }

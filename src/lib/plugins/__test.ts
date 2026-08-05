@@ -19,7 +19,7 @@ import {
 } from './editorDraft'
 import { RECIPES, recipeDefaults, recipeReady } from './recipes'
 import { PLUGIN_SPEC, AI_PROMPT_PREFIX, BOT_SPEC, AI_BOT_PROMPT_PREFIX } from './spec'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { WORKER_BOOTSTRAP } from './bootstrap'
 
 // Исходник диспетчера читаем файлом: нам нужны имена его case-ветвей, а не то,
@@ -1877,6 +1877,138 @@ console.log('\n-- Окно без рамки и прозрачное (v1.487.0) 
   })
 
   A.clearAllApps()
+}
+
+// ── Полная проверка логики: обещанное должно РАБОТАТЬ (v1.488.0) ──────────
+//
+// Самая частая поломка в этом проекте — не падение, а расхождение: список
+// говорит одно, код делает другое. Объявленное событие, которое никто не шлёт;
+// разрешение, которое ничего не охраняет; тип строки, который некому
+// нарисовать. Всё это выглядит как рабочая возможность и молчит.
+//
+// Проверки ниже сверяют СПИСКИ с кодом — каждую в обе стороны.
+console.log('\n-- Обещанное работает --')
+{
+  const исходники = (список: string[]) => список.map(f => readFileSync(f, 'utf8')).join('\n')
+  // Смотрим ВЕСЬ исходник приложения, а не выбранные файлы. Список файлов
+  // здесь был бы той же болезнью, которую проверка ищет: сегодня событие шлют
+  // из host.ts, завтра из нового экрана — и проверка молча перестала бы видеть
+  // половину.
+  const всеИсточники = (() => {
+    let out = ''
+    const обход = (дир: string) => {
+      for (const имя of readdirSync(дир)) {
+        const путь = дир + '/' + имя
+        if (statSync(путь).isDirectory()) { обход(путь); continue }
+        if (!/[.](ts|tsx)$/.test(имя) || имя.startsWith('__')) continue
+        out += '\n' + readFileSync(путь, 'utf8')
+      }
+    }
+    обход('src')
+    return out
+  })()
+
+  check('каждое объявленное событие кто-то шлёт', () => {
+    // Событие, которого никто не шлёт, — это обещание, на которое плагин
+    // подпишется и будет ждать вечно. Ровно «кнопка есть, но не работает».
+    const шлют = new Set<string>()
+    for (const m of всеИсточники.matchAll(/emitPluginEvent\('([^']+)'/g)) шлют.add(m[1])
+    for (const m of всеИсточники.matchAll(/emitToPlugin\([^,]+,\s*'([^']+)'/g)) шлют.add(m[1])
+    for (const m of всеИсточники.matchAll(/\.emit\('([^']+)'/g)) шлют.add(m[1])
+    const немые = Object.keys(PLUGIN_EVENTS).filter(e => !шлют.has(e))
+    if (немые.length) throw new Error('объявлены, но никто не шлёт: ' + немые.join(', '))
+    return true
+  })
+
+  check('никто не шлёт событий, которых нет в списке', () => {
+    // Обратная сторона: событие, которого нет в таблице, подписку не пройдёт —
+    // ponoi.on откажет «неизвестное событие». То есть код шлёт в пустоту.
+    const объявлены = new Set(Object.keys(PLUGIN_EVENTS))
+    const шлют = new Set<string>()
+    for (const m of всеИсточники.matchAll(/emitPluginEvent\('([^']+)'/g)) шлют.add(m[1])
+    for (const m of всеИсточники.matchAll(/emitToPlugin\([^,]+,\s*'([^']+)'/g)) шлют.add(m[1])
+    const лишние = [...шлют].filter(e => !объявлены.has(e))
+    if (лишние.length) throw new Error('шлётся, но подписаться нельзя: ' + лишние.join(', '))
+    return true
+  })
+
+  check('каждое разрешение что-то охраняет', () => {
+    // Разрешение, которое ничего не проверяет, — это строка на экране
+    // установки, пугающая впустую: человек соглашается на «доступ», которого
+    // в коде нет.
+    const охраняет = new Set<string>()
+    for (const m of DISPATCHER_SRC.matchAll(/need\('([^']+)'\)/g)) охраняет.add(m[1])
+    for (const e of Object.values(PLUGIN_EVENTS)) if (e.permission) охраняет.add(e.permission)
+    const пустые = ALL_PERMISSIONS.filter(p => !охраняет.has(p))
+    if (пустые.length) throw new Error('ничего не охраняют: ' + пустые.join(', '))
+    return true
+  })
+
+  check('код не требует разрешений, которых нет в списке', () => {
+    // Опечатка в need() — это разрешение, которое НЕВОЗМОЖНО получить: человек
+    // соглашается на всё, а плагин всё равно получает отказ.
+    const есть = new Set<string>(ALL_PERMISSIONS as unknown as string[])
+    const требуют = [...new Set([...DISPATCHER_SRC.matchAll(/need\('([^']+)'\)/g)].map(m => m[1]))]
+    const нет = требуют.filter(p => !есть.has(p))
+    if (нет.length) throw new Error('такого разрешения не выдать: ' + нет.join(', '))
+    return true
+  })
+
+  check('каждый тип строки умеет рисоваться', () => {
+    // Тип строки, которого не знает рисовальщик, — это строка, которую плагин
+    // описал, а на экране ничего.
+    const panels = readFileSync('src/components/PluginPanels.tsx', 'utf8')
+    const рисует = new Set([...panels.matchAll(/case '([a-z]+)':/g)].map(m => m[1]))
+    const немые = ROW_TYPES.filter(t => !рисует.has(t))
+    if (немые.length) throw new Error('описать можно, нарисовать нечем: ' + немые.join(', '))
+    return true
+  })
+
+  check('каждое место для панели где-то рисуется', () => {
+    const все = исходники([
+      'src/components/PluginPanels.tsx', 'src/components/PluginsSettings.tsx',
+      'src/lib/plugins/api.ts', 'src/lib/plugins/registry.ts',
+    ])
+    const немые = Object.keys(PANEL_SLOTS).filter(s => !все.includes(`'${s}'`))
+    if (немые.length) throw new Error('место объявлено, панели там нет: ' + немые.join(', '))
+    return true
+  })
+
+  check('спрятанное окно плагина видно там, где его выключают', () => {
+    // v1.487.0 дал плагину право спрятать своё окно. Спрятанное окно живо:
+    // считает, рисует, держит холст. Право прятаться без строчки «спрятано,
+    // показать» — это способ работать незаметно, и молча давать его нельзя.
+    const s = readFileSync('src/components/PluginsSettings.tsx', 'utf8')
+    if (!s.includes('appList(pluginId)')) throw new Error('окна плагина на карточке не перечисляются')
+    if (!/спрятано/.test(s)) throw new Error('спрятанное окно ничем не отмечено')
+    if (!/Показать/.test(s)) throw new Error('спрятанное окно нечем вернуть')
+    return /closeAppByUser/.test(s)
+  })
+
+  check('слова «плагин» ярлыком на панели больше нет', () => {
+    // Владелец сказал про этот ярлык прямо: «уродски». Он и правда отвечал не
+    // на тот вопрос: важно не «плагин это или нет», а КАКОЙ.
+    const panels = readFileSync('src/components/PluginPanels.tsx', 'utf8')
+    const css = readFileSync('src/styles.css', 'utf8')
+    if (/plugpanel-tag/.test(panels)) throw new Error('ярлык вернулся в панель')
+    if (/plugpanel-tag\s*\{/.test(css)) throw new Error('в стилях остался мёртвый ярлык')
+    // Но подпись «чьё это» осталась: панель рисует приложение, и человек должен
+    // понимать, кто попросил её нарисовать.
+    return panels.includes('plugpanel-by') && panels.includes('{p.pluginId}')
+  })
+
+  check('каждый значок из списка для плагинов существует', () => {
+    // Плагин выбирает значок по имени из списка. Имя, которого нет у
+    // рисовальщика, — это пустое место в шапке окна и в каталоге.
+    const reg = readFileSync('src/lib/plugins/registry.ts', 'utf8')
+    const icons = readFileSync('src/components/icons.tsx', 'utf8')
+    const кусок = reg.slice(reg.indexOf('ICONS'), reg.indexOf(']', reg.indexOf('ICONS')))
+    const имена = [...кусок.matchAll(/'([a-z0-9-]+)'/g)].map(m => m[1])
+    if (имена.length < 10) throw new Error('список значков не нашёлся: ' + имена.length)
+    const нет = имена.filter(n => !icons.includes(`'${n}'`) && !icons.includes(`${n}:`))
+    if (нет.length) throw new Error('значка нет у рисовальщика: ' + нет.join(', '))
+    return true
+  })
 }
 
 console.log('\n-- Ломаем нарочно (новые возможности) --')

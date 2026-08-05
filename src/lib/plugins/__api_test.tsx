@@ -895,6 +895,79 @@ export async function onLoad(ponoi) {
   forgetPlaces()
 }
 
+// ── 12. Каждый вид строки рисуется в окне плагина (v1.488.0) ────────────────
+//
+// Поводом стала настоящая дыра: строка keybind знала только страницу настроек
+// плагина, а PanelRows — панель И окно — отдавала на неё null. То есть плагин
+// описывал строку по документации, а на экране не появлялось НИЧЕГО: ни
+// ошибки, ни пустого места. Молчаливое расхождение показа и действия.
+//
+// Проверяем не «тип объявлен», а ВИДНО ли строку: у каждой должен найтись свой
+// элемент с ненулевым размером.
+async function всеСтроки(host: Host) {
+  const { forgetPlaces } = await import('./apps')
+  forgetPlaces()
+  const id = await поднять(host, `/**
+ * @name Все строки
+ * @id probe-rows
+ * @version 1.0.0
+ * @author проба
+ * @description Проба всех видов строк
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  await ponoi.apps.create({
+    mode: 'window', title: 'Все строки', width: 460, height: 560, x: 40, y: 40,
+    rows: [
+      { type: 'label', key: 'r-label', label: 'Подпись', value: 'значение' },
+      { type: 'toggle', key: 'r-toggle', label: 'Переключатель', value: true },
+      { type: 'text', key: 'r-text', label: 'Поле', value: 'текст' },
+      { type: 'select', key: 'r-select', label: 'Выбор', value: 'a',
+        options: [{ value: 'a', label: 'Раз' }, { value: 'b', label: 'Два' }] },
+      { type: 'button', key: 'r-button', label: 'Кнопка', onClick: function () {} },
+      { type: 'progress', key: 'r-progress', label: 'Полоса', value: 42 },
+      { type: 'slider', key: 'r-slider', label: 'Ползунок', value: 5, min: 0, max: 10 },
+      { type: 'color', key: 'r-color', label: 'Цвет', value: '#5865f2' },
+      { type: 'canvas', key: 'r-canvas', label: 'Холст', height: 60 },
+      { type: 'keybind', key: 'r-keybind', label: 'Горячая клавиша' },
+    ],
+  })
+  ponoi.log('готово')
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(400)
+
+  const тело = document.querySelector('.plugapp-window .plugapp-body') as HTMLElement | null
+  ok('окно со всеми строками открылось', !!тело)
+
+  // Что искать для каждого вида. Ищем ЭЛЕМЕНТ, а не текст: подпись плагин
+  // задаёт сам, а вот управляющий элемент рисуем мы — или не рисуем.
+  const ищем: Array<[string, string]> = [
+    ['подпись', '.plugpanel-val'],
+    ['переключатель', '.pqs-toggle'],
+    ['поле ввода', 'input.modal-in'],
+    ['выбор из списка', 'select'],
+    ['кнопка', '.plugpanel-btn'],
+    ['полоса', '.plugpanel-bar'],
+    ['ползунок', 'input[type="range"]'],
+    ['цвет', 'input[type="color"]'],
+    ['холст', 'canvas'],
+    ['горячая клавиша', '.plug-keybind'],
+  ]
+  for (const [имя, что] of ищем) {
+    const el = тело?.querySelector(что) as HTMLElement | null
+    const r = el?.getBoundingClientRect()
+    ok('строка «' + имя + '» видна в окне плагина',
+      !!r && r.width > 0 && r.height > 0,
+      el ? Math.round(r!.width) + 'x' + Math.round(r!.height) : 'нет такого элемента')
+  }
+
+  await host.stopPlugin(id)
+  removePlugin(id)
+  forgetPlaces()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -926,6 +999,8 @@ async function main() {
   await окноГдеСтоит(host)
   lines.push(''); lines.push('── Окно без рамки ──'); out()
   await безРамки(host)
+  lines.push(''); lines.push('── Все виды строк ──'); out()
+  await всеСтроки(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
