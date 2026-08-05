@@ -7714,3 +7714,19 @@ body.no-anim .mus-blob.on { animation: none; }
 .plug-perm .risk-dot { flex: none; font-size: 13px; line-height: 1; }
 .modal-primary.danger { background: #d83c3e; }
 .modal-primary.danger:hover { background: #c22d2f; }
+
+
+/* v1.482.0: прохождения — список игр с этого компьютера. */
+.gp-top { display:flex; align-items:center; gap:10px; margin:10px 0 6px; }
+.gp-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.gp-row { background:rgba(var(--ov,255,255,255),.04); border-radius:var(--r-md,10px); padding:10px 12px; }
+.gp-row.gone { opacity:.55; }
+.gp-nm { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.gp-nm b { font-size:14px; }
+.gp-tag { font-size:11px; padding:1px 7px; border-radius:999px; background:rgba(var(--ov,255,255,255),.08); color:var(--mut); }
+.gp-tag.ok { background:rgba(59,165,93,.18); color:#3ba55d; }
+.gp-tag.warn { background:rgba(250,166,26,.16); color:#faa61a; }
+.gp-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px; font-size:12.5px; color:var(--mut); }
+.gp-dot { width:3px; height:3px; border-radius:50%; background:var(--mut); opacity:.6; }
+.gp-bar { height:4px; border-radius:2px; background:rgba(var(--ov,255,255,255),.08); margin-top:8px; overflow:hidden; }
+.gp-bar-in { height:100%; background:var(--brand,#5865f2); border-radius:2px; }

@@ -14,6 +14,7 @@ import { PlateBg } from './PlateBg'
 import { ProfilePet } from './ProfilePet'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
+import { GameProgressList } from './GameProgressList'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
@@ -1376,6 +1377,12 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                     сервер — только в тот сервис, чей он есть. Своей модели у
                     приложения нет: держать её значило бы платить за каждый вопрос
                     каждого человека. */}
+                {/* v1.482.0: список прохождений — приложение само смотрит, во что
+                    человек играет. Стоит здесь, а не отдельным разделом: это
+                    продолжение той же «Активности», просто не про сейчас, а про
+                    всё, во что играли. */}
+                <GameProgressList />
+
                 <div className="pqs-sec-t">Подсказки по игре</div>
                 <div className="pqs2-desc">
                   В панели прохождения можно спросить про место, где ты сейчас. К вопросу само прикладывается всё,

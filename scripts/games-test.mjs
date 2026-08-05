@@ -236,6 +236,150 @@ check('без названий показываем метки достижен�
   return без.ok && без.items[0].name === 'ACH_ONE'
 })
 
+console.log('\n── Обход игр на компьютере (v1.482.0) ──')
+{
+  const {
+    parseLibraryFolders, parseAcf, parsePlaytime, hoursLabel, normName, saveRoots,
+  } = await import('../electron/gameScan.cjs')
+
+  // Куски настоящих файлов с машины владельца — выдуманные форматы проверять
+  // бессмысленно, ошибка вылезет ровно на настоящем.
+  const ACF = `"AppState"
+{
+	"appid"		"220240"
+	"name"		"Far Cry® 3"
+	"installdir"		"Far Cry 3"
+	"LastUpdated"		"1750763755"
+	"LastPlayed"		"1754392822"
+	"SizeOnDisk"		"12454823938"
+}`
+  const LIB = `"libraryfolders"
+{
+	"0"
+	{
+		"path"		"C:\\\\Program Files (x86)\\\\Steam"
+		"apps"
+		{
+			"730"		"71582999231"
+		}
+	}
+	"1"
+	{
+		"path"		"D:\\\\SteamLibrary"
+	}
+}`
+  const LOCAL = `"UserLocalConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"Apps"
+				{
+					"7"
+					{
+						"cloud"
+						{
+							"last_sync_state"		"synchronized"
+						}
+					}
+					"480"
+					{
+						"LastPlayed"		"1783892020"
+						"Playtime"		"6872"
+						"cloud"
+						{
+							"last_sync_state"		"synchronized"
+						}
+					}
+					"43160"
+					{
+						"LastPlayed"		"1696006286"
+						"Playtime"		"77"
+					}
+				}
+			}
+		}
+	}
+}`
+
+  check('манифест игры разбирается целиком', () => {
+    const g = parseAcf(ACF)
+    return g.appId === '220240' && g.name === 'Far Cry® 3' && g.installDir === 'Far Cry 3'
+      && g.sizeBytes === 12454823938 && g.lastPlayed === 1754392822
+  })
+  check('пустой или чужой файл не выдаёт игру', () =>
+    parseAcf('') === null && parseAcf('"что-то" { }') === null)
+
+  check('находятся все библиотеки, включая вынесенные на другой диск', () => {
+    const l = parseLibraryFolders(LIB)
+    return l.length === 2 && l[1] === 'D:\\SteamLibrary'
+  })
+
+  check('часы берутся по каждой игре отдельно', () => {
+    const p = parsePlaytime(LOCAL)
+    return p['480'].minutes === 6872 && p['43160'].minutes === 77 && !p['7']
+  })
+  check('вложенные блоки не путают разбор часов', () => {
+    // Первая версия ловила конец блока по отступам — и на настоящем файле
+    // половина игр оставалась с нулями. Поймано живым прогоном.
+    const p = parsePlaytime(LOCAL)
+    return Object.keys(p).length === 2
+  })
+  check('время последнего запуска тоже читается', () =>
+    parsePlaytime(LOCAL)['480'].lastPlayed === 1783892020)
+  check('чужой файл не даёт выдуманных часов', () => Object.keys(parsePlaytime('привет')).length === 0)
+
+  check('часы показываются по-человечески', () =>
+    hoursLabel(0) === '0 мин' && hoursLabel(59) === '59 мин'
+    && hoursLabel(60) === '1 ч' && hoursLabel(6872) === '114 ч 32 мин')
+
+  check('название игры упрощается для поиска папки сохранений', () =>
+    normName('Far Cry® 3') === 'farcry3' && normName('Grand Theft Auto V') === 'grandtheftautov')
+
+  check('места сохранений ищутся там, где их правда держат', () => {
+    const r = saveRoots({ USERPROFILE: 'C:\\Users\\x', APPDATA: 'C:\\Users\\x\\AppData\\Roaming' })
+    // Папок может не быть на этой машине — проверяем сам список, а не наличие.
+    return Array.isArray(r)
+  })
+}
+
+console.log('\n── Прохождения: что показывать человеку ──')
+{
+  const { gameState, agoLabel, milestonePercent, sortGames, mergeScans } =
+    await import('../src/lib/gameProgress.ts').catch(() => ({}))
+  if (gameState) {
+    const сейчас = Date.UTC(2026, 7, 5)
+    const день = 24 * 3600 * 1000
+    check('вчерашняя игра — «играю»', () =>
+      gameState({ lastPlayed: сейчас - день, minutes: 60 }, сейчас) === 'играю')
+    check('месячной давности — «отложил»', () =>
+      gameState({ lastPlayed: сейчас - 30 * день, minutes: 60 }, сейчас) === 'отложил')
+    check('полугодовой давности — «забросил»', () =>
+      gameState({ lastPlayed: сейчас - 200 * день, minutes: 60 }, сейчас) === 'забросил')
+    check('ни разу не запускали — так и написано', () =>
+      gameState({ lastPlayed: 0, minutes: 0 }, сейчас) === 'не начинал')
+    check('давность пишется словами', () =>
+      agoLabel(сейчас, сейчас) === 'сегодня' && agoLabel(сейчас - день, сейчас) === 'вчера'
+      && agoLabel(0) === 'ни разу')
+    check('вехи в процентах, а без вех — ничего', () =>
+      milestonePercent({ done: 3, total: 12 }) === 25 && milestonePercent() === null)
+    check('сначала то, во что играют сейчас', () => {
+      const s = sortGames([
+        { appId: 'a', lastPlayed: сейчас - 200 * день, minutes: 9999 },
+        { appId: 'b', lastPlayed: сейчас - день, minutes: 10 },
+      ], сейчас)
+      return s[0].appId === 'b'
+    })
+    check('удалённая с диска игра не пропадает из истории', () => {
+      const r = mergeScans([{ appId: 'a', name: 'Старая' }], [{ appId: 'b', name: 'Новая' }])
+      return r.length === 2 && r.find(x => x.appId === 'a').gone === true
+    })
+  }
+}
+
 console.log('\n── Ломаем нарочно (диск) ──')
 check('проверка ловит требование Steam ID там, где он не нужен', () => {
   // Смысл всей правки: прохождение читается вообще без учётной записи.

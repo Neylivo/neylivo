@@ -283,6 +283,33 @@ ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
 
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
+// v1.482.0: «Прохождения» — обход известных мест на диске, чтобы человеку не
+// приходилось заводить свои игры руками. Читаем только то, что лежит в понятном
+// виде (см. gameScan.cjs), ничего никуда не отправляем и весь диск не обходим.
+//
+// Обход идёт по просьбе окна, а не сам по себе: лазить по чужим файлам без
+// спроса приложение не должно, даже по своим же правилам.
+ipcMain.handle('ponoi-games-scan', async () => {
+  try {
+    const { scanGames } = require('./gameScan.cjs')
+    const r = scanGames()
+    // Вехи берём тем же чтением, что и для запущенной игры: у кого есть
+    // достижения на диске — увидит их и здесь.
+    for (const g of r.games) {
+      if (!g.dir) continue
+      try {
+        const п = localProgress(g.appId, g.dir + '\\x.exe')
+        if (п && п.ok && Array.isArray(п.nodes) && п.nodes.length) {
+          g.milestones = { done: п.nodes.filter(n => n.done).length, total: п.nodes.length }
+        }
+      } catch { /* у этой игры вех нет — не беда */ }
+    }
+    return r
+  } catch (e) {
+    return { games: [], libraries: [], error: String((e && e.message) || e) }
+  }
+})
+
 // ---- v1.180.0: «Игровой Экспресс» (QuickLaunch) — поделиться сборкой Minecraft ----
 require('./quicklaunch.cjs').registerQuicklaunch(ipcMain)
 // ---- v1.192.0: «Поделиться игрой» — Terraria (находим Terraria.exe и запускаем с -connect) ----
