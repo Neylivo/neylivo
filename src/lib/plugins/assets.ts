@@ -35,9 +35,9 @@ export class AssetError extends Error {}
 /** Один файл целиком. Больше — это уже не «ресурс плагина», а хранилище. */
 export const MAX_ASSET_BYTES = 32 * 1024 * 1024
 /** Сколько файлов у одного плагина. */
-export const MAX_ASSETS = 500
+export const MAX_ASSETS = 5000
 /** Сколько всего места на плагин. Половина обычной квоты браузера на origin. */
-export const MAX_ASSETS_TOTAL = 256 * 1024 * 1024
+export const MAX_ASSETS_TOTAL = 4 * 1024 * 1024 * 1024
 /** Длина имени файла. */
 export const MAX_ASSET_NAME = 120
 

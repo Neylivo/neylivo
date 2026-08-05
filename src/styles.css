@@ -7704,3 +7704,13 @@ body.no-anim .mus-blob.on { animation: none; }
 .cmdarg.req { font-weight:700; }
 .cmdarg.on { color:var(--brand,#5865f2); opacity:1; }
 .cmdarg-d { margin-left:auto; font-size:12px; }
+
+
+/* v1.481.0: окно риска при установке плагина. Красное — то, что касается
+   переписки, файлов и выхода наружу, жёлтое — то, что меняет вид приложения.
+   Цвет здесь не украшение: по этому списку человек и решает, ставить ли. */
+.plug-perm.risk-red { background: rgba(240, 71, 71, .10); border-left: 3px solid #f04747; }
+.plug-perm.risk-yellow { background: rgba(250, 166, 26, .10); border-left: 3px solid #faa61a; }
+.plug-perm .risk-dot { flex: none; font-size: 13px; line-height: 1; }
+.modal-primary.danger { background: #d83c3e; }
+.modal-primary.danger:hover { background: #c22d2f; }

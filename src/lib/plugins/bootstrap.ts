@@ -267,6 +267,16 @@ const ponoi = {
     // v1.477.0: просмотрено ли моё сообщение — { at, seenLabel, on }.
     // null означает «это не личный разговор» или «отметки выключены».
     readState: () => call('messages.readState', []),
+    // v1.481.0: любой канал, а не только открытый. Пересылка, ответчики,
+    // разбор переписки — всё это отсюда.
+    //   const каналы = await ponoi.messages.channels()
+    //   const было = await ponoi.messages.in(id).recent(50)
+    //   await ponoi.messages.in(id).send('привет')
+    channels: () => call('messages.anyList', []),
+    in: (channelId) => ({
+      recent: (limit) => call('messages.anyRecent', [String(channelId), Number(limit) || 50]),
+      send: (text) => call('messages.anySend', [String(channelId), String(text)]),
+    }),
     recent: (limit) => call('messages.recent', [Number(limit) || 20]),
     react: (messageId, emoji) => call('messages.react', [String(messageId), String(emoji)]),
     remove: (messageId) => call('messages.remove', [String(messageId)]),

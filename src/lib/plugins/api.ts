@@ -30,6 +30,8 @@ import {
   isAssetRef, assetRefName, checkAssetName, ASSET_PREFIX, MAX_ASSET_BYTES,
 } from './assets'
 import { readPads, watchGamepads } from './gamepads'
+// v1.481.0: любой канал, а не только открытый.
+import { anyRecent, anySend, anyChannels } from './anyChat'
 import { askDialog, dialogRows } from './dialog'
 import { musicBridge } from './musicApi'
 import { chatBridge, MAX_RECENT } from './chatApi'
@@ -104,6 +106,8 @@ export const PLUGIN_METHODS = [
   // v1.475.0: своё окно-вопрос. Форма из тех же строк, что панель; ответ —
   // значения полей, и ничего больше.
   'ui.dialog', 'messages.readState',
+  // v1.481.0: любой канал — самое сильное, что есть у плагинов.
+  'messages.anyList', 'messages.anyRecent', 'messages.anySend',
   // v1.475.0: перехват вложений — своё разрешение, помеченное опасным.
   'messages.onUpload',
 ] as const
@@ -1244,6 +1248,25 @@ return updateApp(id, Number(args[0]), patch)
       case 'messages.readState': {
         need('messages.read')
         return ctx.readState ? await ctx.readState() : null
+      }
+
+      // ---- Любой канал (нужно messages.any) --------------------------------
+      // Работает от имени человека и с его правами: куда нельзя ему, туда
+      // сервер не пустит и плагин. Личной переписки здесь нет намеренно —
+      // она шифруется на устройствах, и писать туда отсюда значило бы слать
+      // открытый текст (см. anyChat.ts).
+      case 'messages.anyList': {
+        need('messages.any')
+        return await anyChannels()
+      }
+      case 'messages.anyRecent': {
+        need('messages.any')
+        return await anyRecent(args[0], Number(args[1]) || 50)
+      }
+      case 'messages.anySend': {
+        need('messages.any')
+        rateLimit(id, 'send')
+        return await anySend(args[0], String(args[1] ?? ''))
       }
 
       case 'input.gamepads': {

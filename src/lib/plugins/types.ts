@@ -35,11 +35,13 @@ export type Permission =
   | 'input'           // видеть геймпады, подключённые к устройству
   // v1.475.0
   | 'messages.upload' // видеть и МЕНЯТЬ файлы до отправки
+  // v1.481.0
+  | 'messages.any'    // читать и писать в ЛЮБОЙ канал, а не только в открытый
 
 export const ALL_PERMISSIONS: Permission[] = [
   'ui', 'css', 'commands', 'messages.read', 'messages.write', 'storage', 'net', 'settings', 'notify', 'voice', 'context',
   'panel', 'music', 'navigate', 'status',
-  'ipc', 'messages.intercept', 'background', 'ui.theme', 'apps', 'input', 'messages.upload',
+  'ipc', 'messages.intercept', 'background', 'ui.theme', 'apps', 'input', 'messages.upload', 'messages.any',
 ]
 
 /** Человеческое описание разрешения — ровно то, что читает человек перед установкой. */
@@ -94,6 +96,11 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   // «обработка файлов», это возможность отправить не тот файл, который человек
   // выбрал. Ради этого же оно и нужно — снять с фотографии геометку.
   'messages.upload': 'Видеть и МЕНЯТЬ файлы, которые ты отправляешь',
+  // v1.481.0: самое сильное из всех. Плагин действует в любом канале, куда
+  // можешь ты, — и читает, и пишет от твоего имени. Ради этого разрешение и
+  // существует (пересылка, ответчики, разбор переписки), и формулировка
+  // нарочно не смягчена.
+  'messages.any': 'Читать и писать в ЛЮБОМ канале от твоего имени, а не только в открытом',
 }
 
 /**
@@ -110,6 +117,8 @@ export const SENSITIVE_PERMISSIONS: Permission[] = [
   'messages.intercept', 'background',
   // v1.475.0: перехват вложений — плагин видит каждый отправляемый файл.
   'messages.upload',
+  // v1.481.0: любой канал — сильнее всего остального вместе взятого.
+  'messages.any',
 ]
 
 /**

@@ -4,6 +4,7 @@ import { compareVersions } from '../lib/plugins/manifest'
 import { PERMISSION_LABEL, SENSITIVE_PERMISSIONS, type PluginManifest, type InstalledPlugin } from '../lib/plugins/types'
 import { LIMITS_WARNING } from '../lib/plugins/limits'
 import { missingPermissions } from '../lib/plugins/editorDraft'
+import { installRisks, highRisk } from '../lib/plugins/audit'
 
 // v1.333.0: вынесено из PluginsSettings.tsx отдельным файлом. Каталог плагинов
 // показывает тот же экран разрешений, а импорт «каталог -> настройки -> каталог»
@@ -25,6 +26,8 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
   // он что-то сделал не так или плагин кривой.
   const willFail = code ? missingPermissions(code, manifest.permissions) : []
   const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
+  const risks = installRisks(manifest, code ?? '')
+  const высокий = highRisk(risks)
   return (
     <Portal><div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -49,16 +52,25 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
         </div>
 
         <label className="modal-lbl">Плагин сможет</label>
-        {manifest.permissions.length === 0 && <div className="cset-hint">Ничего особенного — плагин ничего не запрашивает.</div>}
-        {manifest.permissions.map(p => (
-          <div key={p} className={'plug-perm' + (SENSITIVE_PERMISSIONS.includes(p) ? ' warn' : '')}>
-            <Icon name={SENSITIVE_PERMISSIONS.includes(p) ? 'shield' : 'check'} size={15} />
+        {risks.length === 0 && <div className="cset-hint">Ничего особенного — плагин ничего не запрашивает.</div>}
+        {/* v1.481.0: не список разрешений, а список РИСКОВ — красным то, что
+            касается переписки, файлов и выхода наружу, жёлтым то, что меняет
+            вид приложения. Человек решает по этому списку, поэтому он считается
+            от кода и разрешений, а не от слов автора (см. audit.ts). */}
+        {risks.map((r, i) => (
+          <div key={i} className={'plug-perm risk-' + r.level}>
+            <span className="risk-dot">{r.level === 'red' ? '🔴' : '🟡'}</span>
+            <span>{r.text}</span>
+          </div>
+        ))}
+        {/* Остальные разрешения — тем же списком, но без цвета: они ничего о
+            человеке не узнают и ничего от его имени не сделают. */}
+        {manifest.permissions.filter(p => !risks.some(r => r.text === PERMISSION_LABEL[p])).map(p => (
+          <div key={p} className="plug-perm">
+            <Icon name="check" size={15} />
             <span>{PERMISSION_LABEL[p]}</span>
           </div>
         ))}
-        {manifest.hosts.length > 0 && (
-          <div className="cset-hint" style={{ marginTop: 8 }}>Сайты: {manifest.hosts.join(', ')}</div>
-        )}
 
         {willFail.length > 0 && (
           <div className="plug-err" style={{ marginTop: 12 }}>
@@ -79,14 +91,27 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
           <span>{LIMITS_WARNING}</span>
         </div>
 
+        {высокий && (
+          <div className="plug-err" style={{ marginTop: 12 }}>
+            <Icon name="shield" size={14} />
+            <span>
+              <b>У этого плагина высокий уровень доступа.</b> Ставь такое, только если знаешь,
+              откуда он, или если написал его сам.
+            </span>
+          </div>
+        )}
+
         <div className="cset-hint" style={{ marginTop: 14 }}>
-          Плагин выполняется в песочнице: он не видит твой пароль, сессию и файлы на компьютере.
-          Но всё, что перечислено выше, он делать сможет — ставь только то, чему доверяешь.
+          Три вещи плагин не может НИКОГДА, что бы в нём ни было написано: добраться до твоего
+          пароля и сессии, повесить приложение (он работает отдельным потоком, и его можно снять)
+          и пережить безопасный режим — запуск с зажатым Shift не поднимает ни одного плагина.
         </div>
 
         <div className="modal-foot">
-          <button className="modal-ghost" onClick={onCancel}>Отмена</button>
-          <button className="modal-primary" onClick={onConfirm}>{existing ? 'Обновить' : 'Установить'}</button>
+          <button className="modal-ghost" onClick={onCancel}>Отклонить</button>
+          <button className={'modal-primary' + (высокий ? ' danger' : '')} onClick={onConfirm}>
+            {высокий ? 'Я понимаю риски' : existing ? 'Обновить' : 'Установить'}
+          </button>
         </div>
       </div>
     </div></Portal>

@@ -1231,6 +1231,49 @@ console.log('\n── Команды с доводами (v1.475.0) ──')
   })
 }
 
+console.log('\n── Без границ, но три границы остались (v1.481.0) ──')
+{
+  const { checkTarget } = await import('./netGuard')
+  const цель = (hosts: string[]) => ({ hosts, selfHost: 'ponoi.app', supaHost: 'abc.supabase.co' })
+
+  await check('со звёздочкой плагин ходит на любой сайт', () =>
+    checkTarget('https://что-угодно.example/x', цель(['*'])) === null)
+  await check('но НЕ к самому Ponoi — это изоляция сессии, а не «ещё одно правило»', () =>
+    checkTarget('https://ponoi.app/api', цель(['*'])) !== null)
+  await check('и НЕ к серверу Ponoi', () =>
+    checkTarget('https://abc.supabase.co/rest/v1/messages', цель(['*'])) !== null)
+  await check('звёздочка не отменяет https', () =>
+    checkTarget('http://example.com/x', цель(['*'])) !== null)
+  await check('без звёздочки чужой домен по-прежнему закрыт', () =>
+    checkTarget('https://evil.example/x', цель(['ok.example'])) !== null)
+
+  // Любой канал — только с разрешением, и оно самое сильное.
+  await blocked('без messages.any в чужой канал не написать', () =>
+    attacker(['messages.write'], 'any-no')('messages.anySend', ['00000000-0000-0000-0000-000000000001', 'привет']))
+  await blocked('без messages.any чужой канал не прочитать', () =>
+    attacker(['messages.read'], 'any-no2')('messages.anyRecent', ['00000000-0000-0000-0000-000000000001', 10]))
+  await check('в списке возможностей «любой канал» помечен как общий доступ', async () => {
+    const { SENSITIVE_PERMISSIONS } = await import('./types')
+    return SENSITIVE_PERMISSIONS.includes('messages.any' as never)
+  })
+  await check('личная переписка через «любой канал» не идёт', () => {
+    // Личка шифруется на устройствах: писать туда отсюда значило бы отправить
+    // открытый текст. Проверяем, что этого пути в коде нет вовсе.
+    const src = readFileSync('src/lib/plugins/anyChat.ts', 'utf8')
+    return !/dm_messages|dm_threads/.test(src) && /шифр/i.test(src)
+  })
+  await check('плагин по-прежнему живёт в отдельном потоке', () => {
+    // Первая из трёх нерушимых границ: зацикленный плагин вешает свой воркер,
+    // а не приложение.
+    const src = readFileSync('src/lib/plugins/sandbox.ts', 'utf8')
+    return /new Worker\(/.test(src) && /terminate\(\)/.test(src)
+  })
+  await check('безопасный режим не поднимает ни одного плагина', () => {
+    const src = readFileSync('src/lib/plugins/host.ts', 'utf8')
+    return /pluginsDisabled\(\)/.test(src)
+  })
+}
+
 console.log('\n── Уборка за плагином ──')
 {
   const cleanup = await import('./cleanup')

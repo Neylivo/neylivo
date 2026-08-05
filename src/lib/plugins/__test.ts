@@ -630,6 +630,8 @@ for (const p of OFFICIAL_PLUGINS) {
     'ui.dialog', 'messages.onUpload',
     // v1.477.0
     'messages.readState',
+    // v1.481.0
+    'messages.anyList', 'messages.anyRecent', 'messages.anySend',
   ]
 
 
@@ -876,6 +878,7 @@ for (const p of OFFICIAL_PLUGINS) {
         // v1.473.0
         'input': 'ponoi.input.gamepads()',
         'messages.upload': 'ponoi.messages.onUpload(async()=>{})',
+        'messages.any': 'ponoi.messages.in("id").send("привет")',
       }
       const код = прим[p]
       if (!код) return true
@@ -1674,7 +1677,51 @@ for (const p of OFFICIAL_PLUGINS) {
       PLUGIN_SPEC.includes('WebAssembly') && /разрешения не нужно|отдельного разрешения/.test(PLUGIN_SPEC))
   }
 
-  console.log('\n-- Ломаем нарочно (новые возможности) --')
+  console.log('\n-- Окно риска при установке (v1.481.0) --')
+{
+  const { installRisks, highRisk } = await import('./audit')
+  const м = (perms: string[], hosts: string[] = []) => ({ permissions: perms, hosts })
+
+  check('переписка и отправка наружу — красное', () => {
+    const r = installRisks(м(['messages.any', 'net'], ['example.com']), 'function onLoad(){}')
+    return r.filter(x => x.level === 'red').length === 2 && highRisk(r)
+  })
+  check('внешний вид — жёлтое, а не красное', () => {
+    const r = installRisks(м(['css', 'ui.theme']), 'function onLoad(){}')
+    return r.length === 2 && r.every(x => x.level === 'yellow') && !highRisk(r)
+  })
+  check('звёздочка в @hosts названа прямо: любые сайты', () => {
+    const r = installRisks(м(['net'], ['*']), 'function onLoad(){}')
+    return r.some(x => x.level === 'red' && /ЛЮБЫЕ/.test(x.text))
+  })
+  check('без звёздочки в списке видно, куда именно пойдёт плагин', () => {
+    const r = installRisks(м(['net'], ['api.example.com']), 'function onLoad(){}')
+    return r.some(x => x.text.includes('api.example.com'))
+  })
+  check('сеть без единого объявленного сайта тоже видна', () => {
+    const r = installRisks(м(['net'], []), 'function onLoad(){}')
+    return r.some(x => x.level === 'red' && /ни один/.test(x.text))
+  })
+  check('спрятанный код — красное, даже если разрешений почти нет', () => {
+    const r = installRisks(м(['ui']), 'function onLoad(){ eval("1+1") }')
+    return r.some(x => x.level === 'red' && /спрятан/i.test(x.text)) && highRisk(r)
+  })
+  check('плагин без разрешений рисков не собирает', () =>
+    installRisks(м([]), 'function onLoad(){}').length === 0)
+  check('экран установки показывает риски, а не голый список прав', () => {
+    const src = readFileSync('src/components/PluginPermissionGate.tsx', 'utf8')
+    return src.includes('installRisks') && src.includes('Я понимаю риски')
+      && /высокий уровень доступа/i.test(src)
+  })
+  check('экран установки называет три нерушимые границы', () => {
+    // Песочница, сессия и безопасный режим — то, чего плагин не может НИКОГДА.
+    // Человек должен это видеть там же, где соглашается.
+    const src = readFileSync('src/components/PluginPermissionGate.tsx', 'utf8')
+    return /сесси/i.test(src) && /поток/i.test(src) && /безопасн/i.test(src)
+  })
+}
+
+console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')
     // Так выглядела бы ошибка: считать любой ложный ответ отменой. Тогда
