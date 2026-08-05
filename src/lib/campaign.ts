@@ -325,7 +325,12 @@ export const AUTO_WHY: Record<AutoWhy, string> = {
 export async function autoNodes(steamId: string | null, appId?: string | null): Promise<AutoResult> {
   const d = (window as any).ponoiDesktop
   if (!d?.steamProgress) return { ok: false, nodes: [], why: 'no-desktop' }
-  if (!steamId) return { ok: false, nodes: [], why: 'no-steamid' }
+  // v1.483.0: БЕЗ Steam ID тоже спрашиваем. Раньше здесь стоял отказ — и до
+  // чтения файлов на диске дело не доходило вовсе. А приложение умеет читать
+  // прохождение прямо с диска с v1.461.0, в том числе у нелицензионных копий,
+  // где Steam ID нет и быть не может. То есть возможность была, а дверь к ней
+  // закрывала эта строка: владелец так и принёс — «сюжет ничего не показывает,
+  // особенно когда пиратка».
   try {
     const r = await d.steamProgress({ steamId, appId })
     if (!r?.ok) return { ok: false, nodes: [], why: (r?.why as AutoWhy) ?? 'net' }

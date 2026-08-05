@@ -289,6 +289,16 @@ ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 //
 // Обход идёт по просьбе окна, а не сам по себе: лазить по чужим файлам без
 // спроса приложение не должно, даже по своим же правилам.
+// Память названий: appid → имя. Лежит рядом с настройками приложения, чтобы
+// не спрашивать магазин на каждый обход.
+const ИМЕНА_ФАЙЛ = () => path.join(app.getPath('userData'), 'game-names.json')
+function читатьИмена() {
+  try { return JSON.parse(fs.readFileSync(ИМЕНА_ФАЙЛ(), 'utf8')) || {} } catch { return {} }
+}
+function писатьИмена(o) {
+  try { fs.writeFileSync(ИМЕНА_ФАЙЛ(), JSON.stringify(o)) } catch { /* некуда писать — не беда */ }
+}
+
 ipcMain.handle('ponoi-games-scan', async () => {
   try {
     const { scanGames } = require('./gameScan.cjs')
@@ -296,14 +306,46 @@ ipcMain.handle('ponoi-games-scan', async () => {
     // Вехи берём тем же чтением, что и для запущенной игры: у кого есть
     // достижения на диске — увидит их и здесь.
     for (const g of r.games) {
-      if (!g.dir) continue
+      // v1.483.0: раньше здесь стояло «нет папки — пропускаем», и вехи не
+      // читались ровно у тех игр, ради которых всё и делалось: у
+      // нелицензионной копии папки в библиотеке Steam нет вовсе, а
+      // достижения на диске есть. Читатель умеет и по одному номеру игры.
       try {
-        const п = localProgress(g.appId, g.dir + '\\x.exe')
-        if (п && п.ok && Array.isArray(п.nodes) && п.nodes.length) {
-          g.milestones = { done: п.nodes.filter(n => n.done).length, total: п.nodes.length }
+        // Читатель отдаёт items, а не nodes. Спрашивал я nodes — и вехи
+        // получались нулевыми ВСЕГДА, даже там, где файлы достижений лежат на
+        // диске. Поймано живым прогоном: 38 игр, вех ноль, хотя у четырёх из
+        // них 78, 65, 19 и 4 достижения.
+        const п = localProgress(g.appId, g.dir ? g.dir + '\\game.exe' : null)
+        const вехи = (п && п.ok && Array.isArray(п.items)) ? п.items : null
+        if (вехи && вехи.length) {
+          g.milestones = { done: вехи.filter(n => n.done).length, total: вехи.length }
         }
       } catch { /* у этой игры вех нет — не беда */ }
     }
+    // Название для игр вне библиотеки. Номер вместо имени («Игра 534380») —
+    // это не ответ человеку: он не обязан знать, что 534380 значит. Имя
+    // спрашиваем у магазина Steam ОДИН раз и запоминаем на диске: список
+    // нелицензионных копий меняется редко, а без сети всё равно останется то,
+    // что уже узнали.
+    const безымянные = r.games.filter(g => /^Игра \d+$/.test(g.name))
+    if (безымянные.length) {
+      const кэш = читатьИмена()
+      let новых = 0
+      for (const g of безымянные) {
+        if (кэш[g.appId]) { g.name = кэш[g.appId]; continue }
+        // Не больше десяти запросов за обход: спрашивать про сорок игр разом —
+        // это долго и невежливо по отношению к чужому серверу.
+        if (новых >= 10) continue
+        новых++
+        try {
+          const j = await httpJson('https://store.steampowered.com/api/appdetails?appids=' + g.appId + '&l=russian')
+          const имя = j && j[g.appId] && j[g.appId].success && j[g.appId].data && j[g.appId].data.name
+          if (имя) { g.name = String(имя); кэш[g.appId] = g.name }
+        } catch { /* нет сети — останется номер, и это честно */ }
+      }
+      писатьИмена(кэш)
+    }
+
     return r
   } catch (e) {
     return { games: [], libraries: [], error: String((e && e.message) || e) }

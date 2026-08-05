@@ -225,6 +225,41 @@ function findSaves(gameName, roots) {
 }
 
 /**
+ * Игры, которых нет в библиотеке Steam, но прохождение по ним записано.
+ *
+ * v1.483.0. Владелец принёс: «сюжет ничего не показывает, особенно когда
+ * пиратка». Причина оказалась простой и обидной: список игр строился ТОЛЬКО по
+ * манифестам Steam, а нелицензионная копия в них не значится вовсе — то есть
+ * достижения на диске лежали, а спросить про них было некому.
+ *
+ * Эмуляторы держат их по номеру игры в своих папках: Goldberg, CODEX, RUNE,
+ * SmartSteamEmu. Каждая подпапка — это appid, то есть игра, в которую человек
+ * играл.
+ */
+function emulatorGames(env = process.env) {
+  const места = []
+  if (env.APPDATA) {
+    места.push(path.join(env.APPDATA, 'Goldberg SteamEmu Saves'))
+    места.push(path.join(env.APPDATA, 'SmartSteamEmu'))
+  }
+  if (env.PUBLIC) {
+    места.push(path.join(env.PUBLIC, 'Documents', 'Steam', 'CODEX'))
+    места.push(path.join(env.PUBLIC, 'Documents', 'Steam', 'RUNE'))
+  }
+  const out = new Map()
+  for (const м of места) {
+    for (const e of список(м)) {
+      if (!e.isDirectory() || !/^\d+$/.test(e.name)) continue
+      let когда = 0
+      try { когда = fs.statSync(path.join(м, e.name)).mtimeMs } catch { /* нет доступа */ }
+      const было = out.get(e.name)
+      if (!было || когда > было.lastPlayed) out.set(e.name, { appId: e.name, lastPlayed: когда, from: path.basename(м) })
+    }
+  }
+  return [...out.values()]
+}
+
+/**
  * Всё, что удалось узнать про игры на этом компьютере.
  *
  * `progressOf` — та самая функция чтения вех (localProgress). Отдаём её
@@ -279,11 +314,30 @@ function scanGames(io = {}) {
     g.saves = findSaves(g.name, saves)
   }
 
+  // Игры вне Steam: они есть у каждого, кто играет в нелицензионные копии, и
+  // раньше их не было видно вовсе. Название взять неоткуда — показываем номер,
+  // а приложение подставит настоящее имя, когда узнает его из магазина.
+  const известные = new Set(игры.map(g => g.appId))
+  for (const e of emulatorGames(env)) {
+    if (известные.has(e.appId)) continue
+    игры.push({
+      appId: e.appId,
+      name: 'Игра ' + e.appId,
+      dir: null,
+      sizeBytes: 0,
+      minutes: 0,
+      hours: '—',
+      lastPlayed: e.lastPlayed,
+      saves: null,
+      source: 'emu:' + e.from,
+    })
+  }
+
   игры.sort((a, b) => (b.lastPlayed - a.lastPlayed) || (b.minutes - a.minutes))
   return { games: игры, libraries: libs, checkedAt: Date.now() }
 }
 
 module.exports = {
   parseLibraryFolders, parseAcf, parsePlaytime, hoursLabel,
-  steamRoots, steamLibraries, saveRoots, findSaves, normName, saveStats, scanGames,
+  steamRoots, steamLibraries, saveRoots, findSaves, normName, saveStats, scanGames, emulatorGames,
 }

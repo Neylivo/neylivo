@@ -380,6 +380,88 @@ console.log('\n── Прохождения: что показывать чел
   }
 }
 
+console.log('\n── Пиратки и вехи (v1.483.0) ──')
+{
+  const fs2 = await import('node:fs')
+  const os2 = await import('node:os')
+  const path2 = await import('node:path')
+  const { emulatorGames } = await import('../electron/gameScan.cjs')
+
+  // Строим настоящие папки эмуляторов во временном месте: выдуманный fs
+  // проверял бы выдуманное, а тут важен именно обход диска.
+  const корень = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'ponoi-emu-'))
+  const APPDATA = path2.join(корень, 'Roaming')
+  const PUBLIC = path2.join(корень, 'Public')
+  fs2.mkdirSync(path2.join(APPDATA, 'Goldberg SteamEmu Saves', '1817070'), { recursive: true })
+  fs2.mkdirSync(path2.join(APPDATA, 'Goldberg SteamEmu Saves', 'settings'), { recursive: true })
+  fs2.mkdirSync(path2.join(PUBLIC, 'Documents', 'Steam', 'CODEX', '264710'), { recursive: true })
+  fs2.writeFileSync(path2.join(APPDATA, 'Goldberg SteamEmu Saves', '1817070', 'achievements.json'), '{}')
+
+  const найдено = emulatorGames({ APPDATA, PUBLIC })
+  check('игры нелицензионных копий находятся, хотя их нет в библиотеке Steam', () =>
+    найдено.length === 2 && найдено.some(g => g.appId === '1817070') && найдено.some(g => g.appId === '264710'))
+  check('служебные папки эмулятора за игру не считаются', () =>
+    !найдено.some(g => g.appId === 'settings'))
+  check('без папок эмуляторов список пустой, а не выдуманный', () =>
+    emulatorGames({ APPDATA: path2.join(корень, 'нет'), PUBLIC: path2.join(корень, 'нет') }).length === 0)
+
+  fs2.rmSync(корень, { recursive: true, force: true })
+
+  check('обход спрашивает вехи полем items, а не nodes', () => {
+    // Та самая поломка: читатель отдаёт items, а спрашивали nodes — и вехи
+    // были нулевыми ВСЕГДА, даже когда файлы достижений лежали на диске.
+    const src = fs2.readFileSync('electron/main.cjs', 'utf8')
+    const i = src.indexOf("ipcMain.handle('ponoi-games-scan'")
+    const тело = src.slice(i, i + 2500)
+    if (/\bп\.nodes\b/.test(тело)) throw new Error('снова спрашивают nodes')
+    return /Array\.isArray\(п\.items\)/.test(тело)
+  })
+  check('вехи читаются и у игр без папки в библиотеке', () => {
+    const src = fs2.readFileSync('electron/main.cjs', 'utf8')
+    const i = src.indexOf("ipcMain.handle('ponoi-games-scan'")
+    const тело = src.slice(i, i + 2500)
+    // Раньше стояло «нет папки — пропускаем», и это выкидывало ровно пиратки.
+    return !/if \(!g\.dir\) continue/.test(тело)
+  })
+}
+
+console.log('\n── Окна поверх карточки профиля (v1.483.0) ──')
+{
+  const fs3 = await import('node:fs')
+  check('окно статистики выносится порталом', () => {
+    // .pc-card анимируется через transform, а элемент с transform становится
+    // рамкой для position: fixed внутри себя — окно зажималось внутрь карточки
+    // и обрезалось. Лечится выносом в <body>.
+    const src = fs3.readFileSync('src/components/GameStatsModal.tsx', 'utf8')
+    return src.includes("from './Portal'") && /<Portal>/.test(src) && /<\/Portal>/.test(src)
+  })
+  check('карточка профиля правда анимируется через transform', () => {
+    // Если анимацию однажды уберут, портал всё равно не помешает — но пусть
+    // причина будет записана проверкой, а не только словами в комментарии.
+    const css = fs3.readFileSync('src/styles.css', 'utf8')
+    return /\.pc-card\s*\{[^}]*animation:\s*pop/.test(css) && /@keyframes pop[^}]*transform/.test(css)
+  })
+  check('«Прохождение» не обещается там, где вех нет', () => {
+    const src = fs3.readFileSync('src/components/ProfileCard.tsx', 'utf8')
+    // Раньше: !statsAllowed && (isMe || !!story) — то есть у любой игры.
+    return /хочуПрохождение\[curGame\.name\]/.test(src)
+      && !/campaignAllowed = !statsAllowed && \(isMe \|\| !!story\)/.test(src)
+  })
+  check('прохождение спрашивается даже без Steam ID', () => {
+    // Пиратка: Steam ID нет и быть не может, а достижения на диске есть.
+    // Раньше запрос обрывался до чтения файлов — то есть возможность была,
+    // а дверь к ней была закрыта одной строкой.
+    const src = fs3.readFileSync('src/lib/campaign.ts', 'utf8')
+    const i = src.indexOf('export async function autoNodes')
+    const тело = src.slice(i, i + 700)
+    return !/if \(!steamId\) return/.test(тело)
+  })
+  check('текущая игра видна на первом экране профиля, а не только во вкладке', () => {
+    const src = fs3.readFileSync('src/components/ProfileCard.tsx', 'utf8')
+    return /tab === 'board' && curGame/.test(src) && /pc-tab-live/.test(src)
+  })
+}
+
 console.log('\n── Ломаем нарочно (диск) ──')
 check('проверка ловит требование Steam ID там, где он не нужен', () => {
   // Смысл всей правки: прохождение читается вообще без учётной записи.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './icons'
+import { Portal } from './Portal'
 import { fetchMatches, computeStats, type GameMatch } from '../lib/gameMatches'
 import { fetchDotaStats, type DotaStats } from '../lib/opendota'
 
@@ -126,13 +127,21 @@ function Cs2StatsBody({ userId, gameName, isMe }: { userId: string; gameName: st
 // Dota 2 — OpenDota по привязанному SteamID, см. MATCH_TRACKED_GAMES).
 export function GameStatsModal({ userId, gameName, steamId, isMe, onClose }:
   { userId: string; gameName: string; steamId: string | null; isMe: boolean; onClose: () => void }) {
+  // v1.483.0: через портал — иначе окно зажимается ВНУТРЬ карточки профиля и
+  // обрезается сверху и снизу. Причина не в размерах: у .pc-card стоит
+  // анимация появления с transform, а элемент с transform становится рамкой
+  // для position: fixed внутри себя. То есть inset: 0 у подложки означал не
+  // «весь экран», а «эта карточка», да ещё и с overflow: hidden.
+  //
+  // Ровно эта же беда уже была с окном подтверждения (v1.450.0) — и лечится
+  // тем же: выносим в <body>, где fixed снова считается от экрана.
   return (
-    <div className="gstat-backdrop" onClick={onClose}>
+    <Portal><div className="gstat-backdrop" onClick={onClose}>
       <div className="gstat-card" onClick={e => e.stopPropagation()}>
         <button className="gstat-x" onClick={onClose}><Icon name="close" size={16} /></button>
         <div className="gstat-hdr"><Icon name="gamepad" size={18} /> {gameName} — статистика{gameName === 'Dota 2' ? '' : ' за 30 дней'}</div>
         {gameName === 'Dota 2' ? <DotaStatsBody steamId={steamId} isMe={isMe} /> : <Cs2StatsBody userId={userId} gameName={gameName} isMe={isMe} />}
       </div>
-    </div>
+    </div></Portal>
   )
 }

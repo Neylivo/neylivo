@@ -145,6 +145,45 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
   const [wallOpen, setWallOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [campOpen, setCampOpen] = useState(false)   // v1.452.0: панель прохождения
+  /**
+   * Есть ли у игры прохождение, которое мы правда можем показать (v1.483.0).
+   *
+   * Владелец принёс: «написано сюжет там, где не надо, например майнкрафт».
+   * И правда: строка «Прохождение» рисовалась у ЛЮБОЙ игры, у которой нет
+   * статистики матчей, — то есть у всего подряд, включая игры без сюжета
+   * вовсе. Человек нажимал и получал пустоту.
+   *
+   * Теперь спрашиваем настольную часть, есть ли вехи на диске, и рисуем строку
+   * только если есть. Ответ помним: обход диска на каждую перерисовку не нужен.
+   */
+  const [хочуПрохождение, setХочуПрохождение] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    const имена = [curGame?.name, ...(recent ?? []).map(r => r.name)].filter(Boolean) as string[]
+    const имя = имена.find(n => !(n in хочуПрохождение))
+    if (!имя) return
+    let живо = true
+    void (async () => {
+      const d = (window as any).ponoiDesktop
+      if (!d?.scanGames) {
+        if (живо) setХочуПрохождение(m => ({ ...m, ...Object.fromEntries(имена.map(n => [n, false])) }))
+        return
+      }
+      try {
+        const r = await d.scanGames()
+        // Один обход отвечает сразу про все игры, которые нас интересуют.
+        const карта: Record<string, boolean> = {}
+        for (const n of имена) {
+          const g = (r?.games ?? []).find((x: any) => x.name === n)
+          карта[n] = !!(g && g.milestones && g.milestones.total)
+        }
+        if (живо) setХочуПрохождение(m => ({ ...m, ...карта }))
+      } catch {
+        if (живо) setХочуПрохождение(m => ({ ...m, ...Object.fromEntries(имена.map(n => [n, false])) }))
+      }
+    })()
+    return () => { живо = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curGame?.name, recent])
   // v1.463.0: игра, открытая ИЗ ИСТОРИИ. Без неё окно показывало бы ту, что
   // играется сейчас, — то есть не то, по чему нажали.
   const [histGame, setHistGame] = useState<string | null>(null)
@@ -448,12 +487,40 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
         <div className="pc-right">
           <div className="pc-tabs">
             <button className={tab === 'board' ? 'on' : ''} onClick={() => setTab('board')}>Доска</button>
-            <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>Активность</button>
+            {/* v1.483.0: если человек прямо сейчас играет, это видно НА КНОПКЕ.
+                Владелец принёс: «играю в пиратку Киберпанк — в мини-профиле он
+                есть, а в общей нет». Игра там была, но пряталась за вкладкой,
+                которую он не открывал: маленькая карточка показывает активность
+                сразу, а большая — только после нажатия. */}
+            <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>
+              Активность{curGame && <span className="pc-tab-live" title={'Играет в ' + curGame.name} />}
+            </button>
             <button className={tab === 'wall' ? 'on' : ''} onClick={() => setTab('wall')}>Стена</button>
             {!isMe && <button className={tab === 'servers' ? 'on' : ''} onClick={() => setTab('servers')}>Общие сервера{srvs ? ' — ' + srvs.length : ''}</button>}
             {!isMe && <button className={tab === 'friends' ? 'on' : ''} onClick={() => setTab('friends')}>Общие друзья{frs ? ' — ' + frs.length : ''}</button>}
           </div>
           <div className="pc-rbody">
+            {/* Та же карточка активности, что и на вкладке «Активность», но на
+                первом экране: человек открыл профиль и сразу видит, во что
+                играет — как в маленькой карточке. Нажатие уводит на вкладку с
+                подробностями, чтобы не дублировать её содержимое здесь. */}
+            {tab === 'board' && curGame && (
+              <div className="act-card fp-cur clickable" onClick={() => setTab('activity')}>
+                <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>
+                <div className="act-row">
+                  {(curGame.cover ?? covers[curGame.name])
+                    ? <img className="act-cover act-cover-lg" src={(curGame.cover ?? covers[curGame.name])!} alt="" />
+                    : <span className="act-cover act-cover-lg act-cover-ph"><Icon name="gamepad" size={30} /></span>}
+                  <div className="act-info">
+                    <div className="act-name act-name-lg">{curGame.name}</div>
+                    {curGame.mode && <div className="act-mode">{curGame.mode}</div>}
+                    <div className="act-meta">
+                      <span className="act-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={curGame.since} /></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {tab === 'board' && <>
               {isMe && favs.length === 0 && wish.length === 0 && <>
                 <div className="pc-board-h">Персонализируйте свой профиль с помощью виджетов</div>
@@ -505,7 +572,11 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                   // зато есть прохождение. Своё можно завести всегда; чужое открывается,
                   // только если человек им делится (проценты приходят в присутствии).
                   const story = curGame.story
-                  const campaignAllowed = !statsAllowed && (isMe || !!story)
+                  // v1.483.0: «Прохождение» — только когда есть что показать:
+                  // либо человек делится своим местом в игре, либо вехи правда
+                  // лежат на диске. Раньше строка рисовалась у любой игры без
+                  // статистики матчей — и в Minecraft тоже.
+                  const campaignAllowed = !statsAllowed && (!!story || !!хочуПрохождение[curGame.name])
                   return (
                     <div className={'act-card fp-cur' + (statsAllowed || campaignAllowed ? ' clickable' : '')}
                       title={statsAllowed ? 'Статистика за 30 дней' : campaignAllowed ? 'Прохождение: миссии и проценты' : undefined}
@@ -547,7 +618,10 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                 // сюжетных. Раньше строка была мёртвой картинкой: человек видел
                 // игру, тыкал в неё и ничего не происходило.
                 const сетевая = MATCH_TRACKED_GAMES.has(g.name)
-                const можно = сетевая ? (isMe || pp.gameStatsVisibility !== 'none') : isMe
+                // v1.483.0: у игры из истории прохождение открываем, только
+                // если оно у нас есть. «Нажал и ничего» — это та же
+                // кнопка-обманка, просто в списке.
+                const можно = сетевая ? (isMe || pp.gameStatsVisibility !== 'none') : (isMe && !!хочуПрохождение[g.name])
                 return (
                 <div key={g.name} className={'fp-recent' + (можно ? ' clickable' : '')}
                   title={можно
