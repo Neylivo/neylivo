@@ -29,5 +29,6 @@ dist-safe-test/
 dist-live-test/
 dist-snake-test/
 dist-api-test/
+dist-play-test/
 scripts/api-test-certs/
 dist-bench/

@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.477.0",
+  "version": "1.478.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -35,7 +35,8 @@
     "test:java": "node scripts/java-test.mjs",
     "test:games": "node scripts/games-test.mjs",
     "test:snake": "esbuild src/lib/plugins/__snake_test.tsx --bundle --format=iife --jsx=automatic --outfile=dist-snake-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/snake-test.cjs",
-    "test:api": "esbuild src/lib/plugins/__api_test.tsx --bundle --format=iife --jsx=automatic --outfile=dist-api-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/api-test.cjs"
+    "test:api": "esbuild src/lib/plugins/__api_test.tsx --bundle --format=iife --jsx=automatic --outfile=dist-api-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/api-test.cjs",
+    "test:play": "esbuild src/music/__play_test.ts --bundle --format=iife --outfile=dist-play-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/play-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",
