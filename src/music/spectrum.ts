@@ -116,9 +116,32 @@ export function readSpectrum(): Кадр {
 
 function шаг() {
   if (!подписчики.size) { кадр = 0; return }
+  // v1.511.0: пока идёт игра и окно не на виду, кадры не считаются вовсе.
+  // Это самая дорогая петля приложения: чтение анализатора, разбор по полосам
+  // и перерисовка шестьдесят раз в секунду — ради картинки, которой в этот миг
+  // никто не видит. Подписка при этом жива: вернулись в окно — счёт пошёл
+  // дальше с того же места, без «прогрева» и без потери качества.
+  if (isSaving()) {
+    кадр = 0
+    ждёмВозврата()
+    return
+  }
   const k = readSpectrum()
   try { отдать?.(k) } catch { /* сломанный слушатель — не повод встать */ }
   кадр = requestAnimationFrame(шаг)
+}
+
+/** Одна подписка на возвращение — чтобы петля поднялась сама. */
+let отписка: (() => void) | null = null
+function ждёмВозврата() {
+  if (отписка) return
+  отписка = onSaving(б => {
+    if (б) return
+    отписка?.(); отписка = null
+    if (подписчики.size && !кадр && typeof requestAnimationFrame === 'function') {
+      кадр = requestAnimationFrame(шаг)
+    }
+  })
 }
 
 export function watchSpectrum(pluginId: string) {
@@ -147,3 +170,4 @@ export function clearSpectrum() {
   setAnalyser(null)
   отдать = null
 }
+import { isSaving, onSaving } from '../lib/gameMode'

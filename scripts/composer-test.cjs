@@ -343,9 +343,13 @@ app.whenReady().then(async () => {
         поле.focus()
         return document.activeElement.tagName
       })()`)
+      // Выдержки не для красоты: без паузы после focus() нажатие приходит
+      // раньше, чем фокус успел встать, и проверка «фокус ушёл» плавала —
+      // проваливалась примерно в двух прогонах из трёх.
+      await new Promise(r => setTimeout(r, 150))
       win.webContents.sendInputEvent({ type: 'mouseDown', x: место.x, y: место.y, button: 'left', clickCount: 1 })
       win.webContents.sendInputEvent({ type: 'mouseUp', x: место.x, y: место.y, button: 'left', clickCount: 1 })
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 350))
       return await win.webContents.executeJavaScript(`document.activeElement.tagName`)
     }
 

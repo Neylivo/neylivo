@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.510.0",
+  "version": "1.511.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -44,7 +44,8 @@
     "test:mobile": "npm run build && electron scripts/mobile-test.cjs",
     "test:hover": "electron scripts/hover-test.cjs",
     "test:composer": "esbuild src/lib/keepFocus.ts --bundle --format=iife --global-name=KF --outfile=dist-composer-test/keepfocus.js && electron scripts/composer-test.cjs",
-    "release:local": "node scripts/release-local.mjs"
+    "release:local": "node scripts/release-local.mjs",
+    "test:save": "esbuild src/lib/__save_test.ts --bundle --format=iife --outfile=dist-save-test/t.js && electron scripts/save-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

@@ -1,6 +1,8 @@
 
 
 import { Portal } from './components/Portal'
+import { updateGameState } from './lib/gameMode'
+import { getSettings } from './lib/settings'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './auth/AuthProvider'
 import { AuthScreen } from './auth/AuthScreen'
@@ -360,6 +362,29 @@ export default function App() {
   // устройство, а не на аккаунт, поэтому сессия для этого не нужна — они работают и
   // на экране входа (свои темы оформления, например).
   useEffect(() => { void startEnabledPlugins() }, [])
+  // v1.511.0: приложение следит за тем, видно ли его. Вместе с признаком «идёт
+  // игра» (его приносит рабочий стол, см. presence.tsx) это и включает бережный
+  // режим: пока человек в игре, а окно позади, приложение перестаёт считать
+  // кадры и реже стучится в сеть. Вернулись в окно — всё как было, немедленно.
+  //
+  // Слушаем ОБА признака: свёрнутое окно даёт visibilitychange, а окно, которое
+  // просто ушло за игру, — только потерю фокуса.
+  useEffect(() => {
+    const обновить = () => updateGameState({
+      visible: document.visibilityState === 'visible',
+      focused: document.hasFocus(),
+      enabled: getSettings().saveWhileGaming !== false,
+    })
+    обновить()
+    document.addEventListener('visibilitychange', обновить)
+    window.addEventListener('focus', обновить)
+    window.addEventListener('blur', обновить)
+    return () => {
+      document.removeEventListener('visibilitychange', обновить)
+      window.removeEventListener('focus', обновить)
+      window.removeEventListener('blur', обновить)
+    }
+  }, [])
   // v1.443.0: экранная клавиатура на телефоне. Держим её высоту в --kb, чтобы
   // поле ввода не оставалось под клавиатурой, и рассылаем событие — переписка
   // по нему подкручивает список, если человек читал именно низ.

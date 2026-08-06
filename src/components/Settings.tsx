@@ -1010,6 +1010,13 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   <Toggle on={settings.swipes} onChange={v => set('swipes', v)} />
                 </Row>
 
+                {/* v1.511.0: бережный режим. Включён сразу — это не ухудшение
+                    картинки, а отказ считать то, чего в этот миг никто не видит. */}
+                <Row title="Беречь ресурсы во время игры"
+                  desc="Пока идёт игра, а окно Ponoi позади, приложение перестаёт считать кадры (спектр, живой фон) и вчетверо реже стучится в сеть. Как только вернёшься в окно — всё работает как обычно, без задержки. На качество картинки это не влияет: экономится только невидимое.">
+                  <Toggle on={settings.saveWhileGaming} onChange={v => set('saveWhileGaming', v)} />
+                </Row>
+
                 <ChatBgCard />
 
                 <div className="pqs-custom">

@@ -1,5 +1,6 @@
 
 import { storyShare, loadCampaign, type StoryShare } from './campaign'
+import { isSaving, onSaving, slowMs, updateGameState } from './gameMode'
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { resolveCover } from './gameCovers'
@@ -231,9 +232,17 @@ export function PresenceProvider({ username, avatarUrl, children }:
       supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {})
     }
     beat()
-    const t = window.setInterval(beat, 60_000)
+    // v1.511.0: пока идёт игра и окно не на виду, стучимся вчетверо реже.
+    // Минута против четырёх: друзья по-прежнему видят человека в сети, а
+    // машина занята игрой, а не нашими запросами.
+    let t = window.setInterval(beat, slowMs(60_000, isSaving()))
+    const пересобрать = (б: boolean) => {
+      window.clearInterval(t)
+      t = window.setInterval(beat, slowMs(60_000, б))
+    }
+    const отписка = onSaving(пересобрать)
     window.addEventListener('beforeunload', beat)
-    return () => { window.clearInterval(t); window.removeEventListener('beforeunload', beat) }
+    return () => { отписка(); window.clearInterval(t); window.removeEventListener('beforeunload', beat) }
   }, [user])
 
   // Гигиена истории (v1.27.0): при входе закрываем свои «зависшие» игровые сессии
@@ -382,6 +391,9 @@ export function PresenceProvider({ username, avatarUrl, children }:
     const d = (window as any).ponoiDesktop
     if (!d?.onGame) return
     d.onGame(async (g: Game | null) => {
+      // v1.511.0: тот же сигнал включает бережный режим — приложение знает,
+      // что человек сейчас в игре, и перестаёт отъедать у неё машину.
+      updateGameState({ gameRunning: !!g })
       const pub = (val: Game | null) => {
         gameRef.current = val
         setMyGame(val)

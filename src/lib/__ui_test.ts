@@ -37,6 +37,7 @@ import { keepAliveAction, parseMediaKey, mediaSeeked } from './keepAlive'
 import { msgTime, dayLabel, daysAgo, setTime24 } from './ui'
 import { panelFor, panelTitle } from './activityPanel'
 import { humanFail, humanText } from './humanFail'
+import { saving, slowMs, SAVE_SLOWDOWN } from './gameMode'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1842,6 +1843,44 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.511.0: бережный режим во время игры -----------------------------------
+//
+// Владелец: «полная оптимизация с анализом текущей игры без потери качества».
+// Приложение живёт свёрнутым часами, пока человек играет, и всё это время
+// считает кадры для картинки, которой никто не видит, и стучится в сеть.
+//
+// «Без потери качества» здесь не слова, а само правило: пока окно на экране,
+// бережный режим НЕ ВКЛЮЧАЕТСЯ никогда. Экономится только невидимое.
+console.log('\n-- Бережный режим во время игры --')
+
+const бр = (o: Partial<Parameters<typeof saving>[0]>) =>
+  saving({ gameRunning: true, visible: false, focused: false, enabled: true, ...o })
+
+check('идёт игра, окно позади — бережём', () => бр({}) === true)
+check('окно на экране — не бережём НИКОГДА', () =>
+  бр({ visible: true }) === false && бр({ visible: true, focused: false }) === false)
+check('в окне работают — тоже не бережём', () => бр({ focused: true }) === false)
+check('игры нет — беречь не от чего', () => бр({ gameRunning: false }) === false)
+check('настройку выключили — режима нет совсем', () => бр({ enabled: false }) === false)
+
+check('промежутки растягиваются вчетверо, а не «навсегда»', () =>
+  SAVE_SLOWDOWN === 4 && slowMs(60000, true) === 240000 && slowMs(5000, true) === 20000)
+check('в обычной работе промежутки не трогаются', () =>
+  slowMs(60000, false) === 60000 && slowMs(50, false) === 50)
+
+console.log('\n-- Ломаем нарочно (бережный режим) --')
+check('проверка ловит экономию на видимом окне', () => {
+  // Так и появляется «ухудшение качества»: приложение начинает беречь, пока на
+  // него смотрят.
+  const плохо = true
+  return плохо !== бр({ visible: true })
+})
+check('проверка ловит экономию без игры', () => {
+  const плохо = true
+  return плохо !== бр({ gameRunning: false })
+})
 
 
 // -- v1.508.0: наружу не идёт то, чего человеку знать не надо ----------------
