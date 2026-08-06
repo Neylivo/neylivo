@@ -4,12 +4,17 @@
 //
 // По исходнику такое не видно: правило наведения выглядит безобидно
 // (scale 1.08), и понять, что значок при этом УЕЗЖАЕТ, можно только измерив.
-// Поэтому здесь настоящая мышь: подводим её к значку и меряем прямоугольник до
-// и после. На сломанной версии выходит 40×42 -> 43.2×45.4 со сдвигом −1.6,−1.7.
+// На сломанной версии выходило 40×42 -> 43.2×45.4 со сдвигом −1.6, −1.7.
 //
-// Проверка меряет ДВА размера экрана нарочно: правила аватарки на телефоне и на
-// компьютере разные, и прыгало только на компьютере. Своё предположение
-// («виноват чужой transform в чате») этот же стенд и опроверг.
+// ПОЧЕМУ НЕ НАСТОЯЩЕЙ МЫШЬЮ. Сначала я подводил указатель через sendInputEvent
+// — и проверка падала через раз с «мышь не доехала»: Chromium пересчитывает
+// наведение по последнему перемещению и после смены размера окна первые
+// движения иногда съедает. Это беда стенда, а не стилей, и лечить её сном да
+// повторами значит получить проверку, которой нельзя верить.
+//
+// Поэтому :hover включается НАПРЯМУЮ, через отладчик браузера
+// (CSS.forcePseudoState). Состояние ровно то же, что от мыши, только приходит
+// оно наверняка.
 const { app, BrowserWindow } = require('electron')
 const fs = require('fs')
 const path = require('path')
@@ -45,34 +50,66 @@ setTimeout(() => { console.log('ЗАВИС'); process.exit(2) }, 60000)
 
 async function мерка(win) {
   return JSON.parse(await win.webContents.executeJavaScript(`(() => {
-    const r = document.getElementById('ava').getBoundingClientRect()
     const el = document.getElementById('ava')
-    return JSON.stringify({ x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10,
+    const r = el.getBoundingClientRect()
+    return JSON.stringify({
+      x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10,
       w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
-      // Держим и это: без «hover: true» проверка могла бы пройти просто потому,
-      // что мышь до значка не доехала, — и молча не проверить ничего.
-      hover: el.matches(':hover'), tr: getComputedStyle(el).transform })
+      tr: getComputedStyle(el).transform,
+      тень: getComputedStyle(el).boxShadow,
+    })
   })()`))
+}
+
+/**
+ * Включить или снять :hover у значка через отладчик браузера.
+ *
+ * nodeId берём ОДИН раз и держим: DOM.getDocument выдаёт новые номера, и снятие
+ * по свежему номеру не снимает состояние, поставленное по прежнему. Из-за этого
+ * наведение с первого прохода оставалось включённым на втором, и «до» уже было
+ * с подсветкой.
+ */
+let номерЗначка = 0
+async function навести(win, включить) {
+  const d = win.webContents.debugger
+  if (!номерЗначка) {
+    const { root } = await d.sendCommand('DOM.getDocument')
+    const { nodeId } = await d.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: '#ava' })
+    номерЗначка = nodeId
+  }
+  await d.sendCommand('CSS.forcePseudoState', {
+    nodeId: номерЗначка, forcedPseudoClasses: включить ? ['hover'] : [],
+  })
+  // Ждём, пока это ПРАВДА применится: у подсветки есть переход, и мерка,
+  // снятая сразу, поймала бы его середину.
+  for (let i = 0; i < 20; i++) {
+    const м = await мерка(win)
+    const есть = м.тень.includes('255, 255, 255')
+    if (есть === включить) return
+    await new Promise(r => setTimeout(r, 60))
+  }
 }
 
 app.whenReady().then(async () => {
   // ОДНО окно на оба размера: закрытое окно уносит с собой сессию, и следующее
-  // берётся за file:// раньше, чем она поднимется (ERR_FAILED). Ровно на это я
-  // уже попадался в обходе телефона.
-  const win = new BrowserWindow({ show: true, width: 1200, height: 700, backgroundColor: '#313338' })
+  // берётся за file:// раньше, чем она поднимется (ERR_FAILED).
+  const win = new BrowserWindow({ show: false, width: 1200, height: 700, backgroundColor: '#313338' })
+  // Страницу открываем ОДИН раз, до отладчика: переход по новому адресу закрывает
+  // его цель, и следующая же команда падает с «target closed». Содержимое
+  // страницы не меняется — между размерами достаточно поменять ширину окна.
+  await win.loadFile(path.join(OUT, 'index.html'))
+  await new Promise(r => setTimeout(r, 300))
+  win.webContents.debugger.attach('1.3')
+  await win.webContents.debugger.sendCommand('DOM.enable')
+  await win.webContents.debugger.sendCommand('CSS.enable')
+
   for (const [имя, ширина] of [['обычный', 1200], ['телефон', 412]]) {
     win.setContentSize(ширина, 700)
-    await win.loadFile(path.join(OUT, 'index.html'))
-    await new Promise(r => setTimeout(r, 400))
+    await new Promise(r => setTimeout(r, 300))
 
-    // Мышь в сторону — исходное положение.
-    win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 600 })
-    await new Promise(r => setTimeout(r, 250))
+    await навести(win, false)
     const до = await мерка(win)
-
-    // И наводим НА значок.
-    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(до.x + до.w / 2), y: Math.round(до.y + до.h / 2) })
-    await new Promise(r => setTimeout(r, 350))
+    await навести(win, true)
     const после = await мерка(win)
 
     console.log('\n── ' + имя + ' (' + ширина + ') ──')
@@ -80,13 +117,15 @@ app.whenReady().then(async () => {
     check('значок не уезжает под курсором',
       Math.abs(до.x - после.x) < 0.6 && Math.abs(до.y - после.y) < 0.6,
       `сдвиг ${Math.round((после.x - до.x) * 10) / 10}, ${Math.round((после.y - до.y) * 10) / 10}`)
-    check('мышь правда доехала до значка', после.hover === true,
-      'иначе проверка выше не значит ничего')
     check('и не меняет размера',
       Math.abs(до.w - после.w) < 0.6 && Math.abs(до.h - после.h) < 0.6,
       `${до.w}x${до.h} -> ${после.w}x${после.h}`)
+    // Без этой строки проверки выше не значат НИЧЕГО: они прошли бы и на
+    // невключённом наведении. Раз движение убрали — что-то должно остаться,
+    // иначе наведение просто перестало быть заметным.
+    check('но наведение видно — подсветкой', до.тень !== после.тень,
+      'тень: ' + до.тень + ' -> ' + после.тень)
   }
-  win.destroy()
 
   console.log('\nИТОГ: провалено ' + failed)
   process.exit(failed ? 1 : 0)
