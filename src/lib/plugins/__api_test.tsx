@@ -1458,6 +1458,68 @@ export async function onLoad(ponoi) {
   clearAllApps()
 }
 
+
+// ── 17. Конструктор приложений (v1.496.0) ──────────────────────────────────
+//
+// Владелец попросил «создание своих приложений прямо в ponoi». Здесь
+// проверяется не форма, а то, ради чего она есть: собранное ею приложение
+// должно ОТКРЫТЬСЯ и заработать — с холстом, кадрами, курсором и файлами.
+async function конструкторПриложений(host: Host) {
+  const { clearAllApps } = await import('./apps')
+  const AM = await import('./appMaker')
+  clearAllApps()
+
+  // Берём готовую заготовку «Игра на холсте» — ту самую, что предложат человеку.
+  const набор = {
+    ...AM.APP_DEFAULT, name: 'Проба приложения', author: 'проба',
+    description: 'собрано конструктором', width: 300, height: 220,
+    ...AM.APP_TEMPLATES.find(t => t.id === 'canvas2d')!.draft,
+  } as any
+  // Дописываем отчёт: заготовка сама ничего не рассказывает, а нам надо знать,
+  // что кадры идут и мост на месте.
+  набор.js += `
+let счёт = 0
+ponoi.frame(() => { счёт++ })
+setTimeout(() => {
+  ponoi.log('ПРИЛОЖЕНИЕ:' + JSON.stringify({
+    кадров: счёт,
+    холст: !!document.querySelector('canvas'),
+    курсор: typeof ponoi.cursor.lock === 'function',
+    файлы: typeof ponoi.files.open === 'function',
+    кадрАпи: typeof ponoi.frame === 'function',
+  }))
+}, 900)`
+
+  const код = AM.buildApp(набор)
+  ok('конструктор собрал настоящий плагин', /@id\s+proba-prilozheniya/.test(код),
+    (код.split('\n')[2] ?? '').trim())
+  ok('и в него попало разрешение на окно', /@permissions\s+apps/.test(код))
+
+  const назад = AM.parseApp(код)
+  ok('файл разбирается обратно в форму без потерь',
+    !!назад && назад.js === набор.js && назад.css === набор.css && назад.width === 300,
+    назад ? 'ширина ' + назад.width : 'не разобрался')
+
+  const id = await поднять(host, код)
+  ok('приложение открылось окном', await ждать(() => appList(id).length === 1, 6000),
+    String(host.pluginError(id) ?? 'без ошибок'))
+
+  await ждать(() => журнал(host, id).some(l => l.includes('ПРИЛОЖЕНИЕ:')), 15000)
+  const с = строка(host, id, 'ПРИЛОЖЕНИЕ:')
+  let о: any = {}
+  try { о = JSON.parse(с.slice('ПРИЛОЖЕНИЕ:'.length)) } catch { /* ниже видно */ }
+
+  ok('внутри него живой холст', о.холст === true, с.slice(0, 100))
+  ok('и кадры правда идут', Number(о.кадров) > 10, 'кадров: ' + о.кадров)
+  ok('ponoi.frame на месте', о.кадрАпи === true)
+  ok('управление курсором на месте', о.курсор === true)
+  ok('работа с файлами на месте', о.файлы === true)
+
+  await host.stopPlugin(id)
+  removePlugin(id)
+  clearAllApps()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -1499,6 +1561,8 @@ async function main() {
   await остальное(host)
   lines.push(''); lines.push('── Встроенный three.js ──'); out()
   await встроенныйThree(host)
+  lines.push(''); lines.push('── Конструктор приложений ──'); out()
+  await конструкторПриложений(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

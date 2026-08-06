@@ -281,6 +281,197 @@ export const FRAME_BRIDGE = `<script>
   }
   ponoi.libs = function () { return call('libs.list', []) }
 
+  // ── Игровой цикл ─────────────────────────────────────────────────────────
+  //
+  // requestAnimationFrame внутри страницы работает и без нас (замерено: 124
+  // кадра в секунду). Но игровой цикл почти всегда пишут одинаково и одинаково
+  // же ошибаются: забывают посчитать время между кадрами, и на быстром экране
+  // всё летит вдвое быстрее.
+  //
+  // Здесь dt приходит готовым, в секундах, и ограничен сверху: после
+  // переключения вкладки между кадрами проходят минуты, и герой без ограничения
+  // улетал бы сквозь стену за один шаг.
+  var кадровые = []
+  var кадрИдёт = 0
+  var прошлое = 0
+  function шагКадра(now) {
+    var dt = прошлое ? (now - прошлое) / 1000 : 0
+    прошлое = now
+    if (dt > 0.25) dt = 0.25
+    for (var i = 0; i < кадровые.length; i++) {
+      try { кадровые[i](dt, now) } catch (e) { console.error(e) }
+    }
+    кадрИдёт = requestAnimationFrame(шагКадра)
+  }
+  ponoi.frame = function (fn) {
+    кадровые.push(fn)
+    if (!кадрИдёт) кадрИдёт = requestAnimationFrame(шагКадра)
+    return function () {
+      var i = кадровые.indexOf(fn)
+      if (i >= 0) кадровые.splice(i, 1)
+      if (!кадровые.length && кадрИдёт) { cancelAnimationFrame(кадрИдёт); кадрИдёт = 0; прошлое = 0 }
+    }
+  }
+
+  // ── Курсор ───────────────────────────────────────────────────────────────
+  //
+  // Всё это работает и напрямую (style.cursor, requestPointerLock) — но об этом
+  // надо знать. Игре от первого лица нужен захват, редактору — перекрестье, и
+  // писать это руками каждый раз незачем.
+  ponoi.cursor = {
+    set: function (вид) { document.body.style.cursor = String(вид || 'default') },
+    hide: function () { document.body.style.cursor = 'none' },
+    show: function () { document.body.style.cursor = 'default' },
+    /** Захват для камеры от первого лица. Браузер требует нажатия человеком. */
+    lock: function (el) {
+      var цель = el || document.querySelector('canvas') || document.body
+      return цель.requestPointerLock ? цель.requestPointerLock() : null
+    },
+    unlock: function () { if (document.exitPointerLock) document.exitPointerLock() },
+    locked: function () { return !!document.pointerLockElement },
+  }
+
+  // ── Файлы человека ───────────────────────────────────────────────────────
+  //
+  // Открыть проект, сохранить сцену, загрузить модель. Работает через
+  // showOpenFilePicker там, где он есть (замерено: в окне плагина есть), и
+  // через обычный выбор файла там, где его нет, — чтобы плагин не приходилось
+  // писать дважды.
+  //
+  // Это ФАЙЛЫ ЧЕЛОВЕКА, а не наши: он выбирает их сам в системном окне, и без
+  // его выбора плагин не видит ничего. Поэтому разрешения тут не спрашиваются:
+  // спрашивает сама система, и спрашивает нагляднее нас.
+  ponoi.files = {
+    /**
+     * Открыть один или несколько файлов.
+     * Отдаёт [{ name, size, type, text(), bytes(), file }].
+     */
+    open: function (opt) {
+      opt = opt || {}
+      var типы = opt.accept ? String(opt.accept) : ''
+      var много = !!opt.multiple
+      function собери(list) {
+        return [].map.call(list, function (f) {
+          return {
+            name: f.name, size: f.size, type: f.type, file: f,
+            text: function () { return f.text() },
+            bytes: function () { return f.arrayBuffer() },
+            url: function () { return URL.createObjectURL(f) },
+          }
+        })
+      }
+      if (window.showOpenFilePicker) {
+        return window.showOpenFilePicker({ multiple: много })
+          .then(function (ручки) {
+            return Promise.all(ручки.map(function (h) { return h.getFile() }))
+          })
+          .then(собери)
+          .catch(function () { return [] })   // человек передумал — это не ошибка
+      }
+      return new Promise(function (ok) {
+        var i = document.createElement('input')
+        i.type = 'file'
+        if (много) i.multiple = true
+        if (типы) i.accept = типы
+        i.onchange = function () { ok(собери(i.files || [])) }
+        // Отмену выбора файла браузер не сообщает никак: человек может закрыть
+        // окно, и обещание висело бы вечно. Ждём возврата фокуса.
+        window.addEventListener('focus', function once() {
+          window.removeEventListener('focus', once)
+          setTimeout(function () { if (!(i.files || []).length) ok([]) }, 400)
+        })
+        i.click()
+      })
+    },
+    /** Сохранить данные в файл. Строка, ArrayBuffer или Blob. */
+    save: function (имя, данные, тип) {
+      var b = данные instanceof Blob ? данные
+        : new Blob([данные], { type: тип || 'application/octet-stream' })
+      if (window.showSaveFilePicker) {
+        return window.showSaveFilePicker({ suggestedName: String(имя || 'файл') })
+          .then(function (h) { return h.createWritable() })
+          .then(function (w) { return w.write(b).then(function () { return w.close() }) })
+          .then(function () { return true })
+          .catch(function () { return false })
+      }
+      return new Promise(function (ok) {
+        var a = document.createElement('a')
+        a.href = URL.createObjectURL(b)
+        a.download = String(имя || 'файл')
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); ok(true) }, 100)
+      })
+    },
+    /**
+     * Перетаскивание файлов в окно.
+     *
+     * Браузер по умолчанию ОТКРЫВАЕТ брошенный файл вместо страницы — то есть
+     * плагин исчезает, а на его месте картинка. Отменяем это здесь, чтобы
+     * автору не пришлось узнавать про это на своей шкуре.
+     */
+    onDrop: function (fn) {
+      var стоп = function (e) { e.preventDefault(); e.stopPropagation() }
+      var брошено = function (e) {
+        стоп(e)
+        var файлы = [].map.call((e.dataTransfer && e.dataTransfer.files) || [], function (f) {
+          return {
+            name: f.name, size: f.size, type: f.type, file: f,
+            text: function () { return f.text() },
+            bytes: function () { return f.arrayBuffer() },
+            url: function () { return URL.createObjectURL(f) },
+          }
+        })
+        if (файлы.length) { try { fn(файлы) } catch (err) { console.error(err) } }
+      }
+      window.addEventListener('dragover', стоп)
+      window.addEventListener('drop', брошено)
+      return function () {
+        window.removeEventListener('dragover', стоп)
+        window.removeEventListener('drop', брошено)
+      }
+    },
+  }
+
+  // Холст одной строкой — ровно та запись, которую просил владелец.
+  ponoi.canvas = function (opt) {
+    opt = opt || {}
+    var c = document.querySelector('canvas')
+    if (!c) {
+      c = document.createElement('canvas')
+      c.style.display = 'block'
+      c.style.width = '100%'
+      c.style.height = '100%'
+      ;(document.body || document.documentElement).appendChild(c)
+    }
+    // Размер БУФЕРА равен размеру на экране, с учётом плотности точек: иначе
+    // картинка мылится на телефоне и на экранах с масштабом.
+    var к = opt.dpr === false ? 1 : (window.devicePixelRatio || 1)
+    var r = c.getBoundingClientRect()
+    c.width = Math.max(1, Math.round((r.width || 300) * к))
+    c.height = Math.max(1, Math.round((r.height || 150) * к))
+    return c
+  }
+
+  // ── Ошибки страницы уходят в журнал плагина ──────────────────────────────
+  //
+  // Без этого автор отлаживает вслепую: страница молча не работает, консоли у
+  // него нет, а в журнале плагина пусто — плагин-то как раз отработал. Я сам на
+  // этом потерял час, разбирая, почему окно открылось пустым.
+  window.addEventListener('error', function (e) {
+    try {
+      call('log', ['Ошибка в странице: ' + (e.message || 'неизвестно')
+        + (e.lineno ? ' (строка ' + e.lineno + ')' : ''), 'error'])
+    } catch (err) {}
+  })
+  window.addEventListener('unhandledrejection', function (e) {
+    try {
+      var r = e.reason
+      call('log', ['Необработанная ошибка в странице: '
+        + String((r && r.message) || r), 'error'])
+    } catch (err) {}
+  })
+
   parent.postMessage({ ponoi: 1, k: 'ready' }, '*')
 })()
 </script>`
@@ -300,6 +491,15 @@ export function frameDoc(html: string): string {
     + '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;'
     + 'background:transparent;color:#dbdee1;font:14px system-ui,sans-serif}'
     + 'canvas{display:block}</style>'
+    // <body> ОБЯЗАТЕЛЬНО и до всего остального.
+    //
+    // Без него страница, у которой нет разметки (а у игры её и нет — только
+    // код), целиком разбиралась в <head>: document.body там ещё не существует,
+    // и первое же обращение к нему падало с «Cannot read properties of null».
+    // Выглядело это как пустое окно без единой жалобы — плагин-то отработал.
+    // Поймано живой проверкой после того, как ошибки страницы стали доходить
+    // до журнала.
+    + '<body>'
     + FRAME_BRIDGE
     + String(html ?? '')
 }

@@ -2202,6 +2202,93 @@ console.log('\n-- Встроенные библиотеки (v1.492.0) --')
   })
 }
 
+console.log('\n-- Конструктор приложений (v1.496.0) --')
+{
+  const A = await import('./appMaker')
+
+  check('имя файла делается из названия по-русски', () =>
+    A.makeAppId('Моя Игра!') === 'moya-igra'
+    && A.makeAppId('  ') === 'app'
+    && A.makeAppId('Level Editor 2') === 'level-editor-2')
+
+  check('страница собирается из трёх кусков', () => {
+    const p = A.buildPage({ html: '<b>тут</b>', css: 'b{color:red}', js: 'console.log(1)' })
+    return p.includes('<style>') && p.includes('<b>тут</b>') && p.includes('<script>')
+      && p.indexOf('<style>') < p.indexOf('<b>тут</b>')
+  })
+
+  check('закрывающий тег в коде не обрывает страницу', () => {
+    // Строка с закрывающим тегом внутри программы закрыла бы script посреди
+    // кода, и остаток вывалился бы на страницу текстом.
+    const p = A.buildPage({ html: '', css: '', js: 'const s = "</' + 'script>"' })
+    return p.includes('<\\/script>"')
+  })
+
+  check('пустые куски не оставляют пустых тегов', () => {
+    const p = A.buildPage({ html: '<i>i</i>', css: '', js: '' })
+    return p === '<i>i</i>'
+  })
+
+  check('собранное приложение — настоящий плагин с окном', () => {
+    const код = A.buildApp({ ...A.APP_DEFAULT, name: 'Тест', html: '<b>x</b>' })
+    const m = parsePlugin(код)
+    return m.id === 'test' && m.permissions.includes('apps')
+  })
+
+  check('страница ПРАВДА передаётся в окно', () => {
+    // Первая версия собирала страницу и забывала её отдать: окно открывалось
+    // пустым, и ошибок при этом не было никаких.
+    const код = A.buildApp({ ...A.APP_DEFAULT, name: 'Тест', html: '<b>x</b>' })
+    const тело = код.slice(код.indexOf('apps.create'))
+    if (!/html:\s*СТРАНИЦА/.test(тело)) throw new Error('окно открывается без страницы')
+    return true
+  })
+
+  check('файл разбирается обратно без потерь', () => {
+    const было = {
+      ...A.APP_DEFAULT, name: 'Игра', author: 'я', description: 'проба',
+      html: '<canvas></canvas>', css: 'body{margin:0}', js: 'ponoi.frame(dt => {})',
+      width: 640, height: 480, frameless: true, transparent: true,
+    }
+    const стало = A.parseApp(A.buildApp(было))
+    if (!стало) throw new Error('не разобрался вовсе')
+    for (const k of ['html', 'css', 'js', 'width', 'height', 'frameless', 'transparent'] as const) {
+      if ((стало as any)[k] !== (было as any)[k]) throw new Error('разошлось поле ' + k)
+    }
+    return true
+  })
+
+  check('чужой плагин конструктор трогать не берётся', () =>
+    A.parseApp('/**\n * @name Ч\n * @id ch\n * @version 1.0.0\n */\nfunction onLoad() {}') === null
+    && !A.isApp('function onLoad() {}'))
+
+  check('каждая заготовка собирается в рабочий плагин', () => {
+    for (const т of A.APP_TEMPLATES) {
+      const код = A.buildApp({ ...A.APP_DEFAULT, name: т.label, ...т.draft } as any)
+      const m = parsePlugin(код)
+      if (!m.id) throw new Error('заготовка «' + т.label + '» не собралась')
+      const назад = A.parseApp(код)
+      if (!назад || назад.js !== (т.draft.js ?? '')) {
+        throw new Error('заготовка «' + т.label + '» не разбирается обратно')
+      }
+    }
+    return true
+  })
+
+  check('в странице всегда есть body', () => {
+    // Без него страница без разметки (а у игры её и нет) разбирается целиком в
+    // head, и document.body там null — падает первое же обращение.
+    const H = readFileSync('src/lib/plugins/htmlFrame.ts', 'utf8')
+    return H.includes("+ '<body>'")
+  })
+
+  check('ошибки страницы доходят до журнала плагина', () => {
+    // Без этого автор отлаживает вслепую: страница молчит, консоли у него нет.
+    const H = readFileSync('src/lib/plugins/htmlFrame.ts', 'utf8')
+    return /addEventListener\('error'/.test(H) && /unhandledrejection/.test(H)
+  })
+}
+
 console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

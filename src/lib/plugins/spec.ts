@@ -777,12 +777,49 @@ ${APP_DOC_TABLE}
         <\/script>\`,
     })
 
-ЧТО ТАМ РАБОТАЕТ. Всё, что работает на обычной странице: DOM, CSS, canvas со
-всеми контекстами (2d, webgl, webgl2, webgpu), requestAnimationFrame без
-ограничения частоты, мышь (pointermove, pointerdown, wheel, pointerlock),
-клавиатура, касания, AudioContext с AnalyserNode, WebAssembly, OffscreenCanvas
-со своим Worker, шейдеры, и ЛЮБЫЕ библиотеки — three.js, babylon, gsap,
-физические движки — обычным <script src> с любого сайта или своим кодом.
+ЧТО ТАМ РАБОТАЕТ — ПРОВЕРЕНО ЗАМЕРАМИ, А НЕ ОБЕЩАНО:
+
+| что | как |
+|---|---|
+| DOM и CSS | обычные, целиком |
+| canvas 2d, webgl, webgl2 | canvas.getContext('webgl2') |
+| WebGPU | navigator.gpu — адаптер и устройство настоящие |
+| кадры | requestAnimationFrame, замерено 124 в секунду; удобнее ponoi.frame |
+| мышь | pointermove, pointerdown, wheel, pointerlock |
+| клавиатура и касания | keydown/keyup, touch* |
+| звук | AudioContext, Audio, свои файлы — играет |
+| файлы человека | showOpenFilePicker, showSaveFilePicker, перетаскивание |
+| WebAssembly | есть |
+| свой Worker | new Worker из blob, и OffscreenCanvas в него |
+| время | performance.now |
+| память | около 3,5 ГБ на кучу |
+| библиотеки | three.js встроен, любые другие — script src или свой файл |
+
+Чего НЕТ: localStorage (у страницы чужое происхождение — вместо него
+ponoi.storage и ponoi.db) и прямой import по blob-адресу (вместо него
+ponoi.loadModule).
+
+УДОБНЫЕ ОБЁРТКИ. Всё это работает и напрямую, но писать одно и то же каждый раз
+незачем:
+
+    const c = ponoi.canvas()          // холст во всё окно, с учётом плотности точек
+    const gl = c.getContext('webgl2')
+
+    ponoi.frame(dt => { ... })        // игровой цикл, dt в секундах и с потолком
+
+    ponoi.cursor.set('crosshair')     // курсор
+    ponoi.cursor.hide()
+    ponoi.cursor.lock()               // захват для камеры от первого лица
+    ponoi.cursor.unlock()
+
+    const файлы = await ponoi.files.open({ multiple: true })
+    const текст = await файлы[0].text()
+    const байты = await файлы[0].bytes()
+    await ponoi.files.save('сцена.glb', байты)
+    ponoi.files.onDrop(файлы => { ... })   // перетаскивание в окно
+
+ОШИБКИ СТРАНИЦЫ приходят в журнал плагина — консоли у тебя тут нет, и без этого
+пришлось бы гадать.
 
 ЧТО ТАМ ЕСТЬ ОТ PONOI. Объект ponoi — тот же, с теми же разрешениями:
 ponoi.log, ponoi.notify, ponoi.messages.*, ponoi.storage.*, ponoi.net.*,
