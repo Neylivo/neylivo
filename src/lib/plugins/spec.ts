@@ -755,6 +755,53 @@ ${APP_DOC_TABLE}
     await ponoi.apps.hide(id)
     await ponoi.apps.show(id)
 
+### СВОЯ СТРАНИЦА В ОКНЕ: html, canvas, WebGL, WebGPU, звук, библиотеки
+
+Строки годятся для настроек. Для игры, редактора, визуализатора и вообще всего
+живого есть настоящая страница: передай html — и внутри окна будет обычный
+браузерный документ.
+
+    await ponoi.apps.create({
+      mode: 'window', title: 'Игра', width: 900, height: 600,
+      html: \`
+        <canvas id="c" style="width:100%;height:100%"></canvas>
+        <script>
+          const c = document.getElementById('c')
+          const gl = c.getContext('webgl2')     // и webgl, и webgpu, и 2d
+          function кадр() { /* рисуй */ requestAnimationFrame(кадр) }
+          requestAnimationFrame(кадр)
+          addEventListener('pointermove', e => { /* мышь */ })
+          addEventListener('keydown', e => { /* клавиши */ })
+          const звук = new AudioContext()       // анализатор для визуализатора
+          ponoi.log('готово')                   // тот же ponoi, что и снаружи
+        <\/script>\`,
+    })
+
+ЧТО ТАМ РАБОТАЕТ. Всё, что работает на обычной странице: DOM, CSS, canvas со
+всеми контекстами (2d, webgl, webgl2, webgpu), requestAnimationFrame без
+ограничения частоты, мышь (pointermove, pointerdown, wheel, pointerlock),
+клавиатура, касания, AudioContext с AnalyserNode, WebAssembly, OffscreenCanvas
+со своим Worker, шейдеры, и ЛЮБЫЕ библиотеки — three.js, babylon, gsap,
+физические движки — обычным <script src> с любого сайта или своим кодом.
+
+ЧТО ТАМ ЕСТЬ ОТ PONOI. Объект ponoi — тот же, с теми же разрешениями:
+ponoi.log, ponoi.notify, ponoi.messages.*, ponoi.storage.*, ponoi.net.*,
+ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Список
+короче, чем у потока: всё, что отдаёт функции обратного вызова (кнопки, команды,
+перехватчики), заводится из onLoad, а не из страницы.
+
+Свои файлы — сразу готовым адресом, его можно отдать в <img>, в fetch и в
+загрузчик модели:
+
+    const url = await ponoi.assets.url('модель.glb')
+    new THREE.GLTFLoader().load(url, ...)
+
+ЧЕГО ТАМ НЕТ И НЕ БУДЕТ. Страница живёт в песочнице браузера с чужим
+происхождением: ни нашего документа, ни нашего localStorage, ни кук, ни сессии
+человека ей не достаётся. Это единственная граница, которую нельзя открыть, —
+иначе поставленный плагин прочитал бы ключ от чужого аккаунта. Всё остальное,
+что нужно от приложения, есть через ponoi.
+
     ponoi.on('app', ({ id, mode, open }) => {
       if (!open) остановитьВсё()   // окно закрыл человек
     })

@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { PanelRows } from './PluginPanels'
-import { emitToPlugin } from '../lib/plugins/bridge'
+import { emitToPlugin, callFromFrame } from '../lib/plugins/bridge'
+import { frameDoc } from '../lib/plugins/htmlFrame'
+import { subscribeFrameEvents } from '../lib/plugins/frameBus'
 import { useBackClose } from '../lib/mobileBack'
 import {
   appList, subscribeApps, closeAppByUser, moveApp, resizeApp, toggleMaxApp, snapApp, holdApp, setAppRect,
@@ -173,6 +175,72 @@ function useDragResize(app: PluginApp) {
     setRz({ side, x0: e.clientX, y0: e.clientY, w0: r.width, h0: r.height, left: r.left, top: r.top })
   }
   return { ref, startDrag, startBodyDrag, startResize, dragging: !!drag || !!rz, подсказка }
+}
+
+/**
+ * Страница плагина внутри окна (v1.490.0).
+ *
+ * Внутри — полноценный браузерный документ: свой DOM, свой canvas с webgl и
+ * webgpu, свой requestAnimationFrame, мышь, клавиатура, звук, любые
+ * библиотеки. Всё это работает само, без единой нашей строки: мы лишь даём
+ * место и мост к возможностям плагина.
+ *
+ * ЧТО ЗДЕСЬ ВАЖНО И ЧЕГО НЕЛЬЗЯ ТРОГАТЬ.
+ *
+ * sandbox="allow-scripts" БЕЗ allow-same-origin. Это даёт странице уникальное
+ * непрозрачное происхождение: она не видит ни наш DOM, ни localStorage, ни
+ * куки, ни сессию. Добавь сюда allow-same-origin — и любой поставленный плагин
+ * сможет прочитать ключ сессии человека. Это вторая из границ, которые
+ * владелец назвал нерушимыми сам.
+ *
+ * Письма принимаем ТОЛЬКО от своей рамки (сверяем e.source) и приписываем их
+ * своему плагину: подделать отправителя нельзя, а чужая рамка на этой странице
+ * попадёт в чужой же обработчик.
+ */
+function AppFrameHtml({ app }: { app: PluginApp }) {
+  const ref = useRef<HTMLIFrameElement | null>(null)
+  // Документ собираем один раз на каждое изменение html: пересборка на каждой
+  // перерисовке перезагружала бы страницу плагина по десять раз в секунду и
+  // убивала бы всё, что он в ней успел сделать.
+  const doc = useMemo(() => frameDoc(app.html ?? ''), [app.html])
+
+  useEffect(() => {
+    const on = (e: MessageEvent) => {
+      if (!ref.current || e.source !== ref.current.contentWindow) return
+      const m = e.data as any
+      if (!m || m.ponoi !== 1 || m.k !== 'call') return
+      const ответ = (ok: boolean, value: unknown, error: string) => {
+        ref.current?.contentWindow?.postMessage({ ponoi: 1, k: 'res', id: m.id, ok, value, error }, '*')
+      }
+      callFromFrame(app.pluginId, String(m.method), Array.isArray(m.args) ? m.args : [])
+        .then(v => ответ(true, v, ''))
+        .catch(err => ответ(false, null, String(err?.message ?? err)))
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [app.pluginId])
+
+  // Событие плагина уходит и в страницу: подписка ponoi.on внутри рамки должна
+  // работать так же, как в потоке, — иначе пришлось бы объяснять, что «здесь
+  // события есть, а здесь нет».
+  useEffect(() => {
+    const снять = subscribeFrameEvents(app.pluginId, (name, data) => {
+      ref.current?.contentWindow?.postMessage({ ponoi: 1, k: 'ev', name, data }, '*')
+    })
+    return снять
+  }, [app.pluginId])
+
+  return (
+    <iframe
+      ref={ref}
+      className="plugapp-frame"
+      // БЕЗ allow-same-origin — см. объяснение выше. Это не забытый флаг.
+      sandbox="allow-scripts allow-pointer-lock allow-popups-to-escape-sandbox"
+      allow="autoplay; fullscreen; gamepad; xr-spatial-tracking"
+      title={app.title}
+      srcDoc={doc}
+    />
+  )
 }
 
 /** Восемь ручек по краям — как у любого окна. */
@@ -398,7 +466,9 @@ function AppFrame({ app }: { app: PluginApp }) {
           onClick={() => closeAppByUser(app.id)}>×</button>
       </div>}
       <div className="plugapp-body">
-        <PanelRows pluginId={app.pluginId} rows={app.rows} />
+        {app.html
+          ? <AppFrameHtml app={app} />
+          : <PanelRows pluginId={app.pluginId} rows={app.rows} />}
       </div>
       {/* Ручки по краям. Только у плавающих окон: у вкладки и полного экрана
           размер задаёт не человек, а место, где они стоят. */}

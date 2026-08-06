@@ -1003,6 +1003,9 @@ export function createDispatcher(
           // styles.css) — иначе окно во весь экран без подписи и без крестика
           // стало бы способом подделать приложение и не дать себя закрыть.
           frameless: o?.frameless, transparent: o?.transparent, smooth: o?.smooth,
+          // v1.490.0: настоящая страница внутри окна. Живёт в песочнице
+          // браузера с непрозрачным происхождением — см. htmlFrame.ts.
+          html: o?.html,
         })
         return app.id
       }
@@ -1029,6 +1032,7 @@ export function createDispatcher(
         if (o.transparent !== undefined) patch.transparent = o.transparent
         if (o.hidden !== undefined) patch.hidden = o.hidden
         if (o.smooth !== undefined) patch.smooth = o.smooth
+        if (o.html !== undefined) patch.html = o.html
         return updateApp(id, Number(args[0]), patch)
       }
       // v1.487.0: спрятать и показать. Отдельными вызовами, а не только флагом

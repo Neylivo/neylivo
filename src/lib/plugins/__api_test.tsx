@@ -1046,6 +1046,151 @@ export async function onLoad(ponoi) {
   clearAllApps()
 }
 
+
+// ── 14. Окно с настоящей страницей (v1.490.0) ──────────────────────────────
+//
+// Владелец попросил семнадцать вещей — canvas.getContext('webgl2'),
+// navigator.gpu, requestAnimationFrame, мышь, клавиатуру, AudioContext,
+// three.js, физику, шейдеры. Почти все они про одно: дайте настоящую страницу.
+//
+// Здесь проверяется именно это, и не «объявлено», а РАБОТАЕТ: внутри окна
+// плагина крутится настоящий кадровый цикл, рисует настоящий WebGL, ловит
+// настоящую мышь и зовёт возможности плагина через мост.
+async function окноСтраница(host: Host) {
+  const { clearAllApps } = await import('./apps')
+  clearAllApps()
+
+  const страница = `
+<canvas id="c" style="width:100%;height:100%"></canvas>
+<script>
+  const c = document.getElementById('c')
+  c.width = 260; c.height = 180
+  const отчёт = { }
+  // Настоящий WebGL — тот, которого в потоке нет и быть не может.
+  const gl = c.getContext('webgl2') || c.getContext('webgl')
+  отчёт.webgl = !!gl
+  отчёт.webgl2 = !!c.getContext('webgl2')
+  отчёт.gpu = !!navigator.gpu
+  отчёт.audio = typeof AudioContext !== 'undefined'
+  отчёт.raf = typeof requestAnimationFrame === 'function'
+  if (gl) { gl.clearColor(0.2, 0.4, 0.9, 1); gl.clear(gl.COLOR_BUFFER_BIT) }
+
+  // Кадровый цикл. Считаем кадры — по ним видно, что цикл живой.
+  let кадров = 0
+  function шаг() { кадров++; requestAnimationFrame(шаг) }
+  requestAnimationFrame(шаг)
+
+  // Мышь и колесо — то, чего у плагина не было вовсе.
+  let мышей = 0, колесо = 0, клавиш = 0
+  addEventListener('pointermove', () => мышей++)
+  addEventListener('wheel', () => колесо++)
+  addEventListener('keydown', () => клавиш++)
+
+  // Мост: то же ponoi, что и в потоке.
+  // САМОЕ ВАЖНОЕ: дотянуться отсюда до приложения не должно получаться.
+  // Проверяем изнутри, а не снаружи: угроза — страница, лезущая в приложение,
+  // а не наоборот. Приложение и так её родитель.
+  try { отчёт.чужойDOM = parent.document.title ? 'видно' : 'видно' } catch (e) { отчёт.чужойDOM = 'закрыто' }
+  try { отчёт.чужойLS = localStorage.length >= 0 ? 'видно' : 'видно' } catch (e) { отчёт.чужойLS = 'закрыто' }
+  try { отчёт.куки = document.cookie.length >= 0 ? String(document.cookie).slice(0, 20) || 'пусто' : '?' } catch (e) { отчёт.куки = 'закрыто' }
+  try { отчёт.происхождение = String(location.origin) } catch (e) { отчёт.происхождение = 'закрыто' }
+
+  ponoi.log('страница поднялась')
+  setTimeout(async () => {
+    отчёт.кадров = кадров
+    отчёт.мышей = мышей
+    отчёт.колесо = колесо
+    const где = await ponoi.apps.all()
+    отчёт.окон = где.length
+    // Свой файл плагина — готовым адресом. Это то, чем страница грузит модели,
+    // текстуры и звуки, и проверить его надо на настоящем файле.
+    try {
+      const адрес = await ponoi.assets.url('точка.png')
+      const ответ = await fetch(адрес)
+      const b = await ответ.blob()
+      отчёт.файл = b.size + ':' + b.type
+    } catch (e) { отчёт.файл = 'ошибка: ' + e.message.slice(0, 40) }
+    await ponoi.storage.set('из-рамки', 'да')
+    отчёт.хранилище = await ponoi.storage.get('из-рамки')
+    // А это рамке НЕ положено: списка методов у неё короче.
+    try { await ponoi.call('css', ['a{}']); отчёт.лишнее = 'прошло' }
+    catch (e) { отчёт.лишнее = 'отказ' }
+    ponoi.log('ОТЧЁТ:' + JSON.stringify(отчёт))
+  }, 900)
+<\/script>`
+
+  const id = await поднять(host, `/**
+ * @name Страница
+ * @id probe-html
+ * @version 1.0.0
+ * @author проба
+ * @description Проба окна со своей страницей
+ * @permissions *
+ */
+export async function onLoad(ponoi) {
+  // Настоящий png в файлах плагина — чтобы страница взяла его адресом.
+  const png = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
+    0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,156,99,0,1,0,0,5,0,1,
+    13,10,45,180,0,0,0,0,73,69,78,68,174,66,96,130])
+  await ponoi.assets.put('точка.png', png.buffer)
+  await ponoi.apps.create({
+    mode: 'window', title: 'Своя страница', width: 300, height: 220, x: 60, y: 60,
+    html: ${JSON.stringify(страница)},
+  })
+  ponoi.log('окно создано')
+}
+`)
+  await ждать(() => appList(id).length === 1)
+  await пауза(300)
+
+  const рамка = document.querySelector('.plugapp-window .plugapp-frame') as HTMLIFrameElement | null
+  ok('внутри окна появилась настоящая страница', !!рамка)
+  ok('и она в песочнице без доступа к нашему происхождению',
+    (рамка?.getAttribute('sandbox') ?? '').includes('allow-scripts')
+      && !(рамка?.getAttribute('sandbox') ?? '').includes('allow-same-origin'),
+    рамка?.getAttribute('sandbox') ?? 'нет')
+
+  // Мышь и колесо — настоящие, от системы.
+  const r = рамка!.getBoundingClientRect()
+  for (let i = 0; i < 6; i++) await мышь('mouseMove', r.left + 20 + i * 8, r.top + 20 + i * 5)
+
+  ok('страница поднялась и заговорила с приложением',
+    await ждать(() => журнал(host, id).some(l => l.includes('страница поднялась')), 8000))
+
+
+
+  await ждать(() => журнал(host, id).some(l => l.includes('ОТЧЁТ:')), 12000)
+  const отч = JSON.parse((строка(host, id, 'ОТЧЁТ:') || 'ОТЧЁТ:{}').slice('ОТЧЁТ:'.length))
+
+  ok('в ней работает requestAnimationFrame', отч.raf === true)
+  ok('и кадры правда идут', Number(отч.кадров) > 10, 'кадров за секунду: ' + отч.кадров)
+  ok('в ней есть настоящий WebGL', отч.webgl === true, JSON.stringify({ webgl: отч.webgl, webgl2: отч.webgl2 }))
+  ok('и WebGPU', отч.gpu === true, String(отч.gpu))
+  ok('и AudioContext — тот самый, для визуализаторов', отч.audio === true, String(отч.audio))
+  ok('мышь доходит до страницы плагина', Number(отч.мышей) > 0, 'движений: ' + отч.мышей)
+  ok('мост работает: плагин видит свои окна из страницы', Number(отч.окон) === 1, String(отч.окон))
+  ok('и его хранилище — то же самое', отч.хранилище === 'да', String(отч.хранилище))
+  ok('а лишнего страница позвать не может', отч.лишнее === 'отказ', String(отч.лишнее))
+
+  // ── Граница, которую владелец назвал нерушимой сам: ключ сессии.
+  //
+  // Проверяем ИЗНУТРИ страницы: угроза — она, лезущая в приложение, а не
+  // наоборот. Из песочницы без allow-same-origin у неё нет ни нашего документа,
+  // ни нашего хранилища, ни наших кук — то есть добраться до сессии нечем.
+  ok('из страницы не достать наш документ', отч.чужойDOM === 'закрыто', String(отч.чужойDOM))
+  ok('и наше хранилище тоже', отч.чужойLS === 'закрыто', String(отч.чужойLS))
+  ok('свой файл плагина отдаётся странице готовым адресом',
+    /^\d+:image\/png$/.test(String(отч.файл)), String(отч.файл))
+  ok('и происхождение у неё чужое, а не наше',
+    отч.происхождение === 'null' || отч.происхождение === 'закрыто', String(отч.происхождение))
+
+  await host.stopPlugin(id)
+  await пауза(300)
+  ok('страница исчезает вместе с плагином', !document.querySelector('.plugapp-frame'))
+  removePlugin(id)
+  clearAllApps()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -1081,6 +1226,8 @@ async function main() {
   await всеСтроки(host)
   lines.push(''); lines.push('── Пределов нет ──'); out()
   await пределовНет(host)
+  lines.push(''); lines.push('── Окно со своей страницей ──'); out()
+  await окноСтраница(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

@@ -27,6 +27,7 @@ import type { HostContext } from './api'
 import { CtxHolder } from './hostCtx'
 import { loadPlugins } from './store'
 import { pluginsDisabled } from './registry'
+import { emitToFrames } from './frameBus'
 
 type Host = typeof import('./host')
 
@@ -75,6 +76,9 @@ export function emitPluginEvent(name: string, data: unknown): void {
 
 export function emitToPlugin(pluginId: string, name: string, data: unknown): void {
   host?.emitToPlugin(pluginId, name, data)
+  // v1.490.0: и в окно-страницу того же плагина. Ходит мимо хоста намеренно:
+  // рамка живёт в главном потоке, хоста для неё поднимать незачем.
+  emitToFrames(pluginId, name, data)
 }
 
 /**
@@ -85,6 +89,17 @@ export function emitToPlugin(pluginId: string, name: string, data: unknown): voi
 export async function invokePlugin(pluginId: string, ref: FnRef, args: unknown[] = []): Promise<unknown> {
   const h = host ?? await поднять()
   return h.invokePlugin(pluginId, ref, args)
+}
+
+/**
+ * Вызов из окна-страницы плагина (v1.490.0).
+ *
+ * Сюда попадают, только когда такое окно уже открыто, — значит, плагин запущен
+ * и хост загружен. Но если вдруг нет, честно поднимаем: отказ был бы враньём.
+ */
+export async function callFromFrame(pluginId: string, method: string, args: unknown[]): Promise<unknown> {
+  const h = host ?? await поднять()
+  return h.callFromFrame(pluginId, method, args)
 }
 
 /**

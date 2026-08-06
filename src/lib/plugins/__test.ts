@@ -2054,6 +2054,70 @@ console.log('\n-- Обещанное работает --')
   })
 }
 
+console.log('\n-- Окно с настоящей страницей (v1.490.0) --')
+{
+  const H = await import('./htmlFrame')
+  const cmp = readFileSync('src/components/PluginApps.tsx', 'utf8')
+
+  const A = await import('./apps')
+  check('плагин может попросить окно со своей страницей', () => {
+    A.clearAllApps()
+    const a = A.openApp('пр', {
+      title: 'Стр', mode: 'window', icon: 'star', rows: [], html: '<b>тут</b>',
+    })
+    const ok = a.html === '<b>тут</b>'
+    A.clearAllApps()
+    return ok
+  })
+
+  // ── Граница, которую владелец назвал нерушимой сам ───────────────────────
+  //
+  // «Плагин не может вытащить мастер-ключ сессии из процесса приложения». Всё
+  // держится на ОДНОМ слове: sandbox без allow-same-origin. Добавь его — и
+  // страница любого поставленного плагина прочитает localStorage приложения
+  // вместе с сессией. Поэтому здесь отдельная проверка, а не расчёт на память.
+  check('страница плагина живёт в песочнице без нашего происхождения', () => {
+    const m = /sandbox="([^"]+)"/.exec(cmp)
+    if (!m) throw new Error('у рамки вообще нет sandbox — она равна нашему окну')
+    if (m[1].includes('allow-same-origin')) {
+      throw new Error('allow-same-origin: страница плагина получила доступ к сессии человека')
+    }
+    return m[1].includes('allow-scripts')
+  })
+
+  check('и мост не отдаёт ей ссылку на приложение', () => {
+    // Письма принимаются только от СВОЕЙ рамки, а вызовы приписываются её
+    // плагину. Иначе одна страница звала бы возможности от имени другого.
+    return cmp.includes('e.source !== ref.current.contentWindow')
+      && cmp.includes('callFromFrame(app.pluginId')
+  })
+
+  check('из страницы можно звать только объявленное', () => {
+    // Список короче, чем у потока, и это не забывчивость: всё, что отдаёт
+    // наружу функции обратного вызова, в рамке работало бы иначе.
+    if (!H.frameMethodAllowed('messages.send')) throw new Error('нельзя даже написать сообщение')
+    if (H.frameMethodAllowed('css')) throw new Error('css из рамки не должен проходить')
+    if (H.frameMethodAllowed('ui.getCanvas')) throw new Error('холст потока в рамке не имеет смысла')
+    return true
+  })
+
+  check('мост встраивается ПЕРЕД кодом плагина', () => {
+    // Иначе пришлось бы объяснять в документации, что ponoi появляется не
+    // сразу, — и половина страниц падала бы на первой строке.
+    const d = H.frameDoc('<script>ЭТО_КОД_ПЛАГИНА</script>')
+    return d.indexOf('window.ponoi') < d.indexOf('ЭТО_КОД_ПЛАГИНА')
+  })
+
+  check('разрешения у страницы те же, что у потока', () => {
+    // Список рамки только сужает. Проверять разрешения он не должен вовсе —
+    // это делает диспетчер, один на оба входа.
+    const src = readFileSync('src/lib/plugins/htmlFrame.ts', 'utf8')
+    if (/need\(/.test(src)) throw new Error('в рамке завелась своя проверка разрешений — их станет две')
+    const host = readFileSync('src/lib/plugins/host.ts', 'utf8')
+    return host.includes('r.dispatch(method, args)')
+  })
+}
+
 console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

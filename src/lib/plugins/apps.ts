@@ -107,6 +107,15 @@ export interface PluginApp {
   hidden: boolean
   /** Переезжать и менять размер плавно, а не мгновенно. */
   smooth: boolean
+  /**
+   * Настоящая страница внутри окна (v1.490.0).
+   *
+   * Пусто — окно рисуется строками, как раньше. Есть html — внутри живёт
+   * отдельная страница в песочнице браузера: свой DOM, свой canvas с webgl и
+   * webgpu, свой requestAnimationFrame, мышь, клавиатура, звук и любые
+   * библиотеки. См. htmlFrame.ts — там подробно, почему это iframe.
+   */
+  html: string | null
 }
 
 /**
@@ -177,7 +186,7 @@ export function clampSize(v: unknown, min: number, max: number, fallback: number
 export function openApp(pluginId: string, a: {
   title: string; mode: AppMode; icon: string; rows: SettingsRow[]; w?: unknown; h?: unknown
   x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
-  frameless?: unknown; transparent?: unknown; smooth?: unknown
+  frameless?: unknown; transparent?: unknown; smooth?: unknown; html?: unknown
 }): PluginApp {
   // v1.479.0: место и размер берём из памяти этого устройства, если человек их
   // уже выбирал. Плагин своим размером их не перебивает: он предлагает
@@ -207,6 +216,7 @@ export function openApp(pluginId: string, a: {
     transparent: !!a.transparent,
     hidden: false,
     smooth: !!a.smooth,
+    html: typeof a.html === 'string' && a.html ? a.html : null,
   }
   apps.set(app.id, app)
   notify()
@@ -221,6 +231,7 @@ export function updateApp(pluginId: string, id: number, patch: {
   title?: string; rows?: SettingsRow[]; mode?: AppMode; w?: unknown; h?: unknown
   x?: unknown; y?: unknown; resizable?: unknown; minW?: unknown; minH?: unknown
   frameless?: unknown; transparent?: unknown; hidden?: unknown; smooth?: unknown
+  html?: unknown
 }): boolean {
   const a = apps.get(id)
   if (!a || a.pluginId !== pluginId) return false
@@ -234,6 +245,10 @@ export function updateApp(pluginId: string, id: number, patch: {
   if (patch.transparent !== undefined) a.transparent = !!patch.transparent
   if (patch.hidden !== undefined) a.hidden = !!patch.hidden
   if (patch.smooth !== undefined) a.smooth = !!patch.smooth
+  // Страницу можно заменить на ходу. Рамка при этом перезагружается — это не
+  // недосмотр, а единственный честный способ: старый код уже работает внутри,
+  // и «подмешать» к нему новый нельзя.
+  if (patch.html !== undefined) a.html = typeof patch.html === 'string' && patch.html ? patch.html : null
   if (patch.minW !== undefined) a.minW = clampSize(patch.minW, MIN_W, MAX_W, a.minW)
   if (patch.minH !== undefined) a.minH = clampSize(patch.minH, MIN_H, MAX_H, a.minH)
   if (patch.resizable !== undefined) a.resizable = !!patch.resizable

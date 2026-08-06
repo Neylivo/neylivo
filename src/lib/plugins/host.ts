@@ -1,5 +1,6 @@
 import { PluginSandbox, type FnRef } from './sandbox'
 import { createDispatcher, taskHandlers, type HostContext } from './api'
+import { frameMethodAllowed, FRAME_METHODS } from './htmlFrame'
 import { clearPlugin, pluginsDisabled } from './registry'
 import { loadPlugins, getPlugin, subscribePlugins } from './store'
 import type { InstalledPlugin } from './types'
@@ -22,6 +23,8 @@ interface Running {
   sandbox: PluginSandbox
   /** События, на которые плагин реально подписался, — чтобы не будить остальных. */
   subs: Set<string>
+  /** Его же диспетчер: им пользуется и поток, и окно-страница (v1.490.0). */
+  dispatch: (method: string, args: unknown[]) => Promise<unknown>
 }
 
 const running = new Map<string, Running>()
@@ -86,6 +89,26 @@ export function releaseHostContext(owner: string) {
   держатель.release(owner)
 }
 
+/**
+ * Позвать возможность плагина ИЗ ЕГО ОКНА-СТРАНИЦЫ (v1.490.0).
+ *
+ * Тот же диспетчер, что у его потока, — то есть те же проверки разрешений, те
+ * же отказы, тот же плагин в качестве владельца. Второго входа в систему
+ * плагинов здесь нет и быть не должно: два входа однажды разошлись бы, и один
+ * из них оказался бы без проверок.
+ *
+ * Список того, что рамке можно звать, короче (htmlFrame.ts) — но он ничего не
+ * ОТКРЫВАЕТ, только сужает.
+ */
+export async function callFromFrame(pluginId: string, method: string, args: unknown[]): Promise<unknown> {
+  const r = running.get(pluginId)
+  if (!r) throw new Error('Плагин не запущен')
+  if (!frameMethodAllowed(method)) {
+    throw new Error(`«${method}» из окна-страницы недоступен. Из него можно: ${FRAME_METHODS.join(', ')}.`)
+  }
+  return r.dispatch(method, args)
+}
+
 export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
   await stopPlugin(plugin.manifest.id)
   errors.delete(plugin.manifest.id)
@@ -119,7 +142,7 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
       notify()
     },
   })
-  running.set(plugin.manifest.id, { sandbox, subs })
+  running.set(plugin.manifest.id, { sandbox, subs, dispatch })
 
   try {
     await sandbox.start(plugin.code)
