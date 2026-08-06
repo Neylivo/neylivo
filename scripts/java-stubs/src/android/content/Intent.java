@@ -14,6 +14,10 @@ public class Intent {
   public Intent setFlags(int flags) { return this; }
   public Intent setAction(String action) { return this; }
   public Intent putExtra(String name, String value) { return this; }
+  public Intent putExtra(String name, boolean value) { return this; }
+  public Intent putExtra(String name, double value) { return this; }
+  public boolean getBooleanExtra(String name, boolean def) { return def; }
+  public double getDoubleExtra(String name, double def) { return def; }
   public String getAction() { return null; }
   public String getStringExtra(String name) { return null; }
 }

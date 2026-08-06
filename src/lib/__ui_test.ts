@@ -33,7 +33,7 @@ import { fromEdge, swipeDir, swipeAction } from './swipe'
 import { percent, counts, currentIndex, currentMission, isComplete, shortLabel, fullLabel, storyShare, shareLabel, parseMissions, buildCampaign, toggleMission, setNote, askContext, askPrompt, MAX_MISSIONS, MAX_MISSION_NAME } from './campaign'
 import { mentionsMe, mentionsMyRole } from './mentions'
 import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
-import { keepAliveAction } from './keepAlive'
+import { keepAliveAction, parseMediaKey, mediaSeeked } from './keepAlive'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
@@ -1773,8 +1773,12 @@ const KA = {
 const ka = (o: Partial<typeof KA>) => keepAliveAction({ ...KA, ...o })
 
 check('играет — держим процесс', () => ka({}) === 'start')
-check('встало — отпускаем', () => ka({ playing: false }) === 'stop')
-check('играть нечего — тоже отпускаем', () => ka({ hasTrack: false }) === 'stop')
+// v1.502.0: пауза больше не снимает карточку. Владелец: поставил на паузу,
+// свернул Ponoi Music — и продолжить нечем, в шторке пусто. У Spotify карточка
+// на паузе остаётся, на ней и нажимают «играть».
+check('встало — карточка остаётся, но процесс отпускаем', () => ka({ playing: false }) === 'show')
+check('играть нечего — карточку убираем', () => ka({ hasTrack: false }) === 'stop')
+check('пауза без трека — всё равно убираем', () => ka({ playing: false, hasTrack: false }) === 'stop')
 check('в браузере службы нет и не трогаем', () =>
   ka({ native: false }) === 'idle' && ka({ native: false, playing: false }) === 'idle')
 
@@ -1787,19 +1791,103 @@ check('спросили один раз — больше не спрашивае
 check('без разрешения службу не поднимаем', () =>
   ka({ allowed: false, hidden: true }) !== 'start'
   && ka({ allowed: false, hidden: true, askedBefore: true }) !== 'start')
-check('пауза важнее разрешения', () =>
-  ka({ playing: false, allowed: false, hidden: true }) === 'stop')
+check('без разрешения нет и карточки на паузе — показывать её нечем', () =>
+  ka({ playing: false, allowed: false, hidden: true }) === 'idle')
+check('на паузе разрешение не выпрашиваем', () =>
+  ka({ playing: false, allowed: false, hidden: true }) !== 'ask')
 
 console.log('\n-- Ломаем нарочно (музыка в фоне) --')
-check('проверка ловит службу, оставленную после паузы', () => {
-  // Так батарея и утекала бы: уведомление висит, процесс держится, музыки нет.
+check('проверка ловит передний план, оставленный после паузы', () => {
+  // Так батарея и утекала бы: музыки нет, а процесс держится незакрываемым.
+  // Карточке на паузе быть положено, переднему плану — нет.
   const плохо = 'start'
-  return плохо !== ka({ playing: false }) && ka({ playing: false }) === 'stop'
+  return плохо !== ka({ playing: false }) && ka({ playing: false }) === 'show'
+})
+check('проверка ловит карточку без трека', () => {
+  // Пустая карточка — это кнопки, которые ничего не включат.
+  const плохо = 'show'
+  return плохо !== ka({ hasTrack: false }) && ka({ hasTrack: false }) === 'stop'
 })
 check('проверка ловит просьбу о разрешении на пустом месте', () =>
   // Спросить у того, кто ничего не включал, — значит получить отказ навсегда.
   ka({ playing: false, allowed: false, hidden: true }) !== 'ask'
   && ka({ allowed: false, hidden: false }) !== 'ask')
+
+
+// -- v1.502.0: кнопки системной карточки -------------------------------------
+// На Android страница живёт в WebView, а он системной карточки не показывает
+// вовсе: её рисует наша служба, и нажатия идут обратно через мост. Проверить
+// это иначе нечем — самого моста нигде, кроме телефона, нет.
+console.log('\n-- Кнопки системной карточки --')
+
+check('обычные кнопки узнаются', () =>
+  (['play', 'pause', 'next', 'prev', 'stop'] as const)
+    .every(a => parseMediaKey({ action: a })?.action === a))
+
+check('перемотка приходит со временем', () => {
+  const k = parseMediaKey({ action: 'seek', sec: 42.5 })
+  return k?.action === 'seek' && k.sec === 42.5
+})
+
+check('битое время перемотки не уводит трек в никуда', () => {
+  const плохое = [undefined, null, 'сорок', NaN, -5, Infinity]
+  return плохое.every(v => {
+    const k = parseMediaKey({ action: 'seek', sec: v })
+    return k?.action === 'seek' && k.sec === 0
+  })
+})
+
+check('чужое с моста молча пропускаем', () =>
+  parseMediaKey({ action: 'взорвать' }) === null
+  && parseMediaKey({}) === null
+  && parseMediaKey(null) === null
+  && parseMediaKey('play') === null
+  && parseMediaKey({ action: 42 }) === null)
+
+check('первую позицию отдаём без разговоров', () =>
+  mediaSeeked(null, 0, true, 1000) === false)
+
+check('ровное течение трека карточку не дёргает', () =>
+  // Пять секунд игры — время ушло ровно на пять.
+  mediaSeeked({ pos: 10, at: 1000 }, 15, true, 6000) === false)
+
+check('на паузе время стоит, и это не перемотка', () =>
+  mediaSeeked({ pos: 10, at: 1000 }, 10, false, 60000) === false)
+
+check('перемотку вперёд видно', () =>
+  mediaSeeked({ pos: 10, at: 1000 }, 90, true, 2000) === true)
+
+check('перемотку назад тоже', () =>
+  mediaSeeked({ pos: 90, at: 1000 }, 10, true, 2000) === true)
+
+check('перемотку НА ПАУЗЕ видно — иначе полоса поехала бы со старого места', () =>
+  mediaSeeked({ pos: 10, at: 1000 }, 90, false, 2000) === true)
+
+console.log('\n-- Ломаем нарочно (карточка) --')
+const { readFileSync: читать } = await import('node:fs')
+check('плашка трека не спрашивает, играет ли музыка', () => {
+  // Владелец: «если песня на паузе, то закрыв Ponoi Music не появится летающая
+  // плашка трека». Летающая плашка рисуется по условию «плеер убран со экрана И
+  // есть трек» — если в это условие когда-нибудь попадёт playing, пауза снова
+  // оставит человека без единственной кнопки «продолжить».
+  const src = читать('src/music/MusicPlayer.tsx', 'utf8')
+  // Условие ищется как есть, строкой: так проверку видно глазами и её нельзя
+  // случайно ослабить, подправив выражение.
+  const m = new RegExp("\\{!visible && cur && \\(").exec(src)
+  if (!m) throw new Error('условия плашки не найдено — его переписали')
+  return true
+})
+
+check('проверка ловит возврат «плашка только при игре»', () => {
+  const плохо = '{!visible && cur && playing && ('
+  return !читать('src/music/MusicPlayer.tsx', 'utf8').includes(плохо)
+})
+
+check('проверка ловит отдачу позиции на каждый тик', () => {
+  // Так мост дёргался бы шестьдесят раз в минуту без всякой пользы.
+  const плохо = (): boolean => true
+  return плохо() !== mediaSeeked({ pos: 10, at: 1000 }, 11, true, 2000)
+})
 
 
 // -- v1.445.0: удаление пачкой -----------------------------------------------

@@ -8,8 +8,10 @@ public abstract class Service extends Context {
   public static final int START_NOT_STICKY = 2;
   public static final int START_STICKY = 1;
   public static final int STOP_FOREGROUND_REMOVE = 1;
+  public static final int STOP_FOREGROUND_DETACH = 2;
   public abstract IBinder onBind(Intent intent);
   public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
+  public void onCreate() { }
   public void onDestroy() { }
   public final void stopSelf() { }
   public final void startForeground(int id, Notification notification) { }

@@ -32,7 +32,7 @@ import {
 import { advance, credited, freshListened, type Listened } from './playCredit'
 import { IS_MOBILE } from '../lib/mobile'
 import { Capacitor } from '@capacitor/core'
-import { keepAliveAction, keepAliveAsked, canKeepAlive, askKeepAlive, startKeepAlive, stopKeepAlive } from '../lib/keepAlive'
+import { keepAliveAction, keepAliveAsked, canKeepAlive, askKeepAlive, startKeepAlive, stopKeepAlive, onMediaKey, mediaSeeked } from '../lib/keepAlive'
 /** Приложение на Android: только там есть постоянная служба (v1.444.0). */
 const IS_NATIVE = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 import { useBackClose } from '../lib/mobileBack'
@@ -759,6 +759,24 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       stop: () => mediaRef.current.stop(),
     })
   }, [])
+  // v1.502.0: те же кнопки, но с НАШЕЙ системной карточки на Android.
+  //
+  // В браузере карточку рисует сам движок по данным navigator.mediaSession, и
+  // нажатия приходят туда же — этим занят bindMediaKeys выше. В приложении
+  // страница живёт в WebView, а WebView системной карточки не показывает вовсе:
+  // её рисует наша служба, и нажатия идут через мост. Действия одни и те же —
+  // расходиться им нельзя, поэтому оба пути ведут в mediaRef.
+  useEffect(() => {
+    if (!IS_NATIVE) return
+    return onMediaKey(k => {
+      if (k.action === 'play') mediaRef.current.play()
+      else if (k.action === 'pause') mediaRef.current.pause()
+      else if (k.action === 'next') mediaRef.current.next()
+      else if (k.action === 'prev') mediaRef.current.prev()
+      else if (k.action === 'stop') mediaRef.current.stop()
+      else if (k.action === 'seek') mediaRef.current.seek(k.sec)
+    })
+  }, [])
   useEffect(() => {
     if (!cur) { setMediaNow(null); return }
     setMediaNow({
@@ -790,6 +808,21 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   // поднимается постоянная служба (MusicService.java). Решение «нужна ли она»
   // принимает keepAliveAction и только она — см. src/lib/keepAlive.ts.
   const kaOn = useRef(false)
+  // Позицию системной карточке отдают ОДИН раз на событие, а дальше система
+  // двигает полосу сама — по скорости из состояния. Слать её каждую секунду
+  // значило бы дёргать мост шестьдесят раз в минуту без всякой пользы.
+  //
+  // Но перемотку так не поймать: полоса у системы поедет со старого места. Ниже
+  // сравнивается ОЖИДАЕМОЕ время с настоящим, и карточка пересобирается только
+  // при расхождении — то есть ровно на перемотке, своей или чужой.
+  const kaAt = useRef<{ pos: number; at: number } | null>(null)
+  const [kaSeek, setKaSeek] = useState(0)
+  useEffect(() => {
+    if (!IS_NATIVE || !cur) return
+    if (mediaSeeked(kaAt.current, curT, playing, Date.now())) setKaSeek(n => n + 1)
+    kaAt.current = { pos: curT, at: Date.now() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curT, playing, cur?.id])
   useEffect(() => {
     if (!IS_NATIVE) return
     let alive = true
@@ -800,9 +833,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         allowed: await canKeepAlive(), askedBefore: keepAliveAsked(),
       })
       if (!alive) return
-      if (act === 'start') {
+      if (act === 'start' || act === 'show') {
         kaOn.current = true
-        await startKeepAlive(curMeta?.title || cur?.name, curMeta?.author || cur?.author || '')
+        // «show» — это пауза: карточка остаётся, но держать процесс незачем.
+        await startKeepAlive({
+          title: curMeta?.title || cur?.name,
+          artist: curMeta?.author || cur?.author || '',
+          album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'Ponoi Music',
+          art: curArt || null,
+          playing,
+          dur: dur || cur?.dur,
+          pos: curTRef.current,
+        }, act === 'start')
       } else if (act === 'stop') {
         // Отпускаем только то, что сами держали: висящее уведомление без музыки
         // — это съеденная батарея и недоумение.
@@ -818,7 +860,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     document.addEventListener('visibilitychange', onVis)
     return () => { alive = false; document.removeEventListener('visibilitychange', onVis) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, cur?.id, curMeta?.title, curMeta?.author])
+  }, [playing, cur?.id, curMeta?.title, curMeta?.author, curArt, dur, kaSeek])
   // Плеер закрыли — службу отпускаем вместе с ним.
   useEffect(() => () => { if (kaOn.current) { kaOn.current = false; void stopKeepAlive() } }, [])
 

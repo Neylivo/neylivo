@@ -62,7 +62,13 @@ public class MusicKeepAlive extends Plugin {
         call.resolve();
     }
 
-    /** Музыка пошла: держим процесс. Повторный вызов только обновляет надпись. */
+    /**
+     * Показать или обновить системную карточку.
+     *
+     * Зовётся и при смене трека, и при паузе, и при перемотке — служба сама
+     * решает, что из этого менять, а что оставить (обложку, например, она не
+     * качает заново, если ссылка та же).
+     */
     @PluginMethod
     public void start(PluginCall call) {
         if (!allowed()) {
@@ -78,6 +84,12 @@ public class MusicKeepAlive extends Plugin {
             i.setAction(MusicService.ACTION_START);
             i.putExtra(MusicService.EXTRA_TITLE, call.getString("title"));
             i.putExtra(MusicService.EXTRA_ARTIST, call.getString("artist"));
+            i.putExtra(MusicService.EXTRA_ALBUM, call.getString("album"));
+            i.putExtra(MusicService.EXTRA_ART, call.getString("art"));
+            i.putExtra(MusicService.EXTRA_PLAYING, bool(call.getBoolean("playing", Boolean.TRUE)));
+            i.putExtra(MusicService.EXTRA_FOREGROUND, bool(call.getBoolean("foreground", Boolean.TRUE)));
+            i.putExtra(MusicService.EXTRA_DUR, num(call.getDouble("dur")));
+            i.putExtra(MusicService.EXTRA_POS, num(call.getDouble("pos")));
             MusicService.ensureChannel(getContext());
             if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(i);
             else getContext().startService(i);
@@ -91,6 +103,45 @@ public class MusicKeepAlive extends Plugin {
             ret.put("value", false);
             call.resolve(ret);
         }
+    }
+
+    private static boolean bool(Boolean v) { return v == null || v.booleanValue(); }
+
+    private static double num(Double v) { return v == null ? 0 : v.doubleValue(); }
+
+    /**
+     * v1.502.0: нажатия с системной карточки, наушников и экрана блокировки.
+     *
+     * Их принимает служба (там живёт MediaSession), а решают очередь, пауза и
+     * перемотка — в веб-части. Поэтому здесь только пересылка.
+     *
+     * Ссылка на плагин статическая: службу поднимает система, и достучаться до
+     * живого моста ей больше неоткуда. Пусто — приложение уже закрыто, и
+     * пересылать некому.
+     */
+    private static MusicKeepAlive instance;
+
+    @Override
+    public void load() {
+        instance = this;
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (instance == this) instance = null;
+    }
+
+    static void sendKey(String action, double sec) {
+        MusicKeepAlive p = instance;
+        if (p == null || action == null) return;
+        try {
+            JSObject o = new JSObject();
+            o.put("action", action);
+            o.put("sec", sec);
+            // Держим до получения: карточкой пользуются на свёрнутом приложении,
+            // и в этот миг слушателя может не быть на месте.
+            p.notifyListeners("mediaKey", o, true);
+        } catch (Exception ignored) { }
     }
 
     /** Музыка встала: отпускаем процесс. Держать службу дольше нужного — это
