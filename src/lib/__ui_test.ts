@@ -35,6 +35,8 @@ import { mentionsMe, mentionsMyRole } from './mentions'
 import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLabel, skippedNote, runBulk, bulkReport, BULK_MAX } from './bulkSelect'
 import { keepAliveAction, parseMediaKey, mediaSeeked } from './keepAlive'
 import { msgTime, dayLabel, daysAgo, setTime24 } from './ui'
+import { panelFor, panelTitle } from './activityPanel'
+import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
@@ -1813,6 +1815,70 @@ check('проверка ловит просьбу о разрешении на �
   // Спросить у того, кто ничего не включал, — значит получить отказ навсегда.
   ka({ playing: false, allowed: false, hidden: true }) !== 'ask'
   && ka({ allowed: false, hidden: false }) !== 'ask')
+
+
+// -- v1.505.0: нажатие на активность открывает панель игры --------------------
+//
+// Владелец: «статистика сюжетной игры должна открываться нажатием на текущую
+// активность в мини-профиле, должно работать как угодно». В мини-профиле
+// карточка «Играет в» не открывала НИЧЕГО, а в полном профиле правило было
+// записано трижды в разных местах.
+//
+// Здесь проверяется само правило. Главных требований два, и они тянут в разные
+// стороны: у СВОЕЙ игры дверь открыта всегда (нажатие в пустоту — это и есть
+// «не работает»), а у ЧУЖОЙ карточка не должна прикидываться нажимаемой, если
+// показывать нечего. Третье, тихое, но важное: чужое прохождение — это то, чем
+// человек делится, а не моё с моего же диска.
+console.log('\n-- Панель игры по нажатию на активность --')
+
+const пф = (o: Partial<Parameters<typeof panelFor>[0]>) =>
+  panelFor({ game: 'Ведьмак 3', isMe: true, matchTracked: false, ...o })
+
+check('своя сюжетная игра открывает прохождение', () => пф({}) === 'campaign')
+check('своя сетевая игра открывает статистику матчей', () =>
+  пф({ matchTracked: true }) === 'stats')
+check('своя игра открывается ВСЕГДА — даже когда вех ещё не нашлось', () =>
+  // Это прямое требование владельца. Раньше здесь стояло условие «только если
+  // вехи уже лежат на диске», и карточка молчала на нажатие.
+  пф({}) !== null && пф({ sharesStory: false }) !== null)
+
+check('чужая сетевая игра открывает статистику, если её не скрыли', () =>
+  пф({ isMe: false, matchTracked: true }) === 'stats')
+check('скрытая настройками статистика не открывается', () =>
+  пф({ isMe: false, matchTracked: true, statsVisibility: 'none' }) === null)
+check('своя статистика открывается даже при «скрыть от всех»', () =>
+  пф({ matchTracked: true, statsVisibility: 'none' }) === 'stats')
+
+check('чужое прохождение открывается только когда им делятся', () =>
+  пф({ isMe: false, sharesStory: true }) === 'shared'
+  && пф({ isMe: false, sharesStory: false }) === null)
+check('чужое открывается ОТДЕЛЬНЫМ видом, а не как своё', () =>
+  // Разница не в словах: «campaign» читает вехи с ЭТОГО диска, и открыть его
+  // под чужим именем значит показать своё прохождение как чужое.
+  пф({ isMe: false, sharesStory: true }) !== 'campaign')
+
+check('без названия игры открывать нечего', () => пф({ game: '' }) === null)
+check('подпись берётся из того же решения', () =>
+  !!panelTitle(пф({})) && !!panelTitle(пф({ matchTracked: true }))
+  && panelTitle(null) === undefined)
+
+console.log('\n-- Что известно про игру с диска --')
+check('часы читаются по-человечески', () =>
+  playedLabel(0) === '' && playedLabel(45) === '45 мин'
+  && playedLabel(60) === '1 ч' && playedLabel(9560) === '159 ч 20 мин')
+check('размер — без «0 ГБ» на пустом месте', () =>
+  sizeLabel(0) === '' && sizeLabel(-5) === ''
+  && sizeLabel(103_000_000_000) === '103,0 ГБ' && sizeLabel(700_000_000) === '700 МБ')
+
+console.log('\n-- Ломаем нарочно (панель игры) --')
+check('проверка ловит возврат мёртвой карточки у своей игры', () => {
+  const плохо = null
+  return плохо !== пф({}) && плохо !== пф({ matchTracked: true })
+})
+check('проверка ловит показ чужого прохождения как своего', () => {
+  const плохо = 'campaign'
+  return плохо !== пф({ isMe: false, sharesStory: true })
+})
 
 
 // -- v1.504.0: «Вчера» и «Позавчера» вместо даты ------------------------------

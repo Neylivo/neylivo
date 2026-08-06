@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './icons'
 import { Portal } from './Portal'
+import { useBackClose } from '../lib/mobileBack'
 import { fetchMatches, computeStats, type GameMatch } from '../lib/gameMatches'
 import { fetchDotaStats, type DotaStats } from '../lib/opendota'
 
@@ -135,6 +136,8 @@ export function GameStatsModal({ userId, gameName, steamId, isMe, onClose }:
   //
   // Ровно эта же беда уже была с окном подтверждения (v1.450.0) — и лечится
   // тем же: выносим в <body>, где fixed снова считается от экрана.
+  // v1.505.0: «назад» на телефоне закрывает статистику, а не мини-профиль под ней.
+  useBackClose(true, onClose)
   return (
     <Portal><div className="gstat-backdrop" onClick={onClose}>
       <div className="gstat-card" onClick={e => e.stopPropagation()}>

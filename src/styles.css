@@ -8182,3 +8182,14 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .composer .cin-act.on .cin-mic { opacity: 0; transform: scale(.5) rotate(30deg); pointer-events: none; }
 }
 
+
+
+/* v1.505.0: карточка игры в мини-профиле открывает панель.
+   Отклик — только цветом, как у карточки в полном профиле (.act-card.clickable
+   выше) и по общему правилу с v1.501.0: под курсором ничего не двигается и
+   ничего не обводится. */
+.mpg-clickable { cursor: pointer; transition: background .15s var(--ease-out4, ease); }
+.mpg-clickable:hover { background: rgba(var(--ov, 255,255,255), .085); }
+
+/* Строка фактов об игре в панели прохождения: часы, последний запуск, размер. */
+.cmp-facts { color: var(--mut); font-size: 12.5px; margin-top: 2px; }

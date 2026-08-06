@@ -75,7 +75,7 @@ function showMainWindow() {
 // при старте/выходе из игры ({ name, since } | null) — таймер тикает у зрителей сам.
 const { steamNameOf, steamAppIdOf } = require('./steamName.cjs')
 const { steamAchievements } = require('./steamAchievements.cjs')
-const { localProgress, localSteamId } = require('./localProgress.cjs')
+const { localProgress, localSteamId, localGameFacts } = require('./localProgress.cjs')
 
 const GAMES = {
   'cs2.exe': 'Counter-Strike 2',
@@ -271,14 +271,22 @@ ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
   // v1.461.0: СНАЧАЛА смотрим на диск. Это работает без Steam ID, без открытого
   // профиля, без сети и — главное — для нелицензионных копий, где профиля Steam
   // для этой игры нет вовсе, а прохождение у человека есть.
+  // v1.505.0: факты об игре прикладываются ВСЕГДА — и когда вехи нашлись, и
+  // когда нет. Часы, последний запуск, размер и папка лежат на том же диске, и
+  // молчать о них, потому что не нашлось достижений, незачем: панель тогда
+  // пуста при полном диске данных.
+  let факты = null
+  try { факты = localGameFacts(appId) } catch { факты = null }
+
   const свои = localProgress(appId, curGameExe)
-  if (свои.ok) return свои
+  if (свои.ok) return { ...свои, facts: факты }
 
   // И только потом — профиль Steam. SteamID тоже больше не спрашиваем у
   // человека: он записан в файлах самого Steam.
   const steamId = String((arg && arg.steamId) || '') || localSteamId() || ''
-  if (!appId) return { ok: false, why: 'no-appid' }
-  return await steamAchievements(steamId, appId)
+  if (!appId) return { ok: false, why: 'no-appid', facts: факты }
+  const издалека = await steamAchievements(steamId, appId)
+  return { ...издалека, facts: факты }
 })
 
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))

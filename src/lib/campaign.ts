@@ -303,6 +303,8 @@ export interface AutoResult {
   ok: boolean
   nodes: FlowNode[]
   why?: AutoWhy
+  /** Часы, последний запуск, размер — приходят и без вех. */
+  facts?: GameFacts | null
 }
 
 /** Человеческое объяснение, почему само не получилось. Врать «не поддерживается»
@@ -322,6 +324,36 @@ export const AUTO_WHY: Record<AutoWhy, string> = {
 }
 
 /** Спросить приложение о вехах текущей игры. */
+/** Что известно про саму игру с этого диска. Ничего из этого не выдумывается:
+ *  часы Steam держит в своих файлах, размер и папку — в манифесте игры. */
+export interface GameFacts {
+  appId: string
+  /** Наиграно, минут. */
+  minutes: number
+  /** Последний запуск, секунды эпохи. 0 — неизвестно. */
+  lastPlayed: number
+  sizeBytes: number
+  dir: string | null
+  name: string
+}
+
+/** «159 ч 20 мин» — читается человеком, а не в минутах. */
+export function playedLabel(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes || 0))
+  if (!m) return ''
+  const ч = Math.floor(m / 60), мин = m % 60
+  if (!ч) return мин + ' мин'
+  return ч + ' ч' + (мин ? ' ' + мин + ' мин' : '')
+}
+
+/** Размер игры на диске. Ноль — не знаем, и молчим, а не пишем «0 ГБ». */
+export function sizeLabel(bytes: number): string {
+  const b = Number(bytes) || 0
+  if (b <= 0) return ''
+  const гб = b / 1e9
+  return гб >= 1 ? гб.toFixed(1).replace('.', ',') + ' ГБ' : Math.round(b / 1e6) + ' МБ'
+}
+
 export async function autoNodes(steamId: string | null, appId?: string | null): Promise<AutoResult> {
   const d = (window as any).ponoiDesktop
   if (!d?.steamProgress) return { ok: false, nodes: [], why: 'no-desktop' }
@@ -333,7 +365,12 @@ export async function autoNodes(steamId: string | null, appId?: string | null): 
   // особенно когда пиратка».
   try {
     const r = await d.steamProgress({ steamId, appId })
-    if (!r?.ok) return { ok: false, nodes: [], why: (r?.why as AutoWhy) ?? 'net' }
+    // v1.505.0: факты об игре приходят и тогда, когда вех не нашлось — часы и
+    // последний запуск лежат на диске независимо от достижений, и панель, где
+    // «ничего нет» при наигранных полутора сотнях часов, — это просто
+    // непрочитанные данные.
+    const facts = (r?.facts ?? null) as GameFacts | null
+    if (!r?.ok) return { ok: false, nodes: [], why: (r?.why as AutoWhy) ?? 'net', facts }
     const nodes: FlowNode[] = (r.items ?? []).map((a: any, i: number) => ({
       id: 'st' + i,
       title: String(a.name ?? ''),
@@ -342,7 +379,7 @@ export async function autoNodes(steamId: string | null, appId?: string | null): 
       done: !!a.done,
       at: Number(a.at) || 0,
     }))
-    return { ok: nodes.length > 0, nodes, why: nodes.length ? undefined : 'empty' }
+    return { ok: nodes.length > 0, nodes, why: nodes.length ? undefined : 'empty', facts }
   } catch { return { ok: false, nodes: [], why: 'net' } }
 }
 

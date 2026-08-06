@@ -29,6 +29,7 @@ import { lazyNamed } from '../lib/lazyScreen'
 const WallDraw = lazyNamed(() => import('./WallDraw'), 'WallDraw')
 import { shareLabel } from '../lib/campaign'
 import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
+import { panelFor, panelTitle } from '../lib/activityPanel'
 const GameStatsModal = lazyNamed(() => import('./GameStatsModal'), 'GameStatsModal')
 // v1.452.0: прохождение сюжетной игры — миссии, проценты, свои заметки.
 const CampaignModal = lazyNamed(() => import('./CampaignModal'), 'CampaignModal')
@@ -567,22 +568,30 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                     v1.220.0: раньше только у себя — теперь у всех, если владелец не скрыл статистику
                     настройками приватности (см. profiles.game_stats_visibility в Настройках -> Активность). */}
                 {(() => {
-                  const statsAllowed = MATCH_TRACKED_GAMES.has(curGame.name) && (isMe || pp.gameStatsVisibility !== 'none')
-                  // v1.452.0: у сюжетной игры матчей нет и статистики быть не может —
-                  // зато есть прохождение. Своё можно завести всегда; чужое открывается,
-                  // только если человек им делится (проценты приходят в присутствии).
                   const story = curGame.story
-                  // v1.483.0: «Прохождение» — только когда есть что показать:
-                  // либо человек делится своим местом в игре, либо вехи правда
-                  // лежат на диске. Раньше строка рисовалась у любой игры без
-                  // статистики матчей — и в Minecraft тоже.
-                  const campaignAllowed = !statsAllowed && (!!story || !!хочуПрохождение[curGame.name])
+                  // v1.505.0: что открыть — решает panelFor, одна на полный
+                  // профиль и мини-профиль. Раньше правило было записано здесь
+                  // и повторено ещё в двух местах, а в мини-профиле его не было
+                  // вовсе — карточка там не открывала ничего.
+                  //
+                  // Заодно исчезло условие «прохождение только если вехи уже
+                  // нашлись на диске»: у СВОЕЙ игры панель открывается всегда.
+                  // Не нашлось — панель скажет, чего именно не хватает. Владелец
+                  // сказал прямо: должно работать как угодно, а нажатие в пустоту
+                  // — это и есть «не работает».
+                  const что = panelFor({
+                    game: curGame.name, isMe, matchTracked: MATCH_TRACKED_GAMES.has(curGame.name),
+                    statsVisibility: pp.gameStatsVisibility, sharesStory: !!story,
+                  })
+                  const statsAllowed = что === 'stats'
+                  const campaignAllowed = что === 'campaign' || что === 'shared'
                   return (
-                    <div className={'act-card fp-cur' + (statsAllowed || campaignAllowed ? ' clickable' : '')}
-                      title={statsAllowed ? 'Статистика за 30 дней' : campaignAllowed ? 'Прохождение: миссии и проценты' : undefined}
+                    <div className={'act-card fp-cur' + (что ? ' clickable' : '')}
+                      title={panelTitle(что)}
                       onClick={() => {
                         setHistGame(null)
-                        if (statsAllowed) setStatsOpen(true); else if (campaignAllowed) setCampOpen(true)
+                        if (что === 'stats') setStatsOpen(true)
+                        else if (что) setCampOpen(true)
                       }}>
                       <div className="act-head"><span className="mpg-kind"><Icon name={gameIconOf(curGame.name)} size={14} /></span>Играет в</div>{/* v1.139.0: значок по жанру игры */}
                       <div className="act-row">
@@ -618,19 +627,21 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
                 // сюжетных. Раньше строка была мёртвой картинкой: человек видел
                 // игру, тыкал в неё и ничего не происходило.
                 const сетевая = MATCH_TRACKED_GAMES.has(g.name)
-                // v1.483.0: у игры из истории прохождение открываем, только
-                // если оно у нас есть. «Нажал и ничего» — это та же
-                // кнопка-обманка, просто в списке.
-                const можно = сетевая ? (isMe || pp.gameStatsVisibility !== 'none') : (isMe && !!хочуПрохождение[g.name])
+                // v1.505.0: то же правило, что у текущей активности. У чужой
+                // игры из истории прохождения нет вовсе — человек делится
+                // местом только в той игре, в которую играет сейчас.
+                const что = panelFor({
+                  game: g.name, isMe, matchTracked: сетевая,
+                  statsVisibility: pp.gameStatsVisibility, sharesStory: false,
+                })
+                const можно = !!что
                 return (
                 <div key={g.name} className={'fp-recent' + (можно ? ' clickable' : '')}
-                  title={можно
-                    ? (сетевая ? 'Статистика за 30 дней' : 'Прохождение: миссии и проценты')
-                    : 'Всего за 30 дней: ' + fmtMs(g.totalMs) + ' · сессий: ' + g.sessions}
+                  title={panelTitle(что) ?? ('Всего за 30 дней: ' + fmtMs(g.totalMs) + ' · сессий: ' + g.sessions)}
                   onClick={() => {
-                    if (!можно) return
+                    if (!что) return
                     setHistGame(g.name)
-                    if (сетевая) setStatsOpen(true); else setCampOpen(true)
+                    if (что === 'stats') setStatsOpen(true); else setCampOpen(true)
                   }}>
                   {covers[g.name]
                     ? <img className="act-cover act-cover-sm" src={covers[g.name]!} alt="" />
@@ -702,6 +713,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
           }
         }} />}
         {campOpen && (histGame || curGame) && <CampaignModal game={histGame || curGame!.name} isMe={isMe} steamId={pp.steamId}
+          shared={isMe ? undefined : (curGame?.story ?? null)}
           onClose={() => { setCampOpen(false); setHistGame(null) }} />}
         {statsOpen && (histGame || curGame) && <GameStatsModal userId={userId} gameName={histGame || curGame!.name}
           steamId={pp.steamId} isMe={isMe} onClose={() => { setStatsOpen(false); setHistGame(null) }} />}

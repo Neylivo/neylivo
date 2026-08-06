@@ -441,11 +441,38 @@ console.log('\n── Окна поверх карточки профиля (v1.
     const css = fs3.readFileSync('src/styles.css', 'utf8')
     return /\.pc-card\s*\{[^}]*animation:\s*pop/.test(css) && /@keyframes pop[^}]*transform/.test(css)
   })
-  check('«Прохождение» не обещается там, где вех нет', () => {
-    const src = fs3.readFileSync('src/components/ProfileCard.tsx', 'utf8')
-    // Раньше: !statsAllowed && (isMe || !!story) — то есть у любой игры.
-    return /хочуПрохождение\[curGame\.name\]/.test(src)
-      && !/campaignAllowed = !statsAllowed && \(isMe \|\| !!story\)/.test(src)
+  check('панели игры закрываются кнопкой «назад» на телефоне', () => {
+    // Панель рисуется порталом — ВНЕ дерева мини-профиля. Без своей записи в
+    // стеке «назад» снял бы мини-профиль и унёс панель вместе с ним: человек
+    // нажимает «назад», чтобы закрыть панель, и остаётся вообще без всего.
+    for (const f of ['src/components/CampaignModal.tsx', 'src/components/GameStatsModal.tsx']) {
+      const src = fs3.readFileSync(f, 'utf8')
+      if (!/useBackClose\(true, onClose\)/.test(src)) throw new Error('без ловушки «назад»: ' + f)
+    }
+    return true
+  })
+  check('факты об игре прикладываются к ЛЮБОМУ ответу о прохождении', () => {
+    // Часы и последний запуск лежат на диске независимо от достижений. Если
+    // приложить их только к удачному ответу, панель у игры без вех окажется
+    // пустой при полном диске данных — а это и есть жалоба владельца.
+    const src = fs3.readFileSync('electron/main.cjs', 'utf8')
+    const i = src.indexOf("ipcMain.handle('ponoi-steam-progress'")
+    const тело = src.slice(i, src.indexOf('})', src.indexOf('return { ...издалека')) + 2)
+    const возвраты = тело.match(/return \{[^}]*\}/g) || []
+    return возвраты.length >= 3 && возвраты.every(r => /facts|факты/.test(r))
+  })
+  check('что открывать — решает ОДНА функция на все места', () => {
+    // v1.505.0. Раньше правило было записано прямо в ProfileCard и повторено
+    // ещё в двух местах, а в мини-профиле его не было вовсе — карточка там не
+    // открывала ничего. Теперь и полный профиль, и мини-профиль спрашивают
+    // panelFor, и разойтись им нечем.
+    const пк = fs3.readFileSync('src/components/ProfileCard.tsx', 'utf8')
+    const мп = fs3.readFileSync('src/components/MiniProfile.tsx', 'utf8')
+    return пк.includes("from '../lib/activityPanel'") && /panelFor\(/.test(пк)
+      && мп.includes("from '../lib/activityPanel'") && /panelFor\(/.test(мп)
+      // И старого правила «только если вехи уже нашлись» больше нет: у своей
+      // игры панель открывается всегда — так просил владелец.
+      && !/campaignAllowed = !statsAllowed && \(!!story \|\| !!хочуПрохождение/.test(пк)
   })
   check('прохождение спрашивается даже без Steam ID', () => {
     // Пиратка: Steam ID нет и быть не может, а достижения на диске есть.

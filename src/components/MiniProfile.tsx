@@ -15,6 +15,11 @@ import { sendRequest, openThread, mutualFriends } from '../lib/friends'
 import { toastOk, toastErr } from '../lib/toast'
 import { lazyNamed } from '../lib/lazyScreen'
 const Settings = lazyNamed(() => import('./Settings'), 'Settings')
+// v1.505.0: панели игры открываются прямо из мини-профиля. Лениво — они тянут
+// за собой схему прохождения и разбор матчей, а мини-профиль открывают, чтобы
+// посмотреть на человека, а не на игру.
+const GameStatsModal = lazyNamed(() => import('./GameStatsModal'), 'GameStatsModal')
+const CampaignModal = lazyNamed(() => import('./CampaignModal'), 'CampaignModal')
 import { ProfileCard } from './ProfileCard'
 import { Icon } from './icons'
 // v1.465.0: свои пункты плагинов в меню человека.
@@ -24,6 +29,8 @@ import { devMode } from '../lib/settings'
 import { isBotUser } from '../lib/botTag'
 import { UserTagBadge } from './TagEmoji'
 import { gameIconOf } from '../lib/gameIcon'
+import { panelFor, panelTitle } from '../lib/activityPanel'
+import { MATCH_TRACKED_GAMES } from '../lib/gameMatches'
 import type { Profile } from '../types'
 
 // «Был(а) в сети 5 мин назад» — относительное время последнего визита.
@@ -97,6 +104,7 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
   // показывала то же самое, что человек уже видел, а не место, где профиль правят.
   const [accSettings, setAccSettings] = useState<null | 'acc' | 'profile'>(null)
   const [full, setFull] = useState(false)
+  const [панель, setПанель] = useState<'stats' | 'campaign' | 'shared' | null>(null)
   const [msg, setMsg] = useState('')
   const [meName, setMeName] = useState('')
   const [uname, setUname] = useState('')   // v1.40.0: настоящий юзернейм показываемого пользователя
@@ -288,10 +296,20 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
             ? <div className="mini-status">Бот — отвечает на команды, сам не пишет</div>
             : data.status === 'offline' && lastSeen && lastSeenLabel(lastSeen) && <div className="mini-status">был(а) в сети {lastSeenLabel(lastSeen)}</div>}
           {pp.about && <div className="mini-about">{pp.about}</div>}
-          {game && <div className="mpg">{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
+          {/* v1.505.0: нажатие по карточке игры открывает панель — статистику
+              матчей у сетевой игры, прохождение у сюжетной. Раньше карточка не
+              открывала ничего: панель существовала, но добраться до неё можно
+              было только через полный профиль. Что именно открыть, решает
+              panelFor — та же функция, что и в полном профиле. */}
+          {game && (() => { const что = panelFor({
+            game: game.name, isMe, matchTracked: MATCH_TRACKED_GAMES.has(game.name),
+            statsVisibility: pp.gameStatsVisibility, sharesStory: !!game.story,
+          }); return (
+          <div className={'mpg' + (что ? ' mpg-clickable' : '')} title={panelTitle(что)}
+            onClick={что ? () => setПанель(что) : undefined}>{/* v1.49.0: карточка «Играет в» 1-в-1 как в Discord */}
             <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-kind"><Icon name={gameIconOf(game.name)} size={14} /></span>Играет в</span>{/* v1.139.0: значок по жанру игры */}
               <button className="mpg-dots" title="Скопировать название игры"
-                onClick={() => { navigator.clipboard?.writeText(game.name); toastOk('Название игры скопировано') }}><Icon name="more" size={16} /></button>
+                onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(game.name); toastOk('Название игры скопировано') }}><Icon name="more" size={16} /></button>
             </div>
             <div className="mpg-row">
               {game.cover
@@ -303,14 +321,15 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
                 <div className="mpg-time"><Icon name="gamepad" size={13} /> <ClockElapsed since={game.since} /></div>
               </div>
             </div>
-            {isMe && <button className="mpg-add" onClick={() => {
+            {isMe && <button className="mpg-add" onClick={e => {
+              e.stopPropagation()
               if (!pp.favGames.includes(game.name)) saveProfile(data.userId, { favGames: [...pp.favGames, game.name] })
               toastOk('Добавлено к текущим играм')
             }}>Добавить к текущим играм</button>}
-            {listening && <button className="mpg-morebtn" onClick={() => setMoreActs(m => !m)}>{/* v1.106.0: как в Discord — «Ещё N» раскрывает остальные активности */}
+            {listening && <button className="mpg-morebtn" onClick={e => { e.stopPropagation(); setMoreActs(m => !m) }}>{/* v1.106.0: как в Discord — «Ещё N» раскрывает остальные активности */}
               {moreActs ? 'Скрыть' : 'Ещё 1'}{!moreActs && <Icon name="chevron-down" size={13} />}
             </button>}
-          </div>}
+          </div>) })()}
           {listening && (moreActs || !game) && <div className="mpg mpg-music">{/* v1.106.0: карточка «Слушает музыку» — вторая активность или единственная */}
             <div className="mpg-head"><span className="mpg-head-l"><span className="mpg-kind"><Icon name="music" size={14} /></span>Слушает музыку</span>{/* v1.139.0: нота вместо эквалайзера */}
               <button className="mpg-dots" title="Скопировать название трека"
@@ -379,6 +398,13 @@ export function MiniProfile({ data, onClose, onMessage, meControls, onPickAvatar
       {accSettings && <Settings username={data.name} avatarUrl={av} initialCat={accSettings === 'profile' ? 'profile' : undefined}
         onClose={() => setAccSettings(null)} />}
       {signOut && <SignOutModal onClose={() => setSignOut(false)} />}
+      {/* Панели игры. Открываются из карточки активности выше. */}
+      {панель === 'stats' && game && <GameStatsModal userId={data.userId} gameName={game.name}
+        steamId={pp.steamId} isMe={isMe} onClose={() => setПанель(null)} />}
+      {панель === 'campaign' && game && <CampaignModal game={game.name} isMe steamId={pp.steamId}
+        onClose={() => setПанель(null)} />}
+      {панель === 'shared' && game && <CampaignModal game={game.name} isMe={false} shared={game.story ?? null}
+        onClose={() => setПанель(null)} />}
     </>
   )
 }

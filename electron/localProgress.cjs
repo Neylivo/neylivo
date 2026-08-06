@@ -219,7 +219,65 @@ function localProgress(appId, exePath, io2 = {}) {
   return { ok: true, items }
 }
 
+/**
+ * v1.505.0: факты об игре с диска — часы, последний запуск, размер, где стоит.
+ *
+ * Владелец: панель прохождения «должна получать все данные игры и сюжета».
+ * Вехи она читала и раньше, а всё остальное про игру лежало на том же диске и
+ * не показывалось никому: часы Steam держит в localconfig.vdf, размер и папку —
+ * в манифесте appmanifest_<appid>.acf.
+ *
+ * Разбор обоих файлов уже написан и проверен в gameScan.cjs — берём оттуда, а
+ * не пишем второй раз. Два разбора одного формата рано или поздно разойдутся, и
+ * тогда на экране «Прохождений» будет одно число часов, а в панели другое.
+ *
+ * Ничего не скачиваем: всё это лежит у человека.
+ */
+function localGameFacts(appId, io2 = {}) {
+  const { parsePlaytime, parseAcf, steamLibraries } = require('./gameScan.cjs')
+  const readFile = io2.readFile || fs.readFileSync
+  const readdir = io2.readdir || fs.readdirSync
+  const env = io2.env || process.env
+  const app = String(appId || '')
+  if (!app) return null
+  const roots = io2.roots || steamRoots(env)
+  const прочесть = (p) => { try { return String(readFile(p, 'utf8')) } catch { return '' } }
+
+  // Часы: у человека может быть несколько учёток Steam на машине. Берём ту, где
+  // наиграно больше — это и есть та, под которой он играл.
+  let часы = null
+  for (const r of roots) {
+    let люди = []
+    try { люди = readdir(path.join(r, 'userdata'), { withFileTypes: true }) } catch { continue }
+    for (const u of люди) {
+      if (u.isDirectory && !u.isDirectory()) continue
+      const имя = u.name || String(u)
+      const найдено = parsePlaytime(прочесть(path.join(r, 'userdata', имя, 'config', 'localconfig.vdf')))[app]
+      if (найдено && (!часы || найдено.minutes > часы.minutes)) часы = найдено
+    }
+  }
+
+  // Размер и папка: манифест лежит в той библиотеке, куда игра поставлена.
+  let манифест = null
+  for (const lib of steamLibraries(roots)) {
+    const t = прочесть(path.join(lib, 'appmanifest_' + app + '.acf'))
+    if (!t) continue
+    const g = parseAcf(t)
+    if (g && g.appId === app) { манифест = { ...g, lib }; break }
+  }
+
+  if (!часы && !манифест) return null
+  return {
+    appId: app,
+    minutes: часы ? часы.minutes : 0,
+    lastPlayed: часы ? часы.lastPlayed : 0,
+    sizeBytes: манифест ? манифест.sizeBytes : 0,
+    dir: манифест ? path.join(манифест.lib, 'common', манифест.installDir) : null,
+    name: манифест ? манифест.name : '',
+  }
+}
+
 module.exports = {
   steamIdFromLoginUsers, localSteamId, steamRoots,
-  parseGoldberg, parseAchIni, parseSchema, candidatePaths, localProgress,
+  parseGoldberg, parseAchIni, parseSchema, candidatePaths, localProgress, localGameFacts,
 }
