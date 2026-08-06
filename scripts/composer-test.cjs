@@ -35,15 +35,40 @@ fs.copyFileSync(path.join(__dirname, '..', 'src', 'styles.css'), path.join(OUT, 
 const ТЕКСТ = 'Нормальная летающая выбор что сделать с сообщением для телефонов ' +
   'открывающиеся внятным кликом ровно на сообщение'
 
-// Разметка списана с Composer.tsx: поле между кнопкой скрепки и значками.
+// Разметка списана с Composer.tsx: плюс, таблетка поля со смайликом внутри и
+// одно место справа, где лежат микрофон и синяя «отправить».
+//
+// Разметка здесь СВОЯ, а не настоящий компонент: поднять Composer.tsx целиком
+// значит поднять и базу, и права, и плагины. Чтобы копия не разошлась с
+// оригиналом, ниже отдельная проверка читает сам Composer.tsx и требует, чтобы
+// эти же классы были и там.
+const ряд = (id, текст, есть) => `
+  <form class="composer cstyle-default" id="${id}">
+    <div class="plus-wrap"><button type="button" class="attach-btn">+</button></div>
+    <div class="composer-field">
+      <textarea rows="1" placeholder="Написать @guchip0n">${текст}</textarea>
+      <button type="button" class="cin-emoji">&#9786;</button>
+    </div>
+    <div class="composer-tools"></div>
+    <div class="cin-act${есть ? ' on' : ''}">
+      <button type="button" class="cin-mic">&#9679;</button>
+      <button type="submit" class="send-tg">&#10148;</button>
+    </div>
+  </form>`
+
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css">
 <style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif}</style>
 <div style="position:absolute;bottom:0;left:0;right:0">
+  ${ряд('пусто', '', false)}
+  ${ряд('набрано', 'Тексссттттт', true)}
   <div class="composer">
     <button class="attach-btn">+</button>
-    <textarea id="cin" rows="1">${ТЕКСТ}</textarea>
-    <div class="composer-tools"><button class="ctool">&#9786;</button></div>
+    <div class="composer-field">
+      <textarea id="cin" rows="1">${ТЕКСТ}</textarea>
+      <button type="button" class="cin-emoji">&#9786;</button>
+    </div>
+    <div class="cin-act"><button class="cin-mic">&#9679;</button><button class="send-tg">&#10148;</button></div>
   </div>
 </div>`)
 
@@ -83,7 +108,11 @@ function пикселиПоСтрокам(картинка, поле, высот
 }
 
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ show: false, width: 412, height: 560, backgroundColor: '#313338' })
+  // backgroundThrottling: false — иначе в скрытом окне браузер режет кадры и
+  // таймеры до пары в секунду, и любой переход выглядит рывком не потому, что
+  // он рывок, а потому, что его некому нарисовать. На этом стенд соврал сразу.
+  const win = new BrowserWindow({ show: false, width: 412, height: 560, backgroundColor: '#313338',
+    webPreferences: { backgroundThrottling: false } })
   await win.loadFile(path.join(OUT, 'index.html'))
   await new Promise(r => setTimeout(r, 400))
 
@@ -144,6 +173,135 @@ app.whenReady().then(async () => {
             ' (−' + Math.round(потеря * 100) + '%)')
     }
   }
+
+  // ── v1.503.0: сам ряд ──────────────────────────────────────────────────
+  //
+  // Владелец прислал два снимка мобильного Discord: пустое поле — плюс,
+  // таблетка со смайликом ВНУТРИ и микрофон, набран текст — вместо микрофона
+  // синяя «отправить», и переход между ними анимацией. Просьба: «1 в 1 как на
+  // примере, но без лишних кнопок».
+  win.setContentSize(412, 560)
+  await new Promise(r => setTimeout(r, 250))
+  console.log('\n── Ряд как на снимке (412) ──')
+
+  const места = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+    const где = (сел) => {
+      const e = document.querySelector(сел)
+      if (!e) return null
+      const r = e.getBoundingClientRect(), st = getComputedStyle(e)
+      return { x: r.x, y: r.y, w: r.width, h: r.height, круг: st.borderRadius,
+               видно: parseFloat(st.opacity), фон: st.backgroundColor,
+               справа: parseFloat(st.paddingRight) }
+    }
+    return JSON.stringify({
+      плюс: где('#пусто .attach-btn'),
+      поле: где('#пусто .composer-field'),
+      текст: где('#пусто textarea'),
+      смайл: где('#пусто .cin-emoji'),
+      место: где('#пусто .cin-act'),
+      микрофон: где('#пусто .cin-mic'),
+      отправка: где('#пусто .send-tg'),
+      наборМикрофон: где('#набрано .cin-mic'),
+      наборОтправка: где('#набрано .send-tg'),
+      лишние: document.querySelectorAll('#пусто .composer-tools button').length,
+      строка: где('#пусто'),   // сам ряд и есть .composer — искать его ВНУТРИ себя нечего
+    })
+  })()`))
+
+  const { плюс, поле, текст, смайл, место, микрофон, отправка } = места
+  console.log('   плюс ' + Math.round(плюс.w) + 'x' + Math.round(плюс.h) +
+    ', поле ' + Math.round(поле.w) + 'x' + Math.round(поле.h) +
+    ', место кнопки ' + Math.round(место.w) + 'x' + Math.round(место.h))
+
+  check('в ряду ровно три места: плюс, поле и одна кнопка', места.лишние === 0,
+    'лишних кнопок в ряду: ' + места.лишние)
+  check('плюс — круг', плюс.круг.startsWith('50%') && Math.abs(плюс.w - плюс.h) < 1,
+    плюс.круг + ' ' + Math.round(плюс.w) + 'x' + Math.round(плюс.h))
+  check('поле — таблетка во всю оставшуюся ширину',
+    поле.w > места.строка.w * 0.6 && parseFloat(поле.круг) >= поле.h / 2 - 1,
+    'ширина ' + Math.round(поле.w) + ' из ' + Math.round(места.строка.w) + ', скругление ' + поле.круг)
+  check('смайлик ВНУТРИ поля, у правого края',
+    смайл.x > поле.x && смайл.x + смайл.w <= поле.x + поле.w + 1
+    && смайл.y >= поле.y - 1 && смайл.y + смайл.h <= поле.y + поле.h + 1
+    && поле.x + поле.w - (смайл.x + смайл.w) < 12,
+    'смайлик ' + Math.round(смайл.x) + '..' + Math.round(смайл.x + смайл.w) +
+    ', поле ' + Math.round(поле.x) + '..' + Math.round(поле.x + поле.w))
+  check('текст не заезжает под смайлик', текст.справа >= смайл.w + 6,
+    'отступ справа ' + текст.справа + ' при смайлике ' + смайл.w)
+
+  check('пустое поле — виден микрофон, а синей кнопки нет',
+    микрофон.видно > 0.9 && отправка.видно < 0.1,
+    'микрофон ' + микрофон.видно + ', отправка ' + отправка.видно)
+  check('набран текст — наоборот',
+    места.наборМикрофон.видно < 0.1 && места.наборОтправка.видно > 0.9,
+    'микрофон ' + места.наборМикрофон.видно + ', отправка ' + места.наборОтправка.видно)
+  // Сравниваются СЕРЕДИНЫ, а не левые края: синяя кнопка в этот миг уменьшена
+  // и повёрнута, а рамка у повёрнутого прямоугольника шире его самого — левые
+  // края разошлись бы на семь пикселей у совершенно правильной вёрстки.
+  const середина = э => ({ x: э.x + э.w / 2, y: э.y + э.h / 2 })
+  const см = середина(микрофон), со = середина(отправка)
+  check('обе кнопки стоят на ОДНОМ месте, а не рядом',
+    Math.abs(см.x - со.x) < 1.5 && Math.abs(см.y - со.y) < 1.5,
+    'середины ' + Math.round(см.x) + ',' + Math.round(см.y) + ' и ' + Math.round(со.x) + ',' + Math.round(со.y))
+  check('синяя — это синяя', отправка.фон.replace(/ /g, '') !== микрофон.фон.replace(/ /g, ''),
+    микрофон.фон + ' -> ' + отправка.фон)
+
+  // Плавность. Проверяется НЕ по свойству transition, а по тому, что кнопка
+  // правда проходит через промежуточную прозрачность: правило может быть
+  // записано и не действовать — не то свойство, не тот элемент, выключено
+  // настройкой «меньше движения». Значит меряем то, что видно.
+  const шаги = JSON.parse(await win.webContents.executeJavaScript(`(() => new Promise(готово => {
+    const у = document.querySelector('#пусто .cin-act')
+    const кнопка = у.querySelector('.send-tg')
+    const ряд = []
+    у.classList.add('on')
+    const начало = performance.now()
+    // Спрашиваем таймером, а не по кадрам: кадры зависят от того, рисует ли
+    // браузер вообще, а нам нужно значение свойства во времени.
+    const тик = () => {
+      ряд.push(Math.round(parseFloat(getComputedStyle(кнопка).opacity) * 100) / 100)
+      if (performance.now() - начало < 400) setTimeout(тик, 12)
+      else готово(JSON.stringify(ряд))
+    }
+    тик()
+  }))()`))
+  const серединки = шаги.filter(v => v > 0.05 && v < 0.95)
+  console.log('   прозрачность синей по кадрам: ' + шаги.slice(0, 4) + ' … ' + шаги.slice(-2))
+  check('переход плавный, а не рывком', серединки.length >= 3 && шаги[шаги.length - 1] > 0.95,
+    'промежуточных кадров ' + серединки.length + ', в конце ' + шаги[шаги.length - 1])
+
+  // Копия разметки в этом стенде не должна разойтись с настоящей.
+  const исходник = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'Composer.tsx'), 'utf8')
+  check('те же классы есть и в настоящем Composer.tsx',
+    ['composer-field', 'cin-emoji', 'cin-act', 'cin-mic', 'send-tg'].every(c => исходник.includes(c)),
+    'иначе стенд проверяет свою выдумку')
+
+  // ── На компьютере всё как было ─────────────────────────────────────────
+  //
+  // Обёртка поля появилась ради телефона, но она есть в разметке ВЕЗДЕ. Если
+  // она начнёт рисовать таблетку или занимать место на большом экране, это
+  // будет поломка, которую никто не искал.
+  win.setContentSize(1200, 560)
+  await new Promise(r => setTimeout(r, 250))
+  const стол = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+    const c = document.querySelector('#пусто')
+    const поле = c.querySelector('.composer-field'), с = c.querySelector('.send-tg')
+    const ст = getComputedStyle(поле), сс = getComputedStyle(с)
+    return JSON.stringify({
+      фонПоля: ст.backgroundColor, скруглениеПоля: ст.borderRadius,
+      отправкаВидна: сс.display, фонСтроки: getComputedStyle(c).backgroundColor,
+      место: getComputedStyle(c.querySelector('.cin-act')).display,
+    })
+  })()`))
+  console.log(`
+── На компьютере (1200) ──`)
+  check('обёртка поля ничего не рисует', стол.фонПоля === 'rgba(0, 0, 0, 0)',
+    'фон ' + стол.фонПоля + ', скругление ' + стол.скруглениеПоля)
+  check('кнопка отправки на компьютере не показывается', стол.отправкаВидна === 'none',
+    'display: ' + стол.отправкаВидна)
+  check('место кнопки не занимает места', стол.место === 'contents', 'display: ' + стол.место)
+  check('строка ввода осталась общей капсулой', стол.фонСтроки !== 'rgba(0, 0, 0, 0)',
+    'фон ' + стол.фонСтроки)
 
   console.log('\nИТОГ: провалено ' + failed)
   // Окно закрываем ПОСЛЕ печати: закрытие последнего окна заставляет Electron

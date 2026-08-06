@@ -3288,13 +3288,11 @@ body.no-anim .member-typing i { animation:none; }
      внутри неё — свой такой же отступ здесь означал двойной. На телефоне с
      жестовой полосой под полем ввода оставалось около семидесяти пикселей
      пустоты вместо тридцати. */
-  .composer { padding:6px 8px 8px; background:var(--bg2); gap:4px; }
-  .composer textarea { background:transparent; padding:12px 6px; font-size:16px; }
-  .attach-btn { background:transparent; color:var(--mut); width:40px; }
-  .ctool { background:transparent; color:var(--mut); min-width:38px; height:40px; padding:0 6px; }
+  /* v1.503.0: раскладку строки ввода на телефоне задаёт один блок в конце
+     файла. Здесь остались размер текста (16 пикселей — иначе браузер сам
+     приближает страницу при наборе) и кружок «отправляю…». */
+  .composer textarea { font-size:16px; }
   .ctool-clip, .gif-badge { display:none; }
-  .send-tg { display:flex; align-items:center; justify-content:center; flex:none; width:44px; height:44px;
-    border:none; border-radius:50%; background:var(--brand); color:#fff; cursor:pointer; }
   .send-busy { width:44px; height:44px; border-radius:50%; }
 
   /* Список чатов — на весь экран (не резиновые пузырьки чата ниже — тем
@@ -7517,24 +7515,12 @@ body.no-anim .mus-blob.on { animation: none; }
    после него рисуются поверх сами. */
 .mus2 > *:not(.mus-livebg):not(.musbg):not(.musbg-dim) { position: relative; }
 
-/* v1.460.0: строка ввода на телефоне — как в мобильном Discord, но без лишнего.
-   В строке было четыре значка подряд плюс поле, и на 390 пикселях они съедали
-   половину места. Скрепка, эмодзи и микрофон остаются; отдельная кнопка GIF
-   убрана — она ведёт в ту же панель, что и эмодзи (там есть вкладка гифок),
-   то есть занимала место ради второго входа в одно и то же. */
+/* v1.503.0: от блока v1.460.0 осталась одна строка.
+   Промежутки, скругление поля, круглые кнопки и скрытый GIF задавались тут; всё
+   это, кроме GIF, теперь задаёт блок «строка ввода на телефоне 1 в 1 как в
+   мобильном Discord» в конце файла. Два набора одних и тех же свойств в разных
+   концах файла — это гадание, какой из них работает, а не стиль. */
 @media (max-width: 768px) {
-  .composer { gap: 4px; padding-left: 4px; padding-right: 4px; }
-  /* v1.501.0: скругление НЕ БОЛЬШЕ половины строки.
-     Было 999px — «таблетка». На одной строке это верно, но поле растёт вместе с
-     текстом, и на шести строках высотой 130 радиус становится 65: дуга угла
-     заходит внутрь на тридцать пикселей и срезает начало первой и последней
-     строки. Владелец прислал снимок — вместо «Нормальная» видно «ормальная».
-     22 пикселя — половина высоты пустого поля, поэтому одна строка выглядит
-     той же таблеткой, а высокое поле просто со скруглёнными углами. */
-  .composer textarea { border-radius: 22px; padding: 10px 14px; }
-  .composer-tools { gap: 2px; }
-  .composer .attach-btn, .composer-tools .ctool { border-radius: 50%; background: var(--c-hover); }
-  .composer .attach-btn:hover, .composer-tools .ctool:hover { background: #4e5058; }
   .composer-tools .ctool.gif-badge { display: none; }
 }
 
@@ -8129,3 +8115,70 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
    разницу в 0.7 из 255, то есть ничего: подъём яркости возвращал белое обратно
    в белое, упираясь в потолок. Поэтому только контраст. */
 .pqs-theme:hover { filter: contrast(.85); }
+
+
+/* На компьютере обёртки не существует для раскладки вовсе: display:contents
+   означает «этих коробок нет, дети — прямые дети строки». Иначе пустая обёртка
+   съедала бы промежуток, а вид на компьютере не менялся вовсе. */
+.composer-field { flex: 1; min-width: 0; display: flex; }
+.cin-act { display: contents; }
+
+/* ==== v1.503.0: строка ввода на телефоне — 1 в 1 как в мобильном Discord ====
+
+   Владелец прислал два снимка. На первом пустое поле: круглый плюс, длинная
+   тёмная таблетка с подсказкой, смайлик ВНУТРИ таблетки справа и микрофон
+   отдельным кружком. На втором набран текст: микрофона нет, на его месте синяя
+   круглая «отправить», и переход между ними идёт анимацией. Просьба была
+   «как на фото, но без лишних кнопок» — поэтому стикеров и подарка из снимка у
+   нас нет, а скрепка, GIF и кнопки плагинов уехали в меню плюса.
+
+   Что было до этого: одна общая тёмная капсула на всю строку, внутри неё плюс,
+   поле без своего фона, смайлик, микрофон И синяя «отправить» — обе сразу.
+   Отсюда и «лишние кнопки».
+
+   Почему .composer[class], а не .composer: у поля пять стилей на выбор
+   (cstyle-default, outline, glass, neon, compact), и каждый задаёт фон, рамку и
+   тень селектором из двух классов. Обычный .composer их не перебьёт, а !important
+   в таком месте — способ никогда потом не разобраться, что откуда берётся.
+   Одинаковый вес плюс положение ниже по файлу решают это честно. */
+@media (max-width: 768px) {
+  .composer[class] { background: transparent; border: none; box-shadow: none;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    margin: 0; padding: 6px 10px 8px; gap: 8px; align-items: flex-end; min-height: 0; }
+
+  /* Кружки по краям: плюс слева, микрофон или отправка справа. */
+  .composer .attach-btn { flex: none; width: 42px; height: 42px; border-radius: 50%;
+    background: var(--c-hover); color: var(--tx-2, #b5bac1); }
+  .composer .attach-btn:hover { background: var(--c-hover); }
+
+  /* Таблетка поля. Скругление ровно в половину пустой высоты: на одной строке
+     это таблетка, а выросшее поле не режет текст дугой угла (см. v1.501.0 и
+     npm run test:composer). */
+  .composer .composer-field { flex: 1; min-width: 0; position: relative; display: flex;
+    background: var(--c-hover); border-radius: 21px; }
+  .composer .composer-field textarea { padding: 10px 44px 10px 16px; border-radius: 21px; background: transparent; }
+
+  /* Смайлик внутри таблетки, у правого края. Прижат к низу, а не к центру:
+     когда поле вырастает на несколько строк, он остаётся на последней — так же
+     ведёт себя Discord, и кнопка не уезжает в середину простыни текста. */
+  .composer .cin-emoji { position: absolute; right: 5px; bottom: 5px; width: 32px; height: 32px;
+    flex: none; padding: 0; border: none; border-radius: 50%;
+    background: rgba(var(--ov, 255,255,255), .10); color: var(--tx-2, #b5bac1);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  /* Место одной кнопки справа, в котором лежат обе. */
+  .composer .cin-act { position: relative; flex: none; width: 42px; height: 42px; display: block; }
+  .composer .cin-act > button { position: absolute; left: 0; top: 0; width: 42px; height: 42px;
+    padding: 0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    transition: opacity .16s var(--ease-out4, ease), transform .16s var(--ease-out4, ease); }
+  .composer .cin-mic { background: var(--c-hover); color: var(--tx-2, #b5bac1); }
+  .composer .cin-mic.rec-on { color: #da373c; }
+  .composer .send-tg { background: var(--brand); color: #fff; }
+  /* Пустое поле — виден микрофон. Набрали — он уменьшается и уходит, а синяя
+     приезжает на его место. Обе кнопки всё время в разметке: подменять их
+     условием нельзя, иначе сплавлять нечего и вышла бы подмена рывком. */
+  .composer .cin-act .send-tg { opacity: 0; transform: scale(.5) rotate(-30deg); pointer-events: none; }
+  .composer .cin-act.on .send-tg, .composer .cin-act.solo .send-tg { opacity: 1; transform: none; pointer-events: auto; }
+  .composer .cin-act.on .cin-mic { opacity: 0; transform: scale(.5) rotate(30deg); pointer-events: none; }
+}
+

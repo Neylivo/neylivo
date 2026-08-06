@@ -63,3 +63,23 @@ export function isComposingKey(e: { nativeEvent?: unknown }): boolean {
   const n = e.nativeEvent as { isComposing?: boolean; keyCode?: number } | undefined
   return n?.isComposing === true || n?.keyCode === 229
 }
+
+/**
+ * v1.503.0: есть ли что отправлять.
+ *
+ * На телефоне справа от поля стоит ОДНА кнопка: пустое поле — микрофон,
+ * набрал — синяя «отправить». Значит появление синей кнопки — это обещание
+ * «нажмёшь, и уйдёт». Обещание должно совпадать с делом, поэтому правило здесь
+ * ровно то же, по которому submit решает не отправлять ничего: пусто, если нет
+ * вложений и в тексте не осталось ни одного видимого знака.
+ *
+ * Невидимые знаки — отдельная беда: строка из одних пробелов нулевой ширины
+ * непуста для длины, но человеку показывать нечего. Раньше в этом случае
+ * кнопка была бы синей, а нажатие — молча ничем.
+ */
+export const INVISIBLE = /[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g
+
+export function hasSendable(text: string, files = 0): boolean {
+  if (files > 0) return true
+  return text.replace(INVISIBLE, '').trim().length > 0
+}

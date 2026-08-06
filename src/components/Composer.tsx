@@ -30,7 +30,7 @@ import { invokePlugin, claimHostContext, releaseHostContext, emitPluginEvent } f
 import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { slashPrefix, parseSlash, buildArgs, splitArgs, argHint } from '../lib/slashCmd'
-import { shouldSend } from '../lib/sendKey'
+import { shouldSend, hasSendable } from '../lib/sendKey'
 import { IS_MOBILE } from '../lib/mobile'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -211,6 +211,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   }
   // Меню «плюса» слева (Фото / Файл / Папка / Голосовое) — как в Discord.
   const [plusMenu, setPlusMenu] = useState(false)
+  // Синяя «отправить» появляется ровно тогда, когда сообщение правда уйдёт:
+  // правило то же самое, что у submit (hasSendable), а не «в поле что-то есть».
+  // Иначе вышло бы привычное расхождение — кнопка обещает, нажатие молчит.
+  const hasContent = hasSendable(text, files.length)
   const photoRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
   // Запись голосового: { t } — секунды записи; recRef держит MediaRecorder.
@@ -680,7 +684,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     let t = polish(applySlash(text.trim()))
     if ((!t && files.length === 0) || !user) return
     // Блокировка сообщений, состоящих только из пробелов и невидимых символов юникода.
-    if (t && files.length === 0 && !t.replace(/[\u200B-\u200F\u2060\uFEFF\u00A0\u034F\u2800\u3164]/g, '').trim()) return
+    if (!hasSendable(t, files.length)) return
     // Защита от дублей: одно и то же сообщение дважды подряд за секунду не уходит.
     if (t && files.length === 0 && t === lastSent.current.t && Date.now() - lastSent.current.at < 1000) return
     if (t.length > MAXLEN) { toastErr('Сообщение слишком длинное — максимум ' + MAXLEN + ' символов'); return }
@@ -897,7 +901,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           ))}
         </div>}
         <div className="plus-wrap" style={isEditing ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
-          <button type="button" className="attach-btn" title="Прикрепить" onClick={() => setPlusMenu(v => !v)}><Icon name="plus-circle" size={20} /></button>
+          <button type="button" className="attach-btn" title="Прикрепить" onClick={() => setPlusMenu(v => !v)}>
+            {/* На телефоне сама кнопка круглая, и «плюс в кружке» дал бы кружок
+                в кружке — там нужен голый плюс, как на снимке Discord. */}
+            <Icon name={IS_MOBILE ? 'plus' : 'plus-circle'} size={IS_MOBILE ? 24 : 20} /></button>
           {plusMenu && <>
             <div className="plus-overlay" onClick={() => setPlusMenu(false)} />
             <div className="plus-menu">
@@ -906,6 +913,12 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               <button type="button" onClick={() => { setPlusMenu(false); fileRef.current?.click() }}><Icon name="paperclip" size={17} /> Файл</button>
               <button type="button" onClick={() => { setPlusMenu(false); folderRef.current?.click() }}><Icon name="folder" size={17} /> Папка</button></>}
               <button type="button" onClick={() => { setPlusMenu(false); startRec() }}><Icon name="mic" size={17} /> Голосовое</button>
+              {IS_MOBILE && pluginButtons.map(b => (
+                <button key={b.pluginId + ':' + b.key} type="button"
+                  onClick={() => { setPlusMenu(false); void invokePlugin(b.pluginId, b.onClick, []) }}>
+                  <Icon name={b.icon} size={17} /> {b.tooltip}
+                </button>
+              ))}
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Minecraft (Java)' &&
                 <button type="button" onClick={() => { setPlusMenu(false); setShareBuild(true) }}><Icon name="gamepad" size={17} /> Поделиться игрой</button>}
               {isQuicklaunchAvailable() && gameOf(user?.id ?? '')?.name === 'Roblox' && !!gameOf(user?.id ?? '')?.placeId &&
@@ -920,6 +933,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
         <input ref={fileRef} type="file" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={photoRef} type="file" accept="image/*" hidden multiple onChange={e => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '' } as any)} onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; sendFiles(fs) }} />
+        {/* v1.503.0: поле ввода лежит в своей обёртке — на телефоне именно она
+            рисует «таблетку», а смайлик стоит ВНУТРИ неё справа, как в Discord.
+            На компьютере обёртка ничего не рисует и ничего не меняет. */}
+        <div className="composer-field">
         <textarea ref={inputRef} rows={1} disabled={cmdBusy}
           // Курсор поставили сюда — значит человек работает с этим чатом, и
           // сообщения плагинов должны уходить именно в него.
@@ -992,16 +1009,21 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
               // Иначе — перенос строки: поведение textarea по умолчанию.
             }
           }} />
+        {IS_MOBILE && <button ref={emojiBtn} type="button" className="cin-emoji" title="Эмодзи"
+          onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>}
+        </div>
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
         <div className="composer-tools">
-          {!isEditing && canAttachFiles !== false && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
-          <button ref={emojiBtn} type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>
-          {!isEditing && <button ref={gifBtn} type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
-          {!isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
+          {!IS_MOBILE && !isEditing && canAttachFiles !== false && <button type="button" className="ctool ctool-clip" title="Прикрепить файл" onClick={() => fileRef.current?.click()}><Icon name="paperclip" size={20} /></button>}
+          {!IS_MOBILE && <button ref={emojiBtn} type="button" className="ctool" title="Эмодзи" onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>}
+          {!IS_MOBILE && !isEditing && <button ref={gifBtn} type="button" className="ctool gif-badge" title="GIF, стикеры и эмодзи" onClick={() => { setGif(g => !g); setEmoji(false) }}><span className="gif-badge-oval"><i>G</i><i>I</i><i>F</i></span></button>}
+          {!IS_MOBILE && !isEditing && <button type="button" className={'ctool' + (rec ? ' rec-on' : '')} title="Голосовое сообщение" onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
           {/* v1.286.0: кнопки плагинов. Рисуются нашим же компонентом с нашей иконкой —
               плагин задаёт только имя иконки и подсказку, поэтому подделать чужой
               элемент интерфейса (например, поле ввода пароля) он не может. */}
-          {!isEditing && pluginButtons.map(b => (
+          {/* На телефоне кнопки плагинов уехали в меню плюса: в строке ввода их
+              не видно, но доступны они по-прежнему все. */}
+          {!IS_MOBILE && !isEditing && pluginButtons.map(b => (
             <button key={b.pluginId + ':' + b.key} type="button" className="ctool" title={b.tooltip}
               onClick={() => { void invokePlugin(b.pluginId, b.onClick, []) }}>
               <Icon name={b.icon} size={20} />
@@ -1016,7 +1038,20 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             <GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} />
           </Popover>}
         </div>
-        {!busy && <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>}
+        {/* v1.503.0: справа ОДНА кнопка, а не две.
+            Владелец прислал два снимка мобильного Discord: пустое поле — там
+            микрофон, набрал текст — на его месте синяя «отправить», и переход
+            между ними анимацией. У нас до этого висели обе сразу.
+            Обе кнопки остаются в разметке и лежат друг на друге: показывается
+            та, что нужна. Подменять их условием нельзя — снятый и заново
+            вставленный элемент не с чем сплавлять, и никакого перехода бы не
+            вышло, была бы подмена рывком. */}
+        {!busy && <div className={'cin-act' + (hasContent ? ' on' : '') + (IS_MOBILE && !isEditing ? '' : ' solo')}>
+          {IS_MOBILE && !isEditing &&
+            <button type="button" className={'cin-mic' + (rec ? ' rec-on' : '')} title="Голосовое сообщение"
+              onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
+          <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>
+        </div>}
         {busy && <button type="submit" className="send-busy" disabled>…</button>}
       </form>
     </>

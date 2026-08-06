@@ -28,7 +28,7 @@
 // правило может поменять свойство, которого не видно (например, яркость белого
 // прямоугольника). Стенд снимает картинку до и после и считает среднюю
 // яркость участка — это ровно то, что увидит человек.
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, nativeImage } = require('electron')
 const fs = require('fs')
 const path = require('path')
 
@@ -107,13 +107,36 @@ app.whenReady().then(async () => {
   // ОДНО окно и ОДНА загрузка страницы: закрытое окно уносит сессию, а переход
   // по новому адресу закрывает цель отладчика — следом всё падает с
   // «target closed».
-  const win = new BrowserWindow({ show: false, width: 1200, height: 900, backgroundColor: '#313338' })
+  // ОКНО ВИДИМОЕ, и это не небрежность. Скрытое окно Chromium перерисовывает
+  // лениво: capturePage отдаёт кадр, где обновлена лишь часть страницы, а то и
+  // прежний целиком. Стенд из-за этого показал «цвет 0» у всех образцов на
+  // ширине 412 — будто наведение перестало работать на телефоне, хотя стили
+  // были в порядке. Проверял по шагам: у одного образца яркость менялась, у
+  // соседнего нет, при одинаковых правилах.
+  //
+  // Пробовал лечить иначе: backgroundThrottling:false не помог, эмуляция
+  // размера через отладчик разъехалась со снимком окна, а Page.captureScreenshot
+  // на скрытом окне просто не отвечает — кадров ему взять неоткуда.
+  //
+  // Поэтому окно показывается на время проверки. Оно живёт секунд десять.
+  const win = new BrowserWindow({ show: true, x: 40, y: 40, width: 1200, height: 900,
+    backgroundColor: '#313338', webPreferences: { backgroundThrottling: false } })
   await win.loadFile(path.join(OUT, 'index.html'))
   await new Promise(r => setTimeout(r, 400))
   const d = win.webContents.debugger
   d.attach('1.3')
   await d.sendCommand('DOM.enable')
   await d.sendCommand('CSS.enable')
+  await d.sendCommand('Page.enable')
+
+  // Снимок берём ТОЖЕ отладчиком. webContents.capturePage снимает окно, а
+  // ширину страницы мы меняем эмуляцией — окно при этом остаётся прежним, и
+  // снимок оказывается не от той раскладки, что мерки. Page.captureScreenshot
+  // снимает ровно то, что видит страница.
+  const снимок = async () => {
+    const { data } = await d.sendCommand('Page.captureScreenshot', { format: 'png' })
+    return nativeImage.createFromBuffer(Buffer.from(data, 'base64'))
+  }
 
   // Номера узлов берём ОДИН раз и держим: DOM.getDocument выдаёт новые номера,
   // и снятие наведения по свежему номеру не снимает поставленное по прежнему.
@@ -133,6 +156,11 @@ app.whenReady().then(async () => {
   }
 
   for (const [имя, ширина] of [['обычный', 1200], ['телефон', 412]]) {
+    // Ширину меняем ОТЛАДЧИКОМ, а не win.setContentSize. setContentSize меняет
+    // окно и снимок, но страница при скрытом окне не перекладывается: мерки
+    // остаются от прежней ширины, снимок уже от новой — и сравнивать выходит
+    // разные места. Стенд на этом соврал: на 412 он показал «цвет 0» у всех
+    // образцов разом, будто наведение перестало работать на телефоне.
     win.setContentSize(ширина, 900)
     await new Promise(r => setTimeout(r, 300))
     console.log('\n══ ' + имя + ' (' + ширина + ') ══')
