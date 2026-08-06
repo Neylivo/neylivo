@@ -43,7 +43,7 @@ const ТЕКСТ = 'Нормальная летающая выбор что сд
 // оригиналом, ниже отдельная проверка читает сам Composer.tsx и требует, чтобы
 // эти же классы были и там.
 const ряд = (id, текст, есть) => `
-  <form class="composer cstyle-default" id="${id}">
+  <form class="composer cstyle-default" id="${id}" onsubmit="return false">
     <div class="plus-wrap"><button type="button" class="attach-btn">+</button></div>
     <div class="composer-field">
       <textarea rows="1" placeholder="Написать @guchip0n">${текст}</textarea>
@@ -59,6 +59,7 @@ const ряд = (id, текст, есть) => `
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css">
 <style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif}</style>
+<script src="keepfocus.js"></script>
 <div style="position:absolute;bottom:0;left:0;right:0">
   ${ряд('пусто', '', false)}
   ${ряд('набрано', 'Тексссттттт', true)}
@@ -302,6 +303,62 @@ app.whenReady().then(async () => {
   check('место кнопки не занимает места', стол.место === 'contents', 'display: ' + стол.место)
   check('строка ввода осталась общей капсулой', стол.фонСтроки !== 'rgba(0, 0, 0, 0)',
     'фон ' + стол.фонСтроки)
+
+  // ── v1.510.0: клавиатура на телефоне не закрывается от кнопок ──────────
+  //
+  // Владелец: «написание сообщения на телефонах удобнее, как в Discord и TG».
+  // Главное неудобство было тут: нажал «отправить» — фокус ушёл с поля на
+  // кнопку, экранная клавиатура закрылась, лента прыгнула. Следующее сообщение
+  // начиналось с повторного тычка в поле.
+  //
+  // Проверяется НАСТОЯЩИМ нажатием по НАСТОЯЩЕМУ помощнику: src/lib/keepFocus.ts
+  // собран рядом и подключён к странице (window.KF.keepFocus). Перенос фокуса
+  // делает браузер, и увидеть, отменён он или нет, можно только нажав.
+  //
+  // Ряд берётся «набрано»: в пустом синяя кнопка невидима и нажатий не
+  // принимает вовсе — проверка по нему прошла бы, ничего не проверив. Я на
+  // этом попался и сперва получил зелёную проверку ни о чём.
+  // Ширину возвращаем на телефонную: на компьютере синей кнопки нет вовсе
+  // (.cin-act там display:contents, а .send-tg скрыта) — нажимать было бы не по
+  // чему, и проверка прошла бы, ничего не проверив. Так она у меня и «прошла».
+  win.setContentSize(412, 560)
+  await new Promise(r => setTimeout(r, 250))
+  console.log('\n── Клавиатура остаётся открытой (412) ──')
+  {
+    const место = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+      const ряд = document.getElementById('набрано')
+      const кнопка = ряд.querySelector('.send-tg')
+      const r = кнопка.getBoundingClientRect()
+      return JSON.stringify({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) })
+    })()`))
+
+    /** Нажать по кнопке и сказать, где остался фокус. */
+    const нажать = async (сПомощником) => {
+      await win.webContents.executeJavaScript(`(() => {
+        const ряд = document.getElementById('набрано')
+        const поле = ряд.querySelector('textarea')
+        const кнопка = ряд.querySelector('.send-tg')
+        кнопка.onpointerdown = ${сПомощником} ? (e => window.KF.keepFocus(e)) : null
+        кнопка.onmousedown = ${сПомощником} ? (e => window.KF.keepFocus(e)) : null
+        поле.focus()
+        return document.activeElement.tagName
+      })()`)
+      win.webContents.sendInputEvent({ type: 'mouseDown', x: место.x, y: место.y, button: 'left', clickCount: 1 })
+      win.webContents.sendInputEvent({ type: 'mouseUp', x: место.x, y: место.y, button: 'left', clickCount: 1 })
+      await new Promise(r => setTimeout(r, 200))
+      return await win.webContents.executeJavaScript(`document.activeElement.tagName`)
+    }
+
+    const сНим = await нажать(true)
+    check('с помощником фокус ОСТАЁТСЯ в поле — клавиатура не закроется',
+      сНим === 'TEXTAREA', 'фокус стал: ' + сНим)
+
+    // Без помощника фокус обязан уходить. Без этой половины первая ничего не
+    // значит: она прошла бы и там, где кнопка просто не нажимается.
+    const безНего = await нажать(false)
+    check('а без него — уходит на кнопку, и это ровно та беда',
+      безНего !== 'TEXTAREA', 'фокус стал: ' + безНего)
+  }
 
   console.log('\nИТОГ: провалено ' + failed)
   // Окно закрываем ПОСЛЕ печати: закрытие последнего окна заставляет Electron

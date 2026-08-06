@@ -31,6 +31,7 @@ import { toast } from '../lib/toast'
 import { confirmUi, promptUi } from '../lib/confirm'
 import { slashPrefix, parseSlash, buildArgs, splitArgs, argHint } from '../lib/slashCmd'
 import { shouldSend, hasSendable } from '../lib/sendKey'
+import { keepFocus } from '../lib/keepFocus'
 import { IS_MOBILE } from '../lib/mobile'
 
 const MENTION_TAIL = /@([\p{L}\p{N}_.\-]*)$/u
@@ -752,6 +753,10 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
       if (channelId) lastSendByChannel.current[channelId] = Date.now()
       setFailed(false)
       setText(''); keepDraft(''); setFiles([]); setSpoilers({}); setMQ(null); setEQ(null); if (fileRef.current) fileRef.current.value = ''; if (photoRef.current) photoRef.current.value = ''
+      // Подстраховка: если фокус всё же ушёл (например, отправили с клавиатуры
+      // на компьютере или из другого места), вернём его в поле — писать дальше
+      // человек будет туда же.
+      if (document.activeElement !== inputRef.current) inputRef.current?.focus()
     } catch (err: any) { setFailed(true); toastErr(err.message ?? String(err)) }
     finally { setBusy(false); sendingRef.current = false }
   }
@@ -1010,6 +1015,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             }
           }} />
         {IS_MOBILE && <button ref={emojiBtn} type="button" className="cin-emoji" title="Эмодзи"
+          onPointerDown={keepFocus}
           onClick={() => { setEmoji(v => !v); setGif(false) }}><Icon name="smile" size={20} /></button>}
         </div>
         {text.length > MAXLEN - 200 && <span className={'char-count' + (text.length > MAXLEN ? ' over' : '')}>{MAXLEN - text.length}</span>}
@@ -1047,10 +1053,14 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
             вставленный элемент не с чем сплавлять, и никакого перехода бы не
             вышло, была бы подмена рывком. */}
         {!busy && <div className={'cin-act' + (hasContent ? ' on' : '') + (IS_MOBILE && !isEditing ? '' : ' solo')}>
+          {/* v1.510.0: клавиатура на телефоне не закрывается от этих кнопок —
+              фокус остаётся в поле, как в Discord и Telegram. */}
           {IS_MOBILE && !isEditing &&
             <button type="button" className={'cin-mic' + (rec ? ' rec-on' : '')} title="Голосовое сообщение"
+              onPointerDown={keepFocus}
               onClick={() => rec ? stopRec(true) : startRec()}><Icon name="mic" size={20} /></button>}
-          <button type="submit" className="send-tg" title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>
+          <button type="submit" className="send-tg" onPointerDown={keepFocus}
+            title={isEditing ? 'Сохранить (Enter)' : 'Отправить'}><Icon name={isEditing ? 'check' : 'send'} size={18} /></button>
         </div>}
         {busy && <button type="submit" className="send-busy" disabled>…</button>}
       </form>
