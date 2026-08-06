@@ -114,7 +114,10 @@ if (rcedit) {
 беги('npx', ['electron-builder', '--win', 'nsis', '--prepackaged', 'release/win-unpacked',
   '-c.win.signAndEditExecutable=false'])
 
-const файлы0 = () => path.join(ВЫХОД, readdirSync(ВЫХОД).filter(f => /^Ponoi-Setup-.*\.exe$/.test(f))[0])
+// Именно ЭТОЙ версии, а не «первый попавшийся установщик в папке». На этом я
+// уже попался: рядом лежал установщик прошлой версии, проверка запустила его и
+// отчиталась о чужом окне.
+const нашУстановщик = () => path.join(ВЫХОД, 'Ponoi-Setup-' + версия + '.exe')
 
 шаг('Окно установщика помещается на экран')
 // Владелец прислал снимок: мастер открылся так, что кнопки «Готово» не видно —
@@ -130,7 +133,7 @@ const файлы0 = () => path.join(ВЫХОД, readdirSync(ВЫХОД).filter(f
     "Add-Type -AssemblyName System.Windows.Forms",
     "$sig = 'using System;using System.Runtime.InteropServices;public class WW{[DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr h, out RECT r);public struct RECT{public int L,T,R,B;}}'",
     "Add-Type -TypeDefinition $sig",
-    "Start-Process '" + файлы0() + "'",
+    "Start-Process '" + нашУстановщик() + "'",
     "Start-Sleep -Seconds 6",
     "$p = Get-Process | Where-Object { $_.ProcessName -like '*Setup*' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1",
     "if (-not $p) { Write-Output 'НЕТОКНА'; exit }",
