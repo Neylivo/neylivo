@@ -10,8 +10,9 @@ import { frameDoc } from '../lib/plugins/htmlFrame'
 import { libSource, libList } from '../lib/plugins/libs'
 import {
   PROJ_TEMPLATES, buildPage, buildProject, parseProject, fromOldApp, isProject,
-  projId, kindOf, okFileName, type Project, type ProjFile,
+  projId, kindOf, okFileName, newSceneProject, type Project, type ProjFile,
 } from '../lib/plugins/workshop'
+import { SceneEditor } from './SceneEditor'
 
 // v1.497.0: МАСТЕРСКАЯ — отдельный отдел для своих приложений.
 //
@@ -66,6 +67,18 @@ export function AppWorkshop({ onClose }: { onClose: () => void }) {
         сохраняется обычным плагином: его можно скачать файлом и отдать кому угодно.
       </div>
 
+      {/* v1.498.0: визуальный путь — первым и крупно. Он и есть ответ на
+          «буквально Unity»: сцену собирают мышью, а не переписывают чужой
+          пример. Код рядом остаётся для тех, кому нужен именно код. */}
+      <button className="ws-big" onClick={() => setПроект(newSceneProject())}>
+        <span className="ws-big-n">Собрать 3D-сцену</span>
+        <span className="ws-big-h">
+          Визуально: ставишь объекты, крутишь камеру мышью, задаёшь цвет и размер полями.
+          Нажал «Играть» — ходишь по своей сцене. Скрипт можно повесить на любой объект.
+        </span>
+      </button>
+
+      <div className="pqs-sec-t" style={{ marginTop: 18 }}>Или начать кодом</div>
       <div className="ws-tpls">
         {PROJ_TEMPLATES.map(т => (
           <button key={т.id} className={'ws-tpl' + (т.big ? ' big' : '')}
@@ -261,6 +274,12 @@ function Редактор({ проект, onClose }: { проект: Project; on
         </div>
       </div>
 
+      {p.scene ? (
+        <SceneEditor
+          scene={p.scene}
+          onChange={s => setP(x => ({ ...x, scene: s }))}
+          onLog={(у, т) => пиши(у, т)} />
+      ) : (
       <div className="ws-grid">
         {/* Файлы проекта */}
         <div className="ws-files">
@@ -344,6 +363,16 @@ function Редактор({ проект, onClose }: { проект: Project; on
           )}
         </div>
       </div>
+      )}
+
+      {/* Консоль у сцены — снизу во всю ширину: справа у неё инспектор. */}
+      {p.scene && (
+        <div className="ws-console sc-console">
+          {журнал.length === 0
+            ? <div className="ws-con-empty">Здесь появятся ошибки скриптов и ponoi.log.</div>
+            : журнал.map((с, i) => <div key={i} className={'ws-con-l ' + с.уровень}>{с.текст}</div>)}
+        </div>
+      )}
     </div>
   )
 }

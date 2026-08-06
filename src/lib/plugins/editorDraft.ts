@@ -166,7 +166,16 @@ export function buildFile(d: Draft, author: string): string {
     ` * @author ${author}`,
   ]
   if (d.description.trim()) lines.push(` * @description ${d.description.trim().replace(/\s+/g, ' ')}`)
-  if (d.permissions.length) lines.push(` * @permissions ${d.permissions.join(', ')}`)
+  // Строку пишем ВСЕГДА, даже когда не выбрано ничего.
+  //
+  // v1.499.0: отсутствие @permissions теперь означает «все» — так задумано для
+  // файлов, написанных руками, где забытая строка роняла плагин на первом
+  // вызове. Но в конструкторе разрешения ВЫБИРАЮТ, и «не выбрал ничего» — это
+  // осознанное «ничего», а не забывчивость. Опусти мы строку здесь — плагин,
+  // которому человек не дал ни одного права, молча получил бы все.
+  lines.push(d.permissions.length
+    ? ` * @permissions ${d.permissions.join(', ')}`
+    : ' * @permissions none')
   if (d.permissions.includes('net') && d.hosts.trim()) lines.push(` * @hosts ${d.hosts.trim()}`)
   if (d.icon.trim()) lines.push(` * @icon ${d.icon.trim()}`)
   if (d.banner.trim()) lines.push(` * @banner ${d.banner.trim()}`)

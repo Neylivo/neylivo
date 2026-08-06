@@ -68,8 +68,14 @@ function attacker(perms: string[] = [...ALL_PERMISSIONS], id = 'evil') {
   return createDispatcher(plugin, {
     sendMessage: async (t: string) => { sent.push(t) },
     toast: (t: string) => { toasts.push(t) },
+    // v1.499.0: перехват занятого имени пишется в журнал обоих плагинов.
+    // Собираем эти строки: проверка про «не молча» смотрит именно на них.
+    log: (pluginId: string, level: string, text: string) => { сказано.push({ pluginId, level, text }) },
   }, () => {})
 }
+
+/** Что ушло в журналы плагинов. */
+const сказано: { pluginId: string; level: string; text: string }[] = []
 
 const fn = { __fn: 'f1' } as any
 
@@ -502,7 +508,22 @@ console.log('\n── Чужое ──')
   const a = attacker([...ALL_PERMISSIONS], 'plug-a')
   const b = attacker([...ALL_PERMISSIONS], 'plug-b')
   await a('commands.register', ['занято', 'моя', fn])
-  await blocked('чужую команду не перехватить', () => b('commands.register', ['занято', 'подмена', fn]))
+  // v1.499.0: занятое имя команды больше не отказ — оно переходит к
+  // последнему. Владелец попросил убрать отказы, мешающие автору, и этот был
+  // из них: узнать заранее, какие имена занял чужой плагин, автору нечем.
+  //
+  // Проверяем теперь не «нельзя», а что переход НЕ МОЛЧАЛИВЫЙ: оба плагина
+  // узнают о нём из своего журнала. Тихая подмена чужого поведения — это то,
+  // чего быть не должно даже там, где отказов нет.
+  await check('занятое имя команды переходит к последнему', async () => {
+    await b('commands.register', ['занято', 'подмена', fn])
+    return registry.commandOwner('занято') === 'plug-b'
+  })
+  await check('и оба узнают об этом из журнала', () => {
+    const было = сказано.filter(с => с.text.includes('занято'))
+    if (было.length < 2) throw new Error('перехват прошёл молча: строк ' + было.length)
+    return было.some(с => с.pluginId === 'plug-a') && было.some(с => с.pluginId === 'plug-b')
+  })
   await check('чужое хранилище не прочитать', async () => {
     await a('storage.set', ['секрет', 'мой'])
     const got = await b('storage.get', ['секрет'])
@@ -1058,12 +1079,17 @@ console.log('\n── Плагин как библиотека (v1.472.0) ──
     return d('services.register', ['math-utils', { урон: fn, броня: fn }])
   })
 
-  await check('чужое имя службы не отобрать молча', async () => {
-    // Иначе второй плагин тихо занял бы имя, и оба выглядели бы сломанными.
+  await check('чужое имя службы переходит к последнему, но НЕ молча', async () => {
+    // v1.499.0: раньше здесь был отказ. Он мешал автору и не спасал никого:
+    // узнать заранее, что имя занято, нечем. Теперь имя переходит, а оба
+    // плагина узнают об этом из журнала — тихой подмены не остаётся.
+    const было = сказано.length
     const чужой = attacker([...ALL_PERMISSIONS], 'svc-thief')
-    try { await чужой('services.register', ['math-utils', { урон: fn }]); return false }
-    catch { /* так и надо */ }
-    return S.findService('math-utils')?.pluginId === 'svc-ok'
+    await чужой('services.register', ['math-utils', { урон: fn }])
+    if (S.findService('math-utils')?.pluginId !== 'svc-thief') throw new Error('имя не перешло')
+    const новые = сказано.slice(было).filter(с => с.text.includes('math-utils'))
+    if (новые.length < 2) throw new Error('переход прошёл молча')
+    return новые.some(с => с.pluginId === 'svc-ok') && новые.some(с => с.pluginId === 'svc-thief')
   })
 
   await check('свою службу можно перерегистрировать', async () => {

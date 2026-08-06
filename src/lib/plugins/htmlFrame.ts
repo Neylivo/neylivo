@@ -531,6 +531,19 @@ export const FRAME_METHODS: readonly string[] = [
   'libs.list', 'libs.get',
 ]
 
-export function frameMethodAllowed(method: string): boolean {
-  return FRAME_METHODS.includes(method)
+/**
+ * v1.499.0: странице доступно ВСЁ, что доступно потоку.
+ *
+ * Раньше здесь стоял короткий список, и «css» или «ui.addHotkey» со страницы
+ * отвечали отказом. Отказ был из худших: возможность есть, разрешение есть, а
+ * вызов не проходит — потому что зовут не оттуда.
+ *
+ * Разрешения при этом проверяет ТОТ ЖЕ диспетчер, что и для потока (api.ts):
+ * этот список ничего не открывал сам по себе и не открывает.
+ *
+ * FRAME_METHODS остался как перечень того, что мост даёт удобными именами
+ * (ponoi.messages.send и подобное). Всё остальное зовётся через ponoi.call.
+ */
+export function frameMethodAllowed(_method: string): boolean {
+  return true
 }

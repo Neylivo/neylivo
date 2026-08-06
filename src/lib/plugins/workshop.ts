@@ -22,6 +22,7 @@
 // Проверки: src/lib/plugins/__test.ts.
 
 import { parsePlugin } from './manifest'
+import { readScene, scenePage, emptyScene, type Scene } from './scene'
 
 export type FileKind = 'html' | 'css' | 'js'
 
@@ -32,6 +33,14 @@ export interface ProjFile {
 }
 
 export interface Project {
+  /**
+   * Сцена, если проект собран визуально (v1.498.0). Пусто — проект из файлов.
+   *
+   * Оба вида живут в ОДНОМ типе намеренно: список приложений, сохранение,
+   * скачивание и удаление у них общие, и разводить их по двум типам значило бы
+   * писать всё это дважды.
+   */
+  scene?: Scene | null
   id: string
   name: string
   version: string
@@ -132,6 +141,9 @@ export function projId(name: string): string {
  * терялось бы при первом же сохранении.
  */
 export function buildProject(p: Project): string {
+  // Проект-сцена собирается движком сцены, а не склейкой файлов: страницу для
+  // него пишет scene.ts, и она ТА ЖЕ, что крутится в редакторе.
+  if (p.scene) return buildSceneProject(p)
   const id = projId(p.id || p.name)
   const права = [...new Set([PROJ_REQUIRED, ...(p.permissions ?? [])])].join(', ')
   const окно = {
@@ -169,10 +181,76 @@ ${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)
 `
 }
 
+/**
+ * Собрать проект-сцену.
+ *
+ * Сцена сохраняется ДАННЫМИ (const СЦЕНА), а страница — рядом. Открывая
+ * приложение обратно, мастерская читает данные, а не разбирает готовую
+ * страницу: разбирать собранное — верный способ однажды потерять половину.
+ */
+function buildSceneProject(p: Project): string {
+  const id = projId(p.id || p.name)
+  const права = [...new Set([PROJ_REQUIRED, ...(p.permissions ?? [])])].join(', ')
+  const окно = {
+    mode: 'window',
+    title: String(p.name || 'Игра'),
+    width: число(p.width, 960),
+    height: число(p.height, 640),
+    frameless: !!p.frameless,
+    transparent: !!p.transparent,
+  }
+  const строка = (s: string) => String(s ?? '').replace(/[\r\n]+/g, ' ')
+  return `/**
+ * @name ${строка(p.name || 'Моя игра')}
+ * @id ${id}
+ * @version ${String(p.version || '1.0.0').trim()}
+ * @author ${строка(p.author || 'я')}
+ * @description ${строка(p.description || 'Игра')}
+ * @permissions ${права}
+ */
+// Собрано мастерской Ponoi — визуальным редактором сцены.
+//
+// СЦЕНА — источник правды: по ней собирается страница, и её же читает
+// мастерская, открывая проект обратно. Правь сцену в мастерской, а не страницу
+// ниже: её перезапишет следующее сохранение.
+const СЦЕНА = ${JSON.stringify(p.scene, null, 2)}
+
+const СТРАНИЦА = ${JSON.stringify(scenePage(p.scene as Scene, 'игра'))}
+
+function onLoad(ponoi) {
+  return ponoi.apps.create({
+${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)).join(',\n')},
+    html: СТРАНИЦА,
+  }).then(function (id) { self.__окно = id })
+}
+`
+}
+
 /** Разобрать плагин обратно в проект. Чужой код не трогаем. */
 export function parseProject(code: string): Project | null {
   let m
   try { m = parsePlugin(code) } catch { return null }
+
+  // Проект-сцена. Читаем ДАННЫЕ, а не собранную страницу.
+  const с = code.indexOf('const СЦЕНА = ')
+  if (с >= 0) {
+    const до = code.indexOf('\n\nconst СТРАНИЦА', с)
+    if (до > 0) {
+      try {
+        const scene = readScene(JSON.parse(code.slice(с + 'const СЦЕНА = '.length, до)))
+        return {
+          scene, id: m.id, name: m.name, version: m.version,
+          author: m.author, description: m.description, files: [],
+          width: чисИз(code, /"?width"?:\s*(\d+)/, 960),
+          height: чисИз(code, /"?height"?:\s*(\d+)/, 640),
+          frameless: /"?frameless"?:\s*true/.test(code),
+          transparent: /"?transparent"?:\s*true/.test(code),
+          permissions: (m.permissions as string[]).filter(x => x !== PROJ_REQUIRED),
+        }
+      } catch { return null }
+    }
+  }
+
   const i = code.indexOf('const ФАЙЛЫ = ')
   if (i < 0) return null
   const j = code.indexOf('\n\nconst СТРАНИЦА', i)
@@ -196,7 +274,21 @@ export function parseProject(code: string): Project | null {
   }
 }
 
-export const isProject = (code: string): boolean => code.includes('const ФАЙЛЫ = ')
+const чисИз = (code: string, re: RegExp, по: number) => {
+  const r = re.exec(code)
+  return r ? число(r[1], по) : по
+}
+
+export const isProject = (code: string): boolean =>
+  code.includes('const ФАЙЛЫ = ') || code.includes('const СЦЕНА = ')
+
+/** Пустой проект-сцена — с чего начинают визуально. */
+export function newSceneProject(): Project {
+  return {
+    scene: emptyScene(), id: '', name: '', version: '1.0.0', author: '', description: '',
+    files: [], width: 960, height: 640, frameless: false, transparent: false, permissions: [],
+  }
+}
 
 /**
  * Старые приложения (v1.496.0) — из трёх полей.

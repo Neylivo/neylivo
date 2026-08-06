@@ -5,7 +5,7 @@ import {
   NET_TIMEOUT_MS, NET_STREAM_MS, NET_STREAM_IDLE_MS,
 } from './limits'
 import {
-  addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, safeIcon,
+  addCommand, addComposerButton, addMessageAction, addHotkey, okCombo, commandOwner, dropCommand, safeIcon,
   setPluginCss, setSettingsPage, setPanel, PANEL_SLOTS, addContextItem, CTX_TARGETS, getRegistry,
   addHeaderButton, setKeybind,
   type SettingsRow, type PanelSlot, type CtxTarget,
@@ -20,7 +20,7 @@ import { openSocket, sendSocket, closeSocket } from './wsHub'
 import { addTask, removeTask } from './background'
 import { parseTheme, applyPluginTheme, clearPluginTheme } from './pluginTheme'
 import { openApp, updateApp, closeApp, isMode, APP_MODES, appList, widgetOf, setWidgetOf, appGeometry, screenSize } from './apps'
-import { registerService, unregisterService, findService, serviceMethods, checkName } from './services'
+import { registerService, unregisterService, findService, serviceMethods, checkName, takenFrom } from './services'
 import { dbInsert, dbGet, dbAll, dbWhere, dbUpdate, dbRemove, dbCount, dbClear, dbTables, isOp, OPS } from './db'
 // v1.473.0: свои файлы плагина и геймпады. Оба — то же разделение, что и
 // раньше: правила и хранение отдельно, ветка диспетчера здесь.
@@ -196,6 +196,16 @@ export interface HostContext {
    * два — значит позвать чужую функцию в своей песочнице, где её нет.
    */
   invokeIn?: (pluginId: string, ref: FnRef, args: unknown[]) => Promise<unknown>
+  /**
+   * Записать строку в журнал ЛЮБОГО плагина (v1.499.0).
+   *
+   * Нужно там, где один плагин задевает другого: например, забирает себе
+   * занятое имя команды. Раньше это было отказом, теперь — перехватом, и
+   * перехват обязан быть ВИДЕН обоим: у одного «команда стала твоей», у
+   * другого «команду забрал такой-то». Молчаливая подмена чужого поведения —
+   * ровно то, чего здесь быть не должно.
+   */
+  log?: (pluginId: string, level: 'log' | 'warn' | 'error', text: string) => void
 }
 
 /** Сколько ждём ответа от чужого сайта и сколько байт согласны принять. */
@@ -317,6 +327,16 @@ export function createDispatcher(
   const perms = plugin.manifest.permissions
 
   function need(p: Permission) {
+    // v1.499.0: у СВОИХ плагинов разрешений не спрашиваем.
+    //
+    // Плагин, собранный этим же человеком здесь же — в конструкторе или в
+    // мастерской, — его собственный код. Требовать от него объявить разрешение
+    // на то, что он сам только что написал, — чистая церемония: согласия у
+    // себя не спрашивают, а отказ выглядит как поломка приложения.
+    //
+    // Чужого плагина это не касается совсем: пометка ставится при установке
+    // тем, кто ставит, и в файле её подделать нечем.
+    if ((plugin as { authoredHere?: boolean }).authoredHere) return
     if (!perms.includes(p)) {
       throw new Denied(`Плагину «${plugin.manifest.name}» не выдано разрешение «${p}» — добавь его в @permissions.`)
     }
@@ -576,10 +596,20 @@ export function createDispatcher(
         if (!/^[\p{L}\p{N}][\p{L}\p{N}_-]*$/u.test(name)) {
           throw new Denied('Имя команды: буквы, цифры, дефис и подчёркивание — без пробелов.')
         }
+        // v1.499.0: занятое чужим имя больше НЕ отказ.
+        //
+        // Раньше здесь было «команда уже занята» — и плагин не работал по
+        // причине, от автора не зависящей: узнать заранее, какие имена занял
+        // чужой плагин, ему нечем. Теперь новая команда перебивает старую, а в
+        // журнале обоих это видно. Кто поставлен последним — того и имя.
         const owner = commandOwner(name)
-        // Команды глобальны: молча перехватить чужую — способ подменить поведение
-        // другого плагина, поэтому конфликт виден плагину сразу как ошибка.
-        if (owner && owner !== id) throw new Denied(`Команда /${name} уже занята другим плагином.`)
+        if (owner && owner !== id) {
+          dropCommand(name)
+          // Перехват ВИДЕН обоим: молчаливая подмена чужого поведения — это
+          // то, чего здесь быть не должно, даже когда отказов нет.
+          ctx.log?.(owner, 'warn', `Команду /${name} забрал плагин «${id}».`)
+          ctx.log?.(id, 'warn', `Команда /${name} была у плагина «${owner}» — теперь она твоя.`)
+        }
         addCommand({
           pluginId: id, name,
           description: str(объект ? o.description : args[1], 100, 'описание команды'),
@@ -1131,6 +1161,15 @@ export function createDispatcher(
           methods.set(String(k).slice(0, 60), v)
         }
         registerService(id, name, methods)
+        // Имя могло принадлежать другому плагину — теперь оно наше. Это не
+        // отказ, но и не тихая подмена: оба узнают об этом из своего журнала.
+        {
+          const был = takenFrom()
+          if (был) {
+            ctx.log?.(был, 'warn', `Службу «${name}» забрал плагин «${id}».`)
+            ctx.log?.(id, 'warn', `Служба «${name}» была у плагина «${был}» — теперь она твоя.`)
+          }
+        }
         return [...methods.keys()]
       }
       case 'services.unregister': {

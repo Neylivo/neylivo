@@ -445,6 +445,12 @@ export function clearPlugin(pluginId: string) {
 }
 
 /** Занято ли имя команды другим плагином — команды глобальны, дубли надо ловить. */
+/** Убрать команду у любого владельца. Нужно, когда её перебивает новый плагин. */
+export function dropCommand(name: string) {
+  reg.commands = reg.commands.filter(x => x.name !== name)
+  notify()
+}
+
 export function commandOwner(name: string): string | null {
   return reg.commands.find(c => c.name === name)?.pluginId ?? null
 }

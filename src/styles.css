@@ -7990,3 +7990,88 @@ body.no-anim .mus-blob.on { animation: none; }
   .ws-file { min-height: 52px; }
   .ws-file-acts button { min-width: 44px; min-height: 44px; }
 }
+
+/* ══ v1.498.0: визуальный редактор сцены ══════════════════════════════════════
+   Раскладка как в любом редакторе сцен: слева что есть, посередине вид,
+   справа свойства. Вид — самая широкая полоса: собирать сцену смотрят на неё,
+   а не на списки. */
+.ws-big {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left;
+  width: 100%; padding: 18px 20px; cursor: pointer; color: var(--tx);
+  border: 1px solid rgba(88, 101, 242, .55); border-radius: var(--r-lg, 12px);
+  background: linear-gradient(135deg, rgba(88, 101, 242, .16), rgba(88, 101, 242, .05));
+}
+.ws-big:hover { border-color: var(--brand); background: rgba(88, 101, 242, .2); }
+.ws-big-n { font-size: 17px; font-weight: 800; }
+.ws-big-h { font-size: 13px; color: var(--mut); line-height: 1.5; }
+
+.sc-grid {
+  display: grid; grid-template-columns: 236px minmax(0, 1fr) 268px;
+  gap: 12px; flex: 1; min-height: 460px;
+}
+.sc-tree, .sc-view, .sc-insp { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.sc-add { display: flex; flex-wrap: wrap; gap: 4px; }
+.sc-add .pqs2-btn { padding: 5px 8px; font-size: 12px; }
+.sc-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; min-height: 120px; }
+.sc-node {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; cursor: pointer;
+  border-radius: var(--r-sm, 8px); font-size: 13px;
+}
+.sc-node:hover { background: rgba(var(--ov, 255,255,255), .06); }
+.sc-node.on { background: var(--brand); color: #fff; }
+.sc-node.off { opacity: .45; }
+.sc-node-k {
+  flex: none; width: 20px; height: 20px; display: grid; place-items: center;
+  border-radius: 5px; background: rgba(var(--ov, 255,255,255), .12); font-size: 11px; font-weight: 800;
+}
+.sc-node-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-node-a { display: flex; gap: 1px; opacity: 0; }
+.sc-node:hover .sc-node-a, .sc-node.on .sc-node-a { opacity: 1; }
+.sc-node-a button {
+  border: 0; background: none; color: inherit; cursor: pointer; font-size: 12px;
+  padding: 2px 4px; border-radius: 4px; opacity: .75;
+}
+.sc-node-a button:hover { opacity: 1; background: rgba(var(--ov, 255,255,255), .18); }
+
+.sc-canvas {
+  flex: 1; min-height: 300px; width: 100%; display: block; background: #0e1116;
+  border: 1px solid rgba(var(--ov, 255,255,255), .12); border-radius: var(--r-md, 10px);
+}
+.sc-view-acts { display: flex; align-items: center; gap: 6px; }
+
+.sc-insp { overflow-y: auto; }
+.sc-empty { font-size: 12.5px; color: var(--mut); font-style: italic; padding: 6px 2px; }
+.sc-kind { font-size: 12px; color: var(--mut); margin: -2px 0 4px; }
+.sc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.sc-row .modal-in { max-width: 150px; }
+.sc-row b { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+.sc-vec { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--mut); }
+.sc-vec > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.sc-vec .modal-in { width: 100%; padding: 5px 6px; font-size: 12.5px; }
+.sc-world { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--mut); }
+.sc-world label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sc-chk { justify-content: flex-start !important; gap: 6px !important; }
+.sc-script {
+  min-height: 160px; resize: vertical; font: 12.5px/1.5 ui-monospace, Consolas, monospace;
+  background: var(--bg1, #1e1f22); color: var(--tx); tab-size: 2;
+  border: 1px solid rgba(var(--ov, 255,255,255), .1); border-radius: var(--r-sm, 8px); padding: 10px;
+}
+.sc-hint { font-size: 11.5px; color: var(--mut); line-height: 1.45; }
+.sc-hint code { background: rgba(var(--ov, 255,255,255), .1); padding: 1px 4px; border-radius: 4px; }
+.sc-console { margin-top: 10px; }
+
+@media (max-width: 900px) {
+  /* На узком экране три полосы превращаются в три огрызка. Ставим друг под
+     друга, вид первым: он самый нужный. */
+  .sc-grid { grid-template-columns: 1fr; min-height: 0; }
+  .sc-view { order: -1; }
+  .sc-canvas { min-height: 300px; }
+  .sc-list { max-height: 200px; }
+}
+@media (max-width: 768px) {
+  .sc-node { min-height: 44px; }
+  .sc-node-a { opacity: 1; }
+  .sc-node-a button { min-width: 40px; min-height: 40px; }
+  .sc-add .pqs2-btn { min-height: 44px; }
+  .ws-big { min-height: 44px; }
+}

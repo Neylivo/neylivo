@@ -129,6 +129,9 @@ export async function startPlugin(plugin: InstalledPlugin): Promise<void> {
     // v1.472.0: вызов метода службы выполняется в ЧУЖОМ плагине — том, кто её
     // предлагает. Поэтому отдельно от invoke, который зовёт обработчик своего.
     invokeIn: (pid, ref, a2) => invokePlugin(pid, ref, a2),
+    // v1.499.0: строка в журнал любого плагина. Нужна, когда один
+    // задевает другого — например, забирает занятое имя команды.
+    log: (pid, level, text) => { pluginLog(pid, level, text); notify() },
   }, ev => subs.add(ev))
   const sandbox = new PluginSandbox({
     onCall: dispatch,

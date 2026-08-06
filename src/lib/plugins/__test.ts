@@ -2093,14 +2093,17 @@ console.log('\n-- Окно с настоящей страницей (v1.490.0) -
       && cmp.includes('callFromFrame(app.pluginId')
   })
 
-  check('из страницы можно звать только объявленное', () => {
-    // Список короче, чем у потока, и это не забывчивость: всё, что отдаёт
-    // наружу функции обратного вызова, в рамке работало бы иначе.
-    if (!H.frameMethodAllowed('messages.send')) throw new Error('нельзя даже написать сообщение')
-    if (H.frameMethodAllowed('css')) throw new Error('css из рамки не должен проходить')
-    if (H.frameMethodAllowed('ui.getCanvas')) throw new Error('холст потока в рамке не имеет смысла')
-    return true
+  check('из страницы доступно всё то же, что из потока', () => {
+    // v1.499.0: список сняли. Возможность есть, разрешение есть, а вызов не
+    // проходил только потому, что зовут со страницы, а не из потока, — это был
+    // отказ ни за что. Разрешения при этом проверяет тот же диспетчер.
+    if (!H.frameMethodAllowed('messages.send')) throw new Error('простое сообщение не проходит')
+    if (!H.frameMethodAllowed('css')) throw new Error('css со страницы снова отказывает')
+    return H.frameMethodAllowed('что угодно')
   })
+
+  check('удобные имена у моста при этом остались', () =>
+    H.FRAME_METHODS.includes('messages.send') && H.FRAME_METHODS.includes('libs.get'))
 
   check('мост рамки вообще разбирается как код', () => {
     // Ловушка, на которой я попался ДВАЖДЫ подряд: мост живёт внутри шаблонной
@@ -2362,6 +2365,76 @@ function onLoad(ponoi) { return ponoi.apps.create({ html: СТРАНИЦА }) }
     return m[1].includes('allow-scripts')
   })
 }
+console.log('\n-- Отказов, мешающих автору, больше нет (v1.499.0) --')
+{
+  const M = await import('./manifest')
+  const шапка = (perm?: string) => `/**
+ * @name Проба
+ * @id proba-otkaz
+ * @version 1.0.0
+ * @author я
+ * @description проба
+` + (perm === undefined ? '' : ' * @permissions ' + perm + '\n') + ` */
+function onLoad(ponoi) {}
+`
+
+  check('забыл @permissions — получил ВСЕ, а не ничего', () => {
+    // Раньше пустой список значил «ничего нельзя», и правильный код падал на
+    // первом же вызове из-за забытой строки в шапке.
+    const m = M.parsePlugin(шапка())
+    return m.permissions.length === ALL_PERMISSIONS.length
+  })
+
+  check('«none» — это осознанное ничего', () => {
+    // Так пишет конструктор, когда человек не выбрал ни одного разрешения.
+    // Иначе его «ничего» молча превратилось бы во «всё».
+    const m = M.parsePlugin(шапка('none'))
+    return m.permissions.length === 0
+  })
+
+  check('выбранный список по-прежнему действует', () => {
+    const m = M.parsePlugin(шапка('commands, notify'))
+    return m.permissions.length === 2 && m.permissions.includes('commands')
+  })
+
+  check('net без @hosts больше не роняет установку', () => {
+    // Последнее место, где забытая строка в шапке не давала плагину даже
+    // поставиться. Сеть от этого не открывается: доменов нет, идти некуда.
+    const m = M.parsePlugin(шапка('net'))
+    return m.permissions.includes('net') && m.hosts.length === 0
+  })
+
+  check('конструктор всегда пишет строку разрешений', () => {
+    const src = readFileSync('src/lib/plugins/editorDraft.ts', 'utf8')
+    return src.includes("@permissions none")
+  })
+
+  check('свой плагин не спрашивает разрешений', () => {
+    // Согласия у себя не спрашивают: код собран этим же человеком здесь же.
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    return /authoredHere\b[^\n]*\)\s*return/.test(src)
+  })
+
+  check('занятое чужим имя команды не роняет плагин', () => {
+    const src = readFileSync('src/lib/plugins/api.ts', 'utf8')
+    if (/Команда \/\$\{name\} уже занята/.test(src)) throw new Error('отказ вернулся')
+    return src.includes('dropCommand(name)')
+  })
+
+  check('занятое имя службы — тоже', () => {
+    const src = readFileSync('src/lib/plugins/services.ts', 'utf8')
+    if (/уже занята другим плагином/.test(src)) throw new Error('отказ вернулся')
+    return true
+  })
+
+  // ── Что НЕ убрано и почему ───────────────────────────────────────────────
+  check('опечатка в имени по-прежнему ошибка, а не тишина', () => {
+    // Это не ограничение, а помощь: молчащий обработчик автор ищет часами, а
+    // «неизвестное событие» он чинит за секунду.
+    try { M.parsePlugin(шапка('такого-разрешения-нет')); return false } catch { return true }
+  })
+}
+
 console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')
