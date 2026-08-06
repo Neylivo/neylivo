@@ -114,6 +114,45 @@ if (rcedit) {
 беги('npx', ['electron-builder', '--win', 'nsis', '--prepackaged', 'release/win-unpacked',
   '-c.win.signAndEditExecutable=false'])
 
+const файлы0 = () => path.join(ВЫХОД, readdirSync(ВЫХОД).filter(f => /^Ponoi-Setup-.*\.exe$/.test(f))[0])
+
+шаг('Окно установщика помещается на экран')
+// Владелец прислал снимок: мастер открылся так, что кнопки «Готово» не видно —
+// она ушла под нижний край, и установку было не завершить. Замер тогда дал
+// окно 503x390 в точке 778,783 при рабочей области 1920x1032.
+//
+// Проверяется НЕ текст скрипта установщика, а само окно: запускаем собранный
+// установщик, меряем его прямоугольник и закрываем, ничего не устанавливая.
+// Проверка «в installer.nsh есть нужная строка» прошла бы и на той версии, где
+// строка есть, а окно всё равно уезжает.
+{
+  const ps = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$sig = 'using System;using System.Runtime.InteropServices;public class WW{[DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr h, out RECT r);public struct RECT{public int L,T,R,B;}}'",
+    "Add-Type -TypeDefinition $sig",
+    "Start-Process '" + файлы0() + "'",
+    "Start-Sleep -Seconds 6",
+    "$p = Get-Process | Where-Object { $_.ProcessName -like '*Setup*' -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1",
+    "if (-not $p) { Write-Output 'НЕТОКНА'; exit }",
+    "$r = New-Object WW+RECT; [WW]::GetWindowRect($p.MainWindowHandle, [ref]$r) | Out-Null",
+    "$wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea",
+    "Write-Output ($r.L.ToString() + ' ' + $r.T + ' ' + $r.R + ' ' + $r.B + ' ' + $wa.Left + ' ' + $wa.Top + ' ' + $wa.Right + ' ' + $wa.Bottom)",
+    "Stop-Process -Id $p.Id -Force",
+  ].join('; ')
+  const из = execFileSync('powershell', ['-NoProfile', '-Command', ps], { cwd: КОРЕНЬ, encoding: 'utf8' }).trim()
+  const хвост = из.split(/\r?\n/).filter(Boolean).pop() || ''
+  if (хвост === 'НЕТОКНА') {
+    console.log('  окно установщика не появилось — проверить нечем, пропускаю')
+  } else {
+    const [l, t, r, b, wl, wt, wr, wb] = хвост.split(/\s+/).map(Number)
+    console.log('  окно ' + l + ',' + t + '..' + r + ',' + b + ' при рабочей области ' + wr + 'x' + wb)
+    if (!(l >= wl && t >= wt && r <= wr && b <= wb)) {
+      throw new Error('окно установщика вылезает за экран — кнопок будет не видно')
+    }
+    console.log('  помещается целиком')
+  }
+}
+
 шаг('Итог')
 const файлы = readdirSync(ВЫХОД)
   .filter(f => f.endsWith('.exe'))
