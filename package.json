@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.494.0",
+  "version": "1.495.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -40,7 +40,8 @@
     "test:mobback": "esbuild src/lib/plugins/__mobback_test.tsx --bundle --format=iife --jsx=automatic --outfile=dist-mobback-test/t.js --define:import.meta.env={\\\"VITE_SUPABASE_URL\\\":\\\"https://example.supabase.co\\\",\\\"VITE_SUPABASE_ANON_KEY\\\":\\\"test\\\"} && electron scripts/mobback-test.cjs",
     "gen-libs": "node scripts/gen-libs.mjs",
     "test:sheet": "electron scripts/sheet-test.cjs",
-    "test:speak": "esbuild src/lib/__speak_test.ts --bundle --format=iife --outfile=dist-speak-test/t.js && electron scripts/speak-test.cjs"
+    "test:speak": "esbuild src/lib/__speak_test.ts --bundle --format=iife --outfile=dist-speak-test/t.js && electron scripts/speak-test.cjs",
+    "test:mobile": "npm run build && electron scripts/mobile-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

@@ -3617,7 +3617,12 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-hint { color:var(--mut); font-size:12.5px; margin-top:8px; line-height:1.5; }
 .pqs2-divider { height:1px; background:rgba(var(--ov, 255,255,255),.08); margin:26px 0; }
 @media (max-width: 900px) {
-  .pqs2 { width:100vw; height:100vh; border-radius:0; }
+  /* v1.495.0: было 100vw/100vh. На телефоне это мимо цели дважды: 100vw
+     считается ОТ ЭКРАНА и лезет под боковой вырез, а 100vh — от «идеального»
+     экрана без панели браузера, и низ уходит под неё. Ниже в мобильном блоке
+     уже стояло 100%/100%, то есть это правило было мёртвым — но читающий его
+     решил бы, что приложение так и меряет. */
+  .pqs2 { width:100%; height:100%; border-radius:0; }
   .pqs2-side { width:230px; }
   .pqs2-inner { padding:24px 20px 120px; }
 }
@@ -4453,7 +4458,10 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .ctxmenu {
     left: 0 !important; right: 0 !important; top: auto !important;
     bottom: 0 !important; transform: none !important;
-    min-width: 0; width: 100vw; max-height: 65vh; overflow-y: auto;
+    /* v1.495.0: ширину задают left:0/right:0 — они считаются от ОБОЛОЧКИ и
+       уважают боковой вырез. 100vw считался от экрана и перешагивал его.
+       Ровно та же ловушка, из-за которой переписка уезжала под вырез. */
+    min-width: 0; width: auto; max-height: 65vh; overflow-y: auto;
     border-radius:var(--r-2xl) var(--r-2xl) 0 0; border: none;
     padding: 6px 10px calc(12px + env(safe-area-inset-bottom));
     box-shadow: 0 -12px 40px rgba(0,0,0,.55);
@@ -4491,6 +4499,10 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
   .pqs-optrow > :first-child { min-width: 0; }
   .pqs-optrow > :last-child { flex: none; display: flex; align-items: center; min-height: 40px; }
   .pqs2-x, .mob-burger { min-width: 42px; min-height: 42px; }
+  /* v1.495.0: кнопка в шапке плеера была 38 пикселей — мимо пальца.
+     Найдено разбором мобильных правил: высота задана числом, и число меньше
+     пальца. */
+  .mus2-topr button { min-height: 44px; min-width: 44px; }
   .rx { min-height: 30px; }
 
   /* 6. Учёт вырезов экрана в альбомной ориентации и по бокам.
@@ -6858,7 +6870,9 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   .c2-name { font-size: 13px; }
 
   /* ── Лайтбокс: картинка во весь экран и кнопки не у самого края ───────── */
-  .lightbox img { max-width: 100vw; max-height: 76vh; border-radius: 0; }
+  /* v1.495.0: 100vw — от экрана, мимо бокового выреза. Картинка уезжала под
+     него краем. Проценты считаются от родителя, который вырез уважает. */
+  .lightbox img { max-width: 100%; max-height: 76vh; border-radius: 0; }
   .lightbox-bar {
     bottom: calc(14px + env(safe-area-inset-bottom)); gap: 10px;
     left: 8px; right: 8px; transform: none; justify-content: center;
@@ -7542,7 +7556,9 @@ body.no-anim .mus-blob.on { animation: none; }
 @media (max-width: 768px) {
   .pqs-theme-save { flex-direction: column; }
   .pqs-theme-save .pqs-save { min-height: 40px; }
-  .pqs-theme-row button { min-height: 36px; }
+  /* v1.495.0: было 36 — меньше пальца. Кнопок в ряду темы две («Выбрать» и
+     «Убрать»), и промах по «Убрать» стоит темы. */
+  .pqs-theme-row button { min-height: 44px; }
 }
 
 /* v1.461.0: гифки и эмодзи — одного размера.
