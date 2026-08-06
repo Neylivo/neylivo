@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { humanText } from '../lib/humanFail'
 import { isComposingKey } from '../lib/sendKey'
 import { Icon } from './icons'
 import {
@@ -37,7 +38,7 @@ export function EmergencyChat({ onClose }: { onClose: () => void }) {
     try {
       const u = mode === 'register' ? await ecRegister(nameIn.trim(), pass) : await ecLogin(nameIn.trim(), pass)
       setUsername(u)
-    } catch (e: any) { setErr(e.message ?? String(e)) }
+    } catch (e: any) { setErr(humanText(e)) }
     finally { setBusy(false) }
   }
 
@@ -45,7 +46,7 @@ export function EmergencyChat({ onClose }: { onClose: () => void }) {
     const t = text.trim()
     if (!t) return
     setText('')
-    try { await ecSendMessage(t) } catch (e: any) { setErr(e.message ?? String(e)) }
+    try { await ecSendMessage(t) } catch (e: any) { setErr(humanText(e)) }
   }
 
   return (

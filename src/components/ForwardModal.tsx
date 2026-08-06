@@ -3,7 +3,7 @@ import { isComposingKey } from '../lib/sendKey'
 import { supabase } from '../lib/supabase'
 import { openThread } from '../lib/friends'
 import { myServers } from '../lib/servers'
-import { fwdMark, parseFwd } from '../lib/fwd'
+import { fwdMark, parseFwd, fwdTitle, fwdDone } from '../lib/fwd'
 import { Avatar } from './Avatar'
 import { Icon } from './icons'
 import { toastOk, toastErr } from '../lib/toast'
@@ -24,8 +24,20 @@ type Target =
 
 // Модалка «Переслать сообщение» (как в Discord): поиск, мульти-выбор среди
 // ЛС и каналов серверов, необязательный комментарий отдельным сообщением.
-export function ForwardModal({ src, meId, meName, onClose }:
-  { src: FwdSource; meId: string; meName: string; onClose: () => void }) {
+export function ForwardModal({ src, meId, meName, onClose }: {
+  /**
+   * v1.508.0: пересылать можно и пачку.
+   *
+   * Владелец: «при выборе сообщений кроме удаления можно ещё и переслать».
+   * Режим выбора уже был — он умел только удалять, и то лишь своё. Пересылать
+   * можно ЛЮБОЕ выбранное: чтобы переслать чужое сообщение, прав не нужно.
+   *
+   * Порядок сохраняется: пересылка десяти сообщений выглядит у получателя так
+   * же, как разговор шёл у отправителя, а не наоборот.
+   */
+  src: FwdSource | FwdSource[]
+  meId: string; meName: string; onClose: () => void
+}) {
   const [q, setQ] = useState('')
   const [friends, setFriends] = useState<{ id: string; name: string }[]>([])
   const [servers, setServers] = useState<Server[]>([])
@@ -72,36 +84,53 @@ export function ForwardModal({ src, meId, meName, onClose }:
   }
 
   const count = Object.keys(sel).length
+  const письма = Array.isArray(src) ? src : [src]
+  const первое = письма[0]
   // Пересылаем всегда оригинал: если сообщение само было пересылкой — берём исходник.
-  const inner = parseFwd(src.content)
-  const prevText = (inner ? inner.text : src.content) || (src.attach_url ? 'Вложение' : '')
-  const origAuthor = inner ? inner.author : src.author_name
+  const inner = первое ? parseFwd(первое.content) : null
+  const prevText = (inner ? inner.text : первое?.content) || (первое?.attach_url ? 'Вложение' : '')
+  const origAuthor = inner ? inner.author : (первое?.author_name ?? '')
 
   async function send() {
-    if (!count || busy) return
+    if (!count || busy || !письма.length) return
     setBusy(true)
-    const text = fwdMark(inner ? inner.author : src.author_name,
-      inner ? inner.at : src.created_at, inner ? inner.text : (src.content ?? ''))
     const c = comment.trim()
+    // Каждое письмо превращается в свою строку пересылки. Оригинал берётся
+    // тот же, что и в предпросмотре: сообщение, само бывшее пересылкой,
+    // пересылается от ПЕРВОГО автора, а не от того, кто переслал раньше.
+    const строки = письма.map(м => {
+      const в = parseFwd(м.content)
+      return {
+        text: fwdMark(в ? в.author : м.author_name, в ? в.at : м.created_at, в ? в.text : (м.content ?? '')),
+        attach_url: м.attach_url ?? null,
+        attach_type: м.attach_type ?? null,
+      }
+    })
     try {
       for (const t of Object.values(sel)) {
         if (t.kind === 'dm') {
           const th = await openThread(meId, t.id)
           if (!th) throw new Error('Не удалось открыть диалог')
           const base = { thread_id: th.id, author: meId, author_name: meName }
-          const { error } = await supabase.from('dm_messages').insert({ ...base, content: text, attach_url: src.attach_url ?? null, attach_type: src.attach_type ?? null })
-          if (error) throw error
+          // По одному и по порядку: разговор у получателя должен читаться так
+          // же, как он шёл у отправителя.
+          for (const стр of строки) {
+            const { error } = await supabase.from('dm_messages').insert({ ...base, content: стр.text, attach_url: стр.attach_url, attach_type: стр.attach_type })
+            if (error) throw error
+          }
           if (c) await supabase.from('dm_messages').insert({ ...base, content: c })
         } else {
           const base = { channel_id: t.id, author: meId, author_name: meName }
-          const { error } = await supabase.from('messages').insert({ ...base, content: text, attach_url: src.attach_url ?? null, attach_type: src.attach_type ?? null })
-          if (error) throw error
+          for (const стр of строки) {
+            const { error } = await supabase.from('messages').insert({ ...base, content: стр.text, attach_url: стр.attach_url, attach_type: стр.attach_type })
+            if (error) throw error
+          }
           if (c) await supabase.from('messages').insert({ ...base, content: c })
         }
       }
-      toastOk(count === 1 ? 'Переслано' : 'Переслано (' + count + ')')
+      toastOk(fwdDone(письма.length, count))
       onClose()
-    } catch (e: any) { toastErr(e?.message ?? 'Не удалось переслать') }
+    } catch (e) { toastErr(e) }
     finally { setBusy(false) }
   }
 
@@ -109,8 +138,9 @@ export function ForwardModal({ src, meId, meName, onClose }:
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal fwd-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={16} /></button>
-        <div className="modal-title">Переслать сообщение</div>
-        <div className="fwd-prev"><b>{origAuthor}:</b> {prevText.length > 120 ? prevText.slice(0, 120) + '…' : prevText}</div>
+        <div className="modal-title">{fwdTitle(письма.length)}</div>
+        <div className="fwd-prev"><b>{origAuthor}:</b> {prevText.length > 120 ? prevText.slice(0, 120) + '…' : prevText}
+          {письма.length > 1 && <span className="fwd-more"> и ещё {письма.length - 1}</span>}</div>
         <input className="modal-in" placeholder="Поиск: друг, канал или сервер" value={q} autoFocus onChange={e => setQ(e.target.value)} />
         <div className="fwd-list">
           {fFriends.length > 0 && <div className="fwd-sect">Личные сообщения</div>}

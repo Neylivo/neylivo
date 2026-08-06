@@ -7,6 +7,7 @@
 // вложения там работают, дублировать их не пришлось. Здесь только список,
 // сортировка, теги и создание обсуждения.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { humanText } from '../lib/humanFail'
 import { supabase } from '../lib/supabase'
 import { toastErr, toastOk } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
@@ -86,7 +87,7 @@ export function ForumView({
     if (!silent) setLoading(true)
     fetchForumPosts(forChannel, sort)
       .then(list => { if (my !== seq.current) return; setPosts(list); setErr(null) })
-      .catch(e => { if (my === seq.current) setErr(e.message ?? String(e)) })
+      .catch(e => { if (my === seq.current) setErr(humanText(e)) })
       .finally(() => { if (my === seq.current) setLoading(false) })
   }
 

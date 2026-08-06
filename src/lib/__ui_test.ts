@@ -36,6 +36,8 @@ import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLa
 import { keepAliveAction, parseMediaKey, mediaSeeked } from './keepAlive'
 import { msgTime, dayLabel, daysAgo, setTime24 } from './ui'
 import { panelFor, panelTitle } from './activityPanel'
+import { humanFail, humanText } from './humanFail'
+import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
@@ -1815,6 +1817,105 @@ check('проверка ловит просьбу о разрешении на �
   // Спросить у того, кто ничего не включал, — значит получить отказ навсегда.
   ka({ playing: false, allowed: false, hidden: true }) !== 'ask'
   && ka({ allowed: false, hidden: false }) !== 'ask')
+
+
+// -- v1.508.0: пересылка выбранных сообщений ---------------------------------
+//
+// Владелец: «при выборе сообщений кроме удаления можно ещё и переслать». Режим
+// выбора умел только удалять, и то лишь своё.
+//
+// Числа здесь расходятся легче всего: выбрано пять сообщений, отмечено три
+// получателя — и в заголовке, на кнопке и в ответе стоят РАЗНЫЕ числа, каждое
+// про своё. Поэтому их считает одна функция, а не три места по-своему.
+console.log('\n-- Пересылка выбранного --')
+
+check('одно сообщение — заголовок без числа', () => fwdTitle(1) === 'Переслать сообщение')
+check('несколько — с числом и правильным окончанием', () =>
+  fwdTitle(2) === 'Переслать 2 сообщения' && fwdTitle(5) === 'Переслать 5 сообщений'
+  && fwdTitle(21) === 'Переслать 21 сообщение' && fwdTitle(11) === 'Переслать 11 сообщений')
+check('окончания считаются по правилам русского', () =>
+  ruMessages(1) === 'сообщение' && ruMessages(3) === 'сообщения' && ruMessages(7) === 'сообщений'
+  && ruMessages(12) === 'сообщений' && ruMessages(112) === 'сообщений' && ruMessages(101) === 'сообщение')
+check('ответ говорит, сколько ушло и скольким', () =>
+  fwdDone(1, 1) === 'Переслано сообщение'
+  && fwdDone(5, 1) === 'Переслано 5 сообщений'
+  && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
+check('число писем и число адресатов не путаются местами', () =>
+  fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.508.0: наружу не идёт то, чего человеку знать не надо ----------------
+//
+// Владелец: «убрать из приложения лишние данные, которые не надо знать
+// пользователям». Вылезало два вида: указания владельцу базы («примени миграцию
+// supabase/29_channels_update_policy.sql» — таких строк было два десятка) и
+// отказы базы как есть («new row violates row-level security policy…» — таких
+// мест больше восьмидесяти).
+//
+// Чинится не сто мест, а путь, по которому отказ доходит до экрана: иначе
+// каждый новый toastErr(error.message) вернул бы всё назад.
+console.log('\n-- Отказы по-человечески --')
+
+check('отказ базы в правах — человеку про права, а не про политику таблицы', () => {
+  const r = humanFail('new row violates row-level security policy for table "channels"')
+  return r.видно === 'Не хватает прав на это действие'
+    && !r.видно.includes('row-level') && !r.видно.includes('channels')
+})
+check('повтор — «такое уже есть», а не «duplicate key»', () =>
+  humanText('duplicate key value violates unique constraint "servers_name_key"') === 'Такое уже есть')
+check('нет столбца — «сейчас это не сохраняется»', () =>
+  humanText('column "icon_url" does not exist') === 'Сейчас это не сохраняется'
+  && humanText('Could not find the table in the schema cache (PGRST205)') === 'Сейчас это не сохраняется')
+check('устаревший сеанс говорит, что делать', () =>
+  humanText('JWT expired') === 'Сеанс устарел — войди заново')
+check('нет сети — так и сказано', () =>
+  humanText('TypeError: Failed to fetch') === 'Нет связи с сервером'
+  && humanText('NetworkError when attempting to fetch resource') === 'Нет связи с сервером')
+
+check('имя внутреннего файла базы не показывается никогда', () => {
+  const примеры = [
+    'Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql',
+    'Права ролей по каналу не сохранены — примени миграцию supabase/103_channel_perms.sql',
+    'Сначала примени миграцию supabase/34_permissions.sql в Supabase SQL Editor',
+    'Имя сохранено. Для остальных настроек примени миграцию supabase/17_server_settings.sql',
+  ]
+  return примеры.every(t => {
+    const r = humanFail(t)
+    return !/supabase\//i.test(r.видно) && !/\.sql/i.test(r.видно) && !/миграци/i.test(r.видно)
+  })
+})
+check('но ЧТО не вышло — остаётся', () =>
+  humanText('Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql') === 'Канал не удалился'
+  && humanText('Права ролей по каналу не сохранены — примени миграцию supabase/103_channel_perms.sql')
+    === 'Права ролей по каналу не сохранены')
+check('от строки, где кроме указания ничего нет, остаётся понятное', () =>
+  humanText('Примени миграцию supabase/17_server_settings.sql') === 'Не получилось')
+
+check('человеческий отказ проходит как есть', () =>
+  humanText('Сообщение слишком длинное — максимум 4000 символов')
+    === 'Сообщение слишком длинное — максимум 4000 символов')
+check('пустой отказ не оставляет человека без слов', () =>
+  humanText('') === 'Не получилось' && humanText(null) === 'Не получилось'
+  && humanText(undefined) === 'Не получилось')
+check('ошибка приходит и объектом, не только строкой', () =>
+  humanText(new Error('duplicate key value violates unique constraint')) === 'Такое уже есть')
+
+check('спрятанное не теряется — оно уходит в консоль', () => {
+  const r = humanFail('new row violates row-level security policy for table "channels"')
+  return r.спрятано.includes('row-level security') && r.спрятано.includes('channels')
+})
+check('у человеческого отказа прятать нечего', () =>
+  humanFail('Сообщение слишком длинное').спрятано === '')
+
+console.log('\n-- Ломаем нарочно (отказы) --')
+check('проверка ловит возврат отказа базы на экран', () => {
+  const плохо = 'new row violates row-level security policy for table "channels"'
+  return плохо !== humanText(плохо)
+})
+check('проверка ловит возврат имени файла базы', () => {
+  const плохо = 'Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql'
+  return плохо !== humanText(плохо) && !humanText(плохо).includes('supabase/')
+})
 
 
 // -- v1.505.0: нажатие на активность открывает панель игры --------------------

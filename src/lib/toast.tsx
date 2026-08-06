@@ -1,5 +1,6 @@
 import { Portal } from '../components/Portal'
 import { useEffect, useState } from 'react'
+import { humanFail } from './humanFail'
 
 // Красивые тосты вместо системных alert(): всплывают справа внизу и сами исчезают.
 export type ToastKind = 'info' | 'ok' | 'error'
@@ -10,7 +11,24 @@ export function toast(msg: string, kind: ToastKind = 'info') {
   window.dispatchEvent(new CustomEvent('ponoi-toast', { detail: { id: seq++, msg: String(msg), kind } }))
 }
 export const toastOk = (msg: string) => toast(msg, 'ok')
-export const toastErr = (msg: string) => toast(msg, 'error')
+
+/**
+ * v1.508.0: отказ человеку — по-человечески.
+ *
+ * Через эту одну строчку проходят все отказы приложения, поэтому здесь и стоит
+ * очистка: раньше сюда лилось «new row violates row-level security policy for
+ * table "channels"» и «примени миграцию supabase/29_channels_update_policy.sql»
+ * — текст для того, кто пишет запросы и держит базу, а не для того, кто нажал
+ * кнопку.
+ *
+ * Подробности не выбрасываются: они уходят в консоль. Чинить следующую поломку
+ * вслепую было бы дороже, чем показать пару строк в консоли.
+ */
+export const toastErr = (msg: unknown) => {
+  const { видно, спрятано } = humanFail(msg)
+  if (спрятано) console.warn('[ponoi] отказ:', спрятано)
+  toast(видно, 'error')
+}
 
 const ICONS: Record<ToastKind, string> = { info: 'ℹ️', ok: '✅', error: '⚠️' }
 

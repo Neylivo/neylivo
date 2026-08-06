@@ -1302,6 +1302,8 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       if (res.ok) setMessages(ms => ms.filter(m => m.id !== id))
       return res.ok
     },
+    // Пересылать можно любое выбранное — на чужое сообщение прав не нужно.
+    { meId, meName: username },
   )
 
   async function removeMsg(id: string, skipConfirm?: boolean) {

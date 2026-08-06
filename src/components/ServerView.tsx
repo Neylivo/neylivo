@@ -1244,6 +1244,8 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       if (res.ok) setMessages(ms => ms.filter(m => m.id !== id))
       return res.ok
     },
+    // Пересылать можно любое выбранное — на чужое сообщение прав не нужно.
+    { meId: user?.id ?? '', meName: username },
   )
 
   async function removeMsg(id: string, skipConfirm?: boolean) {

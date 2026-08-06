@@ -8193,3 +8193,15 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 
 /* Строка фактов об игре в панели прохождения: часы, последний запуск, размер. */
 .cmp-facts { color: var(--mut); font-size: 12.5px; margin-top: 2px; }
+
+/* v1.508.0: «Переслать» рядом с «Удалить» в полосе выбора. Кнопка обычная, а не
+   красная: пересылка ничего не разрушает, и путать её с удалением нельзя. */
+.bulk-fwd { display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer;
+  border-radius: var(--r-sm); padding: 8px 14px; font-weight: 700; font-size: 14px;
+  background: var(--c-hover); color: var(--tx); }
+.bulk-fwd:disabled { opacity: .5; cursor: default; }
+.bulk-fwd:hover:not(:disabled) { filter: brightness(1.14); }
+.fwd-more { color: var(--mut); }
+@media (max-width: 768px) {
+  .bulk-fwd { padding: 10px 12px; min-height: 44px; }
+}

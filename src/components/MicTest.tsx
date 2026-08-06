@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { humanText } from '../lib/humanFail'
 import { Icon } from './icons'
 
 // Список устройств берём напрямую у браузера, а НЕ через getLocalDevices из
@@ -255,7 +256,7 @@ export function CameraTest() {
       // ref ещё пуст и картинки не будет.
       requestAnimationFrame(() => { if (videoRef.current) videoRef.current.srcObject = stream })
     } catch (e: any) {
-      setErr(e?.name === 'NotAllowedError' ? 'Браузер не дал доступ к камере.' : (e?.message ?? String(e)))
+      setErr(e?.name === 'NotAllowedError' ? 'Браузер не дал доступ к камере.' : humanText(e))
       stop()
     }
   }

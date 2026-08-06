@@ -8,6 +8,7 @@
 // (см. lib/campaign.ts — там же сказано, почему автоматического источника для
 // одиночных игр не существует). Приложение считает и показывает.
 import { useEffect, useMemo, useState } from 'react'
+import { humanText } from '../lib/humanFail'
 import { Icon } from './icons'
 import { Portal } from './Portal'
 import { useBackClose } from '../lib/mobileBack'
@@ -83,7 +84,7 @@ export function CampaignModal({ game, isMe, steamId, appId, shared, onClose }: {
       await askAi(ai, flowPrompt(game, узлы, q), piece => { acc += piece; setОтвет(acc) })
       if (!acc) setErr('Сервис ответил пустотой — попробуй ещё раз или другую модель')
     } catch (e: any) {
-      setErr(e?.message ?? String(e))
+      setErr(humanText(e))
     } finally { setBusy(false) }
   }
 

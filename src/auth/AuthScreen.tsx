@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { humanText } from '../lib/humanFail'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
 import authBg from '../assets/auth-bg.jpg'
@@ -87,7 +88,7 @@ export function AuthScreen() {
       localStorage.setItem('ponoi_username', finalName)
       await supabase.from('profiles').upsert({ id: data.user.id, username: finalName, display_name: finalName })
     } catch (e: any) {
-      setErr(e?.message ?? String(e))
+      setErr(humanText(e))
     } finally { setBusy(false) }
   }
 
