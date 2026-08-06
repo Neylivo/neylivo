@@ -32,5 +32,6 @@ dist-api-test/
 dist-play-test/
 dist-mobback-test/
 dist-sheet-test/
+dist-speak-test/
 scripts/api-test-certs/
 dist-bench/

@@ -16,6 +16,11 @@ import { Avatar } from './Avatar'
 import { Icon } from './icons'
 import { GameProgressList } from './GameProgressList'
 import { comboFromEvent, isComboComplete } from '../lib/keybind'
+import {
+  SPEECH_KEY, SPEECH_DEFAULT, SPEECH_PRESETS, RATE_MIN, RATE_MAX, PITCH_MIN, PITCH_MAX,
+  readSpeech, presetOf, groupVoices, loadVoices, speak, stopSpeaking,
+  type SpeechSettings, type VoiceLike,
+} from '../lib/speech'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
 import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
@@ -299,6 +304,23 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
   const ringtoneRef = useRef<HTMLInputElement>(null)
   const ringbackRef = useRef<HTMLInputElement>(null)
   const [soundBusy, setSoundBusy] = useState<string | null>(null)
+
+  // v1.494.0: свой голос для озвучки сообщений.
+  //
+  // Голоса берутся у системы и приезжают НЕ СРАЗУ — в браузере список часто
+  // пуст при первом вопросе и приходит событием. Поэтому обещанием, а не
+  // прямым вызовом: иначе человек видел бы «голосов нет» на ровном месте.
+  const [речь, setРечь] = useState<SpeechSettings>(() => readSpeech(localStorage.getItem(SPEECH_KEY)))
+  const [голоса, setГолоса] = useState<VoiceLike[]>([])
+  useEffect(() => { void loadVoices().then(setГолоса) }, [])
+  const сохранитьРечь = (s: SpeechSettings) => {
+    setРечь(s)
+    try { localStorage.setItem(SPEECH_KEY, JSON.stringify(s)) } catch { /* переполнено */ }
+  }
+  const пробаРечи = (s: SpeechSettings) => {
+    void speak(s.sayAuthor ? 'Ваня говорит, привет! Так это звучит.' : 'Привет! Так это звучит.',
+      { ...s, sayAuthor: false })
+  }
   const SOUND_SET: Record<string, (v: string) => void> = { notifSoundUrl: setNotifSoundUrl, ringtoneUrl: setRingtoneUrl, ringbackUrl: setRingbackUrl }
   async function pickSound(key: 'notifSoundUrl' | 'ringtoneUrl' | 'ringbackUrl', e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !user) return
@@ -1278,6 +1300,82 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                     </div>
                   </div>
                 ))}
+              </>}
+
+              {cat === 'sounds' && <>
+                {/* v1.494.0: озвучка сообщений. Стоит рядом со звуками
+                    приложения намеренно: это тоже «как Ponoi звучит». */}
+                <div className="pqs-sec-t" style={{ marginTop: 20 }}>Озвучка сообщений</div>
+                <div className="pqs-code-sub" style={{ marginBottom: 10 }}>
+                  Каким голосом читать сообщение по пункту «Зачитать» в его меню.
+                  Список берётся из системы — всё, что у тебя установлено, будет здесь.
+                </div>
+
+                <div className="pqs-acc-card2">
+                  <div className="pqs2-optrow">
+                    <div><div className="pqs-optt">Голос</div>
+                      <div className="pqs-optd">{голоса.length
+                        ? 'Найдено голосов: ' + голоса.length
+                        : 'Система пока не отдала список голосов'}</div></div>
+                    <select className="modal-in" style={{ maxWidth: 260 }} value={речь.voice}
+                      onChange={e => { const s = { ...речь, voice: e.target.value }; сохранитьРечь(s); пробаРечи(s) }}>
+                      <option value="">Как выберет система</option>
+                      {groupVoices(голоса).map(г => (
+                        <optgroup key={г.lang} label={г.lang.toUpperCase()}>
+                          {г.voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="pqs-optt" style={{ marginTop: 12 }}>Готовые голоса</div>
+                  <div className="pqs-optd">Скорость и высота разом. Нажми — сразу услышишь.</div>
+                  <div className="sp-presets">
+                    {SPEECH_PRESETS.map(п => (
+                      <button key={п.id} title={п.hint}
+                        className={'pqs2-btn ghost' + (presetOf(речь) === п.id ? ' on' : '')}
+                        onClick={() => { const s = { ...речь, rate: п.rate, pitch: п.pitch }; сохранитьРечь(s); пробаРечи(s) }}>
+                        {п.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pqs2-optrow" style={{ marginTop: 12 }}>
+                    <div><div className="pqs-optt">Скорость</div><div className="pqs-optd">{речь.rate.toFixed(2)}×</div></div>
+                    <input type="range" min={RATE_MIN} max={RATE_MAX} step={0.05} value={речь.rate}
+                      onChange={e => сохранитьРечь({ ...речь, rate: Number(e.target.value) })}
+                      onMouseUp={() => пробаРечи(речь)} onTouchEnd={() => пробаРечи(речь)} />
+                  </div>
+                  <div className="pqs2-optrow">
+                    <div><div className="pqs-optt">Высота</div><div className="pqs-optd">{речь.pitch.toFixed(2)}</div></div>
+                    <input type="range" min={PITCH_MIN} max={PITCH_MAX} step={0.05} value={речь.pitch}
+                      onChange={e => сохранитьРечь({ ...речь, pitch: Number(e.target.value) })}
+                      onMouseUp={() => пробаРечи(речь)} onTouchEnd={() => пробаРечи(речь)} />
+                  </div>
+                  <div className="pqs2-optrow">
+                    <div><div className="pqs-optt">Громкость</div><div className="pqs-optd">{Math.round(речь.volume * 100)}%</div></div>
+                    <input type="range" min={0} max={1} step={0.05} value={речь.volume}
+                      onChange={e => сохранитьРечь({ ...речь, volume: Number(e.target.value) })}
+                      onMouseUp={() => пробаРечи(речь)} onTouchEnd={() => пробаРечи(речь)} />
+                  </div>
+                  <div className="pqs2-optrow">
+                    <div><div className="pqs-optt">Называть автора</div>
+                      <div className="pqs-optd">«Ваня говорит, привет» вместо просто «привет»</div></div>
+                    <button className={'pqs-toggle' + (речь.sayAuthor ? ' on' : '')}
+                      onClick={() => сохранитьРечь({ ...речь, sayAuthor: !речь.sayAuthor })}><span /></button>
+                  </div>
+
+                  <div className="pqs-iconrow" style={{ marginTop: 10 }}>
+                    <button className="modal-primary" onClick={() => пробаРечи(речь)}>Проверить</button>
+                    <button className="pqs2-btn ghost" onClick={() => stopSpeaking()}>Замолчать</button>
+                    <button className="pqs2-btn ghost" onClick={() => сохранитьРечь({ ...SPEECH_DEFAULT })}>Сбросить</button>
+                  </div>
+                </div>
+                <div className="pqs-code-sub" style={{ marginTop: 8 }}>
+                  Скопировать чей-то настоящий голос с записи Ponoi не умеет и обещать не будет.
+                  Но всё, что стоит в системе, здесь есть: поставь новый голос в настройках
+                  Windows или Android — и он появится в списке сам.
+                </div>
               </>}
 
               {cat === 'keybinds' && <>

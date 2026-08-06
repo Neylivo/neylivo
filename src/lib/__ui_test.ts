@@ -18,6 +18,10 @@ const _store = new Map<string, string>()
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { readFileSync } from 'node:fs'
+import {
+  pickVoice, groupVoices, readSpeech, presetOf, speechText,
+  SPEECH_DEFAULT, SPEECH_PRESETS, RATE_MIN, RATE_MAX, PITCH_MIN, PITCH_MAX,
+} from './speech'
 import { aggregateSessions } from './activityStats'
 import { okColor, okColors, encodeTheme, decodeTheme, addPreset, removePreset, MAX_PRESETS } from './themePresets'
 import { shortReason, logLine } from './log'
@@ -1470,6 +1474,101 @@ check('сто касаний подряд не копят слушателей',
   }
   return w.сколькоСлушателей() === 0
 })
+
+// ── Свой голос для озвучки (v1.494.0) ───────────────────────────────────────
+console.log('\n-- Озвучка сообщений --')
+{
+  const голоса = [
+    { name: 'Ирина', lang: 'ru-RU', voiceURI: 'ru-1', default: false },
+    { name: 'Павел', lang: 'ru-RU', voiceURI: 'ru-2', default: true },
+    { name: 'David', lang: 'en-US', voiceURI: 'en-1', default: true },
+    { name: 'Hazel', lang: 'en-GB', voiceURI: 'en-2', default: false },
+  ]
+
+  check('выбранный голос находится', () => pickVoice(голоса, 'ru-1')?.name === 'Ирина')
+
+  check('исчезнувший голос заменяется, а не оставляет тишину', () => {
+    // Голос может пропасть: удалили языковой пакет, открыли на другом
+    // устройстве. Замолчать при этом — худшее: выглядит как «озвучка сломалась».
+    const v = pickVoice(голоса, 'такого-нет')
+    return !!v && v.lang.startsWith('ru')
+  })
+
+  check('без выбора берётся голос нужного языка, а не первый попавшийся', () =>
+    pickVoice(голоса, '')?.lang === 'ru-RU')
+
+  check('и среди них — тот, что система зовёт основным', () =>
+    pickVoice(голоса, '')?.name === 'Павел')
+
+  check('если языка нет вовсе, берётся хоть какой-то', () => {
+    const только = [{ name: 'David', lang: 'en-US', voiceURI: 'e', default: true }]
+    return pickVoice(только, '')?.name === 'David'
+  })
+
+  check('без голосов — честный ноль, а не выдумка', () => pickVoice([], '') === null)
+
+  check('голоса раскладываются по языкам, русские первыми', () => {
+    const г = groupVoices(голоса)
+    return г[0].lang === 'ru' && г[0].voices.length === 2 && г.length === 2
+  })
+
+  check('настройки читаются, а мусор заменяется разумным', () => {
+    const a = readSpeech('{"rate":99,"pitch":-5,"volume":"чепуха","voice":7}')
+    return a.rate === RATE_MAX && a.pitch === PITCH_MIN && a.volume === 1 && a.voice === ''
+  })
+
+  check('битая запись не роняет озвучку', () => {
+    const a = readSpeech('{это не json')
+    return a.rate === 1 && a.pitch === 1 && a.sayAuthor === true
+  })
+
+  check('Соник — это правда быстро и высоко', () => {
+    const с = SPEECH_PRESETS.find(p => p.id === 'sonic')!
+    return с.rate > 1.5 && с.pitch >= 1.9
+  })
+
+  check('каждый готовый голос — в пределах, которые примет браузер', () =>
+    SPEECH_PRESETS.every(p =>
+      p.rate >= RATE_MIN && p.rate <= RATE_MAX && p.pitch >= PITCH_MIN && p.pitch <= PITCH_MAX))
+
+  check('выбранный готовый голос опознаётся обратно', () => {
+    const с = SPEECH_PRESETS.find(p => p.id === 'sonic')!
+    return presetOf({ ...SPEECH_DEFAULT, rate: с.rate, pitch: с.pitch }) === 'sonic'
+      && presetOf({ ...SPEECH_DEFAULT, rate: 1.234, pitch: 0.777 }) === null
+  })
+
+  check('имя автора отделяется от текста паузой', () => {
+    // Без запятой «Ваня говорит привет» сливается в одно слово, и на слух
+    // непонятно, где кончилось имя.
+    return speechText('Ваня', 'привет', true) === 'Ваня говорит, привет'
+  })
+
+  check('без имени читается только текст', () =>
+    speechText('Ваня', 'привет', false) === 'привет'
+    && speechText('', 'привет', true) === 'привет')
+
+  check('пустое сообщение не произносится вовсе', () =>
+    speechText('Ваня', '   ', true) === '')
+
+  check('чат читает ТЕМИ ЖЕ настройками, что стоят в настройках', () => {
+    // Второй расчёт «как читать» разошёлся бы с первым через пару версий —
+    // это самая частая поломка в этом проекте.
+    const src = readFileSync('src/components/MessageList.tsx', 'utf8')
+    if (/new SpeechSynthesisUtterance/.test(src)) {
+      throw new Error('чат снова строит произнесение сам, мимо общих настроек')
+    }
+    return src.includes("from '../lib/speech'") && src.includes('readSpeech(')
+  })
+
+  check('список голосов не спрашивается одним вопросом', () => {
+    // Замерено живой пробой: getVoices() на старте отдаёт ноль и событие
+    // voiceschanged не приходит, пока движок не попросили что-нибудь сказать.
+    // Один вопрос — и в настройках «голосов нет» навсегда.
+    const src = readFileSync('src/lib/speech.ts', 'utf8')
+    return src.includes('voiceschanged') && /SpeechSynthesisUtterance\(' '\)/.test(src)
+      && src.includes('setInterval')
+  })
+}
 
 // ── Внятное касание по сообщению (v1.493.0) ─────────────────────────────────
 //

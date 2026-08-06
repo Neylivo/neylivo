@@ -154,6 +154,7 @@ import { Em } from '../lib/twemoji'
 import { loadCustom } from '../lib/emoji'
 import { openSafely } from '../lib/safeUrl'
 import { startLongPress, startTap, TAP_SKIP } from '../lib/longPress'
+import { SPEECH_KEY, readSpeech, speak, speechText } from '../lib/speech'
 
 // v1.129.0: эмодзи реакции — кастомные (:имя:) рендерятся картинкой из общего
 // стора, юникодные — как обычно через Twemoji. Список сообщений уже
@@ -276,16 +277,23 @@ function msgImage(m: UiMessage): string | null {
 // v1.82.0: копирование/сохранение медиа переехало в src/lib/copyMedia.ts —
 // универсальный вариант с фолбэком (копирует «что угодно»).
 
-// «Зачитать сообщение» — озвучка через Web Speech API (как в Discord).
+/**
+ * «Зачитать сообщение» — озвучка через Web Speech API.
+ *
+ * v1.494.0: голос, скорость и высоту выбирает человек (Настройки → Звуки).
+ * Раньше здесь стоял один жёсткий ru-RU и голос по умолчанию: ни выбрать
+ * другой, ни ускорить, ни сделать выше было нельзя ничем.
+ *
+ * Всё решение — в lib/speech.ts, а не тут: те же настройки нужны и экрану
+ * настроек с кнопкой «Проверить», и второй расчёт «как читать» разошёлся бы с
+ * первым через пару версий.
+ */
 function speakMsg(m: UiMessage) {
   const text = parseFwd(m.content)?.text ?? m.content ?? ''
   if (!text) return
-  try {
-    const u = new SpeechSynthesisUtterance(m.author_name + ' говорит: ' + text)
-    u.lang = 'ru-RU'
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(u)
-  } catch { toastErr('Синтез речи недоступен') }
+  const s = readSpeech(localStorage.getItem(SPEECH_KEY))
+  void speak(speechText(m.author_name ?? '', text, s.sayAuthor), s)
+    .then(ok => { if (!ok) toastErr('Синтез речи недоступен') })
 }
 
 // Detect a message consisting solely of emoji (1..8) so it can render large.
