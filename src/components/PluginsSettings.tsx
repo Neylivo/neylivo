@@ -19,7 +19,6 @@ import { PermissionGate } from './PluginPermissionGate'
 import { PluginCatalog } from './PluginCatalog'
 import { PluginGuide } from './PluginGuide'
 import { PluginEditor } from './PluginEditor'
-import { AppMaker, AppList } from './AppMaker'
 
 // v1.286.0: раздел «Плагины» в настройках. Плагины ставятся на устройство, поэтому
 // весь список локальный — ни таблицы, ни синхронизации между устройствами.
@@ -208,10 +207,7 @@ export function PluginsSettings() {
   // v1.336.0: три вкладки вместо одной ленты. Каталог, то что уже стоит, и своё —
   // это три разных дела: чтобы дойти до своих плагинов, раньше надо было
   // пролистать весь каталог.
-  const [tab, setTab] = useState<'catalog' | 'installed' | 'mine' | 'apps' | 'grants'>('catalog')
-  // v1.496.0: какое приложение сейчас открыто в конструкторе. undefined —
-  // новое, null — ни одного (показываем список).
-  const [приложение, setПриложение] = useState<{ id?: string } | null>(null)
+  const [tab, setTab] = useState<'catalog' | 'installed' | 'mine' | 'grants'>('catalog')
   // v1.468.0: какой плагин передаём лично. Держим весь набор, а не один id:
   // передаче нужен сам файл, а он лежит в записи плагина.
   const [даём, setДаём] = useState<{ id: string; name: string; version: string; code: string } | null>(null)
@@ -325,12 +321,6 @@ export function PluginsSettings() {
         {/* v1.468.0: личные передачи. Отдельной вкладкой, потому что это не про
             установку и не про каталог: тут получают по коду и следят за своими
             выданными кодами. */}
-        {/* v1.496.0: свои приложения. Стоят рядом с плагинами намеренно: это
-            соседнее дело того же человека — сделать что-то своё, — но дело
-            другое. Плагин вписывается в Ponoi, приложение живёт в своём окне. */}
-        <button className={'sec-tab' + (tab === 'apps' ? ' on' : '')} onClick={() => setTab('apps')}>
-          <Icon name="cube" size={15} /> Приложения
-        </button>
         <button className={'sec-tab' + (tab === 'grants' ? ' on' : '')} onClick={() => setTab('grants')}>
           <Icon name="link" size={15} /> Передачи
         </button>
@@ -341,9 +331,6 @@ export function PluginsSettings() {
 
       {tab === 'catalog' && <PluginCatalog inline />}
 
-      {tab === 'apps' && (приложение
-        ? <AppMaker id={приложение.id} onClose={() => { setПриложение(null); setVer(v => v + 1) }} />
-        : <AppList onOpen={id => setПриложение({ id })} />)}
 
       {tab === 'grants' && <>
         <div className="pqs-sec-t">Получить по коду</div>

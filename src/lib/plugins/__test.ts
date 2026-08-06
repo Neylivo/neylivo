@@ -2202,93 +2202,166 @@ console.log('\n-- Встроенные библиотеки (v1.492.0) --')
   })
 }
 
-console.log('\n-- Конструктор приложений (v1.496.0) --')
+console.log('\n-- Мастерская приложений (v1.497.0) --')
 {
-  const A = await import('./appMaker')
+  const W = await import('./workshop')
 
-  check('имя файла делается из названия по-русски', () =>
-    A.makeAppId('Моя Игра!') === 'moya-igra'
-    && A.makeAppId('  ') === 'app'
-    && A.makeAppId('Level Editor 2') === 'level-editor-2')
+  check('имя файла плагина делается из названия по-русски', () =>
+    W.projId('Моя Игра!') === 'moya-igra' && W.projId('  ') === 'app')
 
-  check('страница собирается из трёх кусков', () => {
-    const p = A.buildPage({ html: '<b>тут</b>', css: 'b{color:red}', js: 'console.log(1)' })
-    return p.includes('<style>') && p.includes('<b>тут</b>') && p.includes('<script>')
-      && p.indexOf('<style>') < p.indexOf('<b>тут</b>')
+  check('вид файла берётся из его имени', () =>
+    W.kindOf('сцена.js') === 'js' && W.kindOf('стили.css') === 'css'
+    && W.kindOf('окно.html') === 'html' && W.kindOf('без-точки') === 'js')
+
+  check('имя файла не пустое и не повторяется', () => {
+    try { W.okFileName('   '); return false } catch { /* так и надо */ }
+    try { W.okFileName('а.js', ['а.js']); return false } catch { /* так и надо */ }
+    return W.okFileName(' сцена.js ') === 'сцена.js'
+  })
+
+  check('страница собирается в порядке: стили, разметка, код', () => {
+    const p = W.buildPage([
+      { name: 'к.js', kind: 'js', text: 'let a=1' },
+      { name: 'р.html', kind: 'html', text: '<b>тут</b>' },
+      { name: 'с.css', kind: 'css', text: 'b{color:red}' },
+    ])
+    return p.indexOf('<style>') < p.indexOf('<b>тут</b>')
+      && p.indexOf('<b>тут</b>') < p.indexOf('let a=1')
+  })
+
+  check('порядок файлов ОДНОГО вида сохраняется', () => {
+    // Библиотека должна выполниться раньше того, кто её зовёт, и порядком
+    // управляет человек — переставляя файлы.
+    const p = W.buildPage([
+      { name: 'первый.js', kind: 'js', text: 'ПЕРВЫЙ' },
+      { name: 'второй.js', kind: 'js', text: 'ВТОРОЙ' },
+    ])
+    return p.indexOf('ПЕРВЫЙ') < p.indexOf('ВТОРОЙ')
+  })
+
+  check('код заворачивается так, что await работает на верхнем уровне', () => {
+    // Почти всё здесь начинается с ожидания: библиотека, модель, звук. В
+    // обычном теге script await наверху — синтаксическая ошибка, и заготовка
+    // «3D-игра» падала на первой строке. Поймано живой проверкой.
+    const p = W.buildPage([{ name: 'и.js', kind: 'js', text: 'const T = await ponoi.lib("three")' }])
+    if (!/\(async \(\) => \{/.test(p)) throw new Error('файл не завёрнут — await упадёт')
+    return /\}\)\(\)\.catch\(/.test(p)
+  })
+
+  check('в жалобе видно, В КАКОМ файле ошибка', () => {
+    const p = W.buildPage([{ name: 'сцена.js', kind: 'js', text: 'нет.такого()' }])
+    return p.includes('Ошибка в сцена.js')
   })
 
   check('закрывающий тег в коде не обрывает страницу', () => {
-    // Строка с закрывающим тегом внутри программы закрыла бы script посреди
-    // кода, и остаток вывалился бы на страницу текстом.
-    const p = A.buildPage({ html: '', css: '', js: 'const s = "</' + 'script>"' })
+    const p = W.buildPage([{ name: 'к.js', kind: 'js', text: 'const s = "</' + 'script>"' }])
     return p.includes('<\\/script>"')
   })
 
-  check('пустые куски не оставляют пустых тегов', () => {
-    const p = A.buildPage({ html: '<i>i</i>', css: '', js: '' })
-    return p === '<i>i</i>'
-  })
-
-  check('собранное приложение — настоящий плагин с окном', () => {
-    const код = A.buildApp({ ...A.APP_DEFAULT, name: 'Тест', html: '<b>x</b>' })
+  check('проект собирается в настоящий плагин с окном', () => {
+    const код = W.buildProject({
+      id: '', name: 'Игра', version: '1.0.0', author: 'я', description: 'проба',
+      files: [{ name: 'и.js', kind: 'js', text: 'let a' }],
+      width: 800, height: 600, frameless: false, transparent: false, permissions: [],
+    })
     const m = parsePlugin(код)
-    return m.id === 'test' && m.permissions.includes('apps')
+    return m.id === 'igra' && m.permissions.includes('apps') && /html: СТРАНИЦА/.test(код)
   })
 
-  check('страница ПРАВДА передаётся в окно', () => {
-    // Первая версия собирала страницу и забывала её отдать: окно открывалось
-    // пустым, и ошибок при этом не было никаких.
-    const код = A.buildApp({ ...A.APP_DEFAULT, name: 'Тест', html: '<b>x</b>' })
-    const тело = код.slice(код.indexOf('apps.create'))
-    if (!/html:\s*СТРАНИЦА/.test(тело)) throw new Error('окно открывается без страницы')
-    return true
+  check('файлы сохраняются в коде, а не только собранная страница', () => {
+    // Иначе разбиение на файлы терялось бы при первом же сохранении.
+    const код = W.buildProject({
+      id: '', name: 'И', version: '1.0.0', author: 'я', description: '',
+      files: [{ name: 'сцена.js', kind: 'js', text: 'let a' }],
+      width: 800, height: 600, frameless: false, transparent: false, permissions: [],
+    })
+    return код.includes('const ФАЙЛЫ = ') && код.includes('сцена.js') && W.isProject(код)
   })
 
-  check('файл разбирается обратно без потерь', () => {
+  check('проект открывается обратно без потерь', () => {
     const было = {
-      ...A.APP_DEFAULT, name: 'Игра', author: 'я', description: 'проба',
-      html: '<canvas></canvas>', css: 'body{margin:0}', js: 'ponoi.frame(dt => {})',
-      width: 640, height: 480, frameless: true, transparent: true,
+      id: '', name: 'Игра', version: '2.1.0', author: 'я', description: 'проба',
+      files: [
+        { name: 'с.css', kind: 'css' as const, text: 'body{margin:0}' },
+        { name: 'и.js', kind: 'js' as const, text: 'ponoi.frame(dt => {})' },
+      ],
+      width: 640, height: 480, frameless: true, transparent: true, permissions: [],
     }
-    const стало = A.parseApp(A.buildApp(было))
-    if (!стало) throw new Error('не разобрался вовсе')
-    for (const k of ['html', 'css', 'js', 'width', 'height', 'frameless', 'transparent'] as const) {
-      if ((стало as any)[k] !== (было as any)[k]) throw new Error('разошлось поле ' + k)
-    }
-    return true
+    const стало = W.parseProject(W.buildProject(было))
+    if (!стало) throw new Error('не разобрался')
+    if (стало.files.length !== 2) throw new Error('файлов ' + стало.files.length)
+    if (стало.files[1].text !== было.files[1].text) throw new Error('код разошёлся')
+    return стало.width === 640 && стало.frameless === true && стало.version === '2.1.0'
   })
 
-  check('чужой плагин конструктор трогать не берётся', () =>
-    A.parseApp('/**\n * @name Ч\n * @id ch\n * @version 1.0.0\n */\nfunction onLoad() {}') === null
-    && !A.isApp('function onLoad() {}'))
+  check('приложения прошлой версии тоже открываются', () => {
+    // «Твой проект больше не открывается» — худшее, что можно сделать с
+    // редактором. Старые собирались из трёх полей (v1.496.0).
+    const старый = `/**
+ * @name Старое
+ * @id staroe
+ * @version 1.0.0
+ * @author я
+ * @description было
+ * @permissions apps
+ */
+const СТРАНИЦА = ${JSON.stringify('<style>\nb{color:red}\n</style>\n<b>тут</b>\n<script>\nlet a = 1\n</script>')}
 
-  check('каждая заготовка собирается в рабочий плагин', () => {
-    for (const т of A.APP_TEMPLATES) {
-      const код = A.buildApp({ ...A.APP_DEFAULT, name: т.label, ...т.draft } as any)
-      const m = parsePlugin(код)
-      if (!m.id) throw new Error('заготовка «' + т.label + '» не собралась')
-      const назад = A.parseApp(код)
-      if (!назад || назад.js !== (т.draft.js ?? '')) {
-        throw new Error('заготовка «' + т.label + '» не разбирается обратно')
+function onLoad(ponoi) { return ponoi.apps.create({ html: СТРАНИЦА }) }
+`
+    const пр = W.fromOldApp(старый)
+    if (!пр) throw new Error('старое приложение не открылось')
+    const js = пр.files.find(f => f.kind === 'js')!
+    const css = пр.files.find(f => f.kind === 'css')!
+    return js.text === 'let a = 1' && css.text === 'b{color:red}' && пр.files.length === 3
+  })
+
+  check('чужой плагин мастерская трогать не берётся', () =>
+    W.parseProject('function onLoad() {}') === null && !W.isProject('function onLoad() {}'))
+
+  check('каждая заготовка собирается и открывается обратно', () => {
+    for (const т of W.PROJ_TEMPLATES) {
+      const код = W.buildProject({
+        id: '', name: т.label, version: '1.0.0', author: 'я', description: т.hint,
+        files: т.files, width: 960, height: 640,
+        frameless: false, transparent: false, permissions: [],
+      })
+      if (!parsePlugin(код).id) throw new Error('«' + т.label + '» не собралась')
+      const назад = W.parseProject(код)
+      if (!назад || назад.files.length !== т.files.length) {
+        throw new Error('«' + т.label + '» не открылась обратно')
       }
     }
     return true
   })
 
+  check('заготовка 3D-игры правда трёхмерная', () => {
+    const т = W.PROJ_TEMPLATES.find(x => x.id === 'game3d')!
+    const код = т.files.map(f => f.text).join('\n')
+    return код.includes("ponoi.lib('three')") && код.includes('ponoi.frame')
+      && код.includes('cursor.lock') && /WebGLRenderer/.test(код)
+  })
+
   check('в странице всегда есть body', () => {
-    // Без него страница без разметки (а у игры её и нет) разбирается целиком в
-    // head, и document.body там null — падает первое же обращение.
     const H = readFileSync('src/lib/plugins/htmlFrame.ts', 'utf8')
     return H.includes("+ '<body>'")
   })
 
   check('ошибки страницы доходят до журнала плагина', () => {
-    // Без этого автор отлаживает вслепую: страница молчит, консоли у него нет.
     const H = readFileSync('src/lib/plugins/htmlFrame.ts', 'utf8')
     return /addEventListener\('error'/.test(H) && /unhandledrejection/.test(H)
   })
-}
 
+  check('показ в мастерской — та же песочница, что настоящее окно', () => {
+    // Иначе здесь работало бы то, что в жизни откажет, и автор узнавал бы об
+    // этом уже после сохранения.
+    const src = readFileSync('src/components/AppWorkshop.tsx', 'utf8')
+    const m = /sandbox="([^"]+)"/.exec(src)
+    if (!m) throw new Error('у показа нет песочницы вовсе')
+    if (m[1].includes('allow-same-origin')) throw new Error('показ получил доступ к сессии')
+    return m[1].includes('allow-scripts')
+  })
+}
 console.log('\n-- Ломаем нарочно (новые возможности) --')
   {
     const mw = await import('./middleware')

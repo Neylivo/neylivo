@@ -7869,3 +7869,124 @@ body.no-anim .mus-blob.on { animation: none; }
   .am-acts .modal-primary { flex: 1; min-height: 44px; }
   .am-tab { min-height: 44px; }
 }
+
+/* ══ v1.497.0: мастерская приложений ══════════════════════════════════════════
+   Три полосы: файлы, код, показ с консолью. Пропорция 220 / 1fr / 1.1fr —
+   показу отдано чуть больше, чем коду, намеренно: смотреть на результат в этом
+   деле важнее, чем видеть лишние двадцать знаков строки.
+
+   На телефоне полосы встают друг под друга: рядом на четырёхстах пикселях они
+   превратились бы в три нечитаемых колонки. */
+.ws-screen { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.ws-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ws-title { margin: 0; font-size: 20px; }
+.ws-name { flex: 1; min-width: 160px; }
+.ws-top-acts { display: flex; align-items: center; gap: 8px; }
+.ws-intro { font-size: 13.5px; color: var(--mut); line-height: 1.55; max-width: 760px; }
+
+.ws-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.ws-tpl {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
+  padding: 14px 16px; border: 1px solid rgba(var(--ov, 255,255,255), .1);
+  border-radius: var(--r-lg, 12px); background: rgba(var(--ov, 255,255,255), .04);
+  color: var(--tx); cursor: pointer; min-height: 76px;
+}
+.ws-tpl:hover { background: rgba(var(--ov, 255,255,255), .08); border-color: var(--brand); }
+.ws-tpl.big { border-color: rgba(88, 101, 242, .55); background: rgba(88, 101, 242, .10); }
+.ws-tpl-n { font-weight: 700; font-size: 15px; }
+.ws-tpl-h { font-size: 12.5px; color: var(--mut); }
+
+.ws-list { display: flex; flex-direction: column; gap: 8px; }
+.ws-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+  padding: 12px 14px; border-radius: var(--r-md, 10px);
+  background: rgba(var(--ov, 255,255,255), .04);
+}
+.ws-item-n { display: flex; align-items: center; gap: 8px; }
+.ws-item-d { grid-column: 1; font-size: 12.5px; color: var(--mut); }
+.ws-item button { grid-row: 1 / span 2; }
+
+/* ── Редактор ──────────────────────────────────────────────────────────── */
+.ws-edit { height: 100%; min-height: 0; }
+.ws-grid {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 12px; flex: 1; min-height: 480px;
+}
+.ws-files, .ws-code-pane, .ws-run {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0;
+}
+.ws-pane-h {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12.5px; color: var(--mut); text-transform: uppercase; letter-spacing: .03em;
+}
+.ws-flist { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 260px; }
+.ws-file {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; cursor: pointer;
+  border-radius: var(--r-sm, 8px); font-size: 13px;
+}
+.ws-file:hover { background: rgba(var(--ov, 255,255,255), .06); }
+.ws-file.on { background: var(--brand); color: #fff; }
+.ws-file-k {
+  flex: none; font-size: 9.5px; font-weight: 800; text-transform: uppercase;
+  padding: 2px 5px; border-radius: 4px; background: rgba(var(--ov, 255,255,255), .12);
+}
+.ws-file-k.js { background: rgba(240, 200, 60, .22); color: #f0c83c; }
+.ws-file-k.css { background: rgba(88, 101, 242, .22); color: #8b96ff; }
+.ws-file-k.html { background: rgba(240, 110, 60, .22); color: #f08a5c; }
+.ws-file.on .ws-file-k { background: rgba(255, 255, 255, .22); color: #fff; }
+.ws-file-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-file-acts { display: flex; gap: 2px; opacity: 0; }
+.ws-file:hover .ws-file-acts, .ws-file.on .ws-file-acts { opacity: 1; }
+.ws-file-acts button {
+  border: 0; background: none; color: inherit; cursor: pointer; font-size: 13px;
+  padding: 2px 4px; border-radius: 4px; opacity: .7;
+}
+.ws-file-acts button:hover { opacity: 1; background: rgba(var(--ov, 255,255,255), .15); }
+.ws-hint { font-size: 11.5px; color: var(--mut); line-height: 1.45; }
+.ws-props { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--mut); margin-top: auto; }
+.ws-props label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ws-props .modal-in { width: 90px; }
+.ws-chk { justify-content: flex-start !important; gap: 6px !important; }
+
+.ws-code-i { text-transform: none; letter-spacing: 0; }
+.ws-code {
+  flex: 1; min-height: 300px; resize: none;
+  font: 13px/1.55 ui-monospace, Consolas, monospace; tab-size: 2;
+  background: var(--bg1, #1e1f22); color: var(--tx);
+  border: 1px solid rgba(var(--ov, 255,255,255), .1); border-radius: var(--r-md, 10px); padding: 12px;
+}
+
+.ws-prev {
+  flex: 1; min-height: 240px; width: 100%; display: block; background: #000;
+  border: 1px solid rgba(var(--ov, 255,255,255), .1); border-radius: var(--r-md, 10px);
+}
+.ws-console {
+  flex: none; height: 150px; overflow-y: auto; padding: 8px 10px;
+  background: var(--bg1, #1e1f22); border: 1px solid rgba(var(--ov, 255,255,255), .1);
+  border-radius: var(--r-md, 10px); font: 12px/1.5 ui-monospace, Consolas, monospace;
+}
+.ws-con-empty { color: var(--mut); font-style: italic; }
+.ws-con-l { white-space: pre-wrap; word-break: break-word; padding: 1px 0; }
+.ws-con-l.error { color: var(--red, #f23f43); }
+.ws-con-l.warn { color: #f0b232; }
+
+@media (max-width: 900px) {
+  .ws-grid { grid-template-columns: 1fr; min-height: 0; }
+  .ws-flist { max-height: 180px; }
+  .ws-code { min-height: 220px; }
+  .ws-prev { min-height: 260px; }
+  .ws-console { height: 120px; }
+  .ws-props { margin-top: 0; }
+}
+@media (max-width: 768px) {
+  .ws-top-acts { width: 100%; }
+  .ws-top-acts .modal-primary { flex: 1; min-height: 44px; }
+  .ws-tpl { min-height: 44px; }
+  .ws-file { min-height: 44px; }
+  .ws-file-acts { opacity: 1; }
+  /* v1.497.0: было 32 — мимо пальца. Кнопки «выше», «ниже» и «удалить» стоят
+     в ряд, и промах по крайней стоит файла. Строку файла при этом делаем выше:
+     иначе кнопки в 44 пикселя её распирают. */
+  .ws-file { min-height: 52px; }
+  .ws-file-acts button { min-width: 44px; min-height: 44px; }
+}

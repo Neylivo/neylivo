@@ -27,6 +27,7 @@ import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appI
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
+import { AppWorkshop } from './AppWorkshop'
 import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint } from '../lib/crypto/keys'
 import { SignOutModal } from './SignOutModal'
@@ -70,6 +71,11 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
   { group: 'Другое', items: [
     // v1.286.0: плагины — расширения интерфейса, ставятся на это устройство.
     { k: 'plugins', label: 'Плагины', icon: 'cube' },
+    // v1.497.0: мастерская приложений. Стоит рядом с плагинами и ботами
+    // намеренно: это соседнее дело того же человека — сделать своё, — но дело
+    // ДРУГОЕ. Плагин вписывается в Ponoi, приложение живёт в своём окне, и
+    // делают его иначе: файлами, с показом и консолью рядом.
+    { k: 'workshop', label: 'Мастерская', icon: 'wand' },
     // v1.335.0: было «Мои приложения» — название из Discord, но у нас за ним
     // прячутся именно боты, и по слову «приложения» их никто не искал.
     { k: 'devportal', label: 'Боты', icon: 'code' },
@@ -1531,6 +1537,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 <button className="pqs-danger" onClick={async () => { if (await confirmUi('Очистить все локальные данные? Настройки, темы и локальные кэши будут сброшены.', { okText: 'Очистить' })) { localStorage.clear(); location.reload() } }}>Очистить все данные</button>
               </>}
               {cat === 'plugins' && <PluginsSettings />}
+              {cat === 'workshop' && <AppWorkshop onClose={() => setCat('plugins')} />}
               {cat === 'devportal' && <DevPortal />}
             </div>
           </div>

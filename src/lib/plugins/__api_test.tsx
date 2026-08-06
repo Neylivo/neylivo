@@ -1459,61 +1459,79 @@ export async function onLoad(ponoi) {
 }
 
 
-// ── 17. Конструктор приложений (v1.496.0) ──────────────────────────────────
+// ── 18. Мастерская: 3D-игра из заготовки (v1.497.0) ────────────────────────
 //
-// Владелец попросил «создание своих приложений прямо в ponoi». Здесь
-// проверяется не форма, а то, ради чего она есть: собранное ею приложение
-// должно ОТКРЫТЬСЯ и заработать — с холстом, кадрами, курсором и файлами.
-async function конструкторПриложений(host: Host) {
+// Владелец попросил «гигантский отдел, где можно хоть 3д игру создать». Здесь
+// проверяется именно это, и не «редактор открылся», а РЕЗУЛЬТАТ: заготовка
+// «3D-игра» собирается в плагин, открывается окном, и внутри рисуется настоящая
+// сцена — с проверкой пикселей на холсте.
+async function мастерская3D(host: Host) {
   const { clearAllApps } = await import('./apps')
-  const AM = await import('./appMaker')
+  const W = await import('./workshop')
   clearAllApps()
 
-  // Берём готовую заготовку «Игра на холсте» — ту самую, что предложат человеку.
-  const набор = {
-    ...AM.APP_DEFAULT, name: 'Проба приложения', author: 'проба',
-    description: 'собрано конструктором', width: 300, height: 220,
-    ...AM.APP_TEMPLATES.find(t => t.id === 'canvas2d')!.draft,
-  } as any
-  // Дописываем отчёт: заготовка сама ничего не рассказывает, а нам надо знать,
-  // что кадры идут и мост на месте.
-  набор.js += `
-let счёт = 0
-ponoi.frame(() => { счёт++ })
+  const т = W.PROJ_TEMPLATES.find(x => x.id === 'game3d')!
+  const проект = {
+    id: '', name: 'Проба игры', version: '1.0.0', author: 'проба',
+    description: 'из заготовки', files: т.files.map(f => ({ ...f })),
+    width: 320, height: 240, frameless: false, transparent: false, permissions: [],
+  }
+  // Дописываем отчёт отдельным файлом — так же, как это сделал бы человек.
+  проект.files.push({
+    name: 'отчёт.js', kind: 'js' as const, text: `
+// Пиксель читаем ВНУТРИ кадра, сразу после отрисовки.
+//
+// WebGL очищает буфер после того, как кадр показан (preserveDrawingBuffer по
+// умолчанию выключен), и readPixels из таймера возвращает чистые нули — то
+// есть «ничего не нарисовано» там, где всё нарисовано. Наш обработчик кадра
+// встаёт ПОСЛЕ игрового: она рисует, мы читаем, и всё это в одном такте.
+let снято = false
 setTimeout(() => {
-  ponoi.log('ПРИЛОЖЕНИЕ:' + JSON.stringify({
-    кадров: счёт,
-    холст: !!document.querySelector('canvas'),
-    курсор: typeof ponoi.cursor.lock === 'function',
-    файлы: typeof ponoi.files.open === 'function',
-    кадрАпи: typeof ponoi.frame === 'function',
-  }))
-}, 900)`
+  ponoi.frame(() => {
+    if (снято) return
+    снято = true
+    const c = document.querySelector('canvas')
+    let цвет = 'нет'
+    try {
+      const gl = c.getContext('webgl2') || c.getContext('webgl')
+      const п = new Uint8Array(4)
+      gl.readPixels(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, п)
+      цвет = п[0] + ',' + п[1] + ',' + п[2]
+    } catch (e) { цвет = 'ошибка: ' + e.message.slice(0, 40) }
+    ponoi.log('ИГРА:' + JSON.stringify({ холст: !!c, ширина: c ? c.width : 0, цвет, файлов: 3 }))
+  })
+}, 1200)`,
+  })
 
-  const код = AM.buildApp(набор)
-  ok('конструктор собрал настоящий плагин', /@id\s+proba-prilozheniya/.test(код),
-    (код.split('\n')[2] ?? '').trim())
-  ok('и в него попало разрешение на окно', /@permissions\s+apps/.test(код))
+  const код = W.buildProject(проект as any)
+  ok('мастерская собрала проект в плагин', /@id\s+proba-igry/.test(код))
+  ok('и файлы сохранились в коде, а не только собранная страница',
+    код.includes('const ФАЙЛЫ = ') && код.includes('игра.js'))
 
-  const назад = AM.parseApp(код)
-  ok('файл разбирается обратно в форму без потерь',
-    !!назад && назад.js === набор.js && назад.css === набор.css && назад.width === 300,
-    назад ? 'ширина ' + назад.width : 'не разобрался')
+  const назад = W.parseProject(код)
+  ok('проект открывается обратно со всеми файлами',
+    !!назад && назад.files.length === проект.files.length
+      && назад.files[1].text === проект.files[1].text,
+    назад ? 'файлов ' + назад.files.length : 'не разобрался')
 
   const id = await поднять(host, код)
-  ok('приложение открылось окном', await ждать(() => appList(id).length === 1, 6000),
+  ok('игра открылась окном', await ждать(() => appList(id).length === 1, 8000),
     String(host.pluginError(id) ?? 'без ошибок'))
 
-  await ждать(() => журнал(host, id).some(l => l.includes('ПРИЛОЖЕНИЕ:')), 15000)
-  const с = строка(host, id, 'ПРИЛОЖЕНИЕ:')
+  await ждать(() => журнал(host, id).some(l => l.includes('ИГРА:')), 25000)
+  const с = строка(host, id, 'ИГРА:')
   let о: any = {}
-  try { о = JSON.parse(с.slice('ПРИЛОЖЕНИЕ:'.length)) } catch { /* ниже видно */ }
+  try { о = JSON.parse(с.slice('ИГРА:'.length)) } catch { /* видно ниже */ }
+  const ошибки = журнал(host, id).filter(l => l.startsWith('error:')).join(' | ')
 
-  ok('внутри него живой холст', о.холст === true, с.slice(0, 100))
-  ok('и кадры правда идут', Number(о.кадров) > 10, 'кадров: ' + о.кадров)
-  ok('ponoi.frame на месте', о.кадрАпи === true)
-  ok('управление курсором на месте', о.курсор === true)
-  ok('работа с файлами на месте', о.файлы === true)
+  ok('в игре есть холст', о.холст === true, ошибки || с.slice(0, 120))
+  ok('и он размером с окно', Number(о.ширина) > 100, 'ширина буфера ' + о.ширина)
+  // Сцена тёмная (фон 0x0e1116), но НЕ чёрная: если бы ничего не нарисовалось,
+  // пиксель был бы ровно нулевым.
+  ok('сцена НАРИСОВАНА, а не осталась чернотой',
+    /^\d+,\d+,\d+$/.test(String(о.цвет)) && String(о.цвет) !== '0,0,0',
+    'пиксель в середине: ' + о.цвет)
+  ok('ошибок в странице нет', !ошибки, ошибки.slice(0, 200))
 
   await host.stopPlugin(id)
   removePlugin(id)
@@ -1561,8 +1579,8 @@ async function main() {
   await остальное(host)
   lines.push(''); lines.push('── Встроенный three.js ──'); out()
   await встроенныйThree(host)
-  lines.push(''); lines.push('── Конструктор приложений ──'); out()
-  await конструкторПриложений(host)
+  lines.push(''); lines.push('── Мастерская: 3D-игра ──'); out()
+  await мастерская3D(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
