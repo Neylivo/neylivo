@@ -1518,8 +1518,27 @@ body.no-anim .msg-flash { animation:none; }
 .search-hit:hover { background:var(--c-hover, #383a40); }
 
 /* ===== Профиль-карточка из чата ===== */
-.av-click { cursor:pointer; display:inline-flex; transition:transform .15s cubic-bezier(.34, 1.56, .64, 1); }
-.av-click:hover { transform:scale(1.08); }
+/* v1.499.0: аватарка при наведении НЕ ПРЫГАЕТ.
+
+   Владелец прислал снимок: «сделай, чтобы иконка при наведении не
+   подскакивала».
+
+   Что было и что намерено. Здесь стояло transform: scale(1.08) с ПРУЖИНЯЩИМ
+   переходом — cubic-bezier с выбросом за единицу, то есть значок не просто рос,
+   а подпрыгивал и качался обратно. Замерено настоящей мышью (test:hover):
+   аватарка 40×42 становилась 43.2×45.4 и уезжала на 1.6 влево и 1.7 вверх.
+   Полтора пикселя туда-сюда под курсором — это и есть «подскакивает».
+
+   Я сперва решил, что дело в чужом transform у аватарки в чате (там она
+   уменьшена до 0.8), — замер это опроверг: на телефоне то правило стоит ниже по
+   файлу и выигрывает, там прыжка не было вовсе. Прыгало на компьютере, от
+   простого scale.
+
+   Чем заменено. Наведение по-прежнему видно — но не движением, а подсветкой:
+   мягкое кольцо вокруг. Оно не меняет ни размера, ни места: соседние строки не
+   дёргаются, и попасть по аватарке легче, а не труднее. */
+.av-click { cursor:pointer; display:inline-flex; border-radius:50%; transition:box-shadow .12s ease; }
+.av-click:hover { box-shadow:0 0 0 2px rgba(var(--ov, 255,255,255), .35); }
 .msg-hdr .nm.clickable { cursor:pointer; }
 .msg-hdr .nm.clickable:hover { text-decoration:underline; }
 .msg-hdr .nm.clickable:hover { text-decoration:underline; }
