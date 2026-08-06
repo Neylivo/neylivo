@@ -618,6 +618,7 @@ for (const p of OFFICIAL_PLUGINS) {
     'apps.create', 'apps.update', 'apps.close',
     // v1.485.0
     'apps.where', 'apps.all', 'apps.screen', 'apps.hide', 'apps.show',
+    'libs.list', 'libs.get',
     'services.register', 'services.unregister', 'services.connect', 'services.call',
     'db.insert', 'db.get', 'db.all', 'db.where', 'db.update', 'db.remove',
     'db.count', 'db.clear', 'db.tables',
@@ -2128,6 +2129,76 @@ console.log('\n-- Окно с настоящей страницей (v1.490.0) -
     if (/need\(/.test(src)) throw new Error('в рамке завелась своя проверка разрешений — их станет две')
     const host = readFileSync('src/lib/plugins/host.ts', 'utf8')
     return host.includes('r.dispatch(method, args)')
+  })
+}
+
+console.log('\n-- Встроенные библиотеки (v1.492.0) --')
+{
+  const L = await import('./libs')
+
+  check('список экспортов разбирается', () => {
+    const э = L.parseExports('const a=1,b=2;export{a as Scene,b};')
+    return э.length === 2
+      && э[0].имя === 'Scene' && э[0].локальное === 'a'
+      && э[1].имя === 'b' && э[1].локальное === 'b'
+  })
+
+  check('берётся последний список, а не первый попавшийся', () => {
+    // «export{» может встретиться внутри строки в самом коде библиотеки.
+    const src = 'const s="export{врун as Врун}";const a=1;export{a as Настоящий};'
+    const э = L.parseExports(src)
+    return э.length === 1 && э[0].имя === 'Настоящий'
+  })
+
+  check('модуль переписывается так, что кладёт себя в window', () => {
+    const out = L.withGlobal('const a=1,b=2;export{a as Scene,b as Mesh};', 'THREE')
+    if (/\bexport\s*\{/.test(out)) throw new Error('export остался — модуль не выполнится встроенным')
+    return out.includes('window["THREE"]') && out.includes('"Scene":a') && out.includes('"Mesh":b')
+  })
+
+  check('обычный скрипт не трогаем', () => {
+    const src = 'window.ЧТО_ТО = 1'
+    return L.withGlobal(src, 'ЧТО_ТО') === src
+  })
+
+  check('переписанный модуль остаётся разбираемым кодом', () => {
+    // Самое обидное здесь — испортить чужую библиотеку хвостом.
+    const out = L.withGlobal('const a=1;function f(){return a}export{a as Число,f as Функция};', 'X')
+    try { new Function(out) } catch (e: any) {
+      throw new Error('после правки не разбирается: ' + e.message)
+    }
+    return true
+  })
+
+  check('склад собран и в нём есть three', () => {
+    const data = readFileSync('src/lib/plugins/libsData.ts', 'utf8')
+    if (data.length < 200000) throw new Error('файл склада подозрительно мал: ' + data.length)
+    return data.includes('id: "three"') && data.includes('global: "THREE"')
+  })
+
+  check('склад собирается генератором, а не руками', () => {
+    const data = readFileSync('src/lib/plugins/libsData.ts', 'utf8')
+    return data.startsWith('// СГЕНЕРИРОВАНО scripts/gen-libs.mjs')
+  })
+
+  check('настоящий three.js переписывается без потерь', () => {
+    // Самая ценная из этих проверок: она работает на НАСТОЯЩЕЙ библиотеке в
+    // 671 КБ, а не на трёх строчках. Если хвост когда-нибудь начнёт резать
+    // лишнее, видно будет здесь, а не по чёрному экрану у человека.
+    const data = readFileSync('src/lib/plugins/libsData.ts', 'utf8')
+    const m = /const СЫРЬЁ_THREE = ("(?:[^"\\]|\\.)*")/.exec(data)
+    if (!m) throw new Error('в складе нет текста three')
+    const src = JSON.parse(m[1]) as string
+    const эксп = L.parseExports(src)
+    // Порог низкий нарочно: в разных выпусках three число экспортов разное
+    // (в r169 их 419, в r183 — 197, часть уехала в отдельную сборку). Проверка
+    // должна ловить «разбор сломался и вернул пустоту», а не выпуск библиотеки.
+    if (эксп.length < 100) throw new Error('экспортов подозрительно мало: ' + эксп.length)
+    const out = L.withGlobal(src, 'THREE')
+    if (/\bexport\s*\{[^}]*\}\s*;?\s*$/.test(out)) throw new Error('export остался на месте')
+    // Длина почти та же: мы меняем только хвост.
+    if (out.length < src.length * 0.9) throw new Error('библиотеку укоротило: ' + out.length + ' из ' + src.length)
+    return out.includes('window["THREE"]') && out.includes('"Scene":')
   })
 }
 

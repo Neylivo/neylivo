@@ -240,6 +240,47 @@ export const FRAME_BRIDGE = `<script>
     })
   }
 
+  // ── Встроенные библиотеки ────────────────────────────────────────────────
+  //
+  // ponoi.lib('three') — и на странице есть three.js, без интернета и без
+  // чужого сервера. Возвращает саму библиотеку, а не «true»: строка
+  // const THREE = await ponoi.lib('three') понятнее, чем помнить, в какое
+  // глобальное имя она себя положила.
+  //
+  // Обратных кавычек в этом файле быть не должно НИГДЕ, даже в комментариях:
+  // весь мост — одна шаблонная строка TypeScript, и любая из них обрывает её.
+  // Это третья ловушка того же рода за две версии (первые две — обратная косая
+  // с n).
+  //
+  // Повторный вызов ничего не грузит заново: библиотека уже в окне.
+  var загруженные = {}
+  ponoi.lib = function (имя) {
+    имя = String(имя)
+    if (загруженные[имя]) return Promise.resolve(загруженные[имя])
+    return call('libs.get', [имя]).then(function (b) {
+      return new Promise(function (ok, no) {
+        var s = document.createElement('script')
+        if (b.kind === 'module') s.type = 'module'
+        s.textContent = b.code
+        s.onerror = function () { no(new Error('библиотека не выполнилась: ' + имя)) }
+        document.head.appendChild(s)
+        // У встроенного скрипта нет onload — ждём, пока появится значение.
+        var ждал = 0
+        var тик = setInterval(function () {
+          if (window[b.global]) {
+            clearInterval(тик)
+            загруженные[имя] = window[b.global]
+            ok(window[b.global])
+          } else if (++ждал > 600) {
+            clearInterval(тик)
+            no(new Error('библиотека не отозвалась: ' + имя))
+          }
+        }, 10)
+      })
+    })
+  }
+  ponoi.libs = function () { return call('libs.list', []) }
+
   parent.postMessage({ ponoi: 1, k: 'ready' }, '*')
 })()
 </script>`
@@ -286,6 +327,8 @@ export const FRAME_METHODS: readonly string[] = [
   'ui.setTheme', 'ui.clearTheme',
   'plugins.send',
   'assets.get', 'assets.put', 'assets.list', 'assets.info', 'assets.remove',
+  // v1.492.0: встроенные библиотеки. Ради них рамка и существует.
+  'libs.list', 'libs.get',
 ]
 
 export function frameMethodAllowed(method: string): boolean {

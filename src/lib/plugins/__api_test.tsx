@@ -1356,6 +1356,108 @@ export async function onLoad(ponoi) {
   clearAllApps()
 }
 
+
+// ── 16. Встроенный three.js (v1.492.0) ─────────────────────────────────────
+//
+// Владелец просил three.js, babylon, физику и «встроенный npm» — четыре пункта
+// из семнадцати про одно. Подключить их с чужого сайта страница могла и раньше,
+// но это значит: нужен интернет и чужой сервер.
+//
+// Проверяется не «библиотека загрузилась», а НАРИСОВАННОЕ: собирается настоящая
+// сцена, рисуется кадр, и с холста читаются пиксели. Библиотека, которая
+// загрузилась и ничего не рисует, — это не работающая библиотека.
+async function встроенныйThree(host: Host) {
+  const { clearAllApps } = await import('./apps')
+  clearAllApps()
+
+  const страница = `
+<canvas id="c" style="width:100%;height:100%"></canvas>
+<script>
+(async () => {
+  const отчёт = {}
+  try {
+    const список = await ponoi.libs()
+    отчёт.список = список.map(b => b.id).join(',')
+    отчёт.вес = Math.round((список.find(b => b.id === 'three') || {}).bytes / 1024)
+
+    const t0 = performance.now()
+    const THREE = await ponoi.lib('three')
+    отчёт.загрузка = Math.round(performance.now() - t0)
+    отчёт.естьСцена = typeof THREE.Scene === 'function'
+    отчёт.естьРендер = typeof THREE.WebGLRenderer === 'function'
+    отчёт.версия = String(THREE.REVISION || 'нет')
+
+    // Второй вызов не должен грузить заново.
+    const t1 = performance.now()
+    await ponoi.lib('three')
+    отчёт.повтор = Math.round(performance.now() - t1)
+
+    // Настоящая сцена и настоящий кадр.
+    const c = document.getElementById('c')
+    c.width = 120; c.height = 120
+    const рендер = new THREE.WebGLRenderer({ canvas: c, antialias: false })
+    рендер.setClearColor(0x000000, 1)
+    const сцена = new THREE.Scene()
+    const камера = new THREE.PerspectiveCamera(60, 1, 0.1, 100)
+    камера.position.z = 3
+    const куб = new THREE.Mesh(
+      new THREE.BoxGeometry(2, 2, 2),
+      new THREE.MeshBasicMaterial({ color: 0xff3366 }),
+    )
+    сцена.add(куб)
+    рендер.render(сцена, камера)
+
+    // Читаем пиксели с САМОГО холста: если бы рисования не было, тут была бы
+    // чернота, и «библиотека работает» оказалось бы неправдой.
+    const gl = рендер.getContext()
+    const пиксели = new Uint8Array(4)
+    gl.readPixels(60, 60, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, пиксели)
+    отчёт.пиксель = пиксели[0] + ',' + пиксели[1] + ',' + пиксели[2]
+    отчёт.нарисовано = пиксели[0] > 100 && пиксели[2] > 50 && пиксели[1] < 120
+  } catch (e) {
+    отчёт.упало = e.message.slice(0, 120)
+  }
+  ponoi.log('THREE:' + JSON.stringify(отчёт))
+})()
+<\/script>`
+
+  const id = await поднять(host, `/**
+ * @name Три-дэ
+ * @id probe-three
+ * @version 1.0.0
+ * @author проба
+ * @description Проба встроенного three.js
+ * @permissions apps
+ */
+export async function onLoad(ponoi) {
+  await ponoi.apps.create({
+    mode: 'window', title: 'Три-дэ', width: 260, height: 260, x: 30, y: 30,
+    html: ${JSON.stringify(страница)},
+  })
+}
+`)
+  ok('окно с трёхмерной сценой открылось', await ждать(() => appList(id).length === 1, 6000))
+  await ждать(() => журнал(host, id).some(l => l.includes('THREE:')), 30000)
+  const с = строка(host, id, 'THREE:')
+  let о: any = {}
+  try { о = JSON.parse(с.slice('THREE:'.length)) } catch { /* ниже видно */ }
+
+  ok('страница отчиталась', !!с, с.slice(0, 160))
+  ok('плагин видит список встроенных библиотек', String(о.список).includes('three'), String(о.список))
+  ok('и знает, сколько они весят', Number(о.вес) > 100, о.вес + ' КБ')
+  ok('three.js загрузился на страницу', о.естьСцена === true && о.естьРендер === true,
+    'упало: ' + String(о.упало ?? 'нет'))
+  ok('и это настоящая библиотека, с версией', /^\d+$/.test(String(о.версия)), 'r' + о.версия)
+  ok('повторный вызов не грузит заново', Number(о.повтор) < Number(о.загрузка) / 2 || Number(о.повтор) < 5,
+    `первый ${о.загрузка} мс, второй ${о.повтор} мс`)
+  ok('сцена НАРИСОВАНА — пиксели на холсте те, что ждали', о.нарисовано === true,
+    'цвет в середине: ' + String(о.пиксель))
+
+  await host.stopPlugin(id)
+  removePlugin(id)
+  clearAllApps()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -1395,6 +1497,8 @@ async function main() {
   await окноСтраница(host)
   lines.push(''); lines.push('── Остальное из списка ──'); out()
   await остальное(host)
+  lines.push(''); lines.push('── Встроенный three.js ──'); out()
+  await встроенныйThree(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)
