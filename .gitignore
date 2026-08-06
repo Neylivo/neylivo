@@ -31,5 +31,6 @@ dist-snake-test/
 dist-api-test/
 dist-play-test/
 dist-mobback-test/
+dist-sheet-test/
 scripts/api-test-certs/
 dist-bench/

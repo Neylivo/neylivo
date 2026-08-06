@@ -153,7 +153,7 @@ export interface UiMessage {
 import { Em } from '../lib/twemoji'
 import { loadCustom } from '../lib/emoji'
 import { openSafely } from '../lib/safeUrl'
-import { startLongPress } from '../lib/longPress'
+import { startLongPress, startTap, TAP_SKIP } from '../lib/longPress'
 
 // v1.129.0: эмодзи реакции — кастомные (:имя:) рендерятся картинкой из общего
 // стора, юникодные — как обычно через Twemoji. Список сообщений уже
@@ -701,12 +701,33 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               /* v1.433.0: отсчёт общий (lib/longPress.ts). Здесь он отменялся
                  на первом же pointermove — то есть на дрожи руки, которая идёт
                  постоянно: меню на телефоне почти не открывалось. */
-              onPointerDown={e => { if (selectMode) return; startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at, sel: selNow() }) }) }}
+              /* v1.493.0: и ОБЫЧНОЕ касание тоже открывает это меню.
+                 Владелец попросил «внятным кликом ровно на сообщение», и он
+                 прав: долгое нажатие надо было угадать. Человек, не знавший про
+                 него, не мог сделать с сообщением НИЧЕГО — ни ответить, ни
+                 скопировать, ни удалить.
+
+                 Что при этом не сломалось: по ссылке по-прежнему переходят, по
+                 картинке — открывают, по реакции — ставят её (TAP_SKIP). Если
+                 текст выделен, человек копирует, а не зовёт меню. Мышь сюда не
+                 попадает вовсе: у неё правая кнопка. */
+              onPointerDown={e => {
+                if (selectMode) return
+                startLongPress(e, at => { setPickFor(null); setMenu({ id: m.id, ...at, sel: selNow() }) })
+                const цель = e.target as HTMLElement | null
+                const своё = !!цель?.closest(TAP_SKIP)
+                startTap(e, at => { setPickFor(null); setMenu({ id: m.id, ...at, sel: selNow() }) },
+                  () => !своё && !window.getSelection()?.toString())
+              }}
               onDoubleClick={e => {
                 // v1.352.0: двойной щелчок — ответить, как в Telegram. Выделение текста
                 // двойным щелчком при этом не ломается: если что-то выделилось, человек
                 // копирует, а не отвечает, и мы не мешаем.
                 if (!onReply || selectMode) return
+                // v1.493.0: на телефоне первое же касание открывает меню, и
+                // «двойное касание» превратилось бы в два открытия подряд.
+                // Ответ там живёт в самом меню, и это понятнее.
+                if (e.nativeEvent && (e.nativeEvent as PointerEvent).pointerType === 'touch') return
                 if (window.getSelection()?.toString()) return
                 const t = e.target as HTMLElement
                 // Внутри ссылок, кнопок, полей и картинок двойной щелчок значит своё.
@@ -817,6 +838,16 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
         return <>
         <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }} />
         <div className="ctx-menu" ref={menuClamp.ref} style={menuClamp.style}>
+          {/* v1.493.0: шапка с тем, о ЧЁМ это меню.
+              На телефоне меню — шторка снизу, и само сообщение к этому моменту
+              закрыто ею или ушло из виду. Без подписи «удалить» и «переслать»
+              относятся неизвестно к чему, а ошибиться тут дорого. */}
+          <div className="ctx-head">
+            <b className="notr" translate="no">{menuMsg.author_name || 'сообщение'}</b>
+            <span className="ctx-head-tx notr" translate="no">
+              {(parseFwd(menuMsg.content)?.text ?? menuMsg.content ?? '').slice(0, 90) || 'вложение'}
+            </span>
+          </div>
           {canReact !== false && <div className="ctx-quick">
             {QUICK.slice(0, 4).map(e => <button key={e} onClick={() => { onReact?.(menu.id, e); setMenu(null) }}><Em>{e}</Em></button>)}
           </div>}

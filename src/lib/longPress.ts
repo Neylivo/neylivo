@@ -80,3 +80,98 @@ export function startLongPress(e: PressLike, run: (at: Pt) => void, ms: number =
   w.addEventListener('scroll', off, true)
   return off
 }
+
+// ── Внятное нажатие на телефоне (v1.493.0) ─────────────────────────────────
+//
+// Владелец: «нормальная летающая выбор что сделать с сообщением для телефонов,
+// открывающиеся внятным кликом ровно на сообщение».
+//
+// Что было. Меню сообщения открывалось долгим нажатием (v1.426.0) — то есть
+// надо было догадаться подержать полсекунды. Ни подсказки, ни следа: человек,
+// не знающий об этом, просто не мог ничего сделать с сообщением.
+//
+// Долгое нажатие остаётся: оно уже привычно тем, кто его нашёл. Но обычного
+// касания теперь достаточно.
+
+/** Сколько времени касание остаётся касанием, а не удержанием. */
+export const TAP_MS = 500
+
+/**
+ * По чему нажимать НЕ значит «открой меню».
+ *
+ * Ссылка ведёт по ссылке, картинка открывается, кнопка нажимается, реакция
+ * ставится. Перехватить их значило бы сломать всё, что и так работало, — и это
+ * куда заметнее, чем отсутствие меню.
+ */
+export const TAP_SKIP = 'a, button, input, textarea, select, img, video, audio,'
+  + ' .msg-reply, .msg-react, .msg-rx, .av-click, .msg-file, .msg-embed, [role="button"]'
+
+/**
+ * Считать ли это касание внятным нажатием ПО СООБЩЕНИЮ.
+ *
+ * Чистая функция: всё, от чего зависит ответ, приходит доводами — и её можно
+ * проверить без единого касания. Именно здесь живут все «а если», и держать их
+ * в обработчике события значило бы не проверить ни одного.
+ */
+export function isPlainTap(o: {
+  /** Тип указателя: у мыши своё меню по правой кнопке. */
+  pointerType?: string
+  /** Сколько прошло от нажатия до отпускания. */
+  ms: number
+  /** Насколько уехал палец. */
+  from: Pt
+  to: Pt
+  /** Попал ли палец в то, у чего есть своё дело. */
+  onInteractive: boolean
+  /** Выделен ли текст: человек копирует, а не зовёт меню. */
+  hasSelection: boolean
+  /** Режим выбора сообщений: там нажатие отмечает строку. */
+  selectMode: boolean
+}): boolean {
+  if (o.pointerType === 'mouse') return false
+  if (o.selectMode || o.onInteractive || o.hasSelection) return false
+  if (o.ms > TAP_MS) return false
+  return !movedTooFar(o.from, o.to)
+}
+
+/**
+ * Поймать внятное касание. Зовётся из onPointerDown рядом с startLongPress.
+ *
+ * Слушатели — на окне и в перехвате, по той же причине, что у долгого нажатия:
+ * палец может уехать с элемента, и тогда до него не дойдёт ни pointerup, ни
+ * pointermove.
+ */
+export function startTap(
+  e: PressLike,
+  run: (at: Pt) => void,
+  ok: (at: Pt) => boolean = () => true,
+): () => void {
+  if (e.pointerType === 'mouse') return () => {}
+  const at: Pt = { x: e.clientX, y: e.clientY }
+  const t0 = Date.now()
+  let ушёл = false
+  const w = window as unknown as {
+    addEventListener: (t: string, f: (ev: any) => void, c?: boolean) => void
+    removeEventListener: (t: string, f: (ev: any) => void, c?: boolean) => void
+  }
+  const move = (ev: { clientX: number; clientY: number }) => {
+    if (movedTooFar(at, { x: ev.clientX, y: ev.clientY })) { ушёл = true; off() }
+  }
+  const up = (ev: { clientX: number; clientY: number }) => {
+    const до = { x: ev.clientX, y: ev.clientY }
+    off()
+    if (ушёл || Date.now() - t0 > TAP_MS || movedTooFar(at, до)) return
+    if (ok(до)) run(до)
+  }
+  const off = () => {
+    w.removeEventListener('pointerup', up, true)
+    w.removeEventListener('pointercancel', off, true)
+    w.removeEventListener('pointermove', move, true)
+    w.removeEventListener('scroll', off, true)
+  }
+  w.addEventListener('pointerup', up, true)
+  w.addEventListener('pointercancel', off, true)
+  w.addEventListener('pointermove', move, true)
+  w.addEventListener('scroll', off, true)
+  return off
+}

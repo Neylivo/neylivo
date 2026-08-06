@@ -17,6 +17,7 @@ const _store = new Map<string, string>()
 ;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
+import { readFileSync } from 'node:fs'
 import { aggregateSessions } from './activityStats'
 import { okColor, okColors, encodeTheme, decodeTheme, addPreset, removePreset, MAX_PRESETS } from './themePresets'
 import { shortReason, logLine } from './log'
@@ -32,7 +33,7 @@ import { keepAliveAction } from './keepAlive'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
 import { otaDecide, otaBanner, otaStale, OTA_EVERY_MS, OTA_RESUME_MS } from './otaPlan'
 import { isLongText, LONG_LINES, LONG_CHARS } from './longText'
-import { startLongPress, movedTooFar, LONG_PRESS_SLOP } from './longPress'
+import { startLongPress, startTap, isPlainTap, movedTooFar, LONG_PRESS_SLOP, TAP_MS, TAP_SKIP } from './longPress'
 import { buildMeta, metaChanged, whatIsDoing } from './presenceMeta'
 import { SHARE_RES, readShareQuality, shareCapture, sharePublish, shareSummary, orderSources } from './shareOpts'
 import { encodeFlags, decodeFlags, mergeFlags, forgetFlags, tileIcon } from './callState'
@@ -1469,6 +1470,101 @@ check('сто касаний подряд не копят слушателей',
   }
   return w.сколькоСлушателей() === 0
 })
+
+// ── Внятное касание по сообщению (v1.493.0) ─────────────────────────────────
+//
+// Меню сообщения на телефоне открывалось только долгим нажатием — о нём надо
+// было догадаться. Теперь хватает обычного касания, и вся тонкость («а если
+// человек попал по ссылке», «а если он тянул список») живёт в одной чистой
+// функции, а не в обработчике события, где её никто не проверит.
+console.log('\n-- Внятное касание по сообщению --')
+{
+  const обычное = {
+    pointerType: 'touch', ms: 120,
+    from: { x: 100, y: 200 }, to: { x: 101, y: 201 },
+    onInteractive: false, hasSelection: false, selectMode: false,
+  }
+
+  check('обычное касание открывает меню', () => isPlainTap(обычное))
+
+  check('дрожь руки в пару пикселей — всё ещё касание', () =>
+    isPlainTap({ ...обычное, to: { x: 104, y: 197 } }))
+
+  check('протяжка списка — не касание', () =>
+    !isPlainTap({ ...обычное, to: { x: 100, y: 260 } }))
+
+  check('удержание — не касание: это долгое нажатие, и у него своё дело', () =>
+    !isPlainTap({ ...обычное, ms: TAP_MS + 50 }))
+
+  check('мышь сюда не попадает — у неё правая кнопка', () =>
+    !isPlainTap({ ...обычное, pointerType: 'mouse' }))
+
+  check('нажатие по ссылке или картинке ведёт по ссылке, а не в меню', () =>
+    !isPlainTap({ ...обычное, onInteractive: true }))
+
+  check('при выделенном тексте человек копирует, а не зовёт меню', () =>
+    !isPlainTap({ ...обычное, hasSelection: true }))
+
+  check('в режиме выбора касание отмечает строку', () =>
+    !isPlainTap({ ...обычное, selectMode: true }))
+
+  check('список «не трогать» покрывает всё, у чего есть своё дело', () => {
+    for (const что of ['a', 'button', 'img', 'video', '.msg-react', '.av-click']) {
+      if (!TAP_SKIP.includes(что)) throw new Error('нет в списке: ' + что)
+    }
+    return true
+  })
+
+  // Живая часть: тот же приём, что у долгого нажатия — поддельное окно.
+  check('касание доходит до обработчика', () => {
+    const w = поддельноеОкно()
+    let открыли = 0
+    startTap({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыли++ })
+    w.послать('pointerup', { clientX: 11, clientY: 21 })
+    return открыли === 1 && w.сколькоСлушателей() === 0
+  })
+
+  check('уехавший палец меню не открывает', () => {
+    const w = поддельноеОкно()
+    let открыли = 0
+    startTap({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыли++ })
+    w.послать('pointermove', { clientX: 10, clientY: 90 })
+    w.послать('pointerup', { clientX: 10, clientY: 90 })
+    return открыли === 0
+  })
+
+  check('прокрутка отменяет касание', () => {
+    const w = поддельноеОкно()
+    let открыли = 0
+    startTap({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => { открыли++ })
+    w.послать('scroll', {})
+    w.послать('pointerup', { clientX: 10, clientY: 20 })
+    return открыли === 0
+  })
+
+  check('слушатели снимаются за собой, сколько ни касайся', () => {
+    const w = поддельноеОкно()
+    for (let i = 0; i < 100; i++) {
+      startTap({ pointerType: 'touch', clientX: 10, clientY: 20 }, () => {})
+      w.послать('pointerup', { clientX: 10, clientY: 20 })
+    }
+    return w.сколькоСлушателей() === 0
+  })
+
+  check('меню сообщения показывает, О ЧЁМ оно', () => {
+    // На телефоне меню закрывает собой сообщение. Без подписи «удалить»
+    // относится неизвестно к чему, а ошибиться тут дорого.
+    const src = readFileSync('src/components/MessageList.tsx', 'utf8')
+    const css = readFileSync('src/styles.css', 'utf8')
+    return src.includes('ctx-head') && /\.ctx-head\s*\{/.test(css)
+  })
+
+  check('на телефоне двойное касание больше не отвечает', () => {
+    // Первое касание уже открыло меню — второе открывало бы его снова.
+    const src = readFileSync('src/components/MessageList.tsx', 'utf8')
+    return /pointerType === 'touch'\) return/.test(src)
+  })
+}
 
 console.log('\n-- Ломаем нарочно (долгое нажатие) --')
 check('проверка заметила бы отмену по любому движению', () =>
