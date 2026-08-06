@@ -35,6 +35,7 @@ dist-mobback-test/
 dist-sheet-test/
 dist-speak-test/
 dist-hover-test/
+dist-save-test/
 dist-composer-test/
 scripts/api-test-certs/
 dist-bench/
