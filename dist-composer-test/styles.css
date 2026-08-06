@@ -89,7 +89,7 @@ body {
 .auth2-btn { margin-top:20px; width:100%; height:48px; border:none; border-radius:999px; cursor:pointer;
   background:linear-gradient(135deg, #6b74f6, #4a54e0); color:#fff; font-weight:700; font-size:15px;
   box-shadow:0 8px 20px rgba(30,36,140,.4); transition:filter .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
-.auth2-btn:hover { filter:brightness(1.08); }
+.auth2-btn:hover { filter:brightness(1.08); transform:translateY(-1px); }
 .auth2-btn:disabled { opacity:.6; cursor:default; transform:none; }
 .auth2-err { margin-top:12px; padding:10px 14px; border-radius:var(--r-xl); background:rgba(237,66,69,.18);
   color:#ffd2d3; font-size:13px; text-align:center; width:100%; box-sizing:border-box; }
@@ -214,6 +214,7 @@ body {
 .mus-full.hasbg .mus-head, .mus-full.hasbg .mus-stage { position:relative; z-index:2; }
 .mus-head { display:flex; align-items:center; justify-content:space-between; padding:16px; z-index:2; }
 .mus-head-r button, .mus-head button { background:rgba(0,0,0,.3); border:none; color:#fff; width:34px; height:34px; border-radius:var(--r-md); cursor:pointer; font-size:15px; margin-left:6px; transition:transform .12s var(--ease-out4, ease), background .15s var(--ease-out4, ease); }
+.mus-head-r button:hover, .mus-head button:hover { transform:scale(1.08); }
 .mus-stage { flex:1; display:flex; align-items:center; justify-content:center; gap:24px; padding:24px; z-index:2; }
 .mus-gif { width:180px; max-height:70%; object-fit:contain; }
 .mus-center { display:flex; flex-direction:column; align-items:center; gap:14px; min-width:320px; }
@@ -223,6 +224,7 @@ body {
 .mus-now { font-size:18px; font-weight:700; color:#fff; text-align:center; }
 .mus-ctl { display:flex; gap:14px; align-items:center; }
 .mus-ctl button { background:rgba(var(--ov, 255,255,255),.12); border:none; color:var(--tx-hi, #fff); width:46px; height:46px; border-radius:50%; font-size:18px; cursor:pointer; transition:transform .12s var(--ease-out4, ease); }
+.mus-ctl button:hover:not(:disabled) { transform:scale(1.08); }
 .mus-ctl .big { width:60px; height:60px; font-size:24px; background:var(--brand); }
 .mus-add { background:rgba(var(--ov, 255,255,255),.1); border:none; color:var(--tx-hi, #fff); padding:8px 14px; border-radius:var(--r-md); cursor:pointer; }
 .mus-list { width:340px; max-width:70vw; max-height:30vh; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
@@ -257,6 +259,7 @@ body {
 .call-cap { position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:#fff; padding:3px 8px; border-radius:var(--r-sm); font-size:13px; z-index:2; }
 .call-bar { display:flex; gap:14px; justify-content:center; padding:16px; background:rgba(0,0,0,.4); }
 .call-bar button { width:54px; height:54px; border-radius:50%; border:none; font-size:20px; cursor:pointer; background:#4e5058; color:#fff; transition:transform .12s var(--ease-out4, ease); }
+.call-bar button:hover { transform:scale(1.06); }
 .call-bar button.on { background:var(--brand); }
 .call-bar button.leave { background:var(--red); }
 
@@ -396,6 +399,7 @@ input[type=range] { accent-color:var(--brand); }
 
 .pqs-langs { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
 .pqs-lang { position:relative; background:var(--bg3); border:2px solid transparent; border-radius:var(--r-lg); padding:16px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; transition:transform .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease); color:var(--tx); }
+.pqs-lang:hover { transform:translateY(-2px); }
 .pqs-lang.on { border-color:var(--brand); }
 .pqs-lang-flag { font-size:34px; }
 .pqs-lang-name { font-weight:700; }
@@ -456,6 +460,7 @@ input[type=range] { accent-color:var(--brand); }
 .gif-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; }
 .gif-cell { position:relative; cursor:pointer; border-radius:var(--r-md); overflow:hidden; aspect-ratio:16/10; background:var(--bg3); }
 .gif-cell img { width:100%; height:100%; object-fit:cover; }
+.gif-cell:hover { outline:2px solid var(--brand); }
 /* v1.250.0: стикеры — квадратные, с прозрачностью, без обрезки (в отличие от GIF). */
 .sticker-cell { aspect-ratio:1/1; background:transparent; }
 .sticker-cell img { object-fit:contain; padding:6px; }
@@ -612,6 +617,7 @@ input[type=range] { accent-color:var(--brand); }
 .pqs-acc-banner { height:100px; }
 .pqs-optrow:last-child { border-bottom:none; }
 .pqs-theme { min-width:120px; text-align:center; transition:border-color .12s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
+.pqs-theme:hover { transform:translateY(-1px); }
 .pqs-toggle { box-shadow:inset 0 1px 2px rgba(0,0,0,.3); }
 .pqs-kbd { min-width:90px; text-align:center; }
 
@@ -633,7 +639,7 @@ input[type=range] { accent-color:var(--brand); }
 .mus-seek input { flex:1; }
 .mus-ctl { display:flex; align-items:center; gap:18px; margin:4px 0; }
 .mus-ctl button { background:none; border:none; color:var(--tx); font-size:22px; cursor:pointer; opacity:.85; }
-.mus-ctl button:hover:not(:disabled) { opacity:1; }
+.mus-ctl button:hover:not(:disabled) { opacity:1; transform:scale(1.1); }
 .mus-ctl .big { width:56px; height:56px; border-radius:50%; background:var(--brand); font-size:24px; display:flex; align-items:center; justify-content:center; }
 .mus-vol { display:flex; align-items:center; gap:8px; width:100%; }
 .mus-vol input { flex:1; }
@@ -755,6 +761,7 @@ body { font-size: var(--font-px, 16px); }
 .pqs-custom-toggle { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
 .pqs-preset-grid { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; }
 .pqs-preset { background:var(--bg3); border:2px solid transparent; border-radius:var(--r-lg); padding:12px 8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px; color:var(--tx); transition:transform .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease); }
+.pqs-preset:hover { transform:translateY(-2px); }
 .pqs-preset.on { border-color:var(--brand); }
 .pqs-preset-sw { width:48px; height:34px; border-radius:var(--r-sm); border-left:6px solid; display:flex; align-items:flex-end; padding:4px; }
 .pqs-preset-sw > span { width:12px; height:12px; border-radius:var(--r-xs); display:block; }
@@ -765,7 +772,7 @@ body { font-size: var(--font-px, 16px); }
 .pqs-density-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
 .pqs-density-card { background:var(--bg3); border:2px solid transparent; border-radius:var(--r-lg); padding:14px; cursor:pointer; text-align:left; color:var(--tx);
   transition:border-color .12s var(--ease-out4, ease), transform .18s var(--ease-out4, ease), box-shadow .18s var(--ease-out4, ease); }
-.pqs-density-card:hover { border-color:var(--c-hover); }
+.pqs-density-card:hover { border-color:var(--c-hover); transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,.25); }
 .pqs-density-card.on { border-color:var(--brand); }
 .pqs-density-prev { background:var(--bg2); border-radius:var(--r-md); padding:10px; margin-bottom:10px; }
 .pqs-density-row { display:flex; align-items:flex-start; gap:8px; }
@@ -787,7 +794,7 @@ body { font-size: var(--font-px, 16px); }
 .pqs-cstyle-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
 .pqs-cstyle-card { background:var(--bg3); border:2px solid transparent; border-radius:var(--r-lg); padding:12px; cursor:pointer; text-align:left; color:var(--tx);
   transition:border-color .12s var(--ease-out4, ease), transform .18s var(--ease-out4, ease), box-shadow .18s var(--ease-out4, ease); }
-.pqs-cstyle-card:hover { border-color:var(--c-hover); }
+.pqs-cstyle-card:hover { border-color:var(--c-hover); transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,.25); }
 .pqs-cstyle-card.on { border-color:var(--brand); }
 .composer.pqs-cstyle-prev { margin:0 0 10px; padding:6px 8px; min-height:0; align-items:center; pointer-events:none; }
 .pqs-cstyle-plus { width:18px; height:18px; border-radius:50%; border:1.5px solid #b5bac1; flex:none; }
@@ -800,6 +807,7 @@ body { font-size: var(--font-px, 16px); }
 /* Быстрый выбор акцентного цвета — ряд кружков-свотчей */
 .pqs-accent-row { display:flex; flex-wrap:wrap; gap:10px; }
 .pqs-accent-sw { width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0; box-shadow:inset 0 0 0 2px rgba(0,0,0,.15); transition:transform .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease); }
+.pqs-accent-sw:hover { transform:scale(1.08); }
 .pqs-accent-sw.on { border-color:var(--tx); }
 .pqs-accent-custom { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; }
 .pqs-accent-custom input[type=color] { position:absolute; inset:-4px; width:calc(100% + 8px); height:calc(100% + 8px); opacity:0; cursor:pointer; }
@@ -980,7 +988,7 @@ body { font-size: var(--font-px, 16px); }
    ряд управления дёргался при переключении повтора. */
 .mus2-repeat-one { position:absolute; right:-3px; bottom:-1px; font-size:9px; font-weight:800; line-height:1; }
 .mus2-ctl button.on { opacity:1; color:var(--mus-a,var(--brand)); }
-.mus2-ctl button:hover:not(:disabled) { opacity:1; }
+.mus2-ctl button:hover:not(:disabled) { opacity:1; transform:scale(1.1); }
 .mus2-ctl .big { width:48px; height:48px; border-radius:50%; background:var(--mus-a,var(--brand)); color:#fff; display:flex; align-items:center; justify-content:center; }
 .mus2-extra { display:flex; align-items:center; gap:12px; }
 .mus2-inpl, .mus2-tog { background:none; border:none; color:var(--mut); cursor:pointer; font-weight:600; font-size:13px; }
@@ -1670,7 +1678,7 @@ body.anim-paused *, body.anim-paused *::before, body.anim-paused *::after {
 .pin-btn.at-btn { font-weight: 700; font-size: 15px; line-height: 1; }
 
 /* --- Тонкая рамка вокруг сообщения при наведении: точные границы --- */
-.msg:hover { border-radius:var(--r-xs); }
+.msg:hover { box-shadow: inset 0 0 0 1px rgba(var(--ov, 255,255,255), .05); border-radius:var(--r-xs); }
 
 
 /* --- Панель закреплённых: кликабельные записи и счётчик на кнопке --- */
@@ -1792,9 +1800,9 @@ img.twemoji { width:1.375em; height:1.375em; vertical-align:-.28em; margin:0 .03
 .emoji-btn img.twemoji { width:26px; height:26px; }
 /* Пикер: ровная сетка, ховер с лёгким увеличением — как в Discord */
 .emoji-btn { display:flex; align-items:center; justify-content:center; aspect-ratio:1; border-radius:var(--r-sm); transition:background .1s var(--ease-out4, ease), transform .08s var(--ease-out4, ease); }
-.emoji-btn:hover { background:rgba(var(--ov, 255,255,255),.08); }
+.emoji-btn:hover { background:rgba(var(--ov, 255,255,255),.08); transform:scale(1.12); }
 .rx-quick button, .ctx-quick button { transition:background .1s var(--ease-out4, ease), transform .08s var(--ease-out4, ease); }
-.rx-quick button:hover, .ctx-quick button:hover { background:rgba(var(--ov, 255,255,255),.08); }
+.rx-quick button:hover, .ctx-quick button:hover { background:rgba(var(--ov, 255,255,255),.08); transform:scale(1.15); }
 
 /* ==== Системные сообщения, цветные роли, активность ==== */
 .sys-msg { display:flex; align-items:center; gap:8px; padding:4px 16px 4px 20px; margin:2px 0; color:var(--mut); font-size:14px; cursor:pointer; border-radius:var(--r-xs); }
@@ -2119,9 +2127,11 @@ body.no-anim .member-typing i { animation:none; }
 
 /* Композер: кнопки «оживают» при наведении (pop + прыжок букв GIF, подмигивание иконок). */
 .composer .ctool { transition:background .15s var(--ease-out4, ease), transform .18s cubic-bezier(.34, 1.56, .64, 1); }
+.composer .ctool:hover { transform: translateY(-1px) scale(1.06); }
 .composer .ctool:active { transform: scale(.92); }
 .composer .ctool:hover > svg { animation: icon-wiggle .3s ease; }
 .gif-badge-oval { transition:transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.ctool.gif-badge:hover .gif-badge-oval { transform: scale(1.12); }
 .gif-badge-oval i { display: inline-block; font-style: normal; }
 .ctool.gif-badge:hover .gif-badge-oval i { animation: gif-jump .3s ease; }
 .ctool.gif-badge:hover .gif-badge-oval i:nth-child(2) { animation-delay: .05s; }
@@ -2201,7 +2211,7 @@ body.no-anim .member-typing i { animation:none; }
 .pc-board-sub { text-align:center; color:var(--mut); font-size:13px; max-width:380px; margin:0 auto 24px; }
 .pc-wgrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .pc-widget { position:relative; height:104px; border-radius:var(--r-lg); background:linear-gradient(140deg,#1c1e26,#15161c); border:1px solid rgba(var(--ov, 255,255,255),.05); display:flex; align-items:flex-end; padding:12px; cursor:pointer; overflow:hidden; transition:transform .18s cubic-bezier(.34, 1.56, .64, 1), border-color .15s var(--ease-out4, ease); }
-.pc-widget:hover { border-color:rgba(var(--ov, 255,255,255),.16); }
+.pc-widget:hover { transform:translateY(-2px); border-color:rgba(var(--ov, 255,255,255),.16); }
 .pc-widget-plus { position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%; background:rgba(var(--ov, 255,255,255),.12); display:flex; align-items:center; justify-content:center; color:var(--tx-hi, #fff); }
 .pc-widget-nm { position:relative; z-index:1; font-size:13.5px; font-weight:800; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.6); display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pc-widget-nm svg { flex:none; opacity:.85; }
@@ -2270,6 +2280,9 @@ body.no-anim .member-typing i { animation:none; }
 /* --- 🎧 Нижняя панель --- */
 /* Наушники: при наведении «снимаются с головы» — ушки разводятся, дуга приподнимается */
 .me-deaf svg path { transition:transform .3s cubic-bezier(.34, 1.56, .64, 1); transform-box: fill-box; transform-origin: center; }
+.me-deaf:hover:not(.off) .hp-l { transform: translateX(-2.5px) rotate(-10deg); }
+.me-deaf:hover:not(.off) .hp-r { transform: translateX(2.5px) rotate(10deg); }
+.me-deaf:hover:not(.off) .hp-arc { transform: translateY(-1.5px); }
 /* Клик: резко схлопываются */
 @keyframes hp-collapse { 0% { transform: scale(1); } 45% { transform: scale(.68, .85); } 75% { transform: scale(1.06, .96); } 100% { transform: scale(1); } }
 .me-ic.anim-squeeze svg { animation: hp-collapse .3s ease-in-out; }
@@ -2297,14 +2310,18 @@ body.no-anim .member-typing i { animation:none; }
 .ctool.gif-badge:hover .gif-badge-oval { border-radius:999px; }
 /* Смайлик: улыбка шире, глаза задорно прищуриваются */
 .composer .ctool .sm-mouth, .composer .ctool .sm-eye { transition:transform .25s var(--ease-out4, ease); transform-box: fill-box; transform-origin: center; }
+.composer .ctool:hover .sm-mouth { transform: scale(1.35); }
+.composer .ctool:hover .sm-eye { transform: translateY(.5px) scaleX(2.6); }
 /* Плюс: оборачивается в крестик и «дышит» */
 .attach-btn svg { transition:transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.attach-btn:hover svg { transform: rotate(45deg) scale(1.12); }
 
 /* --- 🧭 Навигация --- */
 /* Иконки серверов: скругление + zoom-in картинки, «вдавливание» при клике */
 .srv { overflow: hidden; }
 .srv:hover { border-radius:16px; }
 .srv img { transition:transform .25s var(--ease-out4, ease); }
+.srv:hover img { transform: scale(1.1); }
 .srv:active { transform: scale(.92); }
 /* Каналы: строка уступает место мышке (сдвиг на 4px), текст ярче */
 .ch { transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), padding-left .2s var(--ease-out4, ease); }
@@ -2312,6 +2329,7 @@ body.no-anim .member-typing i { animation:none; }
 
 /* --- 💡 Scale & Lift для стандартных кнопок --- */
 .pqs-save, .pqs-danger, .fp-editbtn, .srv-invite, .pin-btn, .mini-msgbox-smile { transition:transform .15s var(--ease-out4, ease), box-shadow .15s var(--ease-out4, ease), background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), filter .15s var(--ease-out4, ease); }
+.pqs-save:hover, .pqs-danger:hover, .fp-editbtn:hover { transform: scale(1.05); box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 .pqs-save:active, .pqs-danger:active, .fp-editbtn:active, .pin-btn:active, .srv-invite:active { transform: scale(.95); }
 
 
@@ -2327,7 +2345,7 @@ body.no-anim .member-typing i { animation:none; }
 .lb-tools > button, .lb-more-wrap > button { width: 36px; height: 36px; border: none; border-radius:var(--r-md); background: none;
   color: rgba(var(--ov, 255,255,255), .75); cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
-.lb-tools > button:hover, .lb-more-wrap > button:hover { background: rgba(var(--ov, 255,255,255), .12); color:var(--tx-hi, #fff); }
+.lb-tools > button:hover, .lb-more-wrap > button:hover { background: rgba(var(--ov, 255,255,255), .12); color:var(--tx-hi, #fff); transform: scale(1.05); }
 .lb-tools > button:active, .lb-more-wrap > button:active { transform: scale(.95); }
 .lb-tools-sep { width: 1px; height: 20px; background: rgba(var(--ov, 255,255,255), .2); margin: 0 6px; }
 .lb-more-wrap { position: relative; }
@@ -2384,7 +2402,7 @@ body.no-anim .member-typing i { animation:none; }
   font-size:12.5px; font-weight:600; padding:5px 12px; }
 .ctx-quick { justify-content:space-between; border-bottom:none; margin-bottom:2px; padding:4px 2px; }
 .ctx-quick button { flex:0 0 auto; width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:22px; background:var(--bg2); border-radius:var(--r-lg); transition:transform .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease); }
-.ctx-quick button:hover { background:var(--brand); }
+.ctx-quick button:hover { background:var(--brand); transform:scale(1.08); }
 .ctx-emoji-pop { position:fixed; z-index:var(--z-petmenu-ov, 95); animation:pop .12s var(--ease-spring, ease) both; }
 
 
@@ -2619,6 +2637,7 @@ body.no-anim .member-typing i { animation:none; }
 
 .sset-swatches { display:flex; flex-wrap:wrap; gap:10px; }
 .sset-sw { width:76px; height:44px; border-radius:var(--r-md); cursor:pointer; border:2px solid transparent; transition:transform .12s var(--ease-out4, ease); }
+.sset-sw:hover { transform:translateY(-2px); }
 .sset-sw.on { border-color:#fff; }
 .sset-sw.small { width:44px; height:44px; }
 .sset-sw.custom { position:relative; background:#fff; color:#4e5058; display:flex; align-items:center; justify-content:center; overflow:hidden; }
@@ -2635,6 +2654,7 @@ body.no-anim .member-typing i { animation:none; }
 .sset-tagchip.big { padding:10px 16px; font-size:16px; border-radius:var(--r-md); }
 .sset-tagico { display:grid; grid-template-columns:repeat(5,56px); gap:8px; }
 .sset-tagico button { width:56px; height:56px; border-radius:var(--r-md); background:var(--bg3); border:2px solid transparent; font-size:24px; cursor:pointer; transition:transform .12s var(--ease-out4, ease); display:flex; align-items:center; justify-content:center; color:var(--tx); }
+.sset-tagico button:hover { transform:translateY(-2px); }
 .sset-tagico button.on { border-color:var(--brand); }
 .sset-tagico button img.tag-cust-emoji { width:22px; height:22px; object-fit:contain; }
 .sset-emojipop { position:absolute; top:64px; left:0; z-index:var(--z-pop, 60); }
@@ -2994,7 +3014,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-btn { position:relative; width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; display:flex;
   align-items:center; justify-content:center; background:var(--bg2); color:#fff;
   transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
-.c2-btn:hover { background:var(--c-hover); }
+.c2-btn:hover { background:var(--c-hover); transform:translateY(-2px); }
 .c2-btn.lit { background:#fff; color:#111214; }
 .c2-btn.lit:hover { background:#e6e7ea; }
 .c2-btn.live { background:var(--red); }
@@ -3106,7 +3126,7 @@ body.no-anim .member-typing i { animation:none; }
 .upd-go { border:none; border-radius:var(--r-md); background:var(--brand); color:#fff; font-weight:700; font-size:13px;
   padding:9px 14px; cursor:pointer; flex:none; transition:filter .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease);
   display:inline-block; text-decoration:none; text-align:center; }
-.upd-go:hover { filter:brightness(1.08); }
+.upd-go:hover { filter:brightness(1.08); transform:translateY(-1px); }
 .upd-x { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
 .upd-x:hover { color:var(--tx); }
 
@@ -3116,15 +3136,19 @@ body.no-anim .member-typing i { animation:none; }
 .chat-head { position:relative; background-image:linear-gradient(180deg, rgba(var(--ov, 255,255,255),.035), rgba(var(--ov, 255,255,255),0)); border-bottom:1px solid rgba(0,0,0,.28); animation:headIn .28s ease both; }
 @keyframes headIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:none; } }
 .pin-btn, .call-start, .srv-invite { transition:background .16s var(--ease-out4, ease), color .16s var(--ease-out4, ease), transform .16s var(--ease-out4, ease); }
+.pin-btn:hover, .call-start:hover { transform:translateY(-1.5px); }
 .pin-btn:active, .call-start:active { transform:scale(.88); }
 .head-online { padding:3px 8px; border-radius:var(--r-lg); background:rgba(59,165,93,.12); }
 .head-online-dot { animation:pulse 2.4s ease infinite; }
 
 /* -- Микро-анимации по всему приложению -- */
+.srv:hover { transform:scale(1.06); }
 .srv:active { transform:scale(.94); }
 .dm-item { transition:background .15s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
+.dm-item:hover { transform:translateX(2px); }
 .ch { transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), padding-left .2s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
 .jump-down { transition:transform .15s var(--ease-out4, ease), background .15s var(--ease-out4, ease), opacity .15s var(--ease-out4, ease); }
+.jump-down:hover { transform:translateY(-2px); }
 
 /* -- Входящий звонок: модалка по центру (как в Discord) -- */
 .ic-ov { position:fixed; inset:0; z-index:var(--z-over-modal, 130); display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.62); animation:lbfade .18s ease both; }
@@ -3139,7 +3163,7 @@ body.no-anim .member-typing i { animation:none; }
 .ic-sub { font-size:13px; color:var(--tx-2, #b5bac1); margin:5px 0 20px; animation:pulse 1.6s ease infinite; }
 .ic-btns { display:flex; gap:28px; justify-content:center; }
 .ic-btn { width:56px; height:56px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; transition:transform .15s var(--ease-out4, ease), filter .15s var(--ease-out4, ease); }
-.ic-btn:hover { filter:brightness(1.12); }
+.ic-btn:hover { transform:translateY(-3px) scale(1.07); filter:brightness(1.12); }
 .ic-btn:active { transform:scale(.92); }
 .ic-btn.ok { background:var(--green); animation:icBounce 1.4s ease infinite; }
 .ic-btn.no { background:var(--red); }
@@ -3158,7 +3182,7 @@ body.no-anim .member-typing i { animation:none; }
 .vp-ch { font-size:11.5px; color:var(--tx-2, #b5bac1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .vp-btns { display:flex; gap:4px; }
 .vp-btn { width:30px; height:30px; border:none; border-radius:var(--r-sm); background:transparent; color:var(--tx-2, #b5bac1); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
-.vp-btn:hover { background:rgba(var(--ov, 255,255,255),.08); color:var(--tx-hi, #fff); }
+.vp-btn:hover { background:rgba(var(--ov, 255,255,255),.08); color:var(--tx-hi, #fff); transform:translateY(-1px); }
 .vp-btn:active { transform:scale(.9); }
 .vp-btn.off { color:var(--red); }
 .vp-btn.danger:hover { color:var(--red); background:rgba(237,66,69,.12); }
@@ -3452,7 +3476,7 @@ body.no-anim .member-typing i { animation:none; }
 .jsm-disc-tx b { font-size:15px; font-weight:700; }
 .jsm-disc-tx span { font-size:12.5px; color:var(--mut); line-height:1.35; }
 .jsm-disc-arr { color:var(--mut); font-size:24px; line-height:1; flex:none; transition:translate .15s var(--ease-out4), color .15s var(--ease-out4, ease); }
-.jsm-disc:hover .jsm-disc-arr { color:var(--tx); }
+.jsm-disc:hover .jsm-disc-arr { translate:3px 0; color:var(--tx); }
 .jsm-foot { display:flex; align-items:center; justify-content:space-between; margin:20px -24px 0; padding:16px 24px; background:var(--c-main); }
 .jsm-foot .modal-ghost { padding-left:0; }
 /* ===== v1.47.0: меню сервера (клик по названию) 1-в-1 как в Discord ===== */
@@ -4036,6 +4060,7 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 @keyframes cover-shimmer { from { transform:translateX(-100%) } to { transform:translateX(100%) } }
 /* Обложка появляется с упругим «поп»-эффектом и слегка растёт при наведении */
 img.mpg-cover, img.act-cover, img.mini-game-cover, img.mag-cover { animation:cover-pop .45s cubic-bezier(.34,1.56,.64,1) both; transition:transform .18s var(--ease-out4, ease); }
+img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { transform:scale(1.06); }
 @keyframes cover-pop { from { opacity:0; transform:scale(.7) } to { opacity:1; transform:none } }
 /* Живой «эквалайзер» рядом с «Играет в» — зелёные столбики пульсируют */
 .mpg-head-l { display:flex; align-items:center; gap:7px; }
@@ -4063,6 +4088,7 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 * { -webkit-tap-highlight-color:transparent; }
 /* Реакции: приподнимаются при наведении, «прожимаются» при клике */
 .rx { transition:background .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
+.rx:hover { transform:translateY(-1px); }
 .rx:active { transform:scale(.92); }
 /* Тосты плавно выезжают снизу с упругим доводом */
 .toast { animation:toast-in .3s cubic-bezier(.34,1.45,.64,1) both; }
@@ -4072,13 +4098,16 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 @keyframes menu-in { from { opacity:0; transform:scale(.94) translateY(-3px) } to { opacity:1; transform:none } }
 /* Быстрые реакции в контекстном меню подпрыгивают при наведении */
 .ctx-quick button { transition:transform .13s cubic-bezier(.34, 1.56, .64, 1), background .12s var(--ease-out4, ease); }
+.ctx-quick button:hover { transform:scale(1.22) translateY(-1px); }
 /* Модалки открываются с мягким «всплытием» */
 .modal { animation:modal-in .2s cubic-bezier(.3,1.25,.6,1) both; }
 @keyframes modal-in { from { opacity:0; transform:scale(.95) translateY(10px) } to { opacity:1; transform:none } }
 /* Крестик модалки поворачивается при наведении */
 .modal-x { transition:transform .18s var(--ease-out4, ease), background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease); }
+.modal-x:hover { transform:rotate(90deg); }
 /* Эмодзи в пикере слегка увеличиваются под курсором */
 .ep2-cell { transition:transform .12s cubic-bezier(.34, 1.56, .64, 1), background .12s var(--ease-out4, ease); }
+.ep2-cell:hover { transform:scale(1.14); }
 /* Кнопки меню «плюса» — мягкое смещение содержимого при наведении */
 .plus-menu button { transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease), padding-left .12s var(--ease-out4, ease); }
 .plus-menu button:hover { padding-left:16px; }
@@ -4271,6 +4300,7 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 
 /* Эмодзи-пикер: клетки чуть подрастают под курсором и сжимаются при клике */
 .emoji-btn { transition:background .1s var(--ease-out4, ease), transform .12s var(--ease-spring); }
+.emoji-btn:hover { transform:scale(1.14); }
 
 /* Точка непрочитанного у канала появляется с «поп»-эффектом */
 @keyframes dot-in { from { scale:0; } to { scale:1; } }
@@ -4278,6 +4308,7 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 
 /* Карточки «Активных контактов»: лёгкий подъём при наведении */
 .pfr-actcard2 { transition:background .15s var(--ease-out4, ease), transform .18s var(--ease-out4), box-shadow .18s var(--ease-out4, ease); }
+.pfr-actcard2:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.25); }
 
 /* Кнопки «Друзей»: плавный ховер + утапливание при нажатии */
 .pfr-cbtn, .pfr-add2-send, .pfr-addfriend, .pfr-tab, .pfr-ok, .pfr-no {
@@ -4373,12 +4404,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 /* 3. Крестик закрытия настроек мягко поворачивается при наведении */
 .pqs2-x { transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease), transform .25s var(--ease-out4, ease); }
+.pqs2-x:hover { transform: rotate(90deg); }
 
 /* 4. Иконки пунктов в меню настроек чуть сдвигаются вправо при наведении */
 .pqs2-item-ic { transition:transform .18s var(--ease-out4, ease); }
+.pqs2-item:hover .pqs2-item-ic { transform: translateX(2px); }
 
 /* 5. Аватар в карточке настроек слегка «оживает» */
 .pqs2-me-av { transition:transform .2s var(--ease-out4, ease), box-shadow .2s var(--ease-out4, ease); }
+.pqs2-me:hover .pqs2-me-av { transform: scale(1.07) rotate(-2deg); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 
 /* 6. Поиск в настройках подсвечивается при фокусе */
 .pqs2-search { transition:box-shadow .15s var(--ease-out4, ease); }
@@ -4390,6 +4424,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 /* 8. Пункты контекстного меню плавно сдвигаются и «нажимаются» */
 .ctxmenu-item { transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease), transform .15s var(--ease-out4, ease); }
+.ctxmenu-item:hover { transform: translateX(2px); }
 .ctxmenu-item:active { transform: translateX(2px) scale(.98); }
 
 /* 9. Окно «Что нового» появляется с мягкой анимацией, маркеры списка — в цвет бренда */
@@ -5078,6 +5113,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 12px; }
 .cat-tile { position: relative; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
   background: var(--bg2); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.cat-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.28); }
 body.no-anim .cat-tile { transition: none; }
 body.no-anim .cat-tile:hover { transform: none; }
 /* Фон плитки: своя картинка либо мягкая заливка от акцента — пустой плитка не
@@ -5630,6 +5666,7 @@ body.no-anim .mus2::before { animation: none; }
   box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
   transition: transform .35s var(--ease-out4, ease), box-shadow .35s var(--ease-out4, ease);
 }
+.mus2-now:hover .mus2-art { transform: translateY(-3px); box-shadow: 0 26px 60px rgba(0, 0, 0, .62); }
 
 /* Строка очереди: плавная подсветка вместо резкой смены цвета. */
 .mus2-li { transition: background .15s var(--ease-out4, ease); }
@@ -5944,6 +5981,7 @@ body.no-anim .mus-mini { transition: none; }
 
 /* Аватарку открываем как картинку — раньше нажатие на неё не делало ничего. */
 .pc-av.clickable { cursor: zoom-in; transition: transform .18s var(--ease-out4, ease); }
+.pc-av.clickable:hover { transform: scale(1.04); }
 body.no-anim .pc-av.clickable { transition: none; }
 
 /* Предпросмотр шапки профиля в настройках (v1.384.0). */
@@ -6189,6 +6227,7 @@ body.no-anim .mus2-q3-row { transition: none; }
   content: '›'; margin-left: auto; font-size: 20px; line-height: 1; color: var(--mut);
 }
 .mus2-libbtn.wide:hover {
+  transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--mus-a, var(--brand, #5865f2)) 60%, transparent);
 }
 body.no-anim .mus2-libbtn.wide { transition: none; }
@@ -6206,6 +6245,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   color: rgba(var(--ov, 255,255,255), .5);
 }
 .mus2-card { padding: 10px; }
+.mus2-card:hover { transform: translateY(-2px); }
 .mus2-card-t { font-size: 13.5px; }
 
 /* Прослушивания на обложке и порядок склада (v1.406.0). Число пряталось в строке
@@ -6680,7 +6720,9 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
   animation: mus2-card-in .2s var(--ease-out4, ease) both;
   padding: 10px 10px 12px;
 }
+.mus2-card:hover { transform: translateY(-3px); }
 .mus2-card-art { box-shadow: 0 10px 24px rgba(0, 0, 0, .45); margin-bottom: 12px; }
+.mus2-card:hover .mus2-card-art { box-shadow: 0 16px 32px rgba(0, 0, 0, .55); }
 /* Мягкая тень внизу обложки: под ней лежат длительность и число прослушиваний,
    и на светлой картинке белые надписи иначе теряются. */
 .mus2-card-art::after {
@@ -7531,7 +7573,7 @@ body.no-anim .mus-blob.on { animation: none; }
      строки. Владелец прислал снимок — вместо «Нормальная» видно «ормальная».
      22 пикселя — половина высоты пустого поля, поэтому одна строка выглядит
      той же таблеткой, а высокое поле просто со скруглёнными углами. */
-  .composer textarea { border-radius: 22px; padding: 10px 14px; }
+  .composer textarea { border-radius: 999px; padding: 10px 14px; }
   .composer-tools { gap: 2px; }
   .composer .attach-btn, .composer-tools .ctool { border-radius: 50%; background: var(--c-hover); }
   .composer .attach-btn:hover, .composer-tools .ctool:hover { background: #4e5058; }
@@ -8089,43 +8131,3 @@ body.no-anim .mus-blob.on { animation: none; }
   .sc-add .pqs2-btn { min-height: 44px; }
   .ws-big { min-height: 44px; }
 }
-
-
-/* ==== v1.501.0: наведение НИЧЕГО НЕ ДВИГАЕТ и НИЧЕГО НЕ ОБВОДИТ ====
-
-   Владелец прислал снимок: вокруг аватарки — длинный овал обводки, и написал
-   «убери полностью все эти обводки и эффекты при наведении». До этого он же
-   жаловался, что значок под курсором подскакивает.
-
-   Поэтому из ВСЕХ правил :hover вынуто то, что меняет геометрию (transform со
-   сдвигом, увеличением или поворотом) и то, что рисует рамку (outline, кольцо
-   тенью, тень-подъём) — шестьдесят пять объявлений в пятидесяти с лишним
-   правилах. Осталось только то, что меняет ЦВЕТ: фон, буквы, прозрачность,
-   яркость, цвет рамки. Ровно так ведёт себя Discord, на который владелец
-   равняется.
-
-   Оставлены «возвраты на место» вроде transform: translateY(0) и translate:0 0
-   — это не движение под курсором, а показ спрятанного: панель действий на
-   сообщении и кнопка очереди у карточки песни лежат сдвинутыми и на наведении
-   встают на место. Если их вынуть, кнопки просто не появятся.
-
-   А сорок один селектор после этого остался ПУСТЫМ — у этих кнопок весь отклик
-   и был движением. Наведение на них перестало быть заметным вообще, поэтому
-   ниже отклик возвращён цветом. Без этого куска правка означала бы «кнопки
-   больше не отзываются», а просили не этого.
-
-   Проверяет всё это npm run test:hover: он и меряет неподвижность, и требует,
-   чтобы картинка под курсором всё-таки менялась. */
-.mus-head-r button:hover, .mus-head button:hover { background: rgba(0, 0, 0, .5); }
-.pqs-lang:hover, .pqs-preset:hover, .pqs-accent-sw:hover, .sset-sw:hover,
-.sset-tagico button:hover, .cat-tile:hover, .pqs-danger:hover,
-.gif-cell:hover, .pc-av.clickable:hover, .mus2-now:hover .mus2-art,
-.mus2-card:hover .mus2-card-art,
-img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: brightness(1.14); }
-/* Светлая тема — белый прямоугольник, ярче его сделать нельзя. Приглушение
-   контраста тянет любой цвет к середине: белое темнеет, чёрное светлеет — и
-   наведение видно на всех трёх образцах.
-   Сначала тут стояло contrast(.9) brightness(1.06) — стенд намерил на белом
-   разницу в 0.7 из 255, то есть ничего: подъём яркости возвращал белое обратно
-   в белое, упираясь в потолок. Поэтому только контраст. */
-.pqs-theme:hover { filter: contrast(.85); }

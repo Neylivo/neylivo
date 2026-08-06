@@ -1,20 +1,33 @@
-// v1.499.0: значки при наведении НЕ ПРЫГАЮТ. Запуск: npm run test:hover
+// v1.501.0: наведение НИЧЕГО НЕ ДВИГАЕТ, но остаётся заметным.
+// Запуск: npm run test:hover
 //
-// Владелец прислал снимок: аватарка подскакивала под курсором.
+// Две жалобы владельца подряд. Сперва: «сделай чтобы иконка при наведение не
+// подскакивала» — аватарка вырастала с сорока до сорока трёх пикселей и
+// уезжала вверх-влево. Я заменил рост подсветкой кольцом, и стало хуже: у
+// элемента выше своей ширины круглое скругление даёт длинный овал. Вторая
+// жалоба со снимком: «убери полностью все эти обводки и эффекты при
+// наведении».
 //
-// По исходнику такое не видно: правило наведения выглядит безобидно
-// (scale 1.08), и понять, что значок при этом УЕЗЖАЕТ, можно только измерив.
-// На сломанной версии выходило 40×42 -> 43.2×45.4 со сдвигом −1.6, −1.7.
+// Отсюда правило, которое стенд и стережёт:
+//   у аватарки на наведение не меняется НИЧЕГО;
+//   у остальных кнопок не меняется ГЕОМЕТРИЯ, но меняется ЦВЕТ.
+//
+// Второе не менее важно первого. Движение убиралось разом из шестидесяти пяти
+// объявлений, и у сорока одного селектора оно было единственным откликом —
+// без возвращённого цвета кнопки стали бы мёртвыми под курсором, а просили не
+// этого. Проверка «ничего не шевелится» одна такую беду не увидит: она пройдёт
+// и на стилях, где наведения нет вовсе.
 //
 // ПОЧЕМУ НЕ НАСТОЯЩЕЙ МЫШЬЮ. Сначала я подводил указатель через sendInputEvent
 // — и проверка падала через раз с «мышь не доехала»: Chromium пересчитывает
 // наведение по последнему перемещению и после смены размера окна первые
-// движения иногда съедает. Это беда стенда, а не стилей, и лечить её сном да
-// повторами значит получить проверку, которой нельзя верить.
+// движения иногда съедает. Это беда стенда, а не стилей. Поэтому :hover
+// включается напрямую, через отладчик браузера (CSS.forcePseudoState).
 //
-// Поэтому :hover включается НАПРЯМУЮ, через отладчик браузера
-// (CSS.forcePseudoState). Состояние ровно то же, что от мыши, только приходит
-// оно наверняка.
+// ПОЧЕМУ ЦВЕТ МЕРЯЕТСЯ ПИКСЕЛЯМИ. Сравнивать computed style бесполезно:
+// правило может поменять свойство, которого не видно (например, яркость белого
+// прямоугольника). Стенд снимает картинку до и после и считает среднюю
+// яркость участка — это ровно то, что увидит человек.
 const { app, BrowserWindow } = require('electron')
 const fs = require('fs')
 const path = require('path')
@@ -23,21 +36,31 @@ const OUT = path.join(__dirname, '..', 'dist-hover-test')
 fs.mkdirSync(OUT, { recursive: true })
 fs.copyFileSync(path.join(__dirname, '..', 'src', 'styles.css'), path.join(OUT, 'styles.css'))
 
-// Разметка списана с MessageList.tsx: аватарка стоит в msg-gutter.
+// Образцы списаны с настоящей разметки. Первый — особый: у него отклика быть
+// НЕ ДОЛЖНО. Остальные обязаны меняться в цвете и стоять на месте.
+const ОБРАЗЦЫ = [
+  { имя: 'аватарка в сообщении', молча: true,
+    html: '<span class="av-click" id="%">' +
+      '<span class="av" style="width:40px;height:40px;border-radius:50%;background:#5865f2;display:block"></span></span>' },
+  { имя: 'кнопка в шапке плеера',
+    html: '<div class="mus-head-r"><button id="%">II</button></div>' },
+  { имя: 'карточка языка',
+    html: '<div class="pqs-lang" id="%"><span class="pqs-lang-flag">RU</span><span class="pqs-lang-name">Русский</span></div>' },
+  { имя: 'тема тёмная', html: '<div class="pqs-theme dark" id="%">Тёмная</div>' },
+  { имя: 'тема светлая', html: '<div class="pqs-theme light" id="%">Светлая</div>' },
+  { имя: 'набор настроек', html: '<div class="pqs-preset" id="%">Набор</div>' },
+  { имя: 'кружок цвета', html: '<button class="pqs-accent-sw" id="%" style="background:#5865f2"></button>' },
+  { имя: 'образец наклейки', html: '<div class="sset-sw" id="%" style="background:#3ba55d"></div>' },
+  { имя: 'плитка раздела', html: '<div class="cat-tile" id="%" style="width:160px;height:90px"></div>' },
+  { имя: 'ячейка гифки', html: '<div class="gif-cell" id="%" style="width:160px"></div>' },
+  { имя: 'опасная кнопка', html: '<button class="pqs-danger" id="%">Удалить</button>' },
+]
+
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css">
-<style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif;color:#dbdee1}
-.msgs{padding:40px 16px}</style>
-<div class="msgs">
-  <div class="msg">
-    <div class="msg-gutter">
-      <span class="av-click" id="ava" title="Профиль">
-        <span class="av" style="width:40px;height:40px;border-radius:50%;background:#5865f2;display:block"></span>
-      </span>
-    </div>
-    <div class="msg-body"><b>Ваня</b><div>Привет</div></div>
-  </div>
-</div>`)
+<style>html,body{margin:0;background:#313338;font-family:system-ui,sans-serif;color:#dbdee1}
+.probes{display:flex;flex-wrap:wrap;gap:24px;padding:24px;align-items:flex-start}</style>
+<div class="probes">${ОБРАЗЦЫ.map((о, n) => о.html.replace('%', 't' + n)).join('\n')}</div>`)
 
 let failed = 0
 const check = (name, ok, extra) => {
@@ -46,85 +69,95 @@ const check = (name, ok, extra) => {
 }
 
 app.disableHardwareAcceleration()
-setTimeout(() => { console.log('ЗАВИС'); process.exit(2) }, 60000)
+setTimeout(() => { console.log('ЗАВИС'); process.exit(2) }, 90000)
 
-async function мерка(win) {
+/** Средняя яркость участка картинки. getBitmap отдаёт BGRA подряд. */
+function яркость(картинка, r) {
+  const { width, height } = картинка.getSize()
+  const b = картинка.getBitmap()
+  let сумма = 0, сколько = 0
+  for (let y = Math.max(0, Math.round(r.y)); y < Math.min(height, Math.round(r.y + r.h)); y++) {
+    for (let x = Math.max(0, Math.round(r.x)); x < Math.min(width, Math.round(r.x + r.w)); x++) {
+      const i = (y * width + x) * 4
+      сумма += (b[i] + b[i + 1] + b[i + 2]) / 3
+      сколько++
+    }
+  }
+  // Ноль пикселей — это не «цвет не изменился», это промах мимо картинки:
+  // образец уехал за край окна или мерку читают не теми ключами. Я на этом
+  // попался: яркость брала r.width, а в мерках лежит r.w, и стенд честно
+  // показывал «цвет 0» на всех образцах разом. Пусть падает громко.
+  if (!сколько) throw new Error('участок вне снимка: ' + JSON.stringify(r) + ' при ' + width + 'x' + height)
+  return сумма / сколько
+}
+
+async function мерки(win) {
   return JSON.parse(await win.webContents.executeJavaScript(`(() => {
-    const el = document.getElementById('ava')
-    const r = el.getBoundingClientRect()
-    return JSON.stringify({
-      x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10,
-      w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
-      tr: getComputedStyle(el).transform,
-      тень: getComputedStyle(el).boxShadow,
-    })
+    const из = []
+    for (let n = 0; n < ${ОБРАЗЦЫ.length}; n++) {
+      const r = document.getElementById('t' + n).getBoundingClientRect()
+      из.push({ x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10,
+                w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 })
+    }
+    return JSON.stringify(из)
   })()`))
 }
 
-/**
- * Включить или снять :hover у значка через отладчик браузера.
- *
- * nodeId берём ОДИН раз и держим: DOM.getDocument выдаёт новые номера, и снятие
- * по свежему номеру не снимает состояние, поставленное по прежнему. Из-за этого
- * наведение с первого прохода оставалось включённым на втором, и «до» уже было
- * с подсветкой.
- */
-let номерЗначка = 0
-async function навести(win, включить) {
-  const d = win.webContents.debugger
-  if (!номерЗначка) {
-    const { root } = await d.sendCommand('DOM.getDocument')
-    const { nodeId } = await d.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: '#ava' })
-    номерЗначка = nodeId
-  }
-  await d.sendCommand('CSS.forcePseudoState', {
-    nodeId: номерЗначка, forcedPseudoClasses: включить ? ['hover'] : [],
-  })
-  // Ждём, пока это ПРАВДА применится: у подсветки есть переход, и мерка,
-  // снятая сразу, поймала бы его середину.
-  for (let i = 0; i < 20; i++) {
-    const м = await мерка(win)
-    const есть = м.тень.includes('255, 255, 255')
-    if (есть === включить) return
-    await new Promise(r => setTimeout(r, 60))
-  }
-}
-
 app.whenReady().then(async () => {
-  // ОДНО окно на оба размера: закрытое окно уносит с собой сессию, и следующее
-  // берётся за file:// раньше, чем она поднимется (ERR_FAILED).
-  const win = new BrowserWindow({ show: false, width: 1200, height: 700, backgroundColor: '#313338' })
-  // Страницу открываем ОДИН раз, до отладчика: переход по новому адресу закрывает
-  // его цель, и следующая же команда падает с «target closed». Содержимое
-  // страницы не меняется — между размерами достаточно поменять ширину окна.
+  // ОДНО окно и ОДНА загрузка страницы: закрытое окно уносит сессию, а переход
+  // по новому адресу закрывает цель отладчика — следом всё падает с
+  // «target closed».
+  const win = new BrowserWindow({ show: false, width: 1200, height: 900, backgroundColor: '#313338' })
   await win.loadFile(path.join(OUT, 'index.html'))
-  await new Promise(r => setTimeout(r, 300))
-  win.webContents.debugger.attach('1.3')
-  await win.webContents.debugger.sendCommand('DOM.enable')
-  await win.webContents.debugger.sendCommand('CSS.enable')
+  await new Promise(r => setTimeout(r, 400))
+  const d = win.webContents.debugger
+  d.attach('1.3')
+  await d.sendCommand('DOM.enable')
+  await d.sendCommand('CSS.enable')
+
+  // Номера узлов берём ОДИН раз и держим: DOM.getDocument выдаёт новые номера,
+  // и снятие наведения по свежему номеру не снимает поставленное по прежнему.
+  const { root } = await d.sendCommand('DOM.getDocument')
+  const номера = []
+  for (let n = 0; n < ОБРАЗЦЫ.length; n++) {
+    const { nodeId } = await d.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: '#t' + n })
+    номера.push(nodeId)
+  }
+  const навести = async включить => {
+    for (const nodeId of номера) {
+      await d.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: включить ? ['hover'] : [] })
+    }
+    // Переходы длятся до трёх десятых — ждём с запасом, иначе мерка поймает
+    // середину перехода и «изменение» окажется случайной величиной.
+    await new Promise(r => setTimeout(r, 500))
+  }
 
   for (const [имя, ширина] of [['обычный', 1200], ['телефон', 412]]) {
-    win.setContentSize(ширина, 700)
+    win.setContentSize(ширина, 900)
     await new Promise(r => setTimeout(r, 300))
+    console.log('\n══ ' + имя + ' (' + ширина + ') ══')
 
-    await навести(win, false)
-    const до = await мерка(win)
-    await навести(win, true)
-    const после = await мерка(win)
+    await навести(false)
+    const до = await мерки(win)
+    const кДо = await win.webContents.capturePage()
+    await навести(true)
+    const после = await мерки(win)
+    const кПосле = await win.webContents.capturePage()
 
-    console.log('\n── ' + имя + ' (' + ширина + ') ──')
-    console.log('   до: ' + JSON.stringify(до) + '\n   после: ' + JSON.stringify(после))
-    check('значок не уезжает под курсором',
-      Math.abs(до.x - после.x) < 0.6 && Math.abs(до.y - после.y) < 0.6,
-      `сдвиг ${Math.round((после.x - до.x) * 10) / 10}, ${Math.round((после.y - до.y) * 10) / 10}`)
-    check('и не меняет размера',
-      Math.abs(до.w - после.w) < 0.6 && Math.abs(до.h - после.h) < 0.6,
-      `${до.w}x${до.h} -> ${после.w}x${после.h}`)
-    // Без этой строки проверки выше не значат НИЧЕГО: они прошли бы и на
-    // невключённом наведении. Раз движение убрали — что-то должно остаться,
-    // иначе наведение просто перестало быть заметным.
-    check('но наведение видно — подсветкой', до.тень !== после.тень,
-      'тень: ' + до.тень + ' -> ' + после.тень)
+    for (let n = 0; n < ОБРАЗЦЫ.length; n++) {
+      const о = ОБРАЗЦЫ[n], a = до[n], b = после[n]
+      const сдвиг = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
+      const рост = Math.max(Math.abs(a.w - b.w), Math.abs(a.h - b.h))
+      const разница = Math.abs(яркость(кПосле, b) - яркость(кДо, a))
+      const подпись = о.имя + ': сдвиг ' + Math.round(сдвиг * 10) / 10 +
+        ', размер ' + Math.round(рост * 10) / 10 + ', цвет ' + Math.round(разница * 10) / 10
+      if (о.молча) {
+        check('на аватарке не меняется НИЧЕГО', сдвиг < 0.6 && рост < 0.6 && разница < 1, подпись)
+      } else {
+        check('не двигается: ' + о.имя, сдвиг < 0.6 && рост < 0.6, подпись)
+        check('но заметно: ' + о.имя, разница >= 1.5, подпись)
+      }
+    }
   }
 
   console.log('\nИТОГ: провалено ' + failed)
