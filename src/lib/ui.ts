@@ -23,14 +23,32 @@ export function callTime(iso: string): string {
   return `${dd}.${mm}.${d.getFullYear()} ${timeShort(iso)}`
 }
 
-export function dayLabel(iso: string) {
+/**
+ * Сколько КАЛЕНДАРНЫХ дней назад. 0 — сегодня, 1 — вчера, 2 — позавчера.
+ *
+ * Именно календарных, а не по двадцать четыре часа. Сообщение, написанное вчера
+ * в 23:50, остаётся вчерашним и в 00:10 — хотя прошло двадцать минут. И
+ * наоборот: написанное двадцать часов назад бывает позавчерашним. Считать
+ * разницу во времени и делить на сутки — самая частая ошибка в таких подписях,
+ * и видна она только на границе полуночи.
+ *
+ * Будущее (сбитые часы на устройстве) даёт отрицательное число — такое считаем
+ * сегодняшним, иначе вышло бы «Вчера» у того, что ещё не наступило.
+ */
+export function daysAgo(when: Date, now: Date = new Date()): number {
+  const день = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  return Math.round((день(now) - день(when)) / 86400000)
+}
+
+export function dayLabel(iso: string, now: Date = new Date()) {
   const d = new Date(iso)
-  const today = new Date()
-  const y = new Date(); y.setDate(today.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Сегодня'
-  if (d.toDateString() === y.toDateString()) return 'Вчера'
+  if (isNaN(d.getTime())) return ''
+  const дней = daysAgo(d, now)
+  if (дней <= 0) return 'Сегодня'
+  if (дней === 1) return 'Вчера'
+  if (дней === 2) return 'Позавчера'
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' }
-  if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric'
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric'
   return d.toLocaleDateString('ru-RU', opts)
 }
 
@@ -43,12 +61,27 @@ export function ruMembers(n: number): string {
   return r === 1 ? 'участник' : r >= 2 && r <= 4 ? 'участника' : 'участников'
 }
 
-// Discord-style время сообщения: сегодня — просто время; иначе — короткая дата
-// плюс время рядом (год добавляется, только если сообщение не из текущего года).
-export function msgTime(iso: string): string {
+/**
+ * Время сообщения.
+ *
+ * Сегодня — просто время. Вчера и позавчера — словом и временем: «Вчера в
+ * 21:13». Дальше — короткая дата плюс время, а год добавляется, только если
+ * сообщение не из текущего года.
+ *
+ * v1.504.0: словами. До этого вчерашнее сообщение подписывалось «5 авг., 21:13»
+ * — число приходилось сопоставлять с сегодняшним, чтобы понять, вчера это было
+ * или на прошлой неделе. Владелец попросил прямо: вчера и позавчера — так и
+ * писать.
+ *
+ * Точная дата никуда не делась — она в подсказке при наведении (timeFull).
+ */
+export function msgTime(iso: string, now: Date = new Date()): string {
   const d = new Date(iso)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString()) return timeShort(iso)
+  if (isNaN(d.getTime())) return ''
+  const дней = daysAgo(d, now)
+  if (дней <= 0) return timeShort(iso)
+  if (дней === 1) return 'Вчера в ' + timeShort(iso)
+  if (дней === 2) return 'Позавчера в ' + timeShort(iso)
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
   if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric'
   return d.toLocaleDateString('ru-RU', opts) + ', ' + timeShort(iso)

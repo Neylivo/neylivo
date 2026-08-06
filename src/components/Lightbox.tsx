@@ -10,18 +10,25 @@ import {
   ZOOM_MIN, ZOOM_MAX, type ZoomState,
 } from '../lib/zoomPan'
 
+import { daysAgo } from '../lib/ui'
+
 export interface LightboxMeta { name: string; avatar?: string | null; at?: string | null }
 
 // «Вчера, в 21:13» — как подписывает время Discord в просмотрщике.
+//
+// v1.504.0: добавилось «Позавчера», и дни считает общая daysAgo. Своя мерка
+// здесь была по МИЛЛИСЕКУНДАМ от полуночи, и на позавчера её пришлось бы
+// растить вторым вычитанием суток — а это ровно тот способ, которым такие
+// подписи и ошибаются на границе полуночи.
 function whenLabel(iso?: string | null): string {
   if (!iso) return ''
   const d = new Date(iso)
-  const now = new Date()
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const t = d.getTime()
+  if (isNaN(d.getTime())) return ''
   const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-  if (t >= midnight) return 'Сегодня, в ' + hm
-  if (t >= midnight - 86400000) return 'Вчера, в ' + hm
+  const дней = daysAgo(d)
+  if (дней <= 0) return 'Сегодня, в ' + hm
+  if (дней === 1) return 'Вчера, в ' + hm
+  if (дней === 2) return 'Позавчера, в ' + hm
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ', в ' + hm
 }
 

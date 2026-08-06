@@ -286,6 +286,7 @@ const DICT_EN_FULL: Record<string, string> = {
   "Вход": "Log In",
   "Входящий звонок…": "Incoming call…",
   "Вчера": "Yesterday",
+  "Позавчера": "The day before yesterday",
   "Вчера, в ": "Yesterday at ",
   "Вы ещё никого не банили… но если надо, не стесняйтесь!": "You haven't banned anyone yet… but if you need to, don't hold back!",
   "Вы можете добавить друзей по имени пользователя в Ponoi.": "You can add friends by their Ponoi username.",
@@ -1232,6 +1233,13 @@ const DICT_EN_FULL: Record<string, string> = {
 }
 Object.assign(DICT_EN, DICT_EN_FULL)
 const REGEX_EN: [RegExp, string][] = [
+  // v1.504.0: время сообщения словом. Строка собирается из слова и часов
+  // («Вчера в 21:13»), поэтому обычным словарём её не взять — только правилом.
+  [/^Вчера в (.+)$/, 'Yesterday at $1'],
+  [/^Позавчера в (.+)$/, 'The day before yesterday at $1'],
+  [/^Вчера, в (.+)$/, 'Yesterday at $1'],
+  [/^Позавчера, в (.+)$/, 'The day before yesterday at $1'],
+  [/^Сегодня, в (.+)$/, 'Today at $1'],
   [/^Написать в #(.+)$/, 'Message #$1'],
   [/^Написать @(.+)$/, 'Message @$1'],
   [/^Покинуть сервер «(.+)»\?$/, 'Leave server “$1”?'],

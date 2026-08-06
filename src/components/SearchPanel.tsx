@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Icon } from './icons'
-import { timeShort } from '../lib/ui'
+import { msgTime } from '../lib/ui'
 import { jumpToMessage } from './MessageList'
 
 // Поиск сообщений как в Discord. Понимает фильтры прямо в строке:
@@ -122,7 +122,11 @@ export function SearchPanel({ scope, onClose }: { scope: SearchScope; onClose: (
             <div className="search-hit-top">
               <b>{h.author_name}</b>
               {scope.channelName && h.channel_id && <span className="search-hit-ch">#{scope.channelName(h.channel_id)}</span>}
-              <span className="search-hit-t">{new Date(h.created_at).toLocaleDateString()} {timeShort(h.created_at)}</span>
+              {/* v1.504.0: найденное сообщение подписывается так же, как в чате —
+                  «Вчера в 21:13». Раньше здесь была машинная дата вида
+                  05.08.2026, и одно и то же сообщение выглядело по-разному в
+                  поиске и в ленте. */}
+              <span className="search-hit-t">{msgTime(h.created_at)}</span>
             </div>
             <div className="search-hit-body">{h.content || (h.attach_url ? '📎 вложение' : '')}</div>
           </div>
