@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.505.0",
+  "version": "1.506.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -43,7 +43,8 @@
     "test:speak": "esbuild src/lib/__speak_test.ts --bundle --format=iife --outfile=dist-speak-test/t.js && electron scripts/speak-test.cjs",
     "test:mobile": "npm run build && electron scripts/mobile-test.cjs",
     "test:hover": "electron scripts/hover-test.cjs",
-    "test:composer": "electron scripts/composer-test.cjs"
+    "test:composer": "electron scripts/composer-test.cjs",
+    "release:local": "node scripts/release-local.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",
