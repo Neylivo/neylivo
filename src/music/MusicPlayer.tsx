@@ -17,6 +17,7 @@ import { mergeTracks } from './mergeTracks'
 import { sendTrackToFriend } from './shareTrack'
 import { trackScore, suggestQuery } from './fuzzy'
 import { buildDsp, readDsp, dspActive, type DspSettings, type DspChain } from './dsp'
+import { setAnalyser, spectrumWanted, onSpectrumWanted } from './spectrum'
 // v1.453.0: «Подборка» убрана по просьбе владельца — кнопка ушла из Трекотеки.
 // Сам подбор никуда не делся: он и был подбором волны, который работает
 // дальше (см. recommend). Убрана именно кнопка, а не умение.
@@ -174,9 +175,18 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
    */
   const [dsp, setDsp] = useState<DspSettings>(() => readDsp(localStorage.getItem('ponoi_mus_dsp')))
   const dspRef = useRef<{ ctx: AudioContext; src: MediaElementAudioSourceNode; chain: DspChain } | null>(null)
+  // v1.491.0: цепочка строится ещё и тогда, когда спектр нужен плагину.
+  //
+  // Раньше условие было только про эффекты, и визуализатор в плагине получал
+  // тишину, пока человек не включит эквалайзер, — то есть работал бы через раз
+  // и необъяснимо. Сама цепочка при выключенных эффектах прозрачна: настройки
+  // применяются ровно те же (apply(dsp)), просто все на нуле.
+  const [спектрНужен, setСпектрНужен] = useState(false)
+  useEffect(() => onSpectrumWanted(() => setСпектрНужен(true)), [])
   useEffect(() => {
     const el = audioRef.current
-    if (!el || !dspActive(dsp)) { dspRef.current?.chain.apply(dsp); return }
+    const нужно = dspActive(dsp) || спектрНужен || spectrumWanted()
+    if (!el || !нужно) { dspRef.current?.chain.apply(dsp); return }
     if (!dspRef.current) {
       try {
         const Ctor = window.AudioContext || (window as any).webkitAudioContext
@@ -184,6 +194,14 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         const src = ctx.createMediaElementSource(el)
         const chain = buildDsp(ctx, ctx.destination)
         src.connect(chain.input)
+        // Анализатор висит ОТДЕЛЬНОЙ веткой и никуда не ведёт дальше: он не
+        // выход, а измеритель. Подключи его к destination — и звук пошёл бы
+        // дважды, вдвое громче.
+        const a = ctx.createAnalyser()
+        a.fftSize = 512
+        a.smoothingTimeConstant = 0.75
+        src.connect(a)
+        setAnalyser(a)
         dspRef.current = { ctx, src, chain }
       } catch { return }   // нет WebAudio — играем как есть, это не повод падать
     }
@@ -191,8 +209,12 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     if (!d) return
     if (d.ctx.state === 'suspended') void d.ctx.resume().catch(() => {})
     d.chain.apply(dsp)
-  }, [dsp])
-  useEffect(() => () => { dspRef.current?.chain.dispose(); void dspRef.current?.ctx.close().catch(() => {}) }, [])
+  }, [dsp, спектрНужен])
+  useEffect(() => () => {
+    setAnalyser(null)
+    dspRef.current?.chain.dispose()
+    void dspRef.current?.ctx.close().catch(() => {})
+  }, [])
   const saveDsp = (d: DspSettings) => {
     setDsp(d)
     try { localStorage.setItem('ponoi_mus_dsp', JSON.stringify(d)) } catch { /* переполнено */ }

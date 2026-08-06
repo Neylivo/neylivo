@@ -30,6 +30,7 @@ import { clearApps, clearAllApps, forgetWidget, forgetAllWidgets } from './apps'
 import { clearServices, clearAllServices } from './services'
 import { clearAssetUrls, clearAllAssetUrls } from './assets'
 import { unwatchGamepads, unwatchAllGamepads } from './gamepads'
+import { unwatchSpectrum, unwatchAllSpectrum } from '../../music/spectrum'
 import { clearDialogs, clearAllDialogs } from './dialog'
 
 /** Всё, что плагин оставляет после себя вне интерфейса. По одной паре на вид:
@@ -58,6 +59,10 @@ const SUBSYSTEMS: { one: (id: string) => void; all: () => void }[] = [
   // продолжало бы будить себя шестьдесят раз в секунду ради выключенного
   // плагина, и человек увидел бы только севшую батарею.
   { one: unwatchGamepads, all: unwatchAllGamepads },
+  // v1.491.0: спектр звука считается кадрами, ровно как геймпады, и снимать
+  // его надо по той же причине: иначе приложение будит себя шестьдесят раз в
+  // секунду ради выключенного визуализатора.
+  { one: unwatchSpectrum, all: unwatchAllSpectrum },
   // v1.475.0: окно-вопрос. Останься оно на экране от выключенного плагина —
   // отвечать было бы некому, а само окно висело бы поверх всего.
   { one: clearDialogs, all: clearAllDialogs },

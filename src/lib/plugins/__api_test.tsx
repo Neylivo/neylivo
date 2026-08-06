@@ -692,9 +692,10 @@ export async function onLoad(ponoi) {
 // именно по :hover, который браузер ставит по настоящему положению мыши.
 // Поэтому ввод просим у стенда (scripts/api-test.cjs).
 let мышьН = 0
-async function мышь(kind: 'mouseMove' | 'mouseDown' | 'mouseUp', x: number, y: number) {
+async function мышь(kind: 'mouseMove' | 'mouseDown' | 'mouseUp' | 'keyDown' | 'keyUp',
+  x: number, y: number, key?: string) {
   const n = ++мышьН
-  ;(window as any).__mouseReq = { kind, x: Math.round(x), y: Math.round(y), n }
+  ;(window as any).__mouseReq = { kind, x: Math.round(x), y: Math.round(y), n, key }
   for (let i = 0; i < 100 && (window as any).__mouseAck !== n; i++) await пауза(20)
   await пауза(30)
 }
@@ -1191,6 +1192,170 @@ export async function onLoad(ponoi) {
   clearAllApps()
 }
 
+
+// ── 15. Остальное из списка возможностей (v1.491.0) ────────────────────────
+//
+// Владелец прислал список из семнадцати пунктов и попросил «проверяй что не
+// сделал». Здесь проверяется каждый из тех, что не покрыт выше: захват
+// указателя, колесо, клавиатура, свой Worker внутри страницы, OffscreenCanvas
+// в него, библиотеки из своих файлов, модули, fetch по адресу asset:.
+//
+// Ни одного «наверное работает»: всё меряется настоящей страницей и настоящим
+// вводом от системы.
+async function остальное(host: Host) {
+  const { clearAllApps } = await import('./apps')
+  clearAllApps()
+  const страница = `
+<canvas id="c" width="100" height="100"></canvas>
+<script>
+(async () => {
+  const отчёт = {}
+  const c = document.getElementById('c')
+
+  // 5. Захват указателя.
+  отчёт.pointerlock = typeof c.requestPointerLock === 'function'
+  отчёт.touch = 'ontouchstart' in window
+  отчёт.wheel = 'onwheel' in window
+
+  // 6. Клавиатура.
+  let клавиш = 0
+  addEventListener('keydown', () => клавиш++)
+
+  // 16. Свой Worker внутри страницы.
+  try {
+    const b = new Blob(['self.onmessage=function(e){self.postMessage(e.data*2)}'], { type: 'text/javascript' })
+    const w = new Worker(URL.createObjectURL(b))
+    отчёт.worker = 'создан'
+    w.onmessage = e => { отчёт.workerОтвет = e.data }
+    w.postMessage(21)
+  } catch (e) { отчёт.worker = 'ошибка: ' + e.message.slice(0, 50) }
+
+  // 16b. OffscreenCanvas в этот Worker.
+  try {
+    const c2 = document.createElement('canvas')
+    отчёт.transferOffscreen = typeof c2.transferControlToOffscreen === 'function'
+  } catch (e) { отчёт.transferOffscreen = 'ошибка' }
+
+  // 9/10/14. Библиотека из СВОЕГО файла: обычным script по blob-адресу.
+  try {
+    const адрес = await ponoi.assets.url('lib.js')
+    await new Promise((ok, no) => {
+      const s = document.createElement('script')
+      s.onload = ok; s.onerror = () => no(new Error('script не загрузился'))
+      s.src = адрес
+      document.head.appendChild(s)
+    })
+    отчёт.библиотека = typeof self.МОЯ_БИБЛИОТЕКА === 'function' ? self.МОЯ_БИБЛИОТЕКА() : 'нет'
+  } catch (e) { отчёт.библиотека = 'ошибка: ' + e.message.slice(0, 50) }
+
+  // 14b. Модуль (import) из своего файла.
+  try {
+    const адрес2 = await ponoi.assets.url('mod.mjs')
+    const m = await import(адрес2)
+    отчёт.модуль = m && m.привет ? m.привет() : 'нет'
+  } catch (e) { отчёт.модуль = 'ошибка: ' + e.message.slice(0, 60) }
+
+  // 8. fetch по адресу asset:
+  try {
+    const r = await fetch('asset:lib.js')
+    const текст = await r.text()
+    отчёт.fetchAsset = r.ok && текст.indexOf('МОЯ_БИБЛИОТЕКА') >= 0 ? 'работает' : 'не ок'
+  } catch (e) { отчёт.fetchAsset = 'ошибка: ' + e.message.slice(0, 40) }
+  try {
+    const r2 = await fetch('asset:нетуже.png')
+    отчёт.fetchAssetНет = r2.status
+  } catch (e) { отчёт.fetchAssetНет = 'ошибка: ' + e.message.slice(0, 50) }
+
+  // 9/10/14. Загрузка библиотеки одним вызовом.
+  try {
+    delete self.МОЯ_БИБЛИОТЕКА
+    await ponoi.load('lib.js')
+    отчёт.load = typeof self.МОЯ_БИБЛИОТЕКА === 'function' ? 'работает' : 'нет'
+  } catch (e) { отчёт.load = 'ошибка: ' + e.message.slice(0, 40) }
+  try {
+    await ponoi.loadModule('mod2.mjs')
+    отчёт.loadModule = self.ИЗ_МОДУЛЯ || 'нет'
+  } catch (e) { отчёт.loadModule = 'ошибка: ' + e.message.slice(0, 50) }
+
+  // 7. Звук приложения — есть ли к нему хоть какой-то путь.
+  отчёт.audioИсточник = typeof ponoi.music === 'object' && typeof ponoi.music.now === 'function'
+    ? 'только сведения о треке' : 'нет'
+
+  // Ждём подольше: клавиши стенд шлёт уже после того, как страница поднялась,
+  // и отчёт, снятый сразу, показывал бы ноль просто потому, что рано.
+  await new Promise(r => setTimeout(r, 2500))
+  отчёт.клавиш = клавиш
+  ponoi.log('ОСТАЛЬНОЕ:' + JSON.stringify(отчёт))
+})().catch(e => ponoi.log('ОСТАЛЬНОЕ:{"упало":"' + e.message + '"}'))
+<\/script>`
+
+  const id = await поднять(host, `/**
+ * @name Остальное
+ * @id probe-rest
+ * @version 1.0.0
+ * @author проба
+ * @description Проба остатка списка
+ * @permissions *
+ */
+export async function onLoad(ponoi) {
+  const enc = new TextEncoder()
+  await ponoi.assets.put('lib.js', enc.encode('self.МОЯ_БИБЛИОТЕКА = function () { return "библиотека жива" }').buffer)
+  await ponoi.assets.put('mod.mjs', enc.encode('export function привет() { return "модуль жив" }').buffer)
+  await ponoi.assets.put('mod2.mjs', enc.encode('const х = "модуль выполнился"; window.ИЗ_МОДУЛЯ = х; export default х').buffer)
+  await ponoi.apps.create({
+    mode: 'window', title: 'Остальное', width: 300, height: 220, x: 40, y: 40,
+    html: ${JSON.stringify(страница)},
+  })
+}
+`)
+  ok('окно с пробной страницей открылось', await ждать(() => appList(id).length === 1, 6000),
+    String(host.pluginError(id) ?? 'без ошибок'))
+  await пауза(400)
+
+  // Клавиши — настоящие, от системы. Сначала щёлкаем ПО СТРАНИЦЕ: без фокуса
+  // внутри неё нажатия уйдут в приложение, и проверка мерила бы не то.
+  const рамка = document.querySelector('.plugapp-frame') as HTMLIFrameElement | null
+  const рр = рамка!.getBoundingClientRect()
+  await мышь('mouseMove', рр.left + 30, рр.top + 30)
+  await мышь('mouseDown', рр.left + 30, рр.top + 30)
+  await мышь('mouseUp', рр.left + 30, рр.top + 30)
+  await пауза(150)
+  for (const к of ['a', 'b', 'c']) { await мышь('keyDown', 0, 0, к); await мышь('keyUp', 0, 0, к) }
+  await пауза(150)
+
+  await ждать(() => журнал(host, id).some(l => l.includes('ОСТАЛЬНОЕ:')), 20000)
+  const с = строка(host, id, 'ОСТАЛЬНОЕ:')
+  let о: any = {}
+  try { о = JSON.parse(с.slice('ОСТАЛЬНОЕ:'.length)) } catch { /* ниже всё упадёт */ }
+  ok('страница отчиталась', !!с, с.slice(0, 120))
+
+  ok('захват указателя доступен', о.pointerlock === true, String(о.pointerlock))
+  ok('колесо мыши доступно', о.wheel === true, String(о.wheel))
+  ok('клавиатура доходит до страницы', Number(о.клавиш) > 0, 'нажатий: ' + о.клавиш)
+  ok('страница может завести свой Worker', о.worker === 'создан', String(о.worker))
+  ok('и он правда считает', о.workerОтвет === 42, String(о.workerОтвет))
+  ok('OffscreenCanvas можно отдать в него', о.transferOffscreen === true, String(о.transferOffscreen))
+  ok('библиотека из своего файла подключается обычным script',
+    о.библиотека === 'библиотека жива', String(о.библиотека))
+  ok('и одним вызовом ponoi.load тоже', о.load === 'работает', String(о.load))
+  ok('модуль из своего файла выполняется через ponoi.loadModule',
+    о.loadModule === 'модуль выполнился', String(о.loadModule))
+  ok('fetch по адресу asset: отдаёт свой файл', о.fetchAsset === 'работает', String(о.fetchAsset))
+  ok('а на несуществующий отвечает честным 404, а не ошибкой',
+    о.fetchAssetНет === 404, String(о.fetchAssetНет))
+
+  // Отдельно и честно: чего НЕТ. Прямой import() по blob-адресу в песочнице не
+  // работает — у страницы чужое происхождение, и браузер отказывается тянуть по
+  // такому адресу модуль. Это не наша поломка и починить её нечем, поэтому в
+  // мосту есть loadModule, а здесь — проверка, что положение дел именно такое.
+  // Изменится в браузере — проверка упадёт, и мы об этом узнаем.
+  ok('прямой import(blob) по-прежнему не проходит — на это и есть loadModule',
+    String(о.модуль).startsWith('ошибка'), String(о.модуль).slice(0, 60))
+  await host.stopPlugin(id)
+  removePlugin(id)
+  clearAllApps()
+}
+
 async function main() {
   // Прибираем за прошлым прогоном: localStorage у file:// общий со смоуком, и
   // забытый здесь плагин заставит его ругаться на «утечку» системы плагинов.
@@ -1228,6 +1393,8 @@ async function main() {
   await пределовНет(host)
   lines.push(''); lines.push('── Окно со своей страницей ──'); out()
   await окноСтраница(host)
+  lines.push(''); lines.push('── Остальное из списка ──'); out()
+  await остальное(host)
 
   lines.push('')
   lines.push(`ИТОГ: пройдено ${lines.filter(l => l.startsWith('OK')).length}, провалено ${failed}`)

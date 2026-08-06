@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from './icons'
 import { PanelRows } from './PluginPanels'
 import { emitToPlugin, callFromFrame } from '../lib/plugins/bridge'
-import { frameDoc } from '../lib/plugins/htmlFrame'
 import { subscribeFrameEvents } from '../lib/plugins/frameBus'
 import { useBackClose } from '../lib/mobileBack'
 import {
@@ -202,8 +201,17 @@ function AppFrameHtml({ app }: { app: PluginApp }) {
   // Документ собираем один раз на каждое изменение html: пересборка на каждой
   // перерисовке перезагружала бы страницу плагина по десять раз в секунду и
   // убивала бы всё, что он в ней успел сделать.
-  const doc = useMemo(() => frameDoc(app.html ?? ''), [app.html])
-
+  //
+  // Мост подгружается по требованию, а не ввозится сюда: он весит около пяти
+  // килобайт текста, а этот компонент живёт в стартовой сборке у КАЖДОГО, в том
+  // числе у тех, кто не ставил ни одного плагина. Ровно так система плагинов
+  // однажды целиком уехала в старт (v1.469.0), и поймал это смоук.
+  const [doc, setDoc] = useState('')
+  useEffect(() => {
+    let живы = true
+    void import('../lib/plugins/htmlFrame').then(m => { if (живы) setDoc(m.frameDoc(app.html ?? '')) })
+    return () => { живы = false }
+  }, [app.html])
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (!ref.current || e.source !== ref.current.contentWindow) return
@@ -229,6 +237,12 @@ function AppFrameHtml({ app }: { app: PluginApp }) {
     })
     return снять
   }, [app.pluginId])
+
+  // Пока мост не подгрузился, рамки нет: вставить её с пустым документом
+  // значило бы дать плагину страницу БЕЗ ponoi, и его код упал бы на первой
+  // строке. Возврат стоит ПОСЛЕ всех хуков намеренно — React не прощает
+  // условного выхода до них.
+  if (!doc) return null
 
   return (
     <iframe

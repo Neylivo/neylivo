@@ -140,6 +140,106 @@ export const FRAME_BRIDGE = `<script>
     },
   }
 
+  // ── fetch('asset:имя') ───────────────────────────────────────────────────
+  //
+  // Владелец попросил ровно такую запись, и она того стоит: три четверти
+  // загрузчиков (текстуры, модели, шрифты, звуки) принимают адрес и зовут fetch
+  // сами. Дай им blob-адрес — они его тоже примут, но написать «asset:модель»
+  // короче и понятнее, а главное — это работает и там, куда адрес отдать
+  // нельзя, потому что зовут не тебя.
+  //
+  // Подменяем ровно свой протокол. Всё остальное уходит в настоящий fetch без
+  // изменений: страница вправе ходить в интернет, как любая страница.
+  var настоящийFetch = window.fetch ? window.fetch.bind(window) : null
+  window.fetch = function (вход, init) {
+    var url = typeof вход === 'string' ? вход : (вход && вход.url) || ''
+    if (url.indexOf('asset:') !== 0) {
+      if (!настоящийFetch) return Promise.reject(new Error('fetch недоступен'))
+      return настоящийFetch(вход, init)
+    }
+    var name = url.slice('asset:'.length)
+    return call('assets.get', [name]).then(function (bytes) {
+      if (!bytes) {
+        // statusText только латиницей: это строка протокола HTTP, и кириллица
+        // в ней роняет сам конструктор Response — то есть «нет файла»
+        // превращалось бы в непонятную ошибку вместо честного 404.
+        return new Response(null, { status: 404, statusText: 'Not Found' })
+      }
+      return call('assets.info', [name]).then(function (meta) {
+        return new Response(bytes, {
+          status: 200,
+          headers: { 'content-type': (meta && meta.type) || 'application/octet-stream' },
+        })
+      })
+    })
+  }
+
+  // ── Библиотеки ───────────────────────────────────────────────────────────
+  //
+  // Своим файлом (three.min.js, физика, что угодно) или ссылкой. Замерено
+  // живой пробой: обычный <script> с blob-адреса внутри песочницы РАБОТАЕТ, а
+  // вот import() того же blob — нет: у страницы чужое происхождение, и модуль
+  // по такому адресу браузер грузить отказывается. Поэтому здесь два способа,
+  // и оба честные, а не «попробуй, вдруг получится».
+  ponoi.load = function (что) {
+    return Promise.resolve()
+      .then(function () {
+        return String(что).indexOf('http') === 0 ? String(что) : ponoi.assets.url(String(что))
+      })
+      .then(function (src) {
+        if (!src) throw new Error('нет такого файла плагина: ' + что)
+        return new Promise(function (ok, no) {
+          var s = document.createElement('script')
+          s.onload = function () { ok(true) }
+          s.onerror = function () { no(new Error('библиотека не загрузилась: ' + что)) }
+          s.src = src
+          document.head.appendChild(s)
+        })
+      })
+  }
+
+  /**
+   * Модуль (import/export) из своего файла.
+   *
+   * Через blob-адрес НЕ выйдет — у страницы чужое происхождение. Поэтому текст
+   * модуля вставляется в страницу как есть: встроенный <script type="module">
+   * выполняется, а свои значения отдаёт через window.
+   */
+  ponoi.loadModule = function (имя, вГлобальное) {
+    return call('assets.get', [String(имя)]).then(function (bytes) {
+      if (!bytes) throw new Error('нет такого файла плагина: ' + имя)
+      var src = new TextDecoder().decode(bytes)
+      var метка = 'мод' + Math.random().toString(36).slice(2)
+      return new Promise(function (ok, no) {
+        var s = document.createElement('script')
+        s.type = 'module'
+        // Перевод строки берём ЧИСЛОМ, а не escape-последовательностью.
+        //
+        // Весь этот мост живёт внутри шаблонной строки TypeScript, и обратная
+        // косая с буквой n превращается в НАСТОЯЩИЙ перевод строки — прямо
+        // посреди кавычек готового кода. Мост тогда перестаёт разбираться
+        // целиком, а падает это как «страница не поднялась»: ни ошибки, ни
+        // намёка. Я поймал это дважды подряд — второй раз в собственном
+        // комментарии об этой же ловушке, где та же пара знаков разорвала
+        // комментарий пополам и остаток строки стал кодом.
+        var НС = String.fromCharCode(10)
+        s.textContent = src
+          + НС + ';window[' + JSON.stringify(метка) + '] = true;'
+          + (вГлобальное
+            ? НС + 'try { window[' + JSON.stringify(String(вГлобальное)) + '] = eval(' + JSON.stringify(String(вГлобальное)) + ') } catch (e) {}'
+            : '')
+        s.onerror = function () { no(new Error('модуль не выполнился: ' + имя)) }
+        document.head.appendChild(s)
+        // У встроенного модуля нет onload — ждём отметки, которую он ставит сам.
+        var ждал = 0
+        var тик = setInterval(function () {
+          if (window[метка]) { clearInterval(тик); ok(true) }
+          else if (++ждал > 200) { clearInterval(тик); no(new Error('модуль не отозвался: ' + имя)) }
+        }, 10)
+      })
+    })
+  }
+
   parent.postMessage({ ponoi: 1, k: 'ready' }, '*')
 })()
 </script>`

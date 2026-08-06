@@ -188,7 +188,13 @@ server.listen(PORT, HOST, async () => {
       const q = JSON.parse(raw)
       if (q.n <= lastMouse) return
       lastMouse = q.n
-      win.webContents.sendInputEvent({ type: q.kind, x: q.x, y: q.y, button: 'left', clickCount: 1 })
+      if (q.kind === 'keyDown' || q.kind === 'keyUp' || q.kind === 'char') {
+        // Клавиши — тем же мостом: страница плагина обязана их получать, и
+        // проверить это можно только настоящим вводом.
+        win.webContents.sendInputEvent({ type: q.kind, keyCode: q.key })
+      } else {
+        win.webContents.sendInputEvent({ type: q.kind, x: q.x, y: q.y, button: 'left', clickCount: 1 })
+      }
       await win.webContents.executeJavaScript('window.__mouseAck = ' + q.n)
     } catch { /* страница ещё грузится или уже закрылась */ }
   }, 20)

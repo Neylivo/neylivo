@@ -1,6 +1,7 @@
 import { PluginSandbox, type FnRef } from './sandbox'
 import { createDispatcher, taskHandlers, type HostContext } from './api'
 import { frameMethodAllowed, FRAME_METHODS } from './htmlFrame'
+import { emitToFrames } from './frameBus'
 import { clearPlugin, pluginsDisabled } from './registry'
 import { loadPlugins, getPlugin, subscribePlugins } from './store'
 import type { InstalledPlugin } from './types'
@@ -179,6 +180,9 @@ export async function stopPlugin(id: string): Promise<void> {
 // знает вот это место, и оно же единственное: emitPluginEvent сам разошлёт
 // событие ровно тем, кто на него подписался.
 setGamepadEmit(ev => emitPluginEvent('gamepad', ev))
+// v1.491.0: спектр звука. Ставится так же, как геймпады, и по той же
+// причине: считать его в никуда — впустую жечь батарею.
+void import('../../music/spectrum').then(m => m.setSpectrumEmit(k => emitPluginEvent('audio', k)))
 
 setTaskRunner((pluginId, taskId) => {
   const h = taskHandlers.get(taskId)
@@ -246,8 +250,13 @@ export async function runUploadHooksHere(file: File): Promise<{ file: File; canc
 
 /** Разослать событие тем плагинам, которые на него подписаны. */
 export function emitPluginEvent(name: string, data: unknown) {
-  for (const [, r] of running) {
-    if (r.subs.has(name)) r.sandbox.emit(name, data)
+  for (const [id, r] of running) {
+    if (!r.subs.has(name)) continue
+    r.sandbox.emit(name, data)
+    // v1.490.0: и в окно-страницу того же плагина. Без этого ponoi.on внутри
+    // страницы работал бы для одних событий и молчал для других — то есть
+    // выглядел бы сломанным без всякой причины.
+    emitToFrames(id, name, data)
   }
 }
 
