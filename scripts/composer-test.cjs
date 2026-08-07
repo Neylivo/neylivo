@@ -58,7 +58,10 @@ const ряд = (id, текст, есть) => `
 
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css">
-<style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif}</style>
+<style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif}
+/* Переменные темы задаёт приложение на ходу. Без них кольцо фокуса не
+   окрашивается вовсе, и проверка «кольца нет» прошла бы, ничего не проверив. */
+:root{--c-accent:#5865f2;--ov:255,255,255}</style>
 <script src="keepfocus.js"></script>
 <div style="position:absolute;bottom:0;left:0;right:0">
   ${ряд('пусто', '', false)}
@@ -363,6 +366,50 @@ app.whenReady().then(async () => {
     check('а без него — уходит на кнопку, и это ровно та беда',
       безНего !== 'TEXTAREA', 'фокус стал: ' + безНего)
   }
+
+  // ── v1.512.0: синего кольца вокруг строки нет ──────────────────────────
+  //
+  // Владелец прислал снимок: поле в фокусе — вся строка обведена синим, вместе
+  // с плюсом и микрофоном. Это кольцо фокуса от стиля поля: на компьютере
+  // строка и есть поле, а на телефоне поле — таблетка внутри неё.
+  //
+  // Состояние включается ОТЛАДЧИКОМ, а не настоящим focus(): в скрытом окне
+  // :focus-within не срабатывает, и проверка проходила, ничего не проверяя, —
+  // подлог со снятой починкой она пропускала.
+  console.log('\n── Кольцо фокуса (412) ──')
+  {
+    win.setContentSize(412, 560)
+    await new Promise(r => setTimeout(r, 200))
+    const d = win.webContents.debugger
+    if (!d.isAttached()) d.attach('1.3')
+    await d.sendCommand('DOM.enable')
+    await d.sendCommand('CSS.enable')
+    const { root } = await d.sendCommand('DOM.getDocument')
+    const { nodeId } = await d.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: '#пусто textarea' })
+    await d.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['focus', 'focus-within'] })
+    // Ждём с запасом: у строки плавная тень (transition: box-shadow), и мерка
+    // раньше времени ловит середину перехода — все значения прозрачные и
+    // нулевые. Подлог на этом «проходил»: сломанные стили выглядели чистыми.
+    await new Promise(r => setTimeout(r, 800))
+
+    const кольцо = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+      const ряд = document.getElementById('пусто')
+      const s = getComputedStyle(ряд)
+      const п = getComputedStyle(ряд.querySelector('.composer-field'))
+      return JSON.stringify({ тень: s.boxShadow, рамка: s.borderColor + ' ' + s.borderWidth,
+        фонПоля: п.backgroundColor, сработало: ряд.matches(':focus-within') })
+    })()`))
+    check('состояние фокуса правда включилось — иначе проверять нечего',
+      кольцо.сработало === true, 'matches(:focus-within): ' + кольцо.сработало)
+    const синее = /rgb\(\s*88,\s*101,\s*242|#5865f2/i
+    check('на телефоне строка в фокусе НЕ обводится',
+      !синее.test(кольцо.тень) && !синее.test(кольцо.рамка),
+      'тень: ' + кольцо.тень.slice(0, 80) + ' | рамка: ' + кольцо.рамка)
+    check('а таблетка поля осталась видимой — фокус не превратил её в пустоту',
+      кольцо.фонПоля !== 'rgba(0, 0, 0, 0)', 'фон поля: ' + кольцо.фонПоля)
+    await d.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] })
+  }
+
 
   console.log('\nИТОГ: провалено ' + failed)
   // Окно закрываем ПОСЛЕ печати: закрытие последнего окна заставляет Electron
