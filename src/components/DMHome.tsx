@@ -1466,7 +1466,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
         <MeBar username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} />
       </aside>
 
-      <main className="chat">
+      <main className={'chat' + (!active && !activeGroup ? ' pfr-chat' : '')}>
         {(active || activeGroup) ? <>
           <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
             {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : (
@@ -1643,7 +1643,14 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 return <>
                   <div className="pfr-search pfr-search2"><Icon name="search" size={16} /><input placeholder="Поиск" value={ffilter} onChange={e => setFfilter(e.target.value)} /></div>
                   <div className="pfr-sec">{tab === 'online' ? 'В сети' : 'Все друзья'} — {list.length}</div>
-                  {list.length === 0 && <div className="pfr-empty">{tab === 'online' ? 'Сейчас никого нет в сети' : 'Пока нет друзей. Добавь кого-нибудь во вкладке «Добавить в друзья».'}</div>}
+                  {list.length === 0 && <div className="pfr-empty pfr-empty-state">
+                    <span className="pfr-empty-ic"><Icon name={tab === 'online' ? 'moon' : 'users'} size={28} /></span>
+                    <strong>{tab === 'online' ? 'Сейчас никого нет в сети' : 'Список друзей пока пуст'}</strong>
+                    <span>{tab === 'online' ? 'Друзья появятся здесь, когда вернутся в Ponoi.' : 'Найди человека по имени пользователя и начни разговор.'}</span>
+                    <button onClick={() => setTab(tab === 'online' ? 'all' : 'add')}>
+                      {tab === 'online' ? 'Показать всех друзей' : 'Добавить друга'}
+                    </button>
+                  </div>}
                   {list.map(f => (
                     <div key={f.id} className="pfr-row pfr-row2" onClick={() => openChat(f)}>
                       <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
@@ -1671,7 +1678,11 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               // кто прямо сейчас в игре: шапка (аватар, ник, «Игра — 6 ч.», иконка игры)
               // и вложенный блок игры (обложка, название, детали/«N человек», аватарки).
               const act = friends.map(f => ({ f, g: gameOf(f.id) })).filter(x => !!x.g)
-              if (act.length === 0) return <div className="an-empty"><b>Пока тихо…</b>Когда друг начнёт играть — это появится здесь!</div>
+              if (act.length === 0) return <div className="an-empty">
+                <span className="an-empty-ic"><Icon name="gamepad" size={22} /></span>
+                <b>Нет активных игр</b>
+                <span>Когда друзья запустят игру, их активность появится здесь.</span>
+              </div>
               const dur = (since: number) => { const m = Math.floor((Date.now() - since) / 60000); return m >= 60 ? Math.floor(m / 60) + ' ч.' : Math.max(1, m) + ' мин.' }
               const ruPpl = (n: number) => { const d = n % 100, r = n % 10; return n + ' ' + (d >= 11 && d <= 14 ? 'человек' : r === 1 ? 'человек' : r >= 2 && r <= 4 ? 'человека' : 'человек') }
               return act.map(({ f, g }) => {
