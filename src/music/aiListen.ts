@@ -55,7 +55,7 @@ export async function listenToTrack(src: string, onProgress: (p: AiProgress) => 
   const pcm = await decodeMono16k(buf)
 
   onProgress({ stage: 'model', percent: 25, note: 'Загружаю модель распознавания' })
-  const { pipeline, env } = await import('@xenova/transformers')
+  const { pipeline, env } = await import('@huggingface/transformers')
   // Локальных файлов модели у нас нет — берём из сети и кэшируем браузером.
   env.allowLocalModels = false
   const asr = await pipeline('automatic-speech-recognition', AI_MODEL, {

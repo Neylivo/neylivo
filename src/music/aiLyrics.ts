@@ -34,7 +34,7 @@ export interface SpeechChunk {
 
 /** С какой моделью работаем. tiny — самая быстрая; она же единственная, которую
  *  разумно скачивать на телефон. Многоязычная: русские песни тоже. */
-export const AI_MODEL = 'Xenova/whisper-tiny'
+export const AI_MODEL = 'onnx-community/whisper-tiny'
 
 /** Метка времени LRC из секунд: [мм:сс.дд]. */
 export function stamp(sec: number): string {
