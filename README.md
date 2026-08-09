@@ -29,20 +29,23 @@
    - `attachments`
 
 5. **SQL Editor → выполни миграции строго по порядку** (каждый файл целиком):
-   1. `supabase/schema.sql`
-   2. `supabase/02_friends_dm.sql`
-   3. `supabase/03_members_invites.sql`
-   4. `supabase/04_storage.sql`   (запускать ПОСЛЕ создания бакетов из шага 4)
-   5. `supabase/05_reactions_pins.sql`
+   1. Сначала `supabase/schema.sql`.
+   2. Потом все файлы `supabase/NN_*.sql` по числовому префиксу: `02`, `03`, `04` ... `106`.
+   3. `supabase/04_storage.sql` запускай ПОСЛЕ создания бакетов из шага 4.
 
-   Порядок важен: реакции/пины (05) и участники (03) зависят от предыдущих шагов.
-   Если пропустить миграции, DM/участники/реакции/пины/загрузки будут падать с ошибкой в рантайме.
+   Порядок важен: обычная сортировка по имени ставит `100_...` раньше `10_...`,
+   а это неправильный порядок. Если пропустить свежие миграции, часть функций
+   приложения будет падать в рантайме: права каналов, боты, приватность,
+   музыка, read receipts, передачи плагинов и другие новые таблицы.
 
 6. Project Settings → API → скопируй **Project URL** и **anon public key**.
 7. Скопируй `.env.example` в `.env` и подставь значения:
    ```
    VITE_SUPABASE_URL=...
    VITE_SUPABASE_ANON_KEY=...
+   VITE_VAPID_PUBLIC_KEY=...       # опционально, для push
+   VITE_TENOR_KEY=...              # опционально, для GIF
+   VITE_STEAMGRIDDB_KEY=...        # опционально, для обложек игр
    ```
 
 8. **(Опционально, для звонков)** Разверни Edge Function `livekit-token`
@@ -75,9 +78,14 @@
 
 **Один раз настроить:**
 1. В репозитории: Settings → Secrets and variables → Actions → New repository secret.
-   Добавь два секрета (значения — из твоего локального `.env`):
+   Добавь обязательные секреты (значения — из твоего локального `.env`):
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+
+   Опционально добавь:
+   - `VITE_VAPID_PUBLIC_KEY` — push-уведомления.
+   - `VITE_TENOR_KEY` — поиск GIF.
+   - `VITE_STEAMGRIDDB_KEY` — обложки игр.
 
 **Выпустить версию:**
 ```bash

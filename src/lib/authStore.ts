@@ -11,9 +11,11 @@
 // и в запасную полку, которая переживает больше. Читаем сначала из localStorage,
 // а если там пусто — поднимаем из запасной и кладём обратно.
 //
-// Запасная полка — Capacitor Preferences, если приложение собрано под Android
-// (модуль подтягивается лениво и его отсутствие ничего не ломает). В браузере
-// запасной полки нет, и это честно: там и терять нечего, кроме той же вкладки.
+// Запасная полка — Capacitor Preferences, если приложение собрано под Android.
+// В браузере запасной полки нет, и это честно: там и терять нечего, кроме той
+// же вкладки.
+
+import { Preferences } from '@capacitor/preferences'
 
 type Backup = { get(k: string): Promise<string | null>; set(k: string, v: string): Promise<void>; del(k: string): Promise<void> }
 
@@ -23,19 +25,11 @@ function backup(): Promise<Backup | null> {
     backupPromise = (async () => {
       // Есть ли вообще нативная часть. В браузере — нет, и это не ошибка.
       if (!(window as any).Capacitor?.isNativePlatform?.()) return null
-      try {
-        // Пакета может не быть в сборке вовсе — поэтому имя собирается на лету:
-        // статический импорт потребовал бы его наличия и ронял бы сборку.
-        const name = '@capacitor' + '/preferences'
-        const m: any = await import(/* @vite-ignore */ name)
-        const P = m.Preferences
-        if (!P) return null
-        return {
-          get: async k => (await P.get({ key: k })).value ?? null,
-          set: async (k, v) => { await P.set({ key: k, value: v }) },
-          del: async k => { await P.remove({ key: k }) },
-        }
-      } catch { return null }   // пакет не установлен — остаёмся на одном localStorage
+      return {
+        get: async k => (await Preferences.get({ key: k })).value ?? null,
+        set: async (k, v) => { await Preferences.set({ key: k, value: v }) },
+        del: async k => { await Preferences.remove({ key: k }) },
+      }
     })()
   }
   return backupPromise

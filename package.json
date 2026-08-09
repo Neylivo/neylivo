@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.512.0",
+  "version": "1.513.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -50,6 +50,7 @@
   "dependencies": {
     "@capacitor/android": "8.4.1",
     "@capacitor/core": "8.4.1",
+    "@capacitor/preferences": "^8.0.1",
     "@fontsource/inter": "^5.3.0",
     "@google/model-viewer": "^4.3.1",
     "@livekit/krisp-noise-filter": "^0.4.3",

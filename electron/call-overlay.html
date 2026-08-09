@@ -36,23 +36,42 @@
 <script>
   var MIC_ON = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" fill="#b5bac1"/><path d="M6 11a1 1 0 1 0-2 0 8 8 0 0 0 7 7.94V21a1 1 0 1 0 2 0v-2.06A8 8 0 0 0 20 11a1 1 0 1 0-2 0 6 6 0 0 1-12 0Z" fill="#b5bac1"/></svg>'
   var MIC_OFF = '<svg viewBox="0 0 24 24" fill="none"><path d="M3 3l18 18" stroke="#ed4245" stroke-width="2" stroke-linecap="round"/><path d="M12 15a3 3 0 0 0 3-3V9.4M9 6.2V6a3 3 0 0 1 5.7-1.3" stroke="#ed4245" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M6 11a6 6 0 0 0 9.8 4.6M18 11a5.98 5.98 0 0 1-.5 2.4" stroke="#ed4245" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 18v3" stroke="#ed4245" stroke-width="2" stroke-linecap="round"/></svg>'
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] }) }
+  function cleanAvatarUrl(raw) {
+    try {
+      var u = new URL(String(raw || ''), location.href)
+      return /^(https?|blob):$/i.test(u.protocol) ? u.href : ''
+    } catch (_) { return '' }
+  }
   function render(list) {
     var panel = document.getElementById('panel')
-    panel.innerHTML = (list || []).map(function (p) {
-      var nm = esc(p.name || '?')
-      var initial = esc((p.name || '?').slice(0, 1).toUpperCase())
-      var av = p.avatarUrl
-        ? '<span class="av" style="background-image:url(\'' + esc(p.avatarUrl) + '\')"></span>'
-        : '<span class="av">' + initial + '</span>'
-      var cls = 'row' + (p.speaking ? ' speaking' : '') + (p.screenSharing ? ' sharing' : '')
-      return '<div class="' + cls + '">' +
-        av +
-        '<span class="nm">' + nm + '</span>' +
-        (p.screenSharing ? '<span class="live">Демонстрация</span>' : '') +
-        '<span class="mic">' + (p.micOn === false ? MIC_OFF : MIC_ON) + '</span>' +
-        '</div>'
-    }).join('')
+    var frag = document.createDocumentFragment()
+    ;(Array.isArray(list) ? list : []).forEach(function (p) {
+      var nm = String((p && p.name) || '?')
+      var row = document.createElement('div')
+      row.className = 'row' + (p && p.speaking ? ' speaking' : '') + (p && p.screenSharing ? ' sharing' : '')
+      var av = document.createElement('span')
+      av.className = 'av'
+      var avatarUrl = cleanAvatarUrl(p && p.avatarUrl)
+      if (avatarUrl) av.style.backgroundImage = 'url("' + avatarUrl.replace(/["\\\r\n]/g, '') + '")'
+      else av.textContent = nm.slice(0, 1).toUpperCase()
+      var name = document.createElement('span')
+      name.className = 'nm'
+      name.textContent = nm
+      row.appendChild(av)
+      row.appendChild(name)
+      if (p && p.screenSharing) {
+        var live = document.createElement('span')
+        live.className = 'live'
+        live.textContent = 'Демонстрация'
+        row.appendChild(live)
+      }
+      var mic = document.createElement('span')
+      mic.className = 'mic'
+      mic.innerHTML = p && p.micOn === false ? MIC_OFF : MIC_ON
+      row.appendChild(mic)
+      frag.appendChild(row)
+    })
+    panel.replaceChildren(frag)
   }
   window.ponoiCallOverlay && window.ponoiCallOverlay.onUpdate(render)
 </script>

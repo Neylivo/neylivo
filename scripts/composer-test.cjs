@@ -402,9 +402,29 @@ app.whenReady().then(async () => {
     check('состояние фокуса правда включилось — иначе проверять нечего',
       кольцо.сработало === true, 'matches(:focus-within): ' + кольцо.сработало)
     const синее = /rgb\(\s*88,\s*101,\s*242|#5865f2/i
-    check('на телефоне строка в фокусе НЕ обводится',
+    check('строка в фокусе НЕ обводится — подсветка выключена изначально',
       !синее.test(кольцо.тень) && !синее.test(кольцо.рамка),
       'тень: ' + кольцо.тень.slice(0, 80) + ' | рамка: ' + кольцо.рамка)
+    // И на ширине компьютера тоже: выпуском раньше я погасил кольцо только на
+    // телефоне, и это была полумера — просили убрать, а не спрятать.
+    win.setContentSize(1200, 560)
+    await new Promise(r => setTimeout(r, 800))
+    const наКомпьютере = await win.webContents.executeJavaScript(
+      `getComputedStyle(document.getElementById('пусто')).boxShadow`)
+    check('и на компьютере тоже не обводится', !синее.test(наКомпьютере),
+      'тень: ' + наКомпьютере.slice(0, 80))
+    // А включённая настройка кольцо возвращает: это переключатель, а не обман.
+    await win.webContents.executeJavaScript(
+      `document.documentElement.setAttribute('data-focusring', '1')`)
+    await new Promise(r => setTimeout(r, 800))
+    const включили = await win.webContents.executeJavaScript(
+      `getComputedStyle(document.getElementById('пусто')).boxShadow`)
+    check('включённая настройка кольцо возвращает', синее.test(включили),
+      'тень: ' + включили.slice(0, 80))
+    await win.webContents.executeJavaScript(
+      `document.documentElement.removeAttribute('data-focusring')`)
+    win.setContentSize(412, 560)
+    await new Promise(r => setTimeout(r, 300))
     check('а таблетка поля осталась видимой — фокус не превратил её в пустоту',
       кольцо.фонПоля !== 'rgba(0, 0, 0, 0)', 'фон поля: ' + кольцо.фонПоля)
     await d.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] })

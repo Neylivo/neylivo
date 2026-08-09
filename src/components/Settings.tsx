@@ -1017,6 +1017,12 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   <Toggle on={settings.saveWhileGaming} onChange={v => set('saveWhileGaming', v)} />
                 </Row>
 
+                {/* v1.513.0: выключена изначально — по прямому указанию владельца. */}
+                <Row title="Подсвечивать строку ввода при наборе"
+                  desc="Пока пишешь, вокруг всей строки ввода горит рамка цветом темы. Включено: рамка обводит строку целиком, вместе с кнопками по краям.">
+                  <Toggle on={settings.focusRing} onChange={v => set('focusRing', v)} />
+                </Row>
+
                 <ChatBgCard />
 
                 <div className="pqs-custom">
