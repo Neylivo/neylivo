@@ -1378,6 +1378,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // рисовался он только в списке участников сервера — человек, с которым просто
   // переписываешься, не видел его нигде.
   const platesOf = useUserPlates(sidebarFriends.map(f => f.id))
+  const activeGames = friends.map(f => ({ f, g: gameOf(f.id) })).filter(x => !!x.g)
 
   return (
     <>
@@ -1579,7 +1580,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               {IS_MOBILE ? <Icon name="plus" size={18} /> : 'Добавить в друзья'}
             </button>
           </header>
-          <div className="pfr-main">
+          <div className={'pfr-main' + (activeGames.length > 0 ? ' has-activity' : ' no-activity')}>
           <div className="pfr-body">
             {tab === 'add' ? <div className="pfr-add2">
               <div className="pfr-add2-head">
@@ -1643,14 +1644,43 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 return <>
                   <div className="pfr-search pfr-search2"><Icon name="search" size={16} /><input placeholder="Поиск" value={ffilter} onChange={e => setFfilter(e.target.value)} /></div>
                   <div className="pfr-sec">{tab === 'online' ? 'В сети' : 'Все друзья'} — {list.length}</div>
-                  {list.length === 0 && <div className="pfr-empty pfr-empty-state">
-                    <span className="pfr-empty-ic"><Icon name={tab === 'online' ? 'moon' : 'users'} size={28} /></span>
-                    <strong>{tab === 'online' ? 'Сейчас никого нет в сети' : 'Список друзей пока пуст'}</strong>
-                    <span>{tab === 'online' ? 'Друзья появятся здесь, когда вернутся в Ponoi.' : 'Найди человека по имени пользователя и начни разговор.'}</span>
-                    <button onClick={() => setTab(tab === 'online' ? 'all' : 'add')}>
-                      {tab === 'online' ? 'Показать всех друзей' : 'Добавить друга'}
-                    </button>
-                  </div>}
+                  {list.length === 0 && (ffilter.trim() ?
+                    <div className="pfr-empty pfr-empty-state compact">
+                      <span className="pfr-empty-ic"><Icon name="search" size={26} /></span>
+                      <strong>Ничего не найдено</strong>
+                      <span>Попробуй другое имя или очисти поиск.</span>
+                      <button onClick={() => setFfilter('')}>Очистить поиск</button>
+                    </div>
+                    : <>
+                      <div className="pfr-empty pfr-empty-state">
+                        <span className="pfr-empty-ic"><Icon name={tab === 'online' ? 'moon' : 'users'} size={28} /></span>
+                        <strong>{tab === 'online' ? 'Сейчас никого нет в сети' : 'Список друзей пока пуст'}</strong>
+                        <span>{tab === 'online' ? 'Статус не мешает разговору — можно написать сейчас.' : 'Найди человека по имени пользователя и начни разговор.'}</span>
+                        <div className="pfr-empty-actions">
+                          <button className="primary" onClick={() => setTab(tab === 'online' ? 'all' : 'add')}>
+                            {tab === 'online' ? 'Показать всех друзей' : 'Добавить друга'}
+                          </button>
+                          <button onClick={() => tab === 'online' ? setNewConvOpen(true) : window.dispatchEvent(new Event('ponoi-open-discover'))}>
+                            {tab === 'online' ? 'Новая беседа' : 'Найти сообщества'}
+                          </button>
+                        </div>
+                      </div>
+                      {tab === 'online' && friends.length > 0 && <section className="pfr-reach">
+                        <div className="pfr-reach-head">
+                          <div><strong>Можно написать сейчас</strong><span>Последние контакты доступны независимо от статуса.</span></div>
+                          <button onClick={() => setTab('all')}>Все друзья</button>
+                        </div>
+                        <div className="pfr-reach-grid">
+                          {friends.slice(0, 6).map(f => (
+                            <button key={f.id} className="pfr-reach-person" onClick={() => openChat(f)}>
+                              <AvatarWithStatus name={f.name} userId={f.id} size={40} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
+                              <span className="pfr-reach-name">{f.name}<small>{STATUS_LABEL[statusOf(f.id)]}</small></span>
+                              <Icon name="message" size={17} />
+                            </button>
+                          ))}
+                        </div>
+                      </section>}
+                    </>)}
                   {list.map(f => (
                     <div key={f.id} className="pfr-row pfr-row2" onClick={() => openChat(f)}>
                       <AvatarWithStatus name={f.name} userId={f.id} size={IS_MOBILE ? 48 : 32} status={statusOf(f.id)} mobile={deviceOf(f.id) === 'mobile'} />
@@ -1671,18 +1701,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 </>
               })()}
           </div>
-          <aside className="pfr-right">
+          {activeGames.length > 0 && <aside className="pfr-right">
             <div className="pfr-right-h">Активные контакты</div>
             {(() => {
               // v1.90.0: 1-в-1 как «Сейчас активны» в Discord — карточки только у тех,
               // кто прямо сейчас в игре: шапка (аватар, ник, «Игра — 6 ч.», иконка игры)
               // и вложенный блок игры (обложка, название, детали/«N человек», аватарки).
-              const act = friends.map(f => ({ f, g: gameOf(f.id) })).filter(x => !!x.g)
-              if (act.length === 0) return <div className="an-empty">
-                <span className="an-empty-ic"><Icon name="gamepad" size={22} /></span>
-                <b>Нет активных игр</b>
-                <span>Когда друзья запустят игру, их активность появится здесь.</span>
-              </div>
+              const act = activeGames
               const dur = (since: number) => { const m = Math.floor((Date.now() - since) / 60000); return m >= 60 ? Math.floor(m / 60) + ' ч.' : Math.max(1, m) + ' мин.' }
               const ruPpl = (n: number) => { const d = n % 100, r = n % 10; return n + ' ' + (d >= 11 && d <= 14 ? 'человек' : r === 1 ? 'человек' : r >= 2 && r <= 4 ? 'человека' : 'человек') }
               return act.map(({ f, g }) => {
@@ -1719,7 +1744,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                 )
               })
             })()}
-          </aside>
+          </aside>}
           </div>
         </>}
       </main>

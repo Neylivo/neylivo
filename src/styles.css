@@ -10074,3 +10074,297 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
 }
+
+/* ==== v1.518.0: unified Ponoi navigation and useful people overview ==== */
+@media (min-width: 769px) {
+  .app {
+    grid-template-columns: 304px minmax(0, 1fr) auto;
+    grid-template-rows: 84px minmax(0, 1fr);
+  }
+
+  .servers {
+    position: relative;
+    grid-column: 1;
+    grid-row: 1;
+    width: 304px;
+    height: 84px;
+    padding: 32px 12px 8px;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 1px solid var(--ponoi-line);
+    border-bottom: 0;
+    background: var(--ponoi-sidebar);
+    scrollbar-width: none;
+  }
+
+  .servers::-webkit-scrollbar {
+    display: none;
+  }
+
+  .servers::before {
+    content: "PONOI";
+    position: absolute;
+    top: 7px;
+    left: 12px;
+    width: auto;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--tx-hi, #fff);
+    font-size: 10px;
+    line-height: 20px;
+    letter-spacing: 1.5px;
+    opacity: .82;
+  }
+
+  .servers .srv-wrap {
+    width: 40px;
+    flex: 0 0 40px;
+  }
+
+  .servers .srv {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+  }
+
+  .servers .srv:hover,
+  .servers .srv.on,
+  .servers .srv.home:hover,
+  .servers .srv.home.on,
+  .servers .srv.music:hover,
+  .servers .srv.music.on {
+    border-radius: 11px;
+  }
+
+  .servers .srv-sep {
+    display: none;
+  }
+
+  .servers .srv-folder,
+  .servers .srv-folder.open {
+    gap: 6px;
+  }
+
+  .servers .music-bottom {
+    margin-left: auto;
+  }
+
+  .channels,
+  .dm-side {
+    grid-column: 1;
+    grid-row: 2;
+    width: 304px;
+    height: auto;
+    min-height: 0;
+    border-top: 1px solid var(--ponoi-line);
+  }
+
+  .chat {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .members,
+  .dmp {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+.pfr-main.no-activity {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pfr-main.no-activity .pfr-body {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.pfr-main.no-activity .pfr-empty-state {
+  min-height: 260px;
+  padding-top: 32px;
+  padding-bottom: 24px;
+}
+
+.pfr-empty-state.compact {
+  min-height: min(420px, calc(100vh - 250px));
+}
+
+.pfr-empty-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pfr-empty-state .pfr-empty-actions button {
+  margin-top: 0;
+}
+
+.pfr-empty-state .pfr-empty-actions .primary {
+  border-color: var(--brand, #b24c93);
+  background: var(--brand, #b24c93);
+  color: #fff;
+}
+
+.pfr-empty-state .pfr-empty-actions .primary:hover {
+  background: color-mix(in srgb, var(--brand, #b24c93) 88%, #fff 12%);
+}
+
+.pfr-reach {
+  max-width: 860px;
+  margin: 0 auto 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--ponoi-line);
+}
+
+.pfr-reach-head {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pfr-reach-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pfr-reach-head strong {
+  color: var(--tx-hi, #fff);
+  font-size: 15px;
+}
+
+.pfr-reach-head span {
+  color: var(--mut, #949ba4);
+  font-size: 13px;
+}
+
+.pfr-reach-head > button {
+  min-height: 36px;
+  padding: 0 12px;
+  flex: none;
+  border: 1px solid var(--ponoi-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tx, #dbdee1);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pfr-reach-head > button:hover {
+  background: var(--ponoi-surface-hover);
+}
+
+.pfr-reach-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pfr-reach-person {
+  width: 100%;
+  min-width: 0;
+  min-height: 60px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--ponoi-line);
+  border-radius: 10px;
+  background: var(--ponoi-surface);
+  color: var(--tx, #dbdee1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pfr-reach-person:hover {
+  border-color: color-mix(in srgb, var(--brand, #b24c93) 32%, var(--ponoi-line));
+  background: var(--ponoi-surface-hover);
+}
+
+.pfr-reach-person > svg {
+  margin-left: auto;
+  flex: none;
+  color: var(--mut, #949ba4);
+}
+
+.pfr-reach-person:hover > svg {
+  color: var(--brand, #b24c93);
+}
+
+.pfr-reach-name {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--tx-hi, #fff);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pfr-reach-name small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--mut, #949ba4);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+  .pfr-main.no-activity .pfr-empty-state {
+    min-height: 250px;
+    padding: 24px 12px 20px;
+  }
+
+  .pfr-empty-state.compact {
+    min-height: 48vh;
+  }
+
+  .pfr-reach {
+    margin-bottom: 20px;
+    padding-top: 18px;
+  }
+
+  .pfr-reach-head {
+    align-items: flex-end;
+  }
+
+  .pfr-reach-head span {
+    display: none;
+  }
+
+  .pfr-reach-head > button {
+    min-height: 40px;
+  }
+
+  .pfr-reach-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pfr-reach-person {
+    min-height: 64px;
+  }
+}
