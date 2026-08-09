@@ -1027,7 +1027,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
 
                 <div className="pqs-custom">
                   <div className="pqs-custom-h">Своя тема</div>
-                  <div className="pqs-custom-sub">Задай цвет на каждую поверхность — можно собрать Discord целиком. Применится после кнопки «Сохранить».</div>
+                  <div className="pqs-custom-sub">Задай цвет на каждую поверхность и собери свой вид Ponoi. Применится после кнопки «Сохранить».</div>
                   {([
                     ['dark', 'Тёмный фон'], ['content', 'Основной фон'], ['panel', 'Панель'],
                     ['hover', 'Наведение'], ['active', 'Активный'], ['accent', 'Акцент'],
@@ -1278,7 +1278,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 {/* v1.409.0: шумоподавление было, но узнать о нём было неоткуда,
                     и выключить его было нельзя — а иногда именно оно и мешает
                     (музыка в микрофон, тихий голос). */}
-                <Row title="ИИ-шумоподавление" desc="Отсекает клавиатуру, вентилятор и улицу — тот же движок, что в Discord. Если голос звучит глухо или ты играешь в микрофон музыку, выключи.">
+                <Row title="ИИ-шумоподавление" desc="Отсекает клавиатуру, вентилятор и улицу. Если голос звучит глухо или ты играешь в микрофон музыку, выключи.">
                   <Toggle on={view.krisp} onChange={v => setD('krisp', v)} />
                 </Row>
                 <Row title="Громкость динамика" desc={view.spkVol + '%'}>

@@ -39,7 +39,7 @@ function isLightColor(hex: string): boolean {
 }
 
 export const THEMES: ThemeDef[] = [
-  { key:'dark',     name:'Discord',  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', tx:'#dbdee1', mut:'#949ba4' },
+  { key:'dark',     name:'Ponoi Dark',  dark:'#1e1f22', main:'#23272a', panel:'#2b2d31', content:'#313338', hover:'#383a40', active:'#35373c', accent:'#5865f2', tx:'#dbdee1', mut:'#949ba4' },
   { key:'light',    name:'Светлая',  dark:'#e3e5e8', main:'#ebedef', panel:'#f2f3f5', content:'#ffffff', hover:'#e8eaed', active:'#e0e2e6', accent:'#5865f2', tx:'#313338', mut:'#5c5e66' },
   { key:'midnight', name:'Полночь',  dark:'#000000', main:'#050506', panel:'#111318', content:'#0b0b0e', hover:'#1a1c22', active:'#16181d', accent:'#4752c4', tx:'#dbdee1', mut:'#8a8f98' },
   { key:'forest',   name:'Лес',      dark:'#12211a', main:'#16281f', panel:'#1b3327', content:'#1f3b2d', hover:'#274b39', active:'#22422f', accent:'#3ba55d', tx:'#dbe5df', mut:'#8fa89a' },

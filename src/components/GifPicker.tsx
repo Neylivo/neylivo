@@ -149,7 +149,7 @@ export function GifPicker({ onPick, onPickSticker, onClose, onEmojiTab }:
         </div>
       </>}
       {tab === 'url' && <div className="gp2-url">
-        <input placeholder="Вставь ссылку на гифку — хоть из Discord" value={urlIn} onChange={e => setUrlIn(e.target.value)}
+        <input placeholder="Вставь ссылку на гифку из любого сервиса" value={urlIn} onChange={e => setUrlIn(e.target.value)}
           onKeyDown={e => { if (e.key !== 'Enter') return; e.preventDefault(); if (urlIn.trim()) { const u = urlGif ?? urlIn.trim(); setUrlIn(''); onPick(u) } }} autoFocus />
         {urlIn.trim() && !broken.has(urlGif ?? urlIn.trim()) && <img className="gp2-preview" src={urlGif ?? urlIn.trim()} alt="предпросмотр" onError={() => markBroken(urlGif ?? urlIn.trim())} />}
         {urlIn.trim() && broken.has(urlGif ?? urlIn.trim()) && <div className="ep2-hint">Не удалось загрузить превью — проверь ссылку</div>}
