@@ -10075,59 +10075,69 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   }
 }
 
-/* ==== v1.518.0: unified Ponoi navigation and useful people overview ==== */
+/* ==== v1.519.0: readable spaces and reduced interface noise ==== */
+.srv-label {
+  display: none;
+}
+
 @media (min-width: 769px) {
   .app {
-    grid-template-columns: 304px minmax(0, 1fr) auto;
-    grid-template-rows: 84px minmax(0, 1fr);
+    grid-template-columns: 112px 288px minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
+    background: var(--ponoi-canvas);
   }
 
   .servers {
     position: relative;
     grid-column: 1;
     grid-row: 1;
-    width: 304px;
-    height: 84px;
-    padding: 32px 12px 8px;
-    gap: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    width: 112px;
+    height: 100%;
+    padding: 12px 10px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
     border-right: 1px solid var(--ponoi-line);
     border-bottom: 0;
     background: var(--ponoi-sidebar);
-    scrollbar-width: none;
-  }
-
-  .servers::-webkit-scrollbar {
-    display: none;
+    scrollbar-width: thin;
   }
 
   .servers::before {
     content: "PONOI";
-    position: absolute;
-    top: 7px;
-    left: 12px;
-    width: auto;
-    height: 20px;
-    margin: 0;
-    padding: 0;
+    position: static;
+    width: 100%;
+    height: 28px;
+    margin: 0 0 2px;
+    padding: 0 4px;
+    flex: 0 0 28px;
     border: 0;
     color: var(--tx-hi, #fff);
     font-size: 10px;
-    line-height: 20px;
-    letter-spacing: 1.5px;
+    line-height: 28px;
+    letter-spacing: 1.6px;
+    text-align: center;
     opacity: .82;
   }
 
   .servers .srv-wrap {
-    width: 40px;
-    flex: 0 0 40px;
+    width: 100%;
+    min-height: 70px;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 5px;
   }
 
   .servers .srv {
-    width: 40px;
-    height: 40px;
-    border-radius: 11px;
+    width: 64px;
+    height: 52px;
+    flex: 0 0 52px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background-color: var(--ponoi-surface);
+    font-size: 14px;
   }
 
   .servers .srv:hover,
@@ -10136,7 +10146,49 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .servers .srv.home.on,
   .servers .srv.music:hover,
   .servers .srv.music.on {
-    border-radius: 11px;
+    border-radius: 10px;
+  }
+
+  .servers .srv:hover,
+  .servers .srv.home:hover,
+  .servers .srv.music:hover {
+    border-color: var(--ponoi-line);
+  }
+
+  .servers .srv.on,
+  .servers .srv.home.on,
+  .servers .srv.music.on {
+    border-color: color-mix(in srgb, var(--brand, #b24c93) 52%, var(--ponoi-line));
+    box-shadow: inset 0 -3px 0 var(--brand, #b24c93);
+  }
+
+  .servers .srv-label {
+    display: block;
+    width: 92px;
+    overflow: hidden;
+    color: var(--mut, #949ba4);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 13px;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .servers .srv-wrap.on > .srv-label,
+  .servers .srv-wrap:hover > .srv-label {
+    color: var(--tx-hi, #fff);
+  }
+
+  .servers .srv-ping-badge {
+    top: -2px;
+    right: 10px;
+  }
+
+  .servers .srv-mute-badge {
+    top: 38px;
+    right: 12px;
+    bottom: auto;
   }
 
   .servers .srv-sep {
@@ -10145,38 +10197,212 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 
   .servers .srv-folder,
   .servers .srv-folder.open {
-    gap: 6px;
+    width: 100%;
+    padding: 6px 0;
+    gap: 8px;
+    flex-direction: column;
+    flex: 0 0 auto;
+    border-radius: 10px;
   }
 
   .servers .music-bottom {
-    margin-left: auto;
+    margin-top: auto;
+    margin-left: 0;
   }
 
   .channels,
   .dm-side {
-    grid-column: 1;
-    grid-row: 2;
-    width: 304px;
-    height: auto;
+    grid-column: 2;
+    grid-row: 1;
+    width: 288px;
+    height: 100%;
     min-height: 0;
-    border-top: 1px solid var(--ponoi-line);
+    padding: 14px 12px 12px;
+    border-top: 0;
+    background: var(--ponoi-sidebar);
   }
 
   .chat {
-    grid-column: 2;
-    grid-row: 1 / 3;
+    grid-column: 3;
+    grid-row: 1;
     width: auto;
-    height: auto;
+    height: 100%;
     min-width: 0;
     min-height: 0;
+    padding: 0;
+    background: var(--ponoi-canvas);
   }
 
   .members,
   .dmp {
-    grid-column: 3;
-    grid-row: 1 / 3;
-    height: auto;
+    grid-column: 4;
+    grid-row: 1;
+    height: 100%;
     min-height: 0;
+  }
+
+  .srv-title,
+  .dm-top,
+  .dm-side-top {
+    min-height: 46px;
+    margin: 0 0 10px;
+    padding: 0 4px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--ponoi-line);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .srv-title.banner {
+    min-height: 132px;
+    margin: -14px -12px 10px;
+    padding: 10px 12px;
+    border-radius: 0;
+  }
+
+  .srv-pill {
+    min-height: 38px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+  }
+
+  .chat-head,
+  .chat-head.ph2,
+  .pfr-chat .pfr-head {
+    min-height: 64px;
+    margin: 0;
+    padding: 0 20px;
+    border: 0;
+    border-bottom: 1px solid var(--ponoi-line);
+    border-radius: 0;
+    background: var(--ponoi-canvas);
+    box-shadow: none;
+  }
+
+  .members {
+    margin: 0;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+    background: var(--ponoi-sidebar);
+  }
+
+  .dm-side .me,
+  .channels .me {
+    min-height: 58px;
+    margin: auto -12px -12px;
+    padding: 9px 12px;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background: var(--ponoi-shell);
+  }
+
+  .ph2-btns {
+    gap: 2px;
+  }
+
+  .ph2-btns .pin-btn:not(.on),
+  .me .me-ic:not(.off),
+  .me .me-out {
+    opacity: .52;
+  }
+
+  .chat-head:hover .ph2-btns .pin-btn,
+  .me:hover .me-ic,
+  .me:hover .me-out,
+  .ph2-btns .pin-btn:focus-visible,
+  .me .me-ic:focus-visible,
+  .me .me-out:focus-visible {
+    opacity: 1;
+  }
+
+  .pfr-title {
+    margin-right: 10px;
+    font-size: 17px;
+  }
+
+  .pfr-title > svg {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .pfr-tabs {
+    padding: 3px;
+    gap: 2px;
+    border: 1px solid var(--ponoi-line);
+    border-radius: 8px;
+    background: var(--ponoi-surface);
+  }
+
+  .pfr-tab {
+    min-height: 30px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 6px;
+  }
+
+  .pfr-tab.on {
+    border: 0;
+    background: color-mix(in srgb, var(--brand, #b24c93) 22%, var(--ponoi-sidebar));
+  }
+
+  .pfr-addfriend {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    margin-left: 8px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 8px;
+  }
+
+  .pfr-addfriend.on,
+  .pfr-addfriend.on:hover {
+    border-color: color-mix(in srgb, var(--brand, #b24c93) 38%, transparent);
+  }
+
+  .pfr-empty-state,
+  .pfr-main.no-activity .pfr-empty-state {
+    width: 100%;
+    max-width: none;
+    min-height: 150px;
+    margin: 0;
+    padding: 24px 4px 20px;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+  }
+
+  .pfr-empty-state .pfr-empty-ic {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 6px;
+    border: 0;
+    border-radius: 8px;
+  }
+
+  .pfr-empty-state button.primary {
+    margin-top: 10px;
+    border-color: var(--brand, #b24c93);
+    background: var(--brand, #b24c93);
+    color: #fff;
+  }
+
+  .pfr-acts {
+    opacity: 0;
+    transition: opacity .14s ease;
+  }
+
+  .pfr-row2:hover .pfr-acts,
+  .pfr-row2:focus-within .pfr-acts {
+    opacity: 1;
   }
 }
 
@@ -10186,52 +10412,29 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 
 .pfr-main.no-activity .pfr-body {
   width: 100%;
-  max-width: 1180px;
+  max-width: 980px;
   margin: 0 auto;
 }
 
 .pfr-main.no-activity .pfr-empty-state {
-  min-height: 260px;
-  padding-top: 32px;
-  padding-bottom: 24px;
+  min-height: 150px;
+  padding-top: 24px;
+  padding-bottom: 20px;
 }
 
 .pfr-empty-state.compact {
-  min-height: min(420px, calc(100vh - 250px));
-}
-
-.pfr-empty-actions {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.pfr-empty-state .pfr-empty-actions button {
-  margin-top: 0;
-}
-
-.pfr-empty-state .pfr-empty-actions .primary {
-  border-color: var(--brand, #b24c93);
-  background: var(--brand, #b24c93);
-  color: #fff;
-}
-
-.pfr-empty-state .pfr-empty-actions .primary:hover {
-  background: color-mix(in srgb, var(--brand, #b24c93) 88%, #fff 12%);
+  min-height: 180px;
 }
 
 .pfr-reach {
-  max-width: 860px;
-  margin: 0 auto 32px;
-  padding-top: 24px;
+  max-width: none;
+  margin: 0 0 28px;
+  padding-top: 20px;
   border-top: 1px solid var(--ponoi-line);
 }
 
 .pfr-reach-head {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -10255,41 +10458,24 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   font-size: 13px;
 }
 
-.pfr-reach-head > button {
-  min-height: 36px;
-  padding: 0 12px;
-  flex: none;
-  border: 1px solid var(--ponoi-line);
-  border-radius: 9px;
-  background: transparent;
-  color: var(--tx, #dbdee1);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pfr-reach-head > button:hover {
-  background: var(--ponoi-surface-hover);
-}
-
 .pfr-reach-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
 }
 
 .pfr-reach-person {
   width: 100%;
   min-width: 0;
-  min-height: 60px;
-  padding: 9px 11px;
+  min-height: 58px;
+  padding: 8px 6px;
   display: flex;
   align-items: center;
   gap: 11px;
-  border: 1px solid var(--ponoi-line);
-  border-radius: 10px;
-  background: var(--ponoi-surface);
+  border: 0;
+  border-bottom: 1px solid var(--ponoi-line);
+  border-radius: 0;
+  background: transparent;
   color: var(--tx, #dbdee1);
   font: inherit;
   text-align: left;
@@ -10297,7 +10483,6 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 }
 
 .pfr-reach-person:hover {
-  border-color: color-mix(in srgb, var(--brand, #b24c93) 32%, var(--ponoi-line));
   background: var(--ponoi-surface-hover);
 }
 

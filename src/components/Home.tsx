@@ -572,6 +572,7 @@ export function Home() {
             <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
               onClick={() => setView({ kind: 'dm' })}><Icon name="home" size={24} /></button>
           </RailTip>
+          <span className="srv-label">Главная</span>
         </div>
         <div className="srv-sep" />
         {(() => {
@@ -585,6 +586,7 @@ export function Home() {
                   onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: e.clientX, y: e.clientY }) }}>
                   {s.name.slice(0, 2).toUpperCase()}</button>
               </RailTip>
+              <span className="srv-label">{s.name}</span>
               {notifModeOf(s.id) === 'mute' && <span className="srv-mute-badge" title="Уведомления выключены">🔕</span>}
               <SrvPingBadge serverId={s.id} />
             </div>
@@ -608,6 +610,7 @@ export function Home() {
                       )}
                     </button>
                   </RailTip>
+                  <span className="srv-label">{f.name}</span>
                   {f.open && list.map(srvBtn)}
                 </div>
               )
@@ -615,12 +618,12 @@ export function Home() {
             {servers.filter(s => !inFolder.has(s.id)).map(srvBtn)}
           </>
         })()}
-        <RailTip text="Создать сервер">
-          <button className="srv add" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
-        </RailTip>
-        <RailTip text="Найти сервер">
-          <button className="srv join" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
-        </RailTip>
+        <div className="srv-wrap">
+          <RailTip text="Добавить или найти сервер">
+            <button className="srv add" onClick={() => setShowCreate(true)}><Icon name="plus" size={24} /></button>
+          </RailTip>
+          <span className="srv-label">Добавить</span>
+        </div>
         <div className={'srv-wrap music-bottom' + (view.kind === 'music' ? ' on' : '')}>
           <RailTip text="Ponoi Music">
             <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
@@ -629,6 +632,7 @@ export function Home() {
               // как переключатель и ведёт себя так везде в приложении.
               onClick={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}><Icon name="music" size={22} /></button>
           </RailTip>
+          <span className="srv-label">Музыка</span>
         </div>
       </nav>
       {/* v1.427.0: системная «назад» закрывает шторку навигации, а не приложение.
