@@ -38,6 +38,8 @@ import { msgTime, dayLabel, daysAgo, setTime24 } from './ui'
 import { panelFor, panelTitle } from './activityPanel'
 import { humanFail, humanText } from './humanFail'
 import { saving, slowMs, SAVE_SLOWDOWN } from './gameMode'
+import { fileKind, fileSub, sizeText, fileNameOf, extOf } from './fileKind'
+import { parseZipTail } from './zipPeek'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1843,6 +1845,84 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.529.0: карточка файла ------------------------------------------------
+//
+// Владелец: «сделай кнопку скачать файл удобной, чтобы можно было посмотреть
+// название, содержание и так далее». Раньше всё, кроме картинок и текста, было
+// синей строкой «Скачать файл 47.8 МБ» — ни имени, ни типа, ни содержимого.
+console.log('\n-- Карточка файла --')
+
+check('имя достаётся из ссылки', () =>
+  fileNameOf('https://x/y/Ponoi-Setup-1.529.0.exe?token=abc') === 'Ponoi-Setup-1.529.0.exe'
+  && fileNameOf('https://x/%D0%B0%D1%80%D1%85%D0%B8%D0%B2.zip') === 'архив.zip')
+check('своё имя вложения важнее ссылки', () =>
+  fileNameOf('https://x/abc_enc', 'отчёт.pdf') === 'отчёт.pdf')
+check('в личке файл лежит под обезличенным именем — и это видно честно', () =>
+  fileNameOf('https://x/9f3ab_enc') === '9f3ab_enc' && extOf('9f3ab_enc') === '')
+
+check('тип узнаётся по расширению', () =>
+  fileKind('архив.zip').kind === 'archive' && fileKind('клип.MP4').kind === 'video'
+  && fileKind('Ponoi-Setup.exe').kind === 'exe' && fileKind('песня.flac').kind === 'audio'
+  && fileKind('отчёт.pdf').kind === 'pdf')
+check('незнакомое не выдумывается', () =>
+  fileKind('нечто.qwerty').kind === 'other' && fileKind('нечто.qwerty').label === 'Файл')
+
+check('размер по-человечески', () =>
+  sizeText(0) === '' && sizeText(null) === '' && sizeText(-5) === ''
+  && sizeText(900) === '900 Б' && sizeText(50 * 1024) === '50 КБ'
+  && sizeText(47.8 * 1024 * 1024).startsWith('48 МБ')
+  && sizeText(3 * 1024 * 1024 * 1024) === '3,0 ГБ')
+check('подпись без одинокой точки, когда размер неизвестен', () =>
+  fileSub('архив.zip') === 'Архив' && fileSub('архив.zip', 1024) === 'Архив · 1,0 КБ')
+
+console.log('\n-- Что внутри архива --')
+
+/** Настоящий zip из двух записей, собранный по байтам (без сжатия). */
+function игрушечныйZip(): Uint8Array {
+  const enc = new TextEncoder()
+  const части: number[] = []
+  const u16 = (n: number) => [n & 255, (n >> 8) & 255]
+  const u32 = (n: number) => [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255]
+  const имена = ['readme.txt', 'папка/']
+  const размеры = [12, 0]
+  const опись: number[] = []
+  for (let i = 0; i < имена.length; i++) {
+    const имя = Array.from(enc.encode(имена[i]))
+    опись.push(...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(размеры[i]), ...u32(размеры[i]),
+      ...u16(имя.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(0), ...имя)
+  }
+  части.push(...опись)
+  части.push(...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(имена.length), ...u16(имена.length),
+    ...u32(опись.length), ...u32(0), ...u16(0))
+  return new Uint8Array(части)
+}
+
+check('опись архива читается с конца файла', () => {
+  const r = parseZipTail(игрушечныйZip(), 0)
+  return !!r && r.total === 2 && r.entries.length === 2
+    && r.entries[0].name === 'readme.txt' && r.entries[0].size === 12
+    && r.entries[1].dir === true && r.full === true
+})
+check('русские имена внутри архива не ломаются', () => {
+  const r = parseZipTail(игрушечныйZip(), 0)
+  return !!r && r.entries[1].name === 'папка/'
+})
+check('не архив — честный отказ, а не выдуманный список', () =>
+  parseZipTail(new TextEncoder().encode('это просто текст, никакой не архив')) === null
+  && parseZipTail(new Uint8Array(4)) === null)
+
+console.log('\n-- Ломаем нарочно (файлы) --')
+check('проверка ловит выдуманный тип у незнакомого файла', () => {
+  const плохо = 'Архив'
+  return плохо !== fileKind('нечто.qwerty').label
+})
+check('проверка ловит «0 Б» вместо пустоты', () => {
+  const плохо = '0 Б'
+  return плохо !== sizeText(0)
+})
 
 
 // -- v1.511.0: бережный режим во время игры -----------------------------------

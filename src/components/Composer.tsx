@@ -14,6 +14,7 @@ import { Icon } from './icons'
 import { Avatar } from './Avatar'
 import { Lightbox } from './Lightbox'
 import { CodeFileCard, isCodeFile } from './CodeFileCard'
+import { FileCard } from './FileCard'
 import { PluginInstallCard, isPluginFile } from './PluginInstallCard'
 import { useSettings } from '../lib/settings'
 import type { AttachPatch } from '../lib/reactions'
@@ -1143,6 +1144,11 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   const [revealed, setRevealed] = useState(false)
   const [viewer, setViewer] = useState(false)
   const [size, setSize] = useState<string | null>(null)
+  // v1.529.0: размер держим и числом. Строка «47,8 МБ» годится для подписи, а
+  // карточке архива нужен байтовый размер: по нему она просит у сервера хвост
+  // файла, где лежит опись. Считать его обратно из строки — верный способ
+  // ошибиться на округлении.
+  const [bytes, setBytes] = useState<number | null>(null)
   const [failed, setFailed] = useState(false)
   // v1.380.0: почему именно картинка не открылась.
   //
@@ -1157,10 +1163,10 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   const canEdit = !!editable && !!onEditAttachment && !uploading
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
-    if (!url || uploading || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); return }
+    if (!url || uploading || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); setBytes(null); return }
     let on = true
     fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
-      .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) setSize(fmtSize(n)) })
+      .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) { setSize(fmtSize(n)); setBytes(n) } })
       .catch(() => {})
     return () => { on = false }
   }, [url, type, uploading])
@@ -1298,9 +1304,17 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   // сервере под обезличенным именем, и браузер сохранял его как «…_enc» — без
   // расширения и без намёка на то, чем это было. Настоящее имя приезжает в
   // метаданных вложения (оно ехало внутри зашифрованного ключа).
-  const dlName = myMeta?.name || decodeURIComponent((clean.split('/').pop() ?? '').split('?')[0]) || 'файл'
-  return <a className="msg-file" href={clean} download={dlName} target="_blank" rel="noreferrer"
-    title={(myMeta?.name ? myMeta.name + (size ? ' · ' + size : '') : size ? 'Размер файла: ' + size : undefined)}>
-    <Icon name="paperclip" size={16} /> {myMeta?.name || 'Скачать файл'}{size && <span className="msg-file-size">{size}</span>}
-  </a>
+  // v1.529.0: карточка вместо синей строки «Скачать файл».
+  //
+  // Раньше про файл было известно ровно два слова и размер: ни имени с
+  // расширением, ни типа, ни содержимого. У архива теперь видно и что внутри —
+  // опись читается с конца файла, без скачивания (см. lib/zipPeek.ts).
+  return <>
+    <div className="att-editwrap">
+      <FileCard url={clean} name={myMeta?.name} size={bytes} desc={myMeta?.desc} />
+      {canEdit && <button className="att-edit-btn" title="Изменить вложение" onClick={e => { e.stopPropagation(); setEditOpen(true) }}><Icon name="edit" size={13} /></button>}
+      {editOpen && <AttachEditModal initial={{ spoiler: false, name: myMeta?.name ?? '', desc: myMeta?.desc ?? '' }}
+        onSave={patch => onEditAttachment!(idx, patch)} onClose={() => setEditOpen(false)} />}
+    </div>
+  </>
 }
