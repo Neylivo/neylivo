@@ -8,6 +8,7 @@
 export type ChangelogEntry = { version: string; date: string; items: string[] }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "1.520.0", date: "2026-08-10", items: ["Исправлено: touch-навигация, изображения и размеры кнопок"] },
   { version: "1.519.0", date: "2026-08-10", items: ["Изменено: серверы увеличены, навигация и действия упрощены"] },
   { version: "1.518.0", date: "2026-08-10", items: ["Изменено: переработаны главный экран и навигация"] },
   { version: "1.517.0", date: "2026-08-10", items: ["Изменено: серверы перенесены в верхнюю панель, экран друзей получил стиль Ponoi"] },
