@@ -45,6 +45,7 @@ import { pad, unpad, stepFor, STEPS } from './crypto/padding'
 import { copyText as собратьТекст, copyCount } from './bulkSelect'
 import { HOLD_MS, holdDue, holdLeft, holdLabel, deleteConfirmed, reportReady, reportNote, REPORT_NOTE_MAX } from './accountGuard'
 import { wipeSummary } from './wipe'
+import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, codeLooksValid, NEW_DEVICE_LOCK_MS } from './deviceGuard'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1850,6 +1851,80 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.535.0: новое устройство и код восстановления --------------------------
+//
+// Владелец просил защиту уровня Steam: вход с нового устройства не даёт сразу
+// делать опасное, а на крайний случай есть код, который знает только владелец.
+console.log('\n-- Новое устройство --')
+
+const ЧАС2 = 60 * 60 * 1000
+const новое = { id: 'd1', firstSeen: 0 }
+const старое = { id: 'd2', firstSeen: -3 * NEW_DEVICE_LOCK_MS }
+
+check('на новом устройстве опасное закрыто', () =>
+  criticalLocked('keys', новое, 1000) && criticalLocked('delete', новое, 1000)
+  && criticalLocked('email', новое, 1000))
+check('через сутки замок снимается сам', () =>
+  criticalLocked('keys', новое, NEW_DEVICE_LOCK_MS - 1) === true
+  && criticalLocked('keys', новое, NEW_DEVICE_LOCK_MS) === false)
+check('подтверждённое устройство открыто сразу', () =>
+  criticalLocked('keys', { id: 'd3', firstSeen: 0, trusted: true }, 1000) === false)
+check('на давно знакомом устройстве замка нет', () =>
+  criticalLocked('delete', старое) === false)
+check('неизвестное устройство закрыто целиком', () =>
+  criticalLocked('keys', null) === true)
+
+check('выход со всех устройств не запирается НИКОГДА', () =>
+  // Это единственное действие, которым человек защищается. Запереть его —
+  // значит помочь тому, кто увёл аккаунт.
+  criticalLocked('logout-all', новое, 1000) === false
+  && criticalLocked('logout-all', null) === false)
+
+check('остаток замка считается, а не выдумывается', () =>
+  lockLeft(новое, 6 * ЧАС2) === 18 * ЧАС2
+  && lockLeft(новое, 99 * ЧАС2) === 0
+  && lockLeft({ id: 'x', firstSeen: 0, trusted: true }, 0) === 0)
+
+check('имя устройства читается человеком', () =>
+  deviceLabel('Mozilla/5.0 (Linux; Android 14) Chrome/120').includes('Android')
+  && deviceLabel('Mozilla/5.0 (Windows NT 10.0) Ponoi/1.5 Electron').includes('Windows')
+  && deviceLabel('').includes('устройство'))
+
+console.log('\n-- Код восстановления --')
+
+const выдать = (байты: number[]) => newRecoveryCode(() => new Uint8Array(байты))
+
+check('код узнаётся с одного взгляда и читается', () => {
+  const к = выдать(new Array(16).fill(0))
+  return к.startsWith('R-') && к.split('-').length === 5
+})
+check('в коде нет знаков, которые путают на бумаге', () => {
+  // Ноль и «O», единица и «I» неразличимы при переписывании, а ошибка тут —
+  // это потерянный аккаунт.
+  let все = ''
+  for (let i = 0; i < 32; i++) все += выдать(new Array(16).fill(i))
+  return !/[01OIL]/.test(все.replace(/^R|-/g, ''))
+})
+check('введённое как попало всё равно подходит', () =>
+  normalizeCode('r-abcd-efgh-jkmn-pqrs') === normalizeCode('ABCDEFGHJKMNPQRS')
+  && normalizeCode('  ABCD EFGH JKMN PQRS ') === 'ABCDEFGHJKMNPQRS')
+check('кривой код отвергается до похода в базу', () =>
+  codeLooksValid('R-ABCD-EFGH-JKMN-PQRS') === true
+  && codeLooksValid('короткий') === false
+  && codeLooksValid('R-ABCD-EFGH-JKMN-PQR') === false
+  && codeLooksValid('R-ABCD-EFGH-JKLM-NPQR') === false)   // L в код не входит
+
+console.log('\n-- Ломаем нарочно (устройства) --')
+check('проверка ловит открытый доступ новому устройству', () => {
+  const плохо = false
+  return плохо !== criticalLocked('keys', новое, 1000)
+})
+check('проверка ловит запертый выход со всех устройств', () => {
+  const плохо = true
+  return плохо !== criticalLocked('logout-all', новое, 1000)
+})
 
 
 // -- v1.533.0: удаление аккаунта, жалобы и задержки --------------------------
