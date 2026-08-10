@@ -354,7 +354,7 @@ export function sizeLabel(bytes: number): string {
   return гб >= 1 ? гб.toFixed(1).replace('.', ',') + ' ГБ' : Math.round(b / 1e6) + ' МБ'
 }
 
-export async function autoNodes(steamId: string | null, appId?: string | null): Promise<AutoResult> {
+export async function autoNodes(steamId: string | null, appId?: string | null, name?: string): Promise<AutoResult> {
   const d = (window as any).ponoiDesktop
   if (!d?.steamProgress) return { ok: false, nodes: [], why: 'no-desktop' }
   // v1.483.0: БЕЗ Steam ID тоже спрашиваем. Раньше здесь стоял отказ — и до
@@ -364,7 +364,12 @@ export async function autoNodes(steamId: string | null, appId?: string | null): 
   // закрывала эта строка: владелец так и принёс — «сюжет ничего не показывает,
   // особенно когда пиратка».
   try {
-    const r = await d.steamProgress({ steamId, appId })
+    // v1.525.0: передаём и НАЗВАНИЕ игры. Номер игры (appId) известен только
+    // для той, что запущена прямо сейчас: его берут из манифеста рядом с
+    // работающим exe. Открыть прохождение можно и у игры из истории — там
+    // номера нет, и раньше запрос обрывался с «no-appid», то есть панель
+    // молчала. По названию рабочий стол находит игру среди установленных.
+    const r = await d.steamProgress({ steamId, appId, name })
     // v1.505.0: факты об игре приходят и тогда, когда вех не нашлось — часы и
     // последний запуск лежат на диске независимо от достижений, и панель, где
     // «ничего нет» при наигранных полутора сотнях часов, — это просто

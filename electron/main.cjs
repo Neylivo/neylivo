@@ -266,7 +266,18 @@ async function findCover(name) {
 ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
   // Номер игры берём из манифеста рядом с запущенной игрой: то же место,
   // откуда уже берём её настоящее название.
-  const appId = String((arg && arg.appId) || '') || (curGameExe ? steamAppIdOf(curGameExe) : null)
+  let appId = String((arg && arg.appId) || '') || (curGameExe ? steamAppIdOf(curGameExe) : null)
+  // v1.525.0: не запущена — ищем по названию среди установленных.
+  // Прохождение открывают и у игры из истории; там номера нет, и запрос
+  // обрывался с «no-appid» ещё до того, как что-то попробовать.
+  if (!appId && arg && arg.name) {
+    try {
+      const { scanGames } = require('./gameScan.cjs')
+      const нужное = String(arg.name).trim().toLowerCase()
+      const найдено = (scanGames().games || []).find(g => String(g.name || '').trim().toLowerCase() === нужное)
+      if (найдено) appId = найдено.appId
+    } catch { /* обход не удался — работаем как раньше */ }
+  }
 
   // v1.461.0: СНАЧАЛА смотрим на диск. Это работает без Steam ID, без открытого
   // профиля, без сети и — главное — для нелицензионных копий, где профиля Steam

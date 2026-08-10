@@ -63,7 +63,7 @@ export function CampaignModal({ game, isMe, steamId, appId, shared, onClose }: {
     let жив = true
     // Чужое прохождение с моего диска не читается: там лежит МОЁ.
     if (shared !== undefined) { setAuto({ nodes: [] }); setИщем(false); return }
-    autoNodes(steamId ?? null, appId ?? null).then(r => {
+    autoNodes(steamId ?? null, appId ?? null, game).then(r => {
       if (!жив) return
       setAuto({ nodes: r.nodes, why: r.why, facts: r.facts ?? null })
       setИщем(false)

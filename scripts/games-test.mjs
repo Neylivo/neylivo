@@ -8,7 +8,7 @@
 // Теперь разбор манифеста Steam вынесен отдельным файлом (electron/steamName.cjs)
 // и проверяется здесь на настоящих кусках .acf — тех самых, что лежат у Steam.
 import { acfField, parseManifest, steamFolder, steamAppsDir, steamNameOf } from '../electron/steamName.cjs'
-import { parseAchievements, isPrivate, appIdFromManifest, steamAchievements } from '../electron/steamAchievements.cjs'
+import { parseAchievements, isPrivate, appIdFromManifest, steamAchievements, следующийАдрес } from '../electron/steamAchievements.cjs'
 import { steamIdFromLoginUsers, steamRoots, parseGoldberg, parseAchIni, parseSchema, candidatePaths, localProgress } from '../electron/localProgress.cjs'
 
 let pass = 0, fail = 0
@@ -31,6 +31,35 @@ const ACF_HOG = `"AppState"
 \t"name"\t\t"Hogwarts Legacy"
 \t"installdir"\t\t"Hogwarts Legacy"
 }`
+
+console.log('── Переход за перенаправлением Steam ──')
+
+// v1.525.0: ЭТО и была причина «сюжетный прогресс ничего не показывает».
+//
+// Steam уводит с номера игры на её короткое имя и ТЕРЯЕТ параметры:
+//   /profiles/<id>/stats/730/?xml=1&l=russian  ->  /profiles/<id>/stats/CSGO
+// Без ?xml=1 он отдаёт обычную страницу для человека. Разбор не находит там ни
+// одной вехи, и приложение честно сообщает «пусто» — при открытом профиле и
+// живых достижениях. Проверено живым запросом: без параметров ответ 1619 байт
+// без вех, с ними — те же вехи с названиями и отметками.
+check('параметры переносятся за перенаправлением', () => {
+  const из = 'https://steamcommunity.com/profiles/765/stats/730/?xml=1&l=russian'
+  const в = следующийАдрес(из, 'https://steamcommunity.com/profiles/765/stats/CSGO')
+  return в.includes('xml=1') && в.includes('l=russian') && в.includes('/stats/CSGO')
+})
+check('относительный переход тоже понимается', () => {
+  const в = следующийАдрес('https://steamcommunity.com/profiles/765/stats/730/?xml=1', '/profiles/765/stats/CSGO')
+  return в.startsWith('https://steamcommunity.com/profiles/765/stats/CSGO') && в.includes('xml=1')
+})
+check('свои параметры перенаправления не затираются', () => {
+  const в = следующийАдрес('https://x/a?xml=1&l=russian', 'https://x/b?l=english')
+  return в.includes('l=english') && в.includes('xml=1') && !в.includes('l=russian')
+})
+check('проверка ловит возврат потерянных параметров', () => {
+  // Так было до починки: шли по голому адресу из заголовка.
+  const плохо = 'https://steamcommunity.com/profiles/765/stats/CSGO'
+  return плохо !== следующийАдрес('https://steamcommunity.com/profiles/765/stats/730/?xml=1', плохо)
+})
 
 console.log('── Название игры из манифеста Steam ──')
 

@@ -74,12 +74,38 @@ function isPrivate(xml) {
   return /<privacyState>\s*(private|friendsonly)/i.test(t) || /<error>/i.test(t)
 }
 
+/**
+ * Куда идти за перенаправлением, сохранив свои параметры.
+ *
+ * Отдельной функцией — чтобы это можно было проверить без сети (см.
+ * npm run test:games): ошибка здесь не видна ничем, кроме пустой панели
+ * прохождения у человека с открытым профилем.
+ */
+function следующийАдрес(откуда, куда) {
+  const дальше = new URL(куда, откуда)
+  const было = new URL(откуда)
+  for (const [к, з] of было.searchParams) {
+    if (!дальше.searchParams.has(к)) дальше.searchParams.set(к, з)
+  }
+  return дальше.toString()
+}
+
 function fetchXml(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { 'User-Agent': 'Ponoi' }, timeout: 15000 }, res => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
-        return fetchXml(res.headers.location).then(resolve, reject)
+        // v1.525.0: за перенаправлением идём С ТЕМИ ЖЕ параметрами.
+        //
+        // Здесь и была причина «сюжет ничего не показывает». Steam уводит с
+        // номера игры на её короткое имя:
+        //   /stats/730/?xml=1&l=russian  ->  /stats/CSGO
+        // и параметры при этом ТЕРЯЕТ. Без ?xml=1 он отдаёт обычную страницу
+        // для человека, разбор не находит в ней ни одной вехи, и приложение
+        // честно сообщает «пусто» — при открытом профиле и живых достижениях.
+        // Поймано живым запросом: без параметров ответ 1619 байт без вех, с
+        // ними — те же вехи с названиями и отметками.
+        return fetchXml(следующийАдрес(url, res.headers.location)).then(resolve, reject)
       }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('Steam ответил ' + res.statusCode)) }
       let data = ''
@@ -111,4 +137,5 @@ async function steamAchievements(steamId64, appId, fetcher = fetchXml) {
   return { ok: true, items }
 }
 
-module.exports = { appIdFromManifest, parseAchievements, isPrivate, steamAchievements }
+module.exports = {
+  следующийАдрес, appIdFromManifest, parseAchievements, isPrivate, steamAchievements }

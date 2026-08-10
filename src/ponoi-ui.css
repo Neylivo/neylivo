@@ -419,16 +419,18 @@ textarea {
   box-shadow: none;
 }
 
-body:not(.no-anim) .srv,
-body:not(.no-anim) .ch,
-body:not(.no-anim) .dm-item,
-body:not(.no-anim) .dm-navitem,
-body:not(.no-anim) .member,
-body:not(.no-anim) .pfr-tab,
-body:not(.no-anim) .pfr-cbtn,
-body:not(.no-anim) .pfr-addfriend {
-  transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, filter .16s ease;
-}
+/* v1.525.0: движение этих элементов задаёт styles.css, и переопределять его
+   здесь нельзя.
+   Тут стоял свой список переходов — и он не ДОБАВЛЯЛСЯ к прежнему, а заменял
+   его целиком: так работает CSS. Из списка выпали transform и border-radius, а
+   это и есть заметное движение рейки серверов (значок скругляется из квадрата
+   в круг) и сдвиг строк каналов и диалогов. Ошибки не было, вид почти прежний —
+   пропала живость, и заметить это можно только рядом со старой версией.
+   Поймано замером: npm run test:anim.
+
+   Цвета, рамки и тени этот слой задаёт по-прежнему — он для вида, а не для
+   движения. Плавность цвета у перечисленных элементов уже описана в styles.css
+   вместе с остальными их переходами. */
 
 @media (max-width: 768px),
   (hover: none) and (pointer: coarse) and (max-width: 1100px),
