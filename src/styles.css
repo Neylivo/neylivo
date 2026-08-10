@@ -10472,3 +10472,288 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
     min-height: 44px;
   }
 }
+
+/* Canonical Ponoi desktop surface layer. It intentionally comes last because
+   the app contains historical visual passes with overlapping selectors. */
+:root {
+  --ponoi-rail-width: 88px;
+  --ponoi-side-width: 292px;
+  --ponoi-member-width: 304px;
+  --ponoi-head-height: 56px;
+  --ponoi-radius: 8px;
+  --ponoi-surface: color-mix(in srgb, var(--bg2, #2b2d31) 94%, #0b0d12 6%);
+  --ponoi-surface-strong: color-mix(in srgb, var(--bg3, #1e1f22) 88%, #0b0d12 12%);
+  --ponoi-line: rgba(var(--ov, 255,255,255), .09);
+  --ponoi-hover: rgba(var(--ov, 255,255,255), .065);
+  --ponoi-active: color-mix(in srgb, var(--brand, #5865f2) 18%, transparent);
+}
+
+:root[data-theme="light"] {
+  --ponoi-surface: color-mix(in srgb, var(--bg2, #f2f3f5) 96%, #ffffff 4%);
+  --ponoi-surface-strong: color-mix(in srgb, var(--bg3, #ffffff) 92%, #e8ebf0 8%);
+  --ponoi-line: rgba(16,24,40,.11);
+  --ponoi-hover: rgba(16,24,40,.055);
+}
+
+@media (min-width: 769px) and (hover: hover) and (pointer: fine) and (min-height: 601px) {
+  .app {
+    display: flex;
+    min-width: 0;
+    background: var(--bg, #313338);
+  }
+
+  .servers {
+    position: static;
+    width: var(--ponoi-rail-width);
+    height: auto;
+    min-height: 0;
+    flex: 0 0 var(--ponoi-rail-width);
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--ponoi-surface-strong);
+    border: 0;
+    border-right: 1px solid var(--ponoi-line);
+    box-shadow: none;
+  }
+
+  .servers::before {
+    position: static;
+    width: 56px;
+    height: 20px;
+    margin: 0 0 2px;
+    padding: 0;
+    color: var(--tx-hi, #fff);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    line-height: 20px;
+    opacity: .78;
+  }
+
+  .servers .srv-wrap {
+    width: 56px;
+    min-height: 56px;
+    flex: 0 0 56px;
+  }
+
+  .servers .srv {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border: 1px solid transparent;
+    border-radius: var(--ponoi-radius);
+    background: var(--ponoi-surface);
+    color: var(--tx, #dbdee1);
+    box-shadow: none;
+  }
+
+  .servers .srv:hover {
+    border-color: var(--ponoi-line);
+    background: var(--ponoi-hover);
+    color: var(--tx-hi, #fff);
+  }
+
+  .servers .srv.on,
+  .servers .srv.home.on,
+  .servers .srv.music.on {
+    border-color: color-mix(in srgb, var(--brand, #5865f2) 46%, var(--ponoi-line));
+    background: var(--ponoi-active);
+    box-shadow: inset 0 -2px 0 var(--brand, #5865f2);
+  }
+
+  .servers .srv.has-avatar,
+  .servers .srv.has-avatar:hover,
+  .servers .srv.has-avatar.on {
+    border-radius: 50%;
+  }
+
+  .servers .srv-sep {
+    display: block;
+    width: 32px;
+    height: 1px;
+    min-height: 1px;
+    margin: 0;
+    background: var(--ponoi-line);
+  }
+
+  .servers .srv-folder,
+  .servers .srv-folder.open {
+    width: 56px;
+    padding: 0;
+    gap: 10px;
+    background: transparent;
+  }
+
+  .servers .music-bottom {
+    margin-top: auto;
+    margin-left: 0;
+  }
+
+  .channels,
+  .dm-side {
+    width: var(--ponoi-side-width);
+    min-width: var(--ponoi-side-width);
+    height: auto;
+    min-height: 0;
+    padding: 10px;
+    background: var(--ponoi-surface);
+    border: 0;
+    border-right: 1px solid var(--ponoi-line);
+    box-shadow: none;
+  }
+
+  .chat {
+    min-width: 0;
+    min-height: 0;
+    background: var(--bg, #313338);
+  }
+
+  .members,
+  .dmp {
+    width: var(--ponoi-member-width);
+    min-width: var(--ponoi-member-width);
+    height: auto;
+    min-height: 0;
+    background: var(--ponoi-surface);
+    border: 0;
+    border-left: 1px solid var(--ponoi-line);
+    box-shadow: none;
+  }
+
+  .chat-head,
+  .chat-head.ph2,
+  .pfr-chat .pfr-head,
+  .dm-side-top,
+  .dm-top,
+  .srv-title {
+    height: var(--ponoi-head-height);
+    min-height: var(--ponoi-head-height);
+    margin: 0;
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 1px solid var(--ponoi-line);
+    border-radius: 0;
+    background: var(--ponoi-surface);
+    box-shadow: none;
+  }
+
+  .dm-top {
+    margin: -10px -10px 8px;
+  }
+
+  .dm-findbtn,
+  .srv-pill {
+    min-height: 38px;
+    border: 1px solid var(--ponoi-line);
+    border-radius: var(--ponoi-radius);
+    background: var(--ponoi-surface-strong);
+  }
+
+  .dm-navitem,
+  .dm-item,
+  .ch,
+  .ch-members-row {
+    min-height: 40px;
+    margin: 2px 0;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--ponoi-radius);
+    background: transparent;
+  }
+
+  .dm-navitem:hover,
+  .dm-item:hover,
+  .ch:hover,
+  .ch-members-row:hover,
+  .member:hover {
+    background: var(--ponoi-hover);
+  }
+
+  .dm-navitem.on,
+  .dm-item.on,
+  .ch.on,
+  .ch-members-row.on {
+    border-color: color-mix(in srgb, var(--brand, #5865f2) 30%, transparent);
+    background: var(--ponoi-active);
+    box-shadow: inset 2px 0 0 var(--brand, #5865f2);
+  }
+
+  .pfr-title {
+    font-size: 17px;
+  }
+
+  .pfr-tabs {
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--ponoi-radius);
+    background: var(--ponoi-surface-strong);
+  }
+
+  .pfr-tab {
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 6px;
+  }
+
+  .pfr-tab.on {
+    background: var(--ponoi-active);
+  }
+
+  .pfr-addfriend {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0 11px;
+    border-radius: var(--ponoi-radius);
+  }
+
+  .pfr-body {
+    width: min(100%, 1040px);
+    margin: 0 auto;
+    padding: 22px 28px;
+  }
+
+  .pfr-right {
+    width: var(--ponoi-member-width);
+    padding: 18px;
+    background: var(--ponoi-surface);
+    border-left: 1px solid var(--ponoi-line);
+  }
+
+  .pfr-search2 input,
+  .pfr-search input,
+  .pfr-addin,
+  .pfr-add2-inwrap {
+    border-color: var(--ponoi-line);
+    border-radius: var(--ponoi-radius);
+    background: var(--ponoi-surface-strong);
+  }
+
+  .pfr-row,
+  .pfr-row2,
+  .pfr-actcard2 {
+    min-height: 56px;
+    border-color: var(--ponoi-line);
+    border-radius: var(--ponoi-radius);
+  }
+
+  .pfr-cbtn {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--ponoi-radius);
+    background: var(--ponoi-surface-strong);
+  }
+}
+
+body:not(.no-anim) .srv,
+body:not(.no-anim) .dm-item,
+body:not(.no-anim) .dm-navitem,
+body:not(.no-anim) .ch,
+body:not(.no-anim) .pfr-tab,
+body:not(.no-anim) .pfr-cbtn,
+body:not(.no-anim) .pfr-addfriend {
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
