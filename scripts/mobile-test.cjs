@@ -334,8 +334,20 @@ app.whenReady().then(async () => {
   })()`)
   check('у затемнения есть свободная область для закрытия', backdropState.top === 'mob-backdrop', JSON.stringify(backdropState))
   await клик('.mob-backdrop', true)
-  const drawerClosed = await win.webContents.executeJavaScript(`!document.body.classList.contains('mob-nav-open')`)
-  check('нажатие вне панели закрывает мобильную навигацию', drawerClosed)
+  const drawerClosed = await win.webContents.executeJavaScript(`(() => {
+    const server = document.querySelector('.servers').getBoundingClientRect()
+    const side = document.querySelector('.dm-side').getBoundingClientRect()
+    return {
+      classRemoved: !document.body.classList.contains('mob-nav-open'),
+      serverRight: server.right,
+      sideRight: side.right,
+    }
+  })()`)
+  check(
+    'нажатие вне панели закрывает мобильную навигацию',
+    drawerClosed.classRemoved && drawerClosed.serverRight <= 1 && drawerClosed.sideRight <= 1,
+    JSON.stringify(drawerClosed),
+  )
   await клик('#touch-add')
   const addState = await win.webContents.executeJavaScript(`(() => {
     const el=document.querySelector('#touch-add')
@@ -352,7 +364,9 @@ app.whenReady().then(async () => {
 
   // ── Правила стилей ──────────────────────────────────────────────────────
   {
-    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'styles.css'), 'utf8')
+    const css = ['styles.css', 'ponoi-ui.css']
+      .map(file => fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'))
+      .join('\n')
     const б = разборСтилей(css)
     console.log('\n── Мобильные правила стилей ──')
     check('ничего не задано шириной больше узкого телефона', б.широкие.length === 0,

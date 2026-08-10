@@ -19,6 +19,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import { SettingsProvider } from './lib/settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles.css'
+import './ponoi-ui.css'
 import { initChatBg } from './lib/chatBg'
 
 initChatBg()
