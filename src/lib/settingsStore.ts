@@ -120,6 +120,12 @@ export interface Settings {
    * а не прятать в настройках включённой.
    */
   focusRing: boolean
+  /** v1.538.0: держать последние секунды экрана (как в Medal). */
+  clipsOn: boolean
+  /** Сколько секунд держать: от 5 до 180. */
+  clipSeconds: number
+  /** Качество записи: экономно, обычное, чётко. */
+  clipQuality: string
 }
 
 export const DEFAULTS: Settings = {
@@ -132,6 +138,7 @@ export const DEFAULTS: Settings = {
   swipes: IS_MOBILE_DEFAULT,
   saveWhileGaming: true,
   focusRing: false,
+  clipsOn: false, clipSeconds: 30, clipQuality: 'mid',
   // v1.387.0: всё шифрование выключено по умолчанию — решение владельца.
   //
   // Что это значит по-честному: содержимое личной переписки, вложений и звонков

@@ -47,6 +47,7 @@ import { HOLD_MS, holdDue, holdLeft, holdLabel, deleteConfirmed, reportReady, re
 import { wipeSummary } from './wipe'
 import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, codeLooksValid, NEW_DEVICE_LOCK_MS } from './deviceGuard'
 import { signupAllowed, leadingZeroBits, MIN_FILL_MS, MAX_TRIES, TRIES_WINDOW_MS } from './signupGuard'
+import { clampSeconds, trimBuffer, collectClip, bufferedSec, clipName, clipLabel, CLIP_MIN_SEC, CLIP_MAX_SEC } from './clipBuffer'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1852,6 +1853,70 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.538.0: клипы с экрана ------------------------------------------------
+//
+// Владелец: «сохранять от 5 секунд до 3 минут того, что происходило на экране».
+//
+// Главная ловушка тут не в UI: куски видео нельзя просто склеить. У webm первый
+// кусок — ЗАГОЛОВОК с описанием дорожек, и без него файл не открывается ничем.
+// Значит вытеснять «самый старый» нельзя: заголовок держим вечно. Ошибка здесь
+// даёт файл на мегабайты, который не открывается, и по коду этого не видно.
+console.log('\n-- Кольцо клипа --')
+
+const б = (at: number, head = false) => ({ data: new Uint8Array(10), at, head })
+
+check('границы те, о которых просили: от 5 секунд до 3 минут', () =>
+  CLIP_MIN_SEC === 5 && CLIP_MAX_SEC === 180
+  && clampSeconds(1) === 5 && clampSeconds(9999) === 180 && clampSeconds(45) === 45)
+check('мусор вместо числа не ломает настройку', () =>
+  clampSeconds(NaN) === 30 && clampSeconds(0) === 5)
+
+check('заголовок не выбрасывается НИКОГДА', () => {
+  const кольцо = [б(0, true), б(1000), б(200_000)]
+  const после = trimBuffer(кольцо, 10, 300_000)
+  return после.some(c => c.head) && после.length === 1
+})
+check('старое вытесняется, свежее остаётся', () => {
+  const кольцо = [б(0, true), б(100_000), б(295_000)]
+  const после = trimBuffer(кольцо, 10, 300_000)
+  return после.length === 2 && после[1].at === 295_000
+})
+check('в клип идёт заголовок плюс запрошенные секунды', () => {
+  const кольцо = [б(0, true), б(100_000), б(295_000), б(299_000)]
+  const клип = collectClip(кольцо, 10, 300_000)
+  return клип.length === 3 && клип[0].head === true && клип[1].at === 295_000
+})
+check('порядок кусков сохраняется — иначе файл не читается', () => {
+  const кольцо = [б(0, true), б(297_000), б(298_000), б(299_000)]
+  const клип = collectClip(кольцо, 10, 300_000)
+  return клип[1].at < клип[2].at && клип[2].at < клип[3].at
+})
+check('в кольце считается длина записи, а не время с запуска', () =>
+  // По заголовку выходило бы, что в кольце вся сессия целиком.
+  bufferedSec([б(0, true), б(290_000)], 300_000) === 10)
+
+console.log('\n-- Имена и подписи --')
+check('имя клипа содержит дату, время и игру', () => {
+  const н2 = clipName(new Date(2026, 7, 10, 19, 5, 3), 'Dying Light: The Beast')
+  return н2.includes('2026-08-10') && н2.includes('19-05-03') && н2.endsWith('.webm')
+    && !/[\/:*?"<>|]/.test(н2)
+})
+check('без игры имя всё равно осмысленное', () =>
+  clipName(new Date(2026, 0, 2, 3, 4, 5)).startsWith('2026-01-02'))
+check('длительность пишется по-человечески', () =>
+  clipLabel(30) === '30 сек' && clipLabel(60) === '1 мин'
+  && clipLabel(90) === '1 мин 30 сек' && clipLabel(180) === '3 мин')
+
+console.log('\n-- Ломаем нарочно (клипы) --')
+check('проверка ловит выброшенный заголовок', () => {
+  const плохо = (ch: ReturnType<typeof б>[], keep: number, now: number) =>
+    ch.filter(c => c.at >= now - keep * 1000)
+  const кольцо = [б(0, true), б(295_000)]
+  return плохо(кольцо, 10, 300_000).length === 1
+    && trimBuffer(кольцо, 10, 300_000).length === 2
+})
 
 
 // -- v1.537.0: защита регистрации от ботов -----------------------------------

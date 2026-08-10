@@ -1,4 +1,5 @@
 import { copyText } from '../lib/copyMedia'
+import { ClipsPanel } from './ClipsPanel'
 import { DevicesPanel } from './DevicesPanel'
 import { DeleteAccountModal } from './DeleteAccountModal'
 import { FONT_PRESETS, ensureFont } from '../lib/fonts'
@@ -67,6 +68,8 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' },
     { k: 'language', label: 'Язык', icon: 'compass' },
     { k: 'activity', label: 'Активность', icon: 'gamepad' },
+    // v1.538.0: запись последних секунд экрана.
+    { k: 'clips', label: 'Клипы с экрана', icon: 'video' },
     { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
   ] },
   // v1.339.0: плагины и боты стоят рядом и в разделе «Другое».
@@ -801,6 +804,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
               </>}
 
               {cat === 'devices' && <DevicesPanel />}
+              {cat === 'clips' && <ClipsPanel />}
 
               {cat === 'profile' && <>
                 <h2>Профиль</h2>

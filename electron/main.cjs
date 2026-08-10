@@ -300,6 +300,24 @@ ipcMain.handle('ponoi-steam-progress', async (_e, arg) => {
   return { ...издалека, facts: факты }
 })
 
+// v1.538.0: запись последних секунд экрана — как в Medal.
+//
+// Кольцо кусков держит отдельное скрытое окно (clipRecorder.cjs): запись нужна
+// ровно тогда, когда приложение свёрнуто, а главное окно Chromium в этот момент
+// придушивает.
+const клипы = require('./clipRecorder.cjs')
+
+ipcMain.handle('ponoi-clip-start', async (_e, opts) => {
+  try { return await клипы.start(opts || {}) } catch (e) { return { ok: false, why: String(e && e.message || e) } }
+})
+ipcMain.handle('ponoi-clip-stop', () => { клипы.stop(); return { ok: true } })
+ipcMain.handle('ponoi-clip-save', async (_e, o) => {
+  try { return await клипы.save(Number(o && o.seconds) || 30, String((o && o.name) || 'clip.webm')) }
+  catch (e) { return { ok: false, why: String(e && e.message || e) } }
+})
+ipcMain.handle('ponoi-clip-state', () => клипы.state())
+ipcMain.handle('ponoi-clip-folder', () => { клипы.openFolder(); return { ok: true } })
+
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 
 // v1.482.0: «Прохождения» — обход известных мест на диске, чтобы человеку не

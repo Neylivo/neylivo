@@ -38,6 +38,7 @@ dist-hover-test/
 dist-save-test/
 dist-anim-test/
 dist-picker-test/
+dist-clip-test/
 dist-look/
 dist-composer-test/
 scripts/api-test-certs/

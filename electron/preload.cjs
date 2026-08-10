@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   findCover: (name) => ipcRenderer.invoke('ponoi-find-cover', name),
   // v1.458.0: вехи прохождения игры из Steam — приложение узнаёт их само.
   steamProgress: (o) => ipcRenderer.invoke('ponoi-steam-progress', o),
+  // v1.538.0: запись последних секунд экрана.
+  clipStart: (o) => ipcRenderer.invoke('ponoi-clip-start', o),
+  clipStop: () => ipcRenderer.invoke('ponoi-clip-stop'),
+  clipSave: (o) => ipcRenderer.invoke('ponoi-clip-save', o),
+  clipState: () => ipcRenderer.invoke('ponoi-clip-state'),
+  clipFolder: () => ipcRenderer.invoke('ponoi-clip-folder'),
   // v1.482.0: список игр с этого компьютера — часы, последний запуск,
   // сохранения, вехи. Ничего не уходит наружу: это ответ окну, и только ему.
   scanGames: () => ipcRenderer.invoke('ponoi-games-scan'),
