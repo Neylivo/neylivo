@@ -1,3 +1,4 @@
+import { pad, unpad } from './padding'
 // v1.292.0: криптографическое ядро сквозного шифрования.
 //
 // Здесь только чистые функции над WebCrypto — ни сети, ни базы, ни React. Так их
@@ -122,13 +123,20 @@ async function open(key: CryptoKey, s: Sealed): Promise<Uint8Array<ArrayBuffer>>
 
 /** Зашифровать текст ключом содержимого. */
 export async function encryptText(key: CryptoKey, text: string): Promise<Sealed> {
-  const bytes = new TextEncoder().encode(text)
-  return seal(key, new Uint8Array(bytes).slice())
+  // v1.531.0: текст кладётся в блок постоянного размера, и длина сообщения
+  // перестаёт быть видна снаружи. Раньше длина шифротекста повторяла длину
+  // текста почти байт в байт: не читая ни слова, можно было отличить «да» от
+  // страницы текста, а в разговоре «да/нет» это и есть ответ.
+  // Подробности и цена решения — в src/lib/crypto/padding.ts.
+  // .slice() отдаёт массив с обычным буфером — того же требует WebCrypto.
+  return seal(key, pad(text).slice())
 }
 
 /** Расшифровать текст. Бросает, если ключ не тот или шифротекст подменён. */
 export async function decryptText(key: CryptoKey, s: Sealed): Promise<string> {
-  return new TextDecoder().decode(await open(key, s))
+  // Старые сообщения (без блока) читаются как раньше — unpad смотрит на метку,
+  // а не гадает. Иначе вся переписка до обновления исчезла бы с экрана.
+  return unpad(new Uint8Array(await open(key, s)))
 }
 
 /** Упаковать ключ содержимого для одного устройства-получателя. */
