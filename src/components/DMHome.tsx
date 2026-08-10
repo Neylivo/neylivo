@@ -1571,11 +1571,13 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               <button className={'pfr-tab' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>Все</button>
               <button className={'pfr-tab' + (tab === 'pending' ? ' on' : '')} onClick={() => setTab('pending')}>Ожидание{requests.length > 0 ? ' — ' + requests.length : ''}</button>
             </div>
-            {/* На узком экране длинная команда не помещается рядом с фильтрами,
-                поэтому здесь остаётся знакомый значок с точной подсказкой. */}
+            {/* v1.429.0: на телефоне вместо длинной надписи — «плюс».
+                «Добавить в друзья» рядом с тремя вкладками в строку не влезало
+                никогда: кнопка уезжала за правый край экрана и нажать её было
+                нельзя вовсе. Так же поступает мобильный Discord. */}
             <button className={'pfr-addfriend' + (tab === 'add' ? ' on' : '')} onClick={() => setTab('add')}
-              title="Добавить в друзья" aria-label="Добавить в друзья">
-              <Icon name="user-plus" size={18} />
+              title={IS_MOBILE ? 'Добавить в друзья' : undefined}>
+              {IS_MOBILE ? <Icon name="plus" size={18} /> : 'Добавить в друзья'}
             </button>
           </header>
           <div className={'pfr-main' + (activeGames.length > 0 ? ' has-activity' : ' no-activity')}>
@@ -1647,17 +1649,26 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                       <span className="pfr-empty-ic"><Icon name="search" size={26} /></span>
                       <strong>Ничего не найдено</strong>
                       <span>Попробуй другое имя или очисти поиск.</span>
+                      <button onClick={() => setFfilter('')}>Очистить поиск</button>
                     </div>
                     : <>
                       <div className="pfr-empty pfr-empty-state">
                         <span className="pfr-empty-ic"><Icon name={tab === 'online' ? 'moon' : 'users'} size={28} /></span>
                         <strong>{tab === 'online' ? 'Сейчас никого нет в сети' : 'Список друзей пока пуст'}</strong>
                         <span>{tab === 'online' ? 'Статус не мешает разговору — можно написать сейчас.' : 'Найди человека по имени пользователя и начни разговор.'}</span>
-                        {tab !== 'online' && <button className="primary" onClick={() => setTab('add')}>Добавить друга</button>}
+                        <div className="pfr-empty-actions">
+                          <button className="primary" onClick={() => setTab(tab === 'online' ? 'all' : 'add')}>
+                            {tab === 'online' ? 'Показать всех друзей' : 'Добавить друга'}
+                          </button>
+                          <button onClick={() => tab === 'online' ? setNewConvOpen(true) : window.dispatchEvent(new Event('ponoi-open-discover'))}>
+                            {tab === 'online' ? 'Новая беседа' : 'Найти сообщества'}
+                          </button>
+                        </div>
                       </div>
                       {tab === 'online' && friends.length > 0 && <section className="pfr-reach">
                         <div className="pfr-reach-head">
                           <div><strong>Можно написать сейчас</strong><span>Последние контакты доступны независимо от статуса.</span></div>
+                          <button onClick={() => setTab('all')}>Все друзья</button>
                         </div>
                         <div className="pfr-reach-grid">
                           {friends.slice(0, 6).map(f => (
@@ -1678,6 +1689,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
                         <span className="pfr-substatus">{(() => { const g = gameOf(f.id); return g ? <GameInline game={g} /> : STATUS_LABEL[statusOf(f.id)] })()}</span>
                       </span>
                       <span className="pfr-acts">
+                        <button className="pfr-cbtn" title="Написать" onClick={e => { e.stopPropagation(); openChat(f) }}><Icon name="message" size={18} /></button>
                         <button className="pfr-cbtn" title="Ещё" onClick={e => { e.stopPropagation(); setRowMenu(m => m === f.id ? null : f.id) }}><Icon name="dots" size={18} /></button>
                         {rowMenu === f.id && <div className="pfr-rowmenu" onClick={e => e.stopPropagation()}>
                           <button onClick={() => { setRowMenu(null); openChat(f) }}>Написать</button>
