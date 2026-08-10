@@ -1,4 +1,5 @@
 import { copyText } from '../lib/copyMedia'
+import { DeleteAccountModal } from './DeleteAccountModal'
 import { FONT_PRESETS, ensureFont } from '../lib/fonts'
 import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
@@ -347,6 +348,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
   const [editEmail, setEditEmail] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [editPw, setEditPw] = useState(false)
+  const [delAcc, setDelAcc] = useState(false)   // v1.534.0: окно удаления аккаунта
   const [pw1, setPw1] = useState('')
   const [pw2, setPw2] = useState('')
   const [pwBusy, setPwBusy] = useState(false)
@@ -783,6 +785,14 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                       <button className="pqs2-btn ghost" onClick={() => { setEditPw(false); setPw1(''); setPw2('') }}>Отмена</button>
                     </div>
                   </div>}
+                  {/* v1.534.0: требование Google Play к мессенджерам — человек
+                      должен уметь удалить учётную запись и все свои данные сам,
+                      не спрашивая никого. Удаление идёт с недельной задержкой и
+                      затирает ключи шифрования на устройстве. */}
+                  <div className="pqs2-row">
+                    <div className="pqs2-row-k">Удалить аккаунт и все данные</div>
+                    <button className="pqs2-btn danger" onClick={() => setDelAcc(true)}>Удалить</button>
+                  </div>
                 </div>
               </>}
 
@@ -1554,6 +1564,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
         </div>
       </div>
       {signOut && <SignOutModal onClose={() => setSignOut(false)} />}
+      {delAcc && <DeleteAccountModal username={username} onClose={() => setDelAcc(false)} />}
     </div>
   )
 }

@@ -8428,3 +8428,29 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
   .bulk-copy { padding: 10px 12px; min-height: 44px; }
 }
+
+
+/* ==== v1.534.0: окна «Удалить аккаунт» и «Пожаловаться» ==== */
+.del-acc, .rep-modal { max-width: 460px; }
+.del-acc-warn { display: flex; align-items: center; gap: 8px; margin: 10px 0;
+  padding: 10px 12px; border-radius: var(--r-md); font-size: 14px;
+  background: rgba(237, 66, 69, .12); color: #f2a5a7; }
+.del-acc-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.del-acc-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--tx-2, #b5bac1); }
+.del-acc-item svg { color: #ed4245; flex: none; }
+
+.rep-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.rep-reason { border: 1px solid rgba(var(--ov, 255,255,255), .12); background: none;
+  color: var(--tx); border-radius: var(--r-md); padding: 8px 12px; font-size: 13.5px;
+  cursor: pointer; min-height: 38px; }
+.rep-reason:hover { background: rgba(var(--ov, 255,255,255), .06); }
+.rep-reason.on { background: rgba(var(--ov, 255,255,255), .12); color: var(--tx-hi, #fff);
+  border-color: transparent; font-weight: 600; }
+.rep-block { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px;
+  font-size: 13.5px; color: var(--tx); cursor: pointer; }
+.rep-block input { width: 18px; height: 18px; accent-color: var(--brand); }
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .rep-reason { min-height: 44px; }
+  .rep-block { min-height: 44px; }
+}

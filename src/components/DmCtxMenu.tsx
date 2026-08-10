@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ReportUserModal } from './ReportUserModal'
 import { Icon } from './icons'
 import { copyText } from '../lib/copyMedia'
 import { confirmUi } from '../lib/confirm'
@@ -36,7 +37,8 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
   onRemoveFriend: () => void
   onBlocked: () => void
 }) {
-  const [sub, setSub] = useState<'invite' | 'mute' | null>(null)
+  const [sub, setSub] = useState<'invite' | 'mute' | null>(null)
+  const [report, setReport] = useState(false)   // v1.534.0: окно жалобы
   const [noteOpen, setNoteOpen] = useState(false)
   const [nickOpen, setNickOpen] = useState(false)
   const [noteVal, setNoteVal] = useState(() => getUserPrefs().notes[friend.id] ?? '')
@@ -164,6 +166,9 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
         <div className="ctx-item" onClick={() => { onRemoveFriend(); onClose() }}><span>Удалить из друзей</span><Icon name="trash" size={14} /></div>
         <div className="ctx-item" onClick={ignore}><span>{ignored ? 'Снять игнор' : 'Игнорировать'}</span><Icon name="flag" size={14} /></div>
         <div className="ctx-item danger" onClick={block}><span>Заблокировать</span><Icon name="shield" size={14} /></div>
+        {/* v1.534.0: требование Google Play — рядом с блокировкой должна быть
+            жалоба. Блокировка помогает мне, жалоба — всем остальным. */}
+        <div className="ctx-item danger" onClick={() => { setReport(true) }}><span>Пожаловаться</span><Icon name="flag" size={14} /></div>
         <div className="ctx-sep" />
         {!muted ? (
           <div className="ctx-item has-sub" onClick={() => setSub(s => s === 'mute' ? null : 'mute')}>
@@ -185,6 +190,8 @@ export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onC
           <div className="ctx-item" onClick={copyThreadId}><span>Копировать ID канала</span><span className="ctx-idbadge">ID</span></div>
         </>}
       </div>
+    {report && <ReportUserModal userId={friend.id} name={friend.name} onClose={() => { setReport(false); onClose() }} />}
+
     </>
   )
 }
