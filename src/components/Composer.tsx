@@ -216,6 +216,17 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   // правило то же самое, что у submit (hasSendable), а не «в поле что-то есть».
   // Иначе вышло бы привычное расхождение — кнопка обещает, нажатие молчит.
   const hasContent = hasSendable(text, files.length)
+  // v1.528.0: пока открыта шторка эмодзи, переписка и строка ввода поднимаются
+  // над ней — как в мобильном Discord, где панель занимает место клавиатуры, а
+  // не накрывает собой ввод. Отметка на теле страницы: высоту шторки знает
+  // только стиль, и считать её здесь заново значило бы дать двум местам
+  // разойтись.
+  useEffect(() => {
+    if (!IS_MOBILE) return
+    const открыта = emoji || gif
+    document.body.classList.toggle('pick-open', открыта)
+    return () => { document.body.classList.remove('pick-open') }
+  }, [emoji, gif])
   const photoRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
   // Запись голосового: { t } — секунды записи; recRef держит MediaRecorder.
@@ -1038,7 +1049,11 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
           {/* v1.460.0: обе панели закрываются щелчком мимо и Escape — раньше
               только повторным нажатием на тот же значок или крестиком внутри. */}
           {emoji && <Popover className="pop-anchor" trigger={emojiBtn.current} onClose={() => setEmoji(false)}>
-            <EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)} />
+            {/* v1.528.0: на телефоне у шторки есть ряд вкладок — с эмодзи можно
+                перейти к гифкам и стикерам, не закрывая её. На компьютере
+                панели остаются раздельными: там у каждой своя кнопка. */}
+            <EmojiPicker onPick={insertEmoji} onClose={() => setEmoji(false)}
+              onGifTab={IS_MOBILE ? () => { setEmoji(false); setGif(true) } : undefined} />
           </Popover>}
           {gif && <Popover className="pop-anchor" trigger={gifBtn.current} onClose={() => setGif(false)}>
             <GifPicker onPick={sendGif} onPickSticker={sendSticker} onClose={() => setGif(false)} onEmojiTab={() => { setGif(false); setEmoji(true) }} />

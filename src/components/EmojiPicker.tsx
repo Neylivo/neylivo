@@ -19,7 +19,17 @@ import { useClampToViewport } from '../lib/clampPos'
 // 📁 паки эмодзи (создаются из своих/избранных, пак можно добавить в избранное),
 // создание своих эмодзи чинит кириллицу (транслитерация) и показывает ошибки.
 // cat: -3 паки, -2 избранные, -1 свои эмодзи, 0..N — юникод-группы.
-export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => void; onClose: () => void }) {
+export function EmojiPicker({ onPick, onClose, onGifTab }: {
+  onPick: (text: string) => void
+  onClose: () => void
+  /**
+   * v1.528.0: перейти к гифкам и стикерам. На телефоне панель выезжает шторкой
+   * снизу, и в ней сверху ряд вкладок — как в мобильном Discord. Без этого
+   * человек, открывший эмодзи, не мог попасть на гифки, не закрыв шторку:
+   * кнопки GIF в строке ввода на телефоне нет, она там лишняя.
+   */
+  onGifTab?: () => void
+}) {
   const { user } = useAuth()
   const [custom, setCustom] = useState(loadCustom())
   const [favs, setFavs] = useState<Set<string>>(new Set(loadFavs()))
@@ -136,6 +146,11 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (text: string) => voi
 
   return (
     <div className="emoji-pop ep2" onClick={e => e.stopPropagation()}>
+      {onGifTab && <div className="ep2-tabs">
+        <button type="button" className="on">Эмодзи</button>
+        <button type="button" onClick={onGifTab}>Гифки</button>
+        <button type="button" onClick={onGifTab}>Стикеры</button>
+      </div>}
       <div className="ep2-search">
         <input placeholder="Поиск (свои эмодзи — по названию)" value={q} onChange={e => setQ(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }} autoFocus />

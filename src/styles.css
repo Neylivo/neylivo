@@ -8237,3 +8237,73 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   box-shadow: none;
   border-color: transparent;
 }
+
+
+/* ==== v1.528.0: эмодзи, гифки и стикеры на телефоне — шторкой снизу ====
+
+   Владелец прислал снимок мобильного Discord: панель не висит пузырём над
+   кнопкой, а выезжает снизу во всю ширину — под строкой ввода, ровно на месте
+   клавиатуры. Полоска-ручка сверху, ряд вкладок, поиск, сетка. Просьба: «1 в 1,
+   тип вылезало снизу».
+
+   Что было. Панель рисовалась привязанной к кнопке (.pop-anchor: absolute,
+   bottom 52px, right 0) — то есть пузырём над правым краем строки ввода,
+   шириной почти во весь экран, но с полями и скруглением со всех сторон. На
+   телефоне это и выглядит чужеродно, и половину экрана занимает зря.
+
+   Как теперь. Тот же приём, что уже применён к меню сообщения (.ctxmenu выше):
+   привязка к кнопке отменяется, панель прибивается к низу оболочки во всю
+   ширину, скругление остаётся только сверху, снизу добавляется запас под
+   жестовую полосу. Высота — по клавиатуре: пока она открыта, панель занимает
+   ровно её место (--kb ставит src/lib/keyboardInset.ts), иначе половину экрана.
+
+   Проверка: npm run test:picker. */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px),
+  (hover: none) and (pointer: coarse) and (max-width: 1100px) and (max-height: 600px) {
+  .pop-anchor {
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    z-index: var(--z-pop, 60);
+    /* Запас под жестовую полосу — на самой шторке, а не внутри неё: обход
+       телефона смотрит на прибитый к низу элемент, и он прав — это он и есть. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Высота шторки одна на двоих: по ней же поднимается строка ввода. Два
+     разных выражения разъехались бы, и панель то накрывала бы ввод, то
+     оставляла бы под ним щель. */
+  .pop-anchor { --pick-h: max(var(--kb, 0px), 46vh); }
+  body.pick-open .chat { padding-bottom: max(var(--kb, 0px), 46vh); }
+
+  .pop-anchor .emoji-pop,
+  .pop-anchor .gif-pop {
+    width: auto;
+    max-width: none;
+    height: var(--pick-h);
+    max-height: 70vh;
+    border-radius: var(--r-2xl) var(--r-2xl) 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, .55);
+    animation: ctx-sheet-up .22s var(--ease-out4, ease) both;
+  }
+
+  /* Полоска-ручка сверху: по ней шторку узнают и за неё же тянут. */
+  .pop-anchor .emoji-pop::before,
+  .pop-anchor .gif-pop::before {
+    content: ''; display: block; flex: none;
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(var(--ov, 255,255,255), .25);
+    margin: 8px auto 4px;
+  }
+
+  /* Вкладки — ряд во всю ширину, как на снимке: они там первое, что видно. */
+  .pop-anchor .gp2-tabs,
+  .pop-anchor .ep2-tabs {
+    display: flex; gap: 4px; padding: 6px 10px;
+  }
+  .pop-anchor .gp2-tabs button,
+  .pop-anchor .ep2-tabs button {
+    /* 44 — размер пальца. На сорока обход телефона справедливо ругается:
+       промах по вкладке это переход не туда, а не «не нажалось». */
+    flex: 1; min-height: 44px; border-radius: var(--r-lg); font-size: 14px;
+  }
+}
