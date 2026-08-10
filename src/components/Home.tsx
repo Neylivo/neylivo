@@ -580,7 +580,7 @@ export function Home() {
           const srvBtn = (s: Server) => (
             <div key={s.id} className={'srv-wrap' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '') + (notifModeOf(s.id) === 'mute' ? ' srv-muted' : '')}>
               <RailTip text={s.name}>
-                <button className={'srv' + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
+                <button className={'srv' + (s.avatar_url ? ' has-avatar' : '') + (view.kind === 'server' && view.server.id === s.id ? ' on' : '')}
                   style={s.avatar_url ? { backgroundImage: `url(${s.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
                   onClick={() => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
                   onContextMenu={e => { e.preventDefault(); setCtx({ server: s, x: e.clientX, y: e.clientY }) }}>

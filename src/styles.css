@@ -10675,3 +10675,12 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
     min-height: 44px;
   }
 }
+
+/* Серверные изображения всегда показаны как аватары, поэтому рамка повторяет круг. */
+.servers .srv.has-avatar,
+.servers .srv.has-avatar:hover,
+.servers .srv.has-avatar.on {
+  border-radius: 50%;
+  overflow: hidden;
+  background-clip: padding-box;
+}

@@ -274,7 +274,7 @@ app.whenReady().then(async () => {
   await win.loadFile(DIST)
   await new Promise(r => setTimeout(r, 500))
   const shell = `<div class="app-viewport"><div class="app">
-    <nav class="servers"><div class="srv-wrap on"><button id="touch-server" class="srv home on">P</button><span class="srv-label">Главная</span></div></nav>
+    <nav class="servers"><div class="srv-wrap on"><button id="touch-server" class="srv has-avatar on">P</button><span class="srv-label">Главная</span></div></nav>
     <div class="mob-backdrop"></div>
     <aside class="dm-side"><div class="dm-top"><button class="dm-findbtn">Найти беседу</button></div><div class="dm-navitem on">Друзья</div></aside>
     <main class="chat pfr-chat"><header class="chat-head pfr-head"><button id="touch-burger" class="mob-burger">M</button><span class="pfr-title">Друзья</span><div class="pfr-tabs"><button class="pfr-tab on">В сети</button><button class="pfr-tab">Все</button></div><button id="touch-add" class="pfr-addfriend">+</button></header>
@@ -319,8 +319,9 @@ app.whenReady().then(async () => {
     }
   })()`)
   check('кнопка меню открывает мобильную навигацию', drawer.burgerClicks === 1 && drawer.left >= -1, JSON.stringify(drawer))
-  const serverSize = await win.webContents.executeJavaScript(`(() => { const r = document.querySelector('#touch-server').getBoundingClientRect(); return { width:r.width, height:r.height, top:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.id } })()`)
+  const serverSize = await win.webContents.executeJavaScript(`(() => { const el=document.querySelector('#touch-server'), r=el.getBoundingClientRect(), s=getComputedStyle(el); return { width:r.width, height:r.height, radius:s.borderRadius, top:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.id } })()`)
   check('сервер квадратный и не меньше пальца', serverSize.width >= 44 && serverSize.height >= 44 && Math.abs(serverSize.width - serverSize.height) < 1, JSON.stringify(serverSize))
+  check('рамка изображения сервера круглая', serverSize.radius === '50%', JSON.stringify(serverSize))
   check('сервер не перекрыт другим слоем', serverSize.top === 'touch-server', serverSize.top)
   await клик('#touch-server')
   const serverClicks = await win.webContents.executeJavaScript(`window.__touchClicks.server`)
