@@ -43,6 +43,8 @@ import { parseZipTail } from './zipPeek'
 import { FONT_PRESETS, fontAvailable } from './fonts'
 import { pad, unpad, stepFor, STEPS } from './crypto/padding'
 import { copyText as собратьТекст, copyCount } from './bulkSelect'
+import { HOLD_MS, holdDue, holdLeft, holdLabel, deleteConfirmed, reportReady, reportNote, REPORT_NOTE_MAX } from './accountGuard'
+import { wipeSummary } from './wipe'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1848,6 +1850,82 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.533.0: удаление аккаунта, жалобы и задержки --------------------------
+//
+// Владелец принёс требования Google Play (жалоба на человека, удаление аккаунта
+// со всеми данными) и защиту уровня Steam (задержка на опасные действия).
+//
+// Смысл задержки: если аккаунт увели, первое, что делает чужой человек, —
+// стирает следы. Мгновенное удаление ему в этом помогает, а задержка даёт
+// настоящему владельцу окно на отмену.
+console.log('\n-- Опасные действия с задержкой --')
+
+const СУТКИ = 24 * 60 * 60 * 1000
+const час = 60 * 60 * 1000
+
+check('удаление аккаунта ждёт неделю', () => HOLD_MS.delete === 7 * СУТКИ)
+check('смена почты и ключей — трое суток', () =>
+  HOLD_MS.email === 3 * СУТКИ && HOLD_MS.keys === 3 * СУТКИ)
+check('выход со всех устройств — сразу', () =>
+  // Это действие ЗАЩИЩАЕТ. Заставлять ждать, пока чужой читает переписку, нельзя.
+  HOLD_MS['logout-all'] === 0 && holdDue({ action: 'logout-all', at: Date.now() }) === true)
+
+check('до срока не исполняется', () =>
+  holdDue({ action: 'delete', at: 1000 }, 1000 + 6 * СУТКИ) === false)
+check('после срока исполняется', () =>
+  holdDue({ action: 'delete', at: 1000 }, 1000 + 7 * СУТКИ) === true)
+check('остаток считается, а не выдумывается', () =>
+  holdLeft({ action: 'email', at: 0 }, 2 * СУТКИ) === 1 * СУТКИ
+  && holdLeft({ action: 'email', at: 0 }, 99 * СУТКИ) === 0)
+
+check('подпись одна на баннер, письмо и кнопку', () =>
+  holdLabel({ action: 'delete', at: 0 }, 5 * СУТКИ) === 'осталось 2 дн.'
+  && holdLabel({ action: 'email', at: 0 }, 3 * СУТКИ - 3 * час) === 'осталось 3 ч'
+  && holdLabel({ action: 'email', at: 0 }, 3 * СУТКИ - 90 * 1000) === 'осталось 2 мин'
+  && holdLabel({ action: 'delete', at: 0 }, 8 * СУТКИ) === 'можно исполнять')
+
+console.log('\n-- Подтверждение удаления --')
+check('удаление подтверждается вводом своего имени, а не «вы уверены»', () =>
+  deleteConfirmed('guchipon', 'guchipon') === true
+  && deleteConfirmed(' GuchiPon ', 'guchipon') === true
+  && deleteConfirmed('да', 'guchipon') === false
+  && deleteConfirmed('', 'guchipon') === false)
+check('пустое имя не подтверждается ничем', () =>
+  deleteConfirmed('', '') === false && deleteConfirmed('   ', '   ') === false)
+
+console.log('\n-- Жалобы --')
+check('жалоба без причины не уходит', () =>
+  reportReady({ target: 'u1', reason: '', note: '' }) === false)
+check('жалоба на пустое место не уходит', () =>
+  reportReady({ target: '', reason: 'spam', note: '' }) === false)
+check('«Другое» без пояснения не принимается', () =>
+  // Такую жалобу невозможно разобрать — принять и не разобрать хуже, чем не принять.
+  reportReady({ target: 'u1', reason: 'other', note: 'коротко' }) === false
+  && reportReady({ target: 'u1', reason: 'other', note: 'вот подробное пояснение' }) === true)
+check('обычная причина уходит без пояснения', () =>
+  reportReady({ target: 'u1', reason: 'spam', note: '' }) === true)
+check('длинное пояснение обрезается, а не отвергается', () =>
+  reportNote('я'.repeat(5000)).length === REPORT_NOTE_MAX)
+
+console.log('\n-- Итог затирания --')
+check('итог говорит, что стёрто, и не молчит про неудачи', () => {
+  const s = wipeSummary({ local: 12, session: 1, databases: 2, caches: 1, errors: ['кэш: занят'] })
+  return s.includes('12') && s.includes('Не удалось') && s.includes('кэш: занят')
+})
+check('пустое затирание не притворяется работой', () =>
+  wipeSummary({ local: 0, session: 0, databases: 0, caches: 0, errors: [] }) === 'Стирать было нечего.')
+
+console.log('\n-- Ломаем нарочно (задержки) --')
+check('проверка ловит мгновенное удаление аккаунта', () => {
+  const плохо = 0
+  return плохо !== HOLD_MS.delete
+})
+check('проверка ловит «да» вместо имени', () => {
+  const плохо = true
+  return плохо !== deleteConfirmed('да', 'guchipon')
+})
 
 
 // -- v1.532.0: копирование выбранных сообщений -------------------------------
