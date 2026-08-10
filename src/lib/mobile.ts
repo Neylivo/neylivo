@@ -1,7 +1,7 @@
 // Мобильная поддержка (v1.34.0).
 // IS_MOBILE — телефон/планшет (по user agent + сенсорный экран небольшого размера).
 // Шторка навигации (рейка серверов + каналы/ЛС) на мобильных управляется классом
-// body.mob-nav-open — CSS в styles.css сдвигает панели, как в мобильном Discord.
+// body.mob-nav-open — CSS в styles.css сдвигает панели поверх открытого экрана.
 export const IS_MOBILE: boolean = (() => {
   try {
     const ua = navigator.userAgent || ''

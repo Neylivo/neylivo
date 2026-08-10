@@ -20,6 +20,8 @@ const { app, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
+app.commandLine.appendSwitch('touch-events', 'enabled')
+
 const DIST = path.join(__dirname, '..', 'dist', 'index.html')
 if (!fs.existsSync(DIST)) {
   console.error('нет собранного приложения — запускай через npm run test:mobile')
@@ -35,6 +37,9 @@ const ЭКРАНЫ = [
   { id: 'вход', ширина: 412, высота: 915 },
   // Узкий старый телефон: на нём всё, что «почти влезает», перестаёт влезать.
   { id: 'узкий', ширина: 320, высота: 640 },
+  // Телефон/планшет поперёк: раньше при ширине больше 768 px внезапно
+  // включалась настольная сетка с hover-действиями.
+  { id: 'touch-ландшафт', ширина: 915, высота: 412 },
 ]
 
 let failed = 0
@@ -125,7 +130,7 @@ const ОБХОД = `(() => {
 // исправленное, и я час чинил бы то, что цело.
 function разборСтилей(css) {
   const блоки = []
-  const re = /@media\s*\(max-width:\s*(\d+)px\)\s*\{/g
+  const re = /@media\s*\(max-width:\s*(\d+)px\)(?:\s*,[^\{]+)?\s*\{/g
   let m
   while ((m = re.exec(css))) {
     const порог = Number(m[1])
@@ -195,7 +200,7 @@ function разборСтилей(css) {
       const последнее = все.length ? Number(все[все.length - 1][1]) : null
       const минимум = [...тело.matchAll(/min-height:\s*(\d+)px/g)].map(x => Number(x[1])).pop()
       const итог = минимум ?? последнее
-      if (итог !== null && итог !== undefined && итог < 40) {
+      if (итог !== null && итог !== undefined && итог < ПАЛЕЦ) {
         беды.мелкие.push(сел + ' -> ' + итог + 'px')
       }
     }
@@ -262,6 +267,84 @@ app.whenReady().then(async () => {
     check('нет текста мельче ' + МЕЛКИЙ + ' пикселей', м.мелкийТекст.length === 0, м.мелкийТекст.join(' | '))
     check('ничего не обрезано молча', м.обрезано.length === 0, м.обрезано.join(' | '))
   }
+
+  // Авторизованная оболочка без сети. Проверяем именно слои приложения:
+  // мобильную шторку, сервер, шапку друзей и изображение во вложении.
+  win.setContentSize(915, 412)
+  await win.loadFile(DIST)
+  await new Promise(r => setTimeout(r, 500))
+  const shell = `<div class="app-viewport"><div class="app">
+    <nav class="servers"><div class="srv-wrap on"><button id="touch-server" class="srv home on">P</button><span class="srv-label">Главная</span></div></nav>
+    <div class="mob-backdrop"></div>
+    <aside class="dm-side"><div class="dm-top"><button class="dm-findbtn">Найти беседу</button></div><div class="dm-navitem on">Друзья</div></aside>
+    <main class="chat pfr-chat"><header class="chat-head pfr-head"><button id="touch-burger" class="mob-burger">M</button><span class="pfr-title">Друзья</span><div class="pfr-tabs"><button class="pfr-tab on">В сети</button><button class="pfr-tab">Все</button></div><button id="touch-add" class="pfr-addfriend">+</button></header>
+      <div class="msgs"><div class="msg"><div class="msg-body"><div class="att-group grid"><img class="msg-att" alt="Проверка вложения" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='120'%3E%3Crect width='320' height='120' fill='%235865f2'/%3E%3C/svg%3E"></div></div></div></div>
+    </main></div></div>`
+  await win.webContents.executeJavaScript(`(() => {
+    document.body.className = 'no-anim'
+    document.body.innerHTML = ${JSON.stringify(shell)}
+    window.__touchClicks = { burger: 0, server: 0, add: 0 }
+    document.querySelector('#touch-burger').addEventListener('click', () => {
+      window.__touchClicks.burger++
+      document.body.classList.add('mob-nav-open')
+    })
+    document.querySelector('.mob-backdrop').addEventListener('click', () => document.body.classList.remove('mob-nav-open'))
+    document.querySelector('#touch-server').addEventListener('click', () => window.__touchClicks.server++)
+    document.querySelector('#touch-add').addEventListener('click', () => window.__touchClicks.add++)
+  })()`)
+
+  const клик = async (сел, справа = false) => {
+    const p = await win.webContents.executeJavaScript(`(() => { const r = document.querySelector(${JSON.stringify(сел)}).getBoundingClientRect(); return { x: Math.round(${справа ? 'r.right - 10' : 'r.left + r.width / 2'}), y: Math.round(r.top + r.height / 2) } })()`)
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+    await new Promise(r => setTimeout(r, 320))
+  }
+
+  console.log('\n── Авторизованная touch-оболочка (915×412) ──')
+  const compactMedia = await win.webContents.executeJavaScript(`matchMedia('(max-width: 1100px) and (max-height: 600px)').matches`)
+  check('компактная мобильная ветка включена в landscape', compactMedia)
+  await клик('#touch-burger')
+  const drawer = await win.webContents.executeJavaScript(`(() => {
+    const r = document.querySelector('.servers').getBoundingClientRect()
+    const b = document.querySelector('#touch-burger').getBoundingClientRect()
+    return {
+      left:r.left,
+      width:r.width,
+      burgerClicks:window.__touchClicks.burger,
+      bodyClass:document.body.className,
+      selectorMatches:document.querySelector('.servers').matches('body.mob-nav-open .servers'),
+      transform:getComputedStyle(document.querySelector('.servers')).transform,
+      transition:getComputedStyle(document.querySelector('.servers')).transitionDuration,
+      burgerTop:document.elementFromPoint(b.left+b.width/2,b.top+b.height/2)?.id || document.elementFromPoint(b.left+b.width/2,b.top+b.height/2)?.className,
+    }
+  })()`)
+  check('кнопка меню открывает мобильную навигацию', drawer.burgerClicks === 1 && drawer.left >= -1, JSON.stringify(drawer))
+  const serverSize = await win.webContents.executeJavaScript(`(() => { const r = document.querySelector('#touch-server').getBoundingClientRect(); return { width:r.width, height:r.height, top:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.id } })()`)
+  check('сервер квадратный и не меньше пальца', serverSize.width >= 44 && serverSize.height >= 44 && Math.abs(serverSize.width - serverSize.height) < 1, JSON.stringify(serverSize))
+  check('сервер не перекрыт другим слоем', serverSize.top === 'touch-server', serverSize.top)
+  await клик('#touch-server')
+  const serverClicks = await win.webContents.executeJavaScript(`window.__touchClicks.server`)
+  check('сервер нажимается настоящим событием ввода', serverClicks === 1, String(serverClicks))
+  const backdropState = await win.webContents.executeJavaScript(`(() => {
+    const r=document.querySelector('.mob-backdrop').getBoundingClientRect()
+    const x=Math.round(r.right-10), y=Math.round(r.top+r.height/2)
+    const top=document.elementFromPoint(x,y)
+    return { left:r.left, right:r.right, width:r.width, x, y, top:top?.id || top?.className }
+  })()`)
+  check('у затемнения есть свободная область для закрытия', backdropState.top === 'mob-backdrop', JSON.stringify(backdropState))
+  await клик('.mob-backdrop', true)
+  const drawerClosed = await win.webContents.executeJavaScript(`!document.body.classList.contains('mob-nav-open')`)
+  check('нажатие вне панели закрывает мобильную навигацию', drawerClosed)
+  await клик('#touch-add')
+  const addState = await win.webContents.executeJavaScript(`(() => {
+    const el=document.querySelector('#touch-add')
+    const r=el.getBoundingClientRect()
+    const top=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)
+    return { clicks:window.__touchClicks.add, width:r.width, height:r.height, bodyClass:document.body.className, top:top?.id || top?.className }
+  })()`)
+  check('добавление друга нажимается и не мельче пальца', addState.clicks === 1 && addState.width >= 44 && addState.height >= 44, JSON.stringify(addState))
+  const imageFit = await win.webContents.executeJavaScript(`getComputedStyle(document.querySelector('.att-group.grid .msg-att')).objectFit`)
+  check('вложенная картинка показывается целиком', imageFit === 'contain', imageFit)
   // Окно НЕ закрываем здесь: закрытие последнего окна заставляет Electron
   // выйти, и разбор правил ниже просто не успевал напечататься — выглядело
   // это как «проверка молча обрывается». Всё закончится вместе с process.exit.
@@ -273,7 +356,7 @@ app.whenReady().then(async () => {
     console.log('\n── Мобильные правила стилей ──')
     check('ничего не задано шириной больше узкого телефона', б.широкие.length === 0,
       б.широкие.slice(0, 6).join(' | '))
-    check('нет целей мельче пальца', б.мелкие.length === 0, б.мелкие.slice(0, 6).join(' | '))
+    check('нет целей мельче пальца', б.мелкие.length === 0, б.мелкие.slice(0, 50).join(' | '))
     check('прибитое к низу оставляет запас под жестовую полосу', б.низ.length === 0,
       б.низ.slice(0, 6).join(' | '))
     check('прибитое к верху оставляет запас под чёлку', б.верх.length === 0,
