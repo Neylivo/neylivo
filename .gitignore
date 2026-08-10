@@ -37,6 +37,7 @@ dist-speak-test/
 dist-hover-test/
 dist-save-test/
 dist-anim-test/
+dist-look/
 dist-composer-test/
 scripts/api-test-certs/
 dist-bench/

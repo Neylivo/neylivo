@@ -107,6 +107,38 @@ app.whenReady().then(async () => {
     }
   }
 
+  // ── v1.526.0: выделение тихое, а форма значка живая ────────────────────
+  //
+  // Владелец: «сделать приложение нормальным». Крикливее всего было выделение:
+  // общий слой стилей красил КАЖДУЮ выбранную строку синей подложкой с рамкой и
+  // полосой, а выбранный сервер, наоборот, делал блёклым — залитым цветом на
+  // 17% вместо сплошного. Плюс скругление значка было прибито к одному
+  // значению, и превращение круга в скруглённый квадрат не происходило вовсе.
+  await win.webContents.executeJavaScript(`(() => {
+    document.body.innerHTML = '<nav class="servers"><div class="srv-wrap"><button class="srv" id="покой">П</button></div>'
+      + '<div class="srv-wrap on"><button class="srv on" id="выбран">В</button></div></nav>'
+      + '<aside class="channels"><div class="ch" id="обычный">общий</div><div class="ch on" id="активный">выбранный</div></aside>'
+  })()`)
+  await new Promise(r => setTimeout(r, 300))
+  const вид = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+    const в = (id) => { const s = getComputedStyle(document.getElementById(id))
+      return { радиус: parseFloat(s.borderTopLeftRadius), фон: s.backgroundColor,
+               рамка: s.borderTopColor, тень: s.boxShadow } }
+    return JSON.stringify({ покой: в('покой'), выбран: в('выбран'), активный: в('активный') })
+  })()`))
+
+  console.log('\n── Как показано выбранное ──')
+  check('значок сервера в покое круглый, а у выбранного — скруглённый квадрат',
+    вид.покой.радиус >= 20 && вид.выбран.радиус < вид.покой.радиус,
+    'покой ' + вид.покой.радиус + 'px, выбран ' + вид.выбран.радиус + 'px')
+  check('выбранный сервер залит цветом, а не подкрашен',
+    /rgb\(\s*88,\s*101,\s*242\s*\)/.test(вид.выбран.фон),
+    'фон: ' + вид.выбран.фон)
+  check('выбранный канал показан подложкой, без рамки и полосы',
+    вид.активный.тень === 'none' && /rgba\(0, 0, 0, 0\)|transparent/.test(вид.активный.рамка)
+    && вид.активный.фон !== 'rgba(0, 0, 0, 0)',
+    'фон ' + вид.активный.фон + ', рамка ' + вид.активный.рамка + ', тень ' + вид.активный.тень)
+
   console.log('\nИТОГ: провалено ' + failed)
   process.exit(failed ? 1 : 0)
 })

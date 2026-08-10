@@ -71,19 +71,28 @@ body {
   width: 52px;
   height: 52px;
   border: 1px solid transparent;
-  border-radius: var(--ponoi-radius-lg);
+  /* Круг в покое — из него и растёт превращение при наведении. */
+  border-radius: 26px;
   background: var(--c-main);
   color: var(--tx-2);
   box-shadow: none;
 }
 
+/* v1.526.0: значок сервера снова МЕНЯЕТ форму.
+   Здесь скругление было прибито к одному значению и для покоя, и для наведения,
+   и для выбранного — значит меняться ему нечем, и знаменитое превращение круга
+   в скруглённый квадрат (то, по чему рейка Discord узнаётся с одного взгляда)
+   просто не происходило. Переход я вернул выпуском раньше, но переходить было
+   не к чему.
+   В покое круг (24px при размере 48), под курсором и у выбранного — скруглённый
+   квадрат. Значения берутся из styles.css, здесь только не мешаем. */
 .srv:hover,
 .srv.on,
 .srv.home:hover,
 .srv.home.on,
 .srv.music:hover,
 .srv.music.on {
-  border-radius: var(--ponoi-radius-lg);
+  border-radius: 16px;
 }
 
 .srv:hover,
@@ -94,19 +103,25 @@ body {
   color: var(--tx-hi);
 }
 
+/* v1.526.0: выбранный сервер залит цветом, а не подкрашен.
+   Тут была подложка цветом темы на 17% с рамкой и синей чертой снизу — на
+   экране это выглядит как «значок чем-то подсвечен», а не «этот сервер
+   открыт». Разница видна рядом: у Discord открытый сервер — сплошной цветной
+   значок и белая полоска слева на рейке. Полоска у нас есть своя
+   (.srv-wrap::before в styles.css), а заливку возвращаю сюда. */
 .srv.on,
 .srv.home.on,
 .srv.music.on {
-  border-color: var(--ponoi-selected-line);
-  background: var(--ponoi-selected);
-  color: var(--tx-hi);
-  box-shadow: inset 0 -2px 0 var(--brand);
+  border-color: transparent;
+  background: var(--brand);
+  color: #fff;
+  box-shadow: none;
 }
 
-.srv.has-avatar,
-.srv.has-avatar:hover,
-.srv.has-avatar.on {
-  border-radius: 50%;
+/* Значок с картинкой: круглый в покое и скруглённый квадрат под курсором и у
+   выбранного — та же форма, что и у буквенного. Раньше здесь стояло 50% на все
+   три состояния, и картинка одна во всей рейке не менялась вовсе. */
+.srv.has-avatar {
   overflow: hidden;
   background-clip: padding-box;
 }
@@ -178,13 +193,22 @@ body {
   background: var(--ponoi-hover);
 }
 
+/* v1.526.0: выбранная строка ведёт себя тихо.
+   Тут стоял синий блок: подложка цветом темы на 17%, рамка на 48% и синяя
+   полоса слева внутренней тенью. На экране это значит, что каждый выбранный
+   канал, каждый открытый диалог и каждый выбранный пункт кричат цветом — а
+   выбран всегда какой-нибудь один, то есть кричит всегда что-то.
+   В Discord, на который равняется владелец, выбранное показано приглушённой
+   подложкой и белым текстом, и ничего больше. Возвращаю это: подложка чуть
+   светлее наведения, буквы ярче, рамки и полосы нет. */
 .ch.on,
 .dm-item.on,
 .dm-navitem.on,
 .ch-members-row.on {
-  border-color: var(--ponoi-selected-line);
-  background: var(--ponoi-selected);
-  box-shadow: inset 2px 0 0 var(--brand);
+  border-color: transparent;
+  background: rgba(var(--ov, 255,255,255), .085);
+  box-shadow: none;
+  color: var(--tx-hi);
 }
 
 .me {
