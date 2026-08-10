@@ -8,6 +8,7 @@
 export type ChangelogEntry = { version: string; date: string; items: string[] }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "1.523.0", date: "2026-08-10", items: ["Изменено: единая система интерфейса"] },
   { version: "1.522.0", date: "2026-08-10", items: ["Исправлено: откат неудачной компоновки"] },
   { version: "1.521.0", date: "2026-08-10", items: ["Исправлено: круглые обводки серверных изображений"] },
   { version: "1.520.0", date: "2026-08-10", items: ["Исправлено: touch-навигация, изображения и размеры кнопок"] },
