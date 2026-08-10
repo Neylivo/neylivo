@@ -46,6 +46,7 @@ import { copyText as собратьТекст, copyCount } from './bulkSelect'
 import { HOLD_MS, holdDue, holdLeft, holdLabel, deleteConfirmed, reportReady, reportNote, REPORT_NOTE_MAX } from './accountGuard'
 import { wipeSummary } from './wipe'
 import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, codeLooksValid, NEW_DEVICE_LOCK_MS } from './deviceGuard'
+import { signupAllowed, leadingZeroBits, MIN_FILL_MS, MAX_TRIES, TRIES_WINDOW_MS } from './signupGuard'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1851,6 +1852,65 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.537.0: защита регистрации от ботов -----------------------------------
+//
+// Владелец: «любой бот или школьник сможет зарегистрировать аккаунт на чужую
+// или несуществующую почту — добавь защиту на самом клиенте».
+//
+// Капчу от чужой службы не берём: ей уходил бы отпечаток каждого, кто просто
+// открыл окно регистрации, а мы обещаем обратное. Вместо неё три простые вещи.
+console.log('\n-- Защита регистрации --')
+
+const попытка = (o: Partial<Parameters<typeof signupAllowed>[0]> = {}) =>
+  signupAllowed({ opened: 0, honeypot: '', history: [], ...o }, MIN_FILL_MS + 1000)
+
+check('обычная регистрация проходит', () => попытка().ok === true)
+check('заполненная ловушка не пускает', () => {
+  const r = попытка({ honeypot: 'http://спам' })
+  return r.ok === false && r.why === 'bot'
+})
+check('отказ не объясняет боту, на чём он попался', () => {
+  // Разные причины — один текст для «бот»: подсказывать, что сработала ловушка,
+  // значит помочь её обойти.
+  const r = попытка({ honeypot: 'x' })
+  return r.ok === false && !r.text.toLowerCase().includes('ловуш') && !r.text.toLowerCase().includes('бот')
+})
+check('форма, заполненная за миг, не проходит', () =>
+  signupAllowed({ opened: 0, honeypot: '', history: [] }, MIN_FILL_MS - 1).ok === false)
+check('человеку про скорость сказано понятно', () => {
+  const r = signupAllowed({ opened: 0, honeypot: '', history: [] }, 10)
+  return r.ok === false && r.why === 'fast' && r.text.includes('быстро')
+})
+
+check('больше трёх аккаунтов с устройства за час нельзя', () => {
+  const час = TRIES_WINDOW_MS
+  const было = [1, 2, 3].map(i => i * 1000)
+  const r = signupAllowed({ opened: 0, honeypot: '', history: было }, 10_000)
+  return r.ok === false && r.why === 'too-many' && (r.retryIn ?? 0) > час - 20_000
+})
+check('старые попытки не считаются', () =>
+  signupAllowed({ opened: 0, honeypot: '', history: [1, 2, 3] },
+    TRIES_WINDOW_MS + 10_000).ok === true)
+check('лимит именно три', () => MAX_TRIES === 3)
+
+console.log('\n-- Работа доказательством --')
+check('нули в начале хеша считаются верно', () =>
+  leadingZeroBits(new Uint8Array([0, 0, 0xff])) === 16
+  && leadingZeroBits(new Uint8Array([0x0f, 0])) === 4
+  && leadingZeroBits(new Uint8Array([0xff])) === 0
+  && leadingZeroBits(new Uint8Array([0, 0])) === 16)
+
+console.log('\n-- Ломаем нарочно (регистрация) --')
+check('проверка ловит пропуск ловушки', () => {
+  const плохо = true
+  return плохо !== попытка({ honeypot: 'x' }).ok
+})
+check('проверка ловит снятый лимит', () => {
+  const плохо = true
+  return плохо !== signupAllowed({ opened: 0, honeypot: '', history: [1, 2, 3] }, 10_000).ok
+})
 
 
 // -- v1.535.0: новое устройство и код восстановления --------------------------

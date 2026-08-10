@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { signupAllowed, solvePow, loadTries, noteTry } from '../lib/signupGuard'
 import { humanText } from '../lib/humanFail'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
@@ -48,6 +49,9 @@ export function AuthScreen() {
   const [username, setUsername] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [pow, setPow] = useState(false)           // v1.537.0: идёт подбор
+  const [honeypot, setHoneypot] = useState('')    // поле-ловушка, человеку не видно
+  const openedAt = useRef(Date.now())             // когда открыли форму
   // Шаг «Введи код из письма»: на какую почту ушёл код + сам код
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null)
   const [pendingName, setPendingName] = useState('')
@@ -99,6 +103,16 @@ export function AuthScreen() {
       if (mode === 'register') {
         const email = login.trim()
         const finalName = username.trim()
+        // v1.537.0: защита от ботов — ловушка, время заполнения и лимит попыток
+        // с устройства. Подробности и почему не капча — в lib/signupGuard.ts.
+        const вердикт = signupAllowed({ opened: openedAt.current, honeypot, history: loadTries() })
+        if (!вердикт.ok) throw new Error(вердикт.text)
+        // Работа доказательством: человеку это секунда ожидания один раз, а тому,
+        // кто заводит тысячу аккаунтов, — тысяча секунд процессорного времени.
+        setPow(true)
+        try { await solvePow(email + '|' + Math.floor(Date.now() / 60000)) }
+        finally { setPow(false) }
+        noteTry()
         // v1.253.0: юзернейм обязателен по-настоящему — раньше при пустом поле
         // (HTML required можно обойти программной отправкой формы) тихо
         // подставлялось начало почты до «@», и пользователь получал юзернейм,
@@ -288,8 +302,14 @@ export function AuthScreen() {
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль" required />
           </label>
         </div>
+        {/* v1.537.0: поле-ловушка. Человеку его не видно и не доступно с
+            клавиатуры, а простой бот заполняет всё подряд — и попадается. */}
+        {reg && <input className="auth2-hp" type="text" tabIndex={-1} autoComplete="off"
+          aria-hidden="true" value={honeypot} onChange={e => setHoneypot(e.target.value)} />}
         {err && <div className="auth2-err">{err}</div>}
-        <button className="auth2-btn" disabled={busy} type="submit">{busy ? '…' : reg ? 'Зарегистрироваться' : 'Войти'}</button>
+        <button className="auth2-btn" disabled={busy} type="submit">
+          {pow ? 'Проверяем, что ты человек…' : busy ? '…' : reg ? 'Зарегистрироваться' : 'Войти'}
+        </button>
         <div className="auth2-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
           {reg ? 'Уже есть аккаунт? ' : 'Нужен аккаунт? '}<span>{reg ? 'Войти' : 'Зарегистрироваться'}</span>
         </div>

@@ -8477,3 +8477,9 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .dev-row .pqs2-btn { min-height: 44px; }
   .dev-code code { font-size: 16px; }
 }
+
+/* v1.537.0: поле-ловушка для ботов.
+   Не display:none — часть ботов такие поля пропускает намеренно. Поле есть, оно
+   занимает место в разметке, но человеку его не видно и клавиатурой до него не
+   добраться (tabIndex -1). */
+.auth2-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
