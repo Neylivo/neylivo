@@ -1,6 +1,7 @@
 // Profile customization (theme colors + "about" + profile pet), stored on the
 // shared `profiles` table so it is visible to everyone on any device.
 import { supabase } from './supabase'
+import { ensureFont } from './fonts'
 
 export type PetKind = 'image' | 'gif' | 'video' | 'model' | 'none'
 export type PetPos = 'above' | 'br' | 'bl' | 'tr' | 'tl' | 'free'
@@ -278,10 +279,16 @@ export function customNickFamily(url: string): string {
 }
 export function nickFontOf(p: Pick<ProfilePrefs, 'nickFont' | 'nickFontUrl'>): string | undefined {
   if (p.nickFontUrl) return `'${customNickFamily(p.nickFontUrl)}', sans-serif`
+  // v1.530.0: шрифт подтягивается там, где его ПОКАЗЫВАЮТ, а не только там, где
+  // выбирают. Чужой ник может быть написан шрифтом, который я сам никогда не
+  // выбирал: без загрузки он показался бы обычным, то есть чужая настройка
+  // молча пропала бы — ровно та беда, с которой всё и началось на телефоне.
+  ensureFont(p.nickFont)
   return p.nickFont || undefined
 }
 // v1.112.0: шрифт сообщений — тот же принцип, что и шрифт ника.
 export function msgFontOf(p: Pick<ProfilePrefs, 'msgFont' | 'msgFontUrl'>): string | undefined {
   if (p.msgFontUrl) return `'${customNickFamily(p.msgFontUrl)}', sans-serif`
+  ensureFont(p.msgFont)
   return p.msgFont || undefined
 }

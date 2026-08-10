@@ -6,17 +6,13 @@
 // 2–4 — градиент по буквам, класс ch-grad), name_anim — «переливание» (класс ch-grad-anim).
 import type { CSSProperties } from 'react'
 import { customNickFamily } from './profilePrefs'
+import { FONT_PRESETS, ensureFont } from './fonts'
 
 // Тот же набор пресетов, что у шрифтов ника/сообщений (Settings.tsx).
-export const CH_FONTS = [
-  { id: '', name: 'Системный' },
-  { id: "'Inter', sans-serif", name: 'Inter' },
-  { id: "'Roboto', sans-serif", name: 'Roboto' },
-  { id: "'Open Sans', sans-serif", name: 'Open Sans' },
-  { id: "'Georgia', serif", name: 'Georgia' },
-  { id: "'JetBrains Mono', monospace", name: 'Моноширинный' },
-  { id: "'Comic Sans MS', cursive", name: 'Comic Sans' },
-]
+// v1.530.0: тот же набор, что у ника и сообщений, и он один на всё приложение
+// (src/lib/fonts.ts). Два списка системных имён разъезжались бы, а главное —
+// системных имён там больше нет: на Android половины из них не существует.
+export const CH_FONTS = FONT_PRESETS
 
 // Готовые пресеты раскраски названия канала.
 export const CH_COLOR_PRESETS: { name: string; colors: string[]; anim?: boolean }[] = [
@@ -48,7 +44,9 @@ export function chNameStyle(chSettings: any, srvSettings: any): { style?: CSSPro
   const grad = colors.length >= 2
   const anim = grad && !!chSettings?.name_anim
   const st: CSSProperties = {}
-  if (font) st.fontFamily = font
+  // Названия каналов рисуются чужой настройкой сервера — шрифт для них надо
+  // подтянуть здесь же, иначе он покажется обычным.
+  if (font) { ensureFont(font); st.fontFamily = font }
   if (colors.length === 1) st.color = colors[0]
   if (grad) st.backgroundImage = 'linear-gradient(90deg, ' + (anim ? [...colors, colors[0]] : colors).join(', ') + ')'
   return { style: Object.keys(st).length ? st : undefined, grad, anim }

@@ -1,4 +1,5 @@
 import { copyText } from '../lib/copyMedia'
+import { FONT_PRESETS, ensureFont } from '../lib/fonts'
 import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
 import { confirmUi } from '../lib/confirm'
@@ -88,15 +89,11 @@ const LANGS = [
   { id: 'dolb', flag: '🤪', name: 'Долбоёбский', sub: 'на свой страх и риск' },
 ]
 
-const FONTS = [
-  { id: '', name: 'Системный' },
-  { id: "'Inter', sans-serif", name: 'Inter' },
-  { id: "'Roboto', sans-serif", name: 'Roboto' },
-  { id: "'Open Sans', sans-serif", name: 'Open Sans' },
-  { id: "'Georgia', serif", name: 'Georgia' },
-  { id: "'JetBrains Mono', monospace", name: 'Моноширинный' },
-  { id: "'Comic Sans MS', cursive", name: 'Comic Sans' },
-]
+// v1.530.0: набор общий на всё приложение (src/lib/fonts.ts) и состоит из
+// шрифтов, которые лежат В САМОМ приложении. Раньше здесь были системные имена
+// — Georgia, Open Sans, Comic Sans, — и на Android их нет вовсе: выбор молча
+// не срабатывал, и понять почему было нельзя.
+const FONTS = FONT_PRESETS
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return <button className={'pqs-toggle' + (on ? ' on' : '')} onClick={() => onChange(!on)}><span /></button>

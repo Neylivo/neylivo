@@ -40,6 +40,7 @@ import { humanFail, humanText } from './humanFail'
 import { saving, slowMs, SAVE_SLOWDOWN } from './gameMode'
 import { fileKind, fileSub, sizeText, fileNameOf, extOf } from './fileKind'
 import { parseZipTail } from './zipPeek'
+import { FONT_PRESETS, fontAvailable } from './fonts'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -1845,6 +1846,47 @@ check('ответ говорит, сколько ушло и скольким', 
   && fwdDone(1, 3).startsWith('Переслано сообщение в 3 мест'))
 check('число писем и число адресатов не путаются местами', () =>
   fwdDone(5, 2) !== fwdDone(2, 5))
+
+
+// -- v1.530.0: шрифты работают на любом устройстве ---------------------------
+//
+// Владелец: «проблема с классическим английским шрифтом на телефонах». В наборе
+// лежали ИМЕНА СИСТЕМНЫХ шрифтов: Georgia, Open Sans, Comic Sans MS, JetBrains
+// Mono. На Windows часть из них есть, и выбор работает. На Android нет ни
+// одного из них — браузер молча подставляет обычный, и человек видит: выбрал,
+// сохранил, на компьютере получилось, на телефоне нет.
+//
+// Замер на этой машине подтвердил: Georgia, Open Sans, Comic Sans есть,
+// Roboto и JetBrains Mono нет. На Android наоборот.
+console.log('\n-- Шрифты --')
+
+check('в наборе не осталось имён, которых нет на телефоне', () =>
+  FONT_PRESETS.every(f => !/Georgia'|Open Sans|Comic Sans MS'|Roboto/.test(f.id.split(',')[0])))
+check('всё, кроме системного, приложение приносит с собой', () =>
+  FONT_PRESETS.filter(f => f.id).every(f => f.bundled === true))
+check('системный остался — он и значит «какой на устройстве»', () =>
+  FONT_PRESETS.some(f => f.id === '' && f.name === 'Системный'))
+check('классический засечковый в наборе есть', () =>
+  FONT_PRESETS.some(f => f.name === 'Классический' && f.id.includes('PT Serif')))
+check('у запасного варианта есть системный хвост', () =>
+  // Пока файл едет, текст показывается похожим системным, а не пропадает.
+  FONT_PRESETS.filter(f => f.id).every(f => /serif|sans-serif|monospace|cursive/.test(f.id)))
+
+check('наличие шрифта определяется сравнением ширины', () => {
+  // Подставная мерка: «Есть» шире запасного, «Нету» — ровно как запасной.
+  // Имя приходит в кавычках — так его и складывает fontAvailable.
+  const мера = (f: string) => f.replace(/'/g, '').startsWith('Есть') ? 120 : 100
+  return fontAvailable("'Есть', sans-serif", мера) === true
+    && fontAvailable("'Нету', sans-serif", мера) === false
+})
+check('системный шрифт есть всегда', () => fontAvailable('', () => 0) === true)
+
+console.log('\n-- Ломаем нарочно (шрифты) --')
+check('проверка ловит возврат системных имён в набор', () => {
+  const плохо = [{ id: "'Georgia', serif", name: 'Georgia' }]
+  return плохо.every(f => /Georgia'/.test(f.id.split(',')[0]))
+    && FONT_PRESETS.every(f => !/Georgia'/.test(f.id.split(',')[0]))
+})
 
 
 // -- v1.529.0: карточка файла ------------------------------------------------
