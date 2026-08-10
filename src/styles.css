@@ -8356,3 +8356,75 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .fcard-btn { width: 44px; height: 44px; }
   .fcard-menu button { padding: 12px 10px; font-size: 15px; min-height: 44px; }
 }
+
+
+/* ==== v1.532.0: пустой экран друзей — снова экран, а не куча текста ====
+
+   Владелец прислал снимок: «Сейчас никого нет в сетиСтатус не мешает разговору
+   — можно написать сейчас.Показать всех друзей Новая беседа» — всё слиплось в
+   одну строку, кнопки серыми прямоугольниками, карточки друзей наползают друг
+   на друга.
+
+   Причина не в раскладке и не в шрифте: разметку этого экрана переписали, а
+   стилей к новым классам (pfr-empty-state, pfr-empty-ic, pfr-empty-actions,
+   pfr-reach и прочие) не написали ни одного. Браузер честно нарисовал голый
+   html: строчные элементы подряд, кнопки по умолчанию.
+
+   Отсюда правило, которое стоит помнить: новый класс без стиля — это не
+   «некрасиво», это сломанный экран. */
+
+.pfr-empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; padding: 48px 20px; color: var(--mut);
+}
+.pfr-empty-state.compact { padding: 28px 20px; }
+.pfr-empty-state strong { color: var(--tx-hi, #fff); font-size: 16px; font-weight: 700; }
+.pfr-empty-state > span { max-width: 380px; line-height: 1.45; font-size: 14px; }
+.pfr-empty-ic {
+  width: 64px; height: 64px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; margin-bottom: 4px;
+  background: rgba(var(--ov, 255,255,255), .06); color: var(--tx-2, #b5bac1);
+}
+.pfr-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.pfr-empty-state button, .pfr-reach-head button {
+  min-height: 38px; padding: 0 16px; border: none; border-radius: var(--r-md);
+  background: var(--c-hover); color: var(--tx); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.pfr-empty-state button:hover, .pfr-reach-head button:hover { filter: brightness(1.14); }
+.pfr-empty-state button.primary { background: var(--brand); color: #fff; }
+
+/* «Можно написать сейчас» — ряд карточек, а не слипшийся текст. */
+.pfr-reach { padding: 0 20px 24px; }
+.pfr-reach-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.pfr-reach-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pfr-reach-head strong { color: var(--tx-hi, #fff); font-size: 15px; }
+.pfr-reach-head span { color: var(--mut); font-size: 13px; }
+.pfr-reach-head button { margin-left: auto; flex: none; }
+.pfr-reach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pfr-reach-person {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: none; border-radius: var(--r-lg);
+  background: rgba(var(--ov, 255,255,255), .04); color: var(--tx);
+  cursor: pointer; text-align: left; min-height: 60px;
+}
+.pfr-reach-person:hover { background: rgba(var(--ov, 255,255,255), .08); }
+.pfr-reach-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pfr-reach-name small { color: var(--mut); font-weight: 400; font-size: 12px; }
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .pfr-empty-state { padding: 32px 16px; }
+  .pfr-empty-state button, .pfr-reach-head button { min-height: 44px; }
+  .pfr-reach { padding: 0 12px 20px; }
+  .pfr-reach-grid { grid-template-columns: 1fr; }
+}
+
+/* v1.532.0: «Копировать» в полосе выбора — рядом с «Переслать», тем же видом. */
+.bulk-copy { display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer;
+  border-radius: var(--r-sm); padding: 8px 14px; font-weight: 700; font-size: 14px;
+  background: var(--c-hover); color: var(--tx); }
+.bulk-copy:disabled { opacity: .5; cursor: default; }
+.bulk-copy:hover:not(:disabled) { filter: brightness(1.14); }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .bulk-copy { padding: 10px 12px; min-height: 44px; }
+}

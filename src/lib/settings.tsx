@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { ensureFont } from './fonts'
 import { setTime24 } from './ui'
 import { applyLang } from './i18n'
 import { applyAppIcon } from './appIcon'
@@ -138,6 +139,13 @@ function apply(s: Settings) {
   ;(document.body.style as any).zoom = String(s.zoom / 100)
   root.style.setProperty('--radius', s.radius + 'px')
   root.style.setProperty('--msg-gap', s.msgGap + 'px')
+  // v1.532.0: шрифт интерфейса тоже надо ПОДТЯНУТЬ, а не только назначить.
+  //
+  // Раньше здесь просто ставилось имя семейства. Выбрал «Классический» — имя
+  // встало, файл не приехал, и браузер откатился на запасной засечковый: на
+  // Windows это Georgia, и весь интерфейс становился засечковым, а на Android
+  // запасного нет вовсе. Владелец прислал снимок ровно с этим.
+  if (!s.fontFamilyUrl) ensureFont(s.fontFamily)
   document.body.style.fontFamily = s.fontFamilyUrl ? customNickFamily(s.fontFamilyUrl) : (s.fontFamily || '')
   setTime24(s.time24)
 }

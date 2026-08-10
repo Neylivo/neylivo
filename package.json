@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.531.0",
+  "version": "1.532.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -48,7 +48,8 @@
     "test:save": "esbuild src/lib/__save_test.ts --bundle --format=iife --outfile=dist-save-test/t.js --loader:.woff=empty --loader:.woff2=empty --loader:.css=empty && electron scripts/save-test.cjs",
     "test:anim": "electron scripts/anim-test.cjs",
     "look": "electron scripts/look.cjs",
-    "test:picker": "electron scripts/picker-test.cjs"
+    "test:picker": "electron scripts/picker-test.cjs",
+    "test:naked": "node scripts/naked-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

@@ -15,8 +15,9 @@ import { confirmUi } from '../lib/confirm'
 import { toastOk, toastErr } from '../lib/toast'
 import {
   BULK_MAX, toggleOne, selectRange, pruneSelection, deletable, skippedCount,
-  bulkLabel, skippedNote, runBulk, bulkReport,
+  bulkLabel, skippedNote, runBulk, bulkReport, copyText as собратьТекст, copyCount,
 } from '../lib/bulkSelect'
+import { copyText as вБуфер } from '../lib/copyMedia'
 
 /**
  * v1.508.0: из режима выбора можно не только удалять, но и пересылать.
@@ -82,6 +83,9 @@ export function useBulkSelect<T extends { id: string }>(
   const over = mode && pruneSelection(sel, all).size > BULK_MAX
   // Переслать можно ВСЁ выбранное, а не только своё. Порядок — ленты, а не
   // нажатий: пересланный разговор должен читаться так же, как шёл.
+  // Сколько строк уйдёт в буфер — это же число стоит на кнопке, чтобы показ и
+  // дело не разошлись.
+  const строк = mode ? copyCount(sel, all as unknown as Parameters<typeof copyCount>[1]) : 0
   const forwardable = mode
     ? (all.filter(m => pruneSelection(sel, all).has(m.id)) as unknown as FwdSource[])
     : []
@@ -108,6 +112,14 @@ export function useBulkSelect<T extends { id: string }>(
         <b>{list.length > 0 ? bulkLabel(list.length).replace('Удалить ', 'Выбрано: ') : 'Ничего не выбрано'}</b>
         {note && <span>{note}</span>}
       </div>
+      {/* v1.532.0: копирование выбранного. Работает всегда — на чужое сообщение
+          прав не нужно, как и на пересылку. */}
+      <button className="bulk-copy" disabled={!строк || busy}
+        title="Скопировать выбранные сообщения"
+        onClick={() => { void вБуфер(собратьТекст(sel, all as unknown as Parameters<typeof собратьТекст>[1]),
+          строк === 1 ? 'Сообщение скопировано' : 'Скопировано сообщений: ' + строк); stop() }}>
+        <Icon name="copy" size={14} /> Копировать{строк ? ' ' + строк : ''}
+      </button>
       {кто && <button className="bulk-fwd" disabled={!forwardable.length || busy}
         title="Переслать выбранное"
         onClick={() => { setПересылка(forwardable); stop() }}>

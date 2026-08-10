@@ -125,3 +125,40 @@ export function bulkReport(r: BulkResult): string {
   if (r.failed === 0) return `Удалено ${r.done}`
   return `Удалено ${r.done}, не удалось ${r.failed}`
 }
+
+// v1.532.0: выбранные сообщения можно скопировать.
+//
+// Владелец: «сделай, чтобы выбранные сообщения можно было копировать». Режим
+// выбора умел удалять (только своё) и пересылать (любое) — а простое «скопировать
+// переписку куском» приходилось делать мышью по одному сообщению.
+//
+// Что копируется. Разговор в том виде, в каком он читается: «Имя: текст», по
+// строке на сообщение, в порядке ленты, а не в порядке нажатий. Вложение без
+// текста не превращается в пустую строку — вместо него пометка, иначе в
+// скопированном куске появлялись бы дыры без объяснения.
+
+export interface CopyMsg {
+  id: string
+  author_name?: string | null
+  content?: string | null
+  attach_url?: string | null
+}
+
+/** Собрать текст выбранных сообщений в порядке ленты. */
+export function copyText(sel: ReadonlySet<string>, all: readonly CopyMsg[]): string {
+  const строки: string[] = []
+  for (const m of all) {
+    if (!sel.has(m.id)) continue
+    const кто = (m.author_name ?? '').trim()
+    const текст = (m.content ?? '').trim()
+    const тело = текст || (m.attach_url ? '[вложение]' : '')
+    if (!тело) continue
+    строки.push(кто ? кто + ': ' + тело : тело)
+  }
+  return строки.join('\n')
+}
+
+/** Сколько строк уйдёт в буфер — это число и стоит на кнопке. */
+export function copyCount(sel: ReadonlySet<string>, all: readonly CopyMsg[]): number {
+  return copyText(sel, all) ? copyText(sel, all).split('\n').length : 0
+}
