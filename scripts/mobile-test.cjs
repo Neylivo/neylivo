@@ -241,6 +241,29 @@ app.whenReady().then(async () => {
     show: false, width: ЭКРАНЫ[0].ширина, height: ЭКРАНЫ[0].высота,
     webPreferences: { backgroundThrottling: false, partition: 'mobile-' + Date.now() },
   })
+  // v1.527.0: стенд ПРИТВОРЯЕТСЯ сенсорным устройством.
+  //
+  // Раньше мобильная раскладка на «телефоне поперёк» включалась одним правилом
+  // «ширина ≤1100 И высота ≤600» — без единого слова про сенсор. Это значит,
+  // что обычное окно на компьютере, уменьшенное по высоте, теряло рейку
+  // серверов и превращалось в телефон. Правило поправлено (нужен ещё и
+  // сенсорный ввод), и вот тут выяснилось, что стенд проверял его случайно:
+  // в обычном окне Electron сенсора нет, и раскладка не включается.
+  //
+  // Поэтому здесь включается настоящая эмуляция: браузеру говорят, что
+  // указатель грубый, а наведения не бывает — ровно то, что сообщает о себе
+  // телефон. Без этого проверки трогали бы не тот вид, что у человека в руках.
+  const сенсорВключить = async (да) => {
+    const d = win.webContents.debugger
+    if (!d.isAttached()) d.attach('1.3')
+    await d.sendCommand('Emulation.setEmulatedMedia', {
+      features: да
+        ? [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }]
+        : [],
+    })
+    await d.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: !!да, maxTouchPoints: 5 })
+  }
+
   win.webContents.setUserAgent(
     'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) '
     + 'Chrome/126.0.0.0 Mobile Safari/537.36')
@@ -253,6 +276,11 @@ app.whenReady().then(async () => {
       failed++
       continue
     }
+    // Сенсор включаем ПОСЛЕ загрузки: переход на новый адрес закрывает цель
+    // отладчика, и команда, отданная до него, падает с «target closed».
+    // Телефонным размерам он нужен всем: узкая ширина включает мобильную
+    // раскладку и без него, а «поперёк» — только вместе с ним.
+    await сенсорВключить(true)
     await new Promise(r => setTimeout(r, 2500))
 
     let м
@@ -268,10 +296,45 @@ app.whenReady().then(async () => {
     check('ничего не обрезано молча', м.обрезано.length === 0, м.обрезано.join(' | '))
   }
 
+  // ── Маленькое окно на КОМПЬЮТЕРЕ остаётся компьютером ──────────────────
+  //
+  // Мобильная раскладка «поперёк» включалась правилом «ширина ≤1100 И высота
+  // ≤600» без единого слова про сенсор. Это значит, что обычное окно на
+  // компьютере, уменьшенное по высоте (например, пристроенное к краю экрана),
+  // теряло рейку серверов и колонку каналов: они уезжали за левый край как
+  // шторка, и открыть их было нечем — жеста от края мышью не сделать.
+  //
+  // Поймано случайно: моя же проба не находила значок сервера, потому что он
+  // стоял на x = −70. Здесь это закреплено проверкой — БЕЗ эмуляции сенсора.
+  win.setContentSize(1000, 500)
+  await win.loadFile(DIST)
+  await сенсорВключить(false)
+  await new Promise(r => setTimeout(r, 1200))
+  await win.webContents.executeJavaScript(`(() => {
+    document.body.className = ''
+    document.body.innerHTML = '<div class="app-viewport"><div class="app">'
+      + '<nav class="servers"><div class="srv-wrap on"><button class="srv on">П</button></div></nav>'
+      + '<aside class="channels"><div class="ch on">общий</div></aside>'
+      + '<main class="chat"></main></div></div>'
+  })()`)
+  await new Promise(r => setTimeout(r, 400))
+  const узкоеОкно = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+    const р = document.querySelector('.servers').getBoundingClientRect()
+    const к = document.querySelector('.channels').getBoundingClientRect()
+    return JSON.stringify({ рейкаX: Math.round(р.x), рейкаШ: Math.round(р.width),
+      каналыX: Math.round(к.x), окно: window.innerWidth })
+  })()`))
+  check('рейка серверов на месте в маленьком окне на компьютере',
+    узкоеОкно.рейкаX >= 0 && узкоеОкно.рейкаШ > 40,
+    JSON.stringify(узкоеОкно))
+  check('колонка каналов тоже на месте, а не уехала шторкой',
+    узкоеОкно.каналыX >= 0, JSON.stringify(узкоеОкно))
+
   // Авторизованная оболочка без сети. Проверяем именно слои приложения:
   // мобильную шторку, сервер, шапку друзей и изображение во вложении.
   win.setContentSize(915, 412)
   await win.loadFile(DIST)
+  await сенсорВключить(true)
   await new Promise(r => setTimeout(r, 500))
   const shell = `<div class="app-viewport"><div class="app">
     <nav class="servers"><div class="srv-wrap on"><button id="touch-server" class="srv has-avatar on">P</button><span class="srv-label">Главная</span></div></nav>
