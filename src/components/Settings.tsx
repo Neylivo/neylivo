@@ -1,4 +1,5 @@
 import { copyText } from '../lib/copyMedia'
+import { DevicesPanel } from './DevicesPanel'
 import { DeleteAccountModal } from './DeleteAccountModal'
 import { FONT_PRESETS, ensureFont } from '../lib/fonts'
 import { logErr, logWarn } from '../lib/log'
@@ -53,6 +54,9 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'account', label: 'Учётная запись', icon: 'user' },
     { k: 'profile', label: 'Профиль', icon: 'edit' },
     { k: 'privacy', label: 'Данные и конфиденциальность', icon: 'shield' },
+    // v1.536.0: откуда заходили в аккаунт, экстренная заморозка и код
+    // восстановления. Помешать чужому входу нельзя — можно сделать его заметным.
+    { k: 'devices', label: 'Устройства и безопасность', icon: 'lock' },
     { k: 'notifications', label: 'Уведомления', icon: 'bell' },
   ] },
   { group: 'Настройки приложения', items: [
@@ -795,6 +799,8 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   </div>
                 </div>
               </>}
+
+              {cat === 'devices' && <DevicesPanel />}
 
               {cat === 'profile' && <>
                 <h2>Профиль</h2>

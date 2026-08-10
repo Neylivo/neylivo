@@ -8454,3 +8454,26 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .rep-reason { min-height: 44px; }
   .rep-block { min-height: 44px; }
 }
+
+/* ==== v1.536.0: раздел «Устройства и безопасность» ==== */
+.dev-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+.dev-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: var(--r-lg); background: rgba(var(--ov, 255,255,255), .04); }
+.dev-row.me { background: rgba(var(--ov, 255,255,255), .075); }
+.dev-ic { width: 36px; height: 36px; flex: none; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(var(--ov, 255,255,255), .06); color: var(--tx-2, #b5bac1); }
+.dev-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dev-nm { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--tx-hi, #fff); }
+.dev-tag { font-size: 11px; font-weight: 700; color: var(--brand); background: rgba(88,101,242,.14);
+  padding: 2px 6px; border-radius: var(--r-sm); }
+.dev-sub { color: var(--mut); font-size: 12px; }
+.dev-code { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.dev-code code { font-family: monospace; font-size: 18px; letter-spacing: 1px;
+  background: var(--bg3); padding: 10px 14px; border-radius: var(--r-md); color: var(--tx-hi, #fff); }
+.dev-panel .pqs-sec-t { margin-top: 22px; }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .dev-row { flex-wrap: wrap; }
+  .dev-row .pqs2-btn { min-height: 44px; }
+  .dev-code code { font-size: 16px; }
+}

@@ -1,6 +1,8 @@
 
 
 import { Portal } from './components/Portal'
+import { touchDevice } from './lib/devices'
+import { supabase } from './lib/supabase'
 import { updateGameState } from './lib/gameMode'
 import { getSettings } from './lib/settings'
 import { useEffect, useRef, useState } from 'react'
@@ -362,6 +364,23 @@ export default function App() {
   // устройство, а не на аккаунт, поэтому сессия для этого не нужна — они работают и
   // на экране входа (свои темы оформления, например).
   useEffect(() => { void startEnabledPlugins() }, [])
+  // v1.536.0: устройство отмечается при запуске — «я здесь».
+  //
+  // Отдельной кнопки «запомнить это устройство» нет намеренно: защита должна
+  // работать, ничего не спрашивая. Первая отметка создаёт запись, и с этого мига
+  // считаются сутки, в которые новому устройству закрыто опасное.
+  //
+  // Молча ловим отказ: у того, кто ещё не применил миграцию, приложение обязано
+  // работать как раньше, а не встречать человека ошибкой на пустом месте.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getUser()
+        const me = data.user?.id
+        if (me) await touchDevice(me)
+      } catch { /* нет миграции или нет сети — не беда */ }
+    })()
+  }, [])
   // v1.511.0: приложение следит за тем, видно ли его. Вместе с признаком «идёт
   // игра» (его приносит рабочий стол, см. presence.tsx) это и включает бережный
   // режим: пока человек в игре, а окно позади, приложение перестаёт считать
