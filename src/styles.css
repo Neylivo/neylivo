@@ -97,7 +97,7 @@ body {
 .auth2-toggle span { color:#fff; font-weight:700; cursor:pointer; }
 .auth2-toggle span:hover { text-decoration:underline; }
 .auth2-legal { margin-top:16px; color:rgba(var(--ov, 255,255,255),.5); font-size:11.5px; line-height:1.4; text-align:center; }
-@media (max-width:768px) {
+@media (max-width:768px), (hover: none) and (pointer: coarse) and (max-width:1100px), (max-width:1100px) and (max-height:600px) {
   .auth2 { padding:16px; }
   .auth2-card { width:100%; padding:32px 20px 24px; }
 }
@@ -3214,7 +3214,7 @@ body.no-anim .member-typing i { animation:none; }
 .mob-burger { display:none; }
 .mob-backdrop { display:none; }
 .av-phone { display:block; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .mob-burger { display:inline-flex; align-items:center; justify-content:center; background:none; border:0; color:var(--mut); padding:2px 10px 2px 2px; cursor:pointer; flex:none; }
   .mob-burger:active { color:var(--tx); }
   /* Шторка навигации: рейка серверов + каналы/ЛС, как свайп-панель в Discord */
@@ -3246,7 +3246,7 @@ body.no-anim .member-typing i { animation:none; }
 /* На телефоне чат выглядит как Telegram (привычно для не-геймеров), десктоп остаётся Discord 1-в-1. */
 .tg-time { display:none; }
 .send-tg { display:none; }
-@media (max-width:768px) {
+@media (max-width:768px), (hover: none) and (pointer: coarse) and (max-width:1100px), (max-width:1100px) and (max-height:600px) {
   /* Фон и шапка как в тёмном Telegram */
   .chat { background:var(--bg); }
   .chat-head { background:var(--bg2); border-bottom:1px solid rgba(0,0,0,.18); box-shadow:none; background-image:none; }
@@ -3306,7 +3306,7 @@ body.no-anim .member-typing i { animation:none; }
 /* ==== v1.212.0: список ЛС на телефоне — цвета и форма как в мобильном Discord.
    Сам открытый чат (пузыри сообщений) сознательно остался в стиле Telegram
    (см. v1.36.0 выше) — эта правка только про список бесед/поиск/шапку. ==== */
-@media (max-width:768px) {
+@media (max-width:768px), (hover: none) and (pointer: coarse) and (max-width:1100px), (max-width:1100px) and (max-height:600px) {
   .dm-side { background:var(--bg2, #2b2d31); }
   .channels { background:var(--bg2, #2b2d31); }
   .dm-top { height:auto; padding:10px 12px; flex-direction:column;
@@ -4244,7 +4244,7 @@ input, textarea { caret-color:var(--brand,#5865f2); }
 .redit-mem-av { width:24px; height:24px; border-radius:50%; background:var(--brand); background-size:cover; background-position:center; flex:none; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
 .redit-mem-x { margin-left:auto; color:var(--mut); cursor:pointer; }
 .redit-mem-x:hover { color:var(--red); }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .redit { flex-wrap:wrap; }
   .redit-side { width:100%; border-right:none; padding-right:0; }
   .redit-main { padding-left:0; }
@@ -4430,7 +4430,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 * { -webkit-tap-highlight-color: transparent; }
 button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-action: manipulation; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* 1. Честная высота экрана: интерфейс не прячется за клавиатурой и панелями браузера */
   @supports (height: 100dvh) {
     html, body, #root { height: 100dvh; }
@@ -4815,7 +4815,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
    пальца крестиком в правом верхнем углу. Контекстное меню уже давно оформлено
    шторкой снизу (см. блок выше) — приводим модалки к тому же жесту, чтобы
    интерфейс не разговаривал на двух языках сразу. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .modal-overlay { align-items: flex-end; padding: 0; }
   .modal {
     width: 100%; max-width: none;
@@ -4843,7 +4843,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 /* v1.287.0: минимальная площадь нажатия. Пальцем трудно попасть в цель меньше
    ~44px — это не вкусовщина, а рекомендация и Apple, и Google. Ставим только на
    сенсорных экранах, чтобы не раздувать плотный десктопный интерфейс мышью. */
-@media (max-width: 768px) and (pointer: coarse) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) and (pointer: coarse) {
   .ch, .dm-item, .dm-navitem, .member, .pqs2-item, .ctx-item, .mention-it {
     min-height: 44px;
   }
@@ -4876,7 +4876,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
        сжималась до пары слов в столбик, а «Настройки» ложились поверх неё;
      • кнопки карточки плагина в чате не помещались уже на 320px, и «Установить»
        уезжала за границу карточки — ровно туда, куда надо нажать. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Крестик лежит поверх заголовка абсолютом: без отступа длинный заголовок
      переносился прямо под него и читался как перечёркнутый. */
   .modal-title { padding: 0 34px; }
@@ -4934,7 +4934,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .chr-perm { font-size:11px; padding:2px 8px; border-radius:var(--r-pill); background:rgba(var(--ov, 255,255,255),.07); color:var(--tx); }
 .chr-perm.mut { color:var(--mut); }
 .chr-note { color:var(--mut); font-size:12px; margin-top:14px; line-height:1.45; }
-@media (max-width: 768px) { .chr-modal { width:100%; } .chr-body { max-height:60vh; } .chr-topic { display:none; } }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) { .chr-modal { width:100%; } .chr-body { max-height:60vh; } .chr-topic { display:none; } }
 
 /* v1.316.0: плашка вместо поля ввода в канале только для чтения */
 .ch-readonly { display:flex; align-items:center; justify-content:center; gap:8px; margin:0 16px 16px;
@@ -4954,7 +4954,7 @@ button, [role="button"], .srv, .ch, .dm-item, .pqs2-item, .ctxmenu-item { touch-
 .guide-empty-ico { opacity:.5; }
 .guide-edit-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
 .guide-edit-row .cset-in { flex:1; min-width:0; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .guide-modal { width:100%; }
   .guide-edit-row { flex-wrap:wrap; }
   .guide-edit-row .cset-in { flex:1 1 100%; }
@@ -5133,7 +5133,7 @@ body.no-anim .cat-tile:hover { transform: none; }
    то, что ниже по файлу, а первая версия этих правил, написанная выше, не
    действовала вовсе. Поймал я это единственным способом — нарочно испортил
    правило и увидел, что проверка осталась зелёной. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Одна карточка в ряд: на 390 пикселях в две колонки не помещается даже название. */
   .cat-grid { grid-template-columns: 1fr; gap: 10px; }
   .cat-acts { display: flex; gap: 8px; }
@@ -6417,7 +6417,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
    кода, перенос строки. Работали только те правила, которым не с чем было
    спорить (высота кнопок), поэтому и выглядело это как «половина применилась».
    Та же ловушка ловила меня в v1.443.0; здесь она записана прямо на месте. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .grant-modal { gap: 12px; }
   .grant-code { font-size: 22px; letter-spacing: 2px; padding: 15px 10px; }
   /* Поле кода — своей строкой во всю ширину: «Код передачи, например…» в одну
@@ -6524,7 +6524,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
    сетка по две карточки, плашка строкой внизу. Отступы — через safe-area:
    приложение теперь рисуется ПОД системными полосами (см. MainActivity.java),
    и без отступов часы наезжали бы на шапку. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Плеер занимает экран целиком, как отдельное приложение. */
   .mus2 {
     left: 0; right: 0; width: auto; border-left: none; box-shadow: none;
@@ -6602,7 +6602,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
    края, а отступы под часы и кнопки навигации добавляет там, где это важно.
    Работает и в браузере (viewport-fit=cover в index.html), и в приложении. */
 @supports (padding: env(safe-area-inset-top)) {
-  @media (max-width: 768px) {
+  @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
     .servers { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
     .dm-side, .channels { padding-bottom: env(safe-area-inset-bottom); }
     .mus2 { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
@@ -6720,7 +6720,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
    Пальцем попадают не туда, где мышью: кнопки в шапке канала были 28–30
    пикселей и стояли вплотную, реакции — мелкими чипами, а тема канала занимала
    середину шапки, оставляя названию канала половину строки. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Кнопки шапки — 40 пикселей и с воздухом; тема канала на узком экране
      скрыта: название канала важнее, а тему видно в его настройках. */
   .ph2-btns { gap: 4px; }
@@ -6755,7 +6755,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 
    Здесь шторкой становятся все. Плюс панели, которые открываются поверх чата
    (закреплённое, поиск, ветки, саундпад), звонок и окна выбора эмодзи и GIF. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* ── Все всплывающие меню — нижней шторкой ────────────────────────────────
      Порядок правил тот же, что у .ctxmenu: прижать к низу, растянуть по ширине,
      скруглить только верх, добавить отступ под системную полосу и выехать
@@ -6932,7 +6932,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .lsn-paused { color: var(--mut); }
 .lsn-paused span { display: inline-flex; align-items: center; gap: 4px; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* На телефоне: отделы своей строкой под названием, поиск — следующей. */
   .mus2-libtabs { order: 2; flex: 1 0 100%; margin-left: 0; }
   .mus2-pltitle { font-size: 18px; }
@@ -6972,7 +6972,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
    2. Шапки на телефоне — одна строка: заголовок сжимается, ряд вкладок листается
       пальцем по горизонтали, кнопки не обрезаются. Разложить их в столбик на
       узком экране значило бы отдать под шапку треть высоты. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .app, .auth2 {
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
@@ -7071,7 +7071,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
    На снимке с телефона плашка легла ровно на панель с аватаркой: обе прижаты к
    низу, и обе видны одновременно, когда шторка открыта. Поднимаем плашку над
    панелью — но только в этом случае, чтобы в чате она не висела в воздухе. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   body.mob-nav-open .mus-mini { bottom: calc(70px + env(safe-area-inset-bottom)); }
 }
 
@@ -7098,7 +7098,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
    происходит, невозможно. Во всех просмотрщиках это тоже мгновенно. */
 .lb-img { transition: none; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* На телефоне картинка занимает экран целиком, а панель инструментов не
      должна налезать на неё сверху. */
   .lb-tools { top: calc(6px + env(safe-area-inset-top)); right: 6px; gap: 2px; }
@@ -7178,7 +7178,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
   border-top: 1px solid rgba(var(--ov, 255,255,255), .06); color: var(--mut); font-size: 12px;
 }
 .sb-vol input[type=range] { flex: 1; accent-color: var(--brand); cursor: pointer; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .sb-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
   .sb-tile { min-height: 88px; }
 }
@@ -7295,7 +7295,7 @@ body.no-anim .vo-live::before { animation: none; }
    приложения на телефоне), сжиматься им нельзя, а не вместившееся переносится на
    вторую строку, а не сдавливается. Ползунок громкости уходит на свою строку —
    он в этом ряду самый бесполезный, но убирать его значит отнять возможность. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .mus2-ctlrow { gap: 8px; flex-wrap: wrap; justify-content: center; }
   .mus2-ctl { gap: 6px; flex: 0 1 auto; min-width: 0; }
   .mus2-ctl button {
@@ -7323,7 +7323,7 @@ body.no-anim .vo-live::before { animation: none; }
   border: none; background: transparent; color: var(--brand); cursor: pointer;
   font-size: inherit; font-weight: 700; padding: 0; text-decoration: underline;
 }
-@media (max-width: 768px) { .mus2-mixbtn { margin-left: 0; width: 100%; justify-content: center; } }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) { .mus2-mixbtn { margin-left: 0; width: 100%; justify-content: center; } }
 
 /* v1.442.0: обработка звука в настройках плеера. */
 .ms-eq { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -7375,7 +7375,7 @@ body.no-anim .vo-live::before { animation: none; }
 .cmp-note, .cmp-ask { flex: none; }
 .cmp-ask-row { display: flex; gap: 8px; align-items: center; }
 .cmp-ask-row .modal-in { flex: 1; min-width: 0; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .cmp-row { padding: 10px 8px; font-size: 15px; }
   .cmp-tick { width: 26px; height: 26px; }
   .cmp-ask-row { flex-direction: column; align-items: stretch; }
@@ -7387,7 +7387,7 @@ body.no-anim .vo-live::before { animation: none; }
    контраст на маленьком экране (текст ложится на фотографию), а размытие
    каждого кадра на слабом телефоне стоит плавности прокрутки. На большом
    экране всё это заметно меньше, поэтому там фон остаётся как был. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   body.chatbg-on .chat { isolation: auto; overflow: visible; }
   body.chatbg-on .chat::before, body.chatbg-on .chat::after { content: none; }
 }
@@ -7405,7 +7405,7 @@ body.no-anim .vo-live::before { animation: none; }
    Блок стоит в конце файла намеренно: при равной силе выигрывает то, что ниже,
    и мобильные правила, написанные выше базовых, не действовали бы вовсе — эту
    ошибку я уже допускал в v1.445.0 и поймал только нарочной поломкой. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Шапка чата: кнопки действий и «бургер» шторки. */
   .ph2-btns button, .mob-burger { min-width: 40px; min-height: 40px; }
   /* v1.455.0: зазор между кнопками. Двумя пикселями я сам их и слепил в
@@ -7481,7 +7481,7 @@ body.no-anim .vo-live::before { animation: none; }
   background: var(--bg2); color: var(--tx); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .cmp-load { padding: 28px 0; text-align: center; color: var(--mut); font-size: 13.5px; }
 .cmp-desc { font-size: 12.5px; color: var(--tx-2, #b5bac1); margin: -4px 0 8px; line-height: 1.45; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .flow-tools button { width: 40px; height: 40px; }
 }
 
@@ -7520,7 +7520,7 @@ body.no-anim .mus-blob.on { animation: none; }
    это, кроме GIF, теперь задаёт блок «строка ввода на телефоне 1 в 1 как в
    мобильном Discord» в конце файла. Два набора одних и тех же свойств в разных
    концах файла — это гадание, какой из них работает, а не стиль. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .composer-tools .ctool.gif-badge { display: none; }
 }
 
@@ -7531,7 +7531,7 @@ body.no-anim .mus-blob.on { animation: none; }
 .modal-x { z-index: 3; background: color-mix(in srgb, var(--bg2, #2b2d31) 82%, transparent);
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 .modal-x:hover { background: rgba(var(--ov, 255,255,255),.14); }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .modal-x { width: 40px; height: 40px; top: 10px; right: 10px; }
 }
 
@@ -7553,7 +7553,7 @@ body.no-anim .mus-blob.on { animation: none; }
 /* Полоска из шести цветов — видно тему, не включая её. */
 .pqs-theme-dots { display: flex; flex: none; border-radius: 4px; overflow: hidden; }
 .pqs-theme-dots i { width: 12px; height: 20px; display: block; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .pqs-theme-save { flex-direction: column; }
   .pqs-theme-save .pqs-save { min-height: 40px; }
   /* v1.495.0: было 36 — меньше пальца. Кнопок в ряду темы две («Выбрать» и
@@ -7573,7 +7573,7 @@ body.no-anim .mus-blob.on { animation: none; }
    потолок в 300 пикселей, и низ панели пустовал. */
 .emoji-pop .emoji-scroll, .gif-pop .emoji-scroll { max-height: none; flex: 1; min-height: 0; }
 .gif-pop .gif-grid { align-content: start; }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .emoji-pop, .gif-pop { width: calc(100vw - 12px); max-width: none; height: 58vh; max-height: 58vh; }
 }
 
@@ -7585,7 +7585,7 @@ body.no-anim .mus-blob.on { animation: none; }
    ничего не происходило. Показываем, что она живая. */
 .fp-recent.clickable { cursor: pointer; border-radius: var(--r-md); transition: background .12s var(--ease-out4, ease); }
 .fp-recent.clickable:hover { background: rgba(var(--ov, 255,255,255),.05); }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Палец, а не курсор: строка должна быть заметной целью. */
   .fp-recent { padding: 8px 6px; }
   .fp-recent.clickable:active { background: rgba(var(--ov, 255,255,255),.09); }
@@ -7729,7 +7729,7 @@ body.no-anim .mus-blob.on { animation: none; }
    Таскать окошки пальцем по маленькому экрану бессмысленно, поэтому окно и
    картинка-в-картинке разворачиваются: первое — на весь экран, вторая —
    шторкой снизу, как всё остальное в приложении на телефоне. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .plugapp-window { inset: 0; width: auto !important; height: auto !important;
     transform: none; border-radius: 0; border: none; }
   .plugapp-pip { left: 0; right: 0; bottom: 0; top: auto;
@@ -7858,7 +7858,7 @@ body.no-anim .mus-blob.on { animation: none; }
 .am-size .modal-in { width: 84px; }
 .am-chk { gap: 6px; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   /* Рядом на телефоне — это две колонки по двести пикселей: не читается ни
      код, ни показ. Ставим друг под друга, показ первым по важности не делаем:
      сначала правишь, потом смотришь. */
@@ -7978,7 +7978,7 @@ body.no-anim .mus-blob.on { animation: none; }
   .ws-console { height: 120px; }
   .ws-props { margin-top: 0; }
 }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .ws-top-acts { width: 100%; }
   .ws-top-acts .modal-primary { flex: 1; min-height: 44px; }
   .ws-tpl { min-height: 44px; }
@@ -8068,7 +8068,7 @@ body.no-anim .mus-blob.on { animation: none; }
   .sc-canvas { min-height: 300px; }
   .sc-list { max-height: 200px; }
 }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .sc-node { min-height: 44px; }
   .sc-node-a { opacity: 1; }
   .sc-node-a button { min-width: 40px; min-height: 40px; }
@@ -8141,7 +8141,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
    тень селектором из двух классов. Обычный .composer их не перебьёт, а !important
    в таком месте — способ никогда потом не разобраться, что откуда берётся.
    Одинаковый вес плюс положение ниже по файлу решают это честно. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .composer[class] { background: transparent; border: none; box-shadow: none;
     backdrop-filter: none; -webkit-backdrop-filter: none;
     margin: 0; padding: 6px 10px 8px; gap: 8px; align-items: flex-end; min-height: 0; }
@@ -8202,7 +8202,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 .bulk-fwd:disabled { opacity: .5; cursor: default; }
 .bulk-fwd:hover:not(:disabled) { filter: brightness(1.14); }
 .fwd-more { color: var(--mut); }
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .bulk-fwd { padding: 10px 12px; min-height: 44px; }
 }
 
@@ -8424,7 +8424,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .servers,
   .channels,
   .dm-side,
@@ -8817,7 +8817,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .servers {
     width: 84px;
     padding: calc(12px + env(safe-area-inset-top)) 10px 12px;
@@ -9384,7 +9384,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   background: color-mix(in srgb, var(--red, #ed4245) 88%, #000 12%);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .pqs2-overlay,
   .modal-overlay,
   .pc-backdrop {
@@ -10006,7 +10006,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .servers {
     width: 72px;
     padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));
@@ -10333,7 +10333,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   text-overflow: ellipsis;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
   .pfr-main.no-activity .pfr-empty-state {
     min-height: 250px;
     padding: 24px 12px 20px;
@@ -10366,5 +10366,109 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 
   .pfr-reach-person {
     min-height: 64px;
+  }
+}
+
+/* Server image avatars keep a circular active outline. */
+.servers .srv.has-avatar,
+.servers .srv.has-avatar:hover,
+.servers .srv.has-avatar.on {
+  border-radius: 50%;
+  overflow: hidden;
+  background-clip: padding-box;
+}
+
+.att-group.grid .msg-att {
+  object-fit: contain;
+  background: rgba(0, 0, 0, .16);
+}
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px), (max-width: 1100px) and (max-height: 600px) {
+  body.mob-nav-open .channels,
+  body.mob-nav-open .dm-side {
+    right: auto;
+    width: min(320px, calc(100% - 112px));
+    max-width: 320px;
+  }
+
+  .servers .srv {
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    min-height: 52px;
+    border-radius: 11px;
+  }
+
+  .mob-burger,
+  .pfr-addfriend,
+  .ph2-btns .pin-btn,
+  .ph2-btns .call-start,
+  .dm-sec-plus,
+  .dm-top-plus,
+  .pfr-cbtn,
+  .me .me-ic,
+  .me .me-out {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .dm-item.on .dm-item-x,
+  .ch.on .ch-acts,
+  .ch.on .ch-acts button,
+  .att-editwrap .att-edit-btn,
+  .md-codewrap .md-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .ch.on .ch-acts button,
+  .att-editwrap .att-edit-btn,
+  .md-codewrap .md-copy {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .pqs2-x,
+  .pqs-optrow .pqs2-btn,
+  .pqs-optrow button:not(.pqs-toggle),
+  .plug-actions > button,
+  .plug-bg-row button,
+  .cat-acts > button,
+  .grant-claim button,
+  .grant-item-a button,
+  .grant-item-code button,
+  .grant-acts .pqs2-btn,
+  .pfr-reach-head > button,
+  .mus-mini button,
+  .lb-tools button,
+  .cmp-ask-row .pqs2-btn,
+  .ph2-btns button,
+  .forum-card-act button,
+  .cset-tri button,
+  .flow-tools button,
+  .plugapp-body .plugpanel-btn,
+  .plugapp-body button,
+  .sc-node-a button,
+  .composer .attach-btn,
+  .composer .cin-act > button,
+  .grant-claim .modal-in,
+  .grant-num,
+  .grant-note-in {
+    min-height: 44px;
+  }
+
+  .composer .attach-btn,
+  .composer .cin-act > button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 }
