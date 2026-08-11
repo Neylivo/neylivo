@@ -1564,7 +1564,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       <main className={'chat' + ((voice || connecting) && voicePanel ? ' voicemode' : '')}>
         {/* v1.31.0: панель канала 1-в-1 как в Discord — слева # имя, справа ветки / колокольчик / пины / участники. Поиск — Ctrl+F. */}
         <header className="chat-head ph2">
-          <button className="mob-burger" onClick={() => { if (IS_MOBILE) { setCurChannel(null); document.body.classList.remove('chat-open') } else openMobNav() }} title={IS_MOBILE ? 'Назад к каналам' : 'Меню'}><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
+          <button className="mob-burger" onClick={openMobNav} title="Меню"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg></button>
           <span className="ph2-hash">{((voice || connecting) && voicePanel) || (curChannel as any)?.kind === 'voice' ? <Icon name="volume" size={20} /> : isForum(curChannel) ? <Icon name="threads" size={20} /> : '#'}</span>
           {(() => {
             const hc: any = voice && voicePanel ? voice.ch : (connecting && voicePanel ? connecting : curChannel)

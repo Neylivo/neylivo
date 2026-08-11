@@ -46,31 +46,35 @@ import { listBlockedByMe, unblockUser, type BlockedEntry } from '../lib/block'
 // v1.50.0: настройки 1-в-1 как в новом Discord — панель поверх приложения,
 // слева сайдбар (карточка профиля, поиск, разделы с иконками и подпунктами),
 // справа прокручиваемое содержимое секциями со строками «Изменить».
-const NAV: { group: string | null; items: { k: string; label: string; icon: string }[] }[] = [
-  { group: null, items: [
+// v1.548.0: у каждого раздела появилась подпись — макет владельца.
+// Подпись отвечает на вопрос «а это про что», который иначе выясняют
+// нажатием: половина названий («Активность», «Дополнительно») сама по себе
+// не говорит ничего. Пишем в них ровно то, что внутри есть на самом деле.
+const NAV: { group: string | null; items: { k: string; label: string; icon: string; sub?: string }[] }[] = [
+  { group: 'Аккаунт', items: [
     // v1.391.0: подпунктов «Информация об учётной записи» и «Пароль и безопасность»
     // больше нет. Они открывали тот же самый раздел и лишь прокручивали его к
     // заголовку, который и так виден целиком, — два лишних нажатия за то, что
     // и без них перед глазами.
-    { k: 'account', label: 'Учётная запись', icon: 'user' },
-    { k: 'profile', label: 'Профиль', icon: 'edit' },
-    { k: 'privacy', label: 'Данные и конфиденциальность', icon: 'shield' },
+    { k: 'account', label: 'Учётная запись', icon: 'user' , sub: 'Почта, имя, пароль, привязки' },
+    { k: 'profile', label: 'Профиль', icon: 'edit' , sub: 'Аватар, о себе, статус' },
+    { k: 'privacy', label: 'Данные и конфиденциальность', icon: 'shield' , sub: 'Что хранится и кто это видит' },
     // v1.536.0: откуда заходили в аккаунт, экстренная заморозка и код
     // восстановления. Помешать чужому входу нельзя — можно сделать его заметным.
-    { k: 'devices', label: 'Устройства и безопасность', icon: 'lock' },
-    { k: 'notifications', label: 'Уведомления', icon: 'bell' },
+    { k: 'devices', label: 'Устройства и безопасность', icon: 'lock' , sub: 'Входы, доверенные устройства, код восстановления' },
+    { k: 'notifications', label: 'Уведомления', icon: 'bell' , sub: 'Что и когда показывать' },
   ] },
   { group: 'Настройки приложения', items: [
-    { k: 'appearance', label: 'Внешний вид', icon: 'image' },
-    { k: 'chat', label: 'Чат', icon: 'message' },
-    { k: 'voice', label: 'Голос и видео', icon: 'mic' },
-    { k: 'sounds', label: 'Звуки', icon: 'volume' },
-    { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' },
-    { k: 'language', label: 'Язык', icon: 'compass' },
-    { k: 'activity', label: 'Активность', icon: 'gamepad' },
+    { k: 'appearance', label: 'Внешний вид', icon: 'image' , sub: 'Тема, цвета, скругления, шрифт' },
+    { k: 'chat', label: 'Чат', icon: 'message' , sub: 'Сообщения, вложения, предпросмотр' },
+    { k: 'voice', label: 'Голос и видео', icon: 'mic' , sub: 'Микрофон, камера, звонки' },
+    { k: 'sounds', label: 'Звуки', icon: 'volume' , sub: 'Громкость и звуки событий' },
+    { k: 'keybinds', label: 'Горячие клавиши', icon: 'zap' , sub: 'Быстрые действия с клавиатуры' },
+    { k: 'language', label: 'Язык', icon: 'compass' , sub: 'Русский · другие языки' },
+    { k: 'activity', label: 'Активность', icon: 'gamepad' , sub: 'Игры, статус, присутствие' },
     // v1.538.0: запись последних секунд экрана.
-    { k: 'clips', label: 'Клипы с экрана', icon: 'video' },
-    { k: 'advanced', label: 'Дополнительно', icon: 'gear' },
+    { k: 'clips', label: 'Клипы с экрана', icon: 'video' , sub: 'Запись последних секунд экрана' },
+    { k: 'advanced', label: 'Дополнительно', icon: 'gear' , sub: 'Для тех, кому нужно глубже' },
   ] },
   // v1.339.0: плагины и боты стоят рядом и в разделе «Другое».
   // Раньше плагины лежали среди настроек приложения, а боты — под заголовком
@@ -79,15 +83,15 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
   // нужен, — ставить чужое умеет кто угодно, программировать для этого не надо.
   { group: 'Другое', items: [
     // v1.286.0: плагины — расширения интерфейса, ставятся на это устройство.
-    { k: 'plugins', label: 'Плагины', icon: 'cube' },
+    { k: 'plugins', label: 'Плагины', icon: 'cube' , sub: 'Расширения интерфейса' },
     // v1.497.0: мастерская приложений. Стоит рядом с плагинами и ботами
     // намеренно: это соседнее дело того же человека — сделать своё, — но дело
     // ДРУГОЕ. Плагин вписывается в Ponoi, приложение живёт в своём окне, и
     // делают его иначе: файлами, с показом и консолью рядом.
-    { k: 'workshop', label: 'Мастерская', icon: 'wand' },
+    { k: 'workshop', label: 'Мастерская', icon: 'wand' , sub: 'Свои приложения' },
     // v1.335.0: было «Мои приложения» — название из Discord, но у нас за ним
     // прячутся именно боты, и по слову «приложения» их никто не искал.
-    { k: 'devportal', label: 'Боты', icon: 'code' },
+    { k: 'devportal', label: 'Боты', icon: 'code' , sub: 'Свои боты' },
   ] },
 ]
 
@@ -712,7 +716,10 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                     {items.map(i => (
                       <div key={i.k}>
                         <button className={'pqs2-item' + (cat === i.k ? ' on' : '')} onClick={() => { setCat(i.k); setMobNavOpen(false) }}>
-                          <span className="pqs2-item-ic"><Icon name={i.icon} size={16} /></span>{i.label}
+                          <span className="pqs2-item-ic"><Icon name={i.icon} size={16} /></span>
+                          <span className="pqs2-item-tx">{i.label}
+                            {i.sub && <small className="pqs2-item-sub">{i.sub}</small>}
+                          </span>
                           {IS_MOBILE && <Icon name="chevron-right" size={16} className="pqs2-item-chev" />}
                         </button>
                       </div>

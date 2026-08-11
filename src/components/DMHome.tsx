@@ -1498,7 +1498,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
       <main className={'chat' + (!active && !activeGroup ? ' pfr-chat' : '')}>
         {(active || activeGroup) ? <>
-          <header className="chat-head ph2"><button className="mob-burger" onClick={() => { if (IS_MOBILE) { setActive(null); setActiveGroup(null) } else openMobNav() }} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
+          <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
             {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : (
               // v1.232.0: клик по нику/аватарке в шапке ЛС открывает полный профиль
               // (ProfileCard), как в Discord — раньше шапка была просто текстом.

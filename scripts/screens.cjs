@@ -286,6 +286,20 @@ const ТЕЛЕФОН_ТРЕКОТЕКА = `<div class="mus2-lib"><div class="mus
   </div>
 </div></div>`
 
+
+// v1.548.0: настройки на телефоне. Разметка списана с Settings.tsx (pqs2-nav).
+const ТЕЛЕФОН_НАСТРОЙКИ = `<div class="app-viewport"><div class="pqs2">
+  <aside class="pqs2-side">
+    <button class="pqs2-me"><span class="av" style="width:44px;height:44px"></span>
+      <span class="pqs2-me-tx"><b>guchipon</b><span>Редактировать профиль…</span></span></button>
+    <div class="pqs2-search">&#9906;<input placeholder="Поиск по настройкам…"></div>
+    <div class="pqs2-nav">
+      <div><div class="pqs2-grp">Аккаунт</div><div><button class="pqs2-item on"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Учётная запись<small class="pqs2-item-sub">Почта, имя, пароль, привязки</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Профиль<small class="pqs2-item-sub">Аватар, о себе, статус</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Данные и конфиденциальность<small class="pqs2-item-sub">Что хранится и кто это видит</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Устройства и безопасность<small class="pqs2-item-sub">Входы, доверенные устройства</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Уведомления<small class="pqs2-item-sub">Что и когда показывать</small></span><span class="pqs2-item-chev">&#8250;</span></button></div></div>
+      <div><div class="pqs2-grp">Настройки приложения</div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Внешний вид<small class="pqs2-item-sub">Тема, цвета, скругления, шрифт</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Чат<small class="pqs2-item-sub">Сообщения, вложения, предпросмотр</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Голос и видео<small class="pqs2-item-sub">Микрофон, камера, звонки</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Звуки<small class="pqs2-item-sub">Громкость и звуки событий</small></span><span class="pqs2-item-chev">&#8250;</span></button></div><div><button class="pqs2-item"><span class="pqs2-item-ic">&#9673;</span><span class="pqs2-item-tx">Язык<small class="pqs2-item-sub">Русский · другие языки</small></span><span class="pqs2-item-chev">&#8250;</span></button></div></div>
+    </div>
+  </aside>
+</div></div>`
+
 /** Все экраны: имя, разметка и удобный размер окна. */
 function экраны() {
   return [
@@ -294,6 +308,7 @@ function экраны() {
     { имя: 'сервер на телефоне', html: СЕРВЕР(true), ш: 412, в: 860 },
     { имя: 'телефон главный', html: ТЕЛЕФОН_ГЛАВНЫЙ, ш: 412, в: 915 },
     { имя: 'телефон трекотека', html: ТЕЛЕФОН_ТРЕКОТЕКА, ш: 412, в: 915 },
+    { имя: 'телефон настройки', html: ТЕЛЕФОН_НАСТРОЙКИ, ш: 412, в: 915 },
     { имя: 'витрина кнопок', html: витрина(), ш: 1000, в: 900 },
     { имя: 'витрина кнопок на телефоне', html: витрина(), ш: 412, в: 900 },
     { имя: 'вход по коду', html: КОД_ВХОДА, ш: 900, в: 820 },
@@ -307,5 +322,5 @@ function экраны() {
   ]
 }
 
-module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, ТЕЛЕФОН_ТРЕКОТЕКА, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
+module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, ТЕЛЕФОН_ТРЕКОТЕКА, ТЕЛЕФОН_НАСТРОЙКИ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
   НАСТРОЙКИ, МЕНЮ, ОКНО, ПЛЕЕР, витрина }

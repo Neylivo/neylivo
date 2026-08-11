@@ -355,110 +355,69 @@ app.whenReady().then(async () => {
   check('колонка каналов тоже на месте, а не уехала шторкой',
     узкоеОкно.каналыX >= 0, JSON.stringify(узкоеОкно))
 
-  // ── Новая навигация телефона (v1.546.0) ───────────────────────────────────
+  // ── Навигация телефона: шторка ────────────────────────────────────────────
   //
-  // Раньше здесь проверялась ШТОРКА: бургер выдвигал рейку и список поверх
-  // переписки. По макету владельца всё наоборот — рейка и список стоят всегда,
-  // а переписка выезжает поверх них. Старые проверки стерегли то, чего больше
-  // нет, поэтому они не «поправлены», а заменены: стеречь надо новое обещание.
-  //
-  // Что обещано: с первого взгляда видны разделы и беседы; переписки не видно,
-  // пока её не открыли; открытая переписка закрывает список целиком; выйти из
-  // неё можно кнопкой в шапке.
+  // В v1.546.0 навигация была перекроена (список экраном, переписка поверх), в
+  // v1.548.1 откатана по слову владельца: на его телефоне это оказалось
+  // нерабочим. Проверки вернулись к тому, что есть: шторка по кнопке меню.
   win.setContentSize(412, 915)
   await win.loadFile(DIST)
   await сенсорВключить(true)
   await new Promise(r => setTimeout(r, 500))
   const оболочка = `<div class="app-viewport"><div class="app">
-    <nav class="servers"><div class="rail2">
-      <div class="rail2-logo">Ponoi</div>
-      <button id="р-главная" class="rail2-item"><span>Главная</span></button>
-      <button id="р-друзья" class="rail2-item on"><span>Друзья</span></button>
-      <button class="rail2-item"><span>Открыть</span></button>
-      <button class="rail2-item"><span>Трекотека</span></button>
-      <button class="rail2-item"><span>Приложения</span></button>
-      <div class="rail2-bottom"><button class="rail2-round">п</button><button class="rail2-round">н</button></div>
-    </div></nav>
+    <nav class="servers"><div class="srv-wrap on"><button id="сервер" class="srv on">П</button></div></nav>
+    <div class="mob-backdrop"></div>
     <aside class="dm-side">
       <div class="dm-top"><div class="dm-top-head"><div class="dm-top-title">Сообщения</div>
         <button class="dm-top-round">п</button><button class="dm-top-round">+</button></div>
         <div class="dm-top-row"><button class="dm-findbtn">Найти или начать беседу</button></div></div>
-      <div class="dm-chips"><button class="dm-chip on">Друзья</button>
-        <button class="dm-chip">Запросы</button><button class="dm-chip">Заблокированные</button></div>
       <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
-      <div id="беседа" class="dm-item"><span class="av" style="width:48px;height:48px"></span>
+      <div class="dm-item"><span class="av" style="width:48px;height:48px"></span>
         <span class="dm-nm">Ваня<br><small class="mut">В сети</small></span>
         <button class="dm-item-more">…</button></div>
-      <div class="me"><span class="av" style="width:40px;height:40px"></span>
-        <span class="me-nm">nubas<br><small class="mut">В сети</small></span>
-        <button class="me-ic">M</button><button class="me-out">G</button></div>
     </aside>
     <main class="chat"><header class="chat-head ph2">
-      <button id="назад" class="mob-burger">‹</button><span class="ch-title">Ваня</span></header>
+      <button id="бургер" class="mob-burger">≡</button><span class="ch-title">Ваня</span></header>
       <div class="msgs"><div class="msg"><div class="msg-body"><div class="att-group grid"><img class="msg-att" alt="Проверка вложения" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='120'%3E%3Crect width='320' height='120' fill='%235865f2'/%3E%3C/svg%3E"></div></div></div></div>
     </main></div></div>`
   await win.webContents.executeJavaScript(`(() => {
     document.body.className = 'no-anim'
     document.body.innerHTML = ${JSON.stringify(оболочка)}
-    // Признак ставит приложение (DMHome/ServerView) при выборе собеседника;
-    // здесь его ставит нажатие — проверяется раскладка, а не React.
-    document.querySelector('#беседа').addEventListener('click', () => document.body.classList.add('chat-open'))
-    document.querySelector('#назад').addEventListener('click', () => document.body.classList.remove('chat-open'))
+    document.querySelector('#бургер').addEventListener('click', () => document.body.classList.add('mob-nav-open'))
+    document.querySelector('.mob-backdrop').addEventListener('click', () => document.body.classList.remove('mob-nav-open'))
   })()`)
 
-  const клик2 = async сел => {
-    const p = await win.webContents.executeJavaScript(`(() => { const r = document.querySelector(${JSON.stringify('!')}.replace('!', ${JSON.stringify(сел)})).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
-    win.webContents.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
-    win.webContents.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
-    await new Promise(r => setTimeout(r, 260))
-  }
-  const мерка = async сел => JSON.parse(await win.webContents.executeJavaScript(`(() => {
+  const мерка2 = async сел => JSON.parse(await win.webContents.executeJavaScript(`(() => {
     const el = document.querySelector(${JSON.stringify('!')}.replace('!', ${JSON.stringify(сел)}))
     if (!el) return JSON.stringify(null)
     const r = el.getBoundingClientRect()
-    return JSON.stringify({ x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width),
-      h: Math.round(r.height), право: Math.round(r.right), низ: Math.round(r.bottom) })
+    return JSON.stringify({ x: Math.round(r.x), w: Math.round(r.width), h: Math.round(r.height) })
   })()`))
+  const клик3 = async сел => {
+    const p = await win.webContents.executeJavaScript(`(() => { const r = document.querySelector(${JSON.stringify('!')}.replace('!', ${JSON.stringify(сел)})).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+    await new Promise(r => setTimeout(r, 280))
+  }
 
-  console.log('\n── Навигация телефона: рейка, список, переписка ──')
-  const рейка2 = await мерка('.servers')
-  check('рейка разделов видна сразу, без нажатий', !!рейка2 && рейка2.x >= 0 && рейка2.w >= 70,
-    JSON.stringify(рейка2))
-  const список = await мерка('.dm-side')
-  check('список бесед — это главный экран', !!список && список.x >= рейка2.w - 1 && список.w > 200,
-    JSON.stringify(список))
-  const переписка = await мерка('.chat')
-  check('переписки не видно, пока её не открыли', переписка.x >= 411, 'слева ' + переписка.x)
-
-  await клик2('#беседа')
-  const открыта = await мерка('.chat')
-  const класс = await win.webContents.executeJavaScript('document.body.className')
-  check('нажатие на беседу открывает переписку', /chat-open/.test(класс) && открыта.x <= 1,
-    класс + ', слева ' + открыта.x)
-  check('открытая переписка закрывает список целиком',
-    открыта.w >= 411 && открыта.h >= 900, открыта.w + 'x' + открыта.h)
-  const назадВидна = await мерка('#назад')
-  check('в переписке есть кнопка «назад» не мельче пальца',
-    !!назадВидна && назадВидна.w >= 24 && назадВидна.h >= 24, JSON.stringify(назадВидна))
-
-  await клик2('#назад')
-  const закрыта = await мерка('.chat')
-  const класс2 = await win.webContents.executeJavaScript('document.body.className')
-  check('«назад» возвращает к списку', !/chat-open/.test(класс2) && закрыта.x >= 411,
-    класс2 + ', слева ' + закрыта.x)
-
-  const разделы = JSON.parse(await win.webContents.executeJavaScript(`(() => {
-    const из = []
-    for (const el of document.querySelectorAll('.rail2-item')) {
-      const r = el.getBoundingClientRect()
-      из.push({ имя: el.textContent.trim(), w: Math.round(r.width), h: Math.round(r.height),
-        видно: r.right > 0 && r.left < innerWidth })
-    }
-    return JSON.stringify(из)
-  })()`))
-  check('все пять разделов видны и не мельче пальца',
-    разделы.length === 5 && разделы.every(р => р.видно && р.h >= 44),
-    разделы.map(р => р.имя + ' ' + р.h).join(', '))
+  console.log('\n── Навигация телефона: шторка ──')
+  const доОткрытия = await мерка2('.servers')
+  check('шторка спрятана, пока её не позвали', доОткрытия.x < -10, 'рейка слева ' + доОткрытия.x)
+  await клик3('#бургер')
+  const после = await мерка2('.servers')
+  check('кнопка меню выдвигает шторку', после.x >= -1, 'рейка слева ' + после.x)
+  const список = await мерка2('.dm-side')
+  check('вместе с рейкой виден и список бесед', список.x >= 0, 'список слева ' + список.x)
+  // Нажимать надо там, где затемнение СВОБОДНО: в середине над ним лежит сама
+  // шторка, и попадание туда её не закрывает — оно попадает в панель.
+  {
+    const r = JSON.parse(await win.webContents.executeJavaScript(`(() => { const b = document.querySelector('.mob-backdrop').getBoundingClientRect(); return JSON.stringify({ x: Math.round(b.right - 12), y: Math.round(b.top + b.height / 2) }) })()`))
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: r.x, y: r.y, button: 'left', clickCount: 1 })
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: r.x, y: r.y, button: 'left', clickCount: 1 })
+    await new Promise(r2 => setTimeout(r2, 280))
+  }
+  const закрыто = await мерка2('.servers')
+  check('нажатие вне шторки её закрывает', закрыто.x < -10, 'рейка слева ' + закрыто.x)
 
   const imageFit = await win.webContents.executeJavaScript(`getComputedStyle(document.querySelector('.att-group.grid .msg-att')).objectFit`)
   check('вложенная картинка показывается целиком', imageFit === 'contain', imageFit)

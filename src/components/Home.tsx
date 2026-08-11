@@ -582,42 +582,6 @@ export function Home() {
     <PresenceProvider username={username} avatarUrl={avatarUrl}>
     <div className="app">
       <nav className="servers">
-        {/* v1.546.0: на телефоне рейка — это разделы, а не серверы (макет
-            владельца). Серверы никуда не деваются: они переехали в «Главную»,
-            иначе на телефоне доступ к ним просто пропал бы. На компьютере этих
-            пунктов нет вовсе — там рейка остаётся рейкой серверов. */}
-        <div className="rail2">
-          <div className="rail2-logo">Ponoi</div>
-          <button className={'rail2-item' + (view.kind === 'home' ? ' on' : '')}
-            onClick={() => setView({ kind: 'home' })}>
-            <Icon name="home" size={22} /><span>Главная</span>
-          </button>
-          <button className={'rail2-item' + (view.kind === 'dm' ? ' on' : '')}
-            onClick={() => setView({ kind: 'dm' })}>
-            <Icon name="users" size={22} /><span>Друзья</span>
-          </button>
-          <button className="rail2-item" onClick={() => setShowFind(true)}>
-            <Icon name="compass" size={22} /><span>Открыть</span>
-          </button>
-          <button className={'rail2-item' + (view.kind === 'music' ? ' on' : '')}
-            onClick={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}>
-            <Icon name="music" size={22} /><span>Трекотека</span>
-          </button>
-          <button className="rail2-item"
-            onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-settings', { detail: { section: 'plugins' } }))}>
-            <Icon name="cube" size={22} /><span>Приложения</span>
-          </button>
-          <div className="rail2-bottom">
-            <button className="rail2-round" title="Поиск"
-              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
-              <Icon name="search" size={18} />
-            </button>
-            <button className="rail2-round" title="Настройки"
-              onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-settings'))}>
-              <Icon name="gear" size={18} />
-            </button>
-          </div>
-        </div>
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
           <RailTip text="Личные сообщения">
             <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
