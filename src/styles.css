@@ -3019,6 +3019,23 @@ body.no-anim .member-typing i { animation:none; }
 /* ===== v1.29.0: экран звонка 1-в-1 как в Discord ===== */
 .c2-wrap { position:relative; flex:none; display:flex; flex-direction:column; background:#000; height:290px;
   border-bottom:1px solid rgba(var(--ov, 255,255,255),.06); }
+
+/* v1.552.0: звонок ЧЁРНЫЙ при любой теме — так видно лица и демонстрацию
+ * экрана. Значит и текст в нём должен считаться от тёмной поверхности, а не
+ * от темы приложения: на светлой var(--tx) становится почти чёрным, и имена
+ * участников пропадали (обход намерил 1,66 при нужных трёх), а подписи
+ * быстрого ряда падали до 2,61.
+ *
+ * Тем же способом уже вылечена карточка входа: поверхность объявляет свою
+ * палитру, и каждый потомок читает её сам — без правки по месту. */
+.c2-wrap {
+  --tx: #dbdee1;
+  --tx-1: #f2f3f5;
+  --tx-2: #b5bac1;
+  --mut: #949ba4;
+  --tx-hi: #ffffff;
+  --ov: 255, 255, 255;
+}
 .c2-wrap:has(.c2-board) { height:48vh; min-height:400px; }
 .c2-wrap.fs { position:fixed; inset:0; z-index:var(--z-call, 80); height:auto; min-height:0; }
 .c2-top { flex:none; display:flex; align-items:center; gap:12px; padding:10px 14px 4px; }
