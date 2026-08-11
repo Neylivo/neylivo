@@ -106,6 +106,15 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
   // друзья, с которыми осталась переписка (см. dmPartnerIds ниже).
   const [nameCache, setNameCache] = useState<Record<string, string>>({})
   const [newConvOpen, setNewConvOpen] = useState(false)
+
+  // v1.546.0: на телефоне переписка выезжает поверх списка, а списком стал
+  // главный экран. Раньше было наоборот: экраном была переписка, а список
+  // выезжал шторкой по бургеру.
+  useEffect(() => {
+    if (!IS_MOBILE) return
+    document.body.classList.toggle('chat-open', !!(active || activeGroup))
+    return () => document.body.classList.remove('chat-open')
+  }, [active, activeGroup])
   // v1.229.0: как в Discord — удаление из друзей не должно прятать диалог. Сайдбар
   // ЛС строится по факту переписки (dm_threads), а не только по списку друзей.
   const [dmPartnerIds, setDmPartnerIds] = useState<string[]>([])
@@ -1385,12 +1394,22 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
       {call && !callRoomShown && <Sinks room={call} meName={username} />}
       <aside className="dm-side">
         <div className="dm-top">
-          {IS_MOBILE && <div className="dm-top-title">Сообщения</div>}
+          {/* v1.546.0: макет владельца — заголовок слева, два круглых значка
+              справа, поле поиска отдельной строкой во всю ширину. */}
+          {IS_MOBILE && <div className="dm-top-head">
+            <div className="dm-top-title">Сообщения</div>
+            <button className="dm-top-round" title="Поиск"
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+              <Icon name="search" size={19} />
+            </button>
+            <button className="dm-top-round" title="Новая беседа" onClick={() => setNewConvOpen(true)}>
+              <Icon name="plus" size={20} />
+            </button>
+          </div>}
           <div className="dm-top-row">
             <button className="dm-findbtn" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
               {IS_MOBILE && <Icon name="search" size={15} />}Найти или начать беседу
             </button>
-            {IS_MOBILE && <button className="dm-sec-plus dm-top-plus" title="Новая беседа" onClick={() => setNewConvOpen(true)}><Icon name="plus" size={18} /></button>}
           </div>
         </div>
         <div className={'dm-navitem' + (!active && !activeGroup ? ' on' : '')} onClick={() => { setActive(null); setActiveGroup(null); closeMobNav() }}>
@@ -1421,6 +1440,16 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               {/* v1.229.0: крестик на наведении — как в Discord, «Закрыть ЛС»: прячет
                   из списка, ничего не удаляет, вернётся само, если собеседник напишет. */}
               <DmPingBadge threadId={dmThreadMap[f.id] ?? getCachedThreadId(f.id)} />
+              {/* v1.546.0: на телефоне вместо крестика — «…», как в макете.
+                  Крестик там был неработоспособен вдвойне: он показывался
+                  только на наведении, которого на телефоне нет вовсе, и
+                  предлагал единственное действие. «…» открывает то же меню,
+                  что и правая кнопка мыши на компьютере. */}
+              {IS_MOBILE && <button className="dm-item-more" title="Ещё" onClick={e => {
+                e.stopPropagation()
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                setDmCtx({ friend: f, x: Math.min(r.left, window.innerWidth - 240), y: r.bottom + 4 })
+              }}><Icon name="dots" size={18} /></button>}
               <button className="dm-item-x" title="Закрыть ЛС" onClick={e => {
                 e.stopPropagation()
                 closeDm(f.id)
@@ -1469,7 +1498,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
 
       <main className={'chat' + (!active && !activeGroup ? ' pfr-chat' : '')}>
         {(active || activeGroup) ? <>
-          <header className="chat-head ph2"><button className="mob-burger" onClick={openMobNav} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
+          <header className="chat-head ph2"><button className="mob-burger" onClick={() => { if (IS_MOBILE) { setActive(null); setActiveGroup(null) } else openMobNav() }} title={IS_MOBILE ? 'Назад' : 'Меню'}>{IS_MOBILE ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>}</button>
             {activeGroup ? <><Icon name="users" size={16} /> {groupLabel(activeGroup)}</> : (
               // v1.232.0: клик по нику/аватарке в шапке ЛС открывает полный профиль
               // (ProfileCard), как в Discord — раньше шапка была просто текстом.

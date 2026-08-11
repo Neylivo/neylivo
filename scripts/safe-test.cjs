@@ -449,6 +449,11 @@ app.whenReady().then(async () => {
   for (const [имя, разметка] of Object.entries(БЛОКИ)) {
     stage.innerHTML = разметка
     document.body.classList.toggle('mob-nav-open', разметка.includes('data-open'))
+    // v1.546.0: по новой навигации переписка стоит за краем, пока её не
+    // открыли. Блок, в котором она есть, обязан её открыть — иначе стенд
+    // мерит припаркованный экран и объявляет поломкой то, что цело.
+    document.body.classList.toggle('chat-open', разметка.includes('class="chat'))
+    document.body.classList.add('no-anim')
     document.querySelectorAll('#stage *').forEach(e => {
       const b = e.getBoundingClientRect()
       if (b.width <= 0 || b.height <= 0) return

@@ -69,7 +69,13 @@ app.whenReady().then(async () => {
   })
   // Приложение помечает тело страницы, пока шторка открыта, — от этой отметки
   // и поднимается строка ввода. Без неё стенд мерил бы не то устройство.
-  await win.webContents.executeJavaScript(`document.body.classList.add('pick-open')`)
+  // v1.546.0: переписка на телефоне стоит за краем экрана, пока её не открыли,
+  // и выезжает переходом. Окно стенда СКРЫТО, а в скрытом окне Chromium
+  // переходы не проигрывает — вычисленный сдвиг навсегда остаётся
+  // начальным. Я на этом потерял время: стенд показывал панель ровно на
+  // ширину экрана правее и выглядело это как поломка вёрстки. Гасим
+  // переходы признаком, который для того и заведён.
+  await win.webContents.executeJavaScript(`document.body.classList.add('pick-open', 'chat-open', 'no-anim')`)
   await new Promise(r => setTimeout(r, 400))
 
   const м = JSON.parse(await win.webContents.executeJavaScript(`(() => {

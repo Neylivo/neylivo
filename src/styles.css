@@ -8372,7 +8372,8 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
      разных выражения разъехались бы, и панель то накрывала бы ввод, то
      оставляла бы под ним щель. */
   .pop-anchor { --pick-h: max(var(--kb, 0px), 46vh); }
-  body.pick-open .chat { padding-bottom: max(var(--kb, 0px), 46vh); }
+  body.pick-open .chat, body.pick-open .app main.chat {
+    padding-bottom: max(var(--kb, 0px), 46vh); }
 
   .pop-anchor .emoji-pop,
   .pop-anchor .gif-pop {
@@ -8818,3 +8819,156 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .bigatt-meta { flex: 1 1 100%; order: -1; }
   .bigatt .pqs2-btn { flex: 1; }
 }
+
+.rail2 { display: none; }
+
+/* ===== v1.546.0: телефон по макету владельца ===== */
+/*
+ * Владелец прислал три снимка и сказал «делай 1 в 1». Первый — главный экран:
+ * слева ПОСТОЯННАЯ рейка разделов с подписями, справа «Сообщения» с поиском,
+ * чипами и списком бесед карточками, внизу — своя карточка с кнопками.
+ *
+ * ЧТО ЭТО МЕНЯЕТ ПО СУЩЕСТВУ. Раньше на телефоне навигация была ШТОРКОЙ:
+ * рейка и список выезжали поверх переписки по нажатию бургера. Теперь они
+ * стоят всегда, а переписка открывается ПОВЕРХ них. То есть местами меняются
+ * не картинки, а главный экран приложения: им становится список, а не чат.
+ *
+ * Рейка на телефоне показывает РАЗДЕЛЫ, а не серверы. Серверы при этом никуда
+ * не делись — они переехали в «Главную» списком (PhoneHome.tsx): пропасть с
+ * телефона они не могли.
+ */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  /* Рейка разделов. Ширина 84 — столько нужно, чтобы подпись «Приложения»
+     помещалась в одну строку и не переносилась. */
+  .rail2 { display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+    width: 100%; height: 100%; padding: 0 8px; }
+  .rail2-logo { font-weight: 800; font-size: 17px; color: var(--tx-hi, #fff);
+    padding: 6px 4px 14px; text-align: center; letter-spacing: .2px; }
+  .rail2-item { display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 2px; margin-bottom: 6px; border-radius: var(--r-lg); background: transparent;
+    color: var(--mut); font-size: 11px; font-weight: 600; line-height: 1.15;
+    min-height: 66px; position: relative; }
+  .rail2-item span { text-align: center; }
+  .rail2-item:active { background: var(--btn-tint); }
+  /* Выбранный раздел: приглушённая подложка и полоса слева — тем же способом,
+     каким в приложении показано всё выбранное. */
+  .rail2-item.on { background: var(--btn-main-soft); color: var(--tx-hi, #fff); }
+  .rail2-item.on::before { content: ''; position: absolute; left: -8px; top: 50%;
+    transform: translateY(-50%); width: 3px; height: 26px; border-radius: 0 3px 3px 0;
+    background: var(--brand); }
+  .rail2-bottom { margin-top: auto; display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: 10px 0 4px; }
+  .rail2-round { width: var(--h-touch); height: var(--h-touch); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--btn-soft); color: var(--tx-2, #b5bac1); }
+
+  /* Рейка стоит всегда, а не выезжает. Значки серверов на телефоне прячутся:
+     их место занял список в «Главной». */
+  .app > .servers { position: static; transform: none; width: 84px; flex: 0 0 84px;
+    padding: calc(8px + env(safe-area-inset-top)) 0 calc(8px + env(safe-area-inset-bottom));
+    overflow: visible; }
+  .servers::after { display: none; }
+  .servers > .srv-wrap, .servers > .srv-sep, .servers > .srv-folder-wrap { display: none; }
+
+  /* Список бесед — это и есть главный экран, а не шторка. */
+  .dm-side, .channels { position: static; transform: none; width: auto; max-width: none;
+    flex: 1; box-shadow: none; }
+  .mob-backdrop { display: none !important; }
+  /* Кнопка в шапке переписки осталась, но означает «назад к списку»:
+     шторки больше нет, а уйти из переписки чем-то надо. */
+  body.chat-open .mob-burger { display: inline-flex; }
+
+  /* Переписка открывается ПОВЕРХ. Признак ставит оболочка, когда выбран
+     собеседник или канал (см. src/lib/mobile.ts). */
+  .app > .chat, .app main.chat { position: fixed; inset: 0; z-index: var(--z-drawer, 61);
+    padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--kb, 0px));
+    transform: translateX(100%); transition: transform .2s var(--ease-out4, ease);
+    background: var(--bg); }
+  body.chat-open .app > .chat, body.chat-open .app main.chat { transform: none; }
+  /* «Главная», «Друзья» и Трекотека — это экраны, а не переписка: они стоят на
+     месте списка и не уезжают. */
+  .app main.ph-home, .app main.pfr-chat { position: static; transform: none; z-index: auto; }
+
+  /* Шапка «Сообщения» и поиск. */
+  .dm-top { padding: 10px 12px 6px; }
+  .dm-top-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+  .dm-top-title { font-size: 26px; font-weight: 800; color: var(--tx-hi, #fff);
+    flex: 1; min-width: 0; text-align: left; }
+  .dm-top-round { flex: none; width: var(--h-touch); height: var(--h-touch);
+    border-radius: var(--r-lg); display: flex; align-items: center; justify-content: center;
+    background: var(--btn-soft); color: var(--tx-2, #b5bac1); }
+  .dm-findbtn { height: var(--h-touch); border-radius: var(--r-2xl); font-size: 15px; }
+
+  /* Строка чипов над списком. */
+  .dm-chips { display: flex; gap: 8px; padding: 4px 12px 10px; overflow-x: auto;
+    scrollbar-width: none; }
+  .dm-chips::-webkit-scrollbar { display: none; }
+  .dm-chip { flex: none; display: inline-flex; align-items: center; gap: 6px;
+    min-height: var(--h-touch); padding: 0 9px; border-radius: var(--r-lg);
+    background: var(--btn-soft); color: var(--tx-2, #b5bac1); font-size: 12px; font-weight: 600;
+    white-space: nowrap; }
+  /* «…» в строке беседы: на телефоне видна всегда — наведения там нет,
+     и всё, что показывается только по нему, недоступно в принципе. */
+  .dm-item-more { flex: none; width: var(--h-touch); height: var(--h-touch); border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center; margin-left: auto;
+    background: transparent; color: var(--mut); }
+  .dm-item-more:active { background: var(--btn-tint); }
+  .dm-item-x { display: none; }
+  .dm-cat .dm-sec-plus { opacity: 1; }
+  .dm-chip.on { background: var(--btn-main-soft); color: var(--tx-hi, #fff);
+    box-shadow: inset 0 0 0 1px var(--brand); }
+  .dm-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+
+  /* Беседы карточками, а не строками списка. */
+  .dm-cat { padding: 0 6px 0 14px; min-height: var(--h-touch); }
+  .dm-item { margin: 0 10px 8px; padding: 10px 12px; border-radius: var(--r-2xl);
+    background: var(--btn-soft); min-height: 72px; gap: 12px; }
+  .dm-item .av, .dm-item .av-wrap, .dm-item img.av { width: 48px; height: 48px; }
+  .dm-item .mut { font-size: 13px; }
+  /* Раздел списка: подпись слева, «плюс» справа — как в макете. */
+  .dm-cat { display: flex; align-items: center; gap: 8px; font-size: 11px;
+    letter-spacing: .6px; color: var(--mut); }
+  .dm-cat .dm-sec-plus { margin-left: auto; width: 32px; height: 32px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center; background: transparent;
+    color: var(--tx-2, #b5bac1); }
+  .dm-item.on { background: var(--btn-soft-h); }
+  .dm-nm { font-size: 15px; font-weight: 700; }
+
+  /* Своя карточка внизу. */
+  .me { margin: 0 10px calc(8px + env(safe-area-inset-bottom)); width: auto;
+    border-radius: var(--r-2xl); background: var(--btn-soft); height: 64px; min-height: 64px;
+    padding: 0 10px 0 12px; gap: 10px; }
+  .me-ic, .me-out { flex: none; width: 40px; height: 40px; min-height: 40px;
+    border-radius: var(--r-lg); background: var(--btn-soft-h); color: var(--tx-2, #b5bac1); }
+  .me .av, .me img.av { width: 40px; height: 40px; }
+  .me-nm { font-size: 15px; }
+  .me .me-nm small { font-size: 12px; }
+}
+
+/* v1.546.0: «Главная» на телефоне — серверы списком.
+ *
+ * По макету рейка на телефоне занята разделами, и значкам серверов там места
+ * нет. Пропасть они не могут, поэтому переехали сюда. Список, а не сетка
+ * кружков: на узком экране рядом с картинкой помещается название, и сервер
+ * узнаётся по имени, а не по двум буквам в кружке. */
+.ph-home { display: flex; flex-direction: column; }
+.ph-head { display: flex; align-items: center; gap: 10px; }
+.ph-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 16px; }
+.ph-sec { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: var(--mut);
+  padding: 10px 2px 8px; }
+.ph-empty { color: var(--mut); font-size: 13px; line-height: 1.5; padding: 4px 2px 12px; }
+.ph-list { display: flex; flex-direction: column; gap: 8px; }
+.ph-row { display: flex; align-items: center; gap: 12px; width: 100%;
+  min-height: 72px; padding: 10px 12px; border-radius: var(--r-2xl);
+  background: var(--btn-soft); color: var(--tx); text-align: left; }
+.ph-row:active { background: var(--btn-soft-h); }
+.ph-av { flex: none; width: 48px; height: 48px; border-radius: var(--r-lg);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--btn-main-soft); color: var(--tx-hi, #fff); font-weight: 700; font-size: 15px; }
+.ph-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ph-nm { font-weight: 700; font-size: 15px; color: var(--tx-hi, #fff);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-sub { font-size: 13px; color: var(--mut); }
+.ph-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.ph-acts .pqs2-btn { min-height: var(--h-touch); justify-content: center; }

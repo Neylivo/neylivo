@@ -61,8 +61,8 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
   <aside class="dm-side">
     <div class="dm-top"><button class="dm-findbtn">Найти беседу</button></div>
     <div class="dm-navitem on">Друзья</div>
-    <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ</div>
-    <div class="dm-item"><span class="av"></span><span class="dm-nm">Ваня</span></div>
+    <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
+    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">Ваня</span></div>
     <div class="dm-item on"><span class="av"></span><span class="dm-nm">Маша</span></div>
     <div class="me"><span class="me-lift"><span class="av"></span></span>
       <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
@@ -220,12 +220,54 @@ const ПЛЕЕР = `<div class="app-viewport"><div class="mus2">
   <div class="mus2-li on"><span class="mus2-li-nm">Второй трек</span><span class="mus2-li-a">Ещё кто-то</span></div>
 </div></div>`
 
+
+// v1.546.0: главный экран телефона по макету владельца. Разметка списана с
+// Home.tsx (rail2) и DMHome.tsx (dm-side): выдуманная показывала бы не то.
+const ТЕЛЕФОН_ГЛАВНЫЙ = `<div class="app-viewport"><div class="app">
+  <nav class="servers"><div class="rail2">
+    <div class="rail2-logo">Ponoi</div>
+    <button class="rail2-item"><span class="ri"></span><span>Главная</span></button>
+    <button class="rail2-item on"><span class="ri"></span><span>Друзья</span></button>
+    <button class="rail2-item"><span class="ri"></span><span>Открыть</span></button>
+    <button class="rail2-item"><span class="ri"></span><span>Трекотека</span></button>
+    <button class="rail2-item"><span class="ri"></span><span>Приложения</span></button>
+    <div class="rail2-bottom">
+      <button class="rail2-round">п</button><button class="rail2-round">н</button>
+    </div>
+  </div></nav>
+  <aside class="dm-side">
+    <div class="dm-top">
+      <div class="dm-top-head">
+        <div class="dm-top-title">Сообщения</div>
+        <button class="dm-top-round">п</button>
+        <button class="dm-top-round">+</button>
+      </div>
+      <div class="dm-top-row">
+        <button class="dm-findbtn">Найти или начать беседу</button>
+      </div>
+    </div>
+    <div class="dm-chips">
+      <button class="dm-chip on">Друзья</button>
+      <button class="dm-chip">Запросы<span class="dm-chip-dot"></span></button>
+      <button class="dm-chip">Заблокированные</button>
+    </div>
+    <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
+    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">yooooori1<br><small class="mut">В сети</small></span><button class="dm-item-more">···</button></div>
+    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">Katih<br><small class="mut">был(а) 2 ч. назад</small></span><button class="dm-item-more">···</button></div>
+    <div class="me"><span class="av" style="width:40px;height:40px"></span>
+      <span class="me-nm">guchipon<br><small class="mut">В сети</small></span>
+      <button class="me-ic me-music">♪</button><button class="me-ic me-mic">M</button>
+      <button class="me-ic me-deaf">H</button><button class="me-out">⚙</button></div>
+  </aside>
+</div></div>`
+
 /** Все экраны: имя, разметка и удобный размер окна. */
 function экраны() {
   return [
     { имя: 'сервер', html: СЕРВЕР(false), ш: 1440, в: 900 },
     { имя: 'друзья', html: ДРУЗЬЯ, ш: 1440, в: 900 },
     { имя: 'сервер на телефоне', html: СЕРВЕР(true), ш: 412, в: 860 },
+    { имя: 'телефон главный', html: ТЕЛЕФОН_ГЛАВНЫЙ, ш: 412, в: 915 },
     { имя: 'витрина кнопок', html: витрина(), ш: 1000, в: 900 },
     { имя: 'витрина кнопок на телефоне', html: витрина(), ш: 412, в: 900 },
     { имя: 'вход по коду', html: КОД_ВХОДА, ш: 900, в: 820 },
@@ -239,5 +281,5 @@ function экраны() {
   ]
 }
 
-module.exports = { экраны, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
+module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
   НАСТРОЙКИ, МЕНЮ, ОКНО, ПЛЕЕР, витрина }

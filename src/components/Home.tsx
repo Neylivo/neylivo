@@ -34,6 +34,7 @@ import { parseSys } from '../lib/sysmsg'
 import { IncomingCall } from './IncomingCall'
 import { InviteModal } from './InviteModal'
 import { IS_MOBILE, openMobNav, closeMobNav } from '../lib/mobile'
+import { PhoneHome } from './PhoneHome'
 import { pushBackTrap } from '../lib/mobileBack'
 import { preloadCallStack } from '../lib/livekit'
 import { ServerTagModal } from './ServerTagModal'
@@ -43,7 +44,7 @@ import { cacheGet, cacheSet } from '../lib/offlineCache'
 import { netOk, netFail } from '../lib/netStatus'
 import { confirmUi } from '../lib/confirm'
 
-type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server }
+type View = { kind: 'dm' } | { kind: 'music' } | { kind: 'server'; server: Server } | { kind: 'home' }
 
 // v1.212.0: красный бейджик с числом на иконке сервера в рейле — как в
 // мобильном Discord. Считает те же bumpMention()/bumpUnread()-события, что уже
@@ -213,7 +214,7 @@ export function Home() {
 
   // v1.56.0: история переходов между разделами — стрелки назад/вперёд в тайтлбаре (как в Discord).
   const sameView = (a: View, b: View) => a.kind === b.kind && (a.kind !== 'server' || (b as any).server?.id === a.server.id)
-  const viewTitle = (v: View) => v.kind === 'dm' ? 'Личные сообщения' : v.kind === 'music' ? 'Ponoi Music' : v.server.name
+  const viewTitle = (v: View) => v.kind === 'dm' ? 'Личные сообщения' : v.kind === 'music' ? 'Ponoi Music' : v.kind === 'home' ? 'Главная' : v.server.name
   const navHist = useRef<{ stack: View[]; idx: number }>({ stack: [view], idx: 0 })
   const navByArrow = useRef(false)
   const broadcastNav = () => {
@@ -581,6 +582,42 @@ export function Home() {
     <PresenceProvider username={username} avatarUrl={avatarUrl}>
     <div className="app">
       <nav className="servers">
+        {/* v1.546.0: на телефоне рейка — это разделы, а не серверы (макет
+            владельца). Серверы никуда не деваются: они переехали в «Главную»,
+            иначе на телефоне доступ к ним просто пропал бы. На компьютере этих
+            пунктов нет вовсе — там рейка остаётся рейкой серверов. */}
+        <div className="rail2">
+          <div className="rail2-logo">Ponoi</div>
+          <button className={'rail2-item' + (view.kind === 'home' ? ' on' : '')}
+            onClick={() => setView({ kind: 'home' })}>
+            <Icon name="home" size={22} /><span>Главная</span>
+          </button>
+          <button className={'rail2-item' + (view.kind === 'dm' ? ' on' : '')}
+            onClick={() => setView({ kind: 'dm' })}>
+            <Icon name="users" size={22} /><span>Друзья</span>
+          </button>
+          <button className="rail2-item" onClick={() => setShowFind(true)}>
+            <Icon name="compass" size={22} /><span>Открыть</span>
+          </button>
+          <button className={'rail2-item' + (view.kind === 'music' ? ' on' : '')}
+            onClick={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}>
+            <Icon name="music" size={22} /><span>Трекотека</span>
+          </button>
+          <button className="rail2-item"
+            onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-settings', { detail: { section: 'plugins' } }))}>
+            <Icon name="cube" size={22} /><span>Приложения</span>
+          </button>
+          <div className="rail2-bottom">
+            <button className="rail2-round" title="Поиск"
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+              <Icon name="search" size={18} />
+            </button>
+            <button className="rail2-round" title="Настройки"
+              onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-settings'))}>
+              <Icon name="gear" size={18} />
+            </button>
+          </div>
+        </div>
         <div className={'srv-wrap' + (view.kind === 'dm' ? ' on' : '')}>
           <RailTip text="Личные сообщения">
             <button className={'srv home' + (view.kind === 'dm' ? ' on' : '')}
@@ -640,7 +677,10 @@ export function Home() {
           Слушаем её здесь, а не в mobile.ts: ловушка живёт ровно пока шторка открыта. */}
       <MobNavBack />
       <div className="mob-backdrop" onClick={closeMobNav} />
-      {(() => { const bv = view.kind === 'music' ? lastView.current : view
+      {view.kind === 'home' && <PhoneHome servers={servers}
+        onOpen={s => { setView({ kind: 'server', server: s }); clearUnread(s.id) }}
+        onCreate={() => setShowCreate(true)} onFind={() => setShowFind(true)} />}
+      {(() => { const bv = view.kind === 'music' || view.kind === 'home' ? lastView.current : view
         const srv = bv.kind === 'server' ? bv.server : lastServer
         // v1.64.0: ЛС и сервер не размонтируются при навигации — активный звонок
         // продолжает жить, неактивный экран просто скрывается.

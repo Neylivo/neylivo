@@ -153,5 +153,36 @@ const скругления = разных('border-radius')
 проверка('разных размеров текста', шрифты.size, 24, [...шрифты].sort((a, b) => parseFloat(a) - parseFloat(b)))
 проверка('разных скруглений в пикселях', скругления.size, 21, [...скругления].sort((a, b) => parseFloat(a) - parseFloat(b)))
 
+// 5. События без слушателей — кнопки, которые не делают ничего.
+//
+// Владелец знает этот вид поломки лучше всех: «настройка есть» ещё не значит
+// «работает». Кнопка шлёт событие, слушателя нет, нажатие проваливается в
+// пустоту — и человек решает, что сломано приложение. На этом я попался в
+// v1.546.0: два раздела в мобильной рейке не делали ровно ничего.
+const шлют = new Map(), слушают = new Set()
+const идтиПоИсходникам = д => {
+  for (const ф of fs.readdirSync(д)) {
+    const п = path.join(д, ф)
+    if (fs.statSync(п).isDirectory()) { идтиПоИсходникам(п); continue }
+    if (!/\.(ts|tsx)$/.test(ф)) continue
+    const т = fs.readFileSync(п, 'utf8')
+    for (const m of т.matchAll(/CustomEvent\(\s*'(ponoi-[\w-]+)'/g)) {
+      if (!шлют.has(m[1])) шлют.set(m[1], п)
+    }
+    // Слушать можно тремя способами: окном, снятием всех слушателей перед
+    // подпиской и мостом настольной части. Считаем все три.
+    for (const m of т.matchAll(/addEventListener\(\s*'(ponoi-[\w-]+)'/g)) слушают.add(m[1])
+    for (const m of т.matchAll(/removeAllListeners\(\s*'(ponoi-[\w-]+)'/g)) слушают.add(m[1])
+    for (const m of т.matchAll(/\bon\(\s*'(ponoi-[\w-]+)'/g)) слушают.add(m[1])
+  }
+}
+идтиПоИсходникам(path.join(__dirname, '..', 'src'))
+const глухие = [...шлют.entries()]
+  .filter(([имя]) => !слушают.has(имя))
+  .map(([имя, где]) => имя + ' (' + path.basename(где) + ')')
+
+console.log('')
+проверка('событий без единого слушателя', глухие.length, 0, глухие)
+
 console.log('\nИТОГ: провалено ' + провал)
 process.exit(провал ? 1 : 0)

@@ -74,6 +74,23 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
   // v1.212.0: на телефоне тап по своей панельке открывает ПОЛНОЭКРАННЫЙ профиль
   // (ProfileCard) напрямую, как в мобильном Discord — маленький попап MiniProfile
   // на тачскрине неудобен. Слушает Home.tsx (см. ponoi-open-my-profile).
+  // v1.546.0: настройки открываются и снаружи — из рейки разделов на телефоне.
+  //
+  // Кнопки в рейке слали событие, которое НИКТО не слушал: нажатие не делало
+  // ровно ничего. Это худший вид поломки — кнопка есть, вида никакого, и
+  // человек решает, что сломано приложение. Ловим событие там, где Settings и
+  // живёт, и заодно принимаем раздел: «Приложения» открывают тот же экран, но
+  // сразу на плагинах.
+  const [настрРаздел, setНастрРаздел] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    const h = (e: Event) => {
+      setНастрРаздел((e as CustomEvent).detail?.section)
+      setSettingsOpen(true)
+    }
+    window.addEventListener('ponoi-open-settings', h)
+    return () => window.removeEventListener('ponoi-open-settings', h)
+  }, [])
+
   const openMe = () => { if (IS_MOBILE) window.dispatchEvent(new CustomEvent('ponoi-open-my-profile')); else setMiniOpen(v => !v) }
   return (
     <div ref={meRef} className={'me' + (plate.outline ? ' plate-outline' : '')} style={plate.outline ? { ['--plate-oc' as any]: plate.outline } : undefined}>
@@ -111,7 +128,7 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
         onAnimationEnd={() => setDeafAnim(false)}
         title="Звук">{deafIsOn ? <Icon name="headphones-off" size={18} /> : <Icon name="headphones" size={18} />}</button>
       <button className="me-out me-lift" onClick={() => setSettingsOpen(true)} title="Настройки пользователя"><Icon name="gear" size={18} /></button>
-      {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <Settings username={username} avatarUrl={avatarUrl} onAvatar={onAvatar} initialCat={настрРаздел} onClose={() => { setSettingsOpen(false); setНастрРаздел(undefined) }} />}
       {miniOpen && user && <MiniProfile
         data={{ userId: user.id, name: username, avatarUrl, status: myStatus, anchor: 'me',
           x: meRef.current?.getBoundingClientRect().left ?? 8,
