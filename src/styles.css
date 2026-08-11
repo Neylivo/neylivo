@@ -72,6 +72,21 @@ body {
   box-shadow:0 24px 60px rgba(10,14,60,.45); display:flex; flex-direction:column; align-items:center;
   animation:pop .25s var(--ease-spring, ease) both; }
 .auth2-card h1 { margin:0; text-align:center; font-size:24px; font-weight:800; color:#fff; }
+
+/* Карточка входа СИНЯЯ при любой теме — у неё свой градиент, не из палитры.
+ * Значит и текст внутри должен считаться от тёмной поверхности, а не от темы
+ * приложения: на светлой теме var(--mut) и var(--tx-2) становятся тёмными, и
+ * подписи на синем пропадали (обход намерил 1,13 у «Назад» и 1,82 у нижней
+ * строки). Объявляем палитру прямо на карточке — и каждый потомок читает её
+ * сам, без единой правки по месту. */
+.auth2-card {
+  --tx: #e7e9ff;
+  --tx-1: #f4f5ff;
+  --tx-2: #d3d7fb;
+  --mut: #c2c7f7;
+  --tx-hi: #ffffff;
+  --ov: 255, 255, 255;
+}
 .auth2-sub { margin:6px 0 0; text-align:center; color:rgba(var(--ov, 255,255,255),.72); font-size:14px; }
 .auth2-fields { display:flex; flex-direction:column; gap:12px; margin-top:24px; width:100%; box-sizing:border-box; }
 .auth2-field { display:flex; align-items:center; gap:10px; background:rgba(0,0,0,.22); border-radius:999px;
@@ -668,7 +683,7 @@ input[type=range] { accent-color:var(--brand); }
 
 /* ===== pass 12: Друзья screen parity, remove pet, mebar controls ===== */
 .pfr-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(var(--ov, 255,255,255),.07);flex-shrink:0;}
-.pfr-title{font-size:20px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px;}
+.pfr-title{font-size:20px;font-weight:800;color:var(--tx-hi, #fff);display:flex;align-items:center;gap:8px;}
 .pfr-tabs{display:flex;gap:6px;margin:0;}
 .pfr-tab{background:transparent;border:none;color:var(--tx-2, #b5bac1);font-size:14px;font-weight:600;padding:6px 12px;border-radius:var(--r-md);cursor:pointer;}
 .pfr-tab:hover{background:rgba(var(--ov, 255,255,255),.06);color:var(--tx-hi, #fff);}
@@ -704,7 +719,7 @@ input[type=range] { accent-color:var(--brand); }
 .pfr-actcard{background:var(--c-panel,#2b2d31);border:1px solid rgba(var(--ov, 255,255,255),.05);border-radius:var(--r-xl);padding:12px 14px;margin-bottom:10px;}
 .pfr-actnm{font-size:15px;font-weight:700;color:var(--tx-1, #f2f3f5);}
 .pfr-actsub{font-size:13px;color:var(--mut);margin-top:2px;}
-.pfr-actempty{font-size:13px;color:#80848e;padding:8px 2px;}
+.pfr-actempty{font-size:13px;color:var(--mut);padding:8px 2px;}
 /* v1.365.0: микрофон, наушники и шестерёнка — один ряд, одна геометрия, один
    цвет из темы.
 
@@ -1172,6 +1187,11 @@ body { font-size: var(--font-px, 16px); }
      темы — на тёмной подпись чуть светлее и ярче, на светлой темнеет сама,
      без отдельной ветки «если тема светлая». */
   --tx-bad: color-mix(in srgb, var(--red) 75%, var(--tx));
+  /* Брендовый ТЕКСТ (имя автора на телефоне, ссылки). Чистый var(--brand) на
+     тёмной подложке даёт разницу 2,8 при нужных трёх — имена в переписке на
+     телефоне читались с трудом. Подмешиваем цвет текста темы: на тёмной буквы
+     светлеют, на светлой темнеют, и остаются брендовыми. */
+  --tx-brand: color-mix(in srgb, var(--brand) 62%, var(--tx));
   /* Поверх картинки и видео: там просвечивающая заливка не читается. */
   --btn-over: rgba(0, 0, 0, .55);
   --btn-over-h: rgba(0, 0, 0, .78);
@@ -2063,7 +2083,7 @@ body.no-anim .member-typing i { animation:none; }
 .mini-avrow { display:flex; align-items:center; gap:10px; margin:-40px 12px 0 16px; position:relative; z-index:2; }
 .mini2 .mini-av { margin:0; width:92px; flex:none; }
 .mini-addstatus { background:#232428; color:var(--tx-2, #b5bac1); border:0; border-radius:var(--r-2xl); padding:11px 16px; cursor:pointer; margin-top:14px; min-width:0; flex:1; display:flex; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,.35); }
-.mini-addstatus:hover { color:#fff; background:var(--bg2); }
+.mini-addstatus:hover { color:var(--tx-hi, #fff); background:var(--bg2); }
 .mini-addstatus-tx { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
 /* Юзернейм с зелёным значком, как на фото */
 /* Общие друзья: стопка мини-аватарок + подпись */
@@ -2129,7 +2149,7 @@ body.no-anim .member-typing i { animation:none; }
 .fp-content { padding:14px 20px 20px; min-height:180px; }
 .fp-empty { color:var(--mut); font-size:14px; display:flex; align-items:center; gap:10px; padding:24px 0; justify-content:center; text-align:center; }
 .fp-game { display:flex; align-items:center; gap:12px; padding:10px; border-radius:var(--r-md); background:rgba(var(--ov, 255,255,255),.04); margin-bottom:8px; }
-.fp-game-ic { width:40px; height:40px; border-radius:var(--r-md); background:#4e5058; color:#b5bac1; display:flex; align-items:center; justify-content:center; flex:none; }
+.fp-game-ic { width:40px; height:40px; border-radius:var(--r-md); background:#4e5058; color:var(--tx-2, #b5bac1); display:flex; align-items:center; justify-content:center; flex:none; }
 .fp-game-nm { font-weight:600; font-size:15px; }
 .fp-srvgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; }
 .fp-srv { display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 6px; border-radius:var(--r-md); cursor:pointer; background:rgba(var(--ov, 255,255,255),.04); }
@@ -2287,7 +2307,7 @@ body.no-anim .member-typing i { animation:none; }
 /* v1.162.0: обложка игры фоном виджета; без обложки — жанровый значок (тот же, что и в «Активности»). */
 .pc-widget.has-cover { background-color:#1c1e26; background-repeat:no-repeat; background-size:auto, cover; background-position:0 0, right center; }
 .pc-widget.has-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,.65), transparent 60%); }
-.pc-widget-ph { position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); width:44px; height:44px; border-radius:50%; background:rgba(var(--ov, 255,255,255),.08); display:flex; align-items:center; justify-content:center; color:#b5bac1; }
+.pc-widget-ph { position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); width:44px; height:44px; border-radius:50%; background:rgba(var(--ov, 255,255,255),.08); display:flex; align-items:center; justify-content:center; color:var(--tx-2, #b5bac1); }
 .pc-skel { position:absolute; top:10px; left:12px; display:flex; flex-direction:column; gap:6px; z-index:1; }
 .pc-skel i { display:block; width:64px; height:7px; border-radius:var(--r-xs); background:rgba(var(--ov, 255,255,255),.1); }
 .pc-skel i:last-child { width:40px; }
@@ -2952,20 +2972,20 @@ body.no-anim .member-typing i { animation:none; }
   padding:0; -webkit-app-region:drag; user-select:none; position:relative; z-index:var(--z-pop, 60); }
 .titlebar .tb-nav { display:flex; align-items:center; gap:2px; padding-left:8px; -webkit-app-region:no-drag; }
 .titlebar .tb-arrow { width:28px; height:24px; display:flex; align-items:center; justify-content:center;
-  border:none; background:transparent; color:#b5bac1; border-radius:var(--r-xs); cursor:pointer; }
-.titlebar .tb-arrow:hover { background:rgba(var(--ov, 255,255,255),.06); color:#f2f3f5; }
+  border:none; background:transparent; color:var(--tx-2, #b5bac1); border-radius:var(--r-xs); cursor:pointer; }
+.titlebar .tb-arrow:hover { background:rgba(var(--ov, 255,255,255),.06); color:var(--tx-1, #f2f3f5); }
 .titlebar .tb-arrow:disabled { opacity:.35; cursor:default; }
-.titlebar .tb-arrow:disabled:hover { background:transparent; color:#b5bac1; }
+.titlebar .tb-arrow:disabled:hover { background:transparent; color:var(--tx-2, #b5bac1); }
 .titlebar .tb-title { position:absolute; left:50%; top:0; height:32px; transform:translateX(-50%);
-  display:flex; align-items:center; font-size:13px; font-weight:600; color:#b5bac1; letter-spacing:.2px;
+  display:flex; align-items:center; font-size:13px; font-weight:600; color:var(--tx-2, #b5bac1); letter-spacing:.2px;
   max-width:46%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; pointer-events:none; }
 .titlebar .tb-right { margin-left:auto; display:flex; align-items:center; height:100%; -webkit-app-region:no-drag; }
 .titlebar .tb-ico { width:32px; height:24px; margin-right:4px; display:flex; align-items:center; justify-content:center;
-  border:none; background:transparent; color:#b5bac1; border-radius:var(--r-xs); cursor:pointer; }
-.titlebar .tb-ico:hover { background:rgba(var(--ov, 255,255,255),.06); color:#f2f3f5; }
+  border:none; background:transparent; color:var(--tx-2, #b5bac1); border-radius:var(--r-xs); cursor:pointer; }
+.titlebar .tb-ico:hover { background:rgba(var(--ov, 255,255,255),.06); color:var(--tx-1, #f2f3f5); }
 .titlebar .tb-winctrls { display:flex; align-items:stretch; height:32px; }
 .titlebar .tb-win { width:46px; height:32px; display:flex; align-items:center; justify-content:center;
-  border:none; background:transparent; color:#b5bac1; cursor:pointer; }
+  border:none; background:transparent; color:var(--tx-2, #b5bac1); cursor:pointer; }
 .titlebar .tb-win:hover { background:rgba(var(--ov, 255,255,255),.08); color:var(--tx-hi, #fff); }
 .titlebar .tb-win.tb-close:hover { background:#e81123; color:#fff; }
 
@@ -3002,17 +3022,17 @@ body.no-anim .member-typing i { animation:none; }
 .c2-wrap:has(.c2-board) { height:48vh; min-height:400px; }
 .c2-wrap.fs { position:fixed; inset:0; z-index:var(--z-call, 80); height:auto; min-height:0; }
 .c2-top { flex:none; display:flex; align-items:center; gap:12px; padding:10px 14px 4px; }
-.c2-status { font-size:13px; font-weight:700; color:#b5bac1; display:inline-flex; align-items:center; gap:7px; }
+.c2-status { font-size:13px; font-weight:700; color:var(--tx-2, #b5bac1); display:inline-flex; align-items:center; gap:7px; }
 .c2-status i { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; }
 .c2-status.connecting i, .c2-status.reconnecting i { background:#faa61a; animation:c2blink 1s ease infinite; }
 @keyframes c2blink { 50% { opacity:.3; } }
-.c2-cnt { display:inline-flex; align-items:center; gap:5px; font-size:13px; color:#80848e; }
+.c2-cnt { display:inline-flex; align-items:center; gap:5px; font-size:13px; color:var(--mut); }
 /* v1.436.0: сколько идёт разговор — цифры не должны «дышать» шириной на каждой
    секунде, поэтому моноширинные. */
-.c2-dur { font-size:13px; color:#b5bac1; font-weight:600; font-variant-numeric:tabular-nums; }
+.c2-dur { font-size:13px; color:var(--tx-2, #b5bac1); font-weight:600; font-variant-numeric:tabular-nums; }
 .c2-flashtag { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#8b8ff5; font-weight:700; }
 .c2-topbtns { margin-left:auto; display:flex; gap:4px; }
-.c2-topbtns button { border:none; background:transparent; color:#b5bac1; width:30px; height:30px; border-radius:var(--r-md);
+.c2-topbtns button { border:none; background:transparent; color:var(--tx-2, #b5bac1); width:30px; height:30px; border-radius:var(--r-md);
   cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
 .c2-topbtns button:hover { background:var(--btn-soft-h); color:var(--tx-hi, #fff); }
 
@@ -3054,16 +3074,16 @@ body.no-anim .member-typing i { animation:none; }
 
 /* Громкость собеседника */
 .c2-vol { display:flex; align-items:center; gap:6px; background:var(--bg3); border:1px solid rgba(var(--ov, 255,255,255),.08);
-  border-radius:var(--r-md); padding:4px 8px; z-index:3; color:#b5bac1; }
+  border-radius:var(--r-md); padding:4px 8px; z-index:3; color:var(--tx-2, #b5bac1); }
 .c2-vol input { width:88px; accent-color:#6366f1; }
 .c2-vol span { font-size:11px; color:var(--mut); min-width:34px; text-align:right; }
 /* v1.183.0: та же громкость, но строкой внутри контекстного меню участника звонка. */
 .c2-pctx { width:230px; }
-.c2-pctx-vol { display:flex; align-items:center; gap:8px; padding:8px 10px; color:#b5bac1; cursor:default; }
+.c2-pctx-vol { display:flex; align-items:center; gap:8px; padding:8px 10px; color:var(--tx-2, #b5bac1); cursor:default; }
 .c2-pctx-vol input { flex:1; accent-color:#6366f1; }
 .c2-pctx-vol span { font-size:12px; color:var(--mut); min-width:34px; text-align:right; }
 
-.c2-waiting { flex:none; text-align:center; color:#80848e; font-size:13px; padding-bottom:4px; }
+.c2-waiting { flex:none; text-align:center; color:var(--mut); font-size:13px; padding-bottom:4px; }
 .dm-call-connecting { display:flex; align-items:center; gap:8px; margin:8px 16px; padding:10px 14px; border-radius:var(--r-md); background:rgba(88,101,242,.12); color:var(--brand); font-size:13px; font-weight:600; }
 .c2-audio-blocked { align-self:center; display:flex; align-items:center; gap:8px; margin:4px 0; padding:8px 16px; border:none; border-radius:20px; background:#faa61a; color:var(--bg3); font-weight:700; font-size:13px; cursor:pointer; }
 .c2-audio-blocked:hover { filter:brightness(1.05); }
@@ -3087,9 +3107,9 @@ body.no-anim .member-typing i { animation:none; }
 .c2-menu { position:absolute; bottom:64px; left:50%; transform:translateX(-50%); width:264px; z-index:var(--z-call3, 82);
   background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-xl); padding:12px;
   box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s var(--ease-spring, ease) both; }
-.c2-menu-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:#80848e; margin:2px 0 8px; }
+.c2-menu-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--mut); margin:2px 0 8px; }
 .c2-qrow { display:flex; gap:6px; margin-bottom:10px; }
-.c2-qrow button { flex:1; border:1px solid rgba(var(--ov, 255,255,255),.08); background:var(--btn-call); color:#b5bac1; border-radius:var(--r-md);
+.c2-qrow button { flex:1; border:1px solid rgba(var(--ov, 255,255,255),.08); background:var(--btn-call); color:var(--tx-2, #b5bac1); border-radius:var(--r-md);
   padding:7px 0; font-size:13px; font-weight:600; cursor:pointer; transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease); }
 .c2-qrow button:hover { background:var(--btn-call-h); color:#fff; }
 .c2-qrow button.on { background:var(--btn-main); border-color:#6366f1; color:#fff; }
@@ -3105,7 +3125,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-srcgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
 .c2-src {
   position:relative; padding:0; border:2px solid transparent; border-radius:var(--r-md);
-  background:var(--bg3); color:#b5bac1; cursor:pointer; overflow:hidden; text-align:left;
+  background:var(--bg3); color:var(--tx-2, #b5bac1); cursor:pointer; overflow:hidden; text-align:left;
   transition:border-color .12s var(--ease-out4, ease), background .12s var(--ease-out4, ease);
 }
 .c2-src:hover { background:#26272b; }
@@ -3124,10 +3144,10 @@ body.no-anim .member-typing i { animation:none; }
 .c2-audio-sw {
   display:flex; align-items:center; gap:8px; width:100%; margin-bottom:8px; cursor:pointer;
   border:1px solid rgba(var(--ov, 255,255,255),.08); border-radius:var(--r-md); background:var(--bg3);
-  color:#b5bac1; font-size:13px; font-weight:600; padding:8px 10px;
+  color:var(--tx-2, #b5bac1); font-size:13px; font-weight:600; padding:8px 10px;
 }
 .c2-audio-sw.on { background:rgba(99,102,241,.18); border-color:#6366f1; color:#fff; }
-.c2-sharehint { font-size:12px; color:#80848e; margin:0 0 8px; }
+.c2-sharehint { font-size:12px; color:var(--mut); margin:0 0 8px; }
 /* «В эфир» не уезжает под нижний край: список окон бывает длинным, и кнопка,
    до которой надо прокручивать, — это кнопка, которую не находят. */
 .c2-sharemenu .c2-go { position:sticky; bottom:0; }
@@ -3161,7 +3181,7 @@ body.no-anim .member-typing i { animation:none; }
    после .2s свойства освобождаются обратно под управление transition. */
 /* v1.222.0: свёрнутая карточка «заползает» за правый край, вместо неё торчит .upd-handle */
 .upd-card.collapsed { transform:translateX(calc(100% + 30px)); opacity:0; pointer-events:none; }
-.upd-collapse { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
+.upd-collapse { border:none; background:transparent; color:var(--mut); cursor:pointer; padding:4px; display:flex; flex:none; }
 .upd-collapse:hover { color:var(--tx); }
 .upd-handle { position:fixed; right:0; bottom:18px; z-index:var(--z-petmenu-ov, 95); width:26px; height:52px; flex:none;
   border:1px solid rgba(var(--ov, 255,255,255),.08); border-right:none; border-radius:var(--r-xl) 0 0 var(--r-xl); background:#111214;
@@ -3186,7 +3206,7 @@ body.no-anim .member-typing i { animation:none; }
   padding:9px 14px; cursor:pointer; flex:none; transition:filter .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease);
   display:inline-block; text-decoration:none; text-align:center; }
 .upd-go:hover { filter:brightness(1.08); }
-.upd-x { border:none; background:transparent; color:#80848e; cursor:pointer; padding:4px; display:flex; flex:none; }
+.upd-x { border:none; background:transparent; color:var(--mut); cursor:pointer; padding:4px; display:flex; flex:none; }
 .upd-x:hover { color:var(--tx); }
 
 /* ==== v1.30.0: звонки как в Discord — входящая модалка, гудки, голос на сервере ==== */
@@ -3252,7 +3272,7 @@ body.no-anim .member-typing i { animation:none; }
 
 /* ==== v1.31.0: верхняя панель канала 1-в-1 как в Discord ==== */
 .chat-head.ph2 { gap:8px; }
-.ph2-hash { color:#80848e; font-size:22px; font-weight:400; line-height:1; flex:none; }
+.ph2-hash { color:var(--mut); font-size:22px; font-weight:400; line-height:1; flex:none; }
 .ph2-name { font-weight:700; color:var(--tx-1, #f2f3f5); font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* v1.263.0: тема канала в шапке (как в Discord) — имя канала не сжимается, тема
    забирает оставшееся место и обрезается первой, если вместе не помещаются. */
@@ -3346,7 +3366,7 @@ body.no-anim .member-typing i { animation:none; }
   .msg.mine .msg-body { background:var(--brand); color:#fff; border-radius:var(--r-2xl) var(--r-2xl) var(--r-sm) var(--r-2xl); }
   .msg.mine.grouped .msg-body { border-radius:var(--r-2xl); }
   .msg.mine .msg-hdr { display:none; }
-  .msg-hdr .nm { font-size:14px; color:var(--brand); }
+  .msg-hdr .nm { font-size:14px; color:var(--tx-brand); }
   .msg-hdr .msg-time, .msg-ts-hover, .msg-edited { display:none; }
   .msg .tg-time { display:block; position:absolute; right:10px; bottom:5px; font-size:11px; color:var(--mut); }
   .msg.mine .tg-time { color:rgba(var(--ov, 255,255,255),.55); }
@@ -3423,7 +3443,7 @@ body.no-anim .member-typing i { animation:none; }
 .sys-call { cursor: default; }
 .sys-call:hover { background: transparent; }
 .sys-call .sys-ic { color:var(--green); }
-.sys-call.missed .sys-ic { color:#80848e; }
+.sys-call.missed .sys-ic { color:var(--mut); }
 .sys-call.missed b { color:#fff; }
 
 /* Панель управления звонком — группа-пилюля, как в Discord. */
@@ -3432,7 +3452,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-grp .c2-btn { width:46px; height:46px; background:transparent; }
 .c2-grp .c2-btn:hover { background:var(--btn-call-h); transform:none; }
 .c2-grp .c2-btn.lit { background:#fff; color:#111214; }
-.c2-caret { border:none; background:transparent; color:#b5bac1; width:22px; height:46px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:var(--r-lg); transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
+.c2-caret { border:none; background:transparent; color:var(--tx-2, #b5bac1); width:22px; height:46px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:var(--r-lg); transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
 .c2-caret:hover, .c2-caret.on { color:var(--tx-hi, #fff); background:rgba(var(--ov, 255,255,255),.08); }
 .c2-grp-sep { width:1px; height:24px; background:rgba(var(--ov, 255,255,255),.08); margin:0 5px; }
 
@@ -3441,7 +3461,7 @@ body.no-anim .member-typing i { animation:none; }
 .c2-dev { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--tx); font-size:13px; padding:9px 10px; border-radius:var(--r-md); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .c2-dev:hover { background:rgba(var(--ov, 255,255,255),.06); }
 .c2-dev.on { color:#fff; background:#6366f1; }
-.c2-dev-empty { color:#80848e; font-size:13px; padding:8px 10px; }
+.c2-dev-empty { color:var(--mut); font-size:13px; padding:8px 10px; }
 
 /* Плитка участника окрашивается в цвет его аватарки (как в Discord). */
 .c2-tile:not(.cam) .c2-tile-av { z-index:1; }
@@ -3560,12 +3580,12 @@ body.no-anim .member-typing i { animation:none; }
   box-shadow:0 8px 24px rgba(0,0,0,.35); transition:border-color .15s var(--ease-out4, ease), box-shadow .15s var(--ease-out4, ease); }
 .fsm-search input:focus { border-color:var(--brand); box-shadow:0 8px 24px rgba(0,0,0,.35), 0 0 0 3px rgba(88,101,242,.25); }
 .fsm-search input::placeholder { color:#6d7178; }
-.fsm-si { position:absolute; left:14px; top:50%; translate:0 -50%; color:#80848e; display:flex; pointer-events:none; }
+.fsm-si { position:absolute; left:14px; top:50%; translate:0 -50%; color:var(--mut); display:flex; pointer-events:none; }
 .fsm-clear { position:absolute; right:10px; top:50%; translate:0 -50%; width:26px; height:26px; border:none; border-radius:50%;
   background:rgba(var(--ov, 255,255,255),.06); color:var(--tx-2, #b5bac1); display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .fsm-clear:hover { background:rgba(var(--ov, 255,255,255),.12); color:var(--tx-hi, #fff); }
 .fsm-body { padding:18px 16px 16px; max-height:380px; overflow:auto; }
-.fsm-sec { font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:#80848e; padding:0 8px 8px; }
+.fsm-sec { font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--mut); padding:0 8px 8px; }
 .fsm-card { display:flex; align-items:center; gap:12px; padding:10px; border-radius:var(--r-md); cursor:pointer; transition:background .12s var(--ease-out4, ease); }
 .fsm-card:hover { background:rgba(var(--ov, 255,255,255),.04); }
 .fsm-av { width:44px; height:44px; border-radius:var(--r-xl); flex:none; color:#fff; font-weight:800; font-size:15px;
@@ -3591,7 +3611,7 @@ body.no-anim .member-typing i { animation:none; }
   background-size:200% 100%; animation:fsm-shimmer 1.2s linear infinite; }
 @keyframes fsm-shimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
 .fsm-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:34px 20px; color:var(--mut); text-align:center; }
-.fsm-empty-ic { width:64px; height:64px; border-radius:50%; background:rgba(var(--ov, 255,255,255),.05); display:flex; align-items:center; justify-content:center; color:#80848e; margin-bottom:6px; }
+.fsm-empty-ic { width:64px; height:64px; border-radius:50%; background:rgba(var(--ov, 255,255,255),.05); display:flex; align-items:center; justify-content:center; color:var(--mut); margin-bottom:6px; }
 .fsm-empty b { color:var(--tx); font-size:15px; }
 .fsm-empty span { font-size:13px; max-width:380px; line-height:1.45; }
 /* ===== v1.49.0: карточка «Играет в» в мини-профиле 1-в-1 как в Discord ===== */
@@ -3641,12 +3661,12 @@ body.no-anim .member-typing i { animation:none; }
 .pqs2-me-tx b { font-size:15px; color:var(--tx-1, #f2f3f5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pqs2-me-tx span { font-size:12px; color:var(--mut); display:flex; align-items:center; gap:4px; }
 .pqs2-search { display:flex; align-items:center; gap:8px; margin:10px 8px 12px; height:32px; padding:0 10px;
-  background:var(--bg3); border-radius:var(--r-md); color:#80848e; }
+  background:var(--bg3); border-radius:var(--r-md); color:var(--mut); }
 .pqs2-search input { flex:1; min-width:0; border:none; background:transparent; outline:none; color:var(--tx); font-size:14px; }
 .pqs2-search input:focus-visible { outline:none; } /* v1.281.0: своя рамка на .pqs2-search:focus-within ниже по файлу, глобальная тут лишняя */
 .pqs2-search input::placeholder { color:#6d7178; }
 .pqs2-nav { display:flex; flex-direction:column; gap:1px; }
-.pqs2-grp { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#80848e; padding:8px 10px 4px; }
+.pqs2-grp { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); padding:8px 10px 4px; }
 .pqs2-item { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:7px 10px; border:none;
   border-radius:var(--r-sm); background:transparent; color:var(--tx-2, #b5bac1); font-size:15px; cursor:pointer; transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
 .pqs2-item:hover { background:rgba(var(--ov, 255,255,255),.05); color:var(--tx); }
@@ -3727,7 +3747,7 @@ body.no-anim .member-typing i { animation:none; }
 .dm-sec-plus:hover { color:#fff; }
 .pfr-vsep { width:1px; height:24px; background:rgba(var(--ov, 255,255,255),.12); margin:0 4px; flex:none; }
 .pfr-search2 { position:relative; display:flex; align-items:center; }
-.pfr-search2 svg { position:absolute; left:12px; color:#80848e; pointer-events:none; }
+.pfr-search2 svg { position:absolute; left:12px; color:var(--mut); pointer-events:none; }
 .pfr-search2 input { padding-left:38px; }
 .pfr-row2 { padding:8px 10px; }
 .pfr-nm2 { display:flex; flex-direction:column; min-width:0; line-height:1.3; }
@@ -3765,7 +3785,7 @@ body.no-anim .member-typing i { animation:none; }
 .pet2-thumb-empty em { font-style:normal; }
 .pet2-pickinfo { min-width:0; }
 .pet2-pickbtns { display:flex; gap:8px; align-items:center; }
-.pet2-formats { color:#80848e; font-size:12px; margin-top:8px; line-height:1.55; }
+.pet2-formats { color:var(--mut); font-size:12px; margin-top:8px; line-height:1.55; }
 .pet2-previews { display:flex; gap:16px; flex-wrap:wrap; }
 .pet2-pv { position:relative; border-radius:var(--r-xl); background:#111214; border:1px solid rgba(var(--ov, 255,255,255),.07);
   overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,.35); }
@@ -3849,7 +3869,7 @@ body.no-anim .pet-burst-emoji { animation: none; }
 .pfr-add2-msg { margin-top:10px; font-size:14px; }
 .pfr-add2-msg.ok { color:#23a55a; }
 .pfr-add2-msg.err { color:#f23f43; }
-.pfr-add2-hint { margin-top:10px; font-size:13px; color:#80848e; }
+.pfr-add2-hint { margin-top:10px; font-size:13px; color:var(--mut); }
 .pfr-add2-hint b { color:var(--tx-2, #b5bac1); cursor:pointer; }
 .pfr-add2-hint b:hover { color:#fff; text-decoration:underline; }
 .pfr-add2-results { margin-top:14px; }
@@ -3887,7 +3907,7 @@ body.no-anim .pet-burst-emoji { animation: none; }
 .ch { padding:6px 8px; margin:1px 0; border-radius:var(--r-xs); font-size:16px; }
 .ch:hover { padding-left:8px; }
 .ch .ch-nm { gap:8px; }
-.ch .ch-nm > svg { color:#80848e; flex:none; }
+.ch .ch-nm > svg { color:var(--mut); flex:none; }
 .ch:hover .ch-nm > svg, .ch.on .ch-nm > svg { color:var(--tx); }
 .ch.on { background:rgba(var(--ov, 255,255,255),.09); }
 /* Иконки действий справа видны и у активного канала, не только при ховере */
@@ -4064,7 +4084,7 @@ button:focus-visible { outline:2px solid var(--brand, #5865f2); outline-offset:2
 .nsfw-gate { display:flex; align-items:center; justify-content:center; }
 .nsfw-gate-box { max-width:420px; text-align:center; padding:32px 24px; display:flex; flex-direction:column; align-items:center; gap:10px; }
 .nsfw-gate-ico { font-size:40px; line-height:1; }
-.nsfw-gate-t { font-size:16px; font-weight:700; color:#f2f3f5; }
+.nsfw-gate-t { font-size:16px; font-weight:700; color:var(--tx-1, #f2f3f5); }
 .nsfw-gate-d { font-size:14px; color:var(--mut); line-height:1.5; }
 .nsfw-gate-box .pqs2-btn { margin-top:10px; }
 
@@ -7255,7 +7275,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .sb-tile:hover .sb-tile-acts, .sb-tile:focus-within .sb-tile-acts { opacity: 1; }
 .sb-mini {
   display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-  border-radius: 6px; background: rgba(0, 0, 0, .45); color: #dbdee1; cursor: pointer;
+  border-radius: 6px; background: rgba(0, 0, 0, .45); color:var(--tx); cursor: pointer;
 }
 .sb-mini:hover { background: rgba(0, 0, 0, .7); color: #fff; }
 .sb-mini.danger:hover { background: var(--red); color: #fff; }
@@ -7278,7 +7298,7 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
 .c2-tile.share:hover .c2-share-ctl { opacity: 1; }
 .c2-share-ctl button {
   display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
-  border: none; border-radius: 7px; background: var(--btn-over); color: #dbdee1; cursor: pointer;
+  border: none; border-radius: 7px; background: var(--btn-over); color:var(--tx); cursor: pointer;
 }
 .c2-share-ctl button:hover { background: var(--btn-over-h); color: #fff; }
 .c2-share-ctl button.on { background: var(--btn-bad); color: #fff; }
@@ -8600,7 +8620,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 .clip-item-main:hover { background: rgba(var(--ov, 255,255,255), .085); }
 .clip-item-main:active { scale: .995; }
 .clip-item-play { flex: none; display: flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px; border-radius: var(--r-md); color: #fff;
+  width: 38px; height: 38px; border-radius: var(--r-md); color: var(--tx-hi, #fff);
   background: rgba(var(--ov, 255,255,255), .08); }
 .clip-item-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .clip-item-nm { font-weight: 600; font-size: 14px; color: var(--tx-hi, #fff);
