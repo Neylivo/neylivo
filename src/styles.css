@@ -8972,3 +8972,53 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 .ph-sub { font-size: 13px; color: var(--mut); }
 .ph-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
 .ph-acts .pqs2-btn { min-height: var(--h-touch); justify-content: center; }
+
+/* ===== v1.547.0: Трекотека на телефоне по макету владельца ===== */
+/*
+ * Второй снимок из трёх. Что взято от макета: крупное название с подзаголовком,
+ * круглые значки в шапке, вкладки-таблетки, треки строками с картинкой,
+ * длительностью и «⋮».
+ *
+ * Чего здесь НЕТ и почему. В макете есть плитки «Любимые» и «Скачанные»,
+ * вкладки «Альбомы» и «Исполнители», полки «Продолжить слушать» и
+ * «Рекомендации». За «любимым» и «скачанным» в приложении не стоит ничего —
+ * ни отметок, ни загрузок на устройство; альбомов у треков тоже нет, есть
+ * только исполнитель. Нарисовать эти плитки значило бы сделать пять кнопок,
+ * которые молчат, — ровно ту поломку, от которой в v1.546.0 заведена отдельная
+ * проверка. Они появятся, когда появится, что за ними открывать.
+ */
+.mus2-lib-ttl { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mus2-lib-sub { display: none; }
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .mus2-lib-head { flex-wrap: wrap; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; }
+  .mus2-lib-ttl { flex: 1; }
+  .mus2-lib-head b { font-size: 24px; font-weight: 800; }
+  .mus2-lib-sub { display: block; font-size: 13px; color: var(--mut); }
+  /* Число треков не должно спорить с названием за место: на телефоне оно
+     уходит под подзаголовок отдельной строкой. */
+  /* Число треков — подпись, а не плашка: во всю ширину она выглядела полосой
+     непонятного назначения. */
+  .mus2-lib-count { order: 5; flex: none; padding: 0; margin: 0; background: none;
+    font-size: 12px; font-weight: 600; color: var(--mut); }
+  /* Треки строками по макету: картинка, название с исполнителем, длительность. */
+  .mus2-lib-body { padding: 4px 10px calc(12px + env(safe-area-inset-bottom)); }
+  .mus2-plrow { min-height: 64px; padding: 8px 10px; gap: 12px; border-radius: var(--r-lg); }
+  .mus2-plrow-art, .mus2-plrow .mus2-card-art { width: 48px; height: 48px; flex: none;
+    border-radius: var(--r-md); background: var(--btn-soft); }
+  .mus2-plrow-nm { flex: 1; min-width: 0; font-size: 15px; font-weight: 600;
+    color: var(--tx-hi, #fff); overflow: hidden; }
+  .mus2-plrow-nm small { display: block; font-size: 13px; font-weight: 400; color: var(--mut); }
+  .mus2-plrow-d { flex: none; font-size: 13px; color: var(--mut); }
+  /* Вкладки — таблетками во всю ширину, как в макете. */
+  .mus2-libtabs { order: 6; flex: 1 0 100%; display: flex; gap: 8px; overflow-x: auto;
+    scrollbar-width: none; }
+  .mus2-libtabs::-webkit-scrollbar { display: none; }
+  .mus2-tab { flex: none; min-height: var(--h-touch); padding: 0 14px; border-radius: var(--r-lg);
+    background: var(--btn-soft); color: var(--tx-2, #b5bac1); font-size: 13px; font-weight: 600;
+    white-space: nowrap; }
+  .mus2-tab.on { background: var(--tx-hi, #fff); color: #16181d; }
+  /* Поиск — отдельной строкой во всю ширину. */
+  .mus2-lib-head .mus2-in { order: 7; flex: 1 0 100%; max-width: none;
+    min-height: var(--h-touch); border-radius: var(--r-2xl); }
+}

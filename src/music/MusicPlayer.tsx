@@ -2853,7 +2853,13 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       {showLib && <Portal><div className="mus2-lib" onClick={() => setShowLib(false)}>
         <div className="mus2-lib-inner" onClick={e => e.stopPropagation()}>
           <header className="mus2-lib-head">
-            <b>Ponoi Music · Трекотека</b>
+            {/* v1.547.0: на телефоне шапка по макету владельца — название,
+                подзаголовок и круглые значки. На компьютере остаётся прежняя
+                строка: там она стоит в один ряд с поиском и вкладками. */}
+            <div className="mus2-lib-ttl">
+              <b>Ponoi Music · Трекотека</b>
+              <span className="mus2-lib-sub">Вся твоя музыка. В одном месте.</span>
+            </div>
             {/* v1.462.0: сколько всего треков — СРАЗУ, а не по мере загрузки.
                 Раньше здесь ничего не было, и человек смотрел, как список
                 бесконечно растёт, не понимая, сколько его ждёт и кончится ли

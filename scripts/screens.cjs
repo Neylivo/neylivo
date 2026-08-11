@@ -261,6 +261,31 @@ const ТЕЛЕФОН_ГЛАВНЫЙ = `<div class="app-viewport"><div class="app
   </aside>
 </div></div>`
 
+
+// v1.547.0: Трекотека на телефоне. Разметка списана с MusicPlayer.tsx (mus2-lib).
+const ТЕЛЕФОН_ТРЕКОТЕКА = `<div class="mus2-lib"><div class="mus2-lib-inner">
+  <header class="mus2-lib-head">
+    <div class="mus2-lib-ttl"><b>Ponoi Music · Трекотека</b>
+      <span class="mus2-lib-sub">Вся твоя музыка. В одном месте.</span></div>
+    <span class="mus2-lib-count">128 треков</span>
+    <div class="mus2-libtabs">
+      <button class="mus2-tab on">Треки</button>
+      <button class="mus2-tab">Плейлисты · 4</button>
+    </div>
+    <input class="mus2-in" placeholder="Поиск по названию или исполнителю…">
+  </header>
+  <div class="mus2-lib-body">
+    <div class="mus2-pllist">
+      <div class="mus2-plrow on"><span class="mus2-plrow-art"></span>
+        <span class="mus2-plrow-nm">MONTAGEM КОЧ БРАТАН<br><small>DJ NASRAL</small></span>
+        <span class="mus2-plrow-d">2:34</span></div>
+      <div class="mus2-plrow"><span class="mus2-plrow-art"></span>
+        <span class="mus2-plrow-nm">Хаммали x DRGS<br><small>Hardstyle</small></span>
+        <span class="mus2-plrow-d">3:12</span></div>
+    </div>
+  </div>
+</div></div>`
+
 /** Все экраны: имя, разметка и удобный размер окна. */
 function экраны() {
   return [
@@ -268,6 +293,7 @@ function экраны() {
     { имя: 'друзья', html: ДРУЗЬЯ, ш: 1440, в: 900 },
     { имя: 'сервер на телефоне', html: СЕРВЕР(true), ш: 412, в: 860 },
     { имя: 'телефон главный', html: ТЕЛЕФОН_ГЛАВНЫЙ, ш: 412, в: 915 },
+    { имя: 'телефон трекотека', html: ТЕЛЕФОН_ТРЕКОТЕКА, ш: 412, в: 915 },
     { имя: 'витрина кнопок', html: витрина(), ш: 1000, в: 900 },
     { имя: 'витрина кнопок на телефоне', html: витрина(), ш: 412, в: 900 },
     { имя: 'вход по коду', html: КОД_ВХОДА, ш: 900, в: 820 },
@@ -281,5 +307,5 @@ function экраны() {
   ]
 }
 
-module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
+module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, ТЕЛЕФОН_ТРЕКОТЕКА, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
   НАСТРОЙКИ, МЕНЮ, ОКНО, ПЛЕЕР, витрина }
