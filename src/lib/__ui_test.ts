@@ -14,7 +14,12 @@ const _store = new Map<string, string>()
   setItem: (k: string, v: string) => { _store.set(k, String(v)) },
   removeItem: (k: string) => { _store.delete(k) }, clear: () => _store.clear(),
 }
-;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null }
+// dispatchEvent в заглушке окна появился не для красоты. Без него confirmUi
+// падал прямо внутри обещания — то есть отказом, который никто не ловит. Пока
+// файл заканчивался сразу, process.exit успевал раньше, чем Node о нём
+// сообщал, и проверка ссылок всё это время делала вид, что спросила
+// человека. Первая же проверка с ожиданием сдвинула выход — и отказ вылез.
+;(globalThis as any).window = { addEventListener: () => {}, removeEventListener: () => {}, open: () => null, dispatchEvent: () => true }
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { readFileSync } from 'node:fs'
@@ -48,7 +53,8 @@ import { wipeSummary } from './wipe'
 import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, codeLooksValid, NEW_DEVICE_LOCK_MS } from './deviceGuard'
 import { signupAllowed, leadingZeroBits, MIN_FILL_MS, MAX_TRIES, TRIES_WINDOW_MS } from './signupGuard'
 import { clampSeconds, trimBuffer, collectClip, bufferedSec, clipName, clipLabel, CLIP_MIN_SEC, CLIP_MAX_SEC } from './clipBuffer'
-import { b32, unb32, qrPayload, parseQr, newCode, qrExpired, qrLeftSec, qrDeviceLabel, validSession, QR_TTL_MS, QR_PREFIX } from './qrLogin'
+import { b32, unb32, qrPayload, parseQr, newCode, qrExpired, qrLeftSec, qrDeviceLabel, validSession, QR_TTL_MS, QR_PREFIX,
+  qrPair, qrPubToB32, qrPubFromB32, qrSharedKey, qrSeal, qrOpen } from './qrLogin'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -85,6 +91,14 @@ let pass = 0, fail = 0
 function check(name: string, fn: () => boolean) {
   let ok = false, err = ''
   try { ok = fn() } catch (e: any) { err = e?.message ?? String(e) }
+  if (ok) { pass++; console.log('  ok   ' + name) }
+  else { fail++; console.log('  ПРОВАЛ ' + name + (err ? ' — ' + err : '')) }
+}
+
+/** То же самое, но для проверок, которым нужно дождаться ответа (шифрование). */
+async function ждём(name: string, fn: () => Promise<boolean>) {
+  let ok = false, err = ''
+  try { ok = await fn() } catch (e: any) { err = e?.message ?? String(e) }
   if (ok) { pass++; console.log('  ok   ' + name) }
   else { fail++; console.log('  ПРОВАЛ ' + name + (err ? ' — ' + err : '')) }
 }
@@ -3512,6 +3526,54 @@ check('за сессию принимается только сессия', () =
   && !validSession({ access_token: 'коротко', refresh_token: 'r'.repeat(20) })
   && !validSession({ access_token: 'a'.repeat(40) })
   && !validSession('строка'))
+
+// Сердце затеи: ключ сходится ТОЛЬКО у своей пары. Без второго утверждения
+// первое ничего не стоит — «расшифровалось» само по себе не значит «расшифровать
+// мог только тот, кому предназначалось».
+await ждём('вход по коду: сессия доходит до своего и только до своего', async () => {
+  const пк = await qrPair()          // компьютер: пара, открытая половина в QR
+  const тел = await qrPair()         // телефон: своя пара
+  const чужой = await qrPair()       // посторонний, подсмотревший заявку в базе
+
+  const pub = await qrPubToB32(пк.publicKey)
+  const ключТелефона = await qrSharedKey(тел.privateKey, await qrPubFromB32(pub))
+  const тело = { access_token: 'a'.repeat(60), refresh_token: 'r'.repeat(40) }
+  const запечатано = await qrSeal(ключТелефона, тело)
+
+  // 1. Свой открывает.
+  const ключПК = await qrSharedKey(пк.privateKey, await qrPubFromB32(await qrPubToB32(тел.publicKey)))
+  const назад = await qrOpen(ключПК, запечатано.iv, запечатано.ct)
+  if (назад.access_token !== тело.access_token || назад.refresh_token !== тело.refresh_token) return false
+
+  // 2. Посторонний, у которого есть ОБЕ открытые половины из базы, — не открывает.
+  //    Это и означает «сервер не может прочитать сессию».
+  const ключЧужого = await qrSharedKey(чужой.privateKey, await qrPubFromB32(await qrPubToB32(тел.publicKey)))
+  try {
+    await qrOpen(ключЧужого, запечатано.iv, запечатано.ct)
+    return false
+  } catch { /* так и надо */ }
+
+  // 3. Испорченный шифротекст тоже не открывается: AES-GCM ловит подмену байта.
+  const порча = запечатано.ct.slice(0, 10) + (запечатано.ct[10] === 'A' ? 'B' : 'A') + запечатано.ct.slice(11)
+  try {
+    await qrOpen(ключПК, запечатано.iv, порча)
+    return false
+  } catch { /* так и надо */ }
+
+  return true
+})
+
+// Настоящий ключ должен пролезать в код и обратно разбираться. Длины в parseQr
+// поставлены руками — если ключ окажется короче ожидаемого, свой же QR перестанет
+// приниматься, и понять это по коду будет нечем.
+await ждём('настоящий ключ проходит через код целиком', async () => {
+  const kp = await qrPair()
+  const pub = await qrPubToB32(kp.publicKey)
+  const код = qrPayload({ code: newCode(), pub })
+  const назад = parseQr(код)
+  return !!назад && назад.pub === pub && (await qrPubFromB32(назад.pub)) !== null
+})
+
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

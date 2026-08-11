@@ -6,6 +6,7 @@ import { confirmUi } from '../lib/confirm'
 import { copyText } from '../lib/copyMedia'
 import { listDevices, trustDevice, forgetDevice, freezeEverywhere, issueRecoveryCode, type DeviceRow } from '../lib/devices'
 import { lockLeft, NEW_DEVICE_LOCK_MS } from '../lib/deviceGuard'
+import { QrScanModal } from './QrScanModal'
 
 // v1.536.0: «Устройства и безопасность» в настройках.
 //
@@ -30,6 +31,7 @@ export function DevicesPanel() {
   const [rows, setRows] = useState<DeviceRow[] | null>(null)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
+  const [сканер, setСканер] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
@@ -114,6 +116,20 @@ export function DevicesPanel() {
           )
         })}
       </div>
+
+      {/* v1.542.0: вход по коду на другом устройстве.
+          Стоит именно здесь, рядом со списком устройств: это тот же разговор —
+          «кого я впускаю в свой аккаунт», только со стороны разрешения. */}
+      <div className="pqs-sec-t">Вход на другом устройстве</div>
+      <div className="pqs2-desc">
+        Открой Ponoi на компьютере, нажми там «Войти по коду с телефона» и наведи камеру на
+        квадратик. Пароль набирать не придётся. Вход шифруется ключом, нарисованным в самом
+        коде: на сервере от него не остаётся ничего, что можно прочитать.
+      </div>
+      <button className="pqs2-btn" onClick={() => setСканер(true)}>
+        <Icon name="camera" size={15} /> Сканировать код входа
+      </button>
+      {сканер && <QrScanModal onClose={() => setСканер(false)} />}
 
       <div className="pqs-sec-t">Экстренная заморозка</div>
       <div className="pqs2-desc">

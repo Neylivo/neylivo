@@ -9,33 +9,10 @@
 // сервере его нет и быть не может — там лежат только две открытые половины и
 // шифротекст.
 import { supabase } from './supabase'
-import { b32, unb32, codeHash, newCode, qrPayload, qrMyDeviceLabel, validSession, type QrSession } from './qrLogin'
-
-const CURVE = 'P-256'
-const AES = 'AES-GCM'
-/** Разделение по назначению: этот же ключ больше нигде не используется. */
-const INFO = 'ponoi-qr-login-v1'
-
-async function пара(): Promise<CryptoKeyPair> {
-  return await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: CURVE }, false, ['deriveBits']) as CryptoKeyPair
-}
-
-async function открытыйВB32(k: CryptoKey): Promise<string> {
-  return b32(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
-}
-
-async function изB32(s: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey('raw', unb32(s).slice(), { name: 'ECDH', namedCurve: CURVE }, false, [])
-}
-
-async function общийКлюч(свой: CryptoKey, чужой: CryptoKey): Promise<CryptoKey> {
-  const биты = await crypto.subtle.deriveBits({ name: 'ECDH', public: чужой }, свой, 256)
-  const hk = await crypto.subtle.importKey('raw', биты, 'HKDF', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode(INFO) },
-    hk, { name: AES, length: 256 }, false, ['encrypt', 'decrypt'],
-  )
-}
+import {
+  codeHash, newCode, qrPayload, qrMyDeviceLabel, qrPair, qrPubToB32, qrPubFromB32,
+  qrSharedKey, qrSeal, qrOpen, type QrSession,
+} from './qrLogin'
 
 export interface QrRequest {
   /** Что печатать в QR-коде. */
@@ -49,8 +26,8 @@ export interface QrRequest {
 
 /** Компьютер: создать заявку и получить содержимое QR-кода. */
 export async function startQrLogin(): Promise<QrRequest> {
-  const kp = await пара()
-  const pub = await открытыйВB32(kp.publicKey)
+  const kp = await qrPair()
+  const pub = await qrPubToB32(kp.publicKey)
   const code = newCode()
   const hash = await codeHash(code)
   const { error } = await supabase.rpc('login_qr_start', {
@@ -70,16 +47,10 @@ export async function claimQrLogin(з: QrRequest): Promise<QrSession | null> {
   if (error) throw error
   const строка = Array.isArray(data) ? data[0] : data
   if (!строка || !строка.sealed_ct) return null
-  const чужой = await изB32(строка.phone_pub)
-  const ключ = await общийКлюч(з.priv, чужой)
-  const открыто = await crypto.subtle.decrypt(
-    { name: AES, iv: unb32(строка.sealed_iv).slice() }, ключ, unb32(строка.sealed_ct).slice(),
-  )
-  const сессия = JSON.parse(new TextDecoder().decode(открыто))
+  const ключ = await qrSharedKey(з.priv, await qrPubFromB32(строка.phone_pub))
   // Расшифровалось — значит, ключ сошёлся, значит, шифровал тот, у кого был наш
-  // QR. Но содержимое всё равно проверяем: мало ли что там окажется.
-  if (!validSession(сессия)) throw new Error('в ответе не сессия')
-  return сессия
+  // QR. Содержимое qrOpen проверяет сам: мало ли что там окажется.
+  return await qrOpen(ключ, строка.sealed_iv, строка.sealed_ct)
 }
 
 export interface QrInfo { pc_pub: string; device: string; expires_at: string }
@@ -109,18 +80,15 @@ export async function approveQrLogin(hash: string, pubИзКода: string): Pro
   const s = сес?.session
   if (!s?.access_token || !s?.refresh_token) throw new Error('нет своей сессии')
 
-  const kp = await пара()
-  const ключ = await общийКлюч(kp.privateKey, await изB32(pubИзКода))
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const телo: QrSession = { access_token: s.access_token, refresh_token: s.refresh_token }
-  const ct = await crypto.subtle.encrypt(
-    { name: AES, iv: iv.slice() }, ключ, new TextEncoder().encode(JSON.stringify(телo)),
-  )
+  const kp = await qrPair()
+  const ключ = await qrSharedKey(kp.privateKey, await qrPubFromB32(pubИзКода))
+  const тело: QrSession = { access_token: s.access_token, refresh_token: s.refresh_token }
+  const запечатано = await qrSeal(ключ, тело)
   const { data, error } = await supabase.rpc('login_qr_approve', {
     p_code_hash: hash,
-    p_phone_pub: await открытыйВB32(kp.publicKey),
-    p_iv: b32(iv),
-    p_ct: b32(new Uint8Array(ct)),
+    p_phone_pub: await qrPubToB32(kp.publicKey),
+    p_iv: запечатано.iv,
+    p_ct: запечатано.ct,
   })
   if (error) throw error
   if (data === false) throw new Error('заявку уже подтвердили или она устарела')

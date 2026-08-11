@@ -166,3 +166,60 @@ export function validSession(x: unknown): x is QrSession {
   return typeof o.access_token === 'string' && o.access_token.length > 20
     && typeof o.refresh_token === 'string' && o.refresh_token.length > 10
 }
+
+// ── Ключи ───────────────────────────────────────────────────────────────────
+//
+// Обе стороны считают общий ключ по Диффи — Хеллману: компьютер делает
+// одноразовую пару и печатает открытую половину в QR, телефон делает свою и
+// кладёт открытую половину в заявку. Общий ключ получается у обоих, а на сервере
+// его нет и быть не может — там лежат только две открытые половины и шифротекст.
+//
+// Живёт здесь, а не рядом с запросами к серверу, ровно затем, чтобы это можно
+// было проверить числами: сходится ли ключ у своей пары и НЕ сходится ли у
+// чужой. Без второго утверждения первое ничего не стоит.
+const CURVE = 'P-256'
+const AES = 'AES-GCM'
+/** Разделение по назначению: этот же общий секрет больше нигде не используется. */
+const INFO = 'ponoi-qr-login-v1'
+
+export async function qrPair(): Promise<CryptoKeyPair> {
+  return await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: CURVE }, false, ['deriveBits'],
+  ) as CryptoKeyPair
+}
+
+export async function qrPubToB32(k: CryptoKey): Promise<string> {
+  return b32(new Uint8Array(await crypto.subtle.exportKey('raw', k)))
+}
+
+export async function qrPubFromB32(s: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', unb32(s).slice(), { name: 'ECDH', namedCurve: CURVE }, false, [])
+}
+
+export async function qrSharedKey(свой: CryptoKey, чужой: CryptoKey): Promise<CryptoKey> {
+  const биты = await crypto.subtle.deriveBits({ name: 'ECDH', public: чужой }, свой, 256)
+  const hk = await crypto.subtle.importKey('raw', биты, 'HKDF', false, ['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode(INFO) },
+    hk, { name: AES, length: 256 }, false, ['encrypt', 'decrypt'],
+  )
+}
+
+/** Запечатать сессию для того, чей открытый ключ нарисован в коде. */
+export async function qrSeal(ключ: CryptoKey, тело: QrSession): Promise<{ iv: string; ct: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt(
+    { name: AES, iv: iv.slice() }, ключ, new TextEncoder().encode(JSON.stringify(тело)),
+  )
+  return { iv: b32(iv), ct: b32(new Uint8Array(ct)) }
+}
+
+/** Распечатать. Бросает, если ключ не тот — это и есть защита от подмены. */
+export async function qrOpen(ключ: CryptoKey, iv: string, ct: string): Promise<QrSession> {
+  const открыто = await crypto.subtle.decrypt(
+    { name: AES, iv: unb32(iv).slice() }, ключ, unb32(ct).slice(),
+  )
+  const сессия = JSON.parse(new TextDecoder().decode(открыто))
+  if (!validSession(сессия)) throw new Error('в ответе не сессия')
+  return сессия
+}

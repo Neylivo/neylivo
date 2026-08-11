@@ -119,6 +119,38 @@ const КЛИПЫ = `<div class="app-viewport"><div class="pqs2" style="padding:2
   </div>
 </div></div>`
 
+// v1.542.0: вход по коду. Квадратик рисуется настоящим кодом — стенд читает ту
+// же библиотеку, что и приложение, поэтому на снимке видно настоящий размер.
+const КОД_ВХОДА = `<div class="auth2" style="background:#2b2d31">
+  <div class="auth2-card">
+    <div class="qr2">
+      <button type="button" class="qr2-back">‹ Назад</button>
+      <h1>Вход по коду</h1>
+      <p class="auth2-sub">Открой Ponoi на телефоне, где ты уже вошёл, и наведи камеру</p>
+      <div class="qr2-box"><canvas id="qr-here" class="qr2-canvas"></canvas></div>
+      <div class="qr2-steps">
+        <div class="qr2-step"><span>1</span> На телефоне: Настройки → Устройства и безопасность</div>
+        <div class="qr2-step"><span>2</span> Нажми «Сканировать код входа»</div>
+        <div class="qr2-step"><span>3</span> Подтверди, что это ты</div>
+      </div>
+      <div class="qr2-hint">Код обновится через 104 с — так его нельзя подсмотреть заранее.</div>
+      <div class="auth2-legal">Пароль при этом не передаётся никуда. Телефон шифрует вход ключом,
+        который нарисован в самом коде и не покидает этот компьютер.</div>
+    </div>
+  </div>
+</div>`
+
+const ВОПРОС = `<div class="modal-overlay"><div class="modal qrs">
+  <button class="modal-x">×</button>
+  <div class="qrs-ask-ico">◻</div>
+  <div class="modal-title" style="margin:0">Впустить это устройство?</div>
+  <div class="qrs-dev">Windows · приложение Ponoi</div>
+  <div class="qrs-warn">Если это не ты сейчас открыл Ponoi на компьютере — нажми «Нет».
+    Подтверждение впустит это устройство в твой аккаунт без пароля.</div>
+  <div class="lyr-btns"><button class="pqs2-btn">Нет</button>
+  <button class="pqs2-btn primary">Да, это я</button></div>
+</div></div>`
+
 const ЭКРАНЫ = [
   // Настоящий экран входа, без подмены разметки: это первое, что видит
   // человек, и общий вид кнопки задевает его в первую очередь.
@@ -126,7 +158,9 @@ const ЭКРАНЫ = [
   { имя: 'сервер-1440', html: СЕРВЕР(false), ш: 1440, в: 900 },
   { имя: 'друзья-1440', html: ДРУЗЬЯ, ш: 1440, в: 900 },
   { имя: 'сервер-412', html: СЕРВЕР(true), ш: 412, в: 860 },
-  { имя: 'кнопки-1000', html: витрина(), ш: 1000, в: 900 },{ имя: 'кнопки-412', html: витрина(), ш: 412, в: 900 },
+  { имя: 'кнопки-1000', html: витрина(), ш: 1000, в: 900 },
+  { имя: 'вход-по-коду', html: КОД_ВХОДА, ш: 900, в: 820 },
+  { имя: 'вопрос-на-телефоне', html: ВОПРОС, ш: 412, в: 760 },{ имя: 'кнопки-412', html: витрина(), ш: 412, в: 900 },
   { имя: 'клипы-1000', html: КЛИПЫ, ш: 1000, в: 980 },
   { имя: 'клип-окно', html: `<div class="modal-overlay"><div class="modal clip-view">
       <button class="modal-x">×</button>
@@ -143,7 +177,10 @@ setTimeout(() => { console.log('ЗАВИС'); process.exit(2) }, 90000)
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: true, x: 20, y: 20, width: 1440, height: 900,
-    backgroundColor: '#313338', webPreferences: { backgroundThrottling: false } })
+    backgroundColor: '#313338',
+    // nodeIntegration нужен только затем, чтобы стенд мог нарисовать настоящий
+    // QR той же библиотекой, что и приложение.
+    webPreferences: { backgroundThrottling: false, nodeIntegration: true, contextIsolation: false } })
   await win.loadFile(DIST)
   await new Promise(r => setTimeout(r, 700))
 
@@ -165,6 +202,25 @@ app.whenReady().then(async () => {
         + ' .me-av{width:32px;height:32px;border-radius:50%;background:#3ba55d;display:inline-block}'
       document.head.appendChild(s)
     })()`)
+    // Настоящий QR: пустой холст на снимке ничего бы не сказал о размере.
+    await win.webContents.executeJavaScript(`(() => {
+      const c = document.getElementById('qr-here')
+      if (!c) return
+      const qr = require(${JSON.stringify('qrcode-generator')})
+      const т = qr(0, 'M')
+      т.addData('PONOI1:' + 'A'.repeat(26) + ':' + 'B'.repeat(104), 'Alphanumeric')
+      т.make()
+      const n = т.getModuleCount(), поле = 4
+      const пиксель = Math.max(2, Math.floor(240 / (n + поле * 2)))
+      const сторона = (n + поле * 2) * пиксель
+      c.width = сторона; c.height = сторона
+      const g = c.getContext('2d')
+      g.fillStyle = '#fff'; g.fillRect(0, 0, сторона, сторона)
+      g.fillStyle = '#000'
+      for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) {
+        if (т.isDark(r, k)) g.fillRect((k + поле) * пиксель, (r + поле) * пиксель, пиксель, пиксель)
+      }
+    })()`).catch(() => {})
     await new Promise(r => setTimeout(r, 450))
     const к = await win.webContents.capturePage()
     fs.writeFileSync(path.join(OUT, э.имя + '.png'), к.toPNG())

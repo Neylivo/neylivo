@@ -4,6 +4,7 @@ import { humanText } from '../lib/humanFail'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
 import authBg from '../assets/auth-bg.jpg'
+import { QrLoginPanel } from './QrLoginPanel'
 
 // Экран входа/регистрации (v1.35.0, редизайн v1.214.0, фон обновлён v1.217.0):
 // фирменный арт вместо голого Discord-клона (маскот из v1.214.0 убран — новый
@@ -44,6 +45,7 @@ function authErrText(e: any): string {
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [qr, setQr] = useState(false)
   const [login, setLogin] = useState('')       // почта или юзернейм (вход); почта (регистрация)
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
@@ -280,6 +282,15 @@ export function AuthScreen() {
   )
 
   const reg = mode === 'register'
+  // v1.542.0: вход по коду с телефона. Отдельным экраном, а не полем в форме:
+  // это другой способ входа целиком, и мешать его с паролем — значит показывать
+  // человеку две задачи разом.
+  if (qr) return (
+    <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
+      <div className="auth2-card"><QrLoginPanel onClose={() => setQr(false)} /></div>
+    </div>
+  )
+
   return (
     <div className="auth2" style={{ backgroundImage: `url(${authBg})` }}>
       <form className="auth2-card" onSubmit={submit}>
@@ -313,6 +324,12 @@ export function AuthScreen() {
         <div className="auth2-toggle" onClick={() => setMode(reg ? 'login' : 'register')}>
           {reg ? 'Уже есть аккаунт? ' : 'Нужен аккаунт? '}<span>{reg ? 'Войти' : 'Зарегистрироваться'}</span>
         </div>
+        {!reg && <>
+          <div className="auth2-or">или</div>
+          <button type="button" className="auth2-btn ghost" onClick={() => setQr(true)}>
+            <Icon name="camera" size={17} /> Войти по коду с телефона
+          </button>
+        </>}
         {/* v1.306.0: вход без почты. Аккаунт создаётся настоящим анонимным
             пользователем — подставного адреса не заводится, серверу неизвестно
             вообще ничего, кроме выбранного ника. */}
