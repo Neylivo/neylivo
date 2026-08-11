@@ -372,12 +372,12 @@ app.whenReady().then(async () => {
         <button class="dm-top-round">п</button><button class="dm-top-round">+</button></div>
         <div class="dm-top-row"><button class="dm-findbtn">Найти или начать беседу</button></div></div>
       <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
-      <div class="dm-item"><span class="av" style="width:48px;height:48px"></span>
+      <div class="dm-item"><span class="av-wrap" style="width:48px;height:48px"></span>
         <span class="dm-nm">Ваня<br><small class="mut">В сети</small></span>
         <button class="dm-item-more">…</button></div>
     </aside>
     <main class="chat"><header class="chat-head ph2">
-      <button id="бургер" class="mob-burger">≡</button><span class="ch-title">Ваня</span></header>
+      <button id="бургер" class="mob-burger">≡</button><span class="ch-txt">Ваня</span></header>
       <div class="msgs"><div class="msg"><div class="msg-body"><div class="att-group grid"><img class="msg-att" alt="Проверка вложения" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='120'%3E%3Crect width='320' height='120' fill='%235865f2'/%3E%3C/svg%3E"></div></div></div></div>
     </main></div></div>`
   await win.webContents.executeJavaScript(`(() => {

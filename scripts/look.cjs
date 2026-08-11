@@ -50,8 +50,8 @@ app.whenReady().then(async () => {
         // экрана, и о нижней кромке по снимку судить нельзя.
         + ' .app{height:100%} .channels,.servers,.dm-side,.chat{height:100%}'
         + ' .ch-list,.dm-list,.msgs{flex:1} .me{margin-top:auto}'
-        + ' .av{width:40px;height:40px;border-radius:50%;background:#5865f2;display:inline-block;flex:none}'
-        + ' .member .av,.dm-item .av,.pfr-row .av{width:32px;height:32px}'
+        + ' .av-wrap{width:40px;height:40px;border-radius:50%;background:#5865f2;display:inline-block;flex:none}'
+        + ' .member .av,.dm-item .av,.pfr-row .av-wrap{width:32px;height:32px}'
         + ' .me-av{width:32px;height:32px;border-radius:50%;background:#3ba55d;display:inline-block}'
       document.head.appendChild(s)
     })()`)

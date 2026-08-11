@@ -14,20 +14,20 @@ const СЕРВЕР = (узкий) => `<div class="app-viewport"><div class="app"
     <div class="srv-wrap"><button class="srv">Д</button></div>
     <div class="srv-wrap"><button class="srv">М</button></div>
     <div class="srv-sep"></div>
-    <div class="srv-wrap"><button class="srv srv-add">+</button></div>
+    <div class="srv-wrap"><button class="srv add">+</button></div>
   </nav>
   <aside class="channels">
-    <div class="ch-head"><span class="ch-head-nm">Мой сервер</span></div>
-    <div class="ch-cat">ТЕКСТОВЫЕ КАНАЛЫ</div>
+    <div class="srv-title"><span class="srv-title-nm">Мой сервер</span></div>
+    <div class="ch-sec-nm">ТЕКСТОВЫЕ КАНАЛЫ</div>
     <div class="ch on"># общий</div>
     <div class="ch"># новости</div>
     <div class="ch"># мемы</div>
-    <div class="ch-cat">ГОЛОСОВЫЕ</div>
+    <div class="ch-sec-nm">ГОЛОСОВЫЕ</div>
     <div class="ch">Общая</div>
     <!-- Настоящая разметка панели профиля (MeBar.tsx). Раньше здесь стоял
          выдуманный .me-bar, которого в стилях нет вовсе, — стенд показывал не то,
          что рисует приложение. -->
-    <div class="me"><span class="me-lift"><span class="av"></span></span>
+    <div class="me"><span class="me-lift"><span class="av-wrap"></span></span>
       <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
       <button class="me-ic me-music me-lift">♪</button>
       <button class="me-ic me-mic me-lift">M</button>
@@ -35,13 +35,13 @@ const СЕРВЕР = (узкий) => `<div class="app-viewport"><div class="app"
       <button class="me-out me-lift">⚙</button></div>
   </aside>
   <main class="chat">
-    <header class="chat-head">${узкий ? '<button class="mob-burger">≡</button>' : ''}<span class="ch-title"># общий</span></header>
+    <header class="chat-head">${узкий ? '<button class="mob-burger">≡</button>' : ''}<span class="ch-txt"># общий</span></header>
     <div class="msgs">
       ${[['Ваня', 'Привет! Как дела с новой версией?'], ['nubas', 'Собрал, сейчас проверю на телефоне'],
          ['Ваня', 'Скинь потом снимок, интересно посмотреть на новый вид']].map(([кто, что]) => `
-      <div class="msg"><div class="msg-gutter"><span class="av-click"><span class="av"></span></span></div>
+      <div class="msg"><div class="msg-gutter"><span class="av-click"><span class="av-wrap"></span></span></div>
         <div class="msg-body"><div class="msg-hdr"><span class="nm">${кто}</span><span class="msg-time">14:32</span></div>
-        <div class="msg-text">${что}</div></div></div>`).join('')}
+        <div class="msg-txt">${что}</div></div></div>`).join('')}
     </div>
     <form class="composer cstyle-default">
       <div class="plus-wrap"><button type="button" class="attach-btn">+</button></div>
@@ -51,9 +51,9 @@ const СЕРВЕР = (узкий) => `<div class="app-viewport"><div class="app"
       <div class="cin-act"><button class="cin-mic">◍</button><button type="submit" class="send-tg">➤</button></div>
     </form>
   </main>
-  ${узкий ? '' : `<aside class="members"><div class="mem-cat">В СЕТИ — 2</div>
-    <div class="member"><span class="av"></span><span class="member-nm">Ваня</span></div>
-    <div class="member"><span class="av"></span><span class="member-nm">nubas</span></div></aside>`}
+  ${узкий ? '' : `<aside class="members"><div class="ch-sec-nm">В СЕТИ — 2</div>
+    <div class="member"><span class="av-wrap"></span><span class="ch-nm">Ваня</span></div>
+    <div class="member"><span class="av-wrap"></span><span class="ch-nm">nubas</span></div></aside>`}
 </div></div>`
 
 const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
@@ -62,9 +62,9 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
     <div class="dm-top"><button class="dm-findbtn">Найти беседу</button></div>
     <div class="dm-navitem on">Друзья</div>
     <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
-    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">Ваня</span></div>
-    <div class="dm-item on"><span class="av"></span><span class="dm-nm">Маша</span></div>
-    <div class="me"><span class="me-lift"><span class="av"></span></span>
+    <div class="dm-item"><span class="av-wrap" style="width:48px;height:48px"></span><span class="dm-nm">Ваня</span></div>
+    <div class="dm-item on"><span class="av-wrap"></span><span class="dm-nm">Маша</span></div>
+    <div class="me"><span class="me-lift"><span class="av-wrap"></span></span>
       <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
       <button class="me-ic me-music me-lift">♪</button>
       <button class="me-ic me-mic me-lift">M</button>
@@ -75,9 +75,9 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
     <header class="chat-head pfr-head"><span class="pfr-title">Друзья</span>
       <div class="pfr-tabs"><button class="pfr-tab on">В сети</button><button class="pfr-tab">Все</button><button class="pfr-tab">Заявки</button></div>
       <button class="pfr-addfriend">Добавить в друзья</button></header>
-    <div class="pfr-main"><div class="pfr-list">
-      <div class="pfr-row"><span class="av"></span><span class="pfr-nm">Ваня</span><span class="pfr-sub">в сети</span></div>
-      <div class="pfr-row"><span class="av"></span><span class="pfr-nm">Маша</span><span class="pfr-sub">играет в Dying Light</span></div>
+    <div class="pfr-main"><div class="pfr-body">
+      <div class="pfr-row"><span class="av-wrap"></span><span class="pfr-nm2">Ваня</span><span class="pfr-sub">в сети</span></div>
+      <div class="pfr-row"><span class="av-wrap"></span><span class="pfr-nm2">Маша</span><span class="pfr-sub">играет в Dying Light</span></div>
     </div></div>
   </main>
 </div></div>`
@@ -171,7 +171,7 @@ const ОКНО_КЛИПА = `<div class="modal-overlay"><div class="modal clip-v
 // MusicPlayer.tsx): выдуманные проверяли бы моё представление о разметке.
 const НАСТРОЙКИ = `<div class="app-viewport"><div class="pqs2">
   <aside class="pqs2-side">
-    <div class="pqs2-side-h">НАСТРОЙКИ</div>
+    <div class="pqs2-grp">НАСТРОЙКИ</div>
     <div class="pqs2-item on">Моя учётная запись</div>
     <div class="pqs2-item">Внешний вид</div>
     <div class="pqs2-item">Устройства и безопасность</div>
@@ -185,7 +185,7 @@ const НАСТРОЙКИ = `<div class="app-viewport"><div class="pqs2">
     <div class="pqs2-optrow"><div><div class="pqs-optt">Компактный вид</div>
       <div class="pqs-optd">Сообщения идут плотнее, без отступов между ними.</div></div>
       <button class="pqs-toggle on"><span></span></button></div>
-    <label class="pqs-in-l">Ваше имя</label>
+    <label class="pqs-lbl">Ваше имя</label>
     <input class="pqs-in" value="nubas">
     <div class="lyr-btns"><button class="pqs2-btn ghost">Отмена</button><button class="pqs-save">Сохранить</button></div>
   </main>
@@ -205,7 +205,7 @@ const МЕНЮ = `<div class="app-viewport" style="padding:24px">
 const ОКНО = `<div class="modal-overlay"><div class="modal">
   <div class="modal-title">Создать канал</div>
   <div class="modal-sub">Каналы — это комнаты для разговоров по темам.</div>
-  <label class="ms-in-l">Название</label>
+  <label class="pqs-lbl">Название</label>
   <input class="ms-in" value="общий">
   <div class="lyr-btns"><button class="pqs2-btn ghost">Отмена</button>
   <button class="pqs2-btn primary">Создать</button></div>
@@ -215,50 +215,9 @@ const ПЛЕЕР = `<div class="app-viewport"><div class="mus2">
   <div class="mus2-top"><div class="mus2-topr"><button>◀</button><button>▶</button></div>
     <button class="mus2-libbtn">Моя музыка</button></div>
   <div class="mus2-nowt">Название трека</div>
-  <div class="mus2-nowa">Исполнитель</div>
-  <div class="mus2-li"><span class="mus2-li-nm">Первый трек</span><span class="mus2-li-a">Кто-то</span></div>
-  <div class="mus2-li on"><span class="mus2-li-nm">Второй трек</span><span class="mus2-li-a">Ещё кто-то</span></div>
-</div></div>`
-
-
-// v1.546.0: главный экран телефона по макету владельца. Разметка списана с
-// Home.tsx (rail2) и DMHome.tsx (dm-side): выдуманная показывала бы не то.
-const ТЕЛЕФОН_ГЛАВНЫЙ = `<div class="app-viewport"><div class="app">
-  <nav class="servers"><div class="rail2">
-    <div class="rail2-logo">Ponoi</div>
-    <button class="rail2-item"><span class="ri"></span><span>Главная</span></button>
-    <button class="rail2-item on"><span class="ri"></span><span>Друзья</span></button>
-    <button class="rail2-item"><span class="ri"></span><span>Открыть</span></button>
-    <button class="rail2-item"><span class="ri"></span><span>Трекотека</span></button>
-    <button class="rail2-item"><span class="ri"></span><span>Приложения</span></button>
-    <div class="rail2-bottom">
-      <button class="rail2-round">п</button><button class="rail2-round">н</button>
-    </div>
-  </div></nav>
-  <aside class="dm-side">
-    <div class="dm-top">
-      <div class="dm-top-head">
-        <div class="dm-top-title">Сообщения</div>
-        <button class="dm-top-round">п</button>
-        <button class="dm-top-round">+</button>
-      </div>
-      <div class="dm-top-row">
-        <button class="dm-findbtn">Найти или начать беседу</button>
-      </div>
-    </div>
-    <div class="dm-chips">
-      <button class="dm-chip on">Друзья</button>
-      <button class="dm-chip">Запросы<span class="dm-chip-dot"></span></button>
-      <button class="dm-chip">Заблокированные</button>
-    </div>
-    <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ<button class="dm-sec-plus">+</button></div>
-    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">yooooori1<br><small class="mut">В сети</small></span><button class="dm-item-more">···</button></div>
-    <div class="dm-item"><span class="av" style="width:48px;height:48px"></span><span class="dm-nm">Katih<br><small class="mut">был(а) 2 ч. назад</small></span><button class="dm-item-more">···</button></div>
-    <div class="me"><span class="av" style="width:40px;height:40px"></span>
-      <span class="me-nm">guchipon<br><small class="mut">В сети</small></span>
-      <button class="me-ic me-music">♪</button><button class="me-ic me-mic">M</button>
-      <button class="me-ic me-deaf">H</button><button class="me-out">⚙</button></div>
-  </aside>
+  <div class="mus2-nowsub">Исполнитель</div>
+  <div class="mus2-li"><span class="mus2-plrow-nm">Первый трек</span><span class="mus2-li-a">Кто-то</span></div>
+  <div class="mus2-li on"><span class="mus2-plrow-nm">Второй трек</span><span class="mus2-li-a">Ещё кто-то</span></div>
 </div></div>`
 
 
@@ -290,7 +249,7 @@ const ТЕЛЕФОН_ТРЕКОТЕКА = `<div class="mus2-lib"><div class="mus
 // v1.548.0: настройки на телефоне. Разметка списана с Settings.tsx (pqs2-nav).
 const ТЕЛЕФОН_НАСТРОЙКИ = `<div class="app-viewport"><div class="pqs2">
   <aside class="pqs2-side">
-    <button class="pqs2-me"><span class="av" style="width:44px;height:44px"></span>
+    <button class="pqs2-me"><span class="av-wrap" style="width:44px;height:44px"></span>
       <span class="pqs2-me-tx"><b>guchipon</b><span>Редактировать профиль…</span></span></button>
     <div class="pqs2-search">&#9906;<input placeholder="Поиск по настройкам…"></div>
     <div class="pqs2-nav">
@@ -306,7 +265,6 @@ function экраны() {
     { имя: 'сервер', html: СЕРВЕР(false), ш: 1440, в: 900 },
     { имя: 'друзья', html: ДРУЗЬЯ, ш: 1440, в: 900 },
     { имя: 'сервер на телефоне', html: СЕРВЕР(true), ш: 412, в: 860 },
-    { имя: 'телефон главный', html: ТЕЛЕФОН_ГЛАВНЫЙ, ш: 412, в: 915 },
     { имя: 'телефон трекотека', html: ТЕЛЕФОН_ТРЕКОТЕКА, ш: 412, в: 915 },
     { имя: 'телефон настройки', html: ТЕЛЕФОН_НАСТРОЙКИ, ш: 412, в: 915 },
     { имя: 'витрина кнопок', html: витрина(), ш: 1000, в: 900 },
@@ -322,5 +280,5 @@ function экраны() {
   ]
 }
 
-module.exports = { экраны, ТЕЛЕФОН_ГЛАВНЫЙ, ТЕЛЕФОН_ТРЕКОТЕКА, ТЕЛЕФОН_НАСТРОЙКИ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
+module.exports = { экраны, ТЕЛЕФОН_ТРЕКОТЕКА, ТЕЛЕФОН_НАСТРОЙКИ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
   НАСТРОЙКИ, МЕНЮ, ОКНО, ПЛЕЕР, витрина }

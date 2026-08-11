@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
         const s = document.createElement('style')
         s.textContent = 'html,body{height:100%;margin:0} .app-viewport,.app{height:100%}'
           + ' .channels,.servers,.chat,.dm-side{height:100%} .ch-list,.msgs{flex:1}'
-          + ' .av{width:32px;height:32px;border-radius:50%;background:#5865f2;display:inline-block}'
+          + ' .av-wrap{width:32px;height:32px;border-radius:50%;background:#5865f2;display:inline-block}'
           + ' .me-av{width:32px;height:32px;border-radius:50%;background:#3ba55d;display:inline-block}'
         document.head.appendChild(s)
       })()`)

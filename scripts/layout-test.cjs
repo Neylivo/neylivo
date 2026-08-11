@@ -35,9 +35,9 @@ const ОБОЛОЧКА = `<div class="app-viewport"><div class="app">
     ${Array.from({ length: 14 }, (_, i) => `<div class="srv-wrap"><button class="srv" id="srv${i}">${i}</button></div>`).join('')}
   </nav>
   <aside class="channels">
-    <div class="ch-head"><span class="ch-head-nm">Мой сервер</span></div>
+    <div class="srv-title"><span class="srv-title-nm">Мой сервер</span></div>
     <div class="ch-list"><div class="ch on"># общий</div></div>
-    <div class="me"><span class="me-lift"><span class="av"></span></span>
+    <div class="me"><span class="me-lift"><span class="av-wrap"></span></span>
       <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
       <button class="me-ic me-music me-lift" id="кнопка-музыки">M</button>
       <button class="me-ic me-mic me-lift">M</button>
@@ -45,7 +45,7 @@ const ОБОЛОЧКА = `<div class="app-viewport"><div class="app">
       <button class="me-out me-lift">G</button></div>
   </aside>
   <main class="chat">
-    <header class="chat-head"><span class="ch-title"># общий</span></header>
+    <header class="chat-head"><span class="ch-txt"># общий</span></header>
     <div class="msgs"></div>
     <form class="composer cstyle-default">
       <div class="plus-wrap"><button type="button" class="attach-btn">+</button></div>
@@ -70,7 +70,7 @@ app.whenReady().then(async () => {
     // Ровно то, что даёт настоящее приложение: оболочка на всю высоту окна.
     s.textContent = 'html,body{height:100%;margin:0} .app-viewport,.app{height:100%}'
       + ' .channels,.servers,.chat{height:100%} .ch-list,.msgs{flex:1}'
-      + ' .av{width:32px;height:32px;border-radius:50%;background:#5865f2;display:block}'
+      + ' .av-wrap{width:32px;height:32px;border-radius:50%;background:#5865f2;display:block}'
     document.head.appendChild(s)
   })()`)
   await new Promise(r => setTimeout(r, 400))

@@ -27,7 +27,7 @@ const РЯДЫ = [
   ['в поле ввода', '<button class="attach-btn">+</button><button class="ctool">☺</button>'],
   // Значки шапки стоят в своей шапке: у них margin-left:auto, и вне её они
   // разлетаются по краям — это была бы поломка стенда, а не приложения.
-  ['шапка канала', '<header class="chat-head" style="width:280px"><span class="ch-title"># общий</span><button class="pin-btn">з</button><button class="call-start">п</button><button class="srv-invite">и</button></header>'],
+  ['шапка канала', '<header class="chat-head" style="width:280px"><span class="ch-txt"># общий</span><button class="pin-btn">з</button><button class="call-start">п</button><button class="srv-invite">и</button></header>'],
   ['вкладки друзей', '<div class="pfr-tabs"><button class="pfr-tab on">В сети</button><button class="pfr-tab">Все</button><button class="pfr-tab">Заявки</button></div>'],
   ['плеер', '<div class="mus2-topr"><button>◀</button><button>▶</button></div><button class="mus2-libbtn">Моё</button><button class="mus2-addbtn">+</button>'],
   ['голосовая панель', '<div class="vp-btns"><button class="vp-btn">М</button><button class="vp-btn danger">×</button><button class="vp-act">…</button></div>'],
