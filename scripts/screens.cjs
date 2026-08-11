@@ -259,6 +259,27 @@ const ТЕЛЕФОН_НАСТРОЙКИ = `<div class="app-viewport"><div class=
   </aside>
 </div></div>`
 
+
+// v1.551.0: звонок. Классы списаны с CallRoom.tsx — владелец: «кнопки размеры и
+// их видимость это ужас», и смотреть на это надо на настоящих именах.
+const ЗВОНОК = `<div class="c2-wrap">
+  <div class="c2-main"><div class="c2-board"><div class="c2-bubbles">
+    <div class="c2-bub"><span class="av-wrap" style="width:72px;height:72px"></span>
+      <span class="c2-bub-nm">guchipon</span></div>
+    <div class="c2-bub"><span class="av-wrap" style="width:72px;height:72px"></span>
+      <span class="c2-bub-nm">Ваня</span></div>
+  </div></div></div>
+  <div class="c2-qrow"><button>Звук</button><button class="on">Шумодав</button><button>Эффекты</button></div>
+  <div class="c2-bar">
+    <div class="c2-grp"><button class="c2-btn">М</button><button class="c2-caret">▾</button>
+      <span class="c2-grp-sep"></span><button class="c2-btn lit">К</button>
+      <button class="c2-caret">▾</button></div>
+    <button class="c2-btn">Э</button>
+    <button class="c2-btn live">Д</button>
+    <button class="c2-btn leave">×</button>
+  </div>
+</div>`
+
 /** Все экраны: имя, разметка и удобный размер окна. */
 function экраны() {
   return [
@@ -266,6 +287,8 @@ function экраны() {
     { имя: 'друзья', html: ДРУЗЬЯ, ш: 1440, в: 900 },
     { имя: 'сервер на телефоне', html: СЕРВЕР(true), ш: 412, в: 860 },
     { имя: 'телефон трекотека', html: ТЕЛЕФОН_ТРЕКОТЕКА, ш: 412, в: 915 },
+    { имя: 'звонок', html: ЗВОНОК, ш: 900, в: 700 },
+    { имя: 'звонок на телефоне', html: ЗВОНОК, ш: 412, в: 800 },
     { имя: 'телефон настройки', html: ТЕЛЕФОН_НАСТРОЙКИ, ш: 412, в: 915 },
     { имя: 'витрина кнопок', html: витрина(), ш: 1000, в: 900 },
     { имя: 'витрина кнопок на телефоне', html: витрина(), ш: 412, в: 900 },
@@ -280,5 +303,5 @@ function экраны() {
   ]
 }
 
-module.exports = { экраны, ТЕЛЕФОН_ТРЕКОТЕКА, ТЕЛЕФОН_НАСТРОЙКИ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
+module.exports = { экраны, ЗВОНОК, ТЕЛЕФОН_ТРЕКОТЕКА, ТЕЛЕФОН_НАСТРОЙКИ, СЕРВЕР, ДРУЗЬЯ, КЛИПЫ, КОД_ВХОДА, ВОПРОС, ОКНО_КЛИПА,
   НАСТРОЙКИ, МЕНЮ, ОКНО, ПЛЕЕР, витрина }

@@ -3090,7 +3090,14 @@ body.no-anim .member-typing i { animation:none; }
 
 /* Панель управления */
 .c2-bar { flex:none; display:flex; align-items:center; justify-content:center; gap:12px; padding:10px 16px 16px; }
-.c2-btn { position:relative; width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; display:flex;
+/* v1.551.0: круг звонка не жмётся и не растягивается отступом.
+ *
+ * Общий вид кнопки (v1.540.0) добавляет padding и min-height всем, у кого их
+ * нет. У этих размер задан, но не защищён: во flex-полосе они сжимались, а
+ * отступ растил их изнутри. Замер на телефоне: 36×52, 37×52, 40×52 вместо
+ * 52×52 — три разных овала вместо трёх одинаковых кругов. Владелец увидел
+ * это раньше меня и назвал ровно так, как оно выглядит. */
+.c2-btn { position:relative; flex:none; padding:0; width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; display:flex;
   align-items:center; justify-content:center; background:var(--btn-call); color:#fff;
   transition:background .15s var(--ease-out4, ease), color .15s var(--ease-out4, ease), transform .12s var(--ease-out4, ease); }
 .c2-btn:hover { background:var(--btn-call-h); }
@@ -3109,7 +3116,7 @@ body.no-anim .member-typing i { animation:none; }
   box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .15s var(--ease-spring, ease) both; }
 .c2-menu-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--mut); margin:2px 0 8px; }
 .c2-qrow { display:flex; gap:6px; margin-bottom:10px; }
-.c2-qrow button { flex:1; border:1px solid rgba(var(--ov, 255,255,255),.08); background:var(--btn-call); color:var(--tx-2, #b5bac1); border-radius:var(--r-md);
+.c2-qrow button { flex:1; min-height:var(--h-touch); border:1px solid rgba(var(--ov, 255,255,255),.08); background:var(--btn-call); color:var(--tx-1, #f2f3f5); border-radius:var(--r-md);
   padding:7px 0; font-size:13px; font-weight:600; cursor:pointer; transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease), border-color .12s var(--ease-out4, ease); }
 .c2-qrow button:hover { background:var(--btn-call-h); color:#fff; }
 .c2-qrow button.on { background:var(--btn-main); border-color:#6366f1; color:#fff; }
@@ -3449,10 +3456,10 @@ body.no-anim .member-typing i { animation:none; }
 /* Панель управления звонком — группа-пилюля, как в Discord. */
 .c2-bar { position:relative; gap:10px; }
 .c2-grp { display:flex; align-items:center; background:var(--bg3); border:1px solid rgba(var(--ov, 255,255,255),.06); border-radius:28px; padding:4px; gap:1px; }
-.c2-grp .c2-btn { width:46px; height:46px; background:transparent; }
+.c2-grp .c2-btn { width:46px; height:46px; min-height:46px; background:transparent; }
 .c2-grp .c2-btn:hover { background:var(--btn-call-h); transform:none; }
 .c2-grp .c2-btn.lit { background:#fff; color:#111214; }
-.c2-caret { border:none; background:transparent; color:var(--tx-2, #b5bac1); width:22px; height:46px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:var(--r-lg); transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
+.c2-caret { border:none; background:transparent; color:var(--tx-2, #b5bac1); flex:none; padding:0; width:22px; height:46px; min-height:46px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:var(--r-lg); transition:background .12s var(--ease-out4, ease), color .12s var(--ease-out4, ease); }
 .c2-caret:hover, .c2-caret.on { color:var(--tx-hi, #fff); background:rgba(var(--ov, 255,255,255),.08); }
 .c2-grp-sep { width:1px; height:24px; background:rgba(var(--ov, 255,255,255),.08); margin:0 5px; }
 
@@ -6955,9 +6962,14 @@ body.no-anim .mus2-lib, body.no-anim .mus2-lib-inner, body.no-anim .mus2-card { 
      звонок лежит поверх всего (position: fixed) и до края экрана достаёт сам. В
      обычном виде звонок стоит В ЧАТЕ над сообщениями, и этот отступ втыкал
      тридцать пустых пикселей прямо посреди экрана, под кнопками звонка. */
-  .c2-bar, .call-bar { padding-bottom: 8px; gap: 10px; }
+  .c2-bar, .call-bar { padding-bottom: 8px; gap: 10px; flex-wrap: wrap; row-gap: 8px; }
   .c2-wrap.fs .c2-bar, .c2-wrap.fs .call-bar { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
-  .c2-bar button, .call-bar button { width: 52px; height: 52px; }
+  /* Ровнять ВСЕ кнопки полосы под один размер нельзя: в ней живут не только
+     круги, но и узкие стрелки выбора устройства и кнопки внутри группы.
+     Прежнее правило раздувало стрелку с 22 до 52 и кнопку группы с 46 до 52,
+     полоса переставала помещаться, и «выйти» уезжала за край экрана. */
+  .c2-bar > button.c2-btn:not(.leave), .call-bar > button:not(.leave) { width: 52px; height: 52px; }
+  .c2-bar > button.c2-btn.leave, .call-bar > button.leave { width: 68px; height: 52px; }
   .c2-name { font-size: 13px; }
 
   /* ── Лайтбокс: картинка во весь экран и кнопки не у самого края ───────── */
