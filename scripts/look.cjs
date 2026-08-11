@@ -74,10 +74,60 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
   </main>
 </div></div>`
 
+// v1.539.0: раздел клипов — настройки и список записанного.
+const КЛИПЫ = `<div class="app-viewport"><div class="pqs2" style="padding:24px;max-width:760px">
+  <div class="clips-panel">
+    <h2>Клипы с экрана</h2>
+    <div class="pqs2-desc">Приложение всё время держит в памяти последние секунды экрана и никуда их не сохраняет.</div>
+    <div class="clip-main">
+      <div class="clip-toggle">
+        <div><div class="clip-toggle-t">Держать последние секунды</div>
+        <div class="clip-toggle-s">Идёт запись — сохранить можно в любой момент</div></div>
+        <button class="pqs-toggle on"><span></span></button>
+      </div>
+      <label class="clip-lbl">Сколько секунд хранить</label>
+      <div class="clip-range"><input type="range" min="5" max="180" step="5" value="30"><span class="clip-val">30 сек</span></div>
+      <div class="clip-hint">От 5 секунд до 3 мин. Чем больше — тем больше памяти занято постоянно: примерно 18 МБ.</div>
+      <label class="clip-lbl">Качество</label>
+      <div class="clip-quality">
+        <button class="clip-q"><span class="clip-q-n">Экономно</span><span class="clip-q-d">720p · 30 кадров</span><span class="clip-q-s">≈ 18 МБ за минуту</span></button>
+        <button class="clip-q on"><span class="clip-q-n">Обычное</span><span class="clip-q-d">1080p · 30 кадров</span><span class="clip-q-s">≈ 37 МБ за минуту</span></button>
+        <button class="clip-q"><span class="clip-q-n">Чётко</span><span class="clip-q-d">1080p · 60 кадров</span><span class="clip-q-s">≈ 60 МБ за минуту</span></button>
+      </div>
+      <div class="clip-actions">
+        <button class="pqs2-btn primary">Сохранить последние 30 сек</button>
+        <button class="pqs2-btn">Открыть папку</button>
+      </div>
+      <div class="clip-hint">Или нажми F7 — работает поверх игры, переключаться в Ponoi не надо.</div>
+    </div>
+    <div class="pqs-sec-t">Записанные клипы</div>
+    <div class="clip-list">
+      ${[['Half-Life 2 2026-08-11 11-23-07', '11 авг, 11:23 · 34,2 МБ'],
+         ['Portal 2 2026-08-10 22-04-19', '10 авг, 22:04 · 12,8 МБ'],
+         ['2026-08-09 18-40-02', '9 авг, 18:40 · 7,1 МБ']].map(([н, п]) => `
+      <div class="clip-item">
+        <button class="clip-item-main"><span class="clip-item-play">▶</span>
+          <span class="clip-item-meta"><span class="clip-item-nm">${н}</span><span class="clip-item-sub">${п}</span></span>
+        </button>
+        <button class="pqs2-btn">П</button><button class="pqs2-btn danger">У</button>
+      </div>`).join('')}
+    </div>
+  </div>
+</div></div>`
+
 const ЭКРАНЫ = [
   { имя: 'сервер-1440', html: СЕРВЕР(false), ш: 1440, в: 900 },
   { имя: 'друзья-1440', html: ДРУЗЬЯ, ш: 1440, в: 900 },
   { имя: 'сервер-412', html: СЕРВЕР(true), ш: 412, в: 860 },
+  { имя: 'клипы-1000', html: КЛИПЫ, ш: 1000, в: 980 },
+  { имя: 'клип-окно', html: `<div class="modal-overlay"><div class="modal clip-view">
+      <button class="modal-x">×</button>
+      <div class="modal-title" style="margin:0">Half-Life 2 2026-08-11 11-23-07</div>
+      <video class="clip-video" controls></video>
+      <div class="lyr-btns"><button class="pqs2-btn">Показать в папке</button>
+      <button class="pqs2-btn ghost">Закрыть</button></div>
+    </div></div>`, ш: 1000, в: 700 },
+  { имя: 'клипы-412', html: КЛИПЫ, ш: 412, в: 900 },
 ]
 
 app.disableHardwareAcceleration()

@@ -20,6 +20,15 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   clipSave: (o) => ipcRenderer.invoke('ponoi-clip-save', o),
   clipState: () => ipcRenderer.invoke('ponoi-clip-state'),
   clipFolder: () => ipcRenderer.invoke('ponoi-clip-folder'),
+  clipList: () => ipcRenderer.invoke('ponoi-clip-list'),
+  clipReveal: (n) => ipcRenderer.invoke('ponoi-clip-reveal', n),
+  clipRemove: (n) => ipcRenderer.invoke('ponoi-clip-remove', n),
+  clipHotkey: (o) => ipcRenderer.invoke('ponoi-clip-hotkey', o),
+  onClipSaved: (fn) => {
+    const h = (_e, r) => { try { fn(r) } catch { /* слушатель сломался */ } }
+    ipcRenderer.on('ponoi-clip-saved', h)
+    return () => ipcRenderer.off('ponoi-clip-saved', h)
+  },
   // v1.482.0: список игр с этого компьютера — часы, последний запуск,
   // сохранения, вехи. Ничего не уходит наружу: это ответ окну, и только ему.
   scanGames: () => ipcRenderer.invoke('ponoi-games-scan'),

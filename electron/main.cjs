@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage, clipboard } = require('electron')
+const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu, nativeImage, clipboard, globalShortcut } = require('electron')
 const path = require('path')
 
 // v1.199.0: без этого Windows не знает, что показанные через web Notification API
@@ -315,8 +315,52 @@ ipcMain.handle('ponoi-clip-save', async (_e, o) => {
   try { return await клипы.save(Number(o && o.seconds) || 30, String((o && o.name) || 'clip.webm')) }
   catch (e) { return { ok: false, why: String(e && e.message || e) } }
 })
-ipcMain.handle('ponoi-clip-state', () => клипы.state())
+// Про горячую клавишу окно спрашивает вместе с остальным состоянием: F7 может
+// занять другая программа, и тогда обещать её в настройках — врать.
+ipcMain.handle('ponoi-clip-state', () => ({ ...клипы.state(), hotkey: горячаяВзята ? 'F7' : '' }))
 ipcMain.handle('ponoi-clip-folder', () => { клипы.openFolder(); return { ok: true } })
+ipcMain.handle('ponoi-clip-list', () => клипы.list())
+ipcMain.handle('ponoi-clip-reveal', (_e, name) => клипы.reveal(name))
+ipcMain.handle('ponoi-clip-remove', (_e, name) => клипы.remove(name))
+
+// v1.539.0: F7 сохраняет клип из любого места, даже поверх игры.
+//
+// Именно поэтому клавиша ГЛОБАЛЬНАЯ: в тот миг, когда случилось интересное,
+// человек играет, и переключаться в Ponoi, чтобы нажать кнопку, — значит
+// потерять ровно то, ради чего всё делалось.
+//
+// Настройки берутся те, что последними прислало окно: держать их второй копией
+// здесь значило бы получить «сохранил 30 секунд, а в настройках стояло 90».
+//
+// Окно присылает длину и название игры, но НЕ готовое имя файла. Сперва имя
+// присылалось целиком — и все клипы по F7 получали время того мига, когда окно
+// в последний раз синхронизировало настройки: второе нажатие молча затирало
+// первый клип тем же именем. Имя собирается здесь, в момент нажатия.
+ipcMain.handle('ponoi-clip-hotkey', (_e, o) => клипы.hotkeySettings(o))
+
+function сохранитьПоКлавише() {
+  клипы.saveHotkey().then(r => {
+    // Сообщаем окну — оно покажет плашку. Молчаливое сохранение неотличимо от
+    // «клавиша не сработала», и человек жмёт её ещё раз, получая второй клип.
+    for (const w of BrowserWindow.getAllWindows()) {
+      try { w.webContents.send('ponoi-clip-saved', r) } catch { /* окно закрылось */ }
+    }
+  })
+}
+
+let горячаяВзята = false
+app.whenReady().then(() => {
+  try {
+    // register() возвращает false, если клавишу уже держит кто-то другой —
+    // молча считать её нашей нельзя, настройки об этом скажут прямо.
+    горячаяВзята = globalShortcut.isRegistered('F7')
+      ? false
+      : globalShortcut.register('F7', сохранитьПоКлавише) !== false
+    if (горячаяВзята) горячаяВзята = globalShortcut.isRegistered('F7')
+  } catch { горячаяВзята = false }
+})
+app.on('will-quit', () => { try { globalShortcut.unregister('F7') } catch { /* уже снята */ } })
+
 
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 

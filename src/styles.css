@@ -8484,7 +8484,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
    добраться (tabIndex -1). */
 .auth2-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-.clips-panel { max-width: 720px; }
+.clips-panel { max-width: 720px; }
 /* ==== v1.538.0: настройки клипов — понятные и без частокола чисел ==== */
 .clip-main { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .clip-toggle { display: flex; align-items: center; gap: 14px; padding: 14px 16px;
@@ -8508,8 +8508,35 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 .clip-q-d { font-size: 12.5px; color: var(--tx-2, #b5bac1); }
 .clip-q-s { font-size: 12px; color: var(--mut); }
 .clip-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+/* v1.539.0: список записанных клипов.
+   Строка целиком — кнопка просмотра: человек метит в название, а не в
+   маленький значок «плей». Проводник и удаление стоят отдельно справа, чтобы
+   промах не удалял клип. */
+.clip-list { display: flex; flex-direction: column; gap: 6px; }
+.clip-item { display: flex; align-items: center; gap: 6px; }
+.clip-item-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border: none; border-radius: var(--r-lg); cursor: pointer;
+  background: rgba(var(--ov, 255,255,255), .045); color: var(--tx); text-align: left; }
+.clip-item-main:hover { background: rgba(var(--ov, 255,255,255), .085); }
+.clip-item-main:active { scale: .995; }
+.clip-item-play { flex: none; display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: var(--r-md); color: #fff;
+  background: rgba(var(--ov, 255,255,255), .08); }
+.clip-item-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.clip-item-nm { font-weight: 600; font-size: 14px; color: var(--tx-hi, #fff);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-item-sub { font-size: 12.5px; color: var(--mut); }
+.clip-item > .pqs2-btn { padding: 0 10px; height: 38px; }
+
+.clip-view { width: min(760px, 92vw); display: flex; flex-direction: column; gap: 12px; }
+.clip-video { width: 100%; max-height: 60vh; border-radius: var(--r-lg); background: #000; }
+
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
   .clip-quality { grid-template-columns: 1fr; }
   .clip-q { min-height: 64px; }
   .clip-actions .pqs2-btn { min-height: 44px; }
+  .clip-item-main { min-height: 56px; }
+  .clip-item > .pqs2-btn { height: 56px; min-height: 56px; }
+  .clip-video { max-height: 45vh; }
 }

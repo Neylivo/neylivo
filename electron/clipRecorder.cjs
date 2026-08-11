@@ -148,10 +148,33 @@ async function save(seconds, name) {
   if (!ответ.ok) return ответ
   const дир = папка()
   try { fs.mkdirSync(дир, { recursive: true }) } catch { /* уже есть */ }
-  const файл = path.join(дир, name)
+  // Имя занято — берём соседнее, а не пишем поверх.
+  //
+  // В имени время с точностью до секунды, и два нажатия в одну секунду дали бы
+  // один файл: человек нажал дважды, а клип остался один, причём молча.
+  let файл = path.join(дир, name)
+  if (fs.existsSync(файл)) {
+    const без = String(name).replace(/\.webm$/i, '')
+    for (let n = 2; n < 100; n++) {
+      const п = path.join(дир, без + ' (' + n + ').webm')
+      if (!fs.existsSync(п)) { файл = п; break }
+    }
+  }
   fs.writeFileSync(файл, Buffer.from(ответ.bytes))
   return { ok: true, path: файл, bytes: ответ.bytes.length }
 }
+
+/**
+ * v1.539.0: сохранение по горячей клавише.
+ *
+ * Живёт здесь, а не в main.cjs, чтобы этот путь можно было проверить целиком
+ * (npm run test:clip). Настройки присылает окно; имя файла собирается ЗДЕСЬ, в
+ * момент нажатия — присланное заранее готовое имя означало бы, что второе
+ * нажатие затирает первый клип.
+ */
+let горячие = { seconds: 30, game: '' }
+function hotkeySettings(o) { горячие = { ...горячие, ...(o || {}) }; return { ok: true } }
+function saveHotkey() { return save(горячие.seconds || 30, имяКлипа(new Date(), горячие.game)) }
 
 function state() {
   return { running: идёт, folder: папка(), ...настройки }
@@ -164,4 +187,63 @@ function openFolder() {
   shell.openPath(дир)
 }
 
-module.exports = { start, stop, save, state, openFolder, папка }
+/**
+ * v1.539.0: список записанных клипов.
+ *
+ * Читается прямо из папки, а не из своей памяти: клипы туда мог положить и
+ * прошлый запуск приложения, и человек мог что-то удалить руками. Список,
+ * который помнит удалённое, врёт при первом же открытии проводника.
+ */
+function list() {
+  const дир = папка()
+  let имена = []
+  try { имена = fs.readdirSync(дир) } catch { return [] }
+  const из = []
+  for (const имя of имена) {
+    if (!/\.webm$/i.test(имя)) continue
+    try {
+      const st = fs.statSync(path.join(дир, имя))
+      из.push({ name: имя, path: path.join(дир, имя), bytes: st.size, at: st.mtimeMs })
+    } catch { /* исчез между чтением и проверкой — бывает */ }
+  }
+  return из.sort((a, b) => b.at - a.at)
+}
+
+/** Показать клип в проводнике — с выделением самого файла. */
+function reveal(name) {
+  const файл = path.join(папка(), path.basename(String(name || '')))
+  if (!fs.existsSync(файл)) return { ok: false, why: 'файла больше нет' }
+  shell.showItemInFolder(файл)
+  return { ok: true }
+}
+
+/** Удалить клип. Имя берём только последней частью пути: снаружи может прийти что угодно. */
+function remove(name) {
+  const файл = path.join(папка(), path.basename(String(name || '')))
+  try { fs.unlinkSync(файл); return { ok: true } }
+  catch (e) { return { ok: false, why: String((e && e.message) || e) } }
+}
+
+/**
+ * Имя файла клипа — то же, что у кнопки в настройках (src/lib/clipBuffer.ts).
+ *
+ * Живёт здесь, а не в main.cjs, ровно потому что его надо проверять: клип по
+ * горячей клавише обязан получать время НАЖАТИЯ. Сперва готовое имя присылало
+ * окно вместе с настройками — и каждое следующее нажатие F7 писало файл с тем
+ * же именем, молча затирая предыдущий клип.
+ */
+function имяКлипа(когда, игра) {
+  const дв = n => String(n).padStart(2, '0')
+  const дата = когда.getFullYear() + '-' + дв(когда.getMonth() + 1) + '-' + дв(когда.getDate())
+  const время = дв(когда.getHours()) + '-' + дв(когда.getMinutes()) + '-' + дв(когда.getSeconds())
+  // Тот же набор запретных знаков, что и в clipBuffer.ts: управляющие символы и
+  // то, что Windows не пускает в имя файла. Дефисы и пробелы остаются — иначе
+  // «Half-Life 2» становится «HalfLife2».
+  const и = String(игра || '').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40).trim()
+  return (и ? и + ' ' : '') + дата + ' ' + время + '.webm'
+}
+
+module.exports = {
+  start, stop, save, state, openFolder, папка, list, reveal, remove,
+  имяКлипа, hotkeySettings, saveHotkey,
+}
