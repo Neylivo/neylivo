@@ -30,7 +30,15 @@ const СЕРВЕР = (узкий) => `<div class="app-viewport"><div class="app"
     <div class="ch"># мемы</div>
     <div class="ch-cat">ГОЛОСОВЫЕ</div>
     <div class="ch">Общая</div>
-    <div class="me-bar"><span class="me-av"></span><span class="me-nm">nubas</span><button class="me-ic">M</button><button class="me-ic">S</button></div>
+    <!-- Настоящая разметка панели профиля (MeBar.tsx). Раньше здесь стоял
+         выдуманный .me-bar, которого в стилях нет вовсе, — стенд показывал не то,
+         что рисует приложение. -->
+    <div class="me"><span class="me-lift"><span class="av"></span></span>
+      <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
+      <button class="me-ic me-music me-lift">♪</button>
+      <button class="me-ic me-mic me-lift">M</button>
+      <button class="me-ic me-deaf me-lift">H</button>
+      <button class="me-out me-lift">⚙</button></div>
   </aside>
   <main class="chat">
     <header class="chat-head">${узкий ? '<button class="mob-burger">≡</button>' : ''}<span class="ch-title"># общий</span></header>
@@ -62,6 +70,12 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
     <div class="dm-cat">ЛИЧНЫЕ СООБЩЕНИЯ</div>
     <div class="dm-item"><span class="av"></span><span class="dm-nm">Ваня</span></div>
     <div class="dm-item on"><span class="av"></span><span class="dm-nm">Маша</span></div>
+    <div class="me"><span class="me-lift"><span class="av"></span></span>
+      <span class="me-nm me-lift">nubas<br><small class="mut">В сети</small></span>
+      <button class="me-ic me-music me-lift">♪</button>
+      <button class="me-ic me-mic me-lift">M</button>
+      <button class="me-ic me-deaf me-lift">H</button>
+      <button class="me-out me-lift">⚙</button></div>
   </aside>
   <main class="chat pfr-chat">
     <header class="chat-head pfr-head"><span class="pfr-title">Друзья</span>
@@ -197,6 +211,10 @@ app.whenReady().then(async () => {
       // снимку было бы суждением о стенде, а не о приложении.
       const s = document.createElement('style')
       s.textContent = 'html,body{height:100%;margin:0} .app-viewport{height:100%}'
+        // Колонки на всю высоту: иначе панель профиля висит посередине
+        // экрана, и о нижней кромке по снимку судить нельзя.
+        + ' .app{height:100%} .channels,.servers,.dm-side,.chat{height:100%}'
+        + ' .ch-list,.dm-list,.msgs{flex:1} .me{margin-top:auto}'
         + ' .av{width:40px;height:40px;border-radius:50%;background:#5865f2;display:inline-block;flex:none}'
         + ' .member .av,.dm-item .av,.pfr-row .av{width:32px;height:32px}'
         + ' .me-av{width:32px;height:32px;border-radius:50%;background:#3ba55d;display:inline-block}'

@@ -220,8 +220,8 @@ body {
 }
 
 .me {
-  min-height: 64px;
-  height: 64px;
+  min-height: 56px;
+  height: 56px;
   padding: 0 10px;
   background: var(--c-main);
   border-top: 1px solid var(--ponoi-line);

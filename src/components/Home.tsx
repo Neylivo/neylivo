@@ -187,6 +187,20 @@ export function Home() {
   // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
   const lastView = useRef<View>({ kind: 'dm' })
 
+  // v1.543.0: Ponoi Music открывается из панели профиля.
+  //
+  // Кнопка уехала из рейки серверов вниз, в панель, и оттуда до setView не
+  // дотянуться: панель рисуют ServerView и DMHome, а вид живёт здесь. Событие —
+  // тот же способ, каким тут уже открывают свой профиль и принимают звонок.
+  //
+  // Переключение сохранено ровно как было у кнопки в рейке (v1.381.0): второе
+  // нажатие закрывает плеер, а не открывает его заново.
+  useEffect(() => {
+    const открыть = () => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })
+    window.addEventListener('ponoi-open-music', открыть)
+    return () => window.removeEventListener('ponoi-open-music', открыть)
+  }, [])
+
   // v1.72.0: каждый раз, когда экран ЛС снова показан (возврат с сервера/музыки),
   // сообщаем DMHome — тот плавно прокручивает открытый чат в самый низ, к новым.
   useEffect(() => {
@@ -621,15 +635,6 @@ export function Home() {
         <RailTip text="Найти сервер">
           <button className="srv join" onClick={() => setShowFind(true)}><Icon name="compass" size={22} /></button>
         </RailTip>
-        <div className={'srv-wrap music-bottom' + (view.kind === 'music' ? ' on' : '')}>
-          <RailTip text="Ponoi Music">
-            <button className={'srv music' + (view.kind === 'music' ? ' on' : '')}
-              // v1.381.0: повторное нажатие закрывает — раньше кнопка только
-              // открывала, и выйти из плеера ею было нельзя, хотя выглядит она
-              // как переключатель и ведёт себя так везде в приложении.
-              onClick={() => setView(v => v.kind === 'music' ? lastView.current : { kind: 'music' })}><Icon name="music" size={22} /></button>
-          </RailTip>
-        </div>
       </nav>
       {/* v1.427.0: системная «назад» закрывает шторку навигации, а не приложение.
           Слушаем её здесь, а не в mobile.ts: ловушка живёт ровно пока шторка открыта. */}

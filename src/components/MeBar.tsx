@@ -92,6 +92,16 @@ export function MeBar({ username, avatarUrl, onAvatar }: { username: string; ava
           return a ? <ActivityLabel activity={a} /> : STATUS_LABEL[myStatus]
         })()}</small>
       </span>
+      {/* v1.543.0: Ponoi Music переехала сюда из рейки серверов.
+          Владелец: «кнопку с музыкой в другое более удобное место». Место она
+          сменила не по вкусу, а по необходимости: панель профиля растянулась на
+          всю нижнюю кромку слева и накрыла собой низ рейки, где кнопка стояла.
+          Здесь ей и место по смыслу — это не сервер, а моя вещь, рядом с
+          микрофоном и наушниками. */}
+      <button className="me-ic me-music me-lift" title="Ponoi Music"
+        onClick={() => window.dispatchEvent(new CustomEvent('ponoi-open-music'))}>
+        <Icon name="music" size={18} />
+      </button>
       <button className={'me-ic me-mic me-lift' + (micIsOff ? ' off' : '') + (micAnim ? ' anim-shake' : '')}
         onClick={() => { if (cst) { if (cst.mic) setMicAnim(true); window.dispatchEvent(new CustomEvent('ponoi-call-toggle', { detail: { what: 'mic' } })); return } setMicOff(m => { if (!m) setMicAnim(true); return !m }) }}
         onAnimationEnd={() => setMicAnim(false)}

@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.542.0",
+  "version": "1.543.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -51,6 +51,7 @@
     "test:picker": "electron scripts/picker-test.cjs",
     "test:naked": "node scripts/naked-test.cjs",
     "test:clip": "electron scripts/clip-test.cjs",
+    "test:layout": "electron scripts/layout-test.cjs",
     "test:qr": "electron scripts/qr-test.cjs",
     "test:contrast": "electron scripts/contrast-test.cjs",
     "audit:ui": "node scripts/style-audit.cjs"
