@@ -1,7 +1,7 @@
 {
   "name": "ponoi",
   "private": true,
-  "version": "1.539.0",
+  "version": "1.540.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -50,7 +50,9 @@
     "look": "electron scripts/look.cjs",
     "test:picker": "electron scripts/picker-test.cjs",
     "test:naked": "node scripts/naked-test.cjs",
-    "test:clip": "electron scripts/clip-test.cjs"
+    "test:clip": "electron scripts/clip-test.cjs",
+    "test:contrast": "electron scripts/contrast-test.cjs",
+    "audit:ui": "node scripts/style-audit.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",

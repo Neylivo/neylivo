@@ -74,6 +74,10 @@ const ДРУЗЬЯ = `<div class="app-viewport"><div class="app">
   </main>
 </div></div>`
 
+// v1.540.0: витрина кнопок живёт в scripts/button-gallery.cjs — той же
+// разметкой её меряет обход телефона (npm run test:mobile).
+const { витрина } = require('./button-gallery.cjs')
+
 // v1.539.0: раздел клипов — настройки и список записанного.
 const КЛИПЫ = `<div class="app-viewport"><div class="pqs2" style="padding:24px;max-width:760px">
   <div class="clips-panel">
@@ -116,9 +120,13 @@ const КЛИПЫ = `<div class="app-viewport"><div class="pqs2" style="padding:2
 </div></div>`
 
 const ЭКРАНЫ = [
+  // Настоящий экран входа, без подмены разметки: это первое, что видит
+  // человек, и общий вид кнопки задевает его в первую очередь.
+  { имя: 'вход-1000', html: null, ш: 1000, в: 800 },
   { имя: 'сервер-1440', html: СЕРВЕР(false), ш: 1440, в: 900 },
   { имя: 'друзья-1440', html: ДРУЗЬЯ, ш: 1440, в: 900 },
   { имя: 'сервер-412', html: СЕРВЕР(true), ш: 412, в: 860 },
+  { имя: 'кнопки-1000', html: витрина(), ш: 1000, в: 900 },{ имя: 'кнопки-412', html: витрина(), ш: 412, в: 900 },
   { имя: 'клипы-1000', html: КЛИПЫ, ш: 1000, в: 980 },
   { имя: 'клип-окно', html: `<div class="modal-overlay"><div class="modal clip-view">
       <button class="modal-x">×</button>
@@ -143,8 +151,10 @@ app.whenReady().then(async () => {
     win.setContentSize(э.ш, э.в)
     await new Promise(r => setTimeout(r, 350))
     await win.webContents.executeJavaScript(`(() => {
-      document.body.className = ''
-      document.body.innerHTML = ${JSON.stringify(э.html)}
+      if (${JSON.stringify(э.html !== null)}) {
+        document.body.className = ''
+        document.body.innerHTML = ${JSON.stringify(э.html || '')}
+      }
       // Настоящее приложение живёт в #root на всю высоту окна. При подмене
       // разметки этого не остаётся, и всё съезжает наверх — сужденное по такому
       // снимку было бы суждением о стенде, а не о приложении.

@@ -170,7 +170,7 @@ body {
 
 .dm-findbtn,
 .srv-pill {
-  min-height: 38px;
+  min-height: 40px;
   border: 1px solid var(--ponoi-line);
   border-radius: var(--ponoi-radius);
   background: var(--c-dark);
@@ -198,7 +198,7 @@ body {
 .dm-navitem:hover,
 .ch-members-row:hover,
 .member:hover {
-  background: var(--ponoi-hover);
+  background: var(--btn-tint);
 }
 
 /* v1.526.0: выбранная строка ведёт себя тихо.
@@ -325,7 +325,7 @@ body {
 }
 
 .pfr-addfriend {
-  min-height: 36px;
+  min-height: 40px;
   border-radius: var(--ponoi-radius);
 }
 
@@ -353,10 +353,10 @@ body {
 }
 
 .pfr-cbtn {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--ponoi-radius);
-  background: var(--c-dark);
+  background: var(--btn-soft);
 }
 
 .pqs2-side {
@@ -371,7 +371,7 @@ body {
 }
 
 .pqs2-item:hover {
-  background: var(--ponoi-hover);
+  background: var(--btn-tint);
   color: var(--tx-hi);
 }
 
@@ -387,7 +387,7 @@ body {
 
 .pqs2-btn {
   border-radius: var(--ponoi-radius-sm);
-  background: var(--c-active);
+  background: var(--btn-soft);
 }
 
 .modal,
@@ -437,7 +437,7 @@ textarea {
 .status-menu button:hover,
 .plus-menu button:hover,
 .srv-menu button:hover {
-  background: var(--ponoi-hover);
+  background: var(--btn-tint);
   color: var(--tx-hi);
 }
 

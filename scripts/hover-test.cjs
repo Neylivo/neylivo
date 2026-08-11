@@ -188,6 +188,45 @@ app.whenReady().then(async () => {
     }
   }
 
+  // v1.540.0: кнопка без класса не должна остаться системной.
+  //
+  // В разметке 103 кнопки без единого класса: они рассчитывают на правило
+  // родителя, а где такого правила нет — браузер рисует свою: серый
+  // прямоугольник с рамкой и чужим шрифтом. Посреди приложения это выглядит как
+  // кусок другой программы, и именно это владелец называл словом «убого».
+  //
+  // Проверяем вычисленным видом, а не наличием строчки в css: правило можно
+  // написать и перебить его же другим, а сюда приходит то, что увидит человек.
+  win.setContentSize(1000, 700)
+  await win.webContents.executeJavaScript(`(() => {
+    const д = document.createElement('div')
+    д.innerHTML = '<div class="plug-actions"><button id="голая">Открыть</button></div>'
+    document.body.appendChild(д)
+  })()`)
+  await new Promise(r => setTimeout(r, 250))
+  const голая = JSON.parse(await win.webContents.executeJavaScript(`(() => {
+    const el = document.getElementById('голая'), s = getComputedStyle(el)
+    const r = el.getBoundingClientRect()
+    return JSON.stringify({ фон: s.backgroundColor, рамка: s.borderTopWidth,
+      шрифт: s.fontFamily.slice(0, 20), высота: Math.round(r.height), радиус: s.borderTopLeftRadius })
+  })()`))
+  // Системная кнопка Windows: СПЛОШНОЙ светлый фон, рамка в пиксель, свой шрифт.
+  //
+  // Прозрачность считать обязательно. Первая проба ловила «rgb 255,255,255» и
+  // называла системной нашу же подсветку rgba(255,255,255,.1): по цифрам белая,
+  // на экране — еле заметный налёт поверх тёмной панели.
+  const светлый = (() => {
+    const m = /rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?/.exec(голая.фон)
+    if (!m) return false
+    const альфа = m[4] === undefined ? 1 : Number(m[4])
+    return альфа > .8 && (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 > 120
+  })()
+  check('кнопка без класса не выглядит системной', !светлый && голая.рамка === '0px',
+    JSON.stringify(голая))
+  check('кнопка без класса ростом с остальные', голая.высота >= 28 && голая.высота <= 48,
+    голая.высота + 'px')
+  check('кнопка без класса скруглена как всё остальное', голая.радиус !== '0px', голая.радиус)
+
   console.log('\nИТОГ: провалено ' + failed)
   process.exit(failed ? 1 : 0)
 })
