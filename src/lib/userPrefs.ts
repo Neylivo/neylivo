@@ -18,6 +18,7 @@ export interface UserPrefsRow {
   dm_read: Record<string, number>
   gif_favs: string[]
   mus_playlists: any[]
+  mus_likes: any[]                   // v1.553.0: отмеченные треки, [{id, at}] — личные, никому не видны
   account: Record<string, any>
   // v1.187.0: контекстное меню друга в списке ЛС (закреп/мьют/никнейм/«закрыть ЛС»/игнор).
   dm_pinned: string[]                // [friendId] — закреплённые вверху списка
@@ -29,7 +30,7 @@ export interface UserPrefsRow {
 
 const DEFAULTS: UserPrefsRow = {
   notes: {}, srv_folders: [], ch_muted: {}, srv_notif: {}, ch_notif: {}, srv_privacy: {},
-  ch_read: {}, dm_read: {}, gif_favs: [], mus_playlists: [], account: {},
+  ch_read: {}, dm_read: {}, gif_favs: [], mus_playlists: [], mus_likes: [], account: {},
   dm_pinned: [], dm_muted: {}, dm_closed: [], dm_ignored: [], friend_nick: {},
 }
 

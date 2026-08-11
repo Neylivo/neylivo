@@ -54,6 +54,7 @@ import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, 
 import { signupAllowed, leadingZeroBits, MIN_FILL_MS, MAX_TRIES, TRIES_WINDOW_MS } from './signupGuard'
 import { clampSeconds, trimBuffer, collectClip, bufferedSec, clipName, clipLabel, CLIP_MIN_SEC, CLIP_MAX_SEC } from './clipBuffer'
 import { КУСОК, надоРезать, сколькоКусков, границы, имяКуска, этоОпись, годнаяОпись, опись, размерСловами, отказПоРазмеру } from './bigFile'
+import { normalizeLikes, isLiked, toggleLike, likeCount, likedTracks, byArtist } from '../music/likes'
 import { b32, unb32, qrPayload, parseQr, newCode, qrExpired, qrLeftSec, qrDeviceLabel, validSession, QR_TTL_MS, QR_PREFIX,
   qrPair, qrPubToB32, qrPubFromB32, qrSharedKey, qrSeal, qrOpen } from './qrLogin'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
@@ -3645,6 +3646,59 @@ check('отказ по размеру узнаётся', () =>
   && отказПоРазмеру('The object exceeded the maximum allowed size')
   && !отказПоРазмеру(new Error('Загрузка не удалась (403) new row violates row-level security'))
   && !отказПоРазмеру(new Error('Сбой сети при загрузке файла')))
+
+
+// ── v1.553.0: «Любимые» и «Исполнители» в Трекотеке ─────────────────────────
+check('отметка ставится и снимается', () => {
+  const п = toggleLike([], 'a', 100)
+  return isLiked(п, 'a') && !isLiked(toggleLike(п, 'a'), 'a') && likeCount(п) === 1
+})
+check('повторная отметка не задваивается', () => {
+  const п = toggleLike(toggleLike([], 'a', 1), 'b', 2)
+  return likeCount(toggleLike(toggleLike(п, 'a'), 'a')) === 2
+})
+check('пустой идентификатор не отмечается', () => likeCount(toggleLike([], '')) === 0)
+check('недавняя отметка идёт первой', () => {
+  const п = toggleLike(toggleLike([], 'a', 1), 'b', 2)
+  return п[0].id === 'b'
+})
+// Настройки переживают версии приложения: раньше отметки лежали простым
+// списком строк, и ронять их на смене формата нельзя.
+check('старый вид отметок читается', () => {
+  const п = normalizeLikes(['a', 'b', 'a'])
+  return п.length === 2 && п[0].id === 'a' && п[1].id === 'b'
+})
+check('мусор в настройках не ломает разбор', () =>
+  normalizeLikes(null).length === 0 && normalizeLikes('строка').length === 0
+  && normalizeLikes([null, 1, {}, { id: '' }, { id: 'ок' }]).length === 1)
+
+const треки = [
+  { id: 'a', author: 'DJ NASRAL' }, { id: 'b', author: 'DJ NASRAL' },
+  { id: 'c', author: 'INTERWORLD' }, { id: 'd', author: '' },
+]
+check('отмеченные отдаются в порядке отметок', () => {
+  const п = toggleLike(toggleLike([], 'a', 1), 'c', 2)
+  const л = likedTracks(п, треки)
+  return л.length === 2 && л[0].id === 'c' && л[1].id === 'a'
+})
+// Склад общий и приезжает частями: трека может не быть просто потому, что он
+// ещё не догрузился. Выбрасывать отметку из-за этого — терять её молча.
+check('отметка на неприехавший трек не теряется', () => {
+  const п = toggleLike([], 'нет-такого', 1)
+  return likedTracks(п, треки).length === 0 && likeCount(п) === 1
+})
+
+check('исполнители группируются, крупные выше', () => {
+  const г = byArtist(треки)
+  return г.length === 3 && г[0].artist === 'DJ NASRAL' && г[0].tracks.length === 2
+})
+check('трек без исполнителя попадает в понятную группу', () =>
+  byArtist(треки).some(г => г.artist === 'Без исполнителя' && г.tracks.length === 1))
+check('порядок исполнителей не прыгает при равном числе треков', () => {
+  const а = byArtist([{ id: '1', author: 'Б' }, { id: '2', author: 'А' }])
+  const б = byArtist([{ id: '2', author: 'А' }, { id: '1', author: 'Б' }])
+  return а.map(x => x.artist).join() === б.map(x => x.artist).join()
+})
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

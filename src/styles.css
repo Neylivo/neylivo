@@ -9040,3 +9040,31 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
     display: flex; align-items: center; justify-content: center; background: transparent;
     color: var(--tx-2, #b5bac1); }
 }
+
+/* v1.553.0: «Любимые» и «Исполнители» в Трекотеке. */
+
+/* Звёздочка на карточке. В покое приглушена и не спорит с обложкой; отмеченная
+ * горит цветом внимания. Показывается всегда, а не по наведению: на телефоне
+ * наведения нет, и всё, что живёт только по нему, там недоступно в принципе. */
+.mus2-card-like { width: 28px; height: 28px; min-height: 28px; padding: 0; flex: none;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--btn-over); color: rgba(255, 255, 255, .75); }
+.mus2-card-like:hover { background: var(--btn-over-h); color: #fff; }
+.mus2-card-like.on { color: #faa61a; }
+
+/* Исполнители — плитками: имя и число треков. Нажатие подставляет имя в поиск,
+ * поэтому это кнопка, а не строка списка. */
+.mus2-artists { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px; padding: 4px 0 12px; }
+.mus2-artist { display: flex; align-items: center; gap: 10px; min-height: var(--h-touch);
+  padding: 10px 12px; border-radius: var(--r-lg); background: var(--btn-soft);
+  color: var(--tx); text-align: left; }
+.mus2-artist:hover { background: var(--btn-soft-h); }
+.mus2-artist-nm { flex: 1; min-width: 0; font-weight: 600; font-size: 14px;
+  color: var(--tx-hi, #fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mus2-artist-n { flex: none; font-size: 12px; color: var(--mut); }
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .mus2-artists { grid-template-columns: 1fr; }
+  .mus2-card-like { width: 32px; height: 32px; }
+}

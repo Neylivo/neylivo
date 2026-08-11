@@ -47,6 +47,7 @@ const fmtPlays = (n: number) => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 
 import { MusicSettings, loadGif, loadBg, loadLyricsCfg } from './MusicSettings'
 import { parseLyrics, activeLineIndex, loadLyrics, saveLyrics, searchLyricsOnline, lyricsScale, lyricsTime, lyricsShift, setLyricsShift, centerScrollTop, autoScrollOk, LYRICS_HOLD_MS, lyricsScrollMs, lyricsEase, livePosition, type Lyrics } from './lyrics'
 import { Icon } from '../components/icons'
+import { normalizeLikes, toggleLike, isLiked, likedTracks, byArtist, type Like } from './likes'
 import { Portal } from '../components/Portal'
 import { Avatar } from '../components/Avatar'
 import { copyText } from '../lib/copyMedia'
@@ -68,6 +69,8 @@ import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 // Плейлисты синхронизируются через user_prefs (миграция 39), как остальные личные настройки.
 function loadPlaylists(): Playlist[] { return normalizePlaylists(getUserPrefs().mus_playlists) }
 function savePlaylists(p: Playlist[]) { patchUserPrefs({ mus_playlists: p }) }
+function loadLikes(): Like[] { return normalizeLikes(getUserPrefs().mus_likes) }
+function saveLikes(l: Like[]) { patchUserPrefs({ mus_likes: l }) }
 function fmt(s: number) {
   if (!isFinite(s)) return '0:00'
   const m = Math.floor(s / 60), ss = Math.floor(s % 60)
@@ -127,7 +130,10 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
   })
   const [libQ, setLibQ] = useState('')
   /** Вкладка склада: треки или плейлисты (v1.428.0). */
-  const [libTab, setLibTab] = useState<'tracks' | 'playlists'>('tracks')
+  const [libTab, setLibTab] = useState<'tracks' | 'playlists' | 'liked' | 'artists'>('tracks')
+  // v1.553.0: «Любимые» — личная отметка. Хранится там же, где плейлисты и
+  // закреплённые диалоги: эти настройки уже ездят между устройствами.
+  const [likes, setLikes] = useState<Like[]>(loadLikes)
   /** Открытый плейлист — его содержимое показывается вместо сетки. */
   const [openPl, setOpenPl] = useState<string | null>(null)
   // «Назад» на телефоне закрывает и выбор плейлиста, и открытый плейлист.
@@ -2882,6 +2888,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 onClick={() => { setLibTab('tracks'); setOpenPl(null) }}>Треки</button>
               <button className={'mus2-tab' + (libTab === 'playlists' ? ' on' : '')}
                 onClick={() => setLibTab('playlists')}>Плейлисты{playlists.length > 0 ? ' · ' + playlists.length : ''}</button>
+              {/* v1.553.0: два отдела из макета владельца, у которых есть на чём
+                  стоять: «Любимые» — личная отметка, «Исполнители» — группировка
+                  по полю, которое у трека уже есть. «Альбомов» не будет, пока у
+                  треков нет альбома: рисовать пустой отдел я не стану. */}
+              <button className={'mus2-tab' + (libTab === 'liked' ? ' on' : '')}
+                onClick={() => { setLibTab('liked'); setOpenPl(null) }}>
+                Любимые{likes.length > 0 ? ' · ' + likes.length : ''}</button>
+              <button className={'mus2-tab' + (libTab === 'artists' ? ' on' : '')}
+                onClick={() => { setLibTab('artists'); setOpenPl(null) }}>Исполнители</button>
             </div>
             <input className="mus2-in" placeholder="Поиск по названию или исполнителю…" value={libQ} onChange={e => setLibQ(e.target.value)} />
             <button className="mus2-lib-x" title="Закрыть Трекотеку" onClick={() => setShowLib(false)}><Icon name="close" size={16} /></button>
@@ -2892,7 +2907,22 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
           <div className="mus2-lib-body">
             {/* v1.417.0: уголок плагинов над списком треков. */}
             <PluginPanels slot="library" />
-            {libTab === 'playlists' ? <>
+            {libTab === 'artists' ? (() => {
+              // v1.553.0: отдел «Исполнители». Нажатие подставляет имя в поиск —
+              // второй экран со списком треков одного исполнителя не нужен: поиск
+              // уже умеет искать по исполнителю и показывает их теми же карточками.
+              const группы = byArtist(tracks)
+              if (группы.length === 0) return <div className="mus2-empty center">Трекотека пуста.</div>
+              return <div className="mus2-artists">
+                {группы.map(г => (
+                  <button key={г.artist} className="mus2-artist"
+                    onClick={() => { setLibQ(г.artist); setLibTab('tracks') }}>
+                    <span className="mus2-artist-nm notr" translate="no">{г.artist}</span>
+                    <span className="mus2-artist-n">{г.tracks.length}</span>
+                  </button>
+                ))}
+              </div>
+            })() : libTab === 'playlists' ? <>
               {/* ── Отдел плейлистов ─────────────────────────────────────── */}
               {(() => {
                 const pl = openPl ? playlists.find(p => p.id === openPl) : null
@@ -3001,9 +3031,19 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
               </div>
             )}
             {(() => {
-              const all = libAll   // v1.434.0: посчитано выше и только при нужде
+              // v1.553.0: отдел «Любимые» показывает те же карточки, только
+              // суженные. Вторая сетка означала бы вторую правку при каждой
+              // будущей мелочи и второе место, где что-нибудь разъедется.
+              const all = libTab === 'liked' ? likedTracks(likes, libAll) : libAll   // v1.434.0: посчитано выше
               if (tracks.length === 0) {
                 return <div className="mus2-empty center">Трекотека пуста. Добавь трек — его увидят все.</div>
+              }
+              if (libTab === 'liked' && all.length === 0) {
+                // Здесь нет запроса, поэтому «ничего не нашлось» было бы враньём.
+                return <div className="mus2-empty center">
+                  Здесь пусто. Отметь трек звёздочкой на карточке — он появится тут.
+                  Отметка личная: её видишь только ты.
+                </div>
               }
               const shown = all.slice(0, libShown)
               if (all.length === 0) {
@@ -3062,6 +3102,15 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                               Осталась одна, и только у своего трека. Всё
                               остальное — правым щелчком или долгим нажатием (см.
                               меню карточки ниже): функции никуда не делись. */}
+                          {/* v1.553.0: отметка ЛИЧНАЯ. Трекотека общая, и превращать отметку в
+                              публичный счётчик — отдельное решение, которого никто не принимал.
+                              Стоит на карточке, а не в меню: отмечают мимоходом, и лишний шаг
+                              означает, что отмечать не будут вовсе. */}
+                          <button className={'mus2-card-like' + (isLiked(likes, t.id) ? ' on' : '')}
+                            title={isLiked(likes, t.id) ? 'Убрать из любимых' : 'В любимые'}
+                            onClick={e => { e.stopPropagation(); const n = toggleLike(likes, t.id); setLikes(n); saveLikes(n) }}>
+                            <Icon name="star" size={14} />
+                          </button>
                           {!guest && t.ownerId === meId && <button className="mus2-card-del" title="Убрать из Трекотеки"
                             onClick={e => { e.stopPropagation(); void removeTrack(t.id, title) }}>
                             <Icon name="trash" size={14} />
