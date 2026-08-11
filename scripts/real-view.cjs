@@ -18,6 +18,22 @@ for (const f of ['styles.css', 'ponoi-ui.css']) {
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css"><link rel=stylesheet href="ponoi-ui.css">
 <style>html,body{height:100%;margin:0;background:#1e1f22}#root{height:100%}</style>
+<script>
+  try {
+    const ключ = 'sb-example-auth-token'
+    const срок = Math.floor(Date.now() / 1000) + 3600
+    const тело = btoa(JSON.stringify({ sub: '00000000-0000-4000-8000-000000000001', exp: срок, role: 'authenticated' })).split('=').join('').split('+').join('-').split('/').join('_')
+      .split('=').join('').split('+').join('-').split('/').join('_')
+    const токен = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + тело + '.подпись'
+    localStorage.setItem(ключ, JSON.stringify({
+      access_token: токен, refresh_token: 'нет', token_type: 'bearer',
+      expires_in: 3600, expires_at: срок,
+      user: { id: '00000000-0000-4000-8000-000000000001', aud: 'authenticated',
+        email: 'guchipon@example.com', user_metadata: { username: 'guchipon' },
+        app_metadata: {}, created_at: new Date().toISOString() },
+    }))
+  } catch {}
+</script>
 <div id="root"></div><script src="app.js"></script>`)
 
 app.commandLine.appendSwitch('touch-events', 'enabled')
@@ -46,13 +62,23 @@ app.whenReady().then(async () => {
   const ошибки = []
   win.webContents.on('console-message', (_e, lvl, msg) => { if (lvl >= 2) ошибки.push(msg.slice(0, 200)) })
 
-  const кадр = await win.webContents.capturePage()
-  fs.writeFileSync(path.join(LOOK, 'настоящие-настройки-412.png'), кадр.toPNG())
-  console.log('снято: настоящие-настройки-412.png')
-
-  const сколько = await win.webContents.executeJavaScript(
-    `document.querySelectorAll('.pqs2-item').length + ' разделов, ' + document.querySelectorAll('.pqs2-item-sub').length + ' подписей'`)
-  console.log('на экране: ' + сколько)
+  // Снимаем несколько экранов подряд: каждый — своя страница, чтобы React
+  // поднимался с нуля, как в жизни, а не переключался состоянием.
+  // Пока снимается только то, что поднимается БЕЗ входа в аккаунт.
+  //
+  // Список бесед сюда не попал, и врать об этом не буду: DMHome падает на
+  // user.id — он рассчитывает, что человек вошёл. Подставная сессия в хранилище
+  // не помогает: supabase-js её проверяет и отбрасывает. Чтобы снять этот экран
+  // настоящими компонентами, нужен слой подставных данных вместо клиента базы —
+  // это отдельная работа, а не строчка в стенде.
+  for (const [что, имя] of [['настройки', 'настоящие-настройки-412']]) {
+    await win.loadURL(require('url').pathToFileURL(path.join(OUT, 'index.html')).href + '?что=' + что)
+    await new Promise(r => setTimeout(r, 1800))
+    const кадр = await win.webContents.capturePage()
+    fs.writeFileSync(path.join(LOOK, имя + '.png'), кадр.toPNG())
+    const узлов = await win.webContents.executeJavaScript(`document.querySelectorAll('body *').length`)
+    console.log('снято: ' + имя + '.png  (узлов: ' + узлов + ')')
+  }
   if (ошибки.length) console.log('ошибки в консоли: ' + ошибки.slice(0, 3).join(' | '))
   process.exit(0)
 })
