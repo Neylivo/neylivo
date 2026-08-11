@@ -48,6 +48,7 @@ import { wipeSummary } from './wipe'
 import { criticalLocked, lockLeft, deviceLabel, newRecoveryCode, normalizeCode, codeLooksValid, NEW_DEVICE_LOCK_MS } from './deviceGuard'
 import { signupAllowed, leadingZeroBits, MIN_FILL_MS, MAX_TRIES, TRIES_WINDOW_MS } from './signupGuard'
 import { clampSeconds, trimBuffer, collectClip, bufferedSec, clipName, clipLabel, CLIP_MIN_SEC, CLIP_MAX_SEC } from './clipBuffer'
+import { b32, unb32, qrPayload, parseQr, newCode, qrExpired, qrLeftSec, qrDeviceLabel, validSession, QR_TTL_MS, QR_PREFIX } from './qrLogin'
 import { fwdTitle, fwdDone, ruMessages } from './fwd'
 import { playedLabel, sizeLabel } from './campaign'
 import { kbInset, kbScrollDelta, KB_MIN } from './keyboardInset'
@@ -3457,6 +3458,60 @@ console.log('\n── Отправка по Enter (v1.484.0) ──')
     return true
   })
 }
+
+// ── v1.541.0: вход по коду с телефона ───────────────────────────────────────
+check('base32 туда и обратно не теряет байт', () => {
+  const б = new Uint8Array([0, 1, 2, 250, 255, 128, 7, 63, 64])
+  const назад = unb32(b32(б))
+  return назад.length === б.length && б.every((в, i) => назад[i] === в)
+})
+check('в base32 только то, что QR кодирует плотно', () =>
+  /^[A-Z2-7]+$/.test(b32(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))))
+check('секрет заявки длинный', () => newCode().length >= 26)
+check('два секрета подряд разные', () => newCode() !== newCode())
+
+check('свой код разбирается', () => {
+  const p = { code: 'A'.repeat(26), pub: 'B'.repeat(104) }
+  const r = parseQr(qrPayload(p))
+  return !!r && r.code === p.code && r.pub === p.pub
+})
+// Камера ловит всё, что попало в кадр: ценник, чужой wi-fi, ссылку с плаката.
+// На всём этом мы обязаны молчать, а не показывать ошибку.
+check('чужой код не принимается', () =>
+  parseQr('https://example.com') === null
+  && parseQr('WIFI:S:дом;T:WPA;P:1234;;') === null
+  && parseQr('') === null
+  && parseQr('PONOI1:короткий:' + 'B'.repeat(104)) === null
+  && parseQr('PONOI2:' + 'A'.repeat(26) + ':' + 'B'.repeat(104)) === null)
+check('обрезанный ключ не принимается', () =>
+  parseQr(QR_PREFIX + ':' + 'A'.repeat(26) + ':' + 'B'.repeat(20)) === null)
+check('строчные буквы не наш код', () =>
+  parseQr(QR_PREFIX + ':' + 'a'.repeat(26) + ':' + 'B'.repeat(104)) === null)
+
+check('заявка живёт две минуты', () => QR_TTL_MS === 120000)
+check('свежая заявка не просрочена', () => !qrExpired(Date.now()))
+check('через две минуты просрочена', () => qrExpired(Date.now() - QR_TTL_MS))
+check('остаток считается вниз', () => {
+  const t = Date.now() - 60000
+  const л = qrLeftSec(t)
+  return л > 55 && л <= 61 && qrLeftSec(Date.now() - QR_TTL_MS - 1000) === 0
+})
+
+// Подпись устройства приходит с чужой стороны — в неё можно затолкать что
+// угодно, лишь бы кнопка «нет» уехала за край экрана.
+check('подпись устройства обрезается и без переносов', () => {
+  const д = qrDeviceLabel('Windows\n\n' + 'Ы'.repeat(500))
+  return д.length <= 60 && !д.includes('\n')
+})
+check('пустая подпись превращается в понятную', () =>
+  qrDeviceLabel('   ') === 'Неизвестное устройство')
+
+check('за сессию принимается только сессия', () =>
+  validSession({ access_token: 'a'.repeat(40), refresh_token: 'r'.repeat(20) })
+  && !validSession(null)
+  && !validSession({ access_token: 'коротко', refresh_token: 'r'.repeat(20) })
+  && !validSession({ access_token: 'a'.repeat(40) })
+  && !validSession('строка'))
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

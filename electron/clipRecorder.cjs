@@ -40,6 +40,7 @@ function страница() {
   // MediaRecorder, ни доступа к потоку.
   return `<!doctype html><meta charset=utf-8><body><script>
 const { ipcRenderer } = require('electron')
+const fs = require('fs')
 let кусочки = []
 let rec = null
 let поток = null
@@ -76,14 +77,27 @@ ipcRenderer.on('стоп', () => {
   rec = null; поток = null; кусочки = []
 })
 
-ipcRenderer.on('сохранить', async (_e, { seconds, id }) => {
+ipcRenderer.on('сохранить', async (_e, { seconds, id, файл }) => {
   try {
     const порог = Date.now() - seconds * 1000
     const взять = кусочки.filter(c => c.head || c.at >= порог)
     if (взять.length < 2) { ipcRenderer.send('клип', { id, ok: false, why: 'пока нечего сохранять' }); return }
     const blob = new Blob(взять.map(c => c.blob), { type: 'video/webm' })
-    const buf = new Uint8Array(await blob.arrayBuffer())
-    ipcRenderer.send('клип', { id, ok: true, bytes: Array.from(buf) })
+    // Пишем файл ЗДЕСЬ, а не пересылаем его главному процессу.
+    //
+    // Сперва клип уходил как Array.from(uint8) — обычным массивом чисел. На
+    // тридцати секундах это тринадцать миллионов элементов: приложение выживало,
+    // но памяти прибавлялось сразу полтораста мегабайт на тринадцать мегабайт
+    // видео. На трёх минутах в качестве «Чётко» это уже под двести мегабайт
+    // видео и массив на двести миллионов чисел — приложение просто ложится, и
+    // ровно на это владелец пожаловался: «при сохранении клипа приложение
+    // ломается».
+    //
+    // Здесь есть fs (окно с nodeIntegration), и байты уже лежат рядом. Через
+    // границу процессов уходит только путь.
+    const буфер = Buffer.from(await blob.arrayBuffer())
+    fs.writeFileSync(файл, буфер)
+    ipcRenderer.send('клип', { id, ok: true, path: файл, bytes: буфер.length })
   } catch (e) { ipcRenderer.send('клип', { id, ok: false, why: String(e && e.message || e) }) }
 })
 </script></body>`
@@ -138,14 +152,6 @@ function stop() {
 /** Сохранить последние секунды на диск. Возвращает путь к файлу. */
 async function save(seconds, name) {
   if (!идёт || !окно || окно.isDestroyed()) return { ok: false, why: 'запись не идёт' }
-  const id = Math.random().toString(36).slice(2)
-  const ответ = await new Promise(готово => {
-    const слушать = (_e, r) => { if (r.id === id) { ipcMain.off('клип', слушать); готово(r) } }
-    ipcMain.on('клип', слушать)
-    окно.webContents.send('сохранить', { seconds, id })
-    setTimeout(() => { ipcMain.off('клип', слушать); готово({ ok: false, why: 'не дождались клипа' }) }, 15000)
-  })
-  if (!ответ.ok) return ответ
   const дир = папка()
   try { fs.mkdirSync(дир, { recursive: true }) } catch { /* уже есть */ }
   // Имя занято — берём соседнее, а не пишем поверх.
@@ -160,8 +166,19 @@ async function save(seconds, name) {
       if (!fs.existsSync(п)) { файл = п; break }
     }
   }
-  fs.writeFileSync(файл, Buffer.from(ответ.bytes))
-  return { ok: true, path: файл, bytes: ответ.bytes.length }
+  const id = Math.random().toString(36).slice(2)
+  // Путь считается ЗДЕСЬ, а пишет файл окно записи: у него байты уже в руках, и
+  // через границу процессов не идёт ничего, кроме строки.
+  //
+  // Ждём дольше прежнего: три минуты в качестве «Чётко» — это под двести
+  // мегабайт, и на медленном диске пятнадцати секунд может не хватить. Отказ по
+  // времени тут хуже ожидания: клип уже записан, человек его просто не получит.
+  return await new Promise(готово => {
+    const слушать = (_e, r) => { if (r.id === id) { ipcMain.off('клип', слушать); готово(r) } }
+    ipcMain.on('клип', слушать)
+    окно.webContents.send('сохранить', { seconds, id, файл })
+    setTimeout(() => { ipcMain.off('клип', слушать); готово({ ok: false, why: 'не дождались клипа' }) }, 60000)
+  })
 }
 
 /**
