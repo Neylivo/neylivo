@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { runUploadHooks } from './plugins/bridge'
 import { contentTypeOf } from './fileType'
+import { надоРезать, отказПоРазмеру } from './bigFile'
+import { отправитьЧастями } from './bigUpload'
 export { contentTypeOf } from './fileType'
 
 
@@ -58,12 +60,25 @@ export const isVideo = (f: File | string) =>
 // Заголовки и путь те же, что использует supabase.storage.upload, поэтому политики бакета работают как раньше.
 export async function uploadWithProgress(bucket: string, uid: string, fileRaw: File, onProgress?: (p: number) => void): Promise<string> {
   const file = await черезПлагины(fileRaw)
+  // v1.545.0: большой файл уходит кусками.
+  //
+  // Хранилище принимает один объект ограниченного размера — полсотни мегабайт
+  // на бесплатном тарифе. Приложение при этом разрешало сорок гигабайт: человек
+  // выбирал клип на сто мегабайт, дожидался конца загрузки и получал отказ.
+  // Теперь такой файл режется на куски по 45 МБ, и в хранилище не появляется ни
+  // одного объекта, который ему велик.
+  if (надоРезать(file.size)) return await отправитьЧастями(bucket, uid, file, onProgress)
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${uid}/${Date.now()}_${safe}`
   const base = import.meta.env.VITE_SUPABASE_URL as string
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string
   const { data: s } = await supabase.auth.getSession()
   const token = s.session?.access_token ?? anon
+  // Предел на файл у каждого проекта свой, и узнать его заранее неоткуда.
+  // Поэтому обычная отправка, упавшая ИМЕННО на размере, переходит на куски —
+  // человек об этом даже не узнает. Отказ по правам или сети сюда не попадает:
+  // кусками он не лечится, и молча повторять его тридцать раз было бы хуже.
+  try {
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${base}/storage/v1/object/${bucket}/${path}`)
@@ -72,10 +87,19 @@ export async function uploadWithProgress(bucket: string, uid: string, fileRaw: F
     xhr.setRequestHeader('cache-control', 'max-age=3600')
     xhr.setRequestHeader('content-type', contentTypeOf(file))
     xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total) }
-    xhr.onload = () => { if (xhr.status < 300) resolve(); else reject(new Error('Загрузка не удалась (' + xhr.status + ')')) }
+    xhr.onload = () => {
+      if (xhr.status < 300) return resolve()
+      // Текст ответа нужен целиком: по нему отличается «файл велик» от «нет
+      // прав». Первое лечится кусками, второе — нет.
+      reject(new Error('Загрузка не удалась (' + xhr.status + ') ' + String(xhr.responseText || '').slice(0, 200)))
+    }
     xhr.onerror = () => reject(new Error('Сбой сети при загрузке файла'))
     xhr.send(file)
   })
+  } catch (e) {
+    if (!отказПоРазмеру(e)) throw e
+    return await отправитьЧастями(bucket, uid, file, onProgress)
+  }
   const { data } = supabase.storage.from(bucket).getPublicUrl(path)
   return data.publicUrl
 }

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { isImage, isVideo } from '../lib/storage'
+import { этоОпись } from '../lib/bigFile'
+import { BigAttachment } from './BigAttachment'
 import { EmojiPicker } from './EmojiPicker'
 import { loadCustom } from '../lib/emoji'
 import { searchEmojiNames, emojiQueryAt } from '../lib/emojiNames'
@@ -1212,6 +1214,14 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     } catch {
       setWhy('Не достучались до файла — проверь соединение')
     }
+  }
+  // v1.545.0: большой файл лежит кусками, и по этому адресу не файл, а опись.
+  //
+  // Показываем карточку, а не тянем сотни мегабайт молча: человек сам решает,
+  // когда собирать. Автоматическая сборка при показе ленты означала бы, что
+  // прокрутка мимо чужого клипа съедает двести мегабайт памяти и трафика.
+  if (этоОпись(clean)) {
+    return <BigAttachment url={clean} />
   }
   const upOverlay = uploading && <div className="att-upload-ov"><span className="att-spin" />{progress != null && <b>{Math.round(progress * 100)}%</b>}</div>
   // v1.250.0: стикер — крупная картинка БЕЗ рамки/спойлера/лайтбокса вложения

@@ -8798,3 +8798,23 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .me { margin-left: 0; width: 100%; height: var(--h-touch); min-height: var(--h-touch); }
 
 }
+
+/* v1.545.0: вложение, лежащее в хранилище кусками.
+ *
+ * Показывается карточкой, а не тянется само: прокрутка мимо чужого клипа на
+ * двести мегабайт не должна съедать двести мегабайт трафика. */
+.bigatt { display: flex; align-items: center; gap: 12px; max-width: 460px; margin-top: 6px;
+  padding: 10px 12px; border-radius: var(--r-lg); background: var(--btn-soft); }
+.bigatt-ic { flex: none; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: var(--r-md); color: var(--tx-hi, #fff);
+  background: var(--btn-soft-h); }
+.bigatt-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bigatt-nm { font-weight: 600; font-size: 14px; color: var(--tx-hi, #fff);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bigatt-sub { font-size: 12px; color: var(--mut); }
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .bigatt { flex-wrap: wrap; }
+  .bigatt-meta { flex: 1 1 100%; order: -1; }
+  .bigatt .pqs2-btn { flex: 1; }
+}
