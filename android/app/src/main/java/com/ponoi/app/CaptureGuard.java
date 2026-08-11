@@ -39,13 +39,20 @@ public class CaptureGuard extends Plugin {
     static final String PREFS = "ponoi";
     static final String KEY = "captureGuard";
 
-    /** Стоит ли защита. По умолчанию ДА — прямая просьба владельца. */
+    /**
+     * Стоит ли защита. По умолчанию НЕТ — включается переключателем в
+     * настройках (v1.556.1, решение владельца).
+     *
+     * У защиты есть цена: приложение перестаёт попадать в запись экрана и в
+     * демонстрацию. Включённая сама собой, она выглядела бы как поломка —
+     * человек показывает экран, а собеседники видят чёрное.
+     */
     static boolean enabled(Context c) {
         try {
             SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            return p.getBoolean(KEY, true);
+            return p.getBoolean(KEY, false);
         } catch (Throwable ignored) {
-            return true;
+            return false;
         }
     }
 
