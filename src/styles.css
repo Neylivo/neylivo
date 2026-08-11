@@ -8253,7 +8253,11 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
     margin: 0; padding: 6px 10px 8px; gap: 8px; align-items: flex-end; min-height: 0; }
 
   /* Кружки по краям: плюс слева, микрофон или отправка справа. */
-  .composer .attach-btn { flex: none; width: 42px; height: 42px; border-radius: 50%;
+  /* 44, а не 42: правило про палец задаёт min-height всем кнопкам, и оно
+     перебивало высоту 42 — кружок выходил овалом 42×44. Поймала проверка
+     test:composer, которая на то и стоит, что «круг» это число, а не мнение. */
+  .composer .attach-btn { flex: none; width: var(--h-touch); height: var(--h-touch);
+    min-height: var(--h-touch); border-radius: 50%;
     background: var(--btn-soft); color: var(--tx-2, #b5bac1); }
   .composer .attach-btn:hover { background: var(--btn-soft-h); }
 
@@ -8679,7 +8683,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
 .qr2 h1 { margin: 2px 0 0; }
 .qr2-back { position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center;
   gap: 4px; height: var(--h-sm); padding: 0 10px; border-radius: var(--r-sm);
-  background: var(--btn-quiet, transparent); color: var(--tx-2, #b5bac1); font-size: 13px; }
+  background: transparent; color: var(--tx-2, #b5bac1); font-size: 13px; }
 .qr2-back:hover { background: var(--btn-tint); color: var(--tx-hi, #fff); }
 /* Белое поле вокруг кода — часть самого кода: без него камера не находит
    границы. Поэтому подложка светлая всегда, на любой теме. */
