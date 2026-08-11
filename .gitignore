@@ -46,3 +46,4 @@ dist-bench/
 # Временные файлы vite: появляются на секунду при сборке и рвут git add -A
 vite.config.ts.timestamp-*
 dist-real-view/
+dist-scene-test/

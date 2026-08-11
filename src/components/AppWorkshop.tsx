@@ -13,6 +13,7 @@ import {
   projId, kindOf, okFileName, newSceneProject, type Project, type ProjFile,
 } from '../lib/plugins/workshop'
 import { SceneEditor } from './SceneEditor'
+import { PublishModal } from './PluginCatalog'
 
 // v1.497.0: МАСТЕРСКАЯ — отдельный отдел для своих приложений.
 //
@@ -64,7 +65,8 @@ export function AppWorkshop({ onClose }: { onClose: () => void }) {
       <div className="ws-intro">
         Здесь делают приложения: игру, редактор, инструмент — всё, что живёт в своём окне.
         Внутри обычные HTML, CSS и JavaScript, рядом — живой показ и консоль. Готовое
-        сохраняется обычным плагином: его можно скачать файлом и отдать кому угодно.
+        можно скачать файлом, отдать кому угодно или выложить в каталог — оттуда его
+        поставят в одно нажатие.
       </div>
 
       {/* v1.498.0: визуальный путь — первым и крупно. Он и есть ответ на
@@ -73,8 +75,9 @@ export function AppWorkshop({ onClose }: { onClose: () => void }) {
       <button className="ws-big" onClick={() => setПроект(newSceneProject())}>
         <span className="ws-big-n">Собрать 3D-сцену</span>
         <span className="ws-big-h">
-          Визуально: ставишь объекты, крутишь камеру мышью, задаёшь цвет и размер полями.
-          Нажал «Играть» — ходишь по своей сцене. Скрипт можно повесить на любой объект.
+          Визуально: ставишь объекты и таскаешь их мышью, приносишь готовые модели
+          файлом (.glb, .obj), задаёшь цвет и размер полями. Нажал «Играть» — ходишь по
+          своей сцене. Скрипт можно повесить на любой объект.
         </span>
       </button>
 
@@ -119,6 +122,9 @@ function Редактор({ проект, onClose }: { проект: Project; on
   const [показ, setПоказ] = useState(0)
   const [занят, setЗанят] = useState(false)
   const [консоль, setКонсоль] = useState(true)
+  const [меню, setМеню] = useState(false)
+  /** Что выкладываем в каталог. Пусто — окно закрыто. */
+  const [выкладка, setВыкладка] = useState<string | null>(null)
   const рамка = useRef<HTMLIFrameElement | null>(null)
   const хранилище = useRef<Record<string, unknown>>({})
 
@@ -217,8 +223,9 @@ function Редактор({ проект, onClose }: { проект: Project; on
     setВыбран(j)
   }
 
-  async function сохранить() {
-    if (!p.name.trim()) { toastErr('Дай приложению название'); return }
+  /** @returns id сохранённого приложения или null, если не вышло. */
+  async function сохранить(): Promise<string | null> {
+    if (!p.name.trim()) { toastErr('Дай приложению название'); return null }
     setЗанят(true)
     try {
       const код = buildProject(p)
@@ -228,8 +235,25 @@ function Редактор({ проект, onClose }: { проект: Project; on
       const ст = loadPlugins().find(x => x.manifest.id === id)
       if (ст) await startPlugin(ст)
       toastOk('Сохранено и открыто окном')
-    } catch (e: any) { toastErr('Не вышло: ' + (e?.message ?? e)) }
+      return id
+    } catch (e: any) { toastErr('Не вышло: ' + (e?.message ?? e)); return null }
     finally { setЗанят(false) }
+  }
+
+  /**
+   * Выложить в каталог прямо отсюда (v1.555.0).
+   *
+   * Раньше путь был такой: сохранить, выйти из мастерской, открыть «Плагины»,
+   * открыть каталог, нажать «Выложить свой», найти своё приложение в списке
+   * всего установленного. Пять шагов и один список, в котором своё приложение
+   * ничем не отличается от чужих плагинов.
+   *
+   * Сохраняем перед выкладкой сами и молча: в каталог уходит код УСТАНОВЛЕННОГО
+   * приложения, поэтому «выложить» без сохранения выложило бы вчерашнее.
+   */
+  async function выложить() {
+    const id = await сохранить()
+    if (id) setВыкладка(id)
   }
 
   async function удалить() {
@@ -258,19 +282,34 @@ function Редактор({ проект, onClose }: { проект: Project; on
         <button className="pqs2-btn ghost" onClick={onClose}><Icon name="arrow-left" size={16} /> К списку</button>
         <input className="modal-in ws-name" placeholder="Название приложения" value={p.name}
           onChange={e => setP(x => ({ ...x, name: e.target.value }))} />
+        {/* v1.555.0: в шапке — только то, ради чего сюда смотрят.
+            Было четыре кнопки в ряд, из них три значка без подписи: понять,
+            какая из них удаляет проект, можно было только наведя мышь.
+            Осталось два действия словами и меню для остального. */}
         <div className="ws-top-acts">
-          <button className="pqs2-btn ghost" title="Перезапустить показ" onClick={() => setПоказ(v => v + 1)}>
-            <Icon name="rotate" size={15} />
-          </button>
-          <button className="pqs2-btn ghost" title="Скачать файлом" onClick={скачать}>
-            <Icon name="download" size={15} />
-          </button>
-          <button className="pqs2-btn ghost danger" title="Удалить" onClick={() => void удалить()}>
-            <Icon name="trash" size={15} />
+          <button className="pqs2-btn ghost" disabled={занят} onClick={() => void выложить()}>
+            <Icon name="store" size={15} /> Выложить
           </button>
           <button className="modal-primary" disabled={занят} onClick={() => void сохранить()}>
             {занят ? 'Сохраняю…' : 'Сохранить и открыть'}
           </button>
+          <div className="ws-more">
+            <button className="pqs2-btn ghost" title="Ещё" onClick={() => setМеню(v => !v)}>⋯</button>
+            {меню && <>
+              <div className="ws-more-away" onClick={() => setМеню(false)} />
+              <div className="ws-more-list">
+                <button onClick={() => { setМеню(false); setПоказ(v => v + 1) }}>
+                  <Icon name="rotate" size={15} /> Перезапустить показ
+                </button>
+                <button onClick={() => { setМеню(false); скачать() }}>
+                  <Icon name="download" size={15} /> Скачать файлом
+                </button>
+                <button className="danger" onClick={() => { setМеню(false); void удалить() }}>
+                  <Icon name="trash" size={15} /> Удалить приложение
+                </button>
+              </div>
+            </>}
+          </div>
         </div>
       </div>
 
@@ -365,9 +404,14 @@ function Редактор({ проект, onClose }: { проект: Project; on
       </div>
       )}
 
-      {/* Консоль у сцены — снизу во всю ширину: справа у неё инспектор. */}
+      {выкладка && <PublishModal fixedId={выкладка}
+        onClose={() => setВыкладка(null)} onDone={() => setВыкладка(null)} />}
+
+      {/* Консоль у сцены — снизу во всю ширину: справа у неё инспектор.
+          Пустая сжимается в строку: полторы сотни пикселей пустоты под сценой
+          отбирали место у самого редактора и ничего при этом не сообщали. */}
       {p.scene && (
-        <div className="ws-console sc-console">
+        <div className={'ws-console sc-console' + (журнал.length ? '' : ' пусто')}>
           {журнал.length === 0
             ? <div className="ws-con-empty">Здесь появятся ошибки скриптов и ponoi.log.</div>
             : журнал.map((с, i) => <div key={i} className={'ws-con-l ' + с.уровень}>{с.текст}</div>)}

@@ -20,6 +20,7 @@ import { createRoot } from 'react-dom/client'
 import { SettingsProvider } from '../lib/settings'
 import { AuthProvider } from '../auth/AuthProvider'
 import { Settings } from './Settings'
+import { AppWorkshop } from './AppWorkshop'
 import { Toasts } from '../lib/toast'
 
 const что = new URLSearchParams(location.search).get('что') || 'настройки'
@@ -29,7 +30,14 @@ function Экран() {
     <SettingsProvider>
       <AuthProvider>
         <Toasts />
-        <Settings username="guchipon" avatarUrl={null} onClose={() => {}} />
+        {/* Мастерская — отдельным экраном, а не через настройки: до неё иначе
+            надо доклацать через раздел, а снимок должен показывать сам
+            редактор, а не путь к нему. */}
+        {что === 'мастерская'
+          ? <div className="pqs2-body" style={{ height: '100%', padding: 16, overflow: 'auto' }}>
+              <AppWorkshop onClose={() => {}} />
+            </div>
+          : <Settings username="guchipon" avatarUrl={null} onClose={() => {}} />}
       </AuthProvider>
     </SettingsProvider>
   )

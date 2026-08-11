@@ -22,7 +22,7 @@
 // Проверки: src/lib/plugins/__test.ts.
 
 import { parsePlugin } from './manifest'
-import { readScene, scenePage, emptyScene, type Scene } from './scene'
+import { readScene, emptyScene, pruneAssets, SCENE_RUNTIME, type Scene } from './scene'
 
 export type FileKind = 'html' | 'css' | 'js'
 
@@ -190,6 +190,9 @@ ${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)
  */
 function buildSceneProject(p: Project): string {
   const id = projId(p.id || p.name)
+  // Модели, на которые никто не смотрит, в файл не едут: удалённый объект
+  // оставлял за собой файл на несколько мегабайт, и проект тихо толстел.
+  const scene = pruneAssets(p.scene as Scene)
   const права = [...new Set([PROJ_REQUIRED, ...(p.permissions ?? [])])].join(', ')
   const окно = {
     mode: 'window',
@@ -211,16 +214,29 @@ function buildSceneProject(p: Project): string {
 // Собрано мастерской Ponoi — визуальным редактором сцены.
 //
 // СЦЕНА — источник правды: по ней собирается страница, и её же читает
-// мастерская, открывая проект обратно. Правь сцену в мастерской, а не страницу
-// ниже: её перезапишет следующее сохранение.
-const СЦЕНА = ${JSON.stringify(p.scene, null, 2)}
+// мастерская, открывая проект обратно. Правь сцену в мастерской.
+const СЦЕНА = ${JSON.stringify(scene, null, 2)}
 
-const СТРАНИЦА = ${JSON.stringify(scenePage(p.scene as Scene, 'игра'))}
+const ДВИЖОК = ${JSON.stringify(SCENE_RUNTIME)}
+
+// Страница собирается ЗДЕСЬ, из СЦЕНЫ, а не лежит рядом готовой строкой
+// (v1.555.0). Раньше лежала — и тогда всё содержимое сцены хранилось в файле
+// ДВАЖДЫ. Пока в сцене были одни кубы, это стоило пары килобайт; с моделями по
+// три мегабайта удвоение упирается в место хранилища браузера, и приложение
+// перестаёт сохраняться вовсе.
+function собериСтраницу() {
+  return '<style>body{margin:0;overflow:hidden;background:' + (СЦЕНА.sky || '#0e1116') + '}'
+    + 'canvas{display:block;width:100%;height:100%}</style>\\n'
+    + '<' + 'script>\\n;(async () => {\\n' + ДВИЖОК + '\\n'
+    + 'await запустиСцену(' + JSON.stringify(СЦЕНА) + ', "игра")\\n'
+    + '})().catch(e => console.error("Сцена не запустилась: " + ((e && e.message) || e)))\\n'
+    + '</' + 'script>'
+}
 
 function onLoad(ponoi) {
   return ponoi.apps.create({
 ${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)).join(',\n')},
-    html: СТРАНИЦА,
+    html: собериСтраницу(),
   }).then(function (id) { self.__окно = id })
 }
 `
@@ -234,7 +250,11 @@ export function parseProject(code: string): Project | null {
   // Проект-сцена. Читаем ДАННЫЕ, а не собранную страницу.
   const с = code.indexOf('const СЦЕНА = ')
   if (с >= 0) {
-    const до = code.indexOf('\n\nconst СТРАНИЦА', с)
+    // Что стоит за сценой: с v1.555.0 — движок, до неё — готовая страница.
+    // Оба вида надо уметь открыть: проект, собранный вчера, обязан открыться
+    // сегодня.
+    let до = code.indexOf('\n\nconst ДВИЖОК', с)
+    if (до < 0) до = code.indexOf('\n\nconst СТРАНИЦА', с)
     if (до > 0) {
       try {
         const scene = readScene(JSON.parse(code.slice(с + 'const СЦЕНА = '.length, до)))
@@ -274,8 +294,16 @@ export function parseProject(code: string): Project | null {
   }
 }
 
+/**
+ * Число из описания окна.
+ *
+ * Ищем ТОЛЬКО в куске после apps.create, а не по всему файлу: с v1.555.0 рядом
+ * лежит текст движка сцены, и первое попавшееся «width: 512» из него стало бы
+ * размером окна приложения.
+ */
 const чисИз = (code: string, re: RegExp, по: number) => {
-  const r = re.exec(code)
+  const н = code.lastIndexOf('apps.create')
+  const r = re.exec(н >= 0 ? code.slice(н) : code)
   return r ? число(r[1], по) : по
 }
 

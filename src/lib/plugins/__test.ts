@@ -2365,6 +2365,154 @@ function onLoad(ponoi) { return ponoi.apps.create({ html: СТРАНИЦА }) }
     return m[1].includes('allow-scripts')
   })
 }
+
+console.log('\n-- Сцена и модели (v1.555.0) --')
+{
+  const S = await import('./scene')
+  const W = await import('./workshop')
+
+  /** Крошечная «модель»: содержимое здесь неважно, важно, что она есть и весит. */
+  const МОДЕЛЬ = { name: 'ёлка.glb', format: 'glb' as const, data: 'AAAAAAAA', bytes: 6 }
+
+  const проект = (scene: import('./scene').Scene) => ({
+    scene, id: '', name: 'Игра', version: '1.0.0', author: 'я', description: '',
+    files: [], width: 800, height: 600, frameless: false, transparent: false, permissions: [],
+  })
+
+  check('модель кладётся в проект и встаёт в сцену', () => {
+    const r = S.addModel(S.emptyScene(), МОДЕЛЬ)
+    const узел = r.scene.nodes.find(n => n.id === r.id)!
+    if (узел.kind !== 'model') throw new Error('вид узла ' + узел.kind)
+    if (r.scene.assets.length !== 1) throw new Error('моделей ' + r.scene.assets.length)
+    if (узел.asset !== r.scene.assets[0].id) throw new Error('узел смотрит не на свою модель')
+    // Вписывание по умолчанию: без него первая же модель оказывается точкой
+    // или стеной до неба, потому что единицы у всех разные.
+    return узел.fit === 2 && узел.name === 'ёлка'
+  })
+
+  check('один и тот же файл не кладётся дважды', () => {
+    // Десять деревьев в лесу должны весить как одно дерево.
+    let s = S.addModel(S.emptyScene(), МОДЕЛЬ).scene
+    s = S.addModel(s, МОДЕЛЬ).scene
+    s = S.addModel(s, { ...МОДЕЛЬ, name: 'другое-имя.glb' }).scene
+    if (s.assets.length !== 1) throw new Error('моделей ' + s.assets.length + ', а файл один')
+    return s.nodes.filter(n => n.kind === 'model').length === 3
+  })
+
+  check('модель без единого объекта выбрасывается при сборке', () => {
+    const r = S.addModel(S.emptyScene(), МОДЕЛЬ)
+    const без = S.removeNode(r.scene, r.id)
+    if (без.assets.length !== 1) throw new Error('удаление объекта не должно трогать файл само')
+    const чисто = S.pruneAssets(без)
+    if (чисто.assets.length !== 0) throw new Error('файл остался висеть в проекте')
+    // А нужную — не трогает.
+    return S.pruneAssets(r.scene).assets.length === 1
+  })
+
+  check('вес проекта считается по моделям', () => {
+    const s = S.addModel(S.emptyScene(), { ...МОДЕЛЬ, bytes: 1024 * 1024 }).scene
+    if (S.sceneBytes(s) !== 1024 * 1024) throw new Error('вес ' + S.sceneBytes(s))
+    return S.fmtBytes(0) === '0 Б' && S.fmtBytes(2048) === '2 КБ' && S.fmtBytes(1572864) === '1,5 МБ'
+  })
+
+  check('сцена с моделью открывается обратно без потерь', () => {
+    const r = S.addModel(S.emptyScene(), МОДЕЛЬ)
+    const назад = W.parseProject(W.buildProject(проект(r.scene)))
+    if (!назад || !назад.scene) throw new Error('сцена не разобралась')
+    if (назад.scene.assets.length !== 1) throw new Error('модель потерялась')
+    if (назад.scene.assets[0].data !== МОДЕЛЬ.data) throw new Error('содержимое модели разошлось')
+    const узел = назад.scene.nodes.find(n => n.kind === 'model')!
+    return узел.asset === назад.scene.assets[0].id && узел.fit === 2
+  })
+
+  check('модель хранится в файле приложения ОДИН раз', () => {
+    // Пока в сцене были кубы, удвоение стоило пары килобайт. С моделями по три
+    // мегабайта оно упирается в место хранилища браузера, и приложение
+    // перестаёт сохраняться вовсе.
+    const s = S.addModel(S.emptyScene(), { ...МОДЕЛЬ, data: 'МЕТКАМОДЕЛИ12345' }).scene
+    const код = W.buildProject(проект(s))
+    const сколько = код.split('МЕТКАМОДЕЛИ12345').length - 1
+    if (сколько !== 1) throw new Error('содержимое модели встречается ' + сколько + ' раз(а)')
+    return код.includes('const ДВИЖОК = ') && код.includes('собериСтраницу()')
+  })
+
+  check('размер окна не путается с числами из движка', () => {
+    // Рядом со сценой теперь лежит текст движка, и первое попавшееся «width:»
+    // из него стало бы размером окна приложения.
+    const назад = W.parseProject(W.buildProject({ ...проект(S.emptyScene()), width: 1280, height: 720 }))
+    if (!назад) throw new Error('не разобралось')
+    return назад.width === 1280 && назад.height === 720
+  })
+
+  check('сцены прошлой версии открываются', () => {
+    // Собранные до v1.555.0 хранили рядом готовую страницу, а не движок.
+    const старая = `/**
+ * @name Старая сцена
+ * @id staraya-scena
+ * @version 1.0.0
+ * @author я
+ * @description было
+ * @permissions apps
+ */
+const СЦЕНА = ${JSON.stringify(S.emptyScene(), null, 2)}
+
+const СТРАНИЦА = ${JSON.stringify('<style></style>')}
+
+function onLoad(ponoi) { return ponoi.apps.create({ width: 900, height: 500, html: СТРАНИЦА }) }
+`
+    const пр = W.parseProject(старая)
+    if (!пр || !пр.scene) throw new Error('старая сцена не открылась')
+    return пр.scene.nodes.length === 3 && пр.width === 900
+  })
+
+  check('битая модель не уносит с собой всю сцену', () => {
+    const s = S.readScene({
+      nodes: [{ kind: 'model', asset: 'a1' }],
+      assets: [{ id: 'a1', data: 'XX', name: 'ок.glb', format: 'glb', bytes: 2 }, { нет: 'полей' }, null],
+    })
+    if (s.assets.length !== 1) throw new Error('битое пролезло или унесло хорошее')
+    return s.nodes[0].kind === 'model' && s.nodes[0].asset === 'a1'
+  })
+
+  check('движок умеет читать модели', () => {
+    const дв = S.SCENE_RUNTIME
+    if (!дв.includes('GLTFLoader')) throw new Error('в движке нет загрузчика glTF')
+    return дв.includes('OBJLoader') && дв.includes('положиМодель') && дв.includes('вписать')
+  })
+
+  check('загрузчики правда лежат в собранной библиотеке', () => {
+    // Без этого GLTFLoader в движке — просто имя, которого на странице нет:
+    // пакет three отдаёт из главного модуля только ядро.
+    const src = readFileSync('src/lib/plugins/libsData.ts', 'utf8')
+    if (!/as GLTFLoader[,}]/.test(src)) throw new Error('GLTFLoader не экспортируется из склада')
+    return /as OBJLoader[,}]/.test(src)
+  })
+
+  check('объект двигается мышью, а не только числами', () => {
+    const дв = S.SCENE_RUNTIME
+    if (!дв.includes('intersectPlane')) throw new Error('перетаскивания нет')
+    // Место уезжает наружу — иначе оно потерялось бы при первой же пересборке.
+    return дв.includes('двинут') && дв.includes('shiftKey')
+  })
+
+  check('облёт камеры переживает пересборку вида', () => {
+    // Иначе каждая правка числа возвращала бы камеру на место, и рассмотреть
+    // сцену с другой стороны было бы нельзя дольше секунды.
+    const стр = S.scenePage(S.emptyScene(), 'редактор', { угол: 1.5, высота: 0.3, дальность: 12 })
+    if (!стр.includes('"орбита"')) throw new Error('облёт не доехал до страницы')
+    // В игру он попадать не должен: это вид мастерской, а не данные сцены.
+    return !S.scenePage(S.emptyScene(), 'игра').includes('"орбита"')
+  })
+
+  check('движок сцены не оборван обратной кавычкой', () => {
+    // Он живёт шаблонной строкой TypeScript: обратная кавычка обрывает её
+    // молча, и сцена перестаёт запускаться без единого сообщения.
+    const дв = S.SCENE_RUNTIME
+    if (дв.includes('`')) throw new Error('в движке появилась обратная кавычка')
+    return дв.includes('запустиСцену') && дв.trim().endsWith('}')
+  })
+}
+
 console.log('\n-- Отказов, мешающих автору, больше нет (v1.499.0) --')
 {
   const M = await import('./manifest')

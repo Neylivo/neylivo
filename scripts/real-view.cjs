@@ -79,6 +79,40 @@ app.whenReady().then(async () => {
     const узлов = await win.webContents.executeJavaScript(`document.querySelectorAll('body *').length`)
     console.log('снято: ' + имя + '.png  (узлов: ' + узлов + ')')
   }
+
+  // Мастерская — на настольном экране и БЕЗ мобильного опознавателя.
+  //
+  // В окне шириной 412 её три полосы схлопываются друг под друга, и снимок
+  // показывал бы не раскладку редактора, а то, как она складывается на
+  // телефоне. Делают приложения всё-таки за столом.
+  {
+    win.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+      + 'Chrome/126.0.0.0 Safari/537.36')
+    await d.sendCommand('Emulation.setEmulatedMedia', {
+      features: [{ name: 'hover', value: 'hover' }, { name: 'pointer', value: 'fine' }],
+    })
+    win.setSize(1360, 860)
+    await win.loadURL(require('url').pathToFileURL(path.join(OUT, 'index.html')).href + '?что=мастерская')
+    await new Promise(r => setTimeout(r, 1500))
+    const кадр0 = await win.webContents.capturePage()
+    fs.writeFileSync(path.join(LOOK, 'мастерская-вход.png'), кадр0.toPNG())
+
+    // Открываем визуальный редактор сцены — ради него сюда и приходят.
+    await win.webContents.executeJavaScript(
+      `document.querySelector('.ws-big')?.click(), true`)
+    await new Promise(r => setTimeout(r, 2500))
+    const кадр1 = await win.webContents.capturePage()
+    fs.writeFileSync(path.join(LOOK, 'мастерская-сцена.png'), кадр1.toPNG())
+
+    // И меню «ещё» в шапке: раскрытое, иначе на снимке от него один знак.
+    await win.webContents.executeJavaScript(
+      `[...document.querySelectorAll('.ws-more button')].find(b => b.textContent === '⋯')?.click(), true`)
+    await new Promise(r => setTimeout(r, 600))
+    const кадр2 = await win.webContents.capturePage()
+    fs.writeFileSync(path.join(LOOK, 'мастерская-меню.png'), кадр2.toPNG())
+    console.log('снято: мастерская-вход.png, мастерская-сцена.png, мастерская-меню.png')
+  }
   if (ошибки.length) console.log('ошибки в консоли: ' + ошибки.slice(0, 3).join(' | '))
   process.exit(0)
 })

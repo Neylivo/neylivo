@@ -294,11 +294,19 @@ function DetailModal({ c, onClose, onInstall }: { c: Card; onClose: () => void; 
   )
 }
 
-/** Выложить свой плагин: берём уже установленный — значит он точно запускается. */
-function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+/**
+ * Выложить свой плагин: берём уже установленный — значит он точно запускается.
+ *
+ * @param fixedId выкладывать именно этот и не спрашивать, какой (v1.555.0).
+ *   Так окно зовёт мастерская: там уже известно, что выкладывают, и выбор из
+ *   списка был бы лишним шагом ровно с одним верным ответом.
+ */
+export function PublishModal({ onClose, onDone, fixedId }: {
+  onClose: () => void; onDone: () => void; fixedId?: string
+}) {
   const { user } = useAuth()
   const installed = loadPlugins()
-  const [pick, setPick] = useState(installed[0]?.manifest.id ?? '')
+  const [pick, setPick] = useState(fixedId ?? installed[0]?.manifest.id ?? '')
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
   const [icon, setIcon] = useState('')
@@ -340,10 +348,14 @@ function PublishModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
         {installed.length === 0
           ? <div className="cat-hint">Сначала установи свой плагин из файла — потом его можно будет выложить.</div>
           : <>
-            <label className="modal-lbl">Какой плагин</label>
-            <select className="modal-in" value={pick} onChange={e => setPick(e.target.value)}>
-              {installed.map(p => <option key={p.manifest.id} value={p.manifest.id}>{p.manifest.name} {p.manifest.version}</option>)}
-            </select>
+            {fixedId
+              ? <div className="modal-lbl">Выкладывается: <b>{chosen?.manifest.name}</b> {chosen?.manifest.version}</div>
+              : <>
+                <label className="modal-lbl">Какой плагин</label>
+                <select className="modal-in" value={pick} onChange={e => setPick(e.target.value)}>
+                  {installed.map(p => <option key={p.manifest.id} value={p.manifest.id}>{p.manifest.name} {p.manifest.version}</option>)}
+                </select>
+              </>}
 
             <label className="modal-lbl">Короткое описание — его видно в списке</label>
             <input className="modal-in" maxLength={SUMMARY_MAX} value={summary} onChange={e => setSummary(e.target.value)}

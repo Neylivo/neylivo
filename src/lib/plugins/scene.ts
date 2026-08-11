@@ -18,7 +18,30 @@
 //
 // Проверки: src/lib/plugins/__test.ts (чистая часть) и живая в __api_test.tsx.
 
-export type NodeKind = 'box' | 'sphere' | 'plane' | 'cylinder' | 'light' | 'empty'
+export type NodeKind = 'box' | 'sphere' | 'plane' | 'cylinder' | 'light' | 'empty' | 'model'
+
+/**
+ * Готовая модель, положенная в проект (v1.555.0).
+ *
+ * ЛЕЖИТ В САМОМ ПРОЕКТЕ, а не в файлах устройства (ponoi.assets). Решение
+ * осознанное: приложение из мастерской сохраняется ОДНИМ файлом и этим же
+ * файлом уезжает другому человеку. Модель, оставленная в хранилище устройства,
+ * до него бы не доехала — он открыл бы игру без единой модели и решил, что она
+ * сломана.
+ *
+ * Плата за это — вес: файл проекта растёт ровно на вес моделей, и место в
+ * хранилище браузера кончается быстрее. Поэтому вес видно в мастерской рядом с
+ * каждой моделью, и он же считается по всей сцене.
+ */
+export interface SceneAsset {
+  id: string
+  name: string
+  /** glb — двоичный glTF (base64), obj — текст как есть. */
+  format: 'glb' | 'obj'
+  data: string
+  /** Вес исходного файла в байтах — человеку на карточке. */
+  bytes: number
+}
 
 export interface SceneNode {
   id: string
@@ -33,6 +56,18 @@ export interface SceneNode {
   visible: boolean
   /** Код объекта: onStart и onFrame. Пусто — объект просто стоит. */
   script: string
+  /** Какая модель показывается — id из scene.assets. Только для kind 'model'. */
+  asset?: string
+  /**
+   * Вписать модель в столько метров по наибольшей стороне. 0 — как есть.
+   *
+   * Зачем это вообще. Модели приходят в каких угодно единицах: одна и та же
+   * машина бывает ростом в 4 единицы и в 400. Без подгонки первая модель либо
+   * не видна вовсе, либо занимает полнеба, и человек крутит «размер» вслепую,
+   * не понимая, на какое число умножать. Считает это движок — только у него
+   * есть настоящие границы загруженной модели.
+   */
+  fit?: number
 }
 
 export interface Scene {
@@ -47,11 +82,13 @@ export interface Scene {
   fly: boolean
   /** Тени. Дороже, но без них сцена плоская. */
   shadows: boolean
+  /** Модели, положенные в проект. Узлы вида 'model' ссылаются сюда по id. */
+  assets: SceneAsset[]
 }
 
 export const KIND_LABEL: Record<NodeKind, string> = {
   box: 'Куб', sphere: 'Шар', plane: 'Плоскость', cylinder: 'Цилиндр',
-  light: 'Свет', empty: 'Пустышка',
+  light: 'Свет', empty: 'Пустышка', model: 'Модель',
 }
 
 let счёт = 0
@@ -78,6 +115,10 @@ export function makeNode(kind: NodeKind, имя?: string): SceneNode {
       return { ...общее, pos: [4, 6, 3], color: '#ffffff', shine: 2 }
     case 'plane':
       return { ...общее, pos: [0, 0, 0], scale: [10, 1, 10], color: '#2a2f3a', shine: 0.1 }
+    case 'model':
+      // Вписываем в 2 метра: первая же поставленная модель должна быть видна
+      // целиком и стоять на полу, а не оказаться точкой или стеной до неба.
+      return { ...общее, pos: [0, 0, 0], color: '#ffffff', shine: 0.4, fit: 2 }
     default:
       // Над полом, а не в нём: объект, наполовину утонувший в полу, читается
       // как ошибка редактора.
@@ -96,7 +137,64 @@ export function emptyScene(): Scene {
     camera: { pos: [4, 3, 7], look: [0, 1, 0], fov: 60 },
     fly: true,
     shadows: true,
+    assets: [],
   }
+}
+
+// ── Модели ─────────────────────────────────────────────────────────────────
+
+/** Сколько весит проект: сумма моделей. Всё остальное рядом с ними — пыль. */
+export function sceneBytes(s: Scene): number {
+  return (s.assets ?? []).reduce((n, a) => n + (a.bytes || a.data.length), 0)
+}
+
+/** «1,4 МБ» — число без подписи человеку ничего не говорит. */
+export function fmtBytes(n: number): string {
+  if (n < 1024) return n + ' Б'
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' КБ'
+  return (n / (1024 * 1024)).toFixed(1).replace('.', ',') + ' МБ'
+}
+
+/**
+ * Положить модель в проект и поставить её в сцену.
+ *
+ * Одна модель — один раз: если тот же файл добавляют второй раз, ставится
+ * ссылка на уже лежащую. Иначе десять деревьев в лесу весили бы как десять
+ * файлов, хотя дерево одно.
+ */
+export function addModel(
+  s: Scene, файл: { name: string; format: 'glb' | 'obj'; data: string; bytes: number },
+): { scene: Scene; id: string } {
+  const был = (s.assets ?? []).find(a => a.data === файл.data)
+  const asset: SceneAsset = был ?? {
+    id: 'a' + Date.now().toString(36) + '-' + (счёт + 1),
+    name: файл.name, format: файл.format, data: файл.data, bytes: файл.bytes,
+  }
+  const узел = makeNode('model', файл.name.replace(/\.(glb|gltf|obj)$/i, ''))
+  узел.asset = asset.id
+  const свои = s.nodes.filter(x => x.name === узел.name || x.name.startsWith(узел.name + ' ')).length
+  if (свои) узел.name = узел.name + ' ' + (свои + 1)
+  return {
+    scene: {
+      ...s,
+      assets: был ? s.assets : [...(s.assets ?? []), asset],
+      nodes: [...s.nodes, узел],
+    },
+    id: узел.id,
+  }
+}
+
+/**
+ * Выбросить модели, на которые никто не смотрит.
+ *
+ * Удалённый объект уносит с собой только себя — файл модели остаётся лежать в
+ * проекте и весить. Чистка идёт при сохранении: делать её на каждое удаление
+ * значило бы терять файл от одного неверного нажатия, а «отменить» здесь нет.
+ */
+export function pruneAssets(s: Scene): Scene {
+  const нужные = new Set(s.nodes.filter(n => n.kind === 'model' && n.asset).map(n => n.asset))
+  const оставить = (s.assets ?? []).filter(a => нужные.has(a.id))
+  return оставить.length === (s.assets ?? []).length ? s : { ...s, assets: оставить }
 }
 
 /** Число из поля ввода: мусор не должен ронять сцену. */
@@ -153,9 +251,23 @@ export function readScene(raw: unknown): Scene {
     shine: num(n?.shine, 0.4),
     visible: n?.visible !== false,
     script: typeof n?.script === 'string' ? n.script : '',
+    asset: typeof n?.asset === 'string' ? n.asset : undefined,
+    fit: n?.fit === undefined ? undefined : num(n.fit, 0),
   })) : п.nodes
+  const модели: SceneAsset[] = Array.isArray(o.assets) ? o.assets
+    // Битую модель молча пропускаем, а не роняем всю сцену: одна испорченная
+    // запись не должна стоить человеку всего проекта.
+    .filter((a: any) => a && typeof a.id === 'string' && typeof a.data === 'string')
+    .map((a: any) => ({
+      id: String(a.id),
+      name: String(a.name ?? 'модель'),
+      format: a.format === 'obj' ? 'obj' : 'glb',
+      data: String(a.data),
+      bytes: num(a.bytes, String(a.data).length),
+    })) : []
   return {
     nodes: узлы,
+    assets: модели,
     sky: typeof o.sky === 'string' ? o.sky : п.sky,
     ambient: num(o.ambient, п.ambient),
     camera: {
@@ -200,6 +312,84 @@ async function запустиСцену(данные, режим) {
   const поId = {}
   const скрипты = []
 
+  // ── Модели ───────────────────────────────────────────────────────────────
+  //
+  // Модель лежит в самом проекте: glb — двоичный, поэтому base64, obj — текст.
+  // Грузится она НЕ мгновенно, а объект в сцене нужен сразу (по нему щёлкают,
+  // его двигают, на нём висит скрипт). Поэтому на месте модели сразу стоит
+  // пустая группа, а содержимое приезжает в неё позже.
+
+  function байтыИзБазы64(s) {
+    const дв = atob(s)
+    const из = new Uint8Array(дв.length)
+    for (let i = 0; i < дв.length; i++) из[i] = дв.charCodeAt(i)
+    return из
+  }
+
+  function теней(корень) {
+    корень.traverse(function (o) {
+      if (o.isMesh) { o.castShadow = !!данные.shadows; o.receiveShadow = true }
+    })
+  }
+
+  /**
+   * Вписать модель в заданный рост и поставить её НА ПОЛ.
+   *
+   * Про пол отдельно: у моделей начало координат бывает где угодно — в центре,
+   * в макушке, в стороне. Без этого поставленное «в ноль» дерево наполовину
+   * тонет в земле, и человек ищет ошибку в своих числах, а не в модели.
+   */
+  function вписать(корень, метров) {
+    if (!(Number(метров) > 0)) return
+    const короб = new THREE.Box3().setFromObject(корень)
+    const размер = new THREE.Vector3()
+    короб.getSize(размер)
+    const бок = Math.max(размер.x, размер.y, размер.z)
+    if (!(бок > 0) || !isFinite(бок)) return
+    корень.scale.multiplyScalar(Number(метров) / бок)
+    короб.setFromObject(корень)
+    корень.position.y -= короб.min.y
+  }
+
+  /** Настоящий размер модели — наружу, чтобы мастерская показала его человеку. */
+  function сообщиРазмер(n, корень) {
+    try {
+      const размер = new THREE.Vector3()
+      new THREE.Box3().setFromObject(корень).getSize(размер)
+      parent.postMessage({ ponoi: 1, k: 'сцена', модель: n.id,
+        размер: [размер.x, размер.y, размер.z] }, '*')
+    } catch (e) {}
+  }
+
+  function положиМодель(n, группа) {
+    let a = null
+    for (const x of (данные.assets || [])) if (x.id === n.asset) a = x
+    if (!a) {
+      console.warn('У объекта ' + n.name + ' не выбрана модель')
+      return
+    }
+    const жалоба = function (e) {
+      console.error('Модель ' + a.name + ' не читается: ' + ((e && e.message) || e))
+    }
+    try {
+      if (a.format === 'obj') {
+        const о = new THREE.OBJLoader().parse(a.data)
+        группа.add(о)
+        теней(о)
+        вписать(о, n.fit)
+        сообщиРазмер(n, о)
+        return
+      }
+      const байты = байтыИзБазы64(a.data)
+      new THREE.GLTFLoader().parse(байты.buffer, '', function (г) {
+        группа.add(г.scene)
+        теней(г.scene)
+        вписать(г.scene, n.fit)
+        сообщиРазмер(n, г.scene)
+      }, жалоба)
+    } catch (e) { жалоба(e) }
+  }
+
   function собери(n) {
     let объект
     const цвет = new THREE.Color(n.color || '#ffffff')
@@ -213,6 +403,9 @@ async function запустиСцену(данные, режим) {
       }
     } else if (n.kind === 'empty') {
       объект = new THREE.Group()
+    } else if (n.kind === 'model') {
+      объект = new THREE.Group()
+      положиМодель(n, объект)
     } else {
       const материал = new THREE.MeshStandardMaterial({
         color: цвет,
@@ -276,9 +469,100 @@ async function запустиСцену(данные, режим) {
     // которого не нажать на объект.
     const начало = new THREE.Vector3(данные.camera.pos[0], данные.camera.pos[1], данные.camera.pos[2])
     орбита.дальность = Math.max(3, начало.distanceTo(центр))
-    холст.addEventListener('pointerdown', e => { тянут = true; холст.setPointerCapture(e.pointerId) })
-    холст.addEventListener('pointerup', e => { тянут = false; try { холст.releasePointerCapture(e.pointerId) } catch (err) {} })
+    // Облёт передаётся снаружи при пересборке вида: иначе каждая правка поля
+    // возвращала бы камеру в начальное положение, и рассмотреть сцену с другой
+    // стороны было бы нельзя дольше секунды.
+    if (данные.орбита) {
+      орбита.угол = Number(данные.орбита.угол) || орбита.угол
+      орбита.высота = Number(данные.орбита.высота) || орбита.высота
+      орбита.дальность = Number(данные.орбита.дальность) || орбита.дальность
+    }
+    // Облёт наружу — с задержкой: за один поворот колеса приходит десяток
+    // событий, и слать столько же сообщений незачем.
+    let ждёмОрбиту = null
+    const отложиОрбиту = () => {
+      if (ждёмОрбиту) clearTimeout(ждёмОрбиту)
+      ждёмОрбиту = setTimeout(
+        () => parent.postMessage({ ponoi: 1, k: 'сцена', орбита: орбита }, '*'), 250)
+    }
+
+    // ── Мышь в редакторе ─────────────────────────────────────────────────
+    //
+    // Тянуть ПО ОБЪЕКТУ — двигать объект, тянуть по пустому месту — облетать
+    // сцену. Без этого место задавалось только тремя числами в инспекторе:
+    // поставить стену там, где она нужна, значило подбирать координаты
+    // вслепую, по одной десятой за раз.
+    //
+    // По земле, а не «куда смотрю»: объект тащится по плоскости своей высоты,
+    // и пол под ним не меняется сам собой. Вверх и вниз — с Shift, по
+    // плоскости, обращённой к камере.
+    const луч = new THREE.Raycaster()
+    const плоскость = new THREE.Plane()
+    const точка = new THREE.Vector3()
+    const сдвиг = new THREE.Vector3()
+    let тащим = null
+
+    const норм = e => {
+      const r = холст.getBoundingClientRect()
+      return new THREE.Vector2(
+        ((e.clientX - r.left) / r.width) * 2 - 1,
+        -((e.clientY - r.top) / r.height) * 2 + 1)
+    }
+    const подЛучом = e => {
+      луч.setFromCamera(норм(e), камера)
+      // Рамку выбранного исключаем: она висит поверх объекта, и луч упирался
+      // бы в неё вместо него — выбранное невозможно было бы ни перевыбрать,
+      // ни сдвинуть.
+      const цели = сцена.children.filter(o => o !== рамка)
+      const попал = луч.intersectObjects(цели, true)
+      for (const п of попал) {
+        let o = п.object
+        while (o && !o.userData.id) o = o.parent
+        if (o && o.userData.id) return o
+      }
+      return null
+    }
+
+    холст.addEventListener('pointerdown', e => {
+      холст.setPointerCapture(e.pointerId)
+      const о = подЛучом(e)
+      if (!о) { тянут = true; return }
+      parent.postMessage({ ponoi: 1, k: 'сцена', выбран: о.userData.id }, '*')
+      подсветить(о.userData.id)
+      тащим = о
+      if (e.shiftKey) {
+        const н = new THREE.Vector3()
+        камера.getWorldDirection(н)
+        н.y = 0
+        плоскость.setFromNormalAndCoplanarPoint(н.normalize(), о.position)
+      } else {
+        плоскость.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), о.position)
+      }
+      луч.setFromCamera(норм(e), камера)
+      if (луч.ray.intersectPlane(плоскость, точка)) сдвиг.copy(о.position).sub(точка)
+      else сдвиг.set(0, 0, 0)
+    })
+    холст.addEventListener('pointerup', e => {
+      try { холст.releasePointerCapture(e.pointerId) } catch (err) {}
+      if (тащим) {
+        // Наружу — только когда отпустили. Слать на каждый кадр значило бы
+        // перерисовывать инспектор шестьдесят раз в секунду ради чисел,
+        // которые всё равно ещё меняются.
+        parent.postMessage({ ponoi: 1, k: 'сцена', двинут: тащим.userData.id,
+          где: [тащим.position.x, тащим.position.y, тащим.position.z] }, '*')
+        тащим = null
+      } else if (тянут) отложиОрбиту()
+      тянут = false
+    })
     холст.addEventListener('pointermove', e => {
+      if (тащим) {
+        луч.setFromCamera(норм(e), камера)
+        if (луч.ray.intersectPlane(плоскость, точка)) {
+          тащим.position.copy(точка).add(сдвиг)
+          if (рамка) рамка.update()
+        }
+        return
+      }
       if (!тянут) return
       орбита.угол -= e.movementX * 0.006
       орбита.высота = Math.max(-1.4, Math.min(1.4, орбита.высота + e.movementY * 0.006))
@@ -286,26 +570,14 @@ async function запустиСцену(данные, режим) {
     холст.addEventListener('wheel', e => {
       e.preventDefault()
       орбита.дальность = Math.max(1.5, Math.min(80, орбита.дальность * (1 + Math.sign(e.deltaY) * 0.12)))
+      отложиОрбиту()
     }, { passive: false })
 
-    // Щелчок выбирает объект — и говорит об этом наружу.
-    const луч = new THREE.Raycaster()
+    // Щелчок по пустому месту снимает выбор. Отдельным событием, потому что
+    // pointerdown по пустому месту — это ещё и начало облёта: снимать выбор
+    // сразу значило бы терять его при каждом повороте камеры.
     холст.addEventListener('click', e => {
-      const r = холст.getBoundingClientRect()
-      const т = new THREE.Vector2(
-        ((e.clientX - r.left) / r.width) * 2 - 1,
-        -((e.clientY - r.top) / r.height) * 2 + 1)
-      луч.setFromCamera(т, камера)
-      const попал = луч.intersectObjects(сцена.children, true)
-      for (const п of попал) {
-        let o = п.object
-        while (o && !o.userData.id) o = o.parent
-        if (o && o.userData.id) {
-          parent.postMessage({ ponoi: 1, k: 'сцена', выбран: o.userData.id }, '*')
-          return
-        }
-      }
-      parent.postMessage({ ponoi: 1, k: 'сцена', выбран: null }, '*')
+      if (!подЛучом(e)) parent.postMessage({ ponoi: 1, k: 'сцена', выбран: null }, '*')
     })
   } else if (данные.fly) {
     // В игре — ходьба и осмотр, как в любой игре от первого лица.
@@ -370,13 +642,23 @@ async function запустиСцену(данные, режим) {
 }
 `
 
-/** Страница редактора: движок плюс запуск в нужном режиме. */
-export function scenePage(scene: Scene, режим: 'редактор' | 'игра'): string {
+/** Где стоит камера облёта в редакторе. Живёт вне сцены: это вид, а не данные. */
+export interface Орбита { угол: number; высота: number; дальность: number }
+
+/**
+ * Страница редактора: движок плюс запуск в нужном режиме.
+ *
+ * Облёт передаётся отдельным доводом, а НЕ полем сцены. Разница важная: сцена —
+ * это то, что уедет в готовое приложение, а «откуда я сейчас смотрю» касается
+ * только мастерской и в игру попадать не должно.
+ */
+export function scenePage(scene: Scene, режим: 'редактор' | 'игра', орбита?: Орбита | null): string {
+  const данные = орбита ? { ...scene, орбита } : scene
   return '<style>body{margin:0;overflow:hidden;background:' + scene.sky + '}'
     + 'canvas{display:block;width:100%;height:100%}</style>\n'
     + '<script>\n;(async () => {\n'
     + SCENE_RUNTIME + '\n'
-    + 'await запустиСцену(' + JSON.stringify(scene) + ', ' + JSON.stringify(режим) + ')\n'
+    + 'await запустиСцену(' + JSON.stringify(данные) + ', ' + JSON.stringify(режим) + ')\n'
     + '})().catch(e => console.error("Сцена не запустилась: " + ((e && e.message) || e)))\n'
     + '</script>'
 }
