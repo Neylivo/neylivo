@@ -17,6 +17,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ApkInstaller.class);
         // v1.444.0: постоянная служба для музыки — по той же причине до super.
         registerPlugin(MusicKeepAlive.class);
+        // v1.556.0: защита от снимков экрана.
+        registerPlugin(CaptureGuard.class);
+        // Флаг ставится ДО super.onCreate — то есть до того, как окно вообще
+        // получит содержимое. Поставленный позже, он оставил бы незакрытыми
+        // первые кадры: как раз те, что попадают в начало записи экрана и в
+        // карточку недавних задач.
+        if (CaptureGuard.enabled(this)) CaptureGuard.apply(this, true);
         super.onCreate(savedInstanceState);
         goFullScreen();
     }

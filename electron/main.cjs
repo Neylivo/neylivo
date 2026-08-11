@@ -31,6 +31,42 @@ function writePrefs(p) { try { require('fs').writeFileSync(prefsFile(), JSON.str
 try { const p0 = readPrefs(); if (p0.resumeHidden) { startHidden = true; writePrefs({ ...p0, resumeHidden: false }) } } catch {}
 let trySilentInstall = () => false   // назначается после инициализации автообновлений (v1.124.0)
 
+// ---- v1.556.0: приложение не попадает в снимки и записи экрана ----
+//
+// Владелец: «сделай чтобы приложение нельзя вообще никак сфоткать».
+//
+// Что здесь делается по-настоящему. Окно помечается для системы как защищённое
+// (на Windows это SetWindowDisplayAffinity с WDA_EXCLUDEFROMCAPTURE, на macOS —
+// свой эквивалент). После этого ЛЮБОЙ снимок и любая запись экрана видят на
+// месте окна чёрный прямоугольник: Win+Shift+S, «Ножницы», OBS, демонстрация
+// экрана в Discord, Teams, Zoom — всё. Это не наша хитрость поверх картинки, а
+// отказ самой системы отдавать содержимое окна кому бы то ни было.
+//
+// ЧЕГО ЭТО НЕ ДЕЛАЕТ. Фотография экрана телефоном так не закрывается и не может
+// быть закрыта ничем: с монитора идёт свет, и он одинаково попадает и в глаз, и
+// в камеру. Всё, что можно противопоставить съёмке со стороны, — не показывать
+// текст, пока на него не смотрят: это делает «Скрывать сообщения» в настройках
+// приватности (src/lib/captureGuard.ts), и это ДРУГАЯ мера, а не эта.
+//
+// Включено по умолчанию — прямая просьба владельца. Ценой того, что своё же
+// окно Ponoi нельзя показать в демонстрации экрана: оно будет чёрным. Это не
+// поломка, а ровно то, о чём просили, и выключается одним переключателем.
+//
+// Состояние хранится в prefs.json и читается ДО создания окна: включи мы защиту
+// после загрузки страницы — первые секунды окно было бы видно записи.
+let captureGuard = (() => {
+  try { const p = readPrefs(); return p.captureGuard !== false } catch { return true }
+})()
+
+function applyCaptureGuard(on) {
+  captureGuard = !!on
+  try { writePrefs({ ...readPrefs(), captureGuard }) } catch {}
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.setContentProtection(captureGuard) } catch { /* окно уже закрыто */ }
+  }
+  return captureGuard
+}
+
 // v1.161.0: диплинки ponoi://msg/... («Скопировать ссылку на сообщение»). Windows
 // запускает наш .exe заново с URL в аргументах — если приложение уже открыто, это
 // приходит вторым экземпляром (второй if-branch ниже); если ещё не запущено —
@@ -361,6 +397,18 @@ app.whenReady().then(() => {
 })
 app.on('will-quit', () => { try { globalShortcut.unregister('F7') } catch { /* уже снята */ } })
 
+// Защита ставится КАЖДОМУ окну и в момент его создания.
+//
+// Не только главному: окна плагинов, окна-вопросы и плашки поверх игры тоже
+// показывают переписку и имена. И не «после загрузки»: окно, защищённое через
+// секунду после открытия, эту секунду видно записи целиком.
+app.on('browser-window-created', (_e, w) => {
+  try { w.setContentProtection(captureGuard) } catch { /* окно уже закрылось */ }
+})
+
+/** @param on true/false — включить или выключить; undefined — только узнать. */
+ipcMain.handle('ponoi-capture-guard', (_e, on) =>
+  (typeof on === 'boolean' ? applyCaptureGuard(on) : captureGuard))
 
 ipcMain.handle('ponoi-find-cover', (_e, name) => findCover(String(name || '')))
 

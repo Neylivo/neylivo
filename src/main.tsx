@@ -21,8 +21,16 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles.css'
 import './ponoi-ui.css'
 import { initChatBg } from './lib/chatBg'
+import { applyBlurMessages, watchBlurTaps } from './lib/captureGuard'
 
 initChatBg()
+
+// v1.556.0: скрытие сообщений включается ДО отрисовки приложения.
+//
+// Иначе первый кадр показал бы переписку открытой — то есть ровно в тот момент,
+// когда её видно и человеку, и чужой камере, и записи экрана.
+applyBlurMessages()
+watchBlurTaps()
 
 // PWA (v1.34.0): регистрируем service worker сразу — нужен для установки на телефон.
 // Под Electron file:// сервис-воркеры недоступны, поэтому тихо пропускаем.

@@ -79,6 +79,10 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // показывать ли (нужно ещё, чтобы была активна игра), см. electron/main.cjs.
   setCallOverlayParticipants: (list) => ipcRenderer.send('ponoi-call-overlay-participants', list),
 
+  // v1.556.0: приложение не отдаётся снимкам и записям экрана.
+  // Довод true/false переключает, без довода — только спрашивает текущее.
+  captureGuard: (on) => ipcRenderer.invoke('ponoi-capture-guard', on),
+
   // v1.436.0: выбор того, ЧТО показывать в демонстрации — экран или окно.
   shareSources: () => ipcRenderer.invoke('ponoi-share-sources'),
   setShareSource: (id, audio) => ipcRenderer.send('ponoi-share-source', { id, audio }),

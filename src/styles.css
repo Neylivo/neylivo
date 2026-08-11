@@ -169,6 +169,48 @@ body {
 .msg-hdr .nm { font-weight:600; color:var(--tx-name, #f2f3f5); }
 .msg-time { color:var(--mut); font-size:12px; }
 .msg-txt { margin-top:2px; white-space:pre-wrap; word-break:break-word; line-height:1.375; }
+
+/* v1.556.0: «Скрывать сообщения» — против съёмки со стороны и взгляда через
+   плечо. Запретить чужой камере видеть экран нельзя ничем: с экрана идёт свет,
+   и он одинаково попадает и в глаз, и в объектив. Единственное, что тут
+   работает, — не держать текст открытым, пока его не читают.
+
+   Размытие сильное намеренно. Слабое читается на снимке после повышения
+   резкости, а восстановить текст из 10 пикселей размытия нечем: там уже нет
+   тех данных. Отдельно гасим прозрачность — по одной длине строки и абзацам
+   тоже кое-что понятно. */
+html.hide-msg .msg-txt,
+html.hide-msg .msg-att,
+html.hide-msg .msg-file,
+html.hide-msg .msg-att-broken,
+html.hide-msg .msg-embed,
+html.hide-msg .msg-quote {
+  filter: blur(10px);
+  opacity: .55;
+  transition: filter .12s var(--ease-out4, ease), opacity .12s var(--ease-out4, ease);
+  /* Размытый текст всё ещё выделяется и копируется — а значит, его можно
+     выделить и прочитать в буфере, не наводя мышь. Тогда мера не стоила бы
+     ничего. */
+  user-select: none;
+}
+/* Открывается ровно то, что человек сейчас читает: наведение мышью, а на
+   телефоне — прикосновение (класс open ставит watchBlurTaps на 10 секунд). */
+html.hide-msg .msg:hover .msg-txt,
+html.hide-msg .msg:hover .msg-att,
+html.hide-msg .msg:hover .msg-file,
+html.hide-msg .msg:hover .msg-att-broken,
+html.hide-msg .msg:hover .msg-embed,
+html.hide-msg .msg:hover .msg-quote,
+html.hide-msg .msg.open .msg-txt,
+html.hide-msg .msg.open .msg-att,
+html.hide-msg .msg.open .msg-file,
+html.hide-msg .msg.open .msg-att-broken,
+html.hide-msg .msg.open .msg-embed,
+html.hide-msg .msg.open .msg-quote {
+  filter: none;
+  opacity: 1;
+  user-select: auto;
+}
 .composer { padding:0 16px 24px; display:flex; gap:8px; }
 /* v1.163.0: многострочный композер (textarea, авто-рост) вместо однострочного input — Shift+Enter теперь переносит строку, как в Discord. */
 .composer textarea { flex:1; background:var(--c-hover); border:none; border-radius:var(--r-md); padding:12px 14px; color:var(--tx); font-size:16px; outline:none; font-family:inherit; line-height:1.375; resize:none; overflow-y:auto; max-height:50vh; }

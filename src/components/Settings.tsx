@@ -32,6 +32,10 @@ import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
 import { AppWorkshop } from './AppWorkshop'
+import {
+  blurMessages, captureGuardAvailable, captureGuardWhyNot, getCaptureGuard,
+  setBlurMessages, setCaptureGuard,
+} from '../lib/captureGuard'
 import { MicTest, CameraTest, VoiceDevices } from './MicTest'
 import { myFingerprint } from '../lib/crypto/keys'
 import { SignOutModal } from './SignOutModal'
@@ -110,6 +114,63 @@ const FONTS = FONT_PRESETS
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return <button className={'pqs-toggle' + (on ? ' on' : '')} onClick={() => onChange(!on)}><span /></button>
 }
+/**
+ * v1.556.0: съёмка экрана — две РАЗНЫЕ меры, и разница между ними названа прямо.
+ *
+ * Владелец просил «чтобы приложение нельзя было вообще никак сфоткать». Первая
+ * мера делает ровно это для снимков и записи: система перестаёт отдавать окно.
+ * Вторая — против чужой камеры, и она не «слабее», а про другое: закрыть
+ * объектив нечем в принципе, поэтому текст просто не держится открытым.
+ *
+ * Состояние защиты спрашивается у СИСТЕМЫ, а не хранится своим флажком: иначе
+ * переключатель показывал бы «включено» и там, где система отказала.
+ */
+function CaptureSection() {
+  const [guard, setGuard] = useState<boolean | null>(null)
+  const [blur, setBlur] = useState(blurMessages())
+  const [busy, setBusy] = useState(false)
+  const можно = captureGuardAvailable()
+  const почему = captureGuardWhyNot()
+
+  useEffect(() => { void getCaptureGuard().then(setGuard) }, [])
+
+  async function переключи(on: boolean) {
+    setBusy(true)
+    try {
+      const стало = await setCaptureGuard(on)
+      setGuard(стало)
+      if (стало !== on) toastErr('Система не дала это изменить — защита осталась ' + (стало ? 'включённой' : 'выключенной'))
+    } finally { setBusy(false) }
+  }
+
+  return <>
+    <Row title="Не отдавать окно снимкам и записи"
+      desc={можно
+        ? 'Снимок экрана, «Ножницы», OBS и демонстрация экрана в звонке увидят на месте Ponoi чёрное. На телефоне снимок не сделается вовсе.'
+        : 'Здесь недоступно'}>
+      <Toggle on={!!guard && можно} onChange={v => { if (можно && !busy) void переключи(v) }} />
+    </Row>
+    {!можно && <div className="pqs2-desc" style={{ marginTop: 6 }}>{почему}</div>}
+
+    <Row title="Скрывать сообщения"
+      desc="Текст размыт, пока не наведёшь мышь — на телефоне пока не коснёшься. Против съёмки со стороны и взгляда через плечо.">
+      <Toggle on={blur} onChange={v => { setBlurMessages(v); setBlur(v) }} />
+    </Row>
+
+    {/* Честно про границу возможного. Обещать «нельзя сфотографировать» —
+        значит обещать невозможное: с экрана идёт свет, и он одинаково попадает
+        и в глаз, и в объектив. Человек, поверивший обещанию, будет писать в
+        приложении то, чего иначе не написал бы, — а это хуже, чем отсутствие
+        защиты. */}
+    <div className="pqs2-desc" style={{ marginTop: 10 }}>
+      Чего не может ни одно приложение: помешать снять экран другим телефоном. Пока текст виден
+      глазу, он виден и камере — это свойство света, а не недоработка. Поэтому вторая настройка
+      не «замазывает от камеры», а держит закрытым всё, кроме той строки, которую ты читаешь
+      прямо сейчас.
+    </div>
+  </>
+}
+
 // v1.295.0: сквозное шифрование личной переписки. Отдельным компонентом, потому
 // что отпечаток читается из хранилища ключей асинхронно.
 function E2eeSection() {
@@ -1462,6 +1523,9 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
               {cat === 'privacy' && <>
                 <h2>Данные и конфиденциальность</h2>
                 <div className="pqs2-desc">Кто может писать тебе в личку и звонить, какие данные хранит приложение.</div>
+
+                <div className="pqs-sec-t">Съёмка экрана</div>
+                <CaptureSection />
 
                 <div className="pqs-sec-t">Сквозное шифрование</div>
                 <E2eeSection />

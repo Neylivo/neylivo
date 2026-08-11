@@ -21,6 +21,7 @@ public abstract class Service extends Context {
   public Object getSystemService(String name) { return null; }
   public PackageManager getPackageManager() { return null; }
   public String getPackageName() { return null; }
+  public android.content.SharedPreferences getSharedPreferences(String name, int mode) { return null; }
   public java.io.File getCacheDir() { return null; }
   public void startActivity(Intent intent) { }
   public ComponentName startService(Intent intent) { return null; }
