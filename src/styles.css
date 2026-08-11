@@ -9068,3 +9068,27 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
   .mus2-artists { grid-template-columns: 1fr; }
   .mus2-card-like { width: 32px; height: 32px; }
 }
+
+/* v1.554.0: цели, по которым промахивались пальцем.
+ *
+ * Сплошной обход (npm run test:reach) прошёл по каждой нажимаемой вещи на всех
+ * экранах и нашёл три, куда попасть трудно: смайлик внутри строки ввода 32×32,
+ * крестик окна 40×40 и стрелки выбора устройства в звонке 22 пикселя шириной.
+ *
+ * Первые две просто дорастают до пальца. Третья — сложнее: широкая стрелка
+ * съедает место у самих кнопок звонка, и полоса перестаёт помещаться. Поэтому
+ * стрелка ОСТАЁТСЯ узкой на вид, а ловит нажатия шире себя — прозрачным полем
+ * вокруг. Так и попасть можно, и полоса цела.
+ */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-width: 1100px) {
+  .composer .cin-emoji { position: absolute; }
+  .composer .cin-emoji::after { content: ''; position: absolute;
+    top: -6px; bottom: -6px; left: -6px; right: -6px; }
+  .modal-x { width: var(--h-touch); height: var(--h-touch); min-height: var(--h-touch);
+    top: 8px; right: 8px; }
+  /* Стрелка звонка: вид прежний, поле нажатия шире. Псевдоэлемент не двигает
+     соседей и не меняет ширину полосы — он просто ловит палец. */
+  .c2-caret { position: relative; }
+  .c2-caret::after { content: ''; position: absolute; top: 0; bottom: 0;
+    left: -11px; right: -11px; }
+}
