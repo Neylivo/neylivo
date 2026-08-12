@@ -4,7 +4,7 @@
 
 ## Supported versions
 
-Ponoi ships from a single line of development, and only the latest release is
+NeyLivo ships from a single line of development, and only the latest release is
 supported. There are no long-term branches to backport to.
 
 | Version | Supported |
@@ -18,7 +18,7 @@ them. The web version is always current.
 ## Reporting a vulnerability
 
 **Please report privately first, and give the problem a chance to be fixed
-before it becomes public.** That protects the people using Ponoi.
+before it becomes public.** That protects the people using NeyLivo.
 
 1. Use GitHub’s private vulnerability reporting on this repository
    (Security → Report a vulnerability). If that is unavailable to you, open an
@@ -54,7 +54,7 @@ better stated than implied.
 
 Before reporting, please check
 [`SECURITY_ARCHITECTURE_AUDIT.md`](SECURITY_ARCHITECTURE_AUDIT.md) and
-[ponoiai.github.io/transparency](https://ponoiai.github.io/transparency/): the
+[neylivo.github.io/transparency](https://neylivo.github.io/transparency/): the
 project publishes its own list of weaknesses, including that attachments sent
 without attachment encryption are in public storage, that end-to-end encryption
 is off by default and covers one-to-one conversations only, and that there is no
@@ -68,7 +68,7 @@ be worse than saying this plainly.
 ### Scope
 
 In scope: this repository, the released Windows and Android applications, the
-web application at <https://ponoiai.github.io/ponoi/>, the database rules under
+web application at <https://neylivo.github.io/neylivo/>, the database rules under
 `supabase/`, the Edge Functions, and the plugin sandbox.
 
 Not in scope: the security of Supabase, LiveKit or GitHub themselves — report
@@ -99,7 +99,7 @@ your own Supabase project is unrestricted.
 ## Как сообщить об уязвимости
 
 **Пожалуйста, сообщите сначала лично и дайте шанс починить проблему до того, как
-о ней узнают все.** Это защищает людей, которые пользуются Ponoi.
+о ней узнают все.** Это защищает людей, которые пользуются NeyLivo.
 
 1. Воспользуйтесь приватным сообщением об уязвимости в этом репозитории
    (Security → Report a vulnerability). Если такой возможности нет, заведите
@@ -135,7 +135,7 @@ your own Supabase project is unrestricted.
 
 Перед отправкой загляните в
 [`SECURITY_ARCHITECTURE_AUDIT.md`](SECURITY_ARCHITECTURE_AUDIT.md) и на
-[страницу прозрачности](https://ponoiai.github.io/ru/transparency/): проект сам
+[страницу прозрачности](https://neylivo.github.io/ru/transparency/): проект сам
 публикует список своих слабых мест, включая то, что вложения без шифрования
 лежат в публичном хранилище, что сквозное шифрование выключено по умолчанию и
 действует только на переписку один на один и что Content-Security-Policy нет.
@@ -149,7 +149,7 @@ your own Supabase project is unrestricted.
 ### Что входит в область
 
 Входит: этот репозиторий, выпущенные приложения для Windows и Android,
-веб-приложение <https://ponoiai.github.io/ponoi/>, правила доступа к базе в
+веб-приложение <https://neylivo.github.io/neylivo/>, правила доступа к базе в
 `supabase/`, Edge Functions и песочница плагинов.
 
 Не входит: безопасность самих Supabase, LiveKit и GitHub — о ней сообщайте им; и

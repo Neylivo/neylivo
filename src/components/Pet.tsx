@@ -7,7 +7,7 @@ import { Icon } from './icons'
 const KEY = 'ponoi_pet_v1'
 const SPECIES = ['🐱', '🐶', '🦊', '🐸', '🐧', '🐹', '🐢', '🦄', '🐉', '👾']
 interface PetCfg { on: boolean; emoji: string; name: string }
-function load(): PetCfg { try { return { on: true, emoji: '🐱', name: 'Поной', ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { on: true, emoji: '🐱', name: 'Поной' } } }
+function load(): PetCfg { try { return { on: true, emoji: '🐱', name: 'Нейливо', ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { on: true, emoji: '🐱', name: 'Нейливо' } } }
 function save(c: PetCfg) { localStorage.setItem(KEY, JSON.stringify(c)) }
 
 export function Pet() {
@@ -35,7 +35,7 @@ export function Pet() {
     return () => clearInterval(t)
   }, [cfg.on])
 
-  const PHRASES = ['Привет! 👋', 'Мур-мур ❤️', 'Как дела?', 'Ponoi лучший!', '🎵 ля-ля-ля', 'Не скучай!', 'Обними меня 🤗']
+  const PHRASES = ['Привет! 👋', 'Мур-мур ❤️', 'Как дела?', 'NeyLivo лучший!', '🎵 ля-ля-ля', 'Не скучай!', 'Обними меня 🤗']
   function poke() { setSay(PHRASES[Math.floor(Math.random() * PHRASES.length)]); setTimeout(() => setSay(null), 2500) }
 
   if (!cfg.on) return (

@@ -1,4 +1,4 @@
--- Ponoi — этап 12 миграции: цветные роли (как в Discord).
+-- NeyLivo — этап 12 миграции: цветные роли (как в Discord).
 -- Выполни в Supabase -> SQL Editor ПОСЛЕ 11_last_seen.sql.
 
 create table if not exists server_roles (

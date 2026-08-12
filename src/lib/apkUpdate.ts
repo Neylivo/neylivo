@@ -6,7 +6,7 @@ import { Capacitor } from '@capacitor/core'
 // на Android без Play Маркета невозможна (систему всё равно попросит
 // подтвердить установку поверх старой версии) — но саму проверку "есть ли
 // новее релиз" и ссылку на .apk можно и нужно сделать автоматической.
-const REPO = 'ponoiai/ponoi'
+const REPO = 'Neylivo/neylivo'
 const DISMISS_KEY = 'ponoi_apk_update_dismissed'
 
 function verParts(v: string): number[] { return v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0) }

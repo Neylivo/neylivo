@@ -1,4 +1,4 @@
-// v1.412.0: проверка всей логики Ponoi Music. Запуск: npm run test:music
+// v1.412.0: проверка всей логики NeyLivo Music. Запуск: npm run test:music
 //
 // Зачем отдельный набор. Плеер оброс решениями, которые видно только на краях:
 // что считать одной и той же песней, что играть дальше, куда возвращает
@@ -1258,7 +1258,7 @@ check('мусор вместо чисел полосу не ломает', () =>
   && mediaPos(10, NaN) === null && mediaPos(-30, 200)?.position === 0)
 
 check('карточка пересобирается только при смене трека', () => {
-  const a = { title: 'Т', artist: 'И', album: 'Ponoi Music', art: 'u' }
+  const a = { title: 'Т', artist: 'И', album: 'NeyLivo Music', art: 'u' }
   return mediaKey(a) === mediaKey({ ...a }) && mediaKey(a) !== mediaKey({ ...a, title: 'Другой' })
 })
 check('смена обложки тоже пересобирает карточку', () => {

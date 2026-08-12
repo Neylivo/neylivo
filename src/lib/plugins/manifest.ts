@@ -1,6 +1,6 @@
 import { ALL_PERMISSIONS, PluginParseError, type Permission, type PluginManifest } from './types'
 
-// v1.286.0: разбор шапки .ponoi-файла. Формат намеренно тот же, к которому уже
+// v1.286.0: разбор шапки файла плагина (.neylivo). Формат намеренно тот же, к которому уже
 // привыкли люди по BetterDiscord/exteraGram — блочный комментарий с @полями в
 // начале файла, а дальше обычный JS:
 //
@@ -15,7 +15,7 @@ import { ALL_PERMISSIONS, PluginParseError, type Permission, type PluginManifest
 //    * @icon https://example.com/icon.png
 //    * @banner https://example.com/banner.jpg
 //    */
-//   export function onLoad(ponoi) { ... }
+//   export function onLoad(neylivo) { ... }
 
 /** Потолок размера файла. Плагин — это логика, а не ассеты; всё, что больше, почти
  *  наверняка попытка запихнуть в чат бинарник под видом плагина. */
@@ -115,7 +115,7 @@ function parsePermissions(raw: string | undefined): Permission[] {
     // написанный под будущую версию, поставится и будет молча не работать, а человек
     // будет думать, что виновато приложение.
     if (!(ALL_PERMISSIONS as string[]).includes(p)) {
-      throw new PluginParseError(`Неизвестное разрешение «${cut(part, 30)}». Плагин рассчитан на другую версию Ponoi.`)
+      throw new PluginParseError(`Неизвестное разрешение «${cut(part, 30)}». Плагин рассчитан на другую версию NeyLivo.`)
     }
     if (!out.includes(p as Permission)) out.push(p as Permission)
   }

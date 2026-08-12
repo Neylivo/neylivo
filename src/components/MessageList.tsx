@@ -460,7 +460,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
   // подтверждениями и откатами. Плагин ничего не делает с базой сам.
   //
   // Ключ — id открытого разговора (канал или диалог), тот же, который плагин
-  // получает в ponoi.channel(). Полей ввода и лент на экране до трёх сразу
+  // получает в neylivo.channel(). Полей ввода и лент на экране до трёх сразу
   // (канал, личка, ветка): без ключа плагин читал бы ту, что отрисовалась
   // последней, а не ту, которую человек видит.
   const chatKey = linkCtx ? (linkCtx.kind === 'server' ? linkCtx.channelId : linkCtx.dmId) : null
@@ -868,7 +868,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
           {textOf ? item('Скопировать текст', 'copy', () => { copyText(textOf, 'Текст скопирован') }) : null}
           {(canPin ? canPin(menuMsg) : true) ? item(menuMsg.pinned ? 'Открепить сообщение' : 'Закрепить сообщение', 'pin', () => onPin?.(menu.id, !menuMsg.pinned)) : null}
           {onMarkUnread ? item('Отметить как непрочитанное', 'message', () => { onMarkUnread(menuMsg); toastOk('Отмечено как непрочитанное') }) : null}
-          {item('Скопировать ссылку на сообщение', 'link', () => { copyText(linkCtx ? buildMsgLink(linkCtx, menuMsg.id) : 'ponoi://msg/' + menuMsg.id, 'Ссылка скопирована') })}
+          {item('Скопировать ссылку на сообщение', 'link', () => { copyText(linkCtx ? buildMsgLink(linkCtx, menuMsg.id) : 'neylivo://msg/' + menuMsg.id, 'Ссылка скопирована') })}
           {textOf ? item('Зачитать сообщение', 'volume', () => speakMsg(menuMsg)) : null}
           {/* v1.286.0: действия над сообщением от плагинов. Плагин получает только
               id, автора и текст — ни вложений, ни служебных полей. */}
@@ -880,7 +880,7 @@ export function MessageList({ messages, reactions = {}, currentUser, currentUser
               })}
             </Fragment>
           ))}
-          {/* v1.465.0: пункты из ponoi.ui.addContextMenu. Для сообщения плагин
+          {/* v1.465.0: пункты из neylivo.ui.addContextMenu. Для сообщения плагин
               получает то же, что и в addMessageAction, — ни вложений, ни
               служебных полей. */}
           {pluginCtx.map(c => (

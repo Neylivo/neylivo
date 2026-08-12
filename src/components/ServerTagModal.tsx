@@ -34,7 +34,7 @@ export function ServerTagModal({ server, myTagServerId, onClose, onEditProfile }
       <div className="modal srvtag" onClick={e => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose}><Icon name="close" size={18} /></button>
         <div className="srvtag-h">Использовать тег этого сервера</div>
-        <div className="srvtag-sub">Представляйте свой любимый сервер в Ponoi.</div>
+        <div className="srvtag-sub">Представляйте свой любимый сервер в NeyLivo.</div>
         <div className="srvtag-row">
           <span className="srvtag-av" style={server.avatar_url ? { backgroundImage: `url(${server.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
             {!server.avatar_url && server.name.slice(0, 2).toUpperCase()}

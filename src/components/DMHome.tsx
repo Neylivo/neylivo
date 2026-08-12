@@ -1578,7 +1578,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               виджетом: стоит там, куда его поставил человек, и им же
               двигается (см. apps.ts, mode: 'widget'). */}
           {/* v1.419.0: плагину нужно знать, ГДЕ он находится. В личке полей
-              channelId/channelName не было вовсе: ponoi.channel() отвечал null,
+              channelId/channelName не было вовсе: neylivo.channel() отвечал null,
               событие о переходе не приходило, и всё, что плагин умеет для
               открытого чата (прочитать последние сообщения, поставить реакцию),
               в ЛС просто не работало — без единого слова почему. serverId здесь
@@ -1619,7 +1619,7 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
               <div className="pfr-add2-head">
                 <div className="pfr-add2-tx">
                   <div className="pfr-add2-h">Добавить в друзья</div>
-                  <div className="pfr-add2-sub">Вы можете добавить друзей по имени пользователя в Ponoi.</div>
+                  <div className="pfr-add2-sub">Вы можете добавить друзей по имени пользователя в NeyLivo.</div>
                 </div>
               </div>
               <div className={'pfr-add2-inwrap' + (codeMsg ? (codeOk ? ' ok' : ' err') : '')}>

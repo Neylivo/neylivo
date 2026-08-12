@@ -92,7 +92,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
   useEffect(() => { void load() }, [])
 
   const official: Card[] = BUILTIN_BOTS.map(b => ({
-    key: 'builtin:' + b.kind, name: b.name, author: 'Ponoi', summary: b.summary,
+    key: 'builtin:' + b.kind, name: b.name, author: 'NeyLivo', summary: b.summary,
     description: b.description, emoji: b.emoji, official: true, kind: b.kind,
     adds: counts['builtin:' + b.kind] ?? 0,
   }))
@@ -166,7 +166,7 @@ export function BotCatalog({ serverId, onAdded, inline: _inline }: {
         </div>
 
         <div className="cat-body">
-          <div className="cat-sec">От создателей Ponoi</div>
+          <div className="cat-sec">От создателей NeyLivo</div>
           <div className="cat-grid">
             {official.filter(match).map(c => (
               <BotCardView key={c.key} c={c} busy={busy === c.key} canAdd={!!target} added={alreadyAdded(c)}
@@ -212,7 +212,7 @@ function BotCardView({ c, busy, canAdd, added, onOpen, onAdd, onRemove }: {
         {c.iconUrl ? <img src={c.iconUrl} alt="" /> : <span className="cat-emoji">{c.emoji ?? '🤖'}</span>}
       </div>
       <div className="cat-tile-body">
-        <div className="cat-nm">{c.name}{c.official && <span className="cat-badge">от Ponoi</span>}</div>
+        <div className="cat-nm">{c.name}{c.official && <span className="cat-badge">от NeyLivo</span>}</div>
         <div className="cat-sum">{shorten(c.summary)}</div>
         <div className="cat-meta">
           <span className="cat-author">{c.author}</span>
@@ -240,12 +240,12 @@ function BotDetail({ c, canAdd, onClose, onAdd }: { c: Card; canAdd: boolean; on
           <div className="cat-ic big">{c.iconUrl ? <img src={c.iconUrl} alt="" /> : <span className="cat-emoji">{c.emoji ?? '🤖'}</span>}</div>
           <div>
             <div className="modal-title" style={{ margin: 0 }}>{c.name}</div>
-            <div className="cat-meta"><span>{c.author}</span>{c.official && <span className="cat-badge">от Ponoi</span>}</div>
+            <div className="cat-meta"><span>{c.author}</span>{c.official && <span className="cat-badge">от NeyLivo</span>}</div>
           </div>
         </div>
         <div className="cat-desc">{c.description || c.summary}</div>
         {c.official && <div className="cset-hint">
-          Готовый бот работает сразу: свой сервер для него не нужен, всё считается внутри Ponoi.
+          Готовый бот работает сразу: свой сервер для него не нужен, всё считается внутри NeyLivo.
           Он заводится под твоей учётной записью — удалить его можно в разделе «Боты» (Настройки пользователя).
         </div>}
         <div className="modal-foot">

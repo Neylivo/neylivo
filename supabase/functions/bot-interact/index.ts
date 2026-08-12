@@ -1,6 +1,6 @@
 // Supabase Edge Function: bot-interact — вызов слэш-команды бота (INTERACTION_CREATE).
 // Деплой:  supabase functions deploy bot-interact   (--verify-jwt по умолчанию —
-//          зовёт обычный пользователь Ponoi из композера, см. src/lib/botApi.ts).
+//          зовёт обычный пользователь NeyLivo из композера, см. src/lib/botApi.ts).
 //
 // Body: { botAppId, channelId, command, args }
 // В отличие от bot-dispatch (события сообщений, фоновая рассылка), тут клиент
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     if (!member) return json({ error: 'bot is not a member of this server' }, 403)
 
     // Вызывающий тоже обязан быть участником этого сервера и не в тайм-ауте —
-    // иначе любой залогиненный аккаунт Ponoi мог бы дёргать чужого бота в чужом
+    // иначе любой залогиненный аккаунт NeyLivo мог бы дёргать чужого бота в чужом
     // канале (guessable botAppId/channelId), а тайм-аут-участник — писать в чат
     // руками бота в обход messages_insert RLS (сама вставка идёт service-role).
     const { data: caller } = await admin.from('server_members').select('user_id, timeout_until').eq('server_id', channel.server_id).eq('user_id', user.id).maybeSingle()
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 5000)   // Discord тоже ждёт ~3-5 сек синхронного ответа
-      const res = await fetch(app.webhook_url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ponoi-Signature': sig }, body, signal: ctrl.signal })
+      const res = await fetch(app.webhook_url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NeyLivo-Signature': sig }, body, signal: ctrl.signal })
       clearTimeout(timer)
       const data = await res.json().catch(() => null)
       botReply = data?.content ? String(data.content).slice(0, 4000) : null

@@ -32,7 +32,7 @@ function shortUrl(u: string): string {
   try { const p = new URL(u); return p.host + (p.pathname + p.search).slice(0, 28) + '\u2026' } catch { return u.slice(0, 61) + '\u2026' }
 }
 
-const PONOI_MSG_RE = /ponoi:\/\/msg\/\S+/
+const NEYLIVO_MSG_RE = /ponoi:\/\/msg\/\S+/
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]*\w/
 const PHONE_RE = /\+\d[\d ()-]{8,16}\d/
@@ -60,7 +60,7 @@ function inline(text: string, depth = 0, roleColors?: Record<string, string>): R
     { re: /~~([\s\S]+?)~~/, render: (m, d) => <s key={k()}>{inline(m[1], d + 1, roleColors)}</s> },
     { re: /\*([^*\n]+)\*/, render: (m, d) => <i key={k()}>{inline(m[1], d + 1, roleColors)}</i> },
     { re: /(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/u, render: (m, d) => <i key={k()}>{inline(m[1], d + 1, roleColors)}</i> },
-    { re: PONOI_MSG_RE, render: m => <a key={k()} className="md-link" href="#" title="Перейти к сообщению" onClick={e => { e.preventDefault(); openMsgLink(m[0]) }}>{m[0]}</a> },
+    { re: NEYLIVO_MSG_RE, render: m => <a key={k()} className="md-link" href="#" title="Перейти к сообщению" onClick={e => { e.preventDefault(); openMsgLink(m[0]) }}>{m[0]}</a> },
     { re: URL_RE, render: m => <a key={k()} className="md-link" href={m[0]} target="_blank" rel="noopener noreferrer" onClick={e => guardLink(e, m[0])} title={m[0]}>{shortUrl(m[0])}</a> },
     { re: EMAIL_RE, render: m => <a key={k()} className="md-link" href={'mailto:' + m[0]}>{m[0]}</a> },
     { re: PHONE_RE, render: m => <a key={k()} className="md-link" href={'tel:' + m[0].replace(/[^+\d]/g, '')}>{m[0]}</a> },

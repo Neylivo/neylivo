@@ -19,7 +19,7 @@ const fs = require('fs')
 const path = require('path')
 
 const КОРЕНЬ = path.join(__dirname, '..')
-const СТИЛИ = ['src/styles.css', 'src/ponoi-ui.css']
+const СТИЛИ = ['src/styles.css', 'src/neylivo-ui.css']
 
 /** Все .tsx приложения, кроме проверок и стендов. */
 function файлы(dir, out = []) {

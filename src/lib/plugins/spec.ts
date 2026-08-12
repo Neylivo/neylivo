@@ -66,9 +66,9 @@ const CTX_DOC_TABLE = [
   ...Object.entries(CTX_TARGETS).map(([t, where]) => `| ${t} | ${where} |`),
 ].join('\n')
 
-export const PLUGIN_SPEC = `# Формат плагина Ponoi
+export const PLUGIN_SPEC = `# Формат плагина NeyLivo
 
-Ponoi — мессенджер. Плагин к нему — ОДИН текстовый файл с расширением .ponoi,
+NeyLivo — мессенджер. Плагин к нему — ОДИН текстовый файл с расширением .ponoi,
 внутри обычный JavaScript. Ниже — всё, что нужно знать, чтобы написать рабочий
 плагин.
 
@@ -82,12 +82,12 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
      * @description Одна строка о том, что делает
      * @permissions commands, messages.write, notify
      */
-    function onLoad(ponoi) {
+    function onLoad(neylivo) {
       // здесь всё, что делает плагин
     }
 
 Шапка — комментарий /** ... */ в самом начале файла, до кода.
-Дальше — функция onLoad, ей приложение передаёт объект ponoi.
+Дальше — функция onLoad, ей приложение передаёт объект neylivo.
 
 ## Поля шапки
 
@@ -149,14 +149,14 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
 
 ### Команды (нужно commands)
 
-    ponoi.commands.register('привет', 'Поздороваться', async (arg) => {
+    neylivo.commands.register('привет', 'Поздороваться', async (arg) => {
       // arg — всё, что человек написал после команды, строкой
     })
 
 Команда с ДОВОДАМИ: приложение покажет их прямо в поле ввода, пока человек
 печатает, и подскажет значения.
 
-    ponoi.commands.register({
+    neylivo.commands.register({
       name: 'опрос',
       description: 'Создать опрос',
       args: [
@@ -168,7 +168,7 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
       // Зовётся с именем набираемого довода, началом слова и уже введённым.
       onComplete: async (довод, начало, введённое) => {
         if (довод !== 'канал') return []
-        const все = await ponoi.channels()
+        const все = await neylivo.channels()
         return все.filter(c => c.name.startsWith(начало))
                   .map(c => ({ value: c.name, label: '#' + c.name }))
       },
@@ -183,11 +183,11 @@ Ponoi — мессенджер. Плагин к нему — ОДИН текст
 
 ### Сообщения
 
-    await ponoi.messages.send('текст')                 // нужно messages.write
-    const last = await ponoi.messages.recent(20)       // нужно messages.read
+    await neylivo.messages.send('текст')                 // нужно messages.write
+    const last = await neylivo.messages.recent(20)       // нужно messages.read
     // last: [{ id, author, authorName, content, mine, at }] — то же, что на экране
-    await ponoi.messages.react(id, '👍')               // нужно messages.write
-    await ponoi.messages.remove(id)                    // нужно messages.write
+    await neylivo.messages.react(id, '👍')               // нужно messages.write
+    await neylivo.messages.remove(id)                    // нужно messages.write
 
 recent, react и remove работают с ОТКРЫТЫМ сейчас чатом — тем же, куда пишет
 send. Если чат не открыт, вызов бросает ошибку. Убрать можно только своё
@@ -198,7 +198,7 @@ send. Если чат не открыт, вызов бросает ошибку.
 
 ### События
 
-    ponoi.on('message', (msg) => { ... })
+    neylivo.on('message', (msg) => { ... })
 
 Подписка возвращает промис: если разрешения нет, он отклонится — это видно сразу,
 а не «обработчик молчит и непонятно почему». Имя события не из списка ниже тоже
@@ -217,11 +217,11 @@ ${EVENT_DOC_TABLE}
 slot: chat открывает виджет сам. Так же делается и «кнопка где угодно»: виджет
 из одной строки-кнопки.
 
-    ponoi.ui.addPanel({ slot: 'chat', title: 'Быстро', rows: [
+    neylivo.ui.addPanel({ slot: 'chat', title: 'Быстро', rows: [
       { type: 'button', key: 'go', label: 'Сделать', onClick: async () => {} },
     ] })
 
-    ponoi.ui.addPanel({
+    neylivo.ui.addPanel({
       slot: 'chat',              // см. таблицу мест ниже
       title: 'Мой уголок',
       rows: [                    // те же строки, что и в настройках, до 20
@@ -264,7 +264,7 @@ slot — старая заменится новой. Так и делают жи
 Самый простой способ сделать настройки: сказать, ЧТО нужно, а страницу соберёт
 приложение само.
 
-    const cfg = await ponoi.settings.registerSchema([
+    const cfg = await neylivo.settings.registerSchema([
       { key: 'auto_feed', type: 'toggle', title: 'Авто-кормление',
         description: 'Питомцы кормятся сами', default: false },
       { key: 'theme_color', type: 'color', title: 'Цвет', default: '#5865f2' },
@@ -272,7 +272,7 @@ slot — старая заменится новой. Так и делают жи
     ])
     // cfg — уже готовые значения: { auto_feed: false, theme_color: '#5865f2', … }
 
-Чем это лучше ponoi.ui.addSettingsPage. Тот принимает готовые строки: значение
+Чем это лучше neylivo.ui.addSettingsPage. Тот принимает готовые строки: значение
 из хранилища доставать самому, значение по умолчанию подставлять самому и не
 забыть сделать это ДО первого обращения к настройке. Здесь всё это делает
 приложение: при первом запуске значения по умолчанию сразу ложатся в хранилище,
@@ -288,11 +288,11 @@ slot — старая заменится новой. Так и делают жи
 
 ### Кнопки, меню и горячие клавиши (нужно ui)
 
-    ponoi.ui.addComposerButton({ tooltip: 'Текст', icon: 'star', onClick: async () => {} })
-    ponoi.ui.addHeaderButton({ tooltip: 'Моё', icon: 'zap', active: false, onClick: async () => {} })
-    ponoi.ui.addMessageAction({ label: 'Что-то', icon: 'star', onClick: async (msg) => {} })
-    ponoi.ui.addHotkey({ combo: 'Ctrl+Shift+K', description: 'Что делает', onPress: async () => {} })
-    ponoi.ui.addSettingsPage({ title: 'Мой плагин', rows: [ ... ] })
+    neylivo.ui.addComposerButton({ tooltip: 'Текст', icon: 'star', onClick: async () => {} })
+    neylivo.ui.addHeaderButton({ tooltip: 'Моё', icon: 'zap', active: false, onClick: async () => {} })
+    neylivo.ui.addMessageAction({ label: 'Что-то', icon: 'star', onClick: async (msg) => {} })
+    neylivo.ui.addHotkey({ combo: 'Ctrl+Shift+K', description: 'Что делает', onPress: async () => {} })
+    neylivo.ui.addSettingsPage({ title: 'Мой плагин', rows: [ ... ] })
 
 Сочетание клавиш обязано содержать Ctrl или Alt И ещё один модификатор:
 Ctrl+Shift+K годится, Ctrl+K и просто K — нет. Иначе плагин отобрал бы у
@@ -315,13 +315,13 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 
 ### Спросить человека (нужно ui)
 
-    const да = await ponoi.ui.confirm({ title: 'Точно?', text: 'Пояснение', ok: 'Да' })
-    const имя = await ponoi.ui.prompt({ title: 'Как тебя звать?', placeholder: 'имя' })
+    const да = await neylivo.ui.confirm({ title: 'Точно?', text: 'Пояснение', ok: 'Да' })
+    const имя = await neylivo.ui.prompt({ title: 'Как тебя звать?', placeholder: 'имя' })
     // prompt вернёт null, если человек отказался
 
 Когда одного вопроса мало — целая форма:
 
-    const ответ = await ponoi.ui.dialog({
+    const ответ = await neylivo.ui.dialog({
       title: 'Настройка напоминания',
       text: 'Необязательное пояснение',
       ok: 'Сохранить',
@@ -338,69 +338,69 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 полей, а кнопка была бы вторым выходом из него. Окон одновременно — одно.
 
 Своё окно плагин нарисовать не может и не должен: он подделал бы им любое окно
-приложения. Окно рисует Ponoi, плагин получает только ответ. В шапке всегда
+приложения. Окно рисует NeyLivo, плагин получает только ответ. В шапке всегда
 написано, какой плагин спрашивает, — убрать это плагин не может.
 
 ### Хранилище (нужно storage)
 
-    await ponoi.storage.set('ключ', любое_значение)
-    const v = await ponoi.storage.get('ключ')
-    await ponoi.storage.remove('ключ')
-    const keys = await ponoi.storage.keys()
-    await ponoi.storage.clear()
+    await neylivo.storage.set('ключ', любое_значение)
+    const v = await neylivo.storage.get('ключ')
+    await neylivo.storage.remove('ключ')
+    const keys = await neylivo.storage.keys()
+    await neylivo.storage.clear()
 
 Размер значения не ограничен. Хранится на этом устройстве, между устройствами
 не синхронизируется. Чужое хранилище недоступно.
 
 ### Обстановка (нужно context)
 
-    const me = await ponoi.me()          // { id, name } или null
-    const ch = await ponoi.channel()     // { id, name, serverId, serverName } или null
-    const srv = await ponoi.servers()    // [{ id, name }] — где человек состоит
-    const chs = await ponoi.channels(serverId)  // [{ id, name, serverId, kind }]
+    const me = await neylivo.me()          // { id, name } или null
+    const ch = await neylivo.channel()     // { id, name, serverId, serverName } или null
+    const srv = await neylivo.servers()    // [{ id, name }] — где человек состоит
+    const chs = await neylivo.channels(serverId)  // [{ id, name, serverId, kind }]
 
 ### Переход по приложению (нужно navigate)
 
-    await ponoi.open({ serverId, channelId })   // открыть канал сервера
-    await ponoi.open({ dmId })                  // открыть диалог по его id
-    await ponoi.open({ userId, userName })      // открыть личку с человеком
+    await neylivo.open({ serverId, channelId })   // открыть канал сервера
+    await neylivo.open({ dmId })                  // открыть диалог по его id
+    await neylivo.open({ userId, userName })      // открыть личку с человеком
 
 Переход уводит человека с того, на что он смотрит, — делай это по его просьбе,
 а не по таймеру.
 
 ### Активность (нужно status)
 
-    await ponoi.status.set('Пьёт чай')   // строка рядом с ником, видна другим
-    await ponoi.status.set('')           // убрать
-    const s = await ponoi.status.get()
+    await neylivo.status.set('Пьёт чай')   // строка рядом с ником, видна другим
+    await neylivo.status.set('')           // убрать
+    const s = await neylivo.status.get()
 
 Это та же строка, что в «Настройки → Активность»: экран настроек и плагин правят
 одно и то же, а не каждый своё.
 
 ### Уведомления и звук (нужно notify)
 
-    await ponoi.notify('текст')
-    await ponoi.sound.play('message')    // 'message' или 'chime', 5 раз за 10 с
+    await neylivo.notify('текст')
+    await neylivo.sound.play('message')    // 'message' или 'chime', 5 раз за 10 с
 
 ### Буфер обмена (нужно ui)
 
-    await ponoi.clipboard.write('текст')
+    await neylivo.clipboard.write('текст')
 
 ### Оформление (нужно css)
 
-    ponoi.css('.msg-txt { font-style: italic }')
+    neylivo.css('.msg-txt { font-style: italic }')
 
 Стили применяются ко всему приложению. Селекторы приложения могут меняться между
 версиями — не рассчитывай на них слишком сильно.
 
 ### Сеть (нужно net и @hosts)
 
-    const r = await ponoi.net.fetch('https://api.example.com/x')
+    const r = await neylivo.net.fetch('https://api.example.com/x')
     // r: { ok, status, body } — body всегда строка
-    const j = await ponoi.net.json('https://api.example.com/x')
+    const j = await neylivo.net.json('https://api.example.com/x')
     // j: { ok, status, data } — data уже разобранный JSON
 
-    await ponoi.net.fetch('https://api.example.com/x', {
+    await neylivo.net.fetch('https://api.example.com/x', {
       method: 'POST',                                   // GET, POST, PUT, PATCH, DELETE
       headers: { 'Content-Type': 'application/json',
                  'Authorization': 'Bearer ...' },
@@ -411,12 +411,12 @@ message, smile, paperclip, clock, folder, copy, edit, trash, rotate.
 размер ответа не ограничен, ожидание — ${sec(NET_TIMEOUT_MS)}. Заголовки — из
 разрешённых: Content-Type, Accept, Authorization, X-Api-Key, X-Auth-Token,
 User-Agent, Accept-Language, Anthropic-Version, Anthropic-Beta,
-OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и его серверу
+OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому NeyLivo и его серверу
 обращаться нельзя.
 
 ### Ответ по кускам — своя ИИ-модель (нужно net и @hosts)
 
-    await ponoi.net.stream('https://api.example.com/v1/chat', {
+    await neylivo.net.stream('https://api.example.com/v1/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ключ },
       body: JSON.stringify({ model: '…', stream: true, messages: [...] }),
@@ -426,15 +426,15 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
     })
     // вернёт { ok, status, bytes } — когда поток закончится
 
-Для чего это. Обычный ponoi.net.fetch ждёт ВЕСЬ ответ целиком, а ИИ-модель
+Для чего это. Обычный neylivo.net.fetch ждёт ВЕСЬ ответ целиком, а ИИ-модель
 отвечает по слову: поток отдаёт её ответ по мере поступления. У потока и сроки
 свои: ${sec(NET_STREAM_MS)} на весь
 ответ и ${sec(NET_STREAM_IDLE_MS)} на очередной кусок (замолчал — обрываем).
 Сколько всего придёт байт и как часто открывать поток — не ограничено.
 
 Правила выхода наружу — те же самые: https, только @hosts, те же заголовки,
-без куки, к самому Ponoi нельзя. Ключ от модели плагин приносит свой; храни
-его через ponoi.storage, а не в тексте плагина — иначе его увидит каждый,
+без куки, к самому NeyLivo нельзя. Ключ от модели плагин приносит свой; храни
+его через neylivo.storage, а не в тексте плагина — иначе его увидит каждый,
 кто откроет файл.
 
 Если обработчик куска упадёт — поток прервётся, и плагин получит ошибку. Это
@@ -442,7 +442,7 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 
 ### Постоянное соединение — WebSocket (нужно net и @hosts)
 
-    const ws = await ponoi.net.ws('wss://api.example.com/socket')
+    const ws = await neylivo.net.ws('wss://api.example.com/socket')
     ws.onOpen(() => ws.send({ type: 'hello' }))
     ws.onMessage((текст) => { /* пришло от сервера */ })
     ws.onClose((код, причина) => { /* связи больше нет */ })
@@ -454,7 +454,7 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 таймеру — значит опаздывать и жечь батарею.
 
 Правила ровно те же, что у обычного запроса, только схема wss: домен обязан
-быть в @hosts, к самому Ponoi нельзя. Соединений разом сколько угодно, у
+быть в @hosts, к самому NeyLivo нельзя. Соединений разом сколько угодно, у
 плагин; как часто открывать и сколько слать — не ограничено.
 Приходящее — только текст. Всё, что плагин открыл, закрывается, когда его
 выключают.
@@ -468,12 +468,12 @@ OpenAI-Organization, OpenAI-Beta, X-Goog-Api-Key. К самому Ponoi и ег�
 ### Разговор с другими плагинами (нужно ipc)
 
     // в плагине-библиотеке:
-    ponoi.on('ipc', ({ from, event, data }) => {
+    neylivo.on('ipc', ({ from, event, data }) => {
       if (event === 'посчитай') { /* … */ }
     })
 
     // в плагине-графике:
-    const дошло = await ponoi.plugins.send('math-lib', 'посчитай', { x: 5 })
+    const дошло = await neylivo.plugins.send('math-lib', 'посчитай', { x: 5 })
     // false — адресат не запущен или не просил разрешение ipc
 
 Разрешение ipc нужно ОБОИМ: и тому, кто шлёт, и тому, кто подписан. Иначе
@@ -486,19 +486,19 @@ ${IPC_MAX_BYTES / 1024} КБ — это не предел, а защита от 
 
 ### Своё хранилище таблицами (нужно storage)
 
-ponoi.storage — это пары ключ-значение на несколько килобайт. Когда данных
+neylivo.storage — это пары ключ-значение на несколько килобайт. Когда данных
 больше — инвентарь, задачи, заметки, сохранения, разобранная переписка, —
 берут таблицы:
 
-    await ponoi.db.table('inventory').insert({ id: 1, item: 'Plasma Rifle', qty: 1 })
-    const items = await ponoi.db.table('inventory').where('qty', '>', 0).get()
+    await neylivo.db.table('inventory').insert({ id: 1, item: 'Plasma Rifle', qty: 1 })
+    const items = await neylivo.db.table('inventory').where('qty', '>', 0).get()
 
-    await ponoi.db.table('inventory').update(1, { qty: 2 })
-    await ponoi.db.table('inventory').remove(1)
-    const сколько = await ponoi.db.table('inventory').count()
-    const все = await ponoi.db.table('inventory').all(500)
-    await ponoi.db.table('inventory').clear()
-    const мои = await ponoi.db.tables()
+    await neylivo.db.table('inventory').update(1, { qty: 2 })
+    await neylivo.db.table('inventory').remove(1)
+    const сколько = await neylivo.db.table('inventory').count()
+    const все = await neylivo.db.table('inventory').all(500)
+    await neylivo.db.table('inventory').clear()
+    const мои = await neylivo.db.tables()
 
 Условия отбора: ${OPS.join(', ')}. Сравнения по порядку (>, >=, <, <=) работают
 у чисел и дат; у строк «больше» зависит от языка и регистра, поэтому такое
@@ -509,7 +509,7 @@ id можно задать свой, можно не задавать — тог
 бы на ровном месте.
 
 Внутри запись цепочкой — это методы db.insert, db.get, db.all, db.where,
-db.update, db.remove, db.count и db.clear; звать их напрямую незачем, ponoi.db
+db.update, db.remove, db.count и db.clear; звать их напрямую незачем, neylivo.db
 делает это сам.
 
 ЧЕСТНО ПРО СКОРОСТЬ. Быстрый здесь — отбор ТАБЛИЦЫ: по ней стоит настоящий
@@ -524,29 +524,29 @@ db.update, db.remove, db.count и db.clear; звать их напрямую н�
 ### Свои файлы: картинки, звуки, шрифты, данные (нужно storage)
 
 Плагин — это один файл кода, и спрайту, звуку или шрифту в нём места нет.
-ponoi.assets — свой склад файлов на устройстве человека:
+neylivo.assets — свой склад файлов на устройстве человека:
 
     // положить своими руками: байты, Uint8Array, base64 или data:-строка
-    await ponoi.assets.put('level1.json', JSON.stringify(уровень))
+    await neylivo.assets.put('level1.json', JSON.stringify(уровень))
     // или скачать ОДИН РАЗ и дальше пользоваться без интернета
-    await ponoi.assets.fetch('sprite.png', 'https://мой-сайт/sprite.png')  // нужно ещё net и @hosts
+    await neylivo.assets.fetch('sprite.png', 'https://мой-сайт/sprite.png')  // нужно ещё net и @hosts
 
-    const инфо = await ponoi.assets.info('sprite.png')   // { name, type, kind, size, at }
-    const все = await ponoi.assets.list()
-    await ponoi.assets.remove('sprite.png')
-    await ponoi.assets.clear()
+    const инфо = await neylivo.assets.info('sprite.png')   // { name, type, kind, size, at }
+    const все = await neylivo.assets.list()
+    await neylivo.assets.remove('sprite.png')
+    await neylivo.assets.clear()
 
 Как этим пользоваться:
 
     // на холсте
-    const bmp = await ponoi.assets.image('sprite.png')   // готовый ImageBitmap
+    const bmp = await neylivo.assets.image('sprite.png')   // готовый ImageBitmap
     ctx.drawImage(bmp, 0, 0)
     // текстом (JSON, уровни, таблицы)
-    const уровень = JSON.parse(await ponoi.assets.text('level1.json'))
+    const уровень = JSON.parse(await neylivo.assets.text('level1.json'))
     // сырые байты
-    const buf = await ponoi.assets.get('sprite.png')     // ArrayBuffer
+    const buf = await neylivo.assets.get('sprite.png')     // ArrayBuffer
     // звуком (нужно ещё notify), громкость 0…1 в пределах общей громкости
-    await ponoi.assets.play('hit.mp3', 0.6)
+    await neylivo.assets.play('hit.mp3', 0.6)
     // картинкой в панели или в настройках
     { type: 'image', key: 'pic', label: 'Спрайт', value: 'asset:sprite.png' }
 
@@ -566,10 +566,10 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 
 ### Геймпад (нужно input)
 
-    const pads = await ponoi.input.gamepads()
+    const pads = await neylivo.input.gamepads()
     // [{ index, id, buttons: [0…1], axes: [-1…1] }] — состояние прямо сейчас
 
-    ponoi.on('gamepad', (e) => {
+    neylivo.on('gamepad', (e) => {
       // e.kind: 'connect' | 'disconnect' | 'button' | 'axis'
       // e.index, e.id, e.which (номер кнопки или ручки), e.pressed, e.value
     })
@@ -586,13 +586,13 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 Обмен письмами — это «отправил и надейся». А библиотеке нужен ответ:
 
     // в плагине-библиотеке:
-    ponoi.services.register('math-utils', {
+    neylivo.services.register('math-utils', {
       урон: (stats) => stats.atk * 1.5,
       броня: (stats) => stats.def * 0.8,
     })
 
     // в плагине-игре:
-    const math = await ponoi.services.connect('math-utils')
+    const math = await neylivo.services.connect('math-utils')
     const dmg = await math.урон({ atk: 50 })
 
 Разрешение ipc нужно ОБОИМ — и тому, кто предлагает, и тому, кто зовёт.
@@ -603,7 +603,7 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 имени. Доводы и ответ чистятся так же, как письма: функции через границу не
 проходят.
 
-Больше не нужна — ponoi.services.unregister('math-utils'). Сама она пропадёт,
+Больше не нужна — neylivo.services.unregister('math-utils'). Сама она пропадёт,
 когда плагин выключат.
 
 Внутри вызов метода — это services.call: connect отдаёт только имена методов, а
@@ -618,12 +618,12 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 Только в личной переписке — в канале читателей много, и «просмотрено» там
 ничего не значит.
 
-    const s = await ponoi.messages.readState()
+    const s = await neylivo.messages.readState()
     // s: { at, seenLabel, on } либо null, если открыт не личный разговор
     // at — когда собеседник дочитал (или null), seenLabel — готовая подпись,
     // on — включены ли отметки у самого человека
 
-    ponoi.on('read', (e) => { /* { at, seenLabel } — собеседник только что прочитал */ })
+    neylivo.on('read', (e) => { /* { at, seenLabel } — собеседник только что прочитал */ })
 
 Работает в обе стороны: человек, выключивший отметки у себя, не показывает
 свою и не видит чужую. Это настройка приложения, а не плагина, — и плагин её
@@ -635,23 +635,23 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 ответчики, сбор статистики, разбор переписки — всё, что раньше упиралось в
 «плагин видит только тот чат, что на экране».
 
-    const каналы = await ponoi.messages.channels()
+    const каналы = await neylivo.messages.channels()
     // [{ id, name, serverId, kind }] — всё, что доступно человеку
 
-    const было = await ponoi.messages.in(id).recent(50)
+    const было = await neylivo.messages.in(id).recent(50)
     // [{ id, author, authorName, content, at }]
 
-    await ponoi.messages.in(id).send('привет')
+    await neylivo.messages.in(id).send('привет')
 
 Внутри это методы messages.anyList, messages.anyRecent и messages.anySend —
-звать их напрямую незачем, ponoi.messages.channels/in делают это сами.
+звать их напрямую незачем, neylivo.messages.channels/in делают это сами.
 
 Работает ОТ ИМЕНИ ЧЕЛОВЕКА и с его правами: куда нельзя ему, туда не пустит и
 плагин — это решает сервер, а не проверка в приложении.
 
-ЛИЧНОЙ ПЕРЕПИСКИ ЗДЕСЬ НЕТ, и это не забывчивость. Личные сообщения в Ponoi
+ЛИЧНОЙ ПЕРЕПИСКИ ЗДЕСЬ НЕТ, и это не забывчивость. Личные сообщения в NeyLivo
 шифруются на устройствах: писать туда отсюда значило бы отправить открытый
-текст и тихо сломать шифрование. Для лички остаётся ponoi.messages.send — он
+текст и тихо сломать шифрование. Для лички остаётся neylivo.messages.send — он
 работает с ОТКРЫТЫМ чатом и его настоящим шифрованием.
 
 ### Перехват вложений (нужно messages.upload)
@@ -659,7 +659,7 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 Файл — ДО того, как он уйдёт в сеть. Ради этого всё и сделано: снять с
 фотографии геометку и модель телефона, сжать картинку, наложить водяной знак.
 
-    ponoi.messages.onUpload(async (file) => {
+    neylivo.messages.onUpload(async (file) => {
       // file: { name, type, size, bytes }  — bytes это ArrayBuffer
       if (!file.type.startsWith('image/')) return            // не трогаем
       const bmp = await createImageBitmap(new Blob([file.bytes]))
@@ -679,12 +679,12 @@ bmp, mp3, ogg, wav, flac, mp4, webm, woff, woff2, ttf, otf, JSON и текст.
 
 ### Перехват сообщений (нужно messages.intercept)
 
-    ponoi.messages.onBeforeSend(async (ctx) => {
+    neylivo.messages.onBeforeSend(async (ctx) => {
       // ctx: { content, channelId }
       return { content: ctx.content.toUpperCase() }   // или строку, или { cancel: true }
     })
 
-    ponoi.messages.onBeforeRender(async (ctx) => {
+    neylivo.messages.onBeforeRender(async (ctx) => {
       // ctx: { id, content, author, mine }
       return перевести(ctx.content)                   // вернёшь строку — её и покажем
     })
@@ -711,7 +711,7 @@ onBeforeSend ловит ВСЁ, что уходит на сервер: и нов
 Панель — это уголок на сотню пикселей. Когда нужно больше — игра, редактор,
 доска, визуализатор во весь экран, — открывается своя область:
 
-    const id = await ponoi.apps.create({
+    const id = await neylivo.apps.create({
       title: 'Мой редактор',
       mode: 'window',            // см. таблицу ниже
       icon: 'gamepad',
@@ -721,10 +721,10 @@ onBeforeSend ловит ВСЁ, что уходит на сервер: и нов
         { type: 'button', key: 'go', label: 'Начать', onClick: async () => {} },
       ],
     })
-    const холст = await ponoi.ui.getCanvas('view')   // рисуй что угодно
+    const холст = await neylivo.ui.getCanvas('view')   // рисуй что угодно
 
-    await ponoi.apps.update(id, { title: 'Новое имя', rows: [...] })
-    await ponoi.apps.close(id)
+    await neylivo.apps.update(id, { title: 'Новое имя', rows: [...] })
+    await neylivo.apps.close(id)
 
 ${APP_DOC_TABLE}
 
@@ -741,7 +741,7 @@ ${APP_DOC_TABLE}
 БЕЗ РАМКИ И ПРОЗРАЧНОЕ. Часам, накладке поверх игры, шару, летающему между
 двумя окнами, наша шапка мешает — она выглядит чужой наклейкой:
 
-    const id = await ponoi.apps.create({
+    const id = await neylivo.apps.create({
       mode: 'window', width: 300, height: 300,
       frameless: true,      // ни шапки на виду, ни рамки, ни тени
       transparent: true,    // подложка прозрачная насквозь
@@ -760,8 +760,8 @@ ${APP_DOC_TABLE}
 СПРЯТАТЬ И ПОКАЗАТЬ. Это не закрытие: содержимое и холст остаются живыми, номер
 окна прежний — потому и годится для «слить два окна в одно и вернуть обратно».
 
-    await ponoi.apps.hide(id)
-    await ponoi.apps.show(id)
+    await neylivo.apps.hide(id)
+    await neylivo.apps.show(id)
 
 ### СВОЯ СТРАНИЦА В ОКНЕ: html, canvas, WebGL, WebGPU, звук, библиотеки
 
@@ -769,7 +769,7 @@ ${APP_DOC_TABLE}
 живого есть настоящая страница: передай html — и внутри окна будет обычный
 браузерный документ.
 
-    await ponoi.apps.create({
+    await neylivo.apps.create({
       mode: 'window', title: 'Игра', width: 900, height: 600,
       html: \`
         <canvas id="c" style="width:100%;height:100%"></canvas>
@@ -781,7 +781,7 @@ ${APP_DOC_TABLE}
           addEventListener('pointermove', e => { /* мышь */ })
           addEventListener('keydown', e => { /* клавиши */ })
           const звук = new AudioContext()       // анализатор для визуализатора
-          ponoi.log('готово')                   // тот же ponoi, что и снаружи
+          neylivo.log('готово')                   // тот же ponoi, что и снаружи
         <\/script>\`,
     })
 
@@ -792,7 +792,7 @@ ${APP_DOC_TABLE}
 | DOM и CSS | обычные, целиком |
 | canvas 2d, webgl, webgl2 | canvas.getContext('webgl2') |
 | WebGPU | navigator.gpu — адаптер и устройство настоящие |
-| кадры | requestAnimationFrame, замерено 124 в секунду; удобнее ponoi.frame |
+| кадры | requestAnimationFrame, замерено 124 в секунду; удобнее neylivo.frame |
 | мышь | pointermove, pointerdown, wheel, pointerlock |
 | клавиатура и касания | keydown/keyup, touch* |
 | звук | AudioContext, Audio, свои файлы — играет |
@@ -804,31 +804,31 @@ ${APP_DOC_TABLE}
 | библиотеки | three.js встроен, любые другие — script src или свой файл |
 
 Чего НЕТ: localStorage (у страницы чужое происхождение — вместо него
-ponoi.storage и ponoi.db) и прямой import по blob-адресу (вместо него
-ponoi.loadModule).
+neylivo.storage и neylivo.db) и прямой import по blob-адресу (вместо него
+neylivo.loadModule).
 
 УДОБНЫЕ ОБЁРТКИ. Всё это работает и напрямую, но писать одно и то же каждый раз
 незачем:
 
-    const c = ponoi.canvas()          // холст во всё окно, с учётом плотности точек
+    const c = neylivo.canvas()          // холст во всё окно, с учётом плотности точек
     const gl = c.getContext('webgl2')
 
-    ponoi.frame(dt => { ... })        // игровой цикл, dt в секундах и с потолком
+    neylivo.frame(dt => { ... })        // игровой цикл, dt в секундах и с потолком
 
-    ponoi.cursor.set('crosshair')     // курсор
-    ponoi.cursor.hide()
-    ponoi.cursor.lock()               // захват для камеры от первого лица
-    ponoi.cursor.unlock()
+    neylivo.cursor.set('crosshair')     // курсор
+    neylivo.cursor.hide()
+    neylivo.cursor.lock()               // захват для камеры от первого лица
+    neylivo.cursor.unlock()
 
-    const файлы = await ponoi.files.open({ multiple: true })
+    const файлы = await neylivo.files.open({ multiple: true })
     const текст = await файлы[0].text()
     const байты = await файлы[0].bytes()
-    await ponoi.files.save('сцена.glb', байты)
-    ponoi.files.onDrop(файлы => { ... })   // перетаскивание в окно
+    await neylivo.files.save('сцена.glb', байты)
+    neylivo.files.onDrop(файлы => { ... })   // перетаскивание в окно
 
 МАСТЕРСКАЯ. Писать всё это руками не обязательно: Настройки → Мастерская. Там
 проект из ФАЙЛОВ (как в любом редакторе), живой показ рядом и консоль, куда
-приходят ponoi.log и ошибки страницы. Есть готовая заготовка «3D-игра» — сцена,
+приходят neylivo.log и ошибки страницы. Есть готовая заготовка «3D-игра» — сцена,
 свет, тени, ходьба на WASD и осмотр мышью с захватом указателя.
 
 Порядок файлов = порядок выполнения. Каждый файл выполняется в СВОЕЙ
@@ -838,25 +838,25 @@ ponoi.loadModule).
 ОШИБКИ СТРАНИЦЫ приходят в журнал плагина — консоли у тебя тут нет, и без этого
 пришлось бы гадать.
 
-ЧТО ТАМ ЕСТЬ ОТ PONOI. Объект ponoi — тот же, с теми же разрешениями:
-ponoi.log, ponoi.notify, ponoi.messages.*, ponoi.storage.*, ponoi.net.*,
-ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Список
+ЧТО ТАМ ЕСТЬ ОТ NEYLIVO. Объект ponoi — тот же, с теми же разрешениями:
+neylivo.log, neylivo.notify, neylivo.messages.*, neylivo.storage.*, neylivo.net.*,
+neylivo.music.*, neylivo.apps.*, neylivo.db.*, neylivo.assets.*, neylivo.on(...). Список
 короче, чем у потока: всё, что отдаёт функции обратного вызова (кнопки, команды,
 перехватчики), заводится из onLoad, а не из страницы.
 
 Свои файлы — сразу готовым адресом, его можно отдать в <img>, в fetch и в
 загрузчик модели:
 
-    const url = await ponoi.assets.url('модель.glb')
+    const url = await neylivo.assets.url('модель.glb')
     new THREE.GLTFLoader().load(url, ...)
 
 ЧЕГО ТАМ НЕТ И НЕ БУДЕТ. Страница живёт в песочнице браузера с чужим
 происхождением: ни нашего документа, ни нашего localStorage, ни кук, ни сессии
 человека ей не достаётся. Это единственная граница, которую нельзя открыть, —
 иначе поставленный плагин прочитал бы ключ от чужого аккаунта. Всё остальное,
-что нужно от приложения, есть через ponoi.
+что нужно от приложения, есть через neylivo.
 
-    ponoi.on('app', ({ id, mode, open }) => {
+    neylivo.on('app', ({ id, mode, open }) => {
       if (!open) остановитьВсё()   // окно закрыл человек
     })
 
@@ -867,19 +867,19 @@ ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Спис
 ГДЕ СТОИТ ОКНО. Плагин выполняется в отдельном потоке, а перетаскивание
 обрабатывает само приложение — поэтому спрашивать место надо у него:
 
-    const о = await ponoi.apps.where(id)
+    const о = await neylivo.apps.where(id)
     // { x, y, width, height, mode, max, screenWidth, screenHeight,
     //   frameless, transparent, hidden, resizable, smooth } либо null
-    const все = await ponoi.apps.all()          // все свои окна разом
-    const экран = await ponoi.apps.screen()     // { w, h }
+    const все = await neylivo.apps.all()          // все свои окна разом
+    const экран = await neylivo.apps.screen()     // { w, h }
 
-    await ponoi.apps.move(id, 100, 80)                    // подвинуть своё окно
-    await ponoi.apps.update(id, { x: 40, y: 40, width: 500, height: 300 })
+    await neylivo.apps.move(id, 100, 80)                    // подвинуть своё окно
+    await neylivo.apps.update(id, { x: 40, y: 40, width: 500, height: 300 })
 
-    ponoi.on('app:move', ({ id, x, y, width, height }) => {
+    neylivo.on('app:move', ({ id, x, y, width, height }) => {
       // приходит КАДРАМИ, пока окно двигают или тянут за край
     })
-    ponoi.on('app:moveend', ({ id, x, y }) => {
+    neylivo.on('app:moveend', ({ id, x, y }) => {
       // окно отпустили — это последнее, окончательное место
     })
 
@@ -894,20 +894,20 @@ ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Спис
 
 Библиотеки лежат в самом приложении и работают БЕЗ интернета:
 
-    const THREE = await ponoi.lib('three')     // на странице окна
+    const THREE = await neylivo.lib('three')     // на странице окна
     const сцена = new THREE.Scene()
     const камера = new THREE.PerspectiveCamera(75, 1, 0.1, 1000)
     const рендер = new THREE.WebGLRenderer({ canvas: холст, antialias: true })
 
-    await ponoi.libs()   // что вообще есть: [{ id, global, about, bytes }]
+    await neylivo.libs()   // что вообще есть: [{ id, global, about, bytes }]
 
 ЗАГРУЗЧИКИ МОДЕЛЕЙ идут вместе с three и лежат там же (v1.555.0). Отдельно
 подключать нечего:
 
     const л = new THREE.GLTFLoader()
-    л.load(await ponoi.assets.url('модель.glb'), г => сцена.add(г.scene))
+    л.load(await neylivo.assets.url('модель.glb'), г => сцена.add(г.scene))
     // или из байтов, если файл уже у тебя в руках:
-    л.parse(буфер, '', г => сцена.add(г.scene), e => ponoi.log(String(e), 'error'))
+    л.parse(буфер, '', г => сцена.add(г.scene), e => neylivo.log(String(e), 'error'))
 
     new THREE.OBJLoader().parse(текстOBJ)   // старое из .obj
 
@@ -920,14 +920,14 @@ ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Спис
 там нет ни DOM, ни холста. Из потока доступны список (libs.list) и готовый
 текст (libs.get), если хочется вписать библиотеку в html заранее:
 
-    const { list, source } = ponoi.libs
-    const b = await ponoi.libs.source('three')   // { code, global, kind }
+    const { list, source } = neylivo.libs
+    const b = await neylivo.libs.source('three')   // { code, global, kind }
 
 Повторный вызов ничего не грузит заново. Разрешения не нужны: это тот же код,
 который ты мог бы принести своим файлом, — просто он уже здесь.
 
-Своё тоже можно: ponoi.load('моя-библиотека.js') подключит файл из твоих
-файлов, ponoi.loadModule('моё.mjs') — модуль с import и export. И любой сайт
+Своё тоже можно: neylivo.load('моя-библиотека.js') подключит файл из твоих
+файлов, neylivo.loadModule('моё.mjs') — модуль с import и export. И любой сайт
 обычным script src, если нужна свежая версия из интернета.
 
 ### Спектр звука для визуализатора (нужно music)
@@ -935,7 +935,7 @@ ponoi.music.*, ponoi.apps.*, ponoi.db.*, ponoi.assets.*, ponoi.on(...). Спис
 Свой AudioContext на странице плагина есть, но ЧУЖОЙ звук им не достать: музыка
 играет в приложении. Поэтому анализатор стоит у нас, а плагину приходят числа:
 
-    ponoi.on('audio', ({ bands, level }) => {
+    neylivo.on('audio', ({ bands, level }) => {
       // bands — 32 числа 0..1, от низких частот к высоким
       // level — общая громкость 0..1, по волне (для «пульса» под бит)
     })
@@ -947,10 +947,10 @@ SoundCloud звук внутри чужого окна, и там придут �
 
 ### Холст: своя графика (нужно panel)
 
-    ponoi.ui.addPanel({ slot: 'player', title: 'Визуализатор', rows: [
+    neylivo.ui.addPanel({ slot: 'player', title: 'Визуализатор', rows: [
       { type: 'canvas', key: 'viz', label: 'Волна', height: 160 },
     ]})
-    const холст = await ponoi.ui.getCanvas('viz')   // настоящий OffscreenCanvas
+    const холст = await neylivo.ui.getCanvas('viz')   // настоящий OffscreenCanvas
     const ctx = холст.getContext('2d')              // работает и webgl
     ctx.fillStyle = '#5865f2'; ctx.fillRect(0, 0, 100, 50)
 
@@ -958,7 +958,7 @@ SoundCloud звук внутри чужого окна, и там придут �
 холст показывать негде, и getCanvas честно откажет. Ширина буфера — ${CANVAS_W},
 высоту задаёшь ты; по ширине холст растягивается под панель.
 
-    ponoi.on('canvas', ({ key, width, height, visible }) => {
+    neylivo.on('canvas', ({ key, width, height, visible }) => {
       if (!visible) остановитьАнимацию()   // панель закрыта, рисовать некому
     })
 
@@ -970,10 +970,10 @@ SoundCloud звук внутри чужого окна, и там придут �
 
 ### Работа по расписанию (нужно background)
 
-    const id = await ponoi.background.every(60000, async () => {
+    const id = await neylivo.background.every(60000, async () => {
       // раз в минуту, даже когда панель плагина закрыта
     }, 'Проверка почты')
-    await ponoi.background.stop(id)
+    await neylivo.background.stop(id)
 
 Честно о том, чего это НЕ добавляет: обычный setInterval внутри плагина и так
 работал с закрытой панелью. Разница в другом — такая задача ВИДНА человеку на
@@ -985,8 +985,8 @@ SoundCloud звук внутри чужого окна, и там придут �
 
 ### Цвета оформления (нужно ui.theme)
 
-    await ponoi.ui.setTheme({ accent: '#ff4500', 'bg-content': '#101015' })
-    await ponoi.ui.clearTheme()
+    await neylivo.ui.setTheme({ accent: '#ff4500', 'bg-content': '#101015' })
+    await neylivo.ui.clearTheme()
 
 Безопасная замена разрешению css: вёрстку этим не сломать и чужое окно не
 подделать. Имена — только из списка: ${THEME_VAR_NAMES.join(', ')}. Значение —
@@ -994,7 +994,7 @@ SoundCloud звук внутри чужого окна, и там придут �
 
 ### Пункт в меню по правой кнопке (нужно ui)
 
-    ponoi.ui.addContextMenu({ target: 'selection', label: 'Перевести', icon: 'code',
+    neylivo.ui.addContextMenu({ target: 'selection', label: 'Перевести', icon: 'code',
       onClick: async ({ text }) => { /* text — выделенное */ } })
 
 ${CTX_DOC_TABLE}
@@ -1005,27 +1005,27 @@ ${CTX_DOC_TABLE}
 
 ### Голос в звонке (нужно voice)
 
-    const list = await ponoi.voice.list()      // доступные эффекты
-    const now = await ponoi.voice.current()
-    await ponoi.voice.setEffect('robot')       // false, если звонка сейчас нет
+    const list = await neylivo.voice.list()      // доступные эффекты
+    const now = await neylivo.voice.current()
+    await neylivo.voice.setEffect('robot')       // false, если звонка сейчас нет
 
 Плагин только выбирает эффект: сам звук обрабатывает приложение, ни одного
 сэмпла разговора плагину не достаётся.
 
 ### Музыка (нужно music)
 
-    const now = await ponoi.music.now()
+    const now = await neylivo.music.now()
     // now: { id, title, author, playing, at, duration } либо null, если плеер закрыт
 
-    const все = await ponoi.music.library()
+    const все = await neylivo.music.library()
     // [{ id, title, author, plays }] — то же, что видно в Трекотеке
 
-    await ponoi.music.play()
-    await ponoi.music.pause()
-    await ponoi.music.next()
-    await ponoi.music.prev()
-    await ponoi.music.queue(trackId)   // поставить следующим; false — нет такого трека
-    await ponoi.music.add(url)         // добавить ссылку в Трекотеку
+    await neylivo.music.play()
+    await neylivo.music.pause()
+    await neylivo.music.next()
+    await neylivo.music.prev()
+    await neylivo.music.queue(trackId)   // поставить следующим; false — нет такого трека
+    await neylivo.music.add(url)         // добавить ссылку в Трекотеку
 
 Как часто управлять и добавлять — не ограничено. Но Трекотека ОБЩАЯ, её видят
 все. Каждое добавление отдельно подтверждает человек — это не предел, а согласие.
@@ -1041,16 +1041,16 @@ ${CTX_DOC_TABLE}
 Внутри песочницы доступны WebAssembly.Module, Instance, Memory и обычный
 instantiate — то есть физика, звук, эмуляторы и криптография пишутся на C++,
 Rust или Go и подключаются как есть. Байты модуля плагин приносит сам: из своего
-кода, из ponoi.db или запросом на объявленный в @hosts домен.
+кода, из neylivo.db или запросом на объявленный в @hosts домен.
 
 Из песочницы по-прежнему вырезаны fetch, WebSocket и IndexedDB — WebAssembly
-этого не меняет: модуль считает, а наружу ходит через тот же ponoi.net.
+этого не меняет: модуль считает, а наружу ходит через тот же neylivo.net.
 
 ### Отладка
 
-    ponoi.log('что угодно')     // видно в журнале плагина (настройки → Плагины → значок кода)
-    ponoi.warn('осторожно')     // то же, но жёлтым
-    ponoi.error('всё плохо')    // то же, но красным
+    neylivo.log('что угодно')     // видно в журнале плагина (настройки → Плагины → значок кода)
+    neylivo.warn('осторожно')     // то же, но жёлтым
+    neylivo.error('всё плохо')    // то же, но красным
 
 Журнал держит последние 200 строк, туда же попадают ошибки самого плагина.
 Разрешения на это не нужно: наружу вывод не уходит.
@@ -1059,8 +1059,8 @@ Rust или Go и подключаются как есть. Байты моду�
 
 Плагин работает в изолированном потоке. Ему НЕДОСТУПНЫ: window, document, DOM,
 localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, доступ к
-другим плагинам, к базе данных Ponoi и к токену сессии человека. Всё общение с
-приложением — только через объект ponoi. setTimeout и setInterval работают.
+другим плагинам, к базе данных NeyLivo и к токену сессии человека. Всё общение с
+приложением — только через объект neylivo. setTimeout и setInterval работают.
 
 Не пытайся обойти это — не получится, и плагин просто не запустится.
 
@@ -1081,19 +1081,19 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
      * @name Приветствие
      * @id hello-plugin
      * @version 1.0.0
-     * @author Ponoi
+     * @author NeyLivo
      * @description Здоровается по команде /привет и помнит, сколько раз
      * @permissions commands, messages.write, storage, notify, context
      */
-    function onLoad(ponoi) {
-      ponoi.commands.register('привет', 'Поздороваться', async (arg) => {
-        const n = (await ponoi.storage.get('count')) || 0
-        await ponoi.storage.set('count', n + 1)
-        const me = await ponoi.me()
+    function onLoad(neylivo) {
+      neylivo.commands.register('привет', 'Поздороваться', async (arg) => {
+        const n = (await neylivo.storage.get('count')) || 0
+        await neylivo.storage.set('count', n + 1)
+        const me = await neylivo.me()
         const кому = arg || (me && me.name) || 'мир'
-        await ponoi.messages.send('Привет, ' + кому + '! Раз номер ' + (n + 1))
+        await neylivo.messages.send('Привет, ' + кому + '! Раз номер ' + (n + 1))
       })
-      ponoi.notify('Плагин приветствия загрузился')
+      neylivo.notify('Плагин приветствия загрузился')
     }
 
 ## Пример посложнее: живая панель
@@ -1104,14 +1104,14 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
      * @name Счётчик сообщений
      * @id msg-counter
      * @version 1.0.0
-     * @author Ponoi
+     * @author NeyLivo
      * @description Считает сообщения в открытом чате и показывает их в панели
      * @permissions panel, messages.read, storage
      */
-    function onLoad(ponoi) {
+    function onLoad(neylivo) {
       let n = 0
       function draw() {
-        ponoi.ui.addPanel({
+        neylivo.ui.addPanel({
           slot: 'chat',
           title: 'Счётчик',
           rows: [
@@ -1121,7 +1121,7 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
         })
       }
       draw()
-      ponoi.on('message', function () { n++; draw() })
+      neylivo.on('message', function () { n++; draw() })
     }
 
 ## Как отдать результат
@@ -1135,7 +1135,7 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
    после кода не пиши.
 
 Так человек сначала читает, что получил, и только потом копирует файл в
-конструктор Ponoi — а не выуживает название из середины кода.
+конструктор NeyLivo — а не выуживает название из середины кода.
 
 Пример ответа:
 
@@ -1148,7 +1148,7 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
      * @name Приветствие
      * ...
      */
-    function onLoad(ponoi) { ... }
+    function onLoad(neylivo) { ... }
 `
 
 /**
@@ -1171,19 +1171,19 @@ localStorage, cookie, обычный fetch и XMLHttpRequest, WebSocket, eval, �
  * предупреждать.
  */
 export const AI_PROMPT_PREFIX =
-  'Ты будешь писать плагин для мессенджера Ponoi. Сначала прочитай это объяснение целиком — ' +
+  'Ты будешь писать плагин для мессенджера NeyLivo. Сначала прочитай это объяснение целиком — ' +
   'оно про то, как устроена вся система, а не про синтаксис.\n\n' +
 
-  '## Что такое Ponoi\n' +
+  '## Что такое NeyLivo\n' +
   'Настольный и мобильный мессенджер: сервера с каналами, личные сообщения, звонки, ' +
   'общая музыкальная библиотека («Трекотека») с плеером, настройки оформления. ' +
-  'Ponoi делается приватным: приложение старается ничего лишнего о человеке не собирать, ' +
+  'NeyLivo делается приватным: приложение старается ничего лишнего о человеке не собирать, ' +
   'личная переписка и вложения шифруются.\n\n' +
 
   '## Что такое плагин и где он живёт\n' +
   'Плагин — ОДИН текстовый файл (.ponoi): блок /** ... */ с полями @name, @id, @version, @author, ' +
   '@description, @permissions, а дальше обычный JavaScript. Ни сборщиков, ни файлов рядом, ни внешних ' +
-  'библиотек, ни import/export: файл выполняется как обычный код, точка входа — function onLoad(ponoi).\n\n' +
+  'библиотек, ни import/export: файл выполняется как обычный код, точка входа — function onLoad(neylivo).\n\n' +
   'Выполняется он в Web Worker, то есть в отдельном потоке БЕЗ доступа к странице. Там нет document, ' +
   'window, localStorage, cookie, обычного fetch, XMLHttpRequest, WebSocket, importScripts, eval и вложенных ' +
   'воркеров. Это не наша придирка, которую можно обойти хитрым кодом: сессия человека лежит там, куда ' +
@@ -1202,7 +1202,7 @@ export const AI_PROMPT_PREFIX =
   'и лишнее его справедливо пугает.\n' +
   '2. НИКАКОЙ СВОЕЙ РАЗМЕТКИ. Плагин ничего не рисует. Кнопки, панели, страницы настроек он ОПИСЫВАЕТ ' +
   'данными — списком строк (toggle, text, select, button, label, progress, slider, color, image), — ' +
-  'а рисует их само приложение. Поэтому плагином нельзя подделать окно Ponoi и нельзя подсунуть ' +
+  'а рисует их само приложение. Поэтому плагином нельзя подделать окно NeyLivo и нельзя подсунуть ' +
   'человеку чужой ввод. Панель обновляется повторным описанием: вызвал addPanel ещё раз — заменилась.\n' +
   '3. ПРЕДЕЛЫ. У всего, что беспокоит человека или уходит наружу, есть ограничение частоты: сообщения, ' +
   'реакции, уведомления, звук, запросы в сеть, управление плеером, переходы. Плагин, который шлёт в цикле, ' +
@@ -1216,11 +1216,11 @@ export const AI_PROMPT_PREFIX =
   '• Не выдумывай методов. Если для задуманного не хватает возможностей из описания ниже — скажи об ' +
   'этом одной строкой, а не подставляй правдоподобное имя: такой плагин просто не запустится.\n' +
   '• Имена команд и сочетания клавиш глобальны: занятое — ошибка, а не тихая подмена чужого.\n' +
-  '• Отладка — ponoi.log, ponoi.warn, ponoi.error: их видно в журнале плагина в настройках.\n\n' +
+  '• Отладка — neylivo.log, neylivo.warn, neylivo.error: их видно в журнале плагина в настройках.\n\n' +
 
   '## Что сделать прямо сейчас\n' +
   'НЕ пиши код в этом ответе. Ответь коротко — в двух-трёх предложениях, — что ты понял про устройство ' +
-  'плагинов Ponoi, и спроси, какой плагин человек хочет. Дальше он расскажет задумку своими словами; ' +
+  'плагинов NeyLivo, и спроси, какой плагин человек хочет. Дальше он расскажет задумку своими словами; ' +
   'если чего-то не хватает, чтобы её собрать, — переспроси.\n\n' +
   'Когда дойдёшь до готового плагина, отдай его ТРЕМЯ ЧАСТЯМИ в таком порядке: сначала название одной ' +
   'строкой, потом описание в одно-два предложения (что делает и какие разрешения просит и зачем), и ' +
@@ -1232,19 +1232,19 @@ export const AI_PROMPT_PREFIX =
 //
 // То же самое для ботов: человек копирует текст, отдаёт ИИ и получает готовый
 // код бота. Бот — не плагин: он живёт снаружи, на своём адресе, и общается с
-// Ponoi по вебхуку. Поэтому описание отдельное.
+// NeyLivo по вебхуку. Поэтому описание отдельное.
 
-export const BOT_SPEC = `# Как написать бота для мессенджера Ponoi
+export const BOT_SPEC = `# Как написать бота для мессенджера NeyLivo
 
-Бот Ponoi — отдельная программа на ЛЮБОМ языке, поднятая на своём https-адресе.
-Ponoi шлёт ей события POST-запросом, она отвечает. Внутри Ponoi бот ничего не
+Бот NeyLivo — отдельная программа на ЛЮБОМ языке, поднятая на своём https-адресе.
+NeyLivo шлёт ей события POST-запросом, она отвечает. Внутри NeyLivo бот ничего не
 исполняет, доступа к приложению у него нет.
 
-Если готовое приложение поднимать негде — в Ponoi есть «бот с ответами»: команды
+Если готовое приложение поднимать негде — в NeyLivo есть «бот с ответами»: команды
 и ответы на них задаются прямо в настройках, без кода и без сервера. Этот текст —
 про полноценного бота со своим кодом.
 
-## Что нужно один раз сделать в Ponoi
+## Что нужно один раз сделать в NeyLivo
 
 1. Настройки → Другое → Боты → «Мои боты» → создать бота.
 2. Скопировать ID приложения, токен и секрет вебхука (секрет показывается один раз).
@@ -1255,7 +1255,7 @@ Ponoi шлёт ей события POST-запросом, она отвечае�
 
 POST на твой Webhook URL, тело — JSON, заголовок:
 
-    X-Ponoi-Signature: <hmac-sha256 от СЫРОГО тела, ключ — секрет вебхука>
+    X-NeyLivo-Signature: <hmac-sha256 от СЫРОГО тела, ключ — секрет вебхука>
 
 Подпись проверять ОБЯЗАТЕЛЬНО: без неё кто угодно пришлёт боту что угодно.
 Считать её надо от сырого тела запроса, а не от разобранного и снова собранного
@@ -1272,7 +1272,7 @@ JSON — иначе подпись не сойдётся.
 
     { "content": "текст ответа" }
 
-Ponoi ждёт ответа не больше 5 секунд и сам отправит его в канал от имени бота.
+NeyLivo ждёт ответа не больше 5 секунд и сам отправит его в канал от имени бота.
 Пустой ответ — бот промолчит.
 
 ### Событие: в канале появилось сообщение
@@ -1281,7 +1281,7 @@ Ponoi ждёт ответа не больше 5 секунд и сам отпр�
       "message": { "id": "...", "channel_id": "...", "author": "...",
                    "author_name": "...", "content": "..." } }
 
-Ответ на это событие Ponoi не ждёт. Хочешь написать в канал — обратись к API
+Ответ на это событие NeyLivo не ждёт. Хочешь написать в канал — обратись к API
 сам (ниже). Свои же сообщения бот не получает — эха не будет.
 
 ## API: как боту написать самому
@@ -1298,19 +1298,19 @@ Ponoi ждёт ответа не больше 5 секунд и сам отпр�
     Authorization: Bot <токен бота>
 
 Бот пишет только в каналы серверов, где он состоит, и только туда, куда ему
-разрешено правами канала. Это проверяет Ponoi, обойти нельзя.
+разрешено правами канала. Это проверяет NeyLivo, обойти нельзя.
 
 ## Пример целиком (Node.js)
 
     import crypto from 'node:crypto'
     import express from 'express'
 
-    const SECRET = process.env.PONOI_WEBHOOK_SECRET
+    const SECRET = process.env.NEYLIVO_WEBHOOK_SECRET
     const app = express()
 
     app.post('/ponoi', express.text({ type: '*/*' }), (req, res) => {
       const mine = crypto.createHmac('sha256', SECRET).update(req.body).digest('hex')
-      if (mine !== req.get('X-Ponoi-Signature')) return res.sendStatus(401)
+      if (mine !== req.get('X-NeyLivo-Signature')) return res.sendStatus(401)
 
       const event = JSON.parse(req.body)
       if (event.type === 'INTERACTION_CREATE' && event.command === 'привет') {
@@ -1323,7 +1323,7 @@ Ponoi ждёт ответа не больше 5 секунд и сам отпр�
 
 ## Правила
 
-1. Адрес обязан быть https. Локальные и внутренние адреса Ponoi не примет.
+1. Адрес обязан быть https. Локальные и внутренние адреса NeyLivo не примет.
 2. Ответ на команду — не дольше 5 секунд, иначе человек увидит ошибку.
 3. Текст ответа обрезается до 4000 символов.
 4. Токен и секрет — как пароль: в код их не вписывают, держат в переменных
@@ -1348,10 +1348,10 @@ Ponoi ждёт ответа не больше 5 секунд и сам отпр�
  * код. Место в квадратных скобках убрано по той же причине: его не заполняли.
  */
 export const AI_BOT_PROMPT_PREFIX =
-  'Ты будешь писать бота для мессенджера Ponoi. Прочитай описание ниже целиком.\n\n' +
+  'Ты будешь писать бота для мессенджера NeyLivo. Прочитай описание ниже целиком.\n\n' +
   'Главное про устройство: бот — это НЕ плагин. Он живёт снаружи, отдельной программой на своём ' +
-  'https-адресе, на любом языке. Ponoi шлёт ему события POST-запросом с подписью в заголовке ' +
-  'X-Ponoi-Signature, бот проверяет подпись и отвечает; на команду ответ нужен синхронный, за 5 секунд. ' +
+  'https-адресе, на любом языке. NeyLivo шлёт ему события POST-запросом с подписью в заголовке ' +
+  'X-NeyLivo-Signature, бот проверяет подпись и отвечает; на команду ответ нужен синхронный, за 5 секунд. ' +
   'Внутрь приложения бот не попадает и доступа к устройству человека не имеет.\n\n' +
   'НЕ пиши код в этом ответе. Ответь коротко, что понял, и спроси, что бот должен делать.\n\n' +
   'Когда дойдёшь до готового бота, отдай его ТРЕМЯ ЧАСТЯМИ в таком порядке: сначала название одной ' +

@@ -2,7 +2,7 @@
 //
 // Зачем. Владелец попросил отслеживание прогресса, «как у WeMod»: приложение
 // само смотрит файлы и говорит, во что ты играешь, — а не просит заводить игры
-// руками. Раньше в Ponoi было только про ЗАПУЩЕННУЮ игру: закрыл — и ничего.
+// руками. Раньше в NeyLivo было только про ЗАПУЩЕННУЮ игру: закрыл — и ничего.
 //
 // Как устроено. Обход диска делает настольная часть (electron/gameScan.cjs) —
 // у окна доступа к файлам нет и не должно быть. Здесь — то, что можно и нужно
@@ -127,12 +127,12 @@ export function saveScan(games: ScannedGame[]) {
 
 /** Есть ли вообще настольная часть: на вебе и телефоне файлов не видно. */
 export function canScan(): boolean {
-  return typeof (window as any)?.ponoiDesktop?.scanGames === 'function'
+  return typeof (window as any)?.neylivoDesktop?.scanGames === 'function'
 }
 
 /** Спросить настольную часть и запомнить ответ. */
 export async function scanNow(): Promise<{ games: (ScannedGame & { gone?: boolean })[]; error?: string }> {
-  const d = (window as any)?.ponoiDesktop
+  const d = (window as any)?.neylivoDesktop
   if (!d?.scanGames) return { games: loadScan(), error: 'Только в приложении на компьютере: в браузере файлов не видно.' }
   const r: ScanResult = await d.scanGames()
   if (r?.error) return { games: loadScan(), error: r.error }

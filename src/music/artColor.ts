@@ -1,4 +1,4 @@
-// Dominant-color extraction from track artwork: the whole Ponoi Music theme
+// Dominant-color extraction from track artwork: the whole NeyLivo Music theme
 // (accent, buttons, background, glow behind the cover) recolors per track.
 export interface Rgb { r: number; g: number; b: number }
 

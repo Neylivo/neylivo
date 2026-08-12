@@ -66,7 +66,7 @@ await build({
 for (const тема of ['dark', 'light']) {
   writeFileSync(path.join(ВЫХОД, тема + '.html'),
     `<!doctype html><html lang="ru" data-theme="${тема}"><head><meta charset="utf-8">
-<title>Ponoi</title>
+<title>NeyLivo</title>
 <link rel="stylesheet" href="app.css"></head><body data-theme="${тема}"><div id="root"></div>
 <script>window.__ТЕМА = ${JSON.stringify(тема)}; window.__ШУМ = ${process.env.SHOTS_NOISE ? 'true' : 'false'}</script>
 <script src="app.js"></script></body></html>`)

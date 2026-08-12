@@ -81,7 +81,7 @@ export function EmojiPicker({ onPick, onClose, onGifTab }: {
   // Создание своего эмодзи из картинки: файл -> хранилище -> общая таблица.
   async function addFromFile(f: File) {
     if (!user) return
-    const name = (await promptUi('Название эмодзи', { placeholder: 'напр. ponoi (кириллица станет латиницей)', okText: 'Создать' }))?.trim()
+    const name = (await promptUi('Название эмодзи', { placeholder: 'напр. neylivo (кириллица станет латиницей)', okText: 'Создать' }))?.trim()
     if (!name) return
     try {
       const url = await uploadTo('attachments', user.id, f)

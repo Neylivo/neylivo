@@ -29,7 +29,7 @@ import { PublishModal } from './PluginCatalog'
 //   2. ЖИВОЙ ПОКАЗ рядом. Цикл «правка → результат» должен идти секунду, а не
 //      полминуты через сохранение и открытие.
 //   3. КОНСОЛЬ. Внутри окна её нет, и без неё ошибка выглядит как «ничего не
-//      происходит». Сюда приходят и ponoi.log, и настоящие ошибки страницы.
+//      происходит». Сюда приходят и neylivo.log, и настоящие ошибки страницы.
 //   4. ЧЕСТНАЯ ПЕСОЧНИЦА. Показ идёт в той же рамке и с теми же правами, что
 //      настоящее окно. Иначе здесь работало бы то, что в жизни откажет.
 //
@@ -147,7 +147,7 @@ function Редактор({ проект, onClose }: { проект: Project; on
 
   // ── Ответчик показа ──────────────────────────────────────────────────────
   //
-  // Страница зовёт ponoi так же, как в настоящем окне. Плагина ещё нет, поэтому
+  // Страница зовёт neylivo так же, как в настоящем окне. Плагина ещё нет, поэтому
   // отвечаем сами — тем, что можно отдать без установки: журналом, встроенными
   // библиотеками и хранилищем в памяти. Остальное честно отказывает: пусть
   // автор увидит отказ здесь, а не после сохранения.
@@ -269,7 +269,7 @@ function Редактор({ проект, onClose }: { проект: Project; on
     const b = new Blob([buildProject(p)], { type: 'text/javascript' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(b)
-    a.download = projId(p.id || p.name) + '.ponoi'
+    a.download = projId(p.id || p.name) + '.neylivo'
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }
@@ -394,7 +394,7 @@ function Редактор({ проект, onClose }: { проект: Project; on
             srcDoc={страница} />
           {консоль && (
             <div className="ws-console">
-              {журнал.length === 0 && <div className="ws-con-empty">Здесь появятся ponoi.log и ошибки страницы.</div>}
+              {журнал.length === 0 && <div className="ws-con-empty">Здесь появятся neylivo.log и ошибки страницы.</div>}
               {журнал.map((с, i) => (
                 <div key={i} className={'ws-con-l ' + с.уровень}>{с.текст}</div>
               ))}
@@ -413,7 +413,7 @@ function Редактор({ проект, onClose }: { проект: Project; on
       {p.scene && (
         <div className={'ws-console sc-console' + (журнал.length ? '' : ' пусто')}>
           {журнал.length === 0
-            ? <div className="ws-con-empty">Здесь появятся ошибки скриптов и ponoi.log.</div>
+            ? <div className="ws-con-empty">Здесь появятся ошибки скриптов и neylivo.log.</div>
             : журнал.map((с, i) => <div key={i} className={'ws-con-l ' + с.уровень}>{с.текст}</div>)}
         </div>
       )}

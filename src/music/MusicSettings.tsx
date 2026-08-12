@@ -62,12 +62,12 @@ export function MusicSettings({ onClose, onChange, dsp, onDsp }:
   return (
     <Portal><div className="ms-overlay" onClick={onClose}>
       <div className="ms-modal" onClick={e => e.stopPropagation()}>
-        <div className="ms-head"><b>Настройки Ponoi Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
+        <div className="ms-head"><b>Настройки NeyLivo Music</b><button onClick={onClose}><Icon name="close" size={16} /></button></div>
 
         {/* ── Обработка звука (v1.442.0) ───────────────────────────────── */}
         <div className="ms-sec"><Icon name="soundboard" size={15} /> Звук</div>
         <div className="ms-hint">
-          Работает для треков, которые Ponoi играет сам. У YouTube и SoundCloud звук идёт
+          Работает для треков, которые NeyLivo играет сам. У YouTube и SoundCloud звук идёт
           внутри их окна — туда приложению хода нет, и обработка на них не действует.
         </div>
         <div className="ms-row">
@@ -174,7 +174,7 @@ export function MusicSettings({ onClose, onChange, dsp, onDsp }:
           Распознавать текст на слух, если его нигде нет (ИИ на этом устройстве)
         </label>
         <div className="ms-note">
-          Ponoi слушает сам трек и расставляет строки с метками времени — так караоке получается даже у песни,
+          NeyLivo слушает сам трек и расставляет строки с метками времени — так караоке получается даже у песни,
           которой нет ни в одном каталоге текстов. Работает на этом устройстве: сам звук никуда не уходит, но при
           первом запуске из интернета скачивается модель распознавания (около 40 МБ, дальше берётся из кэша).
           Занимает минуту-две и заметно нагружает процессор, поэтому по умолчанию выключено.

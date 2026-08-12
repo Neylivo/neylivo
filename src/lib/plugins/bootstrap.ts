@@ -19,7 +19,7 @@ export const WORKER_BOOTSTRAP = String.raw`
 //     видимости, где ничего из этого списка не вырезано, и вся песочница потеряла бы
 //     смысл. Всё остальное ниже держится на том, что этих двух здесь нет.
 //   importScripts    — подгрузка постороннего кода в обход файла, который человек видел.
-//   fetch/XHR/WS/SSE — сеть напрямую; вместо неё ponoi.net.fetch с проверкой домена.
+//   fetch/XHR/WS/SSE — сеть напрямую; вместо неё neylivo.net.fetch с проверкой домена.
 //   indexedDB/caches — тот же origin, что у приложения (в ponoiMedia лежат вложения).
 //   sendBeacon       — тихая отправка данных, обходит любые проверки сети.
 const KILL = [
@@ -34,7 +34,7 @@ for (const k of KILL) {
   try {
     Object.defineProperty(self, k, {
       configurable: false, enumerable: false,
-      get() { throw new Error(k + ' недоступен плагинам: код выполняется в песочнице. Всё, что можно, доступно через объект ponoi (сеть — ponoi.net.fetch, хранилище — ponoi.storage).') },
+      get() { throw new Error(k + ' недоступен плагинам: код выполняется в песочнице. Всё, что можно, доступно через объект ponoi (сеть — neylivo.net.fetch, хранилище — neylivo.storage).') },
     })
   } catch (e) {}
 }
@@ -59,7 +59,7 @@ function packArgs(v, depth) {
   }
   if (Array.isArray(v)) return v.map(x => packArgs(x, depth + 1))
   // v1.473.0: двоичное едет как есть. Разбирать его по полям нельзя: у
-  // ArrayBuffer своих полей нет вовсе, и картинка, отданная в ponoi.assets.put,
+  // ArrayBuffer своих полей нет вовсе, и картинка, отданная в neylivo.assets.put,
   // приезжала бы в приложение пустым объектом — то есть молча портилась.
   // postMessage такие значения умеет копировать сам.
   if (v instanceof ArrayBuffer || ArrayBuffer.isView(v) || (typeof Blob !== 'undefined' && v instanceof Blob)) return v
@@ -102,7 +102,7 @@ const ponoi = {
     // обычную букву.
     addHotkey: (opt) => call('ui.addHotkey', [opt]),
     // Окно рисует приложение, плагин получает только ответ: своё окно он подделал
-    // бы под любое окно Ponoi, а спросить пароль «от имени приложения» нельзя.
+    // бы под любое окно NeyLivo, а спросить пароль «от имени приложения» нельзя.
     confirm: (opt) => call('ui.confirm', [opt || {}]),
     prompt: (opt) => call('ui.prompt', [opt || {}]),
     // v1.475.0: целая форма вместо одного вопроса. Ответ — объект со
@@ -167,7 +167,7 @@ const ponoi = {
     list: () => call('libs.list', []),
     source: (id) => call('libs.get', [String(id)]),
   },
-  // v1.472.0: своё хранилище таблицами. ponoi.storage — это пары ключ-значение
+  // v1.472.0: своё хранилище таблицами. neylivo.storage — это пары ключ-значение
   // на несколько килобайт; здесь настоящие таблицы с отбором.
   //
   // Вид записи цепочкой (table('x').where(...).get()) собирается прямо здесь: он
@@ -221,7 +221,7 @@ const ponoi = {
     },
   },
   // v1.473.0: геймпад. Опрашивает приложение — у воркера getGamepads нет и быть
-  // не может. Плагину уходят ИЗМЕНЕНИЯ через ponoi.on('gamepad'), а этот вызов
+  // не может. Плагину уходят ИЗМЕНЕНИЯ через neylivo.on('gamepad'), а этот вызов
   // отдаёт состояние прямо сейчас: игре, которая рисует кадр, нужно именно оно.
   input: {
     gamepads: () => call('input.gamepads', []),
@@ -251,7 +251,7 @@ const ponoi = {
   // на карточке плагина и он может её остановить. См. background.ts.
   background: {
     every: (ms, handler, label) => {
-      if (typeof handler !== 'function') throw new Error('ponoi.background.every: вторым доводом нужна функция')
+      if (typeof handler !== 'function') throw new Error('neylivo.background.every: вторым доводом нужна функция')
       return call('background.every', [Number(ms), handler, String(label || '')])
     },
     stop: (id) => call('background.stop', [Number(id)]),
@@ -290,9 +290,9 @@ const ponoi = {
     readState: () => call('messages.readState', []),
     // v1.481.0: любой канал, а не только открытый. Пересылка, ответчики,
     // разбор переписки — всё это отсюда.
-    //   const каналы = await ponoi.messages.channels()
-    //   const было = await ponoi.messages.in(id).recent(50)
-    //   await ponoi.messages.in(id).send('привет')
+    //   const каналы = await neylivo.messages.channels()
+    //   const было = await neylivo.messages.in(id).recent(50)
+    //   await neylivo.messages.in(id).send('привет')
     channels: () => call('messages.anyList', []),
     in: (channelId) => ({
       recent: (limit) => call('messages.anyRecent', [String(channelId), Number(limit) || 50]),
@@ -306,11 +306,11 @@ const ponoi = {
     // что-то другое или упал — текст остаётся прежним: сломанный плагин не
     // должен отбирать у человека возможность написать сообщение.
     onBeforeSend: (fn) => {
-      if (typeof fn !== 'function') throw new Error('ponoi.messages.onBeforeSend: нужна функция')
+      if (typeof fn !== 'function') throw new Error('neylivo.messages.onBeforeSend: нужна функция')
       return call('messages.onBeforeSend', [fn])
     },
     onBeforeRender: (fn) => {
-      if (typeof fn !== 'function') throw new Error('ponoi.messages.onBeforeRender: нужна функция')
+      if (typeof fn !== 'function') throw new Error('neylivo.messages.onBeforeRender: нужна функция')
       return call('messages.onBeforeRender', [fn])
     },
     // v1.475.0: файл ДО отправки в сеть. Обработчик получает
@@ -318,7 +318,7 @@ const ponoi = {
     // или { cancel: true }. Вернул что-то другое или упал — файл уходит как
     // был: сломанный плагин не должен отбирать возможность отправить файл.
     onUpload: (fn) => {
-      if (typeof fn !== 'function') throw new Error('ponoi.messages.onUpload: нужна функция')
+      if (typeof fn !== 'function') throw new Error('neylivo.messages.onUpload: нужна функция')
       return call('messages.onUpload', [fn])
     },
   },
@@ -343,11 +343,11 @@ const ponoi = {
     // v1.447.0: ответ по кускам — то, ради чего в плагине вообще возможна своя
     // ИИ-модель. В v1.445.0 это было сделано во всём, кроме самого главного:
     // ветка диспетчера, правила, документация и штурм появились, а СЮДА метод
-    // не добавили — то есть для плагина ponoi.net.stream просто не существовал.
+    // не добавили — то есть для плагина neylivo.net.stream просто не существовал.
     // Ровно тот случай, про который в этом проекте сказано: «настройка есть»
     // не значит «работает».
     stream: (url, init, onChunk) => {
-      if (typeof onChunk !== 'function') throw new Error('ponoi.net.stream: третьим доводом нужна функция — ей приходят куски ответа')
+      if (typeof onChunk !== 'function') throw new Error('neylivo.net.stream: третьим доводом нужна функция — ей приходят куски ответа')
       return call('net.stream', [String(url), init || {}, onChunk])
     },
     // v1.465.0: постоянное соединение. Сам сокет живёт в приложении (в песочнице
@@ -435,10 +435,19 @@ self.onmessage = async (e) => {
       // нельзя. Снимаем ведущее export у объявлений верхнего уровня — работают и
       // форма из документации, и обычная function onLoad.
       const code = m.code.replace(/^[ \t]*export[ \t]+(default[ \t]+)?(?=(async[ \t]+)?(function|const|let|var|class)\b)/gm, '')
-      const factory = new Function('ponoi', 'module', 'exports',
+      // v1.558.0: имя объекта — neylivo, а ponoi оставлен ПСЕВДОНИМОМ.
+      //
+      // Оба имени указывают на один и тот же объект, поэтому плагин, написанный
+      // до переименования (neylivo.messages.send и подобное), работает без единой
+      // правки. Убрать старое имя значило бы разом сломать все чужие плагины
+      // ради красоты в документации — цена несопоставима.
+      //
+      // Обратных кавычек здесь быть не может: весь файл — это String.raw-строка,
+      // и одна кавычка обрывает её посреди кода. Уже ловил это на движке сцены.
+      const factory = new Function('neylivo', 'ponoi', 'module', 'exports',
         code + '\nreturn (typeof onLoad === "function" ? onLoad : (module.exports && module.exports.onLoad) || (exports && exports.onLoad));')
       const mod = { exports: {} }
-      const onLoad = factory(ponoi, mod, mod.exports)
+      const onLoad = factory(ponoi, ponoi, mod, mod.exports)
       if (typeof onLoad === 'function') await onLoad(ponoi)
       self.postMessage({ k: 'ready' })
     } catch (err) {

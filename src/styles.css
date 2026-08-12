@@ -62,7 +62,7 @@ body {
 @keyframes pop { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
 
 /* auth (v1.214.0, фон/карточка обновлены v1.217.0): фирменный арт вместо
-   голого Discord-клона — экран входа единственное место, где Ponoi не
+   голого Discord-клона — экран входа единственное место, где NeyLivo не
    косплеит Discord 1-в-1 нарочно. Маскот из v1.214.0 убран (новый референс
    без него, просто карточка на фоне). */
 .auth2 { position:relative; overflow:hidden; height:100%; display:flex; align-items:center; justify-content:center;
@@ -674,7 +674,7 @@ input[type=range] { accent-color:var(--brand); }
 
 
 
-/* ===== pass 11: Ponoi Music + call screen polish (mus-* / call-*) ===== */
+/* ===== pass 11: NeyLivo Music + call screen polish (mus-* / call-*) ===== */
 .mus-full { display:flex; flex-direction:column; }
 .mus-head { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; backdrop-filter:blur(6px); }
 .mus-head b { font-size:16px; }
@@ -904,7 +904,7 @@ body { font-size: var(--font-px, 16px); }
 .modal-results { min-height:60px; margin-top:12px; }
 .modal-empty { text-align:center; color:var(--mut); font-size:14px; padding:18px 0; }
 .modal-result { padding:10px 12px; border-radius:var(--r-md); cursor:pointer; }
-/* v1.162.0: пикер «Любимая игра» (GamePickerModal) — список игр, реально сыгранных на Ponoi. */
+/* v1.162.0: пикер «Любимая игра» (GamePickerModal) — список игр, реально сыгранных на NeyLivo. */
 .gpick { width:460px; }
 .gpick-list { margin-top:14px; max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
 .gpick-row { display:flex; align-items:center; gap:10px; padding:8px; border-radius:var(--r-md); cursor:pointer; }
@@ -959,7 +959,7 @@ body { font-size: var(--font-px, 16px); }
 .pqs-pet-banner { position:absolute; inset:0 0 auto 0; height:56px; }
 
 
-/* ===== pass 17: Ponoi Music redesign (mus2-*) ===== */
+/* ===== pass 17: NeyLivo Music redesign (mus2-*) ===== */
 /* Музыка: по умолчанию панель у правого края (как в макете), .full — на весь экран */
 .mus2 { position:fixed; top:0; right:0; bottom:0; width:min(520px,92vw); z-index:var(--z-panel, 120); display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border-left:1px solid rgba(0,0,0,.35); box-shadow:-14px 0 44px rgba(0,0,0,.45); }
 .mus2.full { left:0; width:auto; border-left:none; box-shadow:none; }
@@ -1353,7 +1353,7 @@ body.chatbg-on .chat::after {
   background:rgba(0,0,0,var(--chatbg-tint,.45));
 }
 
-/* ===== Ponoi Music: обложка трека + перекраска темы под цвет обложки ===== */
+/* ===== NeyLivo Music: обложка трека + перекраска темы под цвет обложки ===== */
 .mus2.tinted { background:linear-gradient(180deg,var(--mus-bg1,var(--bg)) 0%,var(--bg) 72%); }
 .mus2, .mus2-tab.on, .mus2-addbtn, .mus2-ctl .big { transition:background .5s var(--ease-out4, ease); }
 .mus2-artwrap { position:relative; }
@@ -1363,7 +1363,7 @@ body.chatbg-on .chat::after {
 /* SC-виджет скрыт: играет фоном, интерфейс полностью наш */
 .mus2-scframe { position:fixed; left:-9999px; bottom:0; width:2px; height:2px; opacity:0; pointer-events:none; border:0; }
 
-/* ===== Ponoi Music: мини-плеер в углу + виниловая пластинка ===== */
+/* ===== NeyLivo Music: мини-плеер в углу + виниловая пластинка ===== */
 .mus2-hidden { display:none !important; }
 .mus-mini { position:fixed; right:14px; bottom:14px; z-index:var(--z-over-modal, 130); display:flex; align-items:center; gap:8px;
   background:var(--bg2); border:1px solid rgba(0,0,0,.35); border-radius:var(--r-2xl); padding:8px 10px;
@@ -2975,7 +2975,7 @@ body.no-anim .member-typing i { animation:none; }
 .net-banner-ec:hover { background:rgba(var(--ov, 255,255,255),.16); }
 
 /* v1.275.0: аварийный резервный чат (emergency-server/, деплой на Render) —
-   отдельная маленькая «запасная комната», не полноценный Ponoi. */
+   отдельная маленькая «запасная комната», не полноценный NeyLivo. */
 .ec-overlay { position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,.6); display:flex;
   align-items:center; justify-content:center; }
 .ec-card { width:min(480px, 92vw); max-height:82vh; display:flex; flex-direction:column; background:var(--bg2);
@@ -4522,7 +4522,7 @@ body.no-anim .lsn-bar > i { transition:none; }
 .chlog-list li { font-size: 14px; color: var(--text-normal, #dbdee1); line-height: 1.45; }
 .pqs2-desc { font-size: 14px; color: var(--text-muted, #949ba4); line-height: 1.45; margin: -6px 0 14px; }
 
-/* v1.231.0: Ponoi сейчас в бета-тестировании — метка рядом с версией везде, где
+/* v1.231.0: NeyLivo сейчас в бета-тестировании — метка рядом с версией везде, где
    та показывается (нижний правый угол, окно «Что нового»). Янтарный, чтобы не
    путался с фирменным синим бейджем версии/«текущая». */
 .beta-tag { font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
@@ -5767,7 +5767,7 @@ body.no-anim .msg-dec i { animation: none; opacity: .4; }
 .mus2-extonly-t { font-weight: 700; font-size: 15px; color: #fff; }
 .mus2-extonly-d { font-size: 13px; line-height: 1.5; color: rgba(255, 255, 255, .72); max-width: 260px; }
 
-/* ══ Ponoi Music: живой фон и мелочи в духе Spotify (v1.370.0) ═════════════
+/* ══ NeyLivo Music: живой фон и мелочи в духе Spotify (v1.370.0) ═════════════
    Плеер и раньше подбирал цвет под обложку, но красил им только свечение вокруг
    картинки — сама панель оставалась ровно серой, и от трека к треку ничего не
    менялось. У Spotify цвет обложки разливается по всему полотну и медленно
@@ -6282,7 +6282,7 @@ body.no-anim .mus2-lyrback-in, body.no-anim .mus2-karaoke-in, body.no-anim .mus2
 .ms-check input { accent-color: var(--brand, #5865f2); width: 16px; height: 16px; cursor: pointer; }
 
 /* ══ Журнал плагина (v1.397.0) ═════════════════════════════════════════════
-   В документации плагина было написано, что ponoi.log «видно в настройках
+   В документации плагина было написано, что neylivo.log «видно в настройках
    плагина». Видно его не было нигде, кроме консоли браузера, которой в
    приложении на телефоне и в десктопной сборке нет вовсе, — то есть отладки у
    разработчика не было совсем. Теперь строки живут рядом с самим плагином. */
@@ -6438,7 +6438,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
    Свой уголок плагина в готовом экране. Разметку рисует приложение — от
    плагина приходит только описание строк, поэтому подделать чужое окно этим
    нельзя. Пометка «плагин» обязательна: человек должен видеть, что этот кусок
-   поставил не Ponoi, а то, что он сам установил. */
+   поставил не NeyLivo, а то, что он сам установил. */
 .plugpanels { display: flex; flex-direction: column; gap: 8px; margin: 10px 12px; }
 .plugpanel {
   background: rgba(var(--ov, 255,255,255), .05); border-radius: var(--r-md, 10px);
@@ -6659,7 +6659,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 }
 
 /* ══ Распознавание текста на слух (v1.420.0) ═══════════════════════════════
-   Внутренний ИИ Ponoi Music: слушает трек и расставляет метки времени. Блок
+   Внутренний ИИ NeyLivo Music: слушает трек и расставляет метки времени. Блок
    живёт в окне текста песни — рядом с полем, куда попадёт результат, чтобы
    человек видел, что именно изменилось, и мог поправить слова до сохранения. */
 .lyr-ai {
@@ -6685,7 +6685,7 @@ body.no-anim .mus2-libbtn.wide { transition: none; }
 }
 
 /* ══ v1.425.0: телефон — большой проход по удобству ═══════════════════════════
-   Что было. Мобильные правила у приложения есть с v1.121.0, но Ponoi Music в них
+   Что было. Мобильные правила у приложения есть с v1.121.0, но NeyLivo Music в них
    не попал вовсе: на телефоне плеер оставался узкой панелью на 92% ширины с
    обложкой в 280 пикселей, кнопками по 18 и ползунком громкости, до которого
    пальцем не дотянуться. Трекотека рисовалась сеткой по 150 пикселей — на узком
@@ -8851,7 +8851,7 @@ img.mpg-cover:hover, img.act-cover:hover, img.mini-game-cover:hover { filter: br
  * рейку серверов, и ровно та же высота, что у шапки чата и у поля ввода, — 56.
  *
  * ПОЧЕМУ КНОПКА МУЗЫКИ ПЕРЕЕХАЛА. Растянувшись, панель накрывает низ рейки —
- * ровно то место, где стояла Ponoi Music. Оставить её там значило бы спрятать
+ * ровно то место, где стояла NeyLivo Music. Оставить её там значило бы спрятать
  * кнопку под панелью. Она ушла в саму панель, к микрофону и наушникам: там ей и
  * место по смыслу — это не сервер, а моя вещь.
  *

@@ -15,7 +15,7 @@ const path = require('path')
 
 const CSS = [
   path.join(__dirname, '..', 'src', 'styles.css'),
-  path.join(__dirname, '..', 'src', 'ponoi-ui.css'),
+  path.join(__dirname, '..', 'src', 'neylivo-ui.css'),
 ]
 
 /** Разобрать css на пары «селектор → { свойство: значение }». Без библиотек:

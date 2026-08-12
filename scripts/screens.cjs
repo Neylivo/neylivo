@@ -108,7 +108,7 @@ const КЛИПЫ = `<div class="app-viewport"><div class="pqs2" style="padding:2
         <button class="pqs2-btn primary">Сохранить последние 30 сек</button>
         <button class="pqs2-btn">Открыть папку</button>
       </div>
-      <div class="clip-hint">Или нажми F7 — работает поверх игры, переключаться в Ponoi не надо.</div>
+      <div class="clip-hint">Или нажми F7 — работает поверх игры, переключаться в NeyLivo не надо.</div>
     </div>
     <div class="pqs-sec-t">Записанные клипы</div>
     <div class="clip-list">
@@ -132,7 +132,7 @@ const КОД_ВХОДА = `<div class="auth2" style="background:#2b2d31">
     <div class="qr2">
       <button type="button" class="qr2-back">‹ Назад</button>
       <h1>Вход по коду</h1>
-      <p class="auth2-sub">Открой Ponoi на телефоне, где ты уже вошёл, и наведи камеру</p>
+      <p class="auth2-sub">Открой NeyLivo на телефоне, где ты уже вошёл, и наведи камеру</p>
       <div class="qr2-box"><canvas id="qr-here" class="qr2-canvas"></canvas></div>
       <div class="qr2-steps">
         <div class="qr2-step"><span>1</span> На телефоне: Настройки → Устройства и безопасность</div>
@@ -150,8 +150,8 @@ const ВОПРОС = `<div class="modal-overlay"><div class="modal qrs">
   <button class="modal-x">×</button>
   <div class="qrs-ask-ico">◻</div>
   <div class="modal-title" style="margin:0">Впустить это устройство?</div>
-  <div class="qrs-dev">Windows · приложение Ponoi</div>
-  <div class="qrs-warn">Если это не ты сейчас открыл Ponoi на компьютере — нажми «Нет».
+  <div class="qrs-dev">Windows · приложение NeyLivo</div>
+  <div class="qrs-warn">Если это не ты сейчас открыл NeyLivo на компьютере — нажми «Нет».
     Подтверждение впустит это устройство в твой аккаунт без пароля.</div>
   <div class="lyr-btns"><button class="pqs2-btn">Нет</button>
   <button class="pqs2-btn primary">Да, это я</button></div>
@@ -224,7 +224,7 @@ const ПЛЕЕР = `<div class="app-viewport"><div class="mus2">
 // v1.547.0: Трекотека на телефоне. Разметка списана с MusicPlayer.tsx (mus2-lib).
 const ТЕЛЕФОН_ТРЕКОТЕКА = `<div class="mus2-lib"><div class="mus2-lib-inner">
   <header class="mus2-lib-head">
-    <div class="mus2-lib-ttl"><b>Ponoi Music · Трекотека</b>
+    <div class="mus2-lib-ttl"><b>NeyLivo Music · Трекотека</b>
       <span class="mus2-lib-sub">Вся твоя музыка. В одном месте.</span></div>
     <span class="mus2-lib-count">128 треков</span>
     <div class="mus2-libtabs">

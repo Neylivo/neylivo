@@ -1,7 +1,7 @@
 {
-  "name": "ponoi",
+  "name": "neylivo",
   "private": true,
-  "version": "1.557.0",
+  "version": "1.558.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -108,7 +108,7 @@
   },
   "build": {
     "appId": "com.ponoi.app",
-    "productName": "Ponoi",
+    "productName": "NeyLivo",
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -123,11 +123,11 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "ponoiai",
-      "repo": "ponoi",
+      "owner": "Neylivo",
+      "repo": "neylivo",
       "releaseType": "release"
     },
-    "artifactName": "Ponoi-Setup-${version}.${ext}",
+    "artifactName": "NeyLivo-Setup-${version}.${ext}",
     "nsis": {
       "include": "build/installer.nsh",
       "oneClick": false,
@@ -138,8 +138,8 @@
       "deleteAppDataOnUninstall": false,
       "installerSidebar": "build/installerSidebar.bmp",
       "uninstallerSidebar": "build/installerSidebar.bmp",
-      "shortcutName": "Ponoi",
-      "uninstallDisplayName": "Ponoi"
+      "shortcutName": "NeyLivo",
+      "uninstallDisplayName": "NeyLivo"
     }
   }
 }

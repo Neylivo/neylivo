@@ -1,4 +1,4 @@
-// Call audio capture + soundboard playback for Ponoi voice channels.
+// Call audio capture + soundboard playback for NeyLivo voice channels.
 //
 // CallRecorder keeps a rolling ring buffer (mono Float32) of the *mixed* call
 // audio — the local mic plus every subscribed remote audio track — so that at

@@ -1,7 +1,7 @@
 // v1.180.0: «Игровой Экспресс» (QuickLaunch) — рендерер-обвязка вокруг
 // electron/quicklaunch.cjs (сканирование/заливка модов идут в main-процессе,
 // см. его же комментарии) и таблицы quicklaunch_packs в Supabase.
-// Только десктоп — на вебе window.ponoiDesktop нет вообще.
+// Только десктоп — на вебе window.neylivoDesktop нет вообще.
 import { supabase } from './supabase'
 
 export interface QlMod { name: string; filename: string; sha1: string; size: number }
@@ -22,7 +22,7 @@ export interface QlPack extends QlManifest {
 // инстанс Prism Launcher (см. listPrismInstances() в electron/quicklaunch.cjs).
 export interface QlSource { id: string; label: string; prismInstance?: string; mcVersion: string; loader: string | null; loaderVersion: string | null }
 
-function desktop(): any { return (window as any).ponoiDesktop }
+function desktop(): any { return (window as any).neylivoDesktop }
 export function isQuicklaunchAvailable(): boolean { return !!desktop()?.isDesktop }
 
 // Список источников сборки для пикера («обычный лаунчер» + все инстансы Prism Launcher).
@@ -58,7 +58,7 @@ export async function fetchPack(id: string): Promise<QlPack | null> {
 }
 
 // Заливает недостающие моды хоста в общий bucket modfiles (main-процесс сам
-// пропускает те, что там уже есть — дедуп по sha1 общий на весь Ponoi, не
+// пропускает те, что там уже есть — дедуп по sha1 общий на весь NeyLivo, не
 // только на повторные шары одного и того же человека). onProgress — 0..1.
 export async function uploadMissingMods(mods: QlMod[], onProgress?: (p: number) => void, source?: { prismInstance: string }): Promise<void> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string

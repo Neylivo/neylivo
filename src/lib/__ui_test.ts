@@ -1311,7 +1311,7 @@ console.log('\n-- Демонстрация экрана: настройки (v1.
 
   console.log('\n   выбор источника:')
   const SRC: any[] = [
-    { id: 'window:2', name: 'Ponoi', kind: 'window' },
+    { id: 'window:2', name: 'NeyLivo', kind: 'window' },
     { id: 'window:1', name: 'Ярлык', kind: 'window' },
     { id: 'screen:0', name: 'Screen 1', kind: 'screen' },
     { id: 'window:3', name: 'Автобус', kind: 'window' },
@@ -1322,7 +1322,7 @@ console.log('\n-- Демонстрация экрана: настройки (v1.
     return w.join() === 'Автобус,Ярлык'
   })
   check('своё же окно в список не попадает', () =>
-    !orderSources(SRC).some(x => x.name === 'Ponoi'))
+    !orderSources(SRC).some(x => x.name === 'NeyLivo'))
   check('пустой список не ломает', () => orderSources([]).length === 0)
 
   console.log('\n-- Ломаем нарочно (демонстрация) --')
@@ -1809,7 +1809,7 @@ const ka = (o: Partial<typeof KA>) => keepAliveAction({ ...KA, ...o })
 
 check('играет — держим процесс', () => ka({}) === 'start')
 // v1.502.0: пауза больше не снимает карточку. Владелец: поставил на паузу,
-// свернул Ponoi Music — и продолжить нечем, в шторке пусто. У Spotify карточка
+// свернул NeyLivo Music — и продолжить нечем, в шторке пусто. У Spotify карточка
 // на паузе остаётся, на ней и нажимают «играть».
 check('встало — карточка остаётся, но процесс отпускаем', () => ka({ playing: false }) === 'show')
 check('играть нечего — карточку убираем', () => ka({ hasTrack: false }) === 'stop')
@@ -2037,7 +2037,7 @@ check('остаток замка считается, а не выдумывае�
 
 check('имя устройства читается человеком', () =>
   deviceLabel('Mozilla/5.0 (Linux; Android 14) Chrome/120').includes('Android')
-  && deviceLabel('Mozilla/5.0 (Windows NT 10.0) Ponoi/1.5 Electron').includes('Windows')
+  && deviceLabel('Mozilla/5.0 (Windows NT 10.0) NeyLivo/1.5 Electron').includes('Windows')
   && deviceLabel('').includes('устройство'))
 
 console.log('\n-- Код восстановления --')
@@ -2291,7 +2291,7 @@ check('проверка ловит возврат системных имён в
 console.log('\n-- Карточка файла --')
 
 check('имя достаётся из ссылки', () =>
-  fileNameOf('https://x/y/Ponoi-Setup-1.529.0.exe?token=abc') === 'Ponoi-Setup-1.529.0.exe'
+  fileNameOf('https://x/y/NeyLivo-Setup-1.529.0.exe?token=abc') === 'NeyLivo-Setup-1.529.0.exe'
   && fileNameOf('https://x/%D0%B0%D1%80%D1%85%D0%B8%D0%B2.zip') === 'архив.zip')
 check('своё имя вложения важнее ссылки', () =>
   fileNameOf('https://x/abc_enc', 'отчёт.pdf') === 'отчёт.pdf')
@@ -2300,7 +2300,7 @@ check('в личке файл лежит под обезличенным име�
 
 check('тип узнаётся по расширению', () =>
   fileKind('архив.zip').kind === 'archive' && fileKind('клип.MP4').kind === 'video'
-  && fileKind('Ponoi-Setup.exe').kind === 'exe' && fileKind('песня.flac').kind === 'audio'
+  && fileKind('NeyLivo-Setup.exe').kind === 'exe' && fileKind('песня.flac').kind === 'audio'
   && fileKind('отчёт.pdf').kind === 'pdf')
 check('незнакомое не выдумывается', () =>
   fileKind('нечто.qwerty').kind === 'other' && fileKind('нечто.qwerty').label === 'Файл')
@@ -2657,7 +2657,7 @@ check('перемотку НА ПАУЗЕ видно — иначе полоса
 console.log('\n-- Ломаем нарочно (карточка) --')
 const { readFileSync: читать } = await import('node:fs')
 check('плашка трека не спрашивает, играет ли музыка', () => {
-  // Владелец: «если песня на паузе, то закрыв Ponoi Music не появится летающая
+  // Владелец: «если песня на паузе, то закрыв NeyLivo Music не появится летающая
   // плашка трека». Летающая плашка рисуется по условию «плеер убран со экрана И
   // есть трек» — если в это условие когда-нибудь попадёт playing, пауза снова
   // оставит человека без единственной кнопки «продолжить».
@@ -3499,8 +3499,8 @@ check('чужой код не принимается', () =>
   parseQr('https://example.com') === null
   && parseQr('WIFI:S:дом;T:WPA;P:1234;;') === null
   && parseQr('') === null
-  && parseQr('PONOI1:короткий:' + 'B'.repeat(104)) === null
-  && parseQr('PONOI2:' + 'A'.repeat(26) + ':' + 'B'.repeat(104)) === null)
+  && parseQr('NEYLIVO1:короткий:' + 'B'.repeat(104)) === null
+  && parseQr('NEYLIVO2:' + 'A'.repeat(26) + ':' + 'B'.repeat(104)) === null)
 check('обрезанный ключ не принимается', () =>
   parseQr(QR_PREFIX + ':' + 'A'.repeat(26) + ':' + 'B'.repeat(20)) === null)
 check('строчные буквы не наш код', () =>

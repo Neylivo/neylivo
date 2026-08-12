@@ -85,7 +85,7 @@ export const FRAME_BRIDGE = `<script>
     return o
   }
 
-  window.ponoi = {
+  window.neylivo = {
     __frame: true,
     call: call,
     on: function (name, fn) {
@@ -140,6 +140,10 @@ export const FRAME_BRIDGE = `<script>
     },
   }
 
+  // Псевдоним для страниц, написанных до переименования. Сразу, а не в конце:
+  // ниже к объекту дописываются методы.
+  window.ponoi = window.neylivo
+
   // ── fetch('asset:имя') ───────────────────────────────────────────────────
   //
   // Владелец попросил ровно такую запись, и она того стоит: три четверти
@@ -181,10 +185,10 @@ export const FRAME_BRIDGE = `<script>
   // вот import() того же blob — нет: у страницы чужое происхождение, и модуль
   // по такому адресу браузер грузить отказывается. Поэтому здесь два способа,
   // и оба честные, а не «попробуй, вдруг получится».
-  ponoi.load = function (что) {
+  neylivo.load = function (что) {
     return Promise.resolve()
       .then(function () {
-        return String(что).indexOf('http') === 0 ? String(что) : ponoi.assets.url(String(что))
+        return String(что).indexOf('http') === 0 ? String(что) : neylivo.assets.url(String(что))
       })
       .then(function (src) {
         if (!src) throw new Error('нет такого файла плагина: ' + что)
@@ -205,7 +209,7 @@ export const FRAME_BRIDGE = `<script>
    * модуля вставляется в страницу как есть: встроенный <script type="module">
    * выполняется, а свои значения отдаёт через window.
    */
-  ponoi.loadModule = function (имя, вГлобальное) {
+  neylivo.loadModule = function (имя, вГлобальное) {
     return call('assets.get', [String(имя)]).then(function (bytes) {
       if (!bytes) throw new Error('нет такого файла плагина: ' + имя)
       var src = new TextDecoder().decode(bytes)
@@ -242,9 +246,9 @@ export const FRAME_BRIDGE = `<script>
 
   // ── Встроенные библиотеки ────────────────────────────────────────────────
   //
-  // ponoi.lib('three') — и на странице есть three.js, без интернета и без
+  // neylivo.lib('three') — и на странице есть three.js, без интернета и без
   // чужого сервера. Возвращает саму библиотеку, а не «true»: строка
-  // const THREE = await ponoi.lib('three') понятнее, чем помнить, в какое
+  // const THREE = await neylivo.lib('three') понятнее, чем помнить, в какое
   // глобальное имя она себя положила.
   //
   // Обратных кавычек в этом файле быть не должно НИГДЕ, даже в комментариях:
@@ -254,7 +258,7 @@ export const FRAME_BRIDGE = `<script>
   //
   // Повторный вызов ничего не грузит заново: библиотека уже в окне.
   var загруженные = {}
-  ponoi.lib = function (имя) {
+  neylivo.lib = function (имя) {
     имя = String(имя)
     if (загруженные[имя]) return Promise.resolve(загруженные[имя])
     return call('libs.get', [имя]).then(function (b) {
@@ -279,7 +283,7 @@ export const FRAME_BRIDGE = `<script>
       })
     })
   }
-  ponoi.libs = function () { return call('libs.list', []) }
+  neylivo.libs = function () { return call('libs.list', []) }
 
   // ── Игровой цикл ─────────────────────────────────────────────────────────
   //
@@ -303,7 +307,7 @@ export const FRAME_BRIDGE = `<script>
     }
     кадрИдёт = requestAnimationFrame(шагКадра)
   }
-  ponoi.frame = function (fn) {
+  neylivo.frame = function (fn) {
     кадровые.push(fn)
     if (!кадрИдёт) кадрИдёт = requestAnimationFrame(шагКадра)
     return function () {
@@ -318,7 +322,7 @@ export const FRAME_BRIDGE = `<script>
   // Всё это работает и напрямую (style.cursor, requestPointerLock) — но об этом
   // надо знать. Игре от первого лица нужен захват, редактору — перекрестье, и
   // писать это руками каждый раз незачем.
-  ponoi.cursor = {
+  neylivo.cursor = {
     set: function (вид) { document.body.style.cursor = String(вид || 'default') },
     hide: function () { document.body.style.cursor = 'none' },
     show: function () { document.body.style.cursor = 'default' },
@@ -341,7 +345,7 @@ export const FRAME_BRIDGE = `<script>
   // Это ФАЙЛЫ ЧЕЛОВЕКА, а не наши: он выбирает их сам в системном окне, и без
   // его выбора плагин не видит ничего. Поэтому разрешения тут не спрашиваются:
   // спрашивает сама система, и спрашивает нагляднее нас.
-  ponoi.files = {
+  neylivo.files = {
     /**
      * Открыть один или несколько файлов.
      * Отдаёт [{ name, size, type, text(), bytes(), file }].
@@ -434,7 +438,7 @@ export const FRAME_BRIDGE = `<script>
   }
 
   // Холст одной строкой — ровно та запись, которую просил владелец.
-  ponoi.canvas = function (opt) {
+  neylivo.canvas = function (opt) {
     opt = opt || {}
     var c = document.querySelector('canvas')
     if (!c) {
@@ -472,6 +476,9 @@ export const FRAME_BRIDGE = `<script>
     } catch (err) {}
   })
 
+  // v1.558.0: объект называется neylivo, а ponoi оставлен ПСЕВДОНИМОМ — это
+  // одна и та же ссылка, поэтому страницы плагинов, написанные до
+  // переименования, работают без правок.
   parent.postMessage({ ponoi: 1, k: 'ready' }, '*')
 })()
 </script>`
@@ -542,7 +549,7 @@ export const FRAME_METHODS: readonly string[] = [
  * этот список ничего не открывал сам по себе и не открывает.
  *
  * FRAME_METHODS остался как перечень того, что мост даёт удобными именами
- * (ponoi.messages.send и подобное). Всё остальное зовётся через ponoi.call.
+ * (neylivo.messages.send и подобное). Всё остальное зовётся через neylivo.call.
  */
 export function frameMethodAllowed(_method: string): boolean {
   return true

@@ -361,7 +361,7 @@ async function prepareInstance(pack, supabaseUrl, onProgress) {
 // ванильную — libraries/arguments объединяются, javaVersion/assetIndex/downloads
 // берутся из ванильной. Проверено на реальной установке (см. план).
 
-// os.name важен только для правил windows/osx/linux в version json — Ponoi
+// os.name важен только для правил windows/osx/linux в version json — NeyLivo
 // собирается только под Windows (см. память проекта), остальные ветки не нужны.
 function rulesAllow(rules) {
   if (!rules || !rules.length) return true
@@ -569,7 +569,7 @@ function offlineUuid(username) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-// pack — строка из quicklaunch_packs; instDir — из prepareInstance(); username — ник Ponoi.
+// pack — строка из quicklaunch_packs; instDir — из prepareInstance(); username — ник NeyLivo.
 async function launch(pack, instDir, username, onProgress) {
   const root = mcRoot()
   const javaProbe = findJava(root, null)

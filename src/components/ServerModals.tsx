@@ -219,7 +219,7 @@ export function CreateServerModal({ uid, username, onClose, onCreate, onJoin }:
             <label className="modal-lbl">Название сервера <span className="csrv-req">*</span></label>
             <input className="modal-in" autoFocus value={name}
               onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), avatar) }} />
-            <div className="csrv-terms">Создавая сервер, вы соглашаетесь с Правилами Сообщества Ponoi.</div>
+            <div className="csrv-terms">Создавая сервер, вы соглашаетесь с Правилами Сообщества NeyLivo.</div>
           </div>
           <div className="csrv-foot">
             <button className="modal-ghost" onClick={() => setStep('about')}>Назад</button>
@@ -293,7 +293,7 @@ export function FindServerModal({ uid, username, onClose, onJoined }:
         <div className="fsm-body">
           {items === null && <div className="fsm-skel"><i /><i /><i /></div>}
           {items !== null && <>
-            <div className="fsm-sec">{q.trim() ? 'Результаты поиска' + (list.length ? ' — ' + list.length : '') : 'Сообщества Ponoi'}</div>
+            <div className="fsm-sec">{q.trim() ? 'Результаты поиска' + (list.length ? ' — ' + list.length : '') : 'Сообщества NeyLivo'}</div>
             {list.length === 0 && <div className="fsm-empty">
               <div className="fsm-empty-ic"><Icon name="compass" size={34} /></div>
               <b>Ничего не найдено</b>
@@ -536,13 +536,13 @@ export function JoinServerModal({ onClose, onBack, onDiscover, onJoin }:
           <div className="modal-sub">Введите приглашение, чтобы присоединиться к существующему серверу.</div>
         </div>
         <label className="modal-lbl">Ссылка-приглашение <span className="csrv-req">*</span></label>
-        <input className="modal-in" autoFocus placeholder="https://ponoiai.github.io/ponoi/hjk2m3np" value={code}
+        <input className="modal-in" autoFocus placeholder="https://neylivo.github.io/neylivo/hjk2m3np" value={code}
           onChange={e => setCode(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') submit() }} />
         <div className="jsm-ex-t">Приглашения должны выглядеть так:</div>
         <div className="jsm-ex">
           <span>hjk2m3np</span>
-          <span>https://ponoiai.github.io/ponoi/hjk2m3np</span>
+          <span>https://neylivo.github.io/neylivo/hjk2m3np</span>
         </div>
         <button className="jsm-disc" onClick={onDiscover}>
           <span className="jsm-disc-ic"><Icon name="compass" size={22} /></span>

@@ -10,7 +10,7 @@ create table if not exists bot_apps (
   name text not null,
   avatar_url text,
   webhook_url text,
-  webhook_secret text not null,        -- HMAC-подпись исходящих запросов (X-Ponoi-Signature)
+  webhook_secret text not null,        -- HMAC-подпись исходящих запросов (X-NeyLivo-Signature)
   token_hash text not null,            -- sha256(токен) — сырой токен виден только один раз, при создании
   created_at timestamptz not null default now()
 );

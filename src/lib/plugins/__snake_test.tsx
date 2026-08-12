@@ -148,8 +148,8 @@ async function окноВопрос(host: Awaited<ReturnType<typeof ensureHost>>
  * @description Проба окна-вопроса
  * @permissions ui
  */
-export async function onLoad(ponoi) {
-  ponoi.ui.dialog({
+export async function onLoad(neylivo) {
+  neylivo.ui.dialog({
     title: 'Как настроить', text: 'Пояснение', ok: 'Сохранить',
     rows: [
       { type: 'text', key: 'имя', label: 'Имя', value: 'было' },
@@ -157,8 +157,8 @@ export async function onLoad(ponoi) {
       { type: 'button', key: 'лишняя', label: 'Не должна попасть', onClick: function () {} },
     ],
   }).then(function (ответ) {
-    ponoi.log('ответ:' + JSON.stringify(ответ))
-  }, function (e) { ponoi.log('отказ:' + e.message) })
+    neylivo.log('ответ:' + JSON.stringify(ответ))
+  }, function (e) { neylivo.log('отказ:' + e.message) })
 }
 `
   const m = parsePlugin(КОД)

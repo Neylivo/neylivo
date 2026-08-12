@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell, session, desktopCapturer, ipcMain, Tray, Menu
 const path = require('path')
 
 // v1.199.0: без этого Windows не знает, что показанные через web Notification API
-// тосты принадлежат именно Ponoi — из-за несовпадения с AppUserModelID ярлыка
+// тосты принадлежат именно NeyLivo — из-за несовпадения с AppUserModelID ярлыка
 // (который выставляет electron-builder/NSIS) уведомления могли всплывать под
 // чужой иконкой/именем и не всегда корректно снимались из Центра уведомлений.
 // appId из package.json -> build.appId, тот же, что и в ярлыке установщика.
@@ -52,7 +52,7 @@ let trySilentInstall = () => false   // назначается после ини
 // решение владельца, отменяет прежнее «включено сразу»).
 //
 // Почему так правильнее. У защиты есть цена, и она не видна заранее: своё же
-// окно Ponoi нельзя показать в демонстрации экрана и оно не попадает в клип по
+// окно NeyLivo нельзя показать в демонстрации экрана и оно не попадает в клип по
 // F7. Человек, не включавший ничего, обнаружил бы это в звонке, когда друзья
 // видят чёрный прямоугольник вместо того, что он показывает, — и искал бы
 // поломку, а не настройку. Мера, меняющая поведение приложения, должна
@@ -73,14 +73,19 @@ function applyCaptureGuard(on) {
   return captureGuard
 }
 
-// v1.161.0: диплинки ponoi://msg/... («Скопировать ссылку на сообщение»). Windows
+// v1.161.0: диплинки neylivo://msg/... («Скопировать ссылку на сообщение»). Windows
 // запускает наш .exe заново с URL в аргументах — если приложение уже открыто, это
 // приходит вторым экземпляром (второй if-branch ниже); если ещё не запущено —
 // URL есть в process.argv уже при первом старте, и мы досылаем его рендереру,
 // как только страница прогрузится (см. createWindow).
+// v1.558.0: своя схема теперь neylivo://, но и старая ponoi:// остаётся
+// зарегистрированной. Ссылки на сообщения люди уже разослали друг другу, и
+// перестать их открывать значило бы наказать человека за то, что продукт сменил
+// имя.
+app.setAsDefaultProtocolClient('neylivo')
 app.setAsDefaultProtocolClient('ponoi')
-function extractPonoiUrl(argv) { return argv.find(a => a.startsWith('ponoi://')) || null }
-let pendingDeepLink = extractPonoiUrl(process.argv)
+function extractNeyLivoUrl(argv) { return argv.find(a => a.startsWith('neylivo://') || a.startsWith('ponoi://')) || null }
+let pendingDeepLink = extractNeyLivoUrl(process.argv)
 function sendDeepLink(url) {
   const w = BrowserWindow.getAllWindows().find(x => x !== splash)
   if (w) { try { w.webContents.send('ponoi-deep-link', url) } catch {} }
@@ -100,7 +105,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', (_e, argv) => {
     showMainWindow()
-    const url = extractPonoiUrl(argv)
+    const url = extractNeyLivoUrl(argv)
     if (url) sendDeepLink(url)
   })
 }
@@ -368,7 +373,7 @@ ipcMain.handle('ponoi-clip-remove', (_e, name) => клипы.remove(name))
 // v1.539.0: F7 сохраняет клип из любого места, даже поверх игры.
 //
 // Именно поэтому клавиша ГЛОБАЛЬНАЯ: в тот миг, когда случилось интересное,
-// человек играет, и переключаться в Ponoi, чтобы нажать кнопку, — значит
+// человек играет, и переключаться в NeyLivo, чтобы нажать кнопку, — значит
 // потерять ровно то, ради чего всё делалось.
 //
 // Настройки берутся те, что последними прислало окно: держать их второй копией
@@ -566,7 +571,7 @@ ipcMain.on('ponoi-game-toast', (_e, p) => showGameToast(p))
 
 // ---- v1.99.0: стартовый оверлей при входе в игру — как у Discord ----
 // Как только пользователь сам зашёл в игру, поверх неё в левом верхнем углу всплывает
-// панель: «Использование Ponoi из оверлея во время игры», кнопка «Открыть Ponoi» и список
+// панель: «Использование NeyLivo из оверлея во время игры», кнопка «Открыть NeyLivo» и список
 // «Пригласите друзей поиграть» (аватар, ник, наигранное время в этой игре, кнопка-приглашение).
 // Окно кликабельное (не click-through), но не забирает фокус у игры (focusable: false).
 // v1.101.0: сама исчезает через 6 секунд (наведение мыши ставит таймер на паузу, чтобы
@@ -629,9 +634,9 @@ function showGameOverlay(p) {
       '.ov-x:hover{color:#fff;background:rgba(255,255,255,.08)}' +
       '.sent{flex:none;width:38px;height:34px;display:flex;align-items:center;justify-content:center;color:#23a55a;font-weight:800;font-size:17px}' +
       '</style><div class="panel">' +
-      '<div class="head">' + gic + '<div class="ht"><div class="h1">Использование Ponoi из оверлея во время игры</div>' +
-      '<div class="h2">Ponoi показывает уведомления поверх игры</div></div><button class="ov-x" id="ovclose" title="Закрыть">&#10005;</button></div>' +
-      '<button class="golive" id="openapp">Открыть Ponoi</button>' +
+      '<div class="head">' + gic + '<div class="ht"><div class="h1">Использование NeyLivo из оверлея во время игры</div>' +
+      '<div class="h2">NeyLivo показывает уведомления поверх игры</div></div><button class="ov-x" id="ovclose" title="Закрыть">&#10005;</button></div>' +
+      '<button class="golive" id="openapp">Открыть NeyLivo</button>' +
       (friends.length ? '<div class="sect">Пригласите друзей поиграть</div>' + rows : '') +
       '<div style="height:8px"></div></div>' +
       '<scr' + 'ipt>var GAME=' + JSON.stringify(gameRaw) + ';' +
@@ -869,7 +874,7 @@ try {
 } catch {}
 // v1.165.0: добавлена подписка "player_match_stats" "1" — Valve присылает в ней
 // живые kills/deaths/assists/mvps/score, которых раньше не хватало для статистики CS2.
-const CS2_GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
+const CS2_GSI_CFG = ['"NeyLivo GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
   ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
   '  "player_id" "1"', '  "player_state" "1"', '  "player_match_stats" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
 // v1.236.0: у Dota 2 GSI СВОИ имена полей подписки — "player"/"hero"/"abilities"/
@@ -877,7 +882,7 @@ const CS2_GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "ti
 // "player_match_stats" как у CS2. Раньше сюда клался БУКВАЛЬНО ТОТ ЖЕ файл, что и
 // для CS2 — раз ключи подписки для Dota были неправильные, скорее всего именно
 // поэтому d.player у неё до сих пор мог не приходить (или приходить не всегда).
-const DOTA_GSI_CFG = ['"Ponoi GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
+const DOTA_GSI_CFG = ['"NeyLivo GSI"', '{', ' "uri" "http://127.0.0.1:3947"', ' "timeout" "1.0"', ' "buffer" "0.5"',
   ' "throttle" "1.0"', ' "heartbeat" "10.0"', ' "data"', ' {', '  "provider" "1"', '  "map" "1"',
   '  "player" "1"', '  "hero" "1"', ' }', '}', ''].join('\n')
 // Конфиг GSI подкладывается, когда игра запущена (путь берём из её exe).
@@ -1288,8 +1293,8 @@ for (const [exe, nm] of Object.entries(GAMES)) GAME_BY_PROC[exe.replace(/\.exe$/
 // когда игра свёрнута/не в фокусе, а не просто "процесс с окном ещё жив где-то
 // в фоне". У каждой строки процесса теперь есть Id — сверяем с FG.
 const PS_SCAN = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
-  "Add-Type -Name W -Namespace Ponoi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);'; " +
-  "$h=[Ponoi.W]::GetForegroundWindow(); $fpid=0; [void][Ponoi.W]::GetWindowThreadProcessId($h, [ref]$fpid); " +
+  "Add-Type -Name W -Namespace NeyLivo -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);'; " +
+  "$h=[NeyLivo.W]::GetForegroundWindow(); $fpid=0; [void][NeyLivo.W]::GetWindowThreadProcessId($h, [ref]$fpid); " +
   "Write-Output ('FG|' + $fpid); " +
   "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + '|' + $_.Path + '|' + $_.MainWindowTitle + '|' + $_.Id }"
 const NOT_GAMES = new Set([
@@ -1517,7 +1522,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#313338',
     autoHideMenuBar: true,
-    title: 'Ponoi',
+    title: 'NeyLivo',
     // v1.56.0: без системной рамки и БЕЗ нативного Windows-overlay — тайтлбар и
     // кнопки окна рисует рендерер (как в Discord). Overlay убрали: он рисовался
     // поверх приложения и ломался, когда его что-то перекрывало.
@@ -1568,7 +1573,7 @@ function createWindow() {
   // Свежеоткрытому окну сразу сообщаем текущую игру (если она уже запущена).
   win.webContents.on('did-finish-load', () => { if (curGame) { try { win.webContents.send('ponoi-game', curGame) } catch {} } })
 
-  // Диплинк, с которым приложение было запущено «холодно» (ponoi://msg/... в
+  // Диплинк, с которым приложение было запущено «холодно» (neylivo://msg/... в
   // process.argv) — ждём чуть-чуть после загрузки страницы, чтобы рендерер успел
   // подписаться на событие, и досылаем.
   win.webContents.on('did-finish-load', () => {
@@ -1661,7 +1666,7 @@ app.whenReady().then(() => {
       const bcastUpd = (data) => { for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('ponoi-update', data) } catch {} } }
       // v1.47.1: «жёсткая» установка обновления. Обычный quitAndInstall закрывает окна
       // мягко, и beforeunload (например, предупреждение при активном голосе) не даёт
-      // приложению выйти — установщик писал «Не удалось закрыть Ponoi. Закройте вручную».
+      // приложению выйти — установщик писал «Не удалось закрыть NeyLivo. Закройте вручную».
       // destroy() обходит beforeunload, а снятие window-all-closed не даёт app.quit()
       // вклиниться раньше установки.
       const forceQuitAndInstall = () => {
@@ -1750,10 +1755,10 @@ app.whenReady().then(() => {
     let icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.ico'))
     if (icon.isEmpty()) icon = nativeImage.createFromPath(path.join(__dirname, '..', 'dist', 'icon.png'))
     tray = new Tray(icon)
-    tray.setToolTip('Ponoi')
+    tray.setToolTip('NeyLivo')
     const auto = readPrefs().autostart !== false
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Открыть Ponoi', click: () => showMainWindow() },
+      { label: 'Открыть NeyLivo', click: () => showMainWindow() },
       { type: 'separator' },
       {
         label: 'Автозапуск с Windows', type: 'checkbox', checked: auto,
@@ -1764,7 +1769,7 @@ app.whenReady().then(() => {
       },
       { type: 'separator' },
       {
-        label: 'Выйти из Ponoi',
+        label: 'Выйти из NeyLivo',
         click: () => {
           quitting = true
           try { tray?.destroy() } catch {}
@@ -1794,6 +1799,6 @@ app.on('before-quit', () => { quitting = true })
 
 app.on('window-all-closed', () => {
   // v1.55.0: окна закрыты, но приложение живёт в трее (активность, звонки,
-  // уведомления). Полностью выходим только через «Выйти из Ponoi» в трее.
+  // уведомления). Полностью выходим только через «Выйти из NeyLivo» в трее.
   if (process.platform !== 'darwin' && quitting) app.quit()
 })

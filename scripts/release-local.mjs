@@ -9,7 +9,7 @@
 //
 // Что делает этот файл. Всю сборку установщика на этой машине, без сети (кроме
 // первого раза, когда electron-builder докачивает свои части) и без чужих
-// служб. На выходе — тот же самый Ponoi-Setup-<версия>.exe, что делала бы
+// служб. На выходе — тот же самый NeyLivo-Setup-<версия>.exe, что делала бы
 // сборка на GitHub.
 //
 // ДВЕ ЛОВУШКИ, из-за которых «просто npm run dist» не работает на Windows.
@@ -26,9 +26,9 @@
 //    делать её за человека молча неправильно.
 //
 // 2. Вместе с подписью пропускается и rcedit — тот же набор правит у
-//    Ponoi.exe значок, версию и название. Без него приложение получает значок и
+//    NeyLivo.exe значок, версию и название. Без него приложение получает значок и
 //    версию самого Electron: в свойствах файла «31.7.7» и «Electron» вместо
-//    «1.505.0» и «Ponoi». Поэтому rcedit зовётся здесь отдельно, из уже
+//    «1.505.0» и «NeyLivo». Поэтому rcedit зовётся здесь отдельно, из уже
 //    распакованного кэша, и только потом собирается установщик.
 //
 // Чего этот путь НЕ отменяет: обновление на лету. Приложение спрашивает про
@@ -82,7 +82,7 @@ function найтиRcedit() {
 шаг('Упаковка приложения')
 беги('npx', ['electron-builder', '--win', '-c.win.signAndEditExecutable=false'])
 
-const exe = path.join(ВЫХОД, 'win-unpacked', 'Ponoi.exe')
+const exe = path.join(ВЫХОД, 'win-unpacked', 'NeyLivo.exe')
 if (!existsSync(exe)) throw new Error('приложение не собралось: нет ' + exe)
 // Без этого файла приложение не узнает о новых версиях. Молчать нельзя: с виду
 // такая сборка совершенно исправна, и человек заметит беду через месяц, когда
@@ -92,7 +92,7 @@ if (!existsSync(настройкиОбновления)) {
   throw new Error('в сборке нет resources/app-update.yml — установленное приложение не сможет проверять обновления')
 }
 
-шаг('Значок, версия и название у Ponoi.exe')
+шаг('Значок, версия и название у NeyLivo.exe')
 const rcedit = найтиRcedit()
 if (rcedit) {
   беги(rcedit, [
@@ -100,10 +100,10 @@ if (rcedit) {
     '--set-icon', JSON.stringify(path.join(КОРЕНЬ, 'build', 'icon.ico')),
     '--set-file-version', версия,
     '--set-product-version', версия,
-    '--set-version-string', 'ProductName', 'Ponoi',
-    '--set-version-string', 'FileDescription', 'Ponoi',
-    '--set-version-string', 'CompanyName', 'Ponoi',
-    '--set-version-string', 'LegalCopyright', 'Ponoi',
+    '--set-version-string', 'ProductName', 'NeyLivo',
+    '--set-version-string', 'FileDescription', 'NeyLivo',
+    '--set-version-string', 'CompanyName', 'NeyLivo',
+    '--set-version-string', 'LegalCopyright', 'NeyLivo',
   ])
 } else {
   console.log('  rcedit не найден в кэше — приложение получит значок и версию Electron.')
@@ -117,7 +117,7 @@ if (rcedit) {
 // Именно ЭТОЙ версии, а не «первый попавшийся установщик в папке». На этом я
 // уже попался: рядом лежал установщик прошлой версии, проверка запустила его и
 // отчиталась о чужом окне.
-const нашУстановщик = () => path.join(ВЫХОД, 'Ponoi-Setup-' + версия + '.exe')
+const нашУстановщик = () => path.join(ВЫХОД, 'NeyLivo-Setup-' + версия + '.exe')
 
 шаг('Окно установщика помещается на экран')
 // Владелец прислал снимок: мастер открылся так, что кнопки «Готово» не видно —

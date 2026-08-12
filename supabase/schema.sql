@@ -1,4 +1,4 @@
--- Ponoi — схема БД для Supabase.
+-- NeyLivo — схема БД для Supabase.
 -- Выполни это в Supabase Dashboard -> SQL Editor.
 
 create table if not exists profiles (

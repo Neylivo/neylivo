@@ -36,7 +36,7 @@ const час = (ч: number, м: number) => {
 
 export const ФИКСТУРЫ: Record<string, any[]> = {
   profiles: [
-    { id: Я, username: 'nubas', display_name: 'nubas', avatar_url: null, about: 'Собираю Ponoi', accent: '#8ea1ff', status: 'online' },
+    { id: Я, username: 'nubas', display_name: 'nubas', avatar_url: null, about: 'Собираю NeyLivo', accent: '#8ea1ff', status: 'online' },
     { id: ВАНЯ, username: 'vanya', display_name: 'Ваня', avatar_url: null, about: null, accent: '#7ecb8f', status: 'online' },
     { id: МИЛА, username: 'mila', display_name: 'Мила', avatar_url: null, about: null, accent: '#e0a3d6', status: 'idle' },
   ],

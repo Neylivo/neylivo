@@ -14,7 +14,7 @@ export function robloxJoinUrl(placeId: string, jobId?: string | null): string {
 // На десктопе — через shell.openExternal (main-процесс), иначе диплинк
 // открывает сам браузер (если у пользователя зарегистрирован обработчик roblox://).
 export function openGameLink(url: string): void {
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   if (d?.openExternal) d.openExternal(url)
   else window.location.href = url
 }
@@ -30,7 +30,7 @@ export function steamConnectUrl(ip: string, port: number): string {
 // v1.192.0: Terraria — своего диплинк-протокола нет, поэтому находим Terraria.exe
 // на диске и запускаем сами (main-процесс, electron/terraria.cjs) с -connect/-port.
 export async function terrariaLaunch(ip: string, port: number): Promise<void> {
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   if (!d?.terrariaLaunch) throw new Error('Запуск Terraria доступен только в приложении для компьютера')
   const r = await d.terrariaLaunch(ip, port)
   if (r && r.error) throw new Error(r.error)

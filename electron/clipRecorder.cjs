@@ -27,12 +27,12 @@ let окно = null
 let настройки = { seconds: 30, fps: 30, height: 720, bitrate: 4_000_000, folder: '' }
 let идёт = false
 
-/** Куда складывать клипы. По умолчанию — «Видео/Ponoi», как делает Medal. */
+/** Куда складывать клипы. По умолчанию — «Видео/NeyLivo», как делает Medal. */
 function папка() {
   if (настройки.folder) return настройки.folder
   let база
   try { база = app.getPath('videos') } catch { база = app.getPath('home') }
-  return path.join(база, 'Ponoi')
+  return path.join(база, 'NeyLivo')
 }
 
 function страница() {

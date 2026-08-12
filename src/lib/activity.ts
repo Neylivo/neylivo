@@ -78,7 +78,7 @@ export async function recentActivity(userId: string): Promise<RecentGame[]> {
 
 
 // Каталог игр для пикера «Любимая игра» (v1.162.0, как в Discord) — реально
-// сыгранные на Ponoi игры, отсортированы по числу разных игроков. Пустой
+// сыгранные на NeyLivo игры, отсортированы по числу разных игроков. Пустой
 // запрос — топ популярных, иначе поиск по подстроке (server-side, миграция 38).
 export interface CatalogGame { name: string; players: number; lastPlayed: number }
 

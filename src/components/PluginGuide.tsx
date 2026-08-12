@@ -35,11 +35,11 @@ const FIRST = `/**
  * @description Здоровается по команде /привет
  * @permissions commands, messages.write, notify
  */
-function onLoad(ponoi) {
-  ponoi.commands.register('привет', 'Поздороваться', async (arg) => {
-    await ponoi.messages.send('Привет' + (arg ? ', ' + arg : '') + '!')
+function onLoad(neylivo) {
+  neylivo.commands.register('привет', 'Поздороваться', async (arg) => {
+    await neylivo.messages.send('Привет' + (arg ? ', ' + arg : '') + '!')
   })
-  ponoi.notify('Плагин загрузился')
+  neylivo.notify('Плагин загрузился')
 }`
 
 // v1.363.0: копируем тем же способом, что и всё остальное приложение.
@@ -83,9 +83,9 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
             {tab === 'start' && <>
               <h3>Плагин — это один файл</h3>
               <p>
-                Текстовый файл с расширением <code>.ponoi</code>, внутри обычный JavaScript.
+                Текстовый файл с расширением <code>.neylivo</code>, внутри обычный JavaScript.
                 В начале — шапка с полями, дальше функция <code>onLoad</code>, которой
-                приложение передаёт объект <code>ponoi</code>. Через него плагин и делает всё,
+                приложение передаёт объект <code>neylivo</code>. Через него плагин и делает всё,
                 что умеет.
               </p>
               <p className="pg-note">
@@ -152,35 +152,35 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
             </>}
 
             {tab === 'api' && <>
-              <h3>Что умеет объект ponoi</h3>
+              <h3>Что умеет объект neylivo</h3>
               <p>
                 Полный список — в описании на соседней вкладке. Здесь коротко, чтобы
                 прикинуть, из чего вообще можно собрать плагин.
               </p>
               <div className="pg-tbl">
-                <div><code>ponoi.commands.register</code><span>Своя команда в чате: <code>/имя</code></span></div>
-                <div><code>ponoi.messages.send</code><span>Отправить сообщение в открытый канал</span></div>
-                <div><code>ponoi.messages.recent</code><span>Прочитать последние сообщения открытого чата</span></div>
-                <div><code>ponoi.messages.react / remove</code><span>Поставить реакцию, убрать своё сообщение</span></div>
-                <div><code>ponoi.on('message', …)</code><span>Узнавать о новых сообщениях</span></div>
-                <div><code>ponoi.ui.addPanel</code><span>Свой уголок в чате, плеере, Трекотеке или колонке слева</span></div>
-                <div><code>ponoi.ui.addHotkey</code><span>Своё сочетание клавиш (Ctrl+Shift+…)</span></div>
-                <div><code>ponoi.ui.addComposerButton</code><span>Своя кнопка рядом с полем ввода</span></div>
-                <div><code>ponoi.ui.addMessageAction</code><span>Свой пункт в меню сообщения</span></div>
-                <div><code>ponoi.ui.addSettingsPage</code><span>Своя страница настроек с переключателями</span></div>
-                <div><code>ponoi.ui.confirm / prompt</code><span>Спросить у человека «да/нет» или строку</span></div>
-                <div><code>ponoi.storage.*</code><span>Своё хранилище: get, set, remove, keys, clear</span></div>
-                <div><code>ponoi.me / ponoi.channel</code><span>Кто ты и какой чат открыт</span></div>
-                <div><code>ponoi.servers / ponoi.channels</code><span>Списки серверов и их каналов</span></div>
-                <div><code>ponoi.open</code><span>Открыть канал, диалог или личку с человеком</span></div>
-                <div><code>ponoi.status.set</code><span>Твоя активность, которую видят другие</span></div>
-                <div><code>ponoi.notify / ponoi.sound.play</code><span>Всплывающее уведомление и звук</span></div>
-                <div><code>ponoi.clipboard.write</code><span>Положить текст в буфер обмена</span></div>
-                <div><code>ponoi.css</code><span>Свои стили оформления</span></div>
-                <div><code>ponoi.net.fetch / json</code><span>Запрос в интернет, только на домены из <code>@hosts</code></span></div>
-                <div><code>ponoi.voice.*</code><span>Эффект своего голоса в звонке</span></div>
-                <div><code>ponoi.music.*</code><span>Что играет, плеер и Трекотека</span></div>
-                <div><code>ponoi.log</code><span>Отладочная запись, видна в настройках плагина</span></div>
+                <div><code>neylivo.commands.register</code><span>Своя команда в чате: <code>/имя</code></span></div>
+                <div><code>neylivo.messages.send</code><span>Отправить сообщение в открытый канал</span></div>
+                <div><code>neylivo.messages.recent</code><span>Прочитать последние сообщения открытого чата</span></div>
+                <div><code>neylivo.messages.react / remove</code><span>Поставить реакцию, убрать своё сообщение</span></div>
+                <div><code>neylivo.on('message', …)</code><span>Узнавать о новых сообщениях</span></div>
+                <div><code>neylivo.ui.addPanel</code><span>Свой уголок в чате, плеере, Трекотеке или колонке слева</span></div>
+                <div><code>neylivo.ui.addHotkey</code><span>Своё сочетание клавиш (Ctrl+Shift+…)</span></div>
+                <div><code>neylivo.ui.addComposerButton</code><span>Своя кнопка рядом с полем ввода</span></div>
+                <div><code>neylivo.ui.addMessageAction</code><span>Свой пункт в меню сообщения</span></div>
+                <div><code>neylivo.ui.addSettingsPage</code><span>Своя страница настроек с переключателями</span></div>
+                <div><code>neylivo.ui.confirm / prompt</code><span>Спросить у человека «да/нет» или строку</span></div>
+                <div><code>neylivo.storage.*</code><span>Своё хранилище: get, set, remove, keys, clear</span></div>
+                <div><code>neylivo.me / neylivo.channel</code><span>Кто ты и какой чат открыт</span></div>
+                <div><code>neylivo.servers / neylivo.channels</code><span>Списки серверов и их каналов</span></div>
+                <div><code>neylivo.open</code><span>Открыть канал, диалог или личку с человеком</span></div>
+                <div><code>neylivo.status.set</code><span>Твоя активность, которую видят другие</span></div>
+                <div><code>neylivo.notify / neylivo.sound.play</code><span>Всплывающее уведомление и звук</span></div>
+                <div><code>neylivo.clipboard.write</code><span>Положить текст в буфер обмена</span></div>
+                <div><code>neylivo.css</code><span>Свои стили оформления</span></div>
+                <div><code>neylivo.net.fetch / json</code><span>Запрос в интернет, только на домены из <code>@hosts</code></span></div>
+                <div><code>neylivo.voice.*</code><span>Эффект своего голоса в звонке</span></div>
+                <div><code>neylivo.music.*</code><span>Что играет, плеер и Трекотека</span></div>
+                <div><code>neylivo.log</code><span>Отладочная запись, видна в настройках плагина</span></div>
               </div>
               <p className="pg-note">
                 Панель и страница настроек собираются из строк: <code>toggle</code>,{' '}
@@ -222,8 +222,8 @@ export function PluginGuide({ onClose }: { onClose: () => void }) {
                 Плагин работает в отдельном потоке, без доступа к странице. Ему недоступны{' '}
                 <code>window</code>, <code>document</code>, DOM, <code>localStorage</code>,
                 cookie, обычный <code>fetch</code>, <code>eval</code>, другие плагины, база
-                данных Ponoi и токен твоей сессии. Всё общение с приложением — только через
-                объект <code>ponoi</code>.
+                данных NeyLivo и токен твоей сессии. Всё общение с приложением — только через
+                объект <code>neylivo</code>.
               </p>
               <p className="pg-note">
                 Это не придирка: плагин ставят чужой, и он не должен уметь ни прочитать

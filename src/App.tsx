@@ -58,7 +58,7 @@ declare const __APP_VERSION__: string
 // Десктоп без системной рамки (v1.28.0): тонкий тёмный тайтлбар рисуем сами,
 // а нативные кнопки «свернуть/развернуть/закрыть» отдаёт Windows-overlay
 // (см. electron/main.cjs, titleBarOverlay). Вся полоска — drag-регион.
-const isDesktop = typeof window !== 'undefined' && !!(window as any).ponoiDesktop?.isDesktop
+const isDesktop = typeof window !== 'undefined' && !!(window as any).neylivoDesktop?.isDesktop
 // v1.213.0: настоящий APK (Capacitor-обёртка), не браузер/PWA — у той свой
 // путь обновления (см. apkUpdate.ts).
 const isApkNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
@@ -186,7 +186,7 @@ function UpdateBanner() {
   const [hidden, setHidden] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.onUpdate) return
     d.onUpdate((data: any) => {
       if (data?.state === 'error') { setU(null); return }   // v1.47.1: ошибка — тихо убираем карточку
@@ -204,10 +204,10 @@ function UpdateBanner() {
         <div className="upd-tx">
           <b>{ready ? 'Обновление готово' : 'Скачиваем обновление'}{u.version ? ' — v' + u.version : ''}</b>
           {ready
-            ? <span>Перезапусти Ponoi, чтобы применить</span>
+            ? <span>Перезапусти NeyLivo, чтобы применить</span>
             : <><span>{pct}%</span><div className="upd-bar"><i style={{ width: pct + '%' }} /></div></>}
         </div>
-        {ready && <button className="upd-go" onClick={() => (window as any).ponoiDesktop?.applyUpdate?.()}>Перезапустить</button>}
+        {ready && <button className="upd-go" onClick={() => (window as any).neylivoDesktop?.applyUpdate?.()}>Перезапустить</button>}
         <button className="upd-collapse" title="Свернуть к краю" onClick={() => setCollapsed(true)}><Icon name="chevron-right" size={14} /></button>
         <button className="upd-x" title="Скрыть" onClick={() => setHidden(true)}><Icon name="close" size={14} /></button>
       </div>
@@ -246,11 +246,11 @@ function Titlebar() {
     const h = (e: any) => setNav(e.detail)
     window.addEventListener('ponoi-nav-state', h as any)
     window.dispatchEvent(new Event('ponoi-nav-request'))
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     d?.onMaximize?.((m: boolean) => setMax(m))
     return () => window.removeEventListener('ponoi-nav-state', h as any)
   }, [])
-  const wc = () => (window as any).ponoiDesktop
+  const wc = () => (window as any).neylivoDesktop
   return (
     <header className="titlebar">
       <div className="tb-nav">
@@ -302,8 +302,8 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
       <div className="chlog" onClick={e => e.stopPropagation()}>
         <div className="chlog-head">
           <div>
-            <div className="chlog-title">Что нового <span className="beta-tag" title="Ponoi сейчас в бета-тестировании — возможны баги">БЕТА</span></div>
-            <div className="chlog-sub">История обновлений Ponoi — все версии пока бета</div>
+            <div className="chlog-title">Что нового <span className="beta-tag" title="NeyLivo сейчас в бета-тестировании — возможны баги">БЕТА</span></div>
+            <div className="chlog-sub">История обновлений NeyLivo — все версии пока бета</div>
           </div>
           <button className="chlog-x" title="Закрыть" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
@@ -357,9 +357,9 @@ function EmojiCtxHost() {
 
 export default function App() {
   const { session, loading } = useAuth()
-  // v1.161.0: диплинк ponoi://msg/... — приложение было открыто/поднято таким URL
+  // v1.161.0: диплинк neylivo://msg/... — приложение было открыто/поднято таким URL
   // (десктоп, см. electron/main.cjs). Разбираем и переходим к сообщению.
-  useEffect(() => { (window as any).ponoiDesktop?.onDeepLink?.((url: string) => openMsgLink(url)) }, [])
+  useEffect(() => { (window as any).neylivoDesktop?.onDeepLink?.((url: string) => openMsgLink(url)) }, [])
   // v1.286.0: поднимаем включённые плагины один раз при старте. Плагины ставятся на
   // устройство, а не на аккаунт, поэтому сессия для этого не нужна — они работают и
   // на экране входа (свои темы оформления, например).
@@ -565,9 +565,9 @@ export default function App() {
       </div>
     )}
     {/* v1.59.0: текущая версия мелким шрифтом в правом нижнем углу.
-        v1.231.0: Ponoi сейчас в бета-тестировании — метка БЕТА рядом с версией
+        v1.231.0: NeyLivo сейчас в бета-тестировании — метка БЕТА рядом с версией
         везде, где она показывается (тут и в окне «Что нового»). */}
-    <div className="app-ver" onClick={verClick} title="Три клика — что нового в Ponoi">v{__APP_VERSION__} <span className="beta-tag">бета</span></div>
+    <div className="app-ver" onClick={verClick} title="Три клика — что нового в NeyLivo">v{__APP_VERSION__} <span className="beta-tag">бета</span></div>
     {showLog && <ChangelogModal onClose={() => setShowLog(false)} />}
   </>
 }

@@ -415,7 +415,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
     sendMessage: async text => { await onSendRef.current(text) },
     toast: msg => toast(msg),
     // v1.360.0: обстановка и вопросы к человеку. Окна рисует приложение — плагин
-    // получает только ответ: своё окно он подделал бы под любое окно Ponoi.
+    // получает только ответ: своё окно он подделал бы под любое окно NeyLivo.
     me: () => (user ? { id: user.id, name: user.user_metadata?.display_name ?? user.email ?? '' } : null),
     channel: () => (channelId
       ? { id: channelId, name: channelName ?? '', serverId: serverId ?? null, serverName: serverName ?? null }
@@ -434,7 +434,7 @@ export function Composer({ placeholder, onSend, replyingTo, onCancelReply, onTyp
   }, [])
 
   // v1.397.0: событие о переходе в другой канал. Плагин и раньше мог спросить
-  // ponoi.channel(), но узнать, что канал сменился, было неоткуда — оставалось
+  // neylivo.channel(), но узнать, что канал сменился, было неоткуда — оставалось
   // опрашивать по таймеру, чего никто делать не должен.
   const lastChanRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1289,7 +1289,7 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
     )
     return <div className="att-editwrap"><video className="msg-att msg-att-video" controls preload="metadata" src={clean} onError={() => void explainFail(clean)} />{upOverlay}</div>
   }
-  // v1.286.0: .ponoi — карточка плагина с разрешениями и кнопкой установки.
+  // v1.286.0: файл плагина — карточка с разрешениями и кнопкой установки.
   // Проверяется раньше кода: файл плагина это тоже JS, и без этой ветки он показался
   // бы просто подсвеченным исходником без единого намёка, что его можно поставить.
   if (isPluginFile(clean)) {

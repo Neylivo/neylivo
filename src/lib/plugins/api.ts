@@ -1202,7 +1202,7 @@ export function createDispatcher(
 
       // ---- Своё хранилище таблицами (нужно storage) -----------------------
       //
-      // Разрешение то же, что у ponoi.storage: это те же данные плагина на этом
+      // Разрешение то же, что у neylivo.storage: это те же данные плагина на этом
       // же устройстве, просто их стало можно хранить по-человечески. Заводить
       // ради этого второе разрешение значило бы спрашивать человека дважды об
       // одном и том же.
@@ -1286,7 +1286,7 @@ export function createDispatcher(
         need('storage')
         return await assetClear(id)
       }
-      // Играть свой звук. Разрешение notify — то же, что у ponoi.sound.play:
+      // Играть свой звук. Разрешение notify — то же, что у neylivo.sound.play:
       // звук слышит человек, и это единственное, чем он отличается от чтения
       // файла. Картинку и шрифт здесь играть нечем — отказываем прямо.
       case 'assets.play': {
@@ -1365,7 +1365,7 @@ export function createDispatcher(
       }
 
       default:
-        throw new Denied(`Неизвестный метод ponoi.${method}`)
+        throw new Denied(`Неизвестный метод neylivo.${method}`)
     }
   }
 }
@@ -1429,7 +1429,7 @@ async function pluginFetch(plugin: InstalledPlugin, rawUrl: string, init: any): 
  * писать base64 руками и молча ломаться на первом же неверном байте.
  *
  * Правила выхода наружу ровно те же и берутся оттуда же (netGuard.ts): только
- * https, только домены из @hosts, никогда к самому Ponoi, без куки.
+ * https, только домены из @hosts, никогда к самому NeyLivo, без куки.
  */
 async function assetFetch(plugin: InstalledPlugin, name: string, rawUrl: string): Promise<unknown> {
   const { method, headers } = prepareNet(plugin, rawUrl, { method: 'GET' })
@@ -1489,7 +1489,7 @@ async function playAsset(pluginId: string, name: string, volume: number): Promis
  * сорок пять секунд на очередной кусок — замерший поток обязан умирать) и
  * пропускаем больше (четыре мегабайта). Правила выхода наружу при этом ровно те
  * же и берутся из того же места (netGuard.ts): только https, только домены из
- * @hosts, никогда к самому Ponoi и его серверу, белый список заголовков, без
+ * @hosts, никогда к самому NeyLivo и его серверу, белый список заголовков, без
  * куки. Поток не может пойти туда, куда не может обычный запрос.
  *
  * Куски отдаются обработчику плагина как есть, без разбора: SSE, JSON-строки

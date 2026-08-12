@@ -138,7 +138,7 @@ function PluginSettingsRows({ pluginId, rows }: { pluginId: string; rows: Settin
  *
  * Смысл этого блока — не украшение. Разрешение background само по себе не даёт
  * плагину ничего такого, чего он не мог бы сделать обычным setInterval внутри
- * себя. Разница ровно здесь: заведённую через ponoi.background задачу ВИДНО —
+ * себя. Разница ровно здесь: заведённую через neylivo.background задачу ВИДНО —
  * с её сроком, с числом срабатываний и с кнопкой «остановить». Без этого блока
  * всё разрешение было бы пустой пометкой на карточке.
  *
@@ -302,7 +302,7 @@ export function PluginsSettings() {
         <button className="help-q" title="Как сделать свой плагин" onClick={() => setHelp(true)}>?</button>
       </div>
       <div className="pqs-optd" style={{ marginBottom: 14 }}>
-        Плагины расширяют Ponoi: свои кнопки, команды и оформление. Выполняются в песочнице —
+        Плагины расширяют NeyLivo: свои кнопки, команды и оформление. Выполняются в песочнице —
         доступ к твоему аккаунту и файлам у них закрыт. Ставятся на это устройство.
       </div>
 
@@ -326,7 +326,7 @@ export function PluginsSettings() {
         </button>
       </div>
 
-      <input ref={fileRef} type="file" accept=".ponoi,.js,text/javascript" hidden
+      <input ref={fileRef} type="file" accept=".neylivo,.ponoi,.js,text/javascript" hidden
         onChange={e => void pickFile(e.target.files?.[0] ?? null)} />
 
       {tab === 'catalog' && <PluginCatalog inline />}
@@ -388,7 +388,7 @@ export function PluginsSettings() {
                   </button>
                 )}
                 {/* v1.397.0: журнал плагина. В документации было написано, что
-                    ponoi.log «видно в настройках плагина», — а видно его не было
+                    neylivo.log «видно в настройках плагина», — а видно его не было
                     нигде, кроме консоли браузера, которой в приложении нет. */}
                 <button className={'pqs2-btn ghost' + (logOpen === p.manifest.id ? ' on' : '')}
                   title="Журнал плагина" onClick={() => setLogOpen(logOpen === p.manifest.id ? null : p.manifest.id)}>
@@ -442,7 +442,7 @@ export function PluginsSettings() {
                       onClick={() => { clearPluginLog(p.manifest.id); setVer(v => v + 1) }}>Очистить</button>
                   </div>
                   {lines.length === 0
-                    ? <div className="plug-log-empty">Плагин ничего не писал. Вывод делается через ponoi.log, ponoi.warn и ponoi.error.</div>
+                    ? <div className="plug-log-empty">Плагин ничего не писал. Вывод делается через neylivo.log, neylivo.warn и neylivo.error.</div>
                     : <div className="plug-log-body">
                         {lines.map((l, i) => (
                           <div key={i} className={'plug-log-l ' + l.level}>

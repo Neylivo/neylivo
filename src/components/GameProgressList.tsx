@@ -55,7 +55,7 @@ export function GameProgressList() {
     <>
       <div className="pqs-sec-t">Прохождения</div>
       <div className="pqs2-desc">
-        Ponoi сам смотрит, во что ты играешь: библиотеки Steam, время в игре, когда последний раз
+        NeyLivo сам смотрит, во что ты играешь: библиотеки Steam, время в игре, когда последний раз
         запускал, сохранения и пройденные вехи. Всё это остаётся <b>на этом компьютере</b> — наружу
         не уходит ни строчки, пока ты сам не поделишься игрой.
       </div>
@@ -78,7 +78,7 @@ export function GameProgressList() {
       {беда && <div className="cset-hint">{беда}</div>}
 
       {список.length === 0 && !идёт && можно && (
-        <div className="cset-hint">Игр не нашлось. Ponoi смотрит библиотеки Steam и обычные папки сохранений.</div>
+        <div className="cset-hint">Игр не нашлось. NeyLivo смотрит библиотеки Steam и обычные папки сохранений.</div>
       )}
 
       <div className="gp-list">

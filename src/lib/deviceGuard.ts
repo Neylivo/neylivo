@@ -67,7 +67,7 @@ export function deviceLabel(ua: string): string {
     : /Windows/i.test(u) ? 'Windows'
     : /Mac OS X|Macintosh/i.test(u) ? 'macOS'
     : /Linux/i.test(u) ? 'Linux' : 'устройство'
-  const где = /Electron|Ponoi/i.test(u) ? 'приложение'
+  const где = /Electron|NeyLivo/i.test(u) ? 'приложение'
     : /Firefox/i.test(u) ? 'Firefox'
     : /Edg\//i.test(u) ? 'Edge'
     : /Chrome/i.test(u) ? 'Chrome'

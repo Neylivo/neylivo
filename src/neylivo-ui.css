@@ -1,4 +1,4 @@
-/* Ponoi visual system. This file is intentionally loaded after legacy styles. */
+/* NeyLivo visual system. This file is intentionally loaded after legacy styles. */
 :root {
   --c-dark: #181a20;
   --c-main: #20232a;
@@ -16,15 +16,15 @@
   --tx-1: #f4f5f7;
   --tx-2: #b8bec9;
   --mut: #9299a6;
-  --ponoi-line: rgba(255, 255, 255, .085);
-  --ponoi-line-strong: rgba(255, 255, 255, .13);
-  --ponoi-hover: rgba(255, 255, 255, .06);
-  --ponoi-selected: color-mix(in srgb, var(--brand) 17%, transparent);
-  --ponoi-selected-line: color-mix(in srgb, var(--brand) 48%, transparent);
-  --ponoi-radius-sm: 6px;
-  --ponoi-radius: 8px;
-  --ponoi-radius-lg: 10px;
-  --ponoi-shadow: 0 16px 44px rgba(0, 0, 0, .38);
+  --neylivo-line: rgba(255, 255, 255, .085);
+  --neylivo-line-strong: rgba(255, 255, 255, .13);
+  --neylivo-hover: rgba(255, 255, 255, .06);
+  --neylivo-selected: color-mix(in srgb, var(--brand) 17%, transparent);
+  --neylivo-selected-line: color-mix(in srgb, var(--brand) 48%, transparent);
+  --neylivo-radius-sm: 6px;
+  --neylivo-radius: 8px;
+  --neylivo-radius-lg: 10px;
+  --neylivo-shadow: 0 16px 44px rgba(0, 0, 0, .38);
 }
 
 :root[data-theme="light"] {
@@ -39,10 +39,10 @@
   --tx-1: #16191f;
   --tx-2: #525a67;
   --mut: #697281;
-  --ponoi-line: rgba(20, 26, 36, .10);
-  --ponoi-line-strong: rgba(20, 26, 36, .16);
-  --ponoi-hover: rgba(20, 26, 36, .055);
-  --ponoi-shadow: 0 16px 42px rgba(34, 42, 56, .16);
+  --neylivo-line: rgba(20, 26, 36, .10);
+  --neylivo-line-strong: rgba(20, 26, 36, .16);
+  --neylivo-hover: rgba(20, 26, 36, .055);
+  --neylivo-shadow: 0 16px 42px rgba(34, 42, 56, .16);
 }
 
 body {
@@ -59,7 +59,7 @@ body {
   gap: 8px;
   padding: 12px 0;
   background: var(--c-dark);
-  border-right: 1px solid var(--ponoi-line);
+  border-right: 1px solid var(--neylivo-line);
 }
 
 .srv-wrap {
@@ -98,7 +98,7 @@ body {
 .srv:hover,
 .srv.home:hover,
 .srv.music:hover {
-  border-color: var(--ponoi-line-strong);
+  border-color: var(--neylivo-line-strong);
   background: var(--c-hover);
   color: var(--tx-hi);
 }
@@ -138,7 +138,7 @@ body {
   width: 32px;
   height: 1px;
   margin: 1px auto;
-  background: var(--ponoi-line-strong);
+  background: var(--neylivo-line-strong);
 }
 
 .channels,
@@ -146,7 +146,7 @@ body {
   width: 292px;
   flex: 0 0 292px;
   background: var(--c-panel);
-  border-right: 1px solid var(--ponoi-line);
+  border-right: 1px solid var(--neylivo-line);
 }
 
 .srv-title,
@@ -157,7 +157,7 @@ body {
 .pfr-head {
   min-height: 56px;
   padding: 0 14px;
-  border-bottom: 1px solid var(--ponoi-line);
+  border-bottom: 1px solid var(--neylivo-line);
   background: var(--c-panel);
   box-shadow: none;
 }
@@ -171,8 +171,8 @@ body {
 .dm-findbtn,
 .srv-pill {
   min-height: 40px;
-  border: 1px solid var(--ponoi-line);
-  border-radius: var(--ponoi-radius);
+  border: 1px solid var(--neylivo-line);
+  border-radius: var(--neylivo-radius);
   background: var(--c-dark);
 }
 
@@ -190,7 +190,7 @@ body {
   margin: 2px 0;
   padding: 7px 9px;
   border: 1px solid transparent;
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
 }
 
 .ch:hover,
@@ -224,7 +224,7 @@ body {
   height: 56px;
   padding: 0 10px;
   background: var(--c-main);
-  border-top: 1px solid var(--ponoi-line);
+  border-top: 1px solid var(--neylivo-line);
 }
 
 .chat {
@@ -244,7 +244,7 @@ body {
   width: 292px;
   flex: 0 0 292px;
   background: var(--c-panel);
-  border-left: 1px solid var(--ponoi-line);
+  border-left: 1px solid var(--neylivo-line);
 }
 
 .pfr-main.no-activity .pfr-body {
@@ -278,8 +278,8 @@ body {
   margin: 0 16px 18px;
   padding: 8px 10px;
   gap: 8px;
-  border: 1px solid var(--ponoi-line);
-  border-radius: var(--ponoi-radius-lg);
+  border: 1px solid var(--neylivo-line);
+  border-radius: var(--neylivo-radius-lg);
   background: var(--c-hover);
   box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
 }
@@ -287,14 +287,14 @@ body {
 .composer textarea {
   min-height: 38px;
   padding: 8px 10px;
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
   background: transparent;
 }
 
 .composer button,
 .attach-btn,
 .cin-act > button {
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
 }
 
 .pfr-title {
@@ -304,15 +304,15 @@ body {
 .pfr-tabs {
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--ponoi-line);
-  border-radius: var(--ponoi-radius);
+  border: 1px solid var(--neylivo-line);
+  border-radius: var(--neylivo-radius);
   background: var(--c-dark);
 }
 
 .pfr-tab {
   min-height: 32px;
   padding: 0 11px;
-  border-radius: var(--ponoi-radius-sm);
+  border-radius: var(--neylivo-radius-sm);
 }
 
 /* v1.527.0: выбранная вкладка друзей — как выбранный канал, а не синий блок.
@@ -326,7 +326,7 @@ body {
 
 .pfr-addfriend {
   min-height: 40px;
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
 }
 
 .pfr-body {
@@ -338,8 +338,8 @@ body {
 .pfr-addin,
 .pfr-add2-inwrap {
   min-height: 42px;
-  border: 1px solid var(--ponoi-line);
-  border-radius: var(--ponoi-radius);
+  border: 1px solid var(--neylivo-line);
+  border-radius: var(--neylivo-radius);
   background: var(--c-dark);
 }
 
@@ -348,26 +348,26 @@ body {
 .pfr-actcard,
 .pfr-actcard2 {
   min-height: 56px;
-  border-color: var(--ponoi-line);
-  border-radius: var(--ponoi-radius);
+  border-color: var(--neylivo-line);
+  border-radius: var(--neylivo-radius);
 }
 
 .pfr-cbtn {
   width: 40px;
   height: 40px;
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
   background: var(--btn-soft);
 }
 
 .pqs2-side {
   background: var(--c-panel);
-  border-right: 1px solid var(--ponoi-line);
+  border-right: 1px solid var(--neylivo-line);
 }
 
 .pqs2-item {
   min-height: 40px;
   margin: 2px 0;
-  border-radius: var(--ponoi-radius-sm);
+  border-radius: var(--neylivo-radius-sm);
 }
 
 .pqs2-item:hover {
@@ -376,7 +376,7 @@ body {
 }
 
 .pqs2-item.on {
-  background: var(--ponoi-selected);
+  background: var(--neylivo-selected);
   color: var(--tx-hi);
   box-shadow: inset 2px 0 0 var(--brand);
 }
@@ -386,7 +386,7 @@ body {
 }
 
 .pqs2-btn {
-  border-radius: var(--ponoi-radius-sm);
+  border-radius: var(--neylivo-radius-sm);
   background: var(--btn-soft);
 }
 
@@ -406,10 +406,10 @@ body {
 .c2-menu,
 .c2-devmenu,
 .mus2-tog-pop {
-  border: 1px solid var(--ponoi-line-strong);
-  border-radius: var(--ponoi-radius-lg);
+  border: 1px solid var(--neylivo-line-strong);
+  border-radius: var(--neylivo-radius-lg);
   background: var(--c-panel);
-  box-shadow: var(--ponoi-shadow);
+  box-shadow: var(--neylivo-shadow);
 }
 
 .modal-in,
@@ -421,7 +421,7 @@ body {
 select,
 input,
 textarea {
-  border-radius: var(--ponoi-radius);
+  border-radius: var(--neylivo-radius);
 }
 
 .ctxmenu-item,
@@ -429,7 +429,7 @@ textarea {
 .status-menu button,
 .plus-menu button,
 .srv-menu button {
-  border-radius: var(--ponoi-radius-sm);
+  border-radius: var(--neylivo-radius-sm);
 }
 
 .ctxmenu-item:hover,
@@ -450,8 +450,8 @@ textarea {
 .pqs2-editbox,
 .cset-sync,
 .cset-priv {
-  border: 1px solid var(--ponoi-line);
-  border-radius: var(--ponoi-radius);
+  border: 1px solid var(--neylivo-line);
+  border-radius: var(--neylivo-radius);
   box-shadow: none;
 }
 
@@ -727,4 +727,19 @@ textarea {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+}
+
+/* v1.558.0: старые имена переменных оставлены псевдонимами.
+ * Плагин с разрешением css мог опираться на --ponoi-*; переименование не
+ * должно ломать чужое оформление молча. Новый код пишет --neylivo-*. */
+:root {
+  --ponoi-line: var(--neylivo-line);
+  --ponoi-line-strong: var(--neylivo-line-strong);
+  --ponoi-hover: var(--neylivo-hover);
+  --ponoi-selected: var(--neylivo-selected);
+  --ponoi-selected-line: var(--neylivo-selected-line);
+  --ponoi-radius-sm: var(--neylivo-radius-sm);
+  --ponoi-radius: var(--neylivo-radius);
+  --ponoi-radius-lg: var(--neylivo-radius-lg);
+  --ponoi-shadow: var(--neylivo-shadow);
 }

@@ -136,7 +136,7 @@ export function QrScanModal({ onClose }: { onClose: () => void }) {
           <div className="modal-title" style={{ margin: 0 }}>Впустить это устройство?</div>
           <div className="qrs-dev">{нашли.device}</div>
           <div className="qrs-warn">
-            Если это не ты сейчас открыл Ponoi на компьютере — нажми «Нет».
+            Если это не ты сейчас открыл NeyLivo на компьютере — нажми «Нет».
             Подтверждение впустит это устройство в твой аккаунт без пароля.
           </div>
           <div className="lyr-btns">

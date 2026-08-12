@@ -1,4 +1,4 @@
--- Ponoi — этап 8 миграции: web-push подписки.
+-- NeyLivo — этап 8 миграции: web-push подписки.
 -- Хранит push-подписки браузеров, чтобы Edge Function send-push могла
 -- доставлять уведомления, даже когда приложение/вкладка закрыты.
 -- Выполни в Supabase -> SQL Editor ПОСЛЕ 07_shared_emoji_gifs.sql.

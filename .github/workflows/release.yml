@@ -45,7 +45,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: Ponoi-Setup
+          name: NeyLivo-Setup
           path: release/*.exe
 
   android-apk:
@@ -155,8 +155,8 @@ jobs:
       - name: Build APK
         working-directory: android
         env:
-          PONOI_VERSION_NAME: ${{ steps.ver.outputs.name }}
-          PONOI_VERSION_CODE: ${{ steps.ver.outputs.code }}
+          NEYLIVO_VERSION_NAME: ${{ steps.ver.outputs.name }}
+          NEYLIVO_VERSION_CODE: ${{ steps.ver.outputs.code }}
           ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.present == 'true' && 'release.keystore' || '' }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -166,7 +166,7 @@ jobs:
           ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "Ponoi-Setup-${{ steps.ver.outputs.name }}.apk"
+        run: cp android/app/build/outputs/apk/release/app-release.apk "NeyLivo-Setup-${{ steps.ver.outputs.name }}.apk"
 
       # v1.467.1: прикладываем APK сами, с ожиданием и повтором.
       #
@@ -188,7 +188,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -u
-          APK=$(ls Ponoi-Setup-*.apk | head -1)
+          APK=$(ls NeyLivo-Setup-*.apk | head -1)
           echo "APK: $APK"
           for i in $(seq 1 30); do
             if gh release view "$TAG" >/dev/null 2>&1; then
@@ -212,5 +212,5 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: Ponoi-Setup-apk
-          path: Ponoi-Setup-*.apk
+          name: NeyLivo-Setup-apk
+          path: NeyLivo-Setup-*.apk

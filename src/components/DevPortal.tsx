@@ -50,7 +50,7 @@ export function DevPortal() {
       <h2>Боты
         <button className="help-q" title="Как сделать своего бота" onClick={() => setHelp(true)}>?</button>
       </h2>
-      <div className="pqs2-desc">Готовые боты работают сразу. Свой — это программа у тебя, которой Ponoi шлёт события.</div>
+      <div className="pqs2-desc">Готовые боты работают сразу. Свой — это программа у тебя, которой NeyLivo шлёт события.</div>
 
       <div className="sec-tabs">
         <button className={'sec-tab' + (tab === 'catalog' ? ' on' : '')} onClick={() => setTab('catalog')}>
@@ -71,7 +71,7 @@ export function DevPortal() {
       {tab === 'used' && <>
         <div className="pqs2-desc" style={{ marginTop: 12 }}>
           Готовые боты, которых ты добавил из каталога. Они работают без своего сервера — всё
-          считается внутри Ponoi. Убрать бота с конкретного сервера можно в «Настройки сервера → Боты».
+          считается внутри NeyLivo. Убрать бота с конкретного сервера можно в «Настройки сервера → Боты».
         </div>
         {loading && <div className="modal-empty">Загрузка…</div>}
         {!loading && ready.length === 0 && <div className="modal-empty">Пока ни одного. Возьми готового в каталоге.</div>}
@@ -81,7 +81,7 @@ export function DevPortal() {
               <div className="devp-card-h">
                 <span className="cat-emoji">{BUILTIN_BOTS.find(x => x.kind === b.builtin)?.emoji ?? '🤖'}</span>
                 <b>{b.name}</b>
-                <span className="cat-badge">от Ponoi</span>
+                <span className="cat-badge">от NeyLivo</span>
                 <button className="pqs2-btn ghost danger" style={{ marginLeft: 'auto' }}
                   onClick={() => void removeReady(b)}>Удалить</button>
               </div>
@@ -97,7 +97,7 @@ export function DevPortal() {
             сверху, вебхук и профиль внутри карточки, справка за «?» — начать было
             неоткуда. */}
         <div className="pqs2-desc" style={{ marginTop: 12 }}>
-          Свой бот — программа на твоём сервере: Ponoi шлёт ей события и печатает ответы в чат.
+          Свой бот — программа на твоём сервере: NeyLivo шлёт ей события и печатает ответы в чат.
           Своего сервера нет — возьми готового, он работает сам.
         </div>
         <div className="modal-inline" style={{ marginTop: 12 }}>
@@ -251,7 +251,7 @@ function BotCard({ bot, open, onToggle, onDeleted }: { bot: BotApp; open: boolea
 
         {!simple && <>
         <label className="modal-lbl">Webhook URL</label>
-        <div className="cset-hint" style={{ marginTop: 0 }}>Сюда Ponoi шлёт подписанные POST-запросы: новое сообщение на серверах, где состоит бот, и вызовы слэш-команд.</div>
+        <div className="cset-hint" style={{ marginTop: 0 }}>Сюда NeyLivo шлёт подписанные POST-запросы: новое сообщение на серверах, где состоит бот, и вызовы слэш-команд.</div>
         <div className="modal-inline">
           <input className="modal-in" placeholder="https://..." value={webhook} onChange={e => setWebhook(e.target.value)} style={{ flex: 1 }} />
           <button className="pqs2-btn ghost" disabled={savingWh} onClick={saveWebhook}>{savingWh ? 'Сохранение…' : 'Сохранить'}</button>

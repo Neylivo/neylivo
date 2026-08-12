@@ -22,46 +22,46 @@ const VOICE = `/**
  * @name Смена голоса
  * @id ponoi-voice-changer
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Меняет твой голос в звонке: робот, эхо, рация, хор, подводный. Команда /голос и кнопка в звонке.
  * @permissions voice, commands, notify, settings
  */
-export async function onLoad(ponoi) {
-  const list = await ponoi.voice.list()
+export async function onLoad(neylivo) {
+  const list = await neylivo.voice.list()
   const names = list.map(e => e.label).join(', ')
 
-  await ponoi.commands.register('голос', 'Сменить свой голос в звонке: ' + names, async (arg) => {
+  await neylivo.commands.register('голос', 'Сменить свой голос в звонке: ' + names, async (arg) => {
     const want = String(arg || '').trim().toLowerCase()
     if (!want) {
-      const cur = await ponoi.voice.current()
+      const cur = await neylivo.voice.current()
       const curLabel = (list.find(e => e.id === cur) || {}).label || cur
-      ponoi.notify('Сейчас: ' + curLabel + '. Доступно: ' + names)
+      neylivo.notify('Сейчас: ' + curLabel + '. Доступно: ' + names)
       return
     }
     const found = list.find(e => e.label.toLowerCase() === want || e.id === want)
-    if (!found) { ponoi.notify('Нет такого голоса. Есть: ' + names); return }
-    const ok = await ponoi.voice.setEffect(found.id)
-    ponoi.notify(ok ? 'Голос: ' + found.label : 'Ты сейчас не в звонке — голос включится со следующего')
+    if (!found) { neylivo.notify('Нет такого голоса. Есть: ' + names); return }
+    const ok = await neylivo.voice.setEffect(found.id)
+    neylivo.notify(ok ? 'Голос: ' + found.label : 'Ты сейчас не в звонке — голос включится со следующего')
   })
 
-  await ponoi.ui.addSettingsPage({
+  await neylivo.ui.addSettingsPage({
     title: 'Смена голоса',
     rows: [{
       type: 'select',
       key: 'default',
       label: 'Голос по умолчанию',
       description: 'Включается сам при входе в звонок',
-      value: await ponoi.voice.current(),
+      value: await neylivo.voice.current(),
       options: list.map(e => ({ value: e.id, label: e.label })),
     }],
   })
 
-  ponoi.on('settings', async (e) => {
+  neylivo.on('settings', async (e) => {
     if (e.key !== 'default') return
     // setEffect запоминает выбор сам — он же станет голосом следующего звонка.
-    const now = await ponoi.voice.setEffect(e.value)
+    const now = await neylivo.voice.setEffect(e.value)
     const label = (list.find(x => x.id === e.value) || {}).label || e.value
-    ponoi.notify(now ? 'Голос: ' + label : 'Голос ' + label + ' включится со следующего звонка')
+    neylivo.notify(now ? 'Голос: ' + label : 'Голос ' + label + ' включится со следующего звонка')
   })
 }
 `
@@ -71,16 +71,16 @@ const DICE = `/**
  * @name Кубик и жребий
  * @id ponoi-dice
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Кубик, монетка и «выбери за меня» — с подсказками прямо в поле ввода: видно, что писать дальше.
  * @permissions commands, messages.write
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const rnd = (n) => Math.floor(Math.random() * n)
 
   // v1.477.0: команда объявляет ДОВОДЫ — приложение показывает их в поле ввода
   // и подсказывает значения. Раньше человек, набравший «/кубик», видел пустоту.
-  await ponoi.commands.register({
+  await neylivo.commands.register({
     name: 'кубик',
     description: 'Бросить кубик',
     args: [{
@@ -94,22 +94,22 @@ export async function onLoad(ponoi) {
     }],
     onRun: async (строка) => {
       const sides = Math.min(1000, Math.max(2, parseInt(строка, 10) || 6))
-      await ponoi.messages.send('🎲 Кубик на ' + sides + ': выпало ' + (rnd(sides) + 1))
+      await neylivo.messages.send('🎲 Кубик на ' + sides + ': выпало ' + (rnd(sides) + 1))
     },
   })
 
-  await ponoi.commands.register('монетка', 'Орёл или решка', async () => {
-    await ponoi.messages.send(rnd(2) ? '🪙 Орёл' : '🪙 Решка')
+  await neylivo.commands.register('монетка', 'Орёл или решка', async () => {
+    await neylivo.messages.send(rnd(2) ? '🪙 Орёл' : '🪙 Решка')
   })
 
-  await ponoi.commands.register({
+  await neylivo.commands.register({
     name: 'выбери',
     description: 'Выбрать одно из нескольких',
     args: [{ name: 'варианты', required: true, placeholder: 'чай | кофе | сон' }],
     onRun: async (строка) => {
       const parts = String(строка || '').split(/[|,]/).map(s => s.trim()).filter(Boolean)
-      if (parts.length < 2) { await ponoi.messages.send('Дай хотя бы два варианта через |'); return }
-      await ponoi.messages.send('🤔 Я выбираю: **' + parts[rnd(parts.length)] + '**')
+      if (parts.length < 2) { await neylivo.messages.send('Дай хотя бы два варианта через |'); return }
+      await neylivo.messages.send('🤔 Я выбираю: **' + parts[rnd(parts.length)] + '**')
     },
   })
 }
@@ -120,29 +120,29 @@ const TIMER = `/**
  * @name Напоминания
  * @id ponoi-timer
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description /напомни 10м заварить чай. Напоминания переживают перезапуск приложения — они лежат на этом устройстве, а не в памяти.
  * @permissions commands, notify, storage, background, settings
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   // v1.477.0: раньше это был setTimeout — то есть напоминание умирало вместе с
   // закрытым приложением, о чём человек узнавал ровно тогда, когда оно не
   // сработало. Теперь срок лежит в таблице, а проверяет его фоновая задача.
-  const таблица = () => ponoi.db.table('напоминания')
+  const таблица = () => neylivo.db.table('напоминания')
 
   async function проверить() {
     const сейчас = Date.now()
     const все = await таблица().all(200)
     for (const н of все) {
       if (Number(н.когда) > сейчас) continue
-      ponoi.notify('⏰ ' + (н.текст || 'Время вышло'))
+      neylivo.notify('⏰ ' + (н.текст || 'Время вышло'))
       await таблица().remove(н.id)
     }
   }
 
   async function показать() {
     const все = (await таблица().all(200)).sort((a, b) => a.когда - b.когда)
-    await ponoi.ui.addSettingsPage({
+    await neylivo.ui.addSettingsPage({
       title: 'Напоминания',
       rows: все.length === 0
         ? [{ type: 'label', key: 'нет', label: 'Пока пусто', value: 'Ставится командой /напомни' }]
@@ -154,11 +154,11 @@ export async function onLoad(ponoi) {
     })
   }
 
-  await ponoi.background.every(20000, проверить, 'напоминания')
+  await neylivo.background.every(20000, проверить, 'напоминания')
   await проверить()
   await показать()
 
-  await ponoi.commands.register({
+  await neylivo.commands.register({
     name: 'напомни',
     description: 'Напомнить через время',
     args: [
@@ -168,15 +168,15 @@ export async function onLoad(ponoi) {
     ],
     onRun: async (строка) => {
       const m = String(строка || '').trim().match(/^(\\d+)\\s*([сcмmчh]?)\\s*([\\s\\S]*)$/i)
-      if (!m) { ponoi.notify('Формат: /напомни 10м текст'); return }
+      if (!m) { neylivo.notify('Формат: /напомни 10м текст'); return }
       const n = parseInt(m[1], 10)
       const unit = (m[2] || 'м').toLowerCase()
       const mult = (unit === 'с' || unit === 'c') ? 1000 : (unit === 'ч' || unit === 'h') ? 3600000 : 60000
       const ms = n * mult
-      if (!n || ms > 7 * 24 * 3600000) { ponoi.notify('От 1 секунды до недели'); return }
+      if (!n || ms > 7 * 24 * 3600000) { neylivo.notify('От 1 секунды до недели'); return }
       await таблица().insert({ когда: Date.now() + ms, текст: (m[3] || '').trim() || 'Время вышло' })
       await показать()
-      ponoi.notify('Напомню через ' + n + unit)
+      neylivo.notify('Напомню через ' + n + unit)
     },
   })
 }
@@ -187,28 +187,28 @@ const AFK = `/**
  * @name Меня нет
  * @id ponoi-afk
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Ставит твою активность «Отошёл» и отвечает один раз каждому, кто тебя упомянул. Включается кнопкой в шапке.
  * @permissions messages.read, messages.write, status, ui, notify, storage
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   // v1.477.0: раньше это была страница настроек с переключателем — то есть
   // включать «меня нет» надо было, уже уходя, через три экрана. Теперь кнопка
   // в шапке и один вопрос, а заодно приложение показывает другим «Отошёл»:
   // половина смысла была именно в этом, и её не было.
   let включён = false
   const отвечено = new Set()
-  const текст = async () => (await ponoi.storage.get('текст')) || 'Отошёл — отвечу, как вернусь.'
+  const текст = async () => (await neylivo.storage.get('текст')) || 'Отошёл — отвечу, как вернусь.'
 
   async function переключить() {
     if (включён) {
       включён = false
       отвечено.clear()
-      await ponoi.status.set('')
-      ponoi.notify('С возвращением')
+      await neylivo.status.set('')
+      neylivo.notify('С возвращением')
       return
     }
-    const ответ = await ponoi.ui.dialog({
+    const ответ = await neylivo.ui.dialog({
       title: 'Отойти',
       text: 'Отвечу за тебя один раз каждому, кто упомянет.',
       ok: 'Отойти',
@@ -218,18 +218,18 @@ export async function onLoad(ponoi) {
       ],
     })
     if (!ответ) return
-    await ponoi.storage.set('текст', String(ответ.текст || ''))
-    await ponoi.status.set(String(ответ.активность || 'Отошёл'))
+    await neylivo.storage.set('текст', String(ответ.текст || ''))
+    await neylivo.status.set(String(ответ.активность || 'Отошёл'))
     включён = true
-    ponoi.notify('Отвечаю за тебя')
+    neylivo.notify('Отвечаю за тебя')
   }
 
-  await ponoi.ui.addHeaderButton({ key: 'afk', icon: 'clock', tooltip: 'Меня нет', onClick: переключить })
+  await neylivo.ui.addHeaderButton({ key: 'afk', icon: 'clock', tooltip: 'Меня нет', onClick: переключить })
 
-  ponoi.on('message', async (msg) => {
+  neylivo.on('message', async (msg) => {
     if (!включён || !msg.mentionsMe || отвечено.has(msg.author)) return
     отвечено.add(msg.author)
-    await ponoi.messages.send(await текст())
+    await neylivo.messages.send(await текст())
   })
 }
 `
@@ -239,11 +239,11 @@ const SOFT = `/**
  * @name Мягкий свет
  * @id ponoi-soft-light
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Приглушает цвета приложения — глазам вечером легче. Без своих стилей: меняются только цвета, вёрстка не трогается.
  * @permissions ui.theme, settings, storage
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   // v1.477.0: раньше плагин ставил свой CSS — то есть лез в чужую вёрстку и
   // ломался бы от любой правки разметки. Теперь он меняет ЦВЕТА через
   // безопасный набор имён: сломать этим ничего нельзя.
@@ -253,15 +253,15 @@ export async function onLoad(ponoi) {
     high: { 'bg-content': '#232529', 'bg-main': '#1e2024', 'text': '#b3b8be', 'text-muted': '#79808a' },
   }
 
-  const сила = async () => String((await ponoi.storage.get('сила')) || 'mid')
+  const сила = async () => String((await neylivo.storage.get('сила')) || 'mid')
 
   async function применить() {
     const s = await сила()
-    if (s === 'off') { await ponoi.ui.clearTheme(); return }
-    await ponoi.ui.setTheme(НАБОРЫ[s] || НАБОРЫ.mid)
+    if (s === 'off') { await neylivo.ui.clearTheme(); return }
+    await neylivo.ui.setTheme(НАБОРЫ[s] || НАБОРЫ.mid)
   }
 
-  await ponoi.ui.addSettingsPage({
+  await neylivo.ui.addSettingsPage({
     title: 'Мягкий свет',
     rows: [{
       type: 'select', key: 'сила', label: 'Сила', description: 'Насколько приглушать',
@@ -275,9 +275,9 @@ export async function onLoad(ponoi) {
     }],
   })
 
-  ponoi.on('settings', async (e) => {
+  neylivo.on('settings', async (e) => {
     if (e.key !== 'сила') return
-    await ponoi.storage.set('сила', String(e.value))
+    await neylivo.storage.set('сила', String(e.value))
     await применить()
   })
 
@@ -294,21 +294,21 @@ const READS = `/**
  * @name Прочитано
  * @id ponoi-read-receipts
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Показывает в личной переписке, когда собеседник её прочитал. Работает в обе стороны: не показываешь свою отметку — не видишь чужую.
  * @permissions panel, messages.read, context, notify
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   let последнее = null
 
   async function рисуй() {
-    const s = await ponoi.messages.readState()
+    const s = await neylivo.messages.readState()
     let текст
     if (!s) текст = 'Только в личной переписке'
     else if (!s.on) текст = 'Отметки выключены в настройках'
     else текст = s.seenLabel || 'Пока не прочитано'
     последнее = s
-    await ponoi.ui.addPanel({
+    await neylivo.ui.addPanel({
       slot: 'chat',
       title: 'Прочитано',
       rows: [
@@ -320,11 +320,11 @@ export async function onLoad(ponoi) {
 
   await рисуй()
   // Событием, а не опросом: приложение само скажет, когда отметка изменилась.
-  ponoi.on('read', async (e) => {
+  neylivo.on('read', async (e) => {
     await рисуй()
-    if (!последнее || !последнее.at) ponoi.notify('Твоё сообщение прочитали')
+    if (!последнее || !последнее.at) neylivo.notify('Твоё сообщение прочитали')
   })
-  ponoi.on('channel', рисуй)
+  neylivo.on('channel', рисуй)
 }
 `
 
@@ -336,14 +336,14 @@ const NOTES = `/**
  * @name Заметки
  * @id ponoi-notes
  * @version 1.0.0
- * @author Ponoi
- * @description Свои заметки прямо в Ponoi: отдельная вкладка, поиск, сколько угодно записей. Хранятся на этом устройстве.
+ * @author NeyLivo
+ * @description Свои заметки прямо в NeyLivo: отдельная вкладка, поиск, сколько угодно записей. Хранятся на этом устройстве.
  * @permissions apps, storage, commands, ui
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   let окно = null, поиск = ''
 
-  const все = async () => (await ponoi.db.table('заметки').all(500))
+  const все = async () => (await neylivo.db.table('заметки').all(500))
     .sort((a, b) => (b.когда || 0) - (a.когда || 0))
 
   async function строки() {
@@ -356,7 +356,7 @@ export async function onLoad(ponoi) {
     for (const z of список.slice(0, 40)) {
       r.push({ type: 'label', key: 'z' + z.id, label: new Date(z.когда).toLocaleString(), value: String(z.текст).slice(0, 90) })
       r.push({ type: 'button', key: 'u' + z.id, label: 'Убрать', onClick: async () => {
-        await ponoi.db.table('заметки').remove(z.id)
+        await neylivo.db.table('заметки').remove(z.id)
         await обновить()
       } })
     }
@@ -364,53 +364,53 @@ export async function onLoad(ponoi) {
   }
 
   async function новая() {
-    const ответ = await ponoi.ui.dialog({
+    const ответ = await neylivo.ui.dialog({
       title: 'Новая заметка', ok: 'Сохранить',
       rows: [{ type: 'text', key: 'текст', label: 'Текст', value: '' }],
     })
     if (!ответ || !String(ответ.текст || '').trim()) return
-    await ponoi.db.table('заметки').insert({ текст: String(ответ.текст).trim(), когда: Date.now() })
+    await neylivo.db.table('заметки').insert({ текст: String(ответ.текст).trim(), когда: Date.now() })
     await обновить()
   }
 
   async function обновить() {
     if (окно === null) return
-    await ponoi.apps.update(окно, { rows: await строки() })
+    await neylivo.apps.update(окно, { rows: await строки() })
   }
 
   async function открыть() {
     if (окно !== null) { await обновить(); return }
-    окно = await ponoi.apps.create({ mode: 'tab', title: 'Заметки', icon: 'list', rows: await строки() })
+    окно = await neylivo.apps.create({ mode: 'tab', title: 'Заметки', icon: 'list', rows: await строки() })
   }
 
-  ponoi.on('settings', async (e) => {
+  neylivo.on('settings', async (e) => {
     if (e.key === 'поиск') { поиск = String(e.value || '').toLowerCase(); await обновить() }
   })
-  ponoi.on('app', (e) => { if (!e.open) окно = null })
+  neylivo.on('app', (e) => { if (!e.open) окно = null })
 
-  await ponoi.commands.register('заметки', 'Открыть свои заметки', открыть)
-  await ponoi.ui.addComposerButton({ key: 'заметки', icon: 'list', tooltip: 'Заметки', onClick: открыть })
+  await neylivo.commands.register('заметки', 'Открыть свои заметки', открыть)
+  await neylivo.ui.addComposerButton({ key: 'заметки', icon: 'list', tooltip: 'Заметки', onClick: открыть })
 }
 `
 
 // ── 10. Секретка ───────────────────────────────────────────────────────────
 //
 // v1.477.0. Показывает перехват сообщений — самое сильное разрешение из всех.
-// Личная переписка в Ponoi и так шифруется; смысл этого плагина в другом: он
+// Личная переписка в NeyLivo и так шифруется; смысл этого плагина в другом: он
 // прячет текст в ОБЩЕМ канале, где шифрования нет, — и прочитать его смогут
 // только те, кому ты сказал слово.
 const SECRET = `/**
  * @name Секретка
  * @id ponoi-secret
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Прячет твои сообщения в канале за секретным словом: пишешь !с текст — уходит шифром, а у тех, кто знает слово, читается обычным текстом.
  * @permissions messages.intercept, settings, storage
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const МЕТКА = 'сек1:'
 
-  const слово = async () => String((await ponoi.storage.get('слово')) || '')
+  const слово = async () => String((await neylivo.storage.get('слово')) || '')
 
   // Простой обратимый шифр на слове. ЧЕСТНО: это не защита от того, кто знает,
   // что делает, — сервер видит длину и время, а слово подбирается перебором.
@@ -435,7 +435,7 @@ export async function onLoad(ponoi) {
     } catch (e) { return null }
   }
 
-  await ponoi.ui.addSettingsPage({
+  await neylivo.ui.addSettingsPage({
     title: 'Секретка',
     rows: [
       { type: 'text', key: 'слово', label: 'Секретное слово', description: 'Знают его — прочитают. Одно на всех, кому пишешь.', value: await слово() },
@@ -443,15 +443,15 @@ export async function onLoad(ponoi) {
       { type: 'label', key: 'честно', label: 'Честно', value: 'Это ширма от чужих глаз, а не настоящая защита: слово подбирается перебором' },
     ],
   })
-  ponoi.on('settings', async (e) => { if (e.key === 'слово') await ponoi.storage.set('слово', String(e.value || '')) })
+  neylivo.on('settings', async (e) => { if (e.key === 'слово') await neylivo.storage.set('слово', String(e.value || '')) })
 
-  ponoi.messages.onBeforeSend(async (ctx) => {
+  neylivo.messages.onBeforeSend(async (ctx) => {
     const k = await слово()
     if (!k || ctx.content.slice(0, 3) !== '!с ') return
     return { content: МЕТКА + шифр(ctx.content.slice(3), k) }
   })
 
-  ponoi.messages.onBeforeRender(async (ctx) => {
+  neylivo.messages.onBeforeRender(async (ctx) => {
     if (ctx.content.slice(0, МЕТКА.length) !== МЕТКА) return
     const k = await слово()
     const т = k ? расшифр(ctx.content.slice(МЕТКА.length), k) : null
@@ -469,21 +469,21 @@ const WEATHER = `/**
  * @name Погода
  * @id ponoi-weather
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Погода в твоём городе — панелью в чате и командой /погода. Без ключей и регистрации.
  * @permissions panel, commands, net, storage, settings, messages.write
  * @hosts api.open-meteo.com, geocoding-api.open-meteo.com
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const ВИД = { 0: 'ясно ☀️', 1: 'почти ясно 🌤', 2: 'облачно 🌥', 3: 'пасмурно ☁️',
     45: 'туман 🌫', 48: 'туман 🌫', 51: 'морось 🌦', 61: 'дождь 🌧', 63: 'дождь 🌧',
     65: 'ливень 🌧', 71: 'снег 🌨', 73: 'снег 🌨', 75: 'снегопад 🌨', 80: 'ливни 🌦',
     95: 'гроза ⛈', 96: 'гроза с градом ⛈' }
 
-  const город = async () => String((await ponoi.storage.get('город')) || 'Москва')
+  const город = async () => String((await neylivo.storage.get('город')) || 'Москва')
 
   async function найтиГород(имя) {
-    const r = await ponoi.net.fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=' + encodeURIComponent(имя))
+    const r = await neylivo.net.fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=ru&name=' + encodeURIComponent(имя))
     const j = JSON.parse(r.body)
     const m = j && j.results && j.results[0]
     return m ? { lat: m.latitude, lon: m.longitude, имя: m.name } : null
@@ -492,7 +492,7 @@ export async function onLoad(ponoi) {
   async function погода() {
     const место = await найтиГород(await город())
     if (!место) return null
-    const r = await ponoi.net.fetch('https://api.open-meteo.com/v1/forecast?current_weather=true&latitude=' + место.lat + '&longitude=' + место.lon)
+    const r = await neylivo.net.fetch('https://api.open-meteo.com/v1/forecast?current_weather=true&latitude=' + место.lat + '&longitude=' + место.lon)
     const j = JSON.parse(r.body)
     const c = j && j.current_weather
     if (!c) return null
@@ -505,7 +505,7 @@ export async function onLoad(ponoi) {
       const п = await погода()
       строка = п ? п.темп + '°, ' + п.вид : 'не нашёл город'
     } catch (e) { строка = 'нет связи' }
-    await ponoi.ui.addPanel({
+    await neylivo.ui.addPanel({
       slot: 'chat', title: 'Погода',
       rows: [
         { type: 'label', key: 'сейчас', label: await город(), value: строка },
@@ -514,25 +514,25 @@ export async function onLoad(ponoi) {
     })
   }
 
-  await ponoi.ui.addSettingsPage({
+  await neylivo.ui.addSettingsPage({
     title: 'Погода',
     rows: [{ type: 'text', key: 'город', label: 'Город', placeholder: 'Москва', value: await город() }],
   })
-  ponoi.on('settings', async (e) => {
+  neylivo.on('settings', async (e) => {
     if (e.key !== 'город') return
-    await ponoi.storage.set('город', String(e.value || ''))
+    await neylivo.storage.set('город', String(e.value || ''))
     await рисуй()
   })
 
-  await ponoi.commands.register({
+  await neylivo.commands.register({
     name: 'погода',
     description: 'Погода в городе',
     args: [{ name: 'город', description: 'по умолчанию — из настроек' }],
     onRun: async (строка) => {
       const имя = строка.trim()
-      if (имя) await ponoi.storage.set('город', имя)
+      if (имя) await neylivo.storage.set('город', имя)
       const п = await погода()
-      await ponoi.messages.send(п ? ('Погода, ' + п.имя + ': ' + п.темп + '°, ' + п.вид + ', ветер ' + п.ветер + ' км/ч') : 'Не нашёл такой город')
+      await neylivo.messages.send(п ? ('Погода, ' + п.имя + ': ' + п.темп + '°, ' + п.вид + ', ветер ' + п.ветер + ' км/ч') : 'Не нашёл такой город')
     },
   })
 
@@ -549,18 +549,18 @@ const VIZ = `/**
  * @name Волны музыки
  * @id ponoi-music-waves
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Живая картинка в плеере: волны идут, пока играет музыка, и замирают на паузе.
  * @permissions panel, music
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   let ctx = null, играет = false, фаза = 0, кадр = null, видно = false
 
-  await ponoi.ui.addPanel({
+  await neylivo.ui.addPanel({
     slot: 'player', title: 'Волны',
     rows: [{ type: 'canvas', key: 'волны', label: 'Волны', height: 90 }],
   })
-  const холст = await ponoi.ui.getCanvas('волны')
+  const холст = await neylivo.ui.getCanvas('волны')
   ctx = холст.getContext('2d')
 
   function рисуй() {
@@ -586,9 +586,9 @@ export async function onLoad(ponoi) {
 
   function пуск() { if (кадр === null) рисуй() }
 
-  ponoi.on('canvas', (e) => { видно = !!e.visible; if (видно) пуск() })
-  ponoi.on('music', (e) => { играет = !!e.playing; пуск() })
-  const сейчас = await ponoi.music.now()
+  neylivo.on('canvas', (e) => { видно = !!e.visible; if (видно) пуск() })
+  neylivo.on('music', (e) => { играет = !!e.playing; пуск() })
+  const сейчас = await neylivo.music.now()
   играет = !!(сейчас && сейчас.playing)
   рисуй()
 }
@@ -604,18 +604,18 @@ const EXIF = `/**
  * @name Чистка фотографий
  * @id ponoi-photo-clean
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Убирает из фотографий геометку, модель телефона и время съёмки перед отправкой. Может заодно сжимать большие снимки.
  * @permissions messages.upload, settings, storage
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const наст = async () => ({
-    чистить: (await ponoi.storage.get('чистить')) !== false,
-    сжимать: (await ponoi.storage.get('сжимать')) === true,
-    сторона: Number(await ponoi.storage.get('сторона')) || 2048,
+    чистить: (await neylivo.storage.get('чистить')) !== false,
+    сжимать: (await neylivo.storage.get('сжимать')) === true,
+    сторона: Number(await neylivo.storage.get('сторона')) || 2048,
   })
 
-  await ponoi.ui.addSettingsPage({
+  await neylivo.ui.addSettingsPage({
     title: 'Чистка фотографий',
     rows: [
       { type: 'toggle', key: 'чистить', label: 'Убирать метаданные',
@@ -626,9 +626,9 @@ export async function onLoad(ponoi) {
         value: (await наст()).сторона, min: 720, max: 4096, step: 64 },
     ],
   })
-  ponoi.on('settings', async (e) => { await ponoi.storage.set(e.key, e.value) })
+  neylivo.on('settings', async (e) => { await neylivo.storage.set(e.key, e.value) })
 
-  ponoi.messages.onUpload(async (файл) => {
+  neylivo.messages.onUpload(async (файл) => {
     const s = await наст()
     if (!s.чистить && !s.сжимать) return
     // Трогаем только то, что умеем разобрать обратно в картинку. Всё
@@ -676,11 +676,11 @@ const SNAKE = `/**
  * @name Змейка
  * @id ponoi-snake
  * @version 1.0.0
- * @author Ponoi
+ * @author NeyLivo
  * @description Настоящая игра в своём окне: стрелки, WASD или геймпад. Рекорд сохраняется, звук свой. Команда /змейка.
  * @permissions apps, storage, input, notify, commands
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const КЛЕТКА = 20, ПОЛЕ_Ш = 30, ПОЛЕ_В = 20      // 600×400 пикселей холста
   const ШАГ_МС = 110
 
@@ -710,30 +710,30 @@ export async function onLoad(ponoi) {
 
   async function звуки() {
     try {
-      const есть = (await ponoi.assets.list()).map(a => a.name)
-      if (!есть.includes('ням.wav')) await ponoi.assets.put('ням.wav', писк(880, 70))
-      if (!есть.includes('конец.wav')) await ponoi.assets.put('конец.wav', писк(220, 260))
-    } catch (e) { ponoi.log('звук не собрался: ' + e.message) }
+      const есть = (await neylivo.assets.list()).map(a => a.name)
+      if (!есть.includes('ням.wav')) await neylivo.assets.put('ням.wav', писк(880, 70))
+      if (!есть.includes('конец.wav')) await neylivo.assets.put('конец.wav', писк(220, 260))
+    } catch (e) { neylivo.log('звук не собрался: ' + e.message) }
   }
-  const играй = (имя) => { ponoi.assets.play(имя, 0.35).catch(() => {}) }
+  const играй = (имя) => { neylivo.assets.play(имя, 0.35).catch(() => {}) }
 
   // ---- рекорды: таблица, а не одна строчка --------------------------------
   async function читайРекорд() {
     try {
-      const строки = await ponoi.db.table('счёт').all(50)
+      const строки = await neylivo.db.table('счёт').all(50)
       рекорд = строки.reduce((м, с) => Math.max(м, Number(с.очки) || 0), 0)
     } catch (e) { рекорд = 0 }
   }
   async function запишиРекорд(очки) {
     try {
-      await ponoi.db.table('счёт').insert({ очки: очки, когда: new Date().toISOString() })
-      const строки = await ponoi.db.table('счёт').all(200)
+      await neylivo.db.table('счёт').insert({ очки: очки, когда: new Date().toISOString() })
+      const строки = await neylivo.db.table('счёт').all(200)
       // Держим последние двадцать: таблица для рекордов, а не для истории.
       if (строки.length > 20) {
         const лишние = строки.slice(0, строки.length - 20)
-        for (const с of лишние) await ponoi.db.table('счёт').remove(с.id)
+        for (const с of лишние) await neylivo.db.table('счёт').remove(с.id)
       }
-    } catch (e) { ponoi.log('рекорд не записался: ' + e.message) }
+    } catch (e) { neylivo.log('рекорд не записался: ' + e.message) }
   }
 
   // ---- сама игра -----------------------------------------------------------
@@ -763,7 +763,7 @@ export async function onLoad(ponoi) {
       играй('конец.wav')
       if (счёт > рекорд) { рекорд = счёт }
       запишиРекорд(счёт)
-      ponoi.notify('Змейка: ' + счёт + ' очков' + (счёт >= рекорд ? ' — это рекорд!' : ''))
+      neylivo.notify('Змейка: ' + счёт + ' очков' + (счёт >= рекорд ? ' — это рекорд!' : ''))
       рисуй()
       return
     }
@@ -822,14 +822,14 @@ export async function onLoad(ponoi) {
     await звуки()
     await читайРекорд()
     начать()
-    окно = await ponoi.apps.create({
+    окно = await neylivo.apps.create({
       mode: 'window', title: 'Змейка', icon: 'gamepad', width: 620, height: 470,
       rows: [
         { type: 'canvas', key: 'поле', label: 'Поле', height: 400 },
         { type: 'label', key: 'как', label: 'Управление', value: 'Стрелки, WASD или геймпад' },
       ],
     })
-    const холст = await ponoi.ui.getCanvas('поле')
+    const холст = await neylivo.ui.getCanvas('поле')
     ctx = холст.getContext('2d')
     живо = true
     рисуй()
@@ -843,14 +843,14 @@ export async function onLoad(ponoi) {
     окно = null; ctx = null
   }
 
-  await ponoi.commands.register('змейка', 'Открыть игру', открыть)
+  await neylivo.commands.register('змейка', 'Открыть игру', открыть)
 
-  ponoi.on('key', (e) => { if (e.down) нажали(e.key) })
+  neylivo.on('key', (e) => { if (e.down) нажали(e.key) })
 
-  ponoi.on('app', (e) => { if (!e.open) закрыть() })
+  neylivo.on('app', (e) => { if (!e.open) закрыть() })
 
   // Геймпад: крестовина, ручка и любая кнопка «заново».
-  ponoi.on('gamepad', (e) => {
+  neylivo.on('gamepad', (e) => {
     if (!живо) return
     if (e.kind === 'axis') {
       if (e.which === 0) { if (e.value > 0.5) поверни(1, 0); else if (e.value < -0.5) поверни(-1, 0) }
@@ -864,7 +864,7 @@ export async function onLoad(ponoi) {
     }
   })
 
-  ponoi.log('Змейка готова: /змейка')
+  neylivo.log('Змейка готова: /змейка')
 }
 `
 
@@ -888,7 +888,7 @@ export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
  * Наш ли это плагин (v1.486.0).
  *
  * Сверяем КОД, а не @id и не @author. Иначе кто угодно назвал бы свой файл
- * «ponoi-snake» с автором «Ponoi» и получил зелёную отметку и спокойный экран
+ * «ponoi-snake» с автором «NeyLivo» и получил зелёную отметку и спокойный экран
  * установки — то есть отметка «от создателей» стала бы способом обмана.
  *
  * Пробелы по краям и переводы строк не считаем: файл мог пройти через чат,

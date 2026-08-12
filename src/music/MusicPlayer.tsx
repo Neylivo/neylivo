@@ -715,7 +715,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     // видно «на паузе» — как в Spotify и Discord: человек слушает эту песню,
     // просто остановил её на минуту.
     if (!cur) { setMyListening(null); pubRef.current = null; return }
-    const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'Ponoi Music'
+    const source = curYt ? 'YouTube' : !curSc && isAudiusUrl(cur.url) ? 'Audius' : 'NeyLivo Music'
     const pub = () => {
       const snap = { pos: curTRef.current, dur: dur || undefined, at: Date.now() }
       pubRef.current = snap
@@ -738,7 +738,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
    * Системная карточка проигрывателя (v1.425.0).
    *
    * Та же информация, что уходит в активность, отдаётся и системе: шторка
-   * уведомлений, экран блокировки, кнопки гарнитуры. Раньше о Ponoi Music не
+   * уведомлений, экран блокировки, кнопки гарнитуры. Раньше о NeyLivo Music не
    * знало ничего за пределами открытого окна — свернул приложение, и на телефоне
    * не было даже названия, не то что кнопок.
    *
@@ -788,7 +788,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
     setMediaNow({
       title: curMeta?.title || cur.name,
       artist: curMeta?.author || cur.author || '',
-      album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'Ponoi Music',
+      album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'NeyLivo Music',
       art: curArt || null,
       dur: dur || cur.dur,
       pos: curTRef.current,
@@ -845,7 +845,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         await startKeepAlive({
           title: curMeta?.title || cur?.name,
           artist: curMeta?.author || cur?.author || '',
-          album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'Ponoi Music',
+          album: curSc ? 'SoundCloud' : curYt ? 'YouTube' : 'NeyLivo Music',
           art: curArt || null,
           playing,
           dur: dur || cur?.dur,
@@ -2455,7 +2455,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
       <div className="mus2-body">
         <aside className="mus2-side">
           <div className="mus2-sidehead">
-            <span className="mus2-title">Ponoi Music</span>
+            <span className="mus2-title">NeyLivo Music</span>
             <div className="mus2-tabs">
               <button className={'mus2-tab' + (tab === 'queue' ? ' on' : '')} onClick={() => setTab('queue')}>Очередь</button>
               <button className={'mus2-tab' + (tab === 'playlists' ? ' on' : '')} onClick={() => setTab('playlists')}>Плейлисты</button>
@@ -2863,7 +2863,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
                 подзаголовок и круглые значки. На компьютере остаётся прежняя
                 строка: там она стоит в один ряд с поиском и вкладками. */}
             <div className="mus2-lib-ttl">
-              <b>Ponoi Music · Трекотека</b>
+              <b>NeyLivo Music · Трекотека</b>
               <span className="mus2-lib-sub">Вся твоя музыка. В одном месте.</span>
             </div>
             {/* v1.462.0: сколько всего треков — СРАЗУ, а не по мере загрузки.
@@ -3278,7 +3278,7 @@ export function MusicPlayer({ me, meId, visible, onClose, onStop }:
         </div>
         <div className="mus-mini-meta" onClick={() => { if (IS_MOBILE || !miniDrag.wasDrag()) onClose() }} title="Открыть плеер">
           <div className="mus-mini-t">{curMeta?.title || cur.name}</div>
-          <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'Ponoi Music')}</div>
+          <div className="mus-mini-s">{curMeta?.author || cur.author || (cur.kind === 'file' ? 'файл' : 'NeyLivo Music')}</div>
         </div>
         <button className="mm-play" onPointerDown={e => e.stopPropagation()} title={guest ? noGuest : playing ? 'Пауза' : 'Играть'} onClick={() => setPlaying(pl => !pl)} disabled={!cur || guest}>
           {playing ? <Icon name="pause" size={15} /> : <Icon name="play" size={15} />}

@@ -28,13 +28,13 @@ const EXAMPLE = `// Простейший бот на любом языке. Ни
 import crypto from 'node:crypto'
 import express from 'express'
 
-const SECRET = process.env.PONOI_WEBHOOK_SECRET   // выдаётся при создании бота
+const SECRET = process.env.NEYLIVO_WEBHOOK_SECRET   // выдаётся при создании бота
 const app = express()
 
-app.post('/ponoi', express.text({ type: '*/*' }), (req, res) => {
+app.post('/neylivo', express.text({ type: '*/*' }), (req, res) => {
   // Подпись обязательна: без неё кто угодно пришлёт боту что угодно.
   const mine = crypto.createHmac('sha256', SECRET).update(req.body).digest('hex')
-  if (mine !== req.get('X-Ponoi-Signature')) return res.sendStatus(401)
+  if (mine !== req.get('X-NeyLivo-Signature')) return res.sendStatus(401)
 
   const event = JSON.parse(req.body)
   if (event.type === 'INTERACTION_CREATE' && event.command === 'привет') {
@@ -93,7 +93,7 @@ export function BotGuide({ onClose }: { onClose: () => void }) {
                 </span></div>
                 <div><code>без кода</code><span>
                   Ты пишешь: команда — и что на неё отвечать. Например <code>/правила</code> →
-                  текст правил. Выполняется внутри Ponoi, свой сервер не нужен. В ответе
+                  текст правил. Выполняется внутри NeyLivo, свой сервер не нужен. В ответе
                   можно написать <code>{'{текст}'}</code> — туда подставится то, что человек
                   допишет после команды.
                 </span></div>
@@ -112,7 +112,7 @@ export function BotGuide({ onClose }: { onClose: () => void }) {
               <h3>Пусть бота напишет ИИ</h3>
               <p>
                 Кода можно не знать. Скопируй полное описание того, как устроены боты
-                Ponoi, отдай любому ИИ и допиши своими словами, чего хочешь. В ответ
+                NeyLivo, отдай любому ИИ и допиши своими словами, чего хочешь. В ответ
                 придёт готовый код — уже с проверкой подписи.
               </p>
 
@@ -140,7 +140,7 @@ export function BotGuide({ onClose }: { onClose: () => void }) {
                 <li>«Бот, который по /напомни 10 минут купить хлеб пишет напоминание в канал»</li>
               </ul>
               <p className="pg-note">
-                Не заработало — отдай ИИ ошибку тем же текстом: «вот что отвечает Ponoi,
+                Не заработало — отдай ИИ ошибку тем же текстом: «вот что отвечает NeyLivo,
                 поправь». Список частых ошибок — на соседней вкладке.
               </p>
             </>}
@@ -166,7 +166,7 @@ export function BotGuide({ onClose }: { onClose: () => void }) {
               <div className="pg-tbl">
                 <div><code>INTERACTION_CREATE</code><span>Человек вызвал твою команду. Поля: <code>command</code>, <code>args</code>, <code>channelId</code>, <code>userId</code>. Ответь в течение 5 секунд объектом <code>{'{ content }'}</code> — этот текст и появится в чате.</span></div>
                 <div><code>MESSAGE_CREATE</code><span>Новое сообщение в канале сервера, где стоит бот. Ответа не ждём. Приходит только из каналов, к которым у бота есть доступ.</span></div>
-                <div><code>X-Ponoi-Signature</code><span>HMAC-SHA256 тела запроса на твоём webhook-секрете. Проверяй его всегда: без проверки боту сможет писать кто угодно.</span></div>
+                <div><code>X-NeyLivo-Signature</code><span>HMAC-SHA256 тела запроса на твоём webhook-секрете. Проверяй его всегда: без проверки боту сможет писать кто угодно.</span></div>
               </div>
 
               <h3>Как писать в чат самому</h3>
@@ -184,8 +184,8 @@ export function BotGuide({ onClose }: { onClose: () => void }) {
             {tab === 'errors' && <>
               <h3>Частые ошибки</h3>
               <div className="pg-tbl">
-                <div><code>401 от Ponoi</code><span>Не совпала подпись. Считай HMAC от <b>сырого тела</b> запроса, а не от разобранного JSON: любая перестановка полей меняет подпись.</span></div>
-                <div><code>бот молчит</code><span>Не задан Webhook URL, либо адрес не отвечает за 5 секунд, либо ответ без поля <code>content</code>. Пустой ответ — Ponoi ничего не печатает.</span></div>
+                <div><code>401 от NeyLivo</code><span>Не совпала подпись. Считай HMAC от <b>сырого тела</b> запроса, а не от разобранного JSON: любая перестановка полей меняет подпись.</span></div>
+                <div><code>бот молчит</code><span>Не задан Webhook URL, либо адрес не отвечает за 5 секунд, либо ответ без поля <code>content</code>. Пустой ответ — NeyLivo ничего не печатает.</span></div>
                 <div><code>bot is not a member</code><span>Бота не добавили на сервер. ID приложения → «Настройки сервера → Боты».</span></div>
                 <div><code>no access to this channel</code><span>Канал закрытый, а боту доступ не выдавали. Дай его роли доступ — или пусть бот пишет в другой.</span></div>
                 <div><code>channel is read-only</code><span>Канал только для чтения. Это не обходится: у бота ровно те же запреты, что у людей.</span></div>

@@ -35,7 +35,7 @@ create table if not exists public.login_requests (
   -- телефон мог сверить её с той, что прочитал из QR: не сойдётся — значит
   -- заявку подменили, и телефон откажется.
   pc_pub      text not null,
-  -- Что показать человеку на телефоне: «Windows, Ponoi для компьютера».
+  -- Что показать человеку на телефоне: «Windows, NeyLivo для компьютера».
   device      text not null default '',
   created_at  timestamptz not null default now(),
   expires_at  timestamptz not null,

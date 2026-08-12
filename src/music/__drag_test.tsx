@@ -28,7 +28,7 @@ function Panel() {
       <div className="mus-mini-art" onClick={() => { if (!d.wasDrag()) setOpens(o => o + 1) }}>▶</div>
       <div className="mus-mini-meta" onClick={() => { if (!d.wasDrag()) setOpens(o => o + 1) }}>
         <div className="mus-mini-t">Название трека</div>
-        <div className="mus-mini-s">Ponoi Music</div>
+        <div className="mus-mini-s">NeyLivo Music</div>
       </div>
       <button className="mm-play" id="play" onPointerDown={e => e.stopPropagation()} onClick={() => setPlays(p => p + 1)}>II</button>
       <button onPointerDown={e => e.stopPropagation()}>▷|</button>

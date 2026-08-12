@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 // Minimal, safe bridge. Extend later if the renderer needs native features.
-contextBridge.exposeInMainWorld('ponoiDesktop', {
+const мост = {
   isDesktop: true,
   platform: process.platform,
   // Авто-детект игр: main-процесс присылает { name, since } при старте игры и null при выходе.
@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // main-процесс ведёт сам, см. 'ponoi-set-icon'.
   setAppIcon: (dataUrl) => ipcRenderer.invoke('ponoi-set-icon', { dataUrl }),
   onOverlayInvite: (cb) => { ipcRenderer.removeAllListeners('ponoi-overlay-invite'); ipcRenderer.on('ponoi-overlay-invite', (_e, p) => cb(p)) },
-  // v1.161.0: диплинк на сообщение (ponoi://msg/...), пришедший запуском .exe с URL.
+  // v1.161.0: диплинк на сообщение (neylivo://msg/...), пришедший запуском .exe с URL.
   onDeepLink: (cb) => { ipcRenderer.removeAllListeners('ponoi-deep-link'); ipcRenderer.on('ponoi-deep-link', (_e, url) => cb(url)) },
   // v1.180.0: «Игровой Экспресс» — скан папки mods текущей сборки Minecraft (версия/Forge/список модов с sha1).
   // v1.285.0: source — undefined (обычный .minecraft) или { prismInstance: <имя> } — см.
@@ -86,4 +86,11 @@ contextBridge.exposeInMainWorld('ponoiDesktop', {
   // v1.436.0: выбор того, ЧТО показывать в демонстрации — экран или окно.
   shareSources: () => ipcRenderer.invoke('ponoi-share-sources'),
   setShareSource: (id, audio) => ipcRenderer.send('ponoi-share-source', { id, audio }),
-})
+}
+
+// v1.558.0: мост называется neylivoDesktop, а ponoiDesktop оставлен
+// ПСЕВДОНИМОМ — это одна и та же ссылка. Так собранная веб-часть старой версии
+// (например, открытая страница, которую не успели обновить) не остаётся без
+// рабочего стола, а весь новый код зовёт новое имя.
+contextBridge.exposeInMainWorld('neylivoDesktop', мост)
+contextBridge.exposeInMainWorld('ponoiDesktop', мост)

@@ -24,7 +24,7 @@ interface Friend { id: string; name: string }
 // v1.187.0: правый клик по другу в списке ЛС — меню 1 в 1 как в Discord. Паттерн
 // ctx-overlay/ctx-menu/ctx-item/ctx-sep — тот же, что везде в приложении (см.
 // PartCtxMenu в CallRoom.tsx, chCtx-меню в ServerView.tsx). «Приложения» не
-// добавлены — в Ponoi нет платформы ботов/приложений, нерабочую кнопку не кладём.
+// добавлены — в NeyLivo нет платформы ботов/приложений, нерабочую кнопку не кладём.
 export function DmCtxMenu({ friend, x, y, threadId, servers, meId, username, onClose, onChanged,
   onProfile, onStartCall, onCloseDm, onRemoveFriend, onBlocked }: {
   friend: Friend; x: number; y: number; threadId: string | null; servers: Server[]

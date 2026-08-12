@@ -28,7 +28,7 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
   const willFail = code ? missingPermissions(code, manifest.permissions) : []
   const upgrade = existing ? compareVersions(manifest.version, existing.manifest.version) : 1
   // v1.486.0: наш плагин или чужой. Опознаём ПО КОДУ: назвать свой файл
-  // «ponoi-snake» с автором «Ponoi» может кто угодно, а совпасть с нашим кодом
+  // «ponoi-snake» с автором «NeyLivo» может кто угодно, а совпасть с нашим кодом
   // до буквы — нет.
   const наш = isOfficialCode(code ?? '')
   const risks = installRisks(manifest, code ?? '', наш)
@@ -60,7 +60,7 @@ export function PermissionGate({ manifest, existing, onCancel, onConfirm, code }
           <div className="plug-perm risk-ok" style={{ marginTop: 12 }}>
             <span className="risk-dot">🟢</span>
             <span>
-              <b>Это плагин от создателей Ponoi.</b> Его код идёт в самой сборке приложения —
+              <b>Это плагин от создателей NeyLivo.</b> Его код идёт в самой сборке приложения —
               он не скачивается, не обновляется со стороны и не может подмениться.
             </span>
           </div>

@@ -41,7 +41,7 @@ export async function applyAppIcon(url: string): Promise<void> {
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     if (link) link.href = url || DEFAULT_ICON_URL
   } catch {}
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   if (!d?.setAppIcon) return
   if (!url) { try { await d.setAppIcon(null) } catch {} ; return }
   try {

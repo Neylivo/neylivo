@@ -92,7 +92,7 @@ function следующийАдрес(откуда, куда) {
 
 function fetchXml(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': 'Ponoi' }, timeout: 15000 }, res => {
+    const req = https.get(url, { headers: { 'User-Agent': 'NeyLivo' }, timeout: 15000 }, res => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
         // v1.525.0: за перенаправлением идём С ТЕМИ ЖЕ параметрами.

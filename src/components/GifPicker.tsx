@@ -18,7 +18,7 @@ import { toastErr } from '../lib/toast'
 async function tenorGifs(path: string): Promise<string[]> {
   if (!TENOR_KEY) return []
   try {
-    const r = await fetch(TENOR_V2 + '/' + path + '&key=' + TENOR_KEY + '&client_key=ponoi&limit=24&media_filter=tinygif')
+    const r = await fetch(TENOR_V2 + '/' + path + '&key=' + TENOR_KEY + '&client_key=neylivo&limit=24&media_filter=tinygif')
     const j = await r.json()
     return ((j.results ?? []) as any[]).map(it => it.media_formats?.tinygif?.url).filter(Boolean)
   } catch { return [] }

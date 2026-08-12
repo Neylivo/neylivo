@@ -113,6 +113,6 @@ const браузерМера: ((f: string) => number) | null = (() => {
     if (!ctx) ctx = document.createElement('canvas').getContext('2d')
     if (!ctx) return 0
     ctx.font = '32px ' + f
-    return ctx.measureText('Ponoi mmmmiiiil WXYZ 123').width
+    return ctx.measureText('NeyLivo mmmmiiiil WXYZ 123').width
   }
 })()

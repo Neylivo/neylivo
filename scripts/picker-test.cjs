@@ -17,13 +17,13 @@ const path = require('path')
 
 const OUT = path.join(__dirname, '..', 'dist-picker-test')
 fs.mkdirSync(OUT, { recursive: true })
-for (const f of ['styles.css', 'ponoi-ui.css']) {
+for (const f of ['styles.css', 'neylivo-ui.css']) {
   fs.copyFileSync(path.join(__dirname, '..', 'src', f), path.join(OUT, f))
 }
 
 // Разметка списана с Composer.tsx и EmojiPicker.tsx.
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
-<link rel=stylesheet href="styles.css"><link rel=stylesheet href="ponoi-ui.css">
+<link rel=stylesheet href="styles.css"><link rel=stylesheet href="neylivo-ui.css">
 <style>html,body{margin:0;height:100%;background:#313338;font-family:system-ui,sans-serif;color:#dbdee1}
 :root{--brand:#5865f2;--ov:255,255,255;--c-accent:#5865f2}
 html,body,.app-viewport,.app{height:100%}.chat{display:flex;flex-direction:column;height:100%}

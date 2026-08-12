@@ -15,7 +15,7 @@ import { Home } from './Home'
 import { useAuth } from '../auth/AuthProvider'
 import { Toasts } from '../lib/toast'
 import '../styles.css'
-import '../ponoi-ui.css'
+import '../neylivo-ui.css'
 
 const тема = (window as any).__ТЕМА || 'dark'
 document.documentElement.dataset.theme = тема

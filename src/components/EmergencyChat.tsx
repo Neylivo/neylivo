@@ -9,7 +9,7 @@ import {
 // v1.275.0: полноэкранный аварийный чат — открывается из баннера «Нет связи»
 // (App.tsx), когда основной Supabase недоступен долго. Свои отдельные
 // аккаунты, один общий чат на всех, без серверов/каналов/друзей — честно
-// маленькая «запасная комната», а не полноценный Ponoi.
+// маленькая «запасная комната», а не полноценный NeyLivo.
 export function EmergencyChat({ onClose }: { onClose: () => void }) {
   const [username, setUsername] = useState(() => ecUsername())
   const [mode, setMode] = useState<'login' | 'register'>('register')
@@ -57,7 +57,7 @@ export function EmergencyChat({ onClose }: { onClose: () => void }) {
           <button className="ec-x" title="Закрыть" onClick={onClose}><Icon name="close" size={16} /></button>
         </div>
         <div className="ec-warn">
-          Отдельный сервис, не связан с твоим основным аккаунтом Ponoi — свои логин/пароль, только один общий чат.
+          Отдельный сервис, не связан с твоим основным аккаунтом NeyLivo — свои логин/пароль, только один общий чат.
           Работает, пока основной сервер не поднимется обратно.
         </div>
         {!username ? (

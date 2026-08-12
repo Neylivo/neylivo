@@ -1,5 +1,5 @@
 -- 09_soundboard.sql
--- Shared soundboard for Ponoi voice channels: saved audio clips ("Моменты" +
+-- Shared soundboard for NeyLivo voice channels: saved audio clips ("Моменты" +
 -- uploaded sounds) that everyone can see, play, trim, and blast into a call.
 -- Apply in the Supabase SQL Editor AFTER 08_push.sql (data-plane connection
 -- cannot run DDL). Audio files themselves live in the existing public

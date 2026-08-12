@@ -38,7 +38,7 @@ export function QuickSwitcher({ servers, onGo, onClose }:
 
   const items: Item[] = [
     { key: 'home', label: 'Друзья', sub: 'Личные сообщения', icon: 'home', target: { kind: 'home' } },
-    { key: 'music', label: 'Ponoi Music', sub: 'Музыка', icon: 'music', target: { kind: 'music' } },
+    { key: 'music', label: 'NeyLivo Music', sub: 'Музыка', icon: 'music', target: { kind: 'music' } },
     ...servers.map(s => ({ key: 's' + s.id, label: s.name, sub: 'Сервер', icon: 'users', target: { kind: 'server', server: s } as QSTarget })),
     ...friends.map(f => ({ key: 'f' + f.id, label: '@' + f.name, sub: 'Личное сообщение', icon: 'message', target: { kind: 'dm', friend: f } as QSTarget })),
   ]

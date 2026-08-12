@@ -3,7 +3,7 @@
 // ЗАЧЕМ. От встраивания в чужую страницу защищает `frame-ancestors 'none'` —
 // но эта директива работает ТОЛЬКО заголовком ответа, в <meta> браузер её
 // игнорирует по спецификации. Веб-версия живёт на GitHub Pages, а там заголовки
-// не задать. То есть выбор простой: либо чужой сайт может вложить Ponoi в
+// не задать. То есть выбор простой: либо чужой сайт может вложить NeyLivo в
 // прозрачную рамку и водить рукой человека по чужим кнопкам (перехват нажатий),
 // либо приложение само отказывается работать во вложении.
 //
@@ -26,7 +26,7 @@ export function держатьРамку(): boolean {
   // исключение — тогда просто не запускаемся.
   try { window.top!.location.replace(window.location.href); return true } catch { /* нельзя — ниже */ }
 
-  document.title = 'Ponoi'
+  document.title = 'NeyLivo'
   const поставить = () => {
     // Собирается узлами, а не строкой с innerHTML. Причина не в придирчивости:
     // в подпись пришлось бы вставить window.location.href, а его содержимое
@@ -39,10 +39,10 @@ export function держатьРамку(): boolean {
     внутри.setAttribute('style', 'max-width:34rem;text-align:center')
     const имя = document.createElement('div')
     имя.setAttribute('style', 'font-size:28px;font-weight:800;color:#fff;margin-bottom:12px')
-    имя.textContent = 'Ponoi'
+    имя.textContent = 'NeyLivo'
     const текст = document.createElement('p')
     текст.setAttribute('style', 'margin:0 0 16px')
-    текст.textContent = 'Эта страница открыта внутри чужого сайта, и Ponoi так не работает: '
+    текст.textContent = 'Эта страница открыта внутри чужого сайта, и NeyLivo так не работает: '
       + 'встроенное окно позволяет подставлять нажатия мимо вашего ведома.'
     const строка = document.createElement('p')
     строка.setAttribute('style', 'margin:0')
@@ -51,7 +51,7 @@ export function держатьРамку(): boolean {
     ссылка.target = '_blank'
     ссылка.rel = 'noopener noreferrer'
     ссылка.setAttribute('style', 'color:#8ea1ff')
-    ссылка.textContent = 'Открыть Ponoi отдельной вкладкой'
+    ссылка.textContent = 'Открыть NeyLivo отдельной вкладкой'
     строка.appendChild(ссылка)
     внутри.append(имя, текст, строка)
     обёртка.appendChild(внутри)

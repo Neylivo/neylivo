@@ -1,4 +1,4 @@
--- Ponoi — этап 2 миграции: Друзья и личные сообщения (DM).
+-- NeyLivo — этап 2 миграции: Друзья и личные сообщения (DM).
 -- Выполни в Supabase -> SQL Editor ПОСЛЕ schema.sql.
 
 create table if not exists friend_requests (

@@ -188,7 +188,7 @@ export function Home() {
   // Музыка теперь открывается панелью справа, а базовый экран (ЛС/сервер) остаётся под ней.
   const lastView = useRef<View>({ kind: 'dm' })
 
-  // v1.543.0: Ponoi Music открывается из панели профиля.
+  // v1.543.0: NeyLivo Music открывается из панели профиля.
   //
   // Кнопка уехала из рейки серверов вниз, в панель, и оттуда до setView не
   // дотянуться: панель рисуют ServerView и DMHome, а вид живёт здесь. Событие —
@@ -214,7 +214,7 @@ export function Home() {
 
   // v1.56.0: история переходов между разделами — стрелки назад/вперёд в тайтлбаре (как в Discord).
   const sameView = (a: View, b: View) => a.kind === b.kind && (a.kind !== 'server' || (b as any).server?.id === a.server.id)
-  const viewTitle = (v: View) => v.kind === 'dm' ? 'Личные сообщения' : v.kind === 'music' ? 'Ponoi Music' : v.kind === 'home' ? 'Главная' : v.server.name
+  const viewTitle = (v: View) => v.kind === 'dm' ? 'Личные сообщения' : v.kind === 'music' ? 'NeyLivo Music' : v.kind === 'home' ? 'Главная' : v.server.name
   const navHist = useRef<{ stack: View[]; idx: number }>({ stack: [view], idx: 0 })
   const navByArrow = useRef(false)
   const broadcastNav = () => {

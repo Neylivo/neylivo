@@ -49,9 +49,9 @@ export const RECIPES: Recipe[] = [
       { key: 'cmd', label: 'Команда', placeholder: 'правила', value: 'правила' },
       { key: 'text', label: 'Что отправить', placeholder: 'Не ругаться, не спамить.', multiline: true, value: '' },
     ],
-    build: v => `function onLoad(ponoi) {
-  ponoi.commands.register(${q(v.cmd)}, ${q('Отправить: ' + v.text.slice(0, 60))}, async () => {
-    await ponoi.messages.send(${q(v.text)})
+    build: v => `function onLoad(neylivo) {
+  neylivo.commands.register(${q(v.cmd)}, ${q('Отправить: ' + v.text.slice(0, 60))}, async () => {
+    await neylivo.messages.send(${q(v.text)})
   })
 }`,
   },
@@ -65,14 +65,14 @@ export const RECIPES: Recipe[] = [
       { key: 'word', label: 'Слово или фраза', placeholder: 'привет', value: 'привет' },
       { key: 'text', label: 'Что ответить', placeholder: 'И тебе привет!', multiline: true, value: '' },
     ],
-    build: v => `function onLoad(ponoi) {
+    build: v => `function onLoad(neylivo) {
   var word = ${q(v.word.toLowerCase())}
-  ponoi.on('message', async function (msg) {
+  neylivo.on('message', async function (msg) {
     // Своё же сообщение пропускаем — иначе плагин ответит сам себе.
     if (msg.mine) return
     var text = String(msg.content || '').toLowerCase()
     if (text.indexOf(word) === -1) return
-    await ponoi.messages.send(${q(v.text)})
+    await neylivo.messages.send(${q(v.text)})
   })
 }`,
   },
@@ -85,10 +85,10 @@ export const RECIPES: Recipe[] = [
     fields: [
       { key: 'text', label: 'Текст уведомления', placeholder: 'Тебя зовут!', value: 'Тебя зовут!' },
     ],
-    build: v => `function onLoad(ponoi) {
-  ponoi.on('message', function (msg) {
+    build: v => `function onLoad(neylivo) {
+  neylivo.on('message', function (msg) {
     if (!msg.mentionsMe) return
-    ponoi.notify(${q(v.text)} + ' — ' + msg.authorName)
+    neylivo.notify(${q(v.text)} + ' — ' + msg.authorName)
   })
 }`,
   },
@@ -101,9 +101,9 @@ export const RECIPES: Recipe[] = [
     fields: [
       { key: 'accent', label: 'Цвет', placeholder: '#5865f2', color: true, value: '#5865f2' },
     ],
-    build: v => `function onLoad(ponoi) {
+    build: v => `function onLoad(neylivo) {
   var c = ${q(v.accent)}
-  ponoi.css([
+  neylivo.css([
     '.ch.on { border-left: 3px solid ' + c + '; }',
     '.msg:hover { background: ' + c + '1a !important; }',
     '.pqs2-item.on { box-shadow: inset 2px 0 0 ' + c + '; }',
@@ -119,15 +119,15 @@ export const RECIPES: Recipe[] = [
     fields: [
       { key: 'cmd', label: 'Команда', placeholder: 'напомни', value: 'напомни' },
     ],
-    build: v => `function onLoad(ponoi) {
-  ponoi.commands.register(${q(v.cmd)}, 'Напомнить через N минут: /' + ${q(v.cmd)} + ' 10 чай', function (arg) {
+    build: v => `function onLoad(neylivo) {
+  neylivo.commands.register(${q(v.cmd)}, 'Напомнить через N минут: /' + ${q(v.cmd)} + ' 10 чай', function (arg) {
     var m = String(arg || '').trim().match(/^(\\d+)\\s*(.*)$/)
-    if (!m) { ponoi.notify('Напиши так: 10 заварить чай'); return }
+    if (!m) { neylivo.notify('Напиши так: 10 заварить чай'); return }
     var mins = parseInt(m[1], 10)
-    if (!mins || mins > 720) { ponoi.notify('От 1 до 720 минут'); return }
+    if (!mins || mins > 720) { neylivo.notify('От 1 до 720 минут'); return }
     var what = m[2] || 'Напоминание'
-    ponoi.notify('Напомню через ' + mins + ' мин')
-    setTimeout(function () { ponoi.notify('⏰ ' + what) }, mins * 60000)
+    neylivo.notify('Напомню через ' + mins + ' мин')
+    setTimeout(function () { neylivo.notify('⏰ ' + what) }, mins * 60000)
   })
 }`,
   },

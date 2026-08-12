@@ -63,13 +63,13 @@ async function перехватСообщений(host: Host) {
  * @description Проба перехвата
  * @permissions messages.intercept
  */
-export async function onLoad(ponoi) {
-  ponoi.messages.onBeforeSend(async function (ctx) {
-    ponoi.log('перед отправкой:' + ctx.content)
+export async function onLoad(neylivo) {
+  neylivo.messages.onBeforeSend(async function (ctx) {
+    neylivo.log('перед отправкой:' + ctx.content)
     if (ctx.content.indexOf('нельзя') >= 0) return { cancel: true }
     return { content: ctx.content.replace(/дурак/g, '****') }
   })
-  ponoi.messages.onBeforeRender(async function (ctx) {
+  neylivo.messages.onBeforeRender(async function (ctx) {
     return { content: '[' + ctx.content + ']' }
   })
 }
@@ -117,13 +117,13 @@ async function видыОкон(host: Host) {
  * @description Проба видов окна
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  ponoi.on('app', function (e) { ponoi.log('событие:' + e.mode + ':' + (e.open ? 'открыто' : 'закрыто')) })
+export async function onLoad(neylivo) {
+  neylivo.on('app', function (e) { neylivo.log('событие:' + e.mode + ':' + (e.open ? 'открыто' : 'закрыто')) })
   for (const mode of ['tab', 'pip', 'fullscreen']) {
-    const id = await ponoi.apps.create({ mode: mode, title: 'Окно ' + mode, rows: [
+    const id = await neylivo.apps.create({ mode: mode, title: 'Окно ' + mode, rows: [
       { type: 'label', key: 'l', label: 'Вид', value: mode },
     ] })
-    ponoi.log('открыто:' + mode + ':' + id)
+    neylivo.log('открыто:' + mode + ':' + id)
   }
 }
 `)
@@ -182,12 +182,12 @@ async function службыИПисьма(host: Host) {
  * @description Проба службы
  * @permissions ipc
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   await ponoi.services.register('матан', {
     урон: function (s) { return { итог: s.atk * 1.5 } },
   })
-  ponoi.on('ipc', function (m) { ponoi.log('письмо от ' + m.from + ':' + JSON.stringify(m.data)) })
-  ponoi.log('служба готова')
+  neylivo.on('ipc', function (m) { neylivo.log('письмо от ' + m.from + ':' + JSON.stringify(m.data)) })
+  neylivo.log('служба готова')
 }
 `)
   await пауза(300)
@@ -199,12 +199,12 @@ export async function onLoad(ponoi) {
  * @description Проба клиента
  * @permissions ipc
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const м = await ponoi.services.connect('матан')
   const r = await м.урон({ atk: 20 })
-  ponoi.log('ответ службы:' + JSON.stringify(r))
+  neylivo.log('ответ службы:' + JSON.stringify(r))
   const дошло = await ponoi.plugins.send('probe-lib', 'привет', { n: 7 })
-  ponoi.log('письмо доставлено:' + дошло)
+  neylivo.log('письмо доставлено:' + дошло)
 }
 `)
   await ждать(() => !!строка(host, клиент, 'ответ службы:'))
@@ -232,22 +232,22 @@ async function сеть(host: Host) {
  * @permissions net
  * @hosts 127.0.0.1
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const база = 'https://${АДРЕС}'
-  ponoi.net.fetch(база + '/json').then(function (r) {
-    ponoi.log('запрос:' + r.status + ':' + r.body)
-  }, function (e) { ponoi.log('запрос-ошибка:' + e.message) })
+  neylivo.net.fetch(база + '/json').then(function (r) {
+    neylivo.log('запрос:' + r.status + ':' + r.body)
+  }, function (e) { neylivo.log('запрос-ошибка:' + e.message) })
 
   var куски = []
-  ponoi.net.stream(база + '/stream', {}, function (кусок) { куски.push(кусок) })
-    .then(function () { ponoi.log('поток:' + куски.length + ':' + куски.join('')) },
-          function (e) { ponoi.log('поток-ошибка:' + e.message) })
+  neylivo.net.stream(база + '/stream', {}, function (кусок) { куски.push(кусок) })
+    .then(function () { neylivo.log('поток:' + куски.length + ':' + куски.join('')) },
+          function (e) { neylivo.log('поток-ошибка:' + e.message) })
 
-  ponoi.net.ws('wss://${АДРЕС}/ws').then(function (сокет) {
-    ponoi.log('сокет открыт')
-    сокет.onMessage(function (m) { ponoi.log('сокет:' + m) })
+  neylivo.net.ws('wss://${АДРЕС}/ws').then(function (сокет) {
+    neylivo.log('сокет открыт')
+    сокет.onMessage(function (m) { neylivo.log('сокет:' + m) })
     setTimeout(function () { сокет.send('пинг') }, 200)
-  }, function (e) { ponoi.log('сокет-ошибка:' + e.message) })
+  }, function (e) { neylivo.log('сокет-ошибка:' + e.message) })
 }
 `)
   await ждать(() => !!строка(host, id, 'запрос:') || !!строка(host, id, 'запрос-ошибка:'))
@@ -280,10 +280,10 @@ async function фон(host: Host) {
  * @description Проба фоновой задачи
  * @permissions background
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   var n = 0
-  await ponoi.background.every(1000, function () { n++; ponoi.log('тик:' + n) }, 'счётчик')
-  ponoi.log('задача заведена')
+  await neylivo.background.every(1000, function () { n++; neylivo.log('тик:' + n) }, 'счётчик')
+  neylivo.log('задача заведена')
 }
 `)
   const дошло = await ждать(() => строка(host, id, 'тик:') === 'тик:2', 9000)
@@ -309,10 +309,10 @@ async function оформление(host: Host) {
  * @description Проба темы и меню
  * @permissions ui.theme, ui, messages.read
  */
-export async function onLoad(ponoi) {
-  await ponoi.ui.setTheme({ accent: '#ff4500' })
-  await ponoi.ui.addContextMenu({ target: 'message', label: 'Моё действие', onClick: function () {} })
-  ponoi.log('оформление поставлено')
+export async function onLoad(neylivo) {
+  await neylivo.ui.setTheme({ accent: '#ff4500' })
+  await neylivo.ui.addContextMenu({ target: 'message', label: 'Моё действие', onClick: function () {} })
+  neylivo.log('оформление поставлено')
 }
 `)
   await ждать(() => !!строка(host, id, 'оформление поставлено'))
@@ -349,19 +349,19 @@ async function плеерИГолос(host: Host) {
  * @description Проба плеера и голоса
  * @permissions music, voice
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   try {
-    const сейчас = await ponoi.music.now()
-    ponoi.log('сейчас:' + JSON.stringify(сейчас))
-    const склад = await ponoi.music.library()
-    ponoi.log('склад:' + (Array.isArray(склад) ? склад.length : 'не список'))
-    ponoi.log('пауза:' + await ponoi.music.pause())
-  } catch (e) { ponoi.log('плеер-ошибка:' + e.message) }
+    const сейчас = await neylivo.music.now()
+    neylivo.log('сейчас:' + JSON.stringify(сейчас))
+    const склад = await neylivo.music.library()
+    neylivo.log('склад:' + (Array.isArray(склад) ? склад.length : 'не список'))
+    neylivo.log('пауза:' + await neylivo.music.pause())
+  } catch (e) { neylivo.log('плеер-ошибка:' + e.message) }
   try {
-    const голоса = await ponoi.voice.list()
-    ponoi.log('голоса:' + голоса.map(function (g) { return g.id }).join(','))
-    ponoi.log('текущий:' + await ponoi.voice.current())
-  } catch (e) { ponoi.log('голос-ошибка:' + e.message) }
+    const голоса = await neylivo.voice.list()
+    neylivo.log('голоса:' + голоса.map(function (g) { return g.id }).join(','))
+    neylivo.log('текущий:' + await neylivo.voice.current())
+  } catch (e) { neylivo.log('голос-ошибка:' + e.message) }
 }
 `)
   await ждать(() => !!строка(host, id, 'текущий:') || !!строка(host, id, 'голос-ошибка:'))
@@ -382,9 +382,9 @@ export async function onLoad(ponoi) {
  * @description Проба отказа
  * @permissions storage
  */
-export async function onLoad(ponoi) {
-  ponoi.music.now().then(function () { ponoi.log('пустили:да') },
-                         function (e) { ponoi.log('отказ:' + e.message.slice(0, 40)) })
+export async function onLoad(neylivo) {
+  neylivo.music.now().then(function () { neylivo.log('пустили:да') },
+                         function (e) { neylivo.log('отказ:' + e.message.slice(0, 40)) })
 }
 `)
   await ждать(() => !!строка(host, без, 'отказ:') || !!строка(host, без, 'пустили:'))
@@ -415,13 +415,13 @@ async function окноКудаУгодно(host: Host) {
  * @description Проба места окна
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  const id = await ponoi.apps.create({
+export async function onLoad(neylivo) {
+  const id = await neylivo.apps.create({
     mode: 'window', title: 'Своё место', width: 420, height: 300,
     minWidth: 260, minHeight: 180,
     rows: [{ type: 'label', key: 'l', label: 'Строка', value: 'тут' }],
   })
-  ponoi.log('открыто:' + id)
+  neylivo.log('открыто:' + id)
 }
 `)
   await ждать(() => appList(id).length === 1)
@@ -496,8 +496,8 @@ export async function onLoad(ponoi) {
  * @description Проба места окна
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  await ponoi.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
+export async function onLoad(neylivo) {
+  await neylivo.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
     minWidth: 260, minHeight: 180, rows: [] })
 }
 `),
@@ -509,8 +509,8 @@ export async function onLoad(ponoi) {
  * @description Проба места окна
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  await ponoi.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
+export async function onLoad(neylivo) {
+  await neylivo.apps.create({ mode: 'window', title: 'Своё место', width: 420, height: 300,
     minWidth: 260, minHeight: 180, rows: [] })
 }
 `,
@@ -535,8 +535,8 @@ export async function onLoad(ponoi) {
  * @description Проба окошка в углу
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  await ponoi.apps.create({ mode: 'pip', title: 'Уголок', rows: [] })
+export async function onLoad(neylivo) {
+  await neylivo.apps.create({ mode: 'pip', title: 'Уголок', rows: [] })
 }
 `)
     await ждать(() => appList(id2).length === 1)
@@ -579,14 +579,14 @@ async function свободныйВиджет(host: Host) {
  * @description Проба виджета
  * @permissions panel
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   self.рисуй = function (текст) {
-    return ponoi.ui.addPanel({ slot: 'chat', title: 'Мой уголок', rows: [
+    return neylivo.ui.addPanel({ slot: 'chat', title: 'Мой уголок', rows: [
       { type: 'label', key: 'что', label: 'Значение', value: текст },
     ] })
   }
   await self.рисуй('первое')
-  ponoi.log('нарисовал')
+  neylivo.log('нарисовал')
 }
 `)
   await ждать(() => appList(id).length === 1)
@@ -651,14 +651,14 @@ async function окноГдеСтоит(host: Host) {
  * @description Проба координат окна
  * @permissions *
  */
-export async function onLoad(ponoi) {
-  const окно = await ponoi.apps.create({ mode: 'window', title: 'Где я', width: 320, height: 200, rows: [] })
+export async function onLoad(neylivo) {
+  const окно = await neylivo.apps.create({ mode: 'window', title: 'Где я', width: 320, height: 200, rows: [] })
   self.окно = окно
-  const о = await ponoi.apps.where(окно)
-  ponoi.log('где:' + JSON.stringify({ x: о.x, y: о.y, w: о.width, h: о.height }))
-  ponoi.log('экран:' + JSON.stringify(await ponoi.apps.screen()))
-  ponoi.on('app', function (e) { ponoi.log('событие:' + e.x + ',' + e.y) })
-  self.двинь = function (x, y) { return ponoi.apps.move(окно, x, y) }
+  const о = await neylivo.apps.where(окно)
+  neylivo.log('где:' + JSON.stringify({ x: о.x, y: о.y, w: о.width, h: о.height }))
+  neylivo.log('экран:' + JSON.stringify(await neylivo.apps.screen()))
+  neylivo.on('app', function (e) { neylivo.log('событие:' + e.x + ',' + e.y) })
+  self.двинь = function (x, y) { return neylivo.apps.move(окно, x, y) }
 }
 `)
   await ждать(() => appList(id).length === 1)
@@ -713,25 +713,25 @@ async function безРамки(host: Host) {
  * @description Проба безрамочного окна
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  const окно = await ponoi.apps.create({
+export async function onLoad(neylivo) {
+  const окно = await neylivo.apps.create({
     mode: 'window', title: 'Голое окно', width: 300, height: 220, x: 150, y: 150,
     frameless: true, transparent: true, resizable: false,
     rows: [
       { type: 'label', key: 'l', label: 'Внутри', value: 'тут' },
-      { type: 'button', key: 'b', label: 'Нажми', onClick: function () { ponoi.log('нажали кнопку') } },
+      { type: 'button', key: 'b', label: 'Нажми', onClick: function () { neylivo.log('нажали кнопку') } },
     ],
   })
-  ponoi.log('окно:' + окно)
-  ponoi.on('app', function (e) { ponoi.log('app:' + (e.open ? 'открыто' : 'ЗАКРЫТО')) })
-  ponoi.on('app:move', function (e) { ponoi.log('move:' + e.x + ',' + e.y) })
-  ponoi.on('app:moveend', function (e) { ponoi.log('moveend:' + e.x + ',' + e.y) })
-  ponoi.on('settings', async function (e) {
-    if (e.key === 'hide') await ponoi.apps.hide(окно)
-    if (e.key === 'show') await ponoi.apps.show(окно)
-    if (e.key === 'frame') await ponoi.apps.update(окно, { frameless: false, transparent: false })
-    if (e.key === 'where') ponoi.log('где:' + JSON.stringify(await ponoi.apps.where(окно)))
-    ponoi.log('сделано:' + e.key)
+  neylivo.log('окно:' + окно)
+  neylivo.on('app', function (e) { neylivo.log('app:' + (e.open ? 'открыто' : 'ЗАКРЫТО')) })
+  neylivo.on('app:move', function (e) { neylivo.log('move:' + e.x + ',' + e.y) })
+  neylivo.on('app:moveend', function (e) { neylivo.log('moveend:' + e.x + ',' + e.y) })
+  neylivo.on('settings', async function (e) {
+    if (e.key === 'hide') await neylivo.apps.hide(окно)
+    if (e.key === 'show') await neylivo.apps.show(окно)
+    if (e.key === 'frame') await neylivo.apps.update(окно, { frameless: false, transparent: false })
+    if (e.key === 'where') neylivo.log('где:' + JSON.stringify(await neylivo.apps.where(окно)))
+    neylivo.log('сделано:' + e.key)
   })
 }
 `)
@@ -914,8 +914,8 @@ async function всеСтроки(host: Host) {
  * @description Проба всех видов строк
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  await ponoi.apps.create({
+export async function onLoad(neylivo) {
+  await neylivo.apps.create({
     mode: 'window', title: 'Все строки', width: 460, height: 560, x: 40, y: 40,
     rows: [
       { type: 'label', key: 'r-label', label: 'Подпись', value: 'значение' },
@@ -931,7 +931,7 @@ export async function onLoad(ponoi) {
       { type: 'keybind', key: 'r-keybind', label: 'Горячая клавиша' },
     ],
   })
-  ponoi.log('готово')
+  neylivo.log('готово')
 }
 `)
   await ждать(() => appList(id).length === 1)
@@ -988,31 +988,31 @@ async function пределовНет(host: Host) {
  * @description Проба снятых пределов
  * @permissions *
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   // Окон было не больше трёх на плагин и шести всего.
   let окон = 0
   for (let i = 0; i < 12; i++) {
-    try { await ponoi.apps.create({ mode: 'window', title: 'Окно ' + i, width: 120, height: 90, x: 5, y: 5 }); окон++ }
-    catch (e) { ponoi.log('окно отказ:' + e.message); break }
+    try { await neylivo.apps.create({ mode: 'window', title: 'Окно ' + i, width: 120, height: 90, x: 5, y: 5 }); окон++ }
+    catch (e) { neylivo.log('окно отказ:' + e.message); break }
   }
-  ponoi.log('окон:' + окон)
+  neylivo.log('окон:' + окон)
 
   // Команд было не больше двухсот.
   let команд = 0
   for (let i = 0; i < 400; i++) {
-    try { await ponoi.commands.register('жад' + i, 'проба', function () {}); команд++ } catch { break }
+    try { await neylivo.commands.register('жад' + i, 'проба', function () {}); команд++ } catch { break }
   }
-  ponoi.log('команд:' + команд)
+  neylivo.log('команд:' + команд)
 
   // Значение в хранилище — не больше 4 МБ.
   try {
-    await ponoi.storage.set('громада', 'я'.repeat(6 * 1024 * 1024))
-    ponoi.log('хранилище:да')
-  } catch (e) { ponoi.log('хранилище:' + e.message) }
+    await neylivo.storage.set('громада', 'я'.repeat(6 * 1024 * 1024))
+    neylivo.log('хранилище:да')
+  } catch (e) { neylivo.log('хранилище:' + e.message) }
 
   // Подпись кнопки резалась до 120 знаков.
-  await ponoi.ui.addComposerButton({ key: 'длинная', tooltip: 'д'.repeat(500), onClick: function () {} })
-  ponoi.log('готово')
+  await neylivo.ui.addComposerButton({ key: 'длинная', tooltip: 'д'.repeat(500), onClick: function () {} })
+  neylivo.log('готово')
 }
 `)
   await ждать(() => журнал(host, id).some(l => l.includes('готово')), 20000)
@@ -1096,28 +1096,28 @@ async function окноСтраница(host: Host) {
   try { отчёт.куки = document.cookie.length >= 0 ? String(document.cookie).slice(0, 20) || 'пусто' : '?' } catch (e) { отчёт.куки = 'закрыто' }
   try { отчёт.происхождение = String(location.origin) } catch (e) { отчёт.происхождение = 'закрыто' }
 
-  ponoi.log('страница поднялась')
+  neylivo.log('страница поднялась')
   setTimeout(async () => {
     отчёт.кадров = кадров
     отчёт.мышей = мышей
     отчёт.колесо = колесо
-    const где = await ponoi.apps.all()
+    const где = await neylivo.apps.all()
     отчёт.окон = где.length
     // Свой файл плагина — готовым адресом. Это то, чем страница грузит модели,
     // текстуры и звуки, и проверить его надо на настоящем файле.
     try {
-      const адрес = await ponoi.assets.url('точка.png')
+      const адрес = await neylivo.assets.url('точка.png')
       const ответ = await fetch(адрес)
       const b = await ответ.blob()
       отчёт.файл = b.size + ':' + b.type
     } catch (e) { отчёт.файл = 'ошибка: ' + e.message.slice(0, 40) }
-    await ponoi.storage.set('из-рамки', 'да')
-    отчёт.хранилище = await ponoi.storage.get('из-рамки')
+    await neylivo.storage.set('из-рамки', 'да')
+    отчёт.хранилище = await neylivo.storage.get('из-рамки')
     // v1.499.0: странице доступно то же, что потоку. Раньше здесь стоял
     // короткий список, и css со страницы отвечал отказом ни за что.
-    try { await ponoi.call('css', ['a{}']); отчёт.лишнее = 'прошло' }
+    try { await neylivo.call('css', ['a{}']); отчёт.лишнее = 'прошло' }
     catch (e) { отчёт.лишнее = 'отказ: ' + e.message.slice(0, 40) }
-    ponoi.log('ОТЧЁТ:' + JSON.stringify(отчёт))
+    neylivo.log('ОТЧЁТ:' + JSON.stringify(отчёт))
   }, 900)
 <\/script>`
 
@@ -1129,17 +1129,17 @@ async function окноСтраница(host: Host) {
  * @description Проба окна со своей страницей
  * @permissions *
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   // Настоящий png в файлах плагина — чтобы страница взяла его адресом.
   const png = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
     0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,156,99,0,1,0,0,5,0,1,
     13,10,45,180,0,0,0,0,73,69,78,68,174,66,96,130])
-  await ponoi.assets.put('точка.png', png.buffer)
-  await ponoi.apps.create({
+  await neylivo.assets.put('точка.png', png.buffer)
+  await neylivo.apps.create({
     mode: 'window', title: 'Своя страница', width: 300, height: 220, x: 60, y: 60,
     html: ${JSON.stringify(страница)},
   })
-  ponoi.log('окно создано')
+  neylivo.log('окно создано')
 }
 `)
   await ждать(() => appList(id).length === 1)
@@ -1239,7 +1239,7 @@ async function остальное(host: Host) {
 
   // 9/10/14. Библиотека из СВОЕГО файла: обычным script по blob-адресу.
   try {
-    const адрес = await ponoi.assets.url('lib.js')
+    const адрес = await neylivo.assets.url('lib.js')
     await new Promise((ok, no) => {
       const s = document.createElement('script')
       s.onload = ok; s.onerror = () => no(new Error('script не загрузился'))
@@ -1251,7 +1251,7 @@ async function остальное(host: Host) {
 
   // 14b. Модуль (import) из своего файла.
   try {
-    const адрес2 = await ponoi.assets.url('mod.mjs')
+    const адрес2 = await neylivo.assets.url('mod.mjs')
     const m = await import(адрес2)
     отчёт.модуль = m && m.привет ? m.привет() : 'нет'
   } catch (e) { отчёт.модуль = 'ошибка: ' + e.message.slice(0, 60) }
@@ -1270,24 +1270,24 @@ async function остальное(host: Host) {
   // 9/10/14. Загрузка библиотеки одним вызовом.
   try {
     delete self.МОЯ_БИБЛИОТЕКА
-    await ponoi.load('lib.js')
+    await neylivo.load('lib.js')
     отчёт.load = typeof self.МОЯ_БИБЛИОТЕКА === 'function' ? 'работает' : 'нет'
   } catch (e) { отчёт.load = 'ошибка: ' + e.message.slice(0, 40) }
   try {
-    await ponoi.loadModule('mod2.mjs')
+    await neylivo.loadModule('mod2.mjs')
     отчёт.loadModule = self.ИЗ_МОДУЛЯ || 'нет'
   } catch (e) { отчёт.loadModule = 'ошибка: ' + e.message.slice(0, 50) }
 
   // 7. Звук приложения — есть ли к нему хоть какой-то путь.
-  отчёт.audioИсточник = typeof ponoi.music === 'object' && typeof ponoi.music.now === 'function'
+  отчёт.audioИсточник = typeof neylivo.music === 'object' && typeof neylivo.music.now === 'function'
     ? 'только сведения о треке' : 'нет'
 
   // Ждём подольше: клавиши стенд шлёт уже после того, как страница поднялась,
   // и отчёт, снятый сразу, показывал бы ноль просто потому, что рано.
   await new Promise(r => setTimeout(r, 2500))
   отчёт.клавиш = клавиш
-  ponoi.log('ОСТАЛЬНОЕ:' + JSON.stringify(отчёт))
-})().catch(e => ponoi.log('ОСТАЛЬНОЕ:{"упало":"' + e.message + '"}'))
+  neylivo.log('ОСТАЛЬНОЕ:' + JSON.stringify(отчёт))
+})().catch(e => neylivo.log('ОСТАЛЬНОЕ:{"упало":"' + e.message + '"}'))
 <\/script>`
 
   const id = await поднять(host, `/**
@@ -1298,12 +1298,12 @@ async function остальное(host: Host) {
  * @description Проба остатка списка
  * @permissions *
  */
-export async function onLoad(ponoi) {
+export async function onLoad(neylivo) {
   const enc = new TextEncoder()
-  await ponoi.assets.put('lib.js', enc.encode('self.МОЯ_БИБЛИОТЕКА = function () { return "библиотека жива" }').buffer)
-  await ponoi.assets.put('mod.mjs', enc.encode('export function привет() { return "модуль жив" }').buffer)
-  await ponoi.assets.put('mod2.mjs', enc.encode('const х = "модуль выполнился"; window.ИЗ_МОДУЛЯ = х; export default х').buffer)
-  await ponoi.apps.create({
+  await neylivo.assets.put('lib.js', enc.encode('self.МОЯ_БИБЛИОТЕКА = function () { return "библиотека жива" }').buffer)
+  await neylivo.assets.put('mod.mjs', enc.encode('export function привет() { return "модуль жив" }').buffer)
+  await neylivo.assets.put('mod2.mjs', enc.encode('const х = "модуль выполнился"; window.ИЗ_МОДУЛЯ = х; export default х').buffer)
+  await neylivo.apps.create({
     mode: 'window', title: 'Остальное', width: 300, height: 220, x: 40, y: 40,
     html: ${JSON.stringify(страница)},
   })
@@ -1338,8 +1338,8 @@ export async function onLoad(ponoi) {
   ok('OffscreenCanvas можно отдать в него', о.transferOffscreen === true, String(о.transferOffscreen))
   ok('библиотека из своего файла подключается обычным script',
     о.библиотека === 'библиотека жива', String(о.библиотека))
-  ok('и одним вызовом ponoi.load тоже', о.load === 'работает', String(о.load))
-  ok('модуль из своего файла выполняется через ponoi.loadModule',
+  ok('и одним вызовом neylivo.load тоже', о.load === 'работает', String(о.load))
+  ok('модуль из своего файла выполняется через neylivo.loadModule',
     о.loadModule === 'модуль выполнился', String(о.loadModule))
   ok('fetch по адресу asset: отдаёт свой файл', о.fetchAsset === 'работает', String(о.fetchAsset))
   ok('а на несуществующий отвечает честным 404, а не ошибкой',
@@ -1377,12 +1377,12 @@ async function встроенныйThree(host: Host) {
 (async () => {
   const отчёт = {}
   try {
-    const список = await ponoi.libs()
+    const список = await neylivo.libs()
     отчёт.список = список.map(b => b.id).join(',')
     отчёт.вес = Math.round((список.find(b => b.id === 'three') || {}).bytes / 1024)
 
     const t0 = performance.now()
-    const THREE = await ponoi.lib('three')
+    const THREE = await neylivo.lib('three')
     отчёт.загрузка = Math.round(performance.now() - t0)
     отчёт.естьСцена = typeof THREE.Scene === 'function'
     отчёт.естьРендер = typeof THREE.WebGLRenderer === 'function'
@@ -1390,7 +1390,7 @@ async function встроенныйThree(host: Host) {
 
     // Второй вызов не должен грузить заново.
     const t1 = performance.now()
-    await ponoi.lib('three')
+    await neylivo.lib('three')
     отчёт.повтор = Math.round(performance.now() - t1)
 
     // Настоящая сцена и настоящий кадр.
@@ -1418,7 +1418,7 @@ async function встроенныйThree(host: Host) {
   } catch (e) {
     отчёт.упало = e.message.slice(0, 120)
   }
-  ponoi.log('THREE:' + JSON.stringify(отчёт))
+  neylivo.log('THREE:' + JSON.stringify(отчёт))
 })()
 <\/script>`
 
@@ -1430,8 +1430,8 @@ async function встроенныйThree(host: Host) {
  * @description Проба встроенного three.js
  * @permissions apps
  */
-export async function onLoad(ponoi) {
-  await ponoi.apps.create({
+export async function onLoad(neylivo) {
+  await neylivo.apps.create({
     mode: 'window', title: 'Три-дэ', width: 260, height: 260, x: 30, y: 30,
     html: ${JSON.stringify(страница)},
   })
@@ -1488,7 +1488,7 @@ async function мастерская3D(host: Host) {
 // встаёт ПОСЛЕ игрового: она рисует, мы читаем, и всё это в одном такте.
 let снято = false
 setTimeout(() => {
-  ponoi.frame(() => {
+  neylivo.frame(() => {
     if (снято) return
     снято = true
     const c = document.querySelector('canvas')
@@ -1499,7 +1499,7 @@ setTimeout(() => {
       gl.readPixels(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, п)
       цвет = п[0] + ',' + п[1] + ',' + п[2]
     } catch (e) { цвет = 'ошибка: ' + e.message.slice(0, 40) }
-    ponoi.log('ИГРА:' + JSON.stringify({ холст: !!c, ширина: c ? c.width : 0, цвет, файлов: 3 }))
+    neylivo.log('ИГРА:' + JSON.stringify({ холст: !!c, ширина: c ? c.width : 0, цвет, файлов: 3 }))
   })
 }, 1200)`,
   })
@@ -1592,20 +1592,20 @@ async function редакторСцены(host: Host) {
 // Скрипты объектов выполняются ДО того, как кадр нарисован (сначала посчитали,
 // потом нарисовали — так и должно быть), а WebGL очищает буфер сразу после
 // показа. Значит, из onFrame читается чернота всегда. Свой обработчик кадра,
-// заведённый через ponoi.frame, встаёт в очередь ПОСЛЕ движка сцены — то есть
+// заведённый через neylivo.frame, встаёт в очередь ПОСЛЕ движка сцены — то есть
 // после отрисовки, в том же такте.
 function onStart() {
   let кадров = 0
   // Через setTimeout: движок сцены заводит свой обработчик кадра ПОСЛЕ того,
   // как выполнит скрипты объектов. Запишись мы прямо здесь — встали бы в
   // очереди перед ним, то есть снова до отрисовки.
-  setTimeout(() => ponoi.frame(() => {
+  setTimeout(() => neylivo.frame(() => {
     if (++кадров !== 5) return
     const c = document.querySelector('canvas')
     const gl = c.getContext('webgl2') || c.getContext('webgl')
     const п = new Uint8Array(4)
     gl.readPixels(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, п)
-    ponoi.log('СЦЕНА:' + JSON.stringify({ цвет: п[0] + ',' + п[1] + ',' + п[2] }))
+    neylivo.log('СЦЕНА:' + JSON.stringify({ цвет: п[0] + ',' + п[1] + ',' + п[2] }))
   }), 0)
 }`
   const сЛогом = { ...сцена, nodes: [...сцена.nodes, отчёт] }

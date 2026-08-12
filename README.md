@@ -1,21 +1,21 @@
 <div align="center">
 
-# Ponoi
+# NeyLivo
 
 **Private. Extensible. Yours.**
 
-Ponoi is a privacy-focused extensible messenger for conversations, communities,
+NeyLivo is a privacy-focused extensible messenger for conversations, communities,
 calls, music and user-created plugins. Windows, Android and the web.
 
-*Ponoi (Поной) — приватный расширяемый мессенджер для общения, сообществ,
+*NeyLivo (Нейливо) — приватный расширяемый мессенджер для общения, сообществ,
 звонков, музыки и пользовательских плагинов.*
 
-[**Website**](https://ponoiai.github.io/) ·
-[**Download**](https://ponoiai.github.io/download/) ·
-[**Open web app**](https://ponoiai.github.io/ponoi/) ·
-[**Documentation**](https://ponoiai.github.io/docs/) ·
-[**Security**](https://ponoiai.github.io/security/) ·
-[**Plugins**](https://ponoiai.github.io/plugins/)
+[**Website**](https://neylivo.github.io/) ·
+[**Download**](https://neylivo.github.io/download/) ·
+[**Open web app**](https://neylivo.github.io/neylivo/) ·
+[**Documentation**](https://neylivo.github.io/docs/) ·
+[**Security**](https://neylivo.github.io/security/) ·
+[**Plugins**](https://neylivo.github.io/plugins/)
 
 </div>
 
@@ -76,32 +76,32 @@ And the parts that are not good yet, in the project’s own words:
 
 The full technical write-up, with file references, is in
 [`SECURITY_ARCHITECTURE_AUDIT.md`](SECURITY_ARCHITECTURE_AUDIT.md). The
-user-facing version is at [ponoiai.github.io/security](https://ponoiai.github.io/security/),
+user-facing version is at [neylivo.github.io/security](https://neylivo.github.io/security/),
 and the list of known weaknesses is at
-[ponoiai.github.io/transparency](https://ponoiai.github.io/transparency/).
+[neylivo.github.io/transparency](https://neylivo.github.io/transparency/).
 
 To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 
-## Get Ponoi
+## Get NeyLivo
 
 Downloads live on the website, not here:
-**[ponoiai.github.io/download](https://ponoiai.github.io/download/)** — the
+**[neylivo.github.io/download](https://neylivo.github.io/download/)** — the
 Windows installer, the Android APK and the web version, all linked directly.
 
 ---
 
 # For developers
 
-Ponoi is written in TypeScript on React, with Supabase for the database,
+NeyLivo is written in TypeScript on React, with Supabase for the database,
 accounts, storage and realtime, LiveKit for voice and video, Electron for the
 Windows build and Capacitor for Android. There is no backend of our own.
 
 **How to fetch and build the source is deliberately not documented here.** This
-page is for people who use Ponoi, and a setup recipe at the top of it only gets
+page is for people who use NeyLivo, and a setup recipe at the top of it only gets
 in their way. What a developer actually needs is documented where it belongs:
 
 - [`PLUGINS.md`](PLUGINS.md) — the `.ponoi` file format, the plugin API and how
-  isolation works. Plugins are the supported way to extend Ponoi, and they need
+  isolation works. Plugins are the supported way to extend NeyLivo, and they need
   no build environment at all: the editor is inside the app, under
   Settings → Plugins → Create.
 - [`SECURITY.md`](SECURITY.md) — reporting a vulnerability.
@@ -109,12 +109,12 @@ in their way. What a developer actually needs is documented where it belongs:
   actually protects data, with file references.
 - [`E2EE_DESIGN.md`](E2EE_DESIGN.md) — the design for group encryption, before
   any of it is written.
-- [ponoiai.github.io/changelog](https://ponoiai.github.io/changelog/) — every
+- [neylivo.github.io/changelog](https://neylivo.github.io/changelog/) — every
   release, with what changed in each.
 
-The website at <https://ponoiai.github.io/> is a separate repository,
-[ponoiai/ponoiai.github.io](https://github.com/ponoiai/ponoiai.github.io). The
-web version of the app stays at <https://ponoiai.github.io/ponoi/>, so invite
+The website at <https://neylivo.github.io/> is a separate repository,
+[Neylivo/neylivo.github.io](https://github.com/Neylivo/neylivo.github.io). The
+web version of the app stays at <https://neylivo.github.io/neylivo/>, so invite
 links and installed PWAs keep working.
 
 ## Licence

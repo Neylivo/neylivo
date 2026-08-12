@@ -11,7 +11,7 @@ import { toastErr } from '../lib/toast'
 import type { Server, Channel } from '../types'
 
 // Веб-адрес приложения — из него собирается ссылка-приглашение.
-const WEB_BASE = 'https://ponoiai.github.io/ponoi/'
+const WEB_BASE = 'https://neylivo.github.io/neylivo/'
 
 interface FriendRow { id: string; name: string; handle?: string | null; avatar?: string | null }
 

@@ -12,11 +12,11 @@ const OUT = path.join(__dirname, '..', 'dist-real-view')
 const LOOK = path.join(__dirname, '..', 'dist-look')
 fs.mkdirSync(OUT, { recursive: true })
 fs.mkdirSync(LOOK, { recursive: true })
-for (const f of ['styles.css', 'ponoi-ui.css']) {
+for (const f of ['styles.css', 'neylivo-ui.css']) {
   fs.copyFileSync(path.join(__dirname, '..', 'src', f), path.join(OUT, f))
 }
 fs.writeFileSync(path.join(OUT, 'index.html'), `<!doctype html><meta charset=utf-8>
-<link rel=stylesheet href="styles.css"><link rel=stylesheet href="ponoi-ui.css">
+<link rel=stylesheet href="styles.css"><link rel=stylesheet href="neylivo-ui.css">
 <style>html,body{height:100%;margin:0;background:#1e1f22}#root{height:100%}</style>
 <script>
   try {

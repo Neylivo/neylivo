@@ -36,7 +36,7 @@ interface CaptureGuardPlugin {
 }
 const Native = registerPlugin<CaptureGuardPlugin>('CaptureGuard')
 
-const desktop = () => (window as any).ponoiDesktop as
+const desktop = () => (window as any).neylivoDesktop as
   { captureGuard?: (on?: boolean) => Promise<boolean> } | undefined
 
 /** Где приложение — своё окно, у которого можно отнять содержимое. */
@@ -89,7 +89,7 @@ export async function getCaptureGuard(): Promise<boolean> {
 
 // ── Скрытие текста ─────────────────────────────────────────────────────────
 
-const КЛЮЧ = 'ponoi.blurMessages'
+const КЛЮЧ = 'ponoi.blurMessages'   // имя ключа не трогаем: у людей уже сохранён этот выбор
 
 export function blurMessages(): boolean {
   try { return localStorage.getItem(КЛЮЧ) === '1' } catch { return false }

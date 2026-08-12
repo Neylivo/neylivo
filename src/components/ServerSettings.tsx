@@ -42,7 +42,7 @@ const VERIF_LEVELS: { t: string; d: string }[] = [
   { t: 'Низкий', d: 'Писать может только тот, кто подтвердил свою почту.' },
   { t: 'Средний', d: 'Плюс к предыдущему: учётной записи должно быть больше 5 минут.' },
   { t: 'Высокий', d: 'Плюс к предыдущему: на этом сервере нужно пробыть больше 10 минут.' },
-  { t: 'Наивысший', d: 'Плюс к предыдущему: нужен подтверждённый номер телефона. Вход по телефону в Ponoi пока не настроен, поэтому такого номера нет ни у кого — эта ступень закроет письмо всем, у кого нет роли.' },
+  { t: 'Наивысший', d: 'Плюс к предыдущему: нужен подтверждённый номер телефона. Вход по телефону в NeyLivo пока не настроен, поэтому такого номера нет ни у кого — эта ступень закроет письмо всем, у кого нет роли.' },
 ]
 
 const BANNER_COLORS = ['', '#f23f9a', '#ed4245', '#f0813c', '#f2e75c', '#8547d6', '#0fa4f5', '#2ce0bf', '#5c8a2e', '#232428']
@@ -480,7 +480,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             </div>
             <div className="cset-div" />
             <label className="cset-lbl">Фоновый баннер сервера</label>
-            <div className="cset-hint" style={{ marginTop: 0 }}>Это изображение будет помещено над списком ваших каналов. Рекомендуемый минимальный размер составляет 960x540, рекомендуемое соотношение сторон — 16:9. В Ponoi это бесплатно.</div>
+            <div className="cset-hint" style={{ marginTop: 0 }}>Это изображение будет помещено над списком ваших каналов. Рекомендуемый минимальный размер составляет 960x540, рекомендуемое соотношение сторон — 16:9. В NeyLivo это бесплатно.</div>
             <div className="sset-upbox" style={st.banner_url ? { backgroundImage: `url(${st.banner_url})` } : undefined} onClick={() => bannerRef.current?.click()}>
               {!st.banner_url && <Icon name="image" size={26} />}
             </div>
@@ -488,7 +488,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <input ref={bannerRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, url => persistNow({ ...st, banner_url: url }))} />
             <div className="cset-div" />
             <label className="cset-lbl">Фон приглашения на сервер</label>
-            <div className="cset-hint" style={{ marginTop: 0 }}>Это изображение будет отображаться при просмотре вашего приглашения на сервер в браузере, а также на экране подтверждения приглашения и во время адаптации. Рекомендуемый минимальный размер составляет 1920x1080, рекомендуемое соотношение сторон — 16:9. В Ponoi это бесплатно.</div>
+            <div className="cset-hint" style={{ marginTop: 0 }}>Это изображение будет отображаться при просмотре вашего приглашения на сервер в браузере, а также на экране подтверждения приглашения и во время адаптации. Рекомендуемый минимальный размер составляет 1920x1080, рекомендуемое соотношение сторон — 16:9. В NeyLivo это бесплатно.</div>
             <div className="sset-upbox" style={st.invite_bg ? { backgroundImage: `url(${st.invite_bg})` } : undefined} onClick={() => invBgRef.current?.click()}>
               {!st.invite_bg && <Icon name="image" size={26} />}
             </div>
@@ -538,7 +538,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'tag' && <>
           <div className="cset-h">Тег сервера</div>
-          <div className="cset-hint" style={{ marginTop: -12 }}>Создайте тег, который будет отображаться рядом с именем участников вашего сервера (если они захотят, конечно)! Благодаря тегу сервера любой пользователь Ponoi сможет просматривать профиль вашего сервера — и даже подать заявку на вступление, если у вас включена эта опция. В Ponoi теги бесплатны для всех серверов.</div>
+          <div className="cset-hint" style={{ marginTop: -12 }}>Создайте тег, который будет отображаться рядом с именем участников вашего сервера (если они захотят, конечно)! Благодаря тегу сервера любой пользователь NeyLivo сможет просматривать профиль вашего сервера — и даже подать заявку на вступление, если у вас включена эта опция. В NeyLivo теги бесплатны для всех серверов.</div>
           <label className="cset-lbl">Выберите название</label>
           <div className="sset-tagname">
             <div className="sset-tagchip big" style={{ background: (st.tag?.color ?? '#5865f2') + '33', color: st.tag?.color ?? '#5865f2', fontFamily: tagFontFamily(st.tag) }}>
@@ -647,7 +647,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'emoji' && <>
           <div className="cset-h">Эмодзи</div>
-          <div className="cset-hint" style={{ marginTop: -12 }}>Добавьте пользовательские эмодзи для всех на этом сервере — появляются автоматически у каждого участника, как только он вступает (в пикере эмодзи и в тексте через :имя:). В Ponoi — без лимитов и подписок: любые эмодзи, в том числе анимированные, доступны всем.</div>
+          <div className="cset-hint" style={{ marginTop: -12 }}>Добавьте пользовательские эмодзи для всех на этом сервере — появляются автоматически у каждого участника, как только он вступает (в пикере эмодзи и в тексте через :имя:). В NeyLivo — без лимитов и подписок: любые эмодзи, в том числе анимированные, доступны всем.</div>
           <button className="modal-primary" style={{ marginTop: 14 }} onClick={() => emojiRef.current?.click()}>{busy ? '…' : 'Загрузить эмодзи'}</button>
           <input ref={emojiRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, async (url, f) => {
             try { await addServerEmoji(server.id, cleanName(f), url, uid) } catch (err: any) { toastErr(err.message ?? String(err)) }
@@ -666,7 +666,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
 
         {tab === 'stickers' && <>
           <div className="cset-h">Стикеры</div>
-          <div className="cset-hint" style={{ marginTop: -12 }}>Загружайте стикеры — появляются автоматически у каждого участника, как только он вступает (кнопка стикеров рядом с composer). В Ponoi нет уровней и слотов — стикеров может быть сколько угодно, бесплатно.</div>
+          <div className="cset-hint" style={{ marginTop: -12 }}>Загружайте стикеры — появляются автоматически у каждого участника, как только он вступает (кнопка стикеров рядом с composer). В NeyLivo нет уровней и слотов — стикеров может быть сколько угодно, бесплатно.</div>
           <button className="modal-primary" style={{ marginTop: 14 }} onClick={() => stkRef.current?.click()}>{busy ? '…' : 'Загрузить стикер'}</button>
           <input ref={stkRef} type="file" accept="image/*" hidden onChange={e => pickFile(e, async (url, f) => {
             try { await addSticker(server.id, cleanName(f), url, uid) } catch (err: any) { toastErr(err.message ?? String(err)) }
@@ -716,7 +716,7 @@ export function ServerSettings({ server, uid, onClose, onChanged, onDelete }: {
             <input className="modal-in" style={{ width: 240, margin: 0 }} placeholder="Поиск по имени пользователя" value={mq} onChange={e => setMq(e.target.value)} />
           </div>
           <table className="sset-table">
-            <thead><tr><th>Имя</th><th>В числе участников с</th><th>В Ponoi с</th><th>Способ вступления</th><th>Роли</th><th>Сигналы</th><th /></tr></thead>
+            <thead><tr><th>Имя</th><th>В числе участников с</th><th>В NeyLivo с</th><th>Способ вступления</th><th>Роли</th><th>Сигналы</th><th /></tr></thead>
             <tbody>
               {filtered.map(m => {
                 const mrs = (memberRoles[m.user_id] ?? (m.role_id ? [m.role_id] : [])).map(id => roles.find(r => r.id === id)).filter(Boolean) as ServerRole[]

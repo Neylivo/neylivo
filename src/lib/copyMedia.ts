@@ -3,7 +3,7 @@ import { публичный } from './attachUrl'
 
 // v1.91.0: копирование стало надёжным на всех платформах.
 // - В десктоп-приложении текст и картинки кладутся в СИСТЕМНЫЙ буфер через
-//   нативный мост Electron (ponoiDesktop.copyText/copyImage) — браузерный API
+//   нативный мост Electron (neylivoDesktop.copyText/copyImage) — браузерный API
 //   в Electron мог молча отказывать («document is not focused», file://).
 // - В Safari/iOS (PWA) в ClipboardItem передаётся ПРОМИС блоба: запись
 //   стартует в тот же клик, иначе Safari считает жест «протухшим» и молча
@@ -14,7 +14,7 @@ type DesktopBridge = {
   copyText?: (t: string) => Promise<boolean>
   copyImage?: (dataUrl: string) => Promise<boolean>
 }
-const desktop = (): DesktopBridge | null => (window as any).ponoiDesktop ?? null
+const desktop = (): DesktopBridge | null => (window as any).neylivoDesktop ?? null
 
 // Универсальное копирование текста с фолбэками. Тосты показывает сам.
 export async function copyText(text: string, okMsg = 'Скопировано'): Promise<boolean> {

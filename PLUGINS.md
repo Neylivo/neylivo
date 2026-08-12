@@ -1,6 +1,8 @@
-# Плагины Ponoi
+# Плагины NeyLivo
 
-Плагин — это один файл `.ponoi` (обычный JavaScript). Его можно поставить у себя
+Плагин — это один файл `.neylivo` (обычный JavaScript; файлы со старым
+расширением `.neylivo` тоже принимаются — переименование продукта не должно
+ломать уже написанные плагины). Его можно поставить у себя
 (Настройки → Плагины → «Установить из файла») и отправить другу прямо в чат: файл
 покажется карточкой с названием, автором и списком разрешений и кнопкой «Установить».
 
@@ -16,7 +18,7 @@
 - подгрузить посторонний код мимо файла, который человек видел перед установкой.
 
 Это не проверки, которые можно обойти хитрым кодом, — это ограничения браузера.
-Всё, что плагину доступно, он получает через объект `ponoi`, и каждый вызов
+Всё, что плагину доступно, он получает через объект `neylivo`, и каждый вызов
 сверяется с тем, что заявлено в `@permissions`.
 
 Оставшийся риск честно называется: плагин **может** делать то, на что ты согласился
@@ -36,16 +38,16 @@
  * @hosts api.example.com
  */
 
-function onLoad(ponoi) {
-  ponoi.css('.msg { border-left: 2px solid hotpink }')
+function onLoad(neylivo) {
+  neylivo.css('.msg { border-left: 2px solid hotpink }')
 
-  ponoi.ui.addComposerButton({
+  neylivo.ui.addComposerButton({
     key: 'wave', icon: 'flame', tooltip: 'Помахать',
-    onClick: () => ponoi.messages.send('о/'),
+    onClick: () => neylivo.messages.send('о/'),
   })
 
-  ponoi.commands.register('привет', 'Поздороваться', args =>
-    ponoi.messages.send('Привет, ' + (args || 'мир') + '!'))
+  neylivo.commands.register('привет', 'Поздороваться', args =>
+    neylivo.messages.send('Привет, ' + (args || 'мир') + '!'))
 }
 ```
 
@@ -75,40 +77,40 @@ function onLoad(ponoi) {
 `ui.addMessageAction` требует ещё и `messages.read` — обработчик получает текст
 сообщения, и это должно быть видно в списке разрешений честно.
 
-## Что умеет объект `ponoi`
+## Что умеет объект `neylivo`
 
 ```js
-ponoi.css(текст)
+neylivo.css(текст)
 
-ponoi.ui.addComposerButton({ key, icon, tooltip, onClick })
-ponoi.ui.addMessageAction({ key, icon, label, onClick })   // onClick({id, author, content})
-ponoi.ui.addSettingsPage({ title, rows: [
+neylivo.ui.addComposerButton({ key, icon, tooltip, onClick })
+neylivo.ui.addMessageAction({ key, icon, label, onClick })   // onClick({id, author, content})
+neylivo.ui.addSettingsPage({ title, rows: [
   { type: 'toggle', key, label, description, value },
   { type: 'text',   key, label, value, placeholder },
   { type: 'select', key, label, value, options: [{ value, label }] },
   { type: 'button', key, label, onClick },
 ]})
 
-ponoi.ui.addPanel({ slot, title, rows })            // slot: chat | player | library | sidebar
-ponoi.ui.addHotkey({ combo, description, onPress }) // combo: Ctrl/Alt + ещё модификатор + клавиша
-ponoi.ui.confirm({ title, text, ok }) / .prompt({ title, placeholder })
+neylivo.ui.addPanel({ slot, title, rows })            // slot: chat | player | library | sidebar
+neylivo.ui.addHotkey({ combo, description, onPress }) // combo: Ctrl/Alt + ещё модификатор + клавиша
+neylivo.ui.confirm({ title, text, ok }) / .prompt({ title, placeholder })
 
-ponoi.commands.register(имя, описание, обработчик)   // обработчик(строка-аргументов)
-ponoi.messages.send(текст)
-ponoi.messages.recent(n) / .react(id, эмодзи) / .remove(id)   // открытый чат
-ponoi.storage.get(ключ) / .set(ключ, значение) / .remove(ключ) / .keys() / .clear()
-ponoi.net.fetch(url, { method, headers, body })      // -> { ok, status, body }
-ponoi.net.json(url, init)                            // -> { ok, status, data }
-ponoi.me() / ponoi.channel() / ponoi.servers() / ponoi.channels(serverId)
-ponoi.open({ serverId, channelId } | { dmId } | { userId, userName })
-ponoi.status.get() / .set(текст)
-ponoi.notify(текст) / ponoi.sound.play('message' | 'chime')
-ponoi.clipboard.write(текст)
-ponoi.voice.list() / .current() / .setEffect(id)
-ponoi.music.now() / .library() / .play() / .pause() / .next() / .prev() / .queue(id) / .add(url)
-ponoi.log(...) / ponoi.warn(...) / ponoi.error(...)   // журнал плагина в настройках
-ponoi.on('message', m => ...)                         // новое сообщение в открытом канале
-ponoi.on('settings', s => ...)                        // человек изменил настройку плагина
+neylivo.commands.register(имя, описание, обработчик)   // обработчик(строка-аргументов)
+neylivo.messages.send(текст)
+neylivo.messages.recent(n) / .react(id, эмодзи) / .remove(id)   // открытый чат
+neylivo.storage.get(ключ) / .set(ключ, значение) / .remove(ключ) / .keys() / .clear()
+neylivo.net.fetch(url, { method, headers, body })      // -> { ok, status, body }
+neylivo.net.json(url, init)                            // -> { ok, status, data }
+neylivo.me() / neylivo.channel() / neylivo.servers() / neylivo.channels(serverId)
+neylivo.open({ serverId, channelId } | { dmId } | { userId, userName })
+neylivo.status.get() / .set(текст)
+neylivo.notify(текст) / neylivo.sound.play('message' | 'chime')
+neylivo.clipboard.write(текст)
+neylivo.voice.list() / .current() / .setEffect(id)
+neylivo.music.now() / .library() / .play() / .pause() / .next() / .prev() / .queue(id) / .add(url)
+neylivo.log(...) / neylivo.warn(...) / neylivo.error(...)   // журнал плагина в настройках
+neylivo.on('message', m => ...)                         // новое сообщение в открытом канале
+neylivo.on('settings', s => ...)                        // человек изменил настройку плагина
 ```
 
 Строки панели и страницы настроек: `toggle`, `text`, `select`, `button`, `label`,

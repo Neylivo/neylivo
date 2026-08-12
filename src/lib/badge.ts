@@ -5,7 +5,7 @@ import { getSettings } from './settings'
 // Считаем новые ЛИЧНЫЕ сообщения и @упоминания на серверах. Счётчики по источникам
 // («dm:<threadId>» / «srv:<serverId>») — кружок гаснет по мере прочтения источников.
 // Куда рисуем: Windows-десктоп — overlay-иконка на панели задач (через IPC в main-процесс),
-// PWA/веб — системный Badging API + число в заголовке вкладки «(3) Ponoi».
+// PWA/веб — системный Badging API + число в заголовке вкладки «(3) NeyLivo».
 //
 // v1.203.0: у заглушенных ЛС и обычных (не-упоминание) сообщений на сервере раньше
 // не было вообще никакого следа на иконке — только полноценный красный кружок с
@@ -139,7 +139,7 @@ function drawDot(scale = 1): string {
 // иначе бандловую /icon.png) и кладём поверх неё тот же красный кружок с числом.
 let trayBaseCache: { src: string; img: HTMLImageElement } | null = null
 async function loadTrayBase(): Promise<HTMLImageElement> {
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   const src = (await d?.getTrayIconBase?.()) || '/icon.png'
   if (trayBaseCache && trayBaseCache.src === src) return trayBaseCache.img
   const img = new Image()
@@ -186,7 +186,7 @@ let trayGen = 0
 
 async function playPop(n: number, soft: boolean) {
   const gen = ++animGen
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   if (!d?.setBadge && !d?.setTrayIcon) return
   for (const scale of POP_FRAMES) {
     if (gen !== animGen) return   // догнало более новое изменение — не мешаем ему кадрами похуже
@@ -214,8 +214,8 @@ function apply() {
   const signal = n * 2 + (soft ? 1 : 0)
   const grew = signal > prevSignal
   prevSignal = signal
-  // Заголовок вкладки (веб): «(3) Ponoi». Тихая точка число не показывает.
-  try { document.title = n > 0 ? '(' + (n > 99 ? '99+' : n) + ') Ponoi' : 'Ponoi' } catch {}
+  // Заголовок вкладки (веб): «(3) NeyLivo». Тихая точка число не показывает.
+  try { document.title = n > 0 ? '(' + (n > 99 ? '99+' : n) + ') NeyLivo' : 'NeyLivo' } catch {}
   // Системный бейдж PWA (телефоны/установленный веб) — Badging API. Вызов без
   // аргумента показывает просто точку без числа (часть спецификации Badging API) —
   // ровно то, что нужно для «тихого» состояния. Своей анимации у Badging API нет —
@@ -230,7 +230,7 @@ function apply() {
   } catch {}
   // Windows-десктоп: overlay-иконка на панели задач + иконка в трее (пока окно там).
   try {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (n === 0 && !soft) {
       // Снятие (зашли в чат/сервер) — сразу гасим, без анимации.
       animGen++   // отменяем недоигранный «взрыв», если он ещё шёл

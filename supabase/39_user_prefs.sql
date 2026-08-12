@@ -14,7 +14,7 @@ create table if not exists user_prefs (
   ch_read jsonb not null default '{}'::jsonb,        -- {channelId: ms} — последнее прочитанное в канале
   dm_read jsonb not null default '{}'::jsonb,        -- {threadId: ms} — последнее прочитанное в ЛС
   gif_favs jsonb not null default '[]'::jsonb,       -- избранные GIF
-  mus_playlists jsonb not null default '[]'::jsonb,  -- плейлисты в «Ponoi Music»
+  mus_playlists jsonb not null default '[]'::jsonb,  -- плейлисты в «NeyLivo Music»
   account jsonb not null default '{}'::jsonb,        -- account-level часть настроек (уведомления, ЛС, сбор данных)
   updated_at timestamptz not null default now()
 );

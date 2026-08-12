@@ -8,7 +8,7 @@
 // web-push to each, and prunes subscriptions that come back 404/410 (gone).
 //
 // Security: this used to trust userIds/title/body from the caller with no checks
-// at all — any logged-in user could push a spoofed native notification ("Ponoi:
+// at all — any logged-in user could push a spoofed native notification ("NeyLivo:
 // reset your password") to ANY other user. Now the caller must be authenticated,
 // and each target is dropped unless the caller actually shares context with them
 // (DM thread, accepted friendship, or a common server) — matching the three real
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       .in('user_id', allowed)
     if (error) throw error
 
-    const payload = JSON.stringify({ title: title ?? 'Ponoi', body: body ?? '', url: url ?? '/' })
+    const payload = JSON.stringify({ title: title ?? 'NeyLivo', body: body ?? '', url: url ?? '/' })
     let sent = 0
     const gone: string[] = []
     await Promise.all((subs ?? []).map(async (s: any) => {

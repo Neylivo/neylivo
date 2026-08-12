@@ -57,7 +57,7 @@ export interface NewGrant {
   pluginId: string
   pluginName: string
   pluginVersion: string
-  /** Сам .ponoi-файл. */
+  /** Сам файл плагина (.neylivo). */
   payload: string
   /** Кому именно. null — любому, у кого есть код. */
   toUser?: string | null

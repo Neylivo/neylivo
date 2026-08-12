@@ -32,10 +32,10 @@ function authErrText(e: any): string {
   if (status === 522 || status === 523 || status === 524 || /\b52[234]\b/.test(raw) ||
       low.includes('failed to fetch') || low.includes('networkerror') || low.includes('load failed') ||
       (low.includes('unexpected token') && low.includes('<')))
-    return 'Сервер Ponoi сейчас недоступен (перегрузка/сбой базы данных). Это не связано с твоим аккаунтом — подожди немного и попробуй снова.'
+    return 'Сервер NeyLivo сейчас недоступен (перегрузка/сбой базы данных). Это не связано с твоим аккаунтом — подожди немного и попробуй снова.'
   if (low.includes('error sending') || low.includes('confirmation email') || low.includes('smtp') ||
       low.includes('rate limit') || low.includes('over_email_send_rate'))
-    return 'Не удалось отправить письмо с кодом — почтовый сервис Ponoi сейчас не настроен или исчерпал лимит. Сообщи владельцу, он подтвердит аккаунт вручную.'
+    return 'Не удалось отправить письмо с кодом — почтовый сервис NeyLivo сейчас не настроен или исчерпал лимит. Сообщи владельцу, он подтвердит аккаунт вручную.'
   if (!raw || raw === '()' || raw === '{}' || low === 'error' || low === '[object object]')
     return 'Что-то пошло не так при обращении к серверу. Попробуй ещё раз через минуту.'
   if (low.includes('invalid login credentials')) return 'Неверная почта/юзернейм или пароль'
@@ -362,7 +362,7 @@ export function AuthScreen() {
             Почту можно привязать позже в настройках, тогда появится и восстановление.
           </div>
         </>}
-        {reg && <div className="auth2-legal">Регистрируясь, ты соглашаешься с Условиями использования и Политикой конфиденциальности Ponoi.</div>}
+        {reg && <div className="auth2-legal">Регистрируясь, ты соглашаешься с Условиями использования и Политикой конфиденциальности NeyLivo.</div>}
       </form>
     </div>
   )

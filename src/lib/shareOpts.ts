@@ -84,11 +84,13 @@ export interface ShareSource { id: string; name: string; kind: 'screen' | 'windo
 /**
  * Порядок источников в списке: сначала экраны, потом окна по алфавиту.
  *
- * Своё же окно Ponoi из списка убираем: показывать демонстрацию внутри
+ * Своё же окно NeyLivo из списка убираем: показывать демонстрацию внутри
  * демонстрации — это бесконечный коридор, и человек выбирает его по ошибке
  * чаще, чем можно подумать.
  */
-export function orderSources(list: ShareSource[], selfTitleRe = /ponoi/i): ShareSource[] {
+// v1.558.0: узнаём и новое имя, и старое. На машине человека может быть
+// открыто окно ещё не обновившейся версии — его тоже незачем предлагать.
+export function orderSources(list: ShareSource[], selfTitleRe = /neylivo|ponoi/i): ShareSource[] {
   const clean = (list ?? []).filter(s => s && s.id && !(s.kind === 'window' && selfTitleRe.test(s.name || '')))
   const screens = clean.filter(s => s.kind === 'screen')
   const windows = clean.filter(s => s.kind === 'window')

@@ -186,7 +186,7 @@ export function CampaignModal({ game, isMe, steamId, appId, shared, onClose }: {
           </div>
 
           {/* Спросить ИИ — вопрос уходит вместе с местом прохождения. Сам ответ
-              даёт плагин с ИИ-моделью (ponoi.net.stream): своей модели в
+              даёт плагин с ИИ-моделью (neylivo.net.stream): своей модели в
               приложении нет, и делать вид, что есть, нельзя. */}
           <div className="cmp-ask">
             <label className="modal-lbl">Спросить про это место</label>

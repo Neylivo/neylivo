@@ -193,7 +193,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = (d.id || 'plugin') + '.ponoi'
+    a.download = (d.id || 'plugin') + '.neylivo'
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 5000)
   }
@@ -382,9 +382,9 @@ export function PluginEditor({ editId, onClose, onSaved }: {
             toastOk('Убрал лишнее вокруг кода — оставил сам файл')
           }}
           onChange={e => set('body', e.target.value)}
-          placeholder="function onLoad(ponoi) { … }" />
+          placeholder="function onLoad(neylivo) { … }" />
         <div className="cset-hint" style={{ marginTop: 4 }}>
-          Функция <code>onLoad</code> получает объект <code>ponoi</code> — через него плагин и работает.
+          Функция <code>onLoad</code> получает объект <code>neylivo</code> — через него плагин и работает.
           Полный список того, что он умеет, — в справке «?» рядом с заголовком раздела.
         </div>
         </>}
@@ -446,7 +446,7 @@ export function PluginEditor({ editId, onClose, onSaved }: {
         )}
 
         <div className="modal-foot ped-foot">
-          <button className="modal-ghost" onClick={download} title="Сохранить как .ponoi-файл">
+          <button className="modal-ghost" onClick={download} title="Сохранить как .neylivo-файл">
             <Icon name="download" size={15} /> Файл
           </button>
           {mode === 'code' && (

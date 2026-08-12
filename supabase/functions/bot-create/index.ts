@@ -1,6 +1,6 @@
 // Supabase Edge Function: bot-create — регистрирует новое бот-приложение.
 // Деплой:  supabase functions deploy bot-create   (--verify-jwt по умолчанию —
-//          вызывающий должен быть настоящим залогиненным пользователем Ponoi).
+//          вызывающий должен быть настоящим залогиненным пользователем NeyLivo).
 // Секреты: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY/SUPABASE_ANON_KEY — платформенные.
 //
 // Body: { name: string }
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Кто вызывает — обычная сессия Ponoi (владелец будущего бота).
+    // Кто вызывает — обычная сессия NeyLivo (владелец будущего бота).
     const userClient = createClient(url, anon, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'unauthorized' }, 401)

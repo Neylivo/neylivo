@@ -23,10 +23,7 @@
         <!-- v1.444.0: постоянная служба, пока играет музыка. Без неё Android при
              нехватке памяти вправе прибрать процесс, и музыка обрывалась на
              полуслове. Тип обязателен с Android 10 и строго проверяется с 14. -->
-        <service
-            android:name=".MusicService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+        <service android:name=".MusicService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

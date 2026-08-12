@@ -1,7 +1,7 @@
 // v1.498.0: сцена как ДАННЫЕ, а не как код.
 //
 // Владелец: «сделай мастерскую именно удобно, не рандомные кубики туда-сюда без
-// объяснения, буквально Unity в Ponoi».
+// объяснения, буквально Unity в NeyLivo».
 //
 // Что было не так в v1.497.0. Была заготовка «3D-игра» — сорок кубов, брошенных
 // случайно, и текстовый редактор рядом. Чтобы поставить свой куб, надо было
@@ -23,7 +23,7 @@ export type NodeKind = 'box' | 'sphere' | 'plane' | 'cylinder' | 'light' | 'empt
 /**
  * Готовая модель, положенная в проект (v1.555.0).
  *
- * ЛЕЖИТ В САМОМ ПРОЕКТЕ, а не в файлах устройства (ponoi.assets). Решение
+ * ЛЕЖИТ В САМОМ ПРОЕКТЕ, а не в файлах устройства (neylivo.assets). Решение
  * осознанное: приложение из мастерской сохраняется ОДНИМ файлом и этим же
  * файлом уезжает другому человеку. Модель, оставленная в хранилище устройства,
  * до него бы не доехала — он открыл бы игру без единой модели и решил, что она
@@ -296,8 +296,8 @@ export function readScene(raw: unknown): Scene {
  */
 export const SCENE_RUNTIME = String.raw`
 async function запустиСцену(данные, режим) {
-  const THREE = await ponoi.lib('three')
-  const холст = ponoi.canvas()
+  const THREE = await neylivo.lib('three')
+  const холст = neylivo.canvas()
   const рендер = new THREE.WebGLRenderer({ canvas: холст, antialias: true })
   рендер.shadowMap.enabled = !!данные.shadows
 
@@ -443,10 +443,12 @@ async function запустиСцену(данные, режим) {
     for (const n of данные.nodes) {
       if (!n.script || !n.script.trim()) continue
       try {
-        const делай = new Function('это', 'сцена', 'THREE', 'ponoi',
+        // Оба имени, как в загрузчике плагинов: скрипт объекта пишут той же
+        // рукой, что и плагин, и он вправе звать и neylivo, и ponoi.
+        const делай = new Function('это', 'сцена', 'THREE', 'neylivo', 'ponoi',
           '"use strict";' + n.script + '\n;return { onStart: typeof onStart === "function" ? onStart : null,'
           + ' onFrame: typeof onFrame === "function" ? onFrame : null }')
-        const ч = делай(поId[n.id], сцена, THREE, ponoi)
+        const ч = делай(поId[n.id], сцена, THREE, ponoi, ponoi)
         if (ч.onStart) ч.onStart()
         if (ч.onFrame) скрипты.push({ имя: n.name, fn: ч.onFrame })
       } catch (e) {
@@ -585,9 +587,9 @@ async function запустиСцену(данные, режим) {
     addEventListener('keydown', e => { клавиши[e.code] = true })
     addEventListener('keyup', e => { клавиши[e.code] = false })
     let рыскание = 0, тангаж = 0
-    холст.addEventListener('click', () => ponoi.cursor.lock(холст))
+    холст.addEventListener('click', () => neylivo.cursor.lock(холст))
     addEventListener('pointermove', e => {
-      if (!ponoi.cursor.locked()) return
+      if (!neylivo.cursor.locked()) return
       рыскание -= e.movementX * 0.0022
       тангаж = Math.max(-1.3, Math.min(1.3, тангаж - e.movementY * 0.0022))
     })
@@ -621,7 +623,7 @@ async function запустиСцену(данные, режим) {
     if (m.k === 'выбрать') подсветить(m.id)
   })
 
-  ponoi.frame(dt => {
+  neylivo.frame(dt => {
     if (режим === 'редактор') {
       камера.position.set(
         центр.x + Math.cos(орбита.угол) * Math.cos(орбита.высота) * орбита.дальность,

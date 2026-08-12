@@ -23,7 +23,7 @@
 // там нечего проверять числами, а это — можно (npm run test:ui).
 
 /** Метка версии в начале кода: по ней отличается наш QR от чужого. */
-export const QR_PREFIX = 'PONOI1'
+export const QR_PREFIX = 'NEYLIVO1'
 
 /** Сколько живёт заявка. Столько же стоит в 109_qr_login.sql. */
 export const QR_TTL_MS = 2 * 60 * 1000
@@ -145,12 +145,12 @@ export function qrDeviceLabel(сырое: string): string {
 /** Что за устройство просит вход — для подписи на телефоне. */
 export function qrMyDeviceLabel(): string {
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  const десктоп = typeof window !== 'undefined' && !!(window as unknown as { ponoiDesktop?: unknown }).ponoiDesktop
+  const десктоп = typeof window !== 'undefined' && !!(window as unknown as { neylivoDesktop?: unknown }).neylivoDesktop
   const система = /Windows/i.test(ua) ? 'Windows'
     : /Mac OS X|Macintosh/i.test(ua) ? 'macOS'
       : /Android/i.test(ua) ? 'Android'
         : /Linux/i.test(ua) ? 'Linux' : 'Неизвестная система'
-  return система + ' · ' + (десктоп ? 'приложение Ponoi' : 'браузер')
+  return система + ' · ' + (десктоп ? 'приложение NeyLivo' : 'браузер')
 }
 
 /** Сессия, которую телефон передаёт компьютеру. Больше в шифротекст не кладём. */

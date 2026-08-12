@@ -205,7 +205,7 @@ check('из распознанного собирается LRC с меткам�
 })
 check('в тексте есть честная подпись, откуда он', () => {
   const lrc = chunksToLrc(chunks, 200) ?? ''
-  return /Ponoi/.test(lrc) && /на слух/.test(lrc)
+  return /NeyLivo/.test(lrc) && /на слух/.test(lrc)
 })
 check('пустое и мусорное не попадает в текст', () => {
   const lrc = chunksToLrc([...chunks, { start: 30, end: 31, text: '(музыка)' }, { start: 40, end: 41, text: '  ' }], 200) ?? ''

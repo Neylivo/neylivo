@@ -61,7 +61,7 @@ app.whenReady().then(async () => {
       if (!c) return
       const qr = require(${JSON.stringify('qrcode-generator')})
       const т = qr(0, 'M')
-      т.addData('PONOI1:' + 'A'.repeat(26) + ':' + 'B'.repeat(104), 'Alphanumeric')
+      т.addData('NEYLIVO1:' + 'A'.repeat(26) + ':' + 'B'.repeat(104), 'Alphanumeric')
       т.make()
       const n = т.getModuleCount(), поле = 4
       const пиксель = Math.max(2, Math.floor(240 / (n + поле * 2)))

@@ -34,9 +34,9 @@ export const TEMPLATES: Template[] = [
     key: 'command', label: 'Своя команда', emoji: '⌨️',
     hint: 'Команда в чате, которая что-то отправляет',
     permissions: ['commands', 'messages.write'],
-    body: `function onLoad(ponoi) {
-  ponoi.commands.register('привет', 'Поздороваться', async (arg) => {
-    await ponoi.messages.send('Привет' + (arg ? ', ' + arg : '') + '!')
+    body: `function onLoad(neylivo) {
+  neylivo.commands.register('привет', 'Поздороваться', async (arg) => {
+    await neylivo.messages.send('Привет' + (arg ? ', ' + arg : '') + '!')
   })
 }`,
   },
@@ -44,8 +44,8 @@ export const TEMPLATES: Template[] = [
     key: 'style', label: 'Оформление', emoji: '🎨',
     hint: 'Свои цвета и стили поверх приложения',
     permissions: ['css'],
-    body: `function onLoad(ponoi) {
-  ponoi.css([
+    body: `function onLoad(neylivo) {
+  neylivo.css([
     '.msg:hover { background: rgba(88,101,242,.10) !important; }',
     '.ch.on { border-left: 3px solid var(--brand); }',
   ].join('\\n'))
@@ -55,10 +55,10 @@ export const TEMPLATES: Template[] = [
     key: 'listen', label: 'Реакция на сообщения', emoji: '👂',
     hint: 'Что-то делать, когда пришло новое сообщение',
     permissions: ['messages.read', 'notify'],
-    body: `function onLoad(ponoi) {
-  ponoi.on('message', (msg) => {
+    body: `function onLoad(neylivo) {
+  neylivo.on('message', (msg) => {
     // msg: id, author, authorName, content, mine, mentionsMe
-    if (msg.mentionsMe) ponoi.notify('Тебя упомянул ' + msg.authorName)
+    if (msg.mentionsMe) neylivo.notify('Тебя упомянул ' + msg.authorName)
   })
 }`,
   },
@@ -66,15 +66,15 @@ export const TEMPLATES: Template[] = [
     key: 'settings', label: 'Со своими настройками', emoji: '⚙️',
     hint: 'Страница настроек с переключателями',
     permissions: ['settings', 'storage', 'notify'],
-    body: `function onLoad(ponoi) {
-  ponoi.ui.addSettingsPage({
+    body: `function onLoad(neylivo) {
+  neylivo.ui.addSettingsPage({
     title: 'Мой плагин',
     rows: [
       { type: 'toggle', key: 'on', label: 'Включено', description: 'Пример переключателя', value: true },
       { type: 'text', key: 'text', label: 'Текст', placeholder: 'что-нибудь' },
     ],
   })
-  ponoi.on('settings', (e) => ponoi.notify('Поменяли: ' + e.key))
+  neylivo.on('settings', (e) => neylivo.notify('Поменяли: ' + e.key))
 }`,
   },
   {
@@ -83,32 +83,32 @@ export const TEMPLATES: Template[] = [
     key: 'panel', label: 'Свой уголок в чате', emoji: '🧩',
     hint: 'Панель над полем ввода — со своими строками',
     permissions: ['panel', 'music'],
-    body: `function onLoad(ponoi) {
+    body: `function onLoad(neylivo) {
   async function draw() {
-    const now = await ponoi.music.now()
+    const now = await neylivo.music.now()
     // Панель обновляется повторным описанием — так делается всё живое.
-    ponoi.ui.addPanel({
+    neylivo.ui.addPanel({
       slot: 'chat',                       // chat | player | library | sidebar
       title: 'Что играет',
       rows: [
         { type: 'label', key: 'now', label: 'Сейчас', value: now ? now.title : 'плеер закрыт' },
         { type: 'button', key: 'next', label: 'Следующий', onClick: async () => {
-          await ponoi.music.next()
+          await neylivo.music.next()
           draw()
         } },
       ],
     })
   }
   draw()
-  ponoi.on('music', draw)
+  neylivo.on('music', draw)
 }`,
   },
   {
     key: 'empty', label: 'С нуля', emoji: '📄',
     hint: 'Пустая заготовка',
     permissions: [],
-    body: `function onLoad(ponoi) {
-  ponoi.log('плагин загрузился')
+    body: `function onLoad(neylivo) {
+  neylivo.log('плагин загрузился')
 }`,
   },
 ]
@@ -216,7 +216,7 @@ export function draftFromTemplate(t: Template): Draft {
 // ── Какие разрешения нужны этому коду ─────────────────────────────────────
 //
 // v1.346.0. Самая частая беда при написании плагина руками: код зовёт
-// ponoi.notify, а в @permissions разрешения нет — и плагин падает уже у
+// neylivo.notify, а в @permissions разрешения нет — и плагин падает уже у
 // человека, красной строкой на карточке. Формально ошибка понятная, но доходить
 // до неё не должен никто: по коду прекрасно видно, что он собирается делать.
 //
@@ -224,84 +224,88 @@ export function draftFromTemplate(t: Template): Draft {
 // быть написан как угодно, а нам достаточно не пропустить очевидное. Ошибка в
 // сторону «попросили лишнего» безопаснее: лишнее разрешение человек снимет
 // сам, а недостающее сломает плагин.
+// v1.558.0: определитель узнаёт ОБА имени объекта — и новое neylivo, и старое
+// ponoi. Иначе после переименования каждый уже написанный плагин выглядел бы
+// так, будто просит разрешения, которыми не пользуется, — и получал бы красную
+// строку на карточке ни за что.
 const NEEDS: { re: RegExp; perms: Permission[]; what: string }[] = [
-  { re: /\bponoi\s*\.\s*css\s*\(/,                          perms: ['css'],                       what: 'ponoi.css' },
-  { re: /\bponoi\s*\.\s*notify\s*\(/,                       perms: ['notify'],                    what: 'ponoi.notify' },
-  { re: /\bponoi\s*\.\s*commands\s*\.\s*register\s*\(/,     perms: ['commands'],                  what: 'ponoi.commands.register' },
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*send\s*\(/,         perms: ['messages.write'],            what: 'ponoi.messages.send' },
-  { re: /\bponoi\s*\.\s*storage\s*\./,                       perms: ['storage'],                   what: 'ponoi.storage' },
-  { re: /\bponoi\s*\.\s*net\s*\.\s*fetch\s*\(/,             perms: ['net'],                       what: 'ponoi.net.fetch' },
-  { re: /\bponoi\s*\.\s*voice\s*\./,                         perms: ['voice'],                     what: 'ponoi.voice' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addSettingsPage\s*\(/,     perms: ['settings'],                  what: 'ponoi.ui.addSettingsPage' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addComposerButton\s*\(/,   perms: ['ui'],                        what: 'ponoi.ui.addComposerButton' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*css\s*\(/,                          perms: ['css'],                       what: 'neylivo.css' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*notify\s*\(/,                       perms: ['notify'],                    what: 'neylivo.notify' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*commands\s*\.\s*register\s*\(/,     perms: ['commands'],                  what: 'neylivo.commands.register' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*send\s*\(/,         perms: ['messages.write'],            what: 'neylivo.messages.send' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*storage\s*\./,                       perms: ['storage'],                   what: 'neylivo.storage' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*net\s*\.\s*fetch\s*\(/,             perms: ['net'],                       what: 'neylivo.net.fetch' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*voice\s*\./,                         perms: ['voice'],                     what: 'neylivo.voice' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addSettingsPage\s*\(/,     perms: ['settings'],                  what: 'neylivo.ui.addSettingsPage' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addComposerButton\s*\(/,   perms: ['ui'],                        what: 'neylivo.ui.addComposerButton' },
   // Действие над сообщением получает само сообщение — поэтому и чтение тоже.
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addMessageAction\s*\(/,    perms: ['ui', 'messages.read'],       what: 'ponoi.ui.addMessageAction' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]message['"`]/,         perms: ['messages.read'],             what: "ponoi.on('message')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addMessageAction\s*\(/,    perms: ['ui', 'messages.read'],       what: 'neylivo.ui.addMessageAction' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]message['"`]/,         perms: ['messages.read'],             what: "neylivo.on('message')" },
   // v1.419.0. Половины списка здесь не было с самого появления определителя:
   // панель, музыка, буфер обмена и обстановка звались из плагина, а
   // конструктор молчал — то есть человек узнавал о недостающем разрешении
   // единственным способом, от которого этот определитель и должен был спасти:
   // красной строкой на карточке уже установленного плагина.
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addPanel\s*\(/,            perms: ['panel'],                     what: 'ponoi.ui.addPanel' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addHotkey\s*\(/,           perms: ['ui'],                        what: 'ponoi.ui.addHotkey' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*(confirm|prompt)\s*\(/,    perms: ['ui'],                        what: 'ponoi.ui.confirm/prompt' },
-  { re: /\bponoi\s*\.\s*clipboard\s*\./,                      perms: ['ui'],                        what: 'ponoi.clipboard' },
-  { re: /\bponoi\s*\.\s*music\s*\./,                          perms: ['music'],                     what: 'ponoi.music' },
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*recent\s*\(/,        perms: ['messages.read'],             what: 'ponoi.messages.recent' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addPanel\s*\(/,            perms: ['panel'],                     what: 'neylivo.ui.addPanel' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addHotkey\s*\(/,           perms: ['ui'],                        what: 'neylivo.ui.addHotkey' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*(confirm|prompt)\s*\(/,    perms: ['ui'],                        what: 'neylivo.ui.confirm/prompt' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*clipboard\s*\./,                      perms: ['ui'],                        what: 'neylivo.clipboard' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*music\s*\./,                          perms: ['music'],                     what: 'neylivo.music' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*recent\s*\(/,        perms: ['messages.read'],             what: 'neylivo.messages.recent' },
   // v1.477.0: «прочитал ли собеседник» — это про открытый разговор, и
   // разрешение то же, что на чтение сообщений.
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*readState\s*\(/,     perms: ['messages.read'],             what: 'ponoi.messages.readState' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*readState\s*\(/,     perms: ['messages.read'],             what: 'neylivo.messages.readState' },
   // v1.481.0: любой канал.
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*(in|channels)\s*\(/, perms: ['messages.any'],              what: 'ponoi.messages.in/channels' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['\"`]read['\"`]/,          perms: ['messages.read'],             what: "ponoi.on('read')" },
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*(react|remove)\s*\(/, perms: ['messages.write'],            what: 'ponoi.messages.react/remove' },
-  { re: /\bponoi\s*\.\s*(me|channel|servers|channels)\s*\(/,  perms: ['context'],                   what: 'ponoi.me/channel/servers/channels' },
-  { re: /\bponoi\s*\.\s*open\s*\(/,                           perms: ['navigate'],                  what: 'ponoi.open' },
-  { re: /\bponoi\s*\.\s*status\s*\./,                         perms: ['status'],                    what: 'ponoi.status' },
-  { re: /\bponoi\s*\.\s*sound\s*\.\s*play\s*\(/,             perms: ['notify'],                    what: 'ponoi.sound.play' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*(in|channels)\s*\(/, perms: ['messages.any'],              what: 'neylivo.messages.in/channels' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['\"`]read['\"`]/,          perms: ['messages.read'],             what: "neylivo.on('read')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*(react|remove)\s*\(/, perms: ['messages.write'],            what: 'neylivo.messages.react/remove' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*(me|channel|servers|channels)\s*\(/,  perms: ['context'],                   what: 'neylivo.me/channel/servers/channels' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*open\s*\(/,                           perms: ['navigate'],                  what: 'neylivo.open' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*status\s*\./,                         perms: ['status'],                    what: 'neylivo.status' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*sound\s*\.\s*play\s*\(/,             perms: ['notify'],                    what: 'neylivo.sound.play' },
   // Событий с разрешением messages.read несколько, и подписка на любое из них
   // требует того же самого — перечислять их поимённо здесь значит однажды
   // забыть новое (см. таблицу PLUGIN_EVENTS в types.ts).
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](message\.edit|message\.delete|reaction|typing)['"`]/, perms: ['messages.read'], what: 'подписка на события переписки' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`](channel|voice)['"`]/, perms: ['context'],                   what: "ponoi.on('channel'/'voice')" },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]music['"`]/,           perms: ['music'],                     what: "ponoi.on('music')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`](message\.edit|message\.delete|reaction|typing)['"`]/, perms: ['messages.read'], what: 'подписка на события переписки' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`](channel|voice)['"`]/, perms: ['context'],                   what: "neylivo.on('channel'/'voice')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]music['"`]/,           perms: ['music'],                     what: "neylivo.on('music')" },
   // v1.465.0: семь новых возможностей. Каждая обязана быть здесь, иначе человек
   // узнаёт о недостающем разрешении единственным способом, от которого этот
   // определитель и должен спасать, — красной строкой на уже поставленном плагине.
-  { re: /\bponoi\s*\.\s*plugins\s*\.\s*send\s*\(/,           perms: ['ipc'],                       what: 'ponoi.plugins.send' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]ipc['"`]/,             perms: ['ipc'],                       what: "ponoi.on('ipc')" },
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*onBefore(Send|Render)\s*\(/, perms: ['messages.intercept'], what: 'ponoi.messages.onBeforeSend/Render' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*plugins\s*\.\s*send\s*\(/,           perms: ['ipc'],                       what: 'ponoi.plugins.send' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]ipc['"`]/,             perms: ['ipc'],                       what: "neylivo.on('ipc')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*onBefore(Send|Render)\s*\(/, perms: ['messages.intercept'], what: 'neylivo.messages.onBeforeSend/Render' },
   // Холст живёт либо в панели, либо в своём окне — и разрешение нужно ровно то,
   // где он объявлен (api.ts, ui.getCanvas). Поэтому «panel» просим только у
   // того, кто окон не открывает: игре, живущей в своём окне, чужая панель в
   // плеере и чате не нужна, и требовать её значило бы врать на экране
   // разрешений. Условие смотрит на весь код целиком — отсюда просмотр вперёд.
-  { re: /^(?![\s\S]*\bponoi\s*\.\s*apps\s*\.)[\s\S]*\bponoi\s*\.\s*ui\s*\.\s*getCanvas\s*\(/, perms: ['panel'], what: 'ponoi.ui.getCanvas' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]canvas['"`]/,          perms: ['panel'],                     what: "ponoi.on('canvas')" },
-  { re: /\bponoi\s*\.\s*net\s*\.\s*ws\s*\(/,                 perms: ['net'],                       what: 'ponoi.net.ws' },
-  { re: /\bponoi\s*\.\s*background\s*\./,                     perms: ['background'],                what: 'ponoi.background' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*(setTheme|clearTheme)\s*\(/, perms: ['ui.theme'],                what: 'ponoi.ui.setTheme' },
+  { re: /^(?![\s\S]*\bponoi\s*\.\s*apps\s*\.)[\s\S]*\bponoi\s*\.\s*ui\s*\.\s*getCanvas\s*\(/, perms: ['panel'], what: 'neylivo.ui.getCanvas' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]canvas['"`]/,          perms: ['panel'],                     what: "neylivo.on('canvas')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*net\s*\.\s*ws\s*\(/,                 perms: ['net'],                       what: 'neylivo.net.ws' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*background\s*\./,                     perms: ['background'],                what: 'neylivo.background' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*(setTheme|clearTheme)\s*\(/, perms: ['ui.theme'],                what: 'neylivo.ui.setTheme' },
   // Пункт меню сообщения отдаёт само сообщение — значит, и чтение тоже.
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(\s*\{[^}]*target\s*:\s*['"`]message['"`]/, perms: ['ui', 'messages.read'], what: 'ponoi.ui.addContextMenu (message)' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*addContextMenu\s*\(/,      perms: ['ui'],                        what: 'ponoi.ui.addContextMenu' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addContextMenu\s*\(\s*\{[^}]*target\s*:\s*['"`]message['"`]/, perms: ['ui', 'messages.read'], what: 'neylivo.ui.addContextMenu (message)' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*addContextMenu\s*\(/,      perms: ['ui'],                        what: 'neylivo.ui.addContextMenu' },
   // v1.471.0: своя область экрана.
-  { re: /\bponoi\s*\.\s*apps\s*\./,                           perms: ['apps'],                      what: 'ponoi.apps' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]app['"`]/,             perms: ['apps'],                      what: "ponoi.on('app')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*apps\s*\./,                           perms: ['apps'],                      what: 'neylivo.apps' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]app['"`]/,             perms: ['apps'],                      what: "neylivo.on('app')" },
   // v1.472.0: таблицы — то же хранилище, то же разрешение. Без строки здесь
-  // плагин на ponoi.db молча получал бы отказ при первой же записи.
-  { re: /\bponoi\s*\.\s*db\s*\./,                             perms: ['storage'],                   what: 'ponoi.db' },
-  { re: /\bponoi\s*\.\s*services\s*\./,                       perms: ['ipc'],                       what: 'ponoi.services' },
+  // плагин на neylivo.db молча получал бы отказ при первой же записи.
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*db\s*\./,                             perms: ['storage'],                   what: 'neylivo.db' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*services\s*\./,                       perms: ['ipc'],                       what: 'ponoi.services' },
   // v1.473.0: свои файлы. Скачивание — это ещё и сеть, поэтому у него своя
   // строка ВЫШЕ общей: иначе она бы до него не дошла, и плагин узнал бы о
   // недостающем «net» уже на живом отказе.
-  { re: /\bponoi\s*\.\s*assets\s*\.\s*fetch\s*\(/,           perms: ['storage', 'net'],            what: 'ponoi.assets.fetch' },
-  { re: /\bponoi\s*\.\s*assets\s*\.\s*play\s*\(/,            perms: ['storage', 'notify'],         what: 'ponoi.assets.play' },
-  { re: /\bponoi\s*\.\s*assets\s*\./,                         perms: ['storage'],                   what: 'ponoi.assets' },
-  { re: /\bponoi\s*\.\s*input\s*\./,                          perms: ['input'],                     what: 'ponoi.input' },
-  { re: /\bponoi\s*\.\s*on\s*\(\s*['"`]gamepad['"`]/,         perms: ['input'],                     what: "ponoi.on('gamepad')" },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*assets\s*\.\s*fetch\s*\(/,           perms: ['storage', 'net'],            what: 'neylivo.assets.fetch' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*assets\s*\.\s*play\s*\(/,            perms: ['storage', 'notify'],         what: 'neylivo.assets.play' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*assets\s*\./,                         perms: ['storage'],                   what: 'neylivo.assets' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*input\s*\./,                          perms: ['input'],                     what: 'neylivo.input' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*on\s*\(\s*['"`]gamepad['"`]/,         perms: ['input'],                     what: "neylivo.on('gamepad')" },
   // v1.475.0: перехват вложений и окно-вопрос.
-  { re: /\bponoi\s*\.\s*messages\s*\.\s*onUpload\s*\(/, perms: ['messages.upload'],           what: 'ponoi.messages.onUpload' },
-  { re: /\bponoi\s*\.\s*ui\s*\.\s*dialog\s*\(/,          perms: ['ui'],                        what: 'ponoi.ui.dialog' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*messages\s*\.\s*onUpload\s*\(/, perms: ['messages.upload'],           what: 'neylivo.messages.onUpload' },
+  { re: /\b(?:neylivo|ponoi)\s*\.\s*ui\s*\.\s*dialog\s*\(/,          perms: ['ui'],                        what: 'neylivo.ui.dialog' },
 ]
 
 export interface NeededPerm { perm: Permission; what: string }

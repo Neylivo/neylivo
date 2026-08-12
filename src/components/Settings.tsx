@@ -90,7 +90,7 @@ const NAV: { group: string | null; items: { k: string; label: string; icon: stri
     { k: 'plugins', label: 'Плагины', icon: 'cube' , sub: 'Расширения интерфейса' },
     // v1.497.0: мастерская приложений. Стоит рядом с плагинами и ботами
     // намеренно: это соседнее дело того же человека — сделать своё, — но дело
-    // ДРУГОЕ. Плагин вписывается в Ponoi, приложение живёт в своём окне, и
+    // ДРУГОЕ. Плагин вписывается в NeyLivo, приложение живёт в своём окне, и
     // делают его иначе: файлами, с показом и консолью рядом.
     { k: 'workshop', label: 'Мастерская', icon: 'wand' , sub: 'Свои приложения' },
     // v1.335.0: было «Мои приложения» — название из Discord, но у нас за ним
@@ -146,7 +146,7 @@ function CaptureSection() {
   return <>
     <Row title="Не отдавать окно снимкам и записи"
       desc={можно
-        ? 'Снимок экрана, «Ножницы», OBS и демонстрация экрана в звонке увидят на месте Ponoi чёрное. '
+        ? 'Снимок экрана, «Ножницы», OBS и демонстрация экрана в звонке увидят на месте NeyLivo чёрное. '
           + 'На телефоне снимок не сделается вовсе. Пока выключено — приложение снимается как обычно: '
           + 'включённая сама собой, эта защита выглядела бы как поломка, когда показываешь экран друзьям.'
         : 'Здесь недоступно'}>
@@ -1100,7 +1100,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 {/* v1.511.0: бережный режим. Включён сразу — это не ухудшение
                     картинки, а отказ считать то, чего в этот миг никто не видит. */}
                 <Row title="Беречь ресурсы во время игры"
-                  desc="Пока идёт игра, а окно Ponoi позади, приложение перестаёт считать кадры (спектр, живой фон) и вчетверо реже стучится в сеть. Как только вернёшься в окно — всё работает как обычно, без задержки. На качество картинки это не влияет: экономится только невидимое.">
+                  desc="Пока идёт игра, а окно NeyLivo позади, приложение перестаёт считать кадры (спектр, живой фон) и вчетверо реже стучится в сеть. Как только вернёшься в окно — всё работает как обычно, без задержки. На качество картинки это не влияет: экономится только невидимое.">
                   <Toggle on={settings.saveWhileGaming} onChange={v => set('saveWhileGaming', v)} />
                 </Row>
 
@@ -1114,7 +1114,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
 
                 <div className="pqs-custom">
                   <div className="pqs-custom-h">Своя тема</div>
-                  <div className="pqs-custom-sub">Задай цвет на каждую поверхность и собери свой вид Ponoi. Применится после кнопки «Сохранить».</div>
+                  <div className="pqs-custom-sub">Задай цвет на каждую поверхность и собери свой вид NeyLivo. Применится после кнопки «Сохранить».</div>
                   {([
                     ['dark', 'Тёмный фон'], ['content', 'Основной фон'], ['panel', 'Панель'],
                     ['hover', 'Наведение'], ['active', 'Активный'], ['accent', 'Акцент'],
@@ -1175,7 +1175,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                       const t = decodeTheme(themeCode)
                       // Молча применять чужую строку нельзя: непонятно, что это
                       // было и почему ничего не изменилось.
-                      if (!t) { toastErr('Это не код темы Ponoi'); return }
+                      if (!t) { toastErr('Это не код темы NeyLivo'); return }
                       setPresets(addPreset(presets, t.name, t.colors))
                       setCustomD({ ...t.colors, on: true } as any)
                       setThemeCode('')
@@ -1210,7 +1210,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 </div>
 
                 <div className="pqs-sec-t">Логотип приложения</div>
-                <div className="pqs2-desc" style={{ marginTop: -6 }}>Свой логотип вместо стандартного — меняется везде: в панели серверов, на экране загрузки{(window as any).ponoiDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
+                <div className="pqs2-desc" style={{ marginTop: -6 }}>Свой логотип вместо стандартного — меняется везде: в панели серверов, на экране загрузки{(window as any).neylivoDesktop?.isDesktop ? ', и в панели задач Windows' : ''}.</div>
                 <div className="pqs-iconrow">
                   <span className="pqs-iconprev"><img src={settings.appIcon || DEFAULT_ICON_URL} alt="" width={40} height={40} /></span>
                   <button className="modal-primary" onClick={() => iconInputRef.current?.click()}>{iconBusy ? 'Загрузка…' : 'Загрузить свой логотип'}</button>
@@ -1410,7 +1410,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
 
               {cat === 'sounds' && <>
                 {/* v1.494.0: озвучка сообщений. Стоит рядом со звуками
-                    приложения намеренно: это тоже «как Ponoi звучит». */}
+                    приложения намеренно: это тоже «как NeyLivo звучит». */}
                 <div className="pqs-sec-t" style={{ marginTop: 20 }}>Озвучка сообщений</div>
                 <div className="pqs-code-sub" style={{ marginBottom: 10 }}>
                   Каким голосом читать сообщение по пункту «Зачитать» в его меню.
@@ -1478,7 +1478,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   </div>
                 </div>
                 <div className="pqs-code-sub" style={{ marginTop: 8 }}>
-                  Скопировать чей-то настоящий голос с записи Ponoi не умеет и обещать не будет.
+                  Скопировать чей-то настоящий голос с записи NeyLivo не умеет и обещать не будет.
                   Но всё, что стоит в системе, здесь есть: поставь новый голос в настройках
                   Windows или Android — и он появится в списке сам.
                 </div>
@@ -1488,7 +1488,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 <h2>Горячие клавиши</h2>
                 <div className="pqs2-desc">Быстрые действия с клавиатуры. Нажми на поле и введи своё сочетание.</div>
                 <div className="pqs-sec-t">Настраиваемые</div>
-                <Row title="Открыть Музыку" desc="Быстрый переход в Ponoi Music">
+                <Row title="Открыть Музыку" desc="Быстрый переход в NeyLivo Music">
                   <KeyCapture value={view.keyMusic} onChange={v => setD('keyMusic', v)} />
                 </Row>
                 <Row title="Открыть личные сообщения" desc="Быстрый переход на главный экран (ЛС)">
@@ -1595,7 +1595,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                   В панели прохождения можно спросить про место, где ты сейчас. К вопросу само прикладывается всё,
                   что приложение знает об игре: название, сколько пройдено и в процентах, текущая веха с описанием,
                   последние пройденные и ближайшие впереди. Ничего, кроме игры, не уходит — ни имени, ни переписки.
-                  Отвечает не Ponoi, а сервис по твоему ключу: ключ хранится только на этом устройстве.
+                  Отвечает не NeyLivo, а сервис по твоему ключу: ключ хранится только на этом устройстве.
                   У Gemini ключ бесплатный — с него проще всего начать.
                 </div>
                 <div className="pqs-seg">

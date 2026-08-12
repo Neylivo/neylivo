@@ -39,7 +39,7 @@ export function loadPlugins(): InstalledPlugin[] {
 /**
  * @param silent не будить подписчиков. Нужно для записей в storage самого плагина:
  *   от них состав и включённость плагинов не меняются, а host.ts по этому сигналу
- *   сверяет запущенное с сохранённым — гонять сверку на каждый ponoi.storage.set
+ *   сверяет запущенное с сохранённым — гонять сверку на каждый neylivo.storage.set
  *   бессмысленно (и однажды уже приводило к остановке плагина посреди его же вызова).
  */
 function persist(list: InstalledPlugin[], silent = false) {

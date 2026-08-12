@@ -63,7 +63,7 @@ export interface Integration { label: string; url: string }
 
 export const DEFAULT_PROFILE: ProfilePrefs = {
   bannerUrl: null,
-  primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую Ponoi.',
+  primary: '#5865f2', accent: '#5865f2', about: 'Привет! Я использую NeyLivo.',
   petUrl: null, petKind: 'none', petOn: false, petSize: 180, petPos: 'tr',
   petFree: { x: 80, y: 22 },
   petReaction: 'bounce',

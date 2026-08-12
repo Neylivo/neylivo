@@ -30,7 +30,7 @@ const КАЧЕСТВО = [
 
 interface ClipFile { name: string; path: string; bytes: number; at: number }
 
-const desktop = (): any => (window as any).ponoiDesktop
+const desktop = (): any => (window as any).neylivoDesktop
 
 export function ClipsPanel() {
   const { settings, set } = useSettings()
@@ -115,7 +115,7 @@ export function ClipsPanel() {
       </div>
 
       {!есть && <div className="cset-hint">
-        Запись экрана работает в настольном приложении Ponoi. В браузере её нет: там пришлось бы
+        Запись экрана работает в настольном приложении NeyLivo. В браузере её нет: там пришлось бы
         каждый раз заново спрашивать разрешение, и «уже записанного» не существовало бы.
       </div>}
 
@@ -171,7 +171,7 @@ export function ClipsPanel() {
             другой, и тогда обещание в настройках было бы обманом. */}
         <div className="clip-hint">
           {state?.hotkey
-            ? 'Или нажми ' + state.hotkey + ' — работает поверх игры, переключаться в Ponoi не надо.'
+            ? 'Или нажми ' + state.hotkey + ' — работает поверх игры, переключаться в NeyLivo не надо.'
             : 'Горячую клавишу F7 занимает другая программа, поэтому сохранять можно только отсюда.'}
         </div>
         {state?.folder && <div className="clip-hint">Клипы лежат в {state.folder}</div>}

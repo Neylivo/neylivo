@@ -310,7 +310,7 @@ export interface AutoResult {
 /** Человеческое объяснение, почему само не получилось. Врать «не поддерживается»
  *  нельзя: причины разные, и что делать — тоже разное. */
 export const AUTO_WHY: Record<AutoWhy, string> = {
-  'no-desktop': 'Само подтягивается только в приложении на компьютере — там Ponoi видит файлы игры.',
+  'no-desktop': 'Само подтягивается только в приложении на компьютере — там NeyLivo видит файлы игры.',
   // v1.461.0: SteamID больше не спрашиваем — он записан в файлах самого Steam.
   // Эта причина остаётся на случай, когда Steam не установлен вовсе.
   'no-steamid': 'Steam на этом компьютере не найден, а в самой игре прохождение не записано.',
@@ -355,7 +355,7 @@ export function sizeLabel(bytes: number): string {
 }
 
 export async function autoNodes(steamId: string | null, appId?: string | null, name?: string): Promise<AutoResult> {
-  const d = (window as any).ponoiDesktop
+  const d = (window as any).neylivoDesktop
   if (!d?.steamProgress) return { ok: false, nodes: [], why: 'no-desktop' }
   // v1.483.0: БЕЗ Steam ID тоже спрашиваем. Раньше здесь стоял отказ — и до
   // чтения файлов на диске дело не доходило вовсе. А приложение умеет читать

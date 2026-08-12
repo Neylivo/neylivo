@@ -80,7 +80,7 @@ export type WidgetField = 'favGames' | 'wishGames'
 
 // v1.169.0: карточка виджета доски — 1-в-1 как в Discord: арт игры фоном (затемнён
 // слева под подпись), скелетон-полоски сверху (место под статистику, для которой
-// у Ponoi нет источника — так же выглядят непривязанные виджеты и в самом Discord),
+// у NeyLivo нет источника — так же выглядят непривязанные виджеты и в самом Discord),
 // иконка-ссылка + название снизу. Пустая — «+» по центру и подпись.
 function WidgetTile({ label, games, covers, isMe, onClick }:
   { label: string; games: string[]; covers: Record<string, string | null>; isMe: boolean; onClick: () => void }) {
@@ -164,7 +164,7 @@ export function ProfileCard({ userId, name, avatarUrl, status, onClose, initialT
     if (!имя) return
     let живо = true
     void (async () => {
-      const d = (window as any).ponoiDesktop
+      const d = (window as any).neylivoDesktop
       if (!d?.scanGames) {
         if (живо) setХочуПрохождение(m => ({ ...m, ...Object.fromEntries(имена.map(n => [n, false])) }))
         return

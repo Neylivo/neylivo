@@ -163,7 +163,7 @@ export function buildProject(p: Project): string {
  * @description ${строка(p.description || 'Приложение')}
  * @permissions ${права}
  */
-// Собрано мастерской приложений Ponoi.
+// Собрано мастерской приложений NeyLivo.
 //
 // ФАЙЛЫ — источник правды: по ним собирается страница, и по ним же мастерская
 // открывает проект обратно. Правь их здесь или там, но не собранную страницу:
@@ -172,8 +172,8 @@ const ФАЙЛЫ = ${JSON.stringify(p.files, null, 2)}
 
 const СТРАНИЦА = ${JSON.stringify(buildPage(p.files))}
 
-function onLoad(ponoi) {
-  return ponoi.apps.create({
+function onLoad(neylivo) {
+  return neylivo.apps.create({
 ${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)).join(',\n')},
     html: СТРАНИЦА,
   }).then(function (id) { self.__окно = id })
@@ -211,7 +211,7 @@ function buildSceneProject(p: Project): string {
  * @description ${строка(p.description || 'Игра')}
  * @permissions ${права}
  */
-// Собрано мастерской Ponoi — визуальным редактором сцены.
+// Собрано мастерской NeyLivo — визуальным редактором сцены.
 //
 // СЦЕНА — источник правды: по ней собирается страница, и её же читает
 // мастерская, открывая проект обратно. Правь сцену в мастерской.
@@ -233,8 +233,8 @@ function собериСтраницу() {
     + '</' + 'script>'
 }
 
-function onLoad(ponoi) {
-  return ponoi.apps.create({
+function onLoad(neylivo) {
+  return neylivo.apps.create({
 ${Object.entries(окно).map(([k, v]) => '    ' + k + ': ' + JSON.stringify(v)).join(',\n')},
     html: собериСтраницу(),
   }).then(function (id) { self.__окно = id })
@@ -355,9 +355,9 @@ export interface ProjTemplate { id: string; label: string; hint: string; files: 
 
 const ИГРА_3D = `// Трёхмерная сцена на встроенном three.js.
 // Мышью — осмотреться, WASD — ходить, колесо — приблизить.
-const THREE = await ponoi.lib('three')
+const THREE = await neylivo.lib('three')
 
-const холст = ponoi.canvas()
+const холст = neylivo.canvas()
 const рендер = new THREE.WebGLRenderer({ canvas: холст, antialias: true })
 рендер.shadowMap.enabled = true
 
@@ -403,9 +403,9 @@ addEventListener('keydown', e => { клавиши[e.code] = true })
 addEventListener('keyup', e => { клавиши[e.code] = false })
 
 let рыскание = 0, тангаж = 0
-холст.addEventListener('click', () => ponoi.cursor.lock(холст))
+холст.addEventListener('click', () => neylivo.cursor.lock(холст))
 addEventListener('pointermove', e => {
-  if (!ponoi.cursor.locked()) return
+  if (!neylivo.cursor.locked()) return
   рыскание -= e.movementX * 0.0022
   тангаж = Math.max(-1.3, Math.min(1.3, тангаж - e.movementY * 0.0022))
 })
@@ -414,7 +414,7 @@ addEventListener('wheel', e => {
   камера.updateProjectionMatrix()
 })
 
-ponoi.frame(dt => {
+neylivo.frame(dt => {
   const скорость = (клавиши.ShiftLeft ? 12 : 5) * dt
   const вперёд = new THREE.Vector3(-Math.sin(рыскание), 0, -Math.cos(рыскание))
   const вбок = new THREE.Vector3(Math.cos(рыскание), 0, -Math.sin(рыскание))
@@ -429,7 +429,7 @@ ponoi.frame(dt => {
   рендер.render(сцена, камера)
 })
 
-ponoi.log('Сцена готова: щёлкни по окну и оглядись мышью, ходи на WASD')`
+neylivo.log('Сцена готова: щёлкни по окну и оглядись мышью, ходи на WASD')`
 
 export const PROJ_TEMPLATES: ProjTemplate[] = [
   {
@@ -452,13 +452,13 @@ export const PROJ_TEMPLATES: ProjTemplate[] = [
     files: [
       { name: 'стили.css', kind: 'css', text: 'body { margin: 0; overflow: hidden; background: #10121a }' },
       {
-        name: 'игра.js', kind: 'js', text: `const c = ponoi.canvas()
+        name: 'игра.js', kind: 'js', text: `const c = neylivo.canvas()
 const g = c.getContext('2d')
 let x = c.width / 2, y = c.height / 2, vx = 220, vy = 160
 
 addEventListener('keydown', e => { if (e.key === ' ') { vx = -vx; vy = -vy } })
 
-ponoi.frame(dt => {
+neylivo.frame(dt => {
   x += vx * dt; y += vy * dt
   if (x < 20 || x > c.width - 20) vx = -vx
   if (y < 20 || y > c.height - 20) vy = -vy
@@ -484,9 +484,9 @@ async function показать(файлы) {
   что.textContent = f.name + '  ' + f.size + ' байт\\n\\n' + текст
 }
 
-document.getElementById('открыть').onclick = async () => показать(await ponoi.files.open())
-document.getElementById('сохранить').onclick = () => ponoi.files.save('моё.txt', что.textContent, 'text/plain')
-ponoi.files.onDrop(показать)`,
+document.getElementById('открыть').onclick = async () => показать(await neylivo.files.open())
+document.getElementById('сохранить').onclick = () => neylivo.files.save('моё.txt', что.textContent, 'text/plain')
+neylivo.files.onDrop(показать)`,
       },
     ],
   },

@@ -5,7 +5,7 @@
 // Replaces the old client-side flow: RPC email_for_username(username) -> email
 // exposed straight to the browser -> supabase.auth.signInWithPassword(email, pw).
 // That RPC was `grant execute ... to anon`, so anyone on the internet (no
-// account needed) could resolve ANY Ponoi username to its real email address —
+// account needed) could resolve ANY NeyLivo username to its real email address —
 // a PII leak, and free reconnaissance for phishing/credential-stuffing. See
 // security audit findings. supabase/19_login_by_username.sql now revokes anon/
 // authenticated execute on that RPC; this function is the only remaining path.

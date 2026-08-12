@@ -130,7 +130,7 @@ export function Sinks({ room, meName }: { room: Room; meName?: string }) {
   // оверлей не пропадал, если свернуть игру и уйти в браузер.
   const avatarCache = useRef<Map<string, string | null>>(new Map())
   useEffect(() => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.setCallOverlayParticipants) return
     let raf = 0
     const push = () => {
@@ -477,9 +477,9 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
   // v1.436.0: что именно показывать — экран или окно (только в приложении: в
   // браузере выбор рисует он сам и подменить его нечем).
   const [sources, setSources] = useState<ShareSource[] | null>(null)
-  const canPickSource = !!(window as any).ponoiDesktop?.shareSources
+  const canPickSource = !!(window as any).neylivoDesktop?.shareSources
   const loadSources = async () => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.shareSources) return
     try { setSources(orderSources(await d.shareSources())) } catch { setSources([]) }
   }
@@ -695,7 +695,7 @@ export function CallRoom({ room, meId, meName, onLeave, peer, onProfile, serverS
     try { localStorage.setItem('ponoi_share_q', JSON.stringify(sq)) } catch {}
     // v1.436.0: выбранный источник и «нужен ли звук» уезжают в оболочку до
     // запроса — она отдаёт браузеру именно это окно (см. electron/main.cjs).
-    try { (window as any).ponoiDesktop?.setShareSource?.(sq.sourceId ?? null, sq.audio) } catch {}
+    try { (window as any).neylivoDesktop?.setShareSource?.(sq.sourceId ?? null, sq.audio) } catch {}
     try {
       // v1.64.0: contentHint подсказывает браузеру, что важнее (чёткость/плавность),
       // simulcast выключен — зритель всегда получает полное разрешение.

@@ -427,7 +427,7 @@ app.whenReady().then(async () => {
 
   // ── Правила стилей ──────────────────────────────────────────────────────
   {
-    const css = ['styles.css', 'ponoi-ui.css']
+    const css = ['styles.css', 'neylivo-ui.css']
       .map(file => fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'))
       .join('\n')
     const б = разборСтилей(css)

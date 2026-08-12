@@ -61,11 +61,11 @@ export class ThemeError extends Error {}
  */
 export function parseTheme(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new ThemeError('ponoi.ui.setTheme: нужен объект вида { accent: "#ff4500" }')
+    throw new ThemeError('neylivo.ui.setTheme: нужен объект вида { accent: "#ff4500" }')
   }
   const out: Record<string, string> = {}
   const entries = Object.entries(raw as Record<string, unknown>)
-  if (entries.length === 0) throw new ThemeError('ponoi.ui.setTheme: пустой набор цветов')
+  if (entries.length === 0) throw new ThemeError('neylivo.ui.setTheme: пустой набор цветов')
   for (const [k, v] of entries) {
     // Ведущие дефисы прощаем: их пишут по привычке из CSS, и отказ из-за них
     // выглядел бы придиркой.

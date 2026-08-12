@@ -7,13 +7,16 @@ import { installPlugin } from '../lib/plugins/install'
 import { PermissionGate } from './PluginPermissionGate'
 import { SENSITIVE_PERMISSIONS, PERMISSION_LABEL, type PluginManifest } from '../lib/plugins/types'
 
-// v1.286.0: файл .ponoi, отправленный в чат, показывается карточкой плагина — с
+// v1.286.0: файл плагина, отправленный в чат, показывается карточкой плагина — с
 // названием, автором и списком разрешений — вместо безымянного вложения. Установка
 // всё равно идёт через тот же экран подтверждения, что и из настроек: карточка
 // экономит клики, но не отменяет согласия.
 
 export function isPluginFile(url: string): boolean {
-  return /\.ponoi(\?|#|$)/i.test(url)
+  // v1.558.0: новое расширение .neylivo, старое .ponoi принимается как раньше.
+  // Файлы плагинов уже лежат в переписке у людей; перестать их узнавать значило
+  // бы, что переименование продукта сломало чужие плагины.
+  return /\.(neylivo|ponoi)(\?|#|$)/i.test(url)
 }
 
 export function PluginInstallCard({ url, sizeLabel }: { url: string; sizeLabel?: string | null }) {
@@ -30,7 +33,7 @@ export function PluginInstallCard({ url, sizeLabel }: { url: string; sizeLabel?:
         const res = await fetch(url)
         if (!res.ok) throw new Error('не удалось скачать файл')
         // Читаем как текст, но с потолком: карточка не должна тянуть в память
-        // что-то огромное только потому, что кто-то переименовал архив в .ponoi.
+        // что-то огромное только потому, что кто-то переименовал архив в .neylivo.
         // v1.489.0: длину файла плагина больше не режем и не проверяем.
         const text = await res.text()
         if (!ok) return

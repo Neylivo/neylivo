@@ -34,10 +34,10 @@ export function HotkeysModal({ onClose }: { onClose: () => void }) {
     ['/ + буквы', 'Команда бота или плагина'],
   ]
   if (settings.keyHome) rows.push([settings.keyHome, 'Перейти в личные сообщения'])
-  if (settings.keyMusic) rows.push([settings.keyMusic, 'Открыть Ponoi Music'])
+  if (settings.keyMusic) rows.push([settings.keyMusic, 'Открыть NeyLivo Music'])
   // v1.419.0: клавиши, которые завели плагины. Без этой строки шпаргалка снова
   // врала бы умолчанием: сочетание работает, а откуда оно взялось — неизвестно.
-  // Помечаем, чей это плагин: это не клавиша Ponoi, и убирается она вместе с ним.
+  // Помечаем, чей это плагин: это не клавиша NeyLivo, и убирается она вместе с ним.
   const plugKeys = useHotkeys()
 
   // v1.389.0: было modal-back — класса с таким именем в стилях нет вовсе, и окно

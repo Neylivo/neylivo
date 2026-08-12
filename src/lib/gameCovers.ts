@@ -82,7 +82,7 @@ export async function resolveCover(name: string): Promise<string | null> {
   //    браузер — iTunes через JSONP.
   let url: string | null = null
   try {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     url = d?.findCover ? await d.findCover(name) : await itunesJsonp(term)
     if (!url) url = await steamGridDbCover(term)
   } catch { return prior }

@@ -23,7 +23,7 @@ export const STATUS_COLOR: Record<Status, string> = {
 
 // Кастомная активность («Играю в Doom»): текст + момент начала, тикает у всех в реальном времени.
 export interface Activity { text: string; since: number }
-// Авто-активность «Слушает…»: публикуется плеером Ponoi Music сама, как Spotify-статус в Discord.
+// Авто-активность «Слушает…»: публикуется плеером NeyLivo Music сама, как Spotify-статус в Discord.
 // pos — позиция трека (сек) на момент at; зрители досчитывают тайминг локально.
 // v1.423.0: art — обложка трека. Публикуется вместе с остальным: у себя в
 // плеере обложка есть, а другим показывалась нота-заглушка, хотя ссылка на
@@ -295,7 +295,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
       if (Date.now() - (gameToastAtRef.current[key] ?? 0) < 10 * 60_000) continue   // не чаще раза в 10 минут на друга+игру
       gameToastAtRef.current[key] = Date.now()
       const st = online[uid]
-      const d = (window as any).ponoiDesktop
+      const d = (window as any).neylivoDesktop
       if (d?.gameToast) d.gameToast({ name: st.username, avatar: st.avatar_url ?? null, game: gname, cover: gameRef.current?.cover ?? null })
       else toast('Пользователь ' + st.username + ' начал играть в ' + gname)
     }
@@ -308,7 +308,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // который рисует панель поверх игры. v1.101.0: показываем до 5 друзей, отсортированных
   // по свежести общения в ЛС (с кем переписывался позже всех — тот первый).
   async function overlayForGame(gname: string, cover: string | null) {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     const u = userRef.current
     if (!d?.gameOverlay || !u) return
     try {
@@ -358,7 +358,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
 
   // Приглашение из оверлея: кнопка-стрелка у друга шлёт ему личное сообщение-приглашение.
   useEffect(() => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.onOverlayInvite || !user) return
     d.onOverlayInvite(async (p: { id: string; game: string }) => {
       const u = userRef.current
@@ -388,7 +388,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   }, [])
 
   useEffect(() => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.onGame) return
     d.onGame(async (g: Game | null) => {
       // v1.511.0: тот же сигнал включает бережный режим — приложение знает,
@@ -426,7 +426,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
   // v1.150.0: конец матча (CS2 через GSI) — main-процесс прислал итоговый счёт/карту/режим,
   // сохраняем в game_matches (own-only RLS, см. миграцию 32) для статистики за 30 дней.
   useEffect(() => {
-    const d = (window as any).ponoiDesktop
+    const d = (window as any).neylivoDesktop
     if (!d?.onMatchEnd) return
     d.onMatchEnd((m: { game: string; mode?: string | null; map?: string | null; score?: string | null; result?: 'win' | 'loss' | 'draw' | null; kills?: number | null; deaths?: number | null; assists?: number | null; mvps?: number | null }) => {
       const u = userRef.current
@@ -445,7 +445,7 @@ export function PresenceProvider({ username, avatarUrl, children }:
     void publishNow()
   }
 
-  // Живая строка активности: авто-«Слушает…» из Ponoi Music важнее ручной.
+  // Живая строка активности: авто-«Слушает…» из NeyLivo Music важнее ручной.
   // since подобран так, что бегущее время = позиция трека.
   function activityOf(userId: string): Activity | null {
     // Приоритет как в Discord: демонстрация экрана > голос > игра > музыка >

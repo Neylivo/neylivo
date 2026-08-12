@@ -192,48 +192,48 @@ async function живьём() {
   // Настоящий PNG 2×2: первый пиксель красный. Пиксель и проверяем — «файл
   // сохранился» без «картинка нарисовалась» не значит ничего.
   const КОД = `
-function onLoad(ponoi) {
+function onLoad(neylivo) {
   var b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4z8AAQv/BJIgBAEPOB/lhwfRKAAAAAElFTkSuQmCC'
   var bin = atob(b64)
   var bytes = new Uint8Array(bin.length)
   for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
 
-  ponoi.assets.put('спрайт.png', bytes).then(function (info) {
-    ponoi.log('положил:' + info.type + ':' + info.size)
-    return ponoi.assets.get('спрайт.png')
+  neylivo.assets.put('спрайт.png', bytes).then(function (info) {
+    neylivo.log('положил:' + info.type + ':' + info.size)
+    return neylivo.assets.get('спрайт.png')
   }).then(function (buf) {
-    ponoi.log('назад:' + (buf && buf.byteLength) + ':' + (buf instanceof ArrayBuffer))
-    return ponoi.assets.image('спрайт.png')
+    neylivo.log('назад:' + (buf && buf.byteLength) + ':' + (buf instanceof ArrayBuffer))
+    return neylivo.assets.image('спрайт.png')
   }).then(function (bmp) {
     var c = new OffscreenCanvas(2, 2)
     var ctx = c.getContext('2d')
     ctx.drawImage(bmp, 0, 0)
     var p = ctx.getImageData(0, 0, 1, 1).data
-    ponoi.log('картинка:' + bmp.width + 'x' + bmp.height + ':' + p[0] + ',' + p[1] + ',' + p[2] + ',' + p[3])
-    return ponoi.assets.put('данные.json', JSON.stringify({ уровень: 7 }))
+    neylivo.log('картинка:' + bmp.width + 'x' + bmp.height + ':' + p[0] + ',' + p[1] + ',' + p[2] + ',' + p[3])
+    return neylivo.assets.put('данные.json', JSON.stringify({ уровень: 7 }))
   }).then(function () {
-    return ponoi.assets.text('данные.json')
+    return neylivo.assets.text('данные.json')
   }).then(function (t) {
-    ponoi.log('текст:' + t)
-    return ponoi.ui.addPanel({ slot: 'player', title: 'Проба', rows: [
+    neylivo.log('текст:' + t)
+    return neylivo.ui.addPanel({ slot: 'player', title: 'Проба', rows: [
       { type: 'image', key: 'pic', label: 'Спрайт', value: 'asset:спрайт.png' },
       { type: 'image', key: 'bad', label: 'Чужое', value: 'blob:https://ponoi/aaa' },
     ] })
   }).then(function () {
-    return ponoi.assets.put('разметка.png', '<svg onload="alert(1)"></svg>')
+    return neylivo.assets.put('разметка.png', '<svg onload="alert(1)"></svg>')
   }).then(function () {
-    ponoi.log('разметка:ПРОШЛА')
+    neylivo.log('разметка:ПРОШЛА')
   }, function (e) {
-    ponoi.log('разметка:' + (e.message || '').slice(0, 20))
+    neylivo.log('разметка:' + (e.message || '').slice(0, 20))
   }).then(function () {
     // Играть картинку нечем — приложение обязано сказать это прямо, а не
     // молча ничего не сделать.
-    return ponoi.assets.play('спрайт.png')
+    return neylivo.assets.play('спрайт.png')
   }).then(function () {
-    ponoi.log('звук-картинки:ЗАИГРАЛА')
+    neylivo.log('звук-картинки:ЗАИГРАЛА')
   }, function (e) {
-    ponoi.log('звук-картинки:' + (e.message || '').slice(0, 30))
-  }).then(function () { ponoi.log('готово') })
+    neylivo.log('звук-картинки:' + (e.message || '').slice(0, 30))
+  }).then(function () { neylivo.log('готово') })
 }
 `
   const plugin: any = {

@@ -256,7 +256,7 @@ function DetailModal({ c, onClose, onInstall }: { c: Card; onClose: () => void; 
           <div className="cat-ic big">{c.iconUrl ? <img src={c.iconUrl} alt="" /> : <span className="cat-emoji">{c.emoji ?? '🧩'}</span>}</div>
           <div>
             <div className="modal-title" style={{ margin: 0 }}>{c.name} <span className="plug-ver">{c.version}</span></div>
-            <div className="cat-meta"><span>{c.author}</span>{c.official && <span className="cat-badge">от Ponoi</span>}</div>
+            <div className="cat-meta"><span>{c.author}</span>{c.official && <span className="cat-badge">от NeyLivo</span>}</div>
           </div>
         </div>
         <div className="cat-desc">{c.description || c.summary}</div>

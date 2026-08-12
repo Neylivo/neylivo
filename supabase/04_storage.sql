@@ -1,4 +1,4 @@
--- Ponoi — этап 4 миграции: Storage (аватары и вложения).
+-- NeyLivo — этап 4 миграции: Storage (аватары и вложения).
 -- ПЕРЕД выполнением создай два бакета в Supabase -> Storage:
 --   1) avatars      (Public bucket: ON)
 --   2) attachments  (Public bucket: ON)

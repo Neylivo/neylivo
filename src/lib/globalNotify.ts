@@ -52,7 +52,7 @@ export function startGlobalNotify(ctx: NotifyCtx): () => void {
         icon: ctx.avatarOf(m.author),
         tag: 'dm:' + m.thread_id,
         // v1.440.0: нажатие открывает именно этот разговор.
-        route: 'ponoi://msg/d/' + m.thread_id + '/' + m.id,
+        route: 'neylivo://msg/d/' + m.thread_id + '/' + m.id,
       })
     })
     .subscribe()
@@ -81,7 +81,7 @@ export function startGlobalNotify(ctx: NotifyCtx): () => void {
           mention: mentioned,
           icon: ctx.avatarOf(m.author),
           tag: 'ch:' + m.channel_id,
-          route: 'ponoi://msg/s/' + where.serverId + '/' + m.channel_id + '/' + m.id,
+          route: 'neylivo://msg/s/' + where.serverId + '/' + m.channel_id + '/' + m.id,
         })
       })
     })

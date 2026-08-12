@@ -1,11 +1,11 @@
-/* Ponoi service worker — web-push receiver.
+/* NeyLivo service worker — web-push receiver.
    Served at ./sw.js (from Vite public/). Handles 'push' (show notification)
    and 'notificationclick' (focus/open the app). Payload is JSON:
    { title, body, url, icon }. */
 self.addEventListener('push', (event) => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch (e) { data = { body: event.data && event.data.text() } }
-  const title = data.title || 'Ponoi'
+  const title = data.title || 'NeyLivo'
   const options = {
     body: data.body || '',
     icon: data.icon || undefined,

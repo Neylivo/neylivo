@@ -325,8 +325,8 @@ export function BotWizard({ onClose, onDone }: { onClose: () => void; onDone: ()
             </div>
           </div>
 
-          <label className="modal-lbl">Куда Ponoi будет слать события</label>
-          <input className="modal-in" placeholder="https://твой-адрес/ponoi" value={webhook} onChange={e => setWebhook(e.target.value)} />
+          <label className="modal-lbl">Куда NeyLivo будет слать события</label>
+          <input className="modal-in" placeholder="https://твой-адрес/neylivo" value={webhook} onChange={e => setWebhook(e.target.value)} />
           <div className="cset-hint" style={{ marginTop: 4 }}>
             Можно оставить пустым и вписать позже. Без адреса бот просто молчит.
           </div>

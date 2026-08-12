@@ -1,4 +1,4 @@
--- Ponoi — этап 3 миграции: участники серверов + приглашения, жёсткий RLS.
+-- NeyLivo — этап 3 миграции: участники серверов + приглашения, жёсткий RLS.
 -- Выполни в Supabase -> SQL Editor ПОСЛЕ 02_friends_dm.sql.
 
 create table if not exists server_members (

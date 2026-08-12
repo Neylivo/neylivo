@@ -74,7 +74,7 @@ export function QrLoginPanel({ onClose }: { onClose: () => void }) {
         <Icon name="chevron-left" size={18} /> Назад
       </button>
       <h1>Вход по коду</h1>
-      <p className="auth2-sub">Открой Ponoi на телефоне, где ты уже вошёл, и наведи камеру</p>
+      <p className="auth2-sub">Открой NeyLivo на телефоне, где ты уже вошёл, и наведи камеру</p>
 
       <div className="qr2-box">
         {заявка

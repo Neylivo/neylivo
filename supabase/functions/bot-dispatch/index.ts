@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     await Promise.all(targets.map(async (b: any) => {
       try {
         const sig = await hmac(b.webhook_secret, body)
-        await fetch(b.webhook_url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ponoi-Signature': sig }, body })
+        await fetch(b.webhook_url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NeyLivo-Signature': sig }, body })
       } catch { /* один упавший вебхук не должен ронять остальных */ }
     }))
 

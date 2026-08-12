@@ -41,7 +41,7 @@ create policy "mr_delete" on member_roles for delete using (
 -- у любого участника БЕЗ явно назначенной роли (обычное дело — большинство
 -- рядовых участников) эти действия просто пропадут — серьёзный регресс. У
 -- Discord эта проблема решена ролью @everyone, которая есть у всех по
--- умолчанию; в Ponoi такой роли нет. Заводим её эквивалент — server-wide
+-- умолчанию; в NeyLivo такой роли нет. Заводим её эквивалент — server-wide
 -- базовые права, которые server_permissions() всегда добавляет поверх ролей.
 alter table servers add column if not exists base_permissions bigint not null default 15872; -- MENTION_EVERYONE(2048)|ADD_REACTIONS(4096)|ATTACH_FILES(8192)|CREATE_INVITE(1024)
 

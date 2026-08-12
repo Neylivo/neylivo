@@ -17,9 +17,9 @@ const DB_NAME = 'ponoi_plugin_db'
 /** v1: только строки таблиц. v2: добавлены ресурсы плагина. */
 const DB_VERSION = 2
 
-/** Строки таблиц плагина (ponoi.db). Ключ — «плагин + таблица + id». */
+/** Строки таблиц плагина (neylivo.db). Ключ — «плагин + таблица + id». */
 export const STORE_ROWS = 'rows'
-/** Файлы плагина (ponoi.assets). Ключ — «плагин + имя». */
+/** Файлы плагина (neylivo.assets). Ключ — «плагин + имя». */
 export const STORE_ASSETS = 'assets'
 
 export class IdbError extends Error {}

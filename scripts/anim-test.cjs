@@ -1,6 +1,6 @@
 // v1.525.0: движение в приложении не пропало. Запуск: npm run test:anim
 //
-// Зачем. Поверх наших стилей появился второй слой (src/ponoi-ui.css), который
+// Зачем. Поверх наших стилей появился второй слой (src/neylivo-ui.css), который
 // задаёт тем же элементам свои рамки, тени и переходы. CSS так и работает: кто
 // ниже — тот и прав, и объявление `transition: background-color .16s` не
 // добавляется к прежнему, а ЗАМЕНЯЕТ его целиком. Значит любое движение,
@@ -22,7 +22,7 @@ const path = require('path')
 const OUT = path.join(__dirname, '..', 'dist-anim-test')
 fs.mkdirSync(OUT, { recursive: true })
 fs.copyFileSync(path.join(__dirname, '..', 'src', 'styles.css'), path.join(OUT, 'styles.css'))
-fs.copyFileSync(path.join(__dirname, '..', 'src', 'ponoi-ui.css'), path.join(OUT, 'ponoi-ui.css'))
+fs.copyFileSync(path.join(__dirname, '..', 'src', 'neylivo-ui.css'), path.join(OUT, 'neylivo-ui.css'))
 
 // Образцы: разметка списана с настоящих экранов. Для каждого — что именно
 // должно двигаться, чтобы интерфейс не выглядел мёртвым.
@@ -44,7 +44,7 @@ const ОБРАЗЦЫ = [
 function страница(соСлоем) {
   return `<!doctype html><meta charset=utf-8>
 <link rel=stylesheet href="styles.css">
-${соСлоем ? '<link rel=stylesheet href="ponoi-ui.css">' : ''}
+${соСлоем ? '<link rel=stylesheet href="neylivo-ui.css">' : ''}
 <style>html,body{margin:0;background:#313338;font-family:system-ui,sans-serif;color:#dbdee1}
 :root{--c-accent:#5865f2;--ov:255,255,255;--brand:#5865f2}
 .probes{display:flex;flex-wrap:wrap;gap:16px;padding:16px;align-items:flex-start}</style>
