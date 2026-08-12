@@ -90,95 +90,32 @@ Windows installer, the Android APK and the web version, all linked directly.
 
 ---
 
-# Developer documentation
+# For developers
 
-Everything below is for building Ponoi, not for using it.
+Ponoi is written in TypeScript on React, with Supabase for the database,
+accounts, storage and realtime, LiveKit for voice and video, Electron for the
+Windows build and Capacitor for Android. There is no backend of our own.
 
-## Stack
+**How to fetch and build the source is deliberately not documented here.** This
+page is for people who use Ponoi, and a setup recipe at the top of it only gets
+in their way. What a developer actually needs is documented where it belongs:
 
-Vite + React + TypeScript. Supabase for the database, accounts, storage and
-realtime; LiveKit for voice and video. Electron for the Windows build, Capacitor
-for Android. No backend of our own to run.
+- [`PLUGINS.md`](PLUGINS.md) — the `.ponoi` file format, the plugin API and how
+  isolation works. Plugins are the supported way to extend Ponoi, and they need
+  no build environment at all: the editor is inside the app, under
+  Settings → Plugins → Create.
+- [`SECURITY.md`](SECURITY.md) — reporting a vulnerability.
+- [`SECURITY_ARCHITECTURE_AUDIT.md`](SECURITY_ARCHITECTURE_AUDIT.md) — what
+  actually protects data, with file references.
+- [`E2EE_DESIGN.md`](E2EE_DESIGN.md) — the design for group encryption, before
+  any of it is written.
+- [ponoiai.github.io/changelog](https://ponoiai.github.io/changelog/) — every
+  release, with what changed in each.
 
-## Running it
-
-1. Node.js 20+ (Capacitor CLI needs 22+; the Android build in CI uses 22).
-2. `npm install`
-3. Create a project at <https://supabase.com>.
-4. **Storage → create the buckets** `avatars`, `attachments`, `modfiles`.
-5. **SQL Editor → run the migrations strictly in numeric order**: first
-   `supabase/schema.sql`, then every `supabase/NN_*.sql` by its numeric prefix
-   (`02`, `03`, … `110`). Plain name sorting puts `100_` before `10_`, which is
-   the wrong order. `04_storage.sql` goes after the buckets exist.
-   Skipping recent migrations breaks features at runtime: channel permissions,
-   bots, privacy, music, read receipts, plugin transfers and more.
-6. Project Settings → API → copy the **Project URL** and the **anon public key**.
-7. Copy `.env.example` to `.env`:
-   ```
-   VITE_SUPABASE_URL=...
-   VITE_SUPABASE_ANON_KEY=...
-   VITE_VAPID_PUBLIC_KEY=...       # optional, push notifications
-   VITE_TENOR_KEY=...              # optional, GIF search
-   VITE_STEAMGRIDDB_KEY=...        # optional, game cover art
-   ```
-8. Optional Edge Functions — see `supabase/functions/README.md`:
-   - `livekit-token` — without it, text works and the call button errors.
-   - `login-by-username` — without it, only email login works.
-   - `send-push` — without it, no notifications while the app is closed.
-9. `npm run dev`
-
-## Checks
-
-The project leans on live checks rather than assertions about code that was
-never run. A few of the load-bearing ones:
-
-```bash
-npm run typecheck     # TypeScript
-npm run test:db       # RLS rules against a real Postgres (pglite), 1500+ lines
-npm run test:crypto   # the encryption core, in a real browser engine
-npm run test:plugins  # the plugin system
-npm run test:attack   # deliberate attempts to escape the plugin sandbox
-npm run test:capture  # screen capture protection, by actually capturing the screen
-npm run smoke         # the built app starts
-```
-
-`npm run look` and `npm run look:real` take screenshots of the interface, the
-second one with the real components rather than markup written by hand.
-
-## Releasing
-
-```bash
-git tag v1.0.0
-git push --tags
-```
-
-GitHub Actions builds `Ponoi-Setup-<version>.exe` and
-`Ponoi-Setup-<version>.apk` and attaches both to one release. The Android job
-**fails on purpose** if the signing keystore secret is missing, rather than
-signing with a throwaway debug key that would produce an APK nobody can install
-over their existing one.
-
-Required repository secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
-`ANDROID_KEY_PASSWORD`. Optional: `VITE_VAPID_PUBLIC_KEY`, `VITE_TENOR_KEY`,
-`VITE_STEAMGRIDDB_KEY`.
-
-Commit messages become the changelog (`scripts/gen-changelog.mjs`), which the
-app shows in its “What’s new” window and the website publishes at
-[/changelog/](https://ponoiai.github.io/changelog/).
-
-## The website
-
-The site at <https://ponoiai.github.io/> is a separate repository:
+The website at <https://ponoiai.github.io/> is a separate repository,
 [ponoiai/ponoiai.github.io](https://github.com/ponoiai/ponoiai.github.io). The
-web version of the app stays where it has always been,
-<https://ponoiai.github.io/ponoi/>, so invite links and installed PWAs keep
-working.
-
-## Writing plugins
-
-See [`PLUGINS.md`](PLUGINS.md) for the file format, the API and how isolation
-works — or use the editor inside the app: Settings → Plugins → Create.
+web version of the app stays at <https://ponoiai.github.io/ponoi/>, so invite
+links and installed PWAs keep working.
 
 ## Licence
 

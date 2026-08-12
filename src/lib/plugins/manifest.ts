@@ -53,6 +53,30 @@ function readTags(code: string): Record<string, string> {
   return out
 }
 
+/**
+ * Откуда взялся список разрешений (v1.557.0, находка F6 аудита).
+ *
+ * «Забыл написать @permissions» и «сознательно написал @permissions *» до сих
+ * пор выглядели для человека ОДИНАКОВО — обе строки давали все разрешения и
+ * один и тот же красный экран. А означают они разное: во втором случае автор
+ * решение принял, в первом его не было вовсе. Человеку, который решает
+ * «ставить или нет», разница существенная, и теперь она видна.
+ *
+ * list    — перечислено руками, действует ровно перечисленное;
+ * star    — «*», то есть осознанное «дай всё»;
+ * omitted — строки @permissions в шапке нет вовсе;
+ * none    — осознанное «ничего» (так пишет конструктор).
+ */
+export type PermsSource = 'list' | 'star' | 'omitted' | 'none'
+
+export function permsSourceOf(raw: string | undefined): PermsSource {
+  if (!raw || !raw.trim()) return 'omitted'
+  const t = raw.trim().toLowerCase()
+  if (t === 'none') return 'none'
+  if (raw.split(/[,\s]+/).some(x => x.trim() === '*')) return 'star'
+  return 'list'
+}
+
 function parsePermissions(raw: string | undefined): Permission[] {
   // v1.499.0: НЕ НАПИСАЛ @permissions — значит ВСЕ.
   //
@@ -111,6 +135,7 @@ export function parsePlugin(code: string): PluginManifest {
   if (!version) throw new PluginParseError('Поле @version обязательно (например 1.0.0).')
 
   const permissions = parsePermissions(tags.permissions)
+  const permsSource = permsSourceOf(tags.permissions)
   const hosts = (tags.hosts || '')
     .split(/[,\s]+/)
     .filter(Boolean)
@@ -149,6 +174,7 @@ export function parsePlugin(code: string): PluginManifest {
     author: cut(tags.author || 'неизвестен', MAX_AUTHOR),
     description: cut(tags.description || '', MAX_DESC),
     permissions,
+    permsSource,
     // Без разрешения net домены не значат ничего — не храним, чтобы они не создавали
     // ложного впечатления на экране установки.
     hosts: permissions.includes('net') ? hosts : [],

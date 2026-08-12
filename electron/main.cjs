@@ -1585,6 +1585,10 @@ function createWindow() {
   return win
 }
 
+// v1.557.0 (находка F5 аудита): окну запрещено уходить на чужой адрес.
+// Правило и объяснение — electron/navGuard.cjs, там же его проба.
+require('./navGuard.cjs').поставитьСторожа(app, (u) => shell.openExternal(u))
+
 app.whenReady().then(() => {
   // Allow mic / camera / notifications (needed for LiveKit voice & video).
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {

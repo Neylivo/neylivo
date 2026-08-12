@@ -206,7 +206,7 @@ const ЖЁЛТЫЕ: Record<string, string> = {
  * браузера.
  */
 export function installRisks(
-  m: { permissions: readonly string[]; hosts: readonly string[] },
+  m: { permissions: readonly string[]; hosts: readonly string[]; permsSource?: string },
   code: string,
   official = false,
 ): Risk[] {
@@ -223,6 +223,22 @@ export function installRisks(
   if (official) return []
 
   const out: Risk[] = []
+
+  // v1.557.0 (находка F6 аудита): «забыл» и «попросил всё» — разное.
+  //
+  // Оба случая дают плагину все разрешения, и до сих пор человек видел
+  // одинаковый красный экран. Но «@permissions *» — это решение автора, а
+  // отсутствие строки — чаще всего забывчивость: код просит две вещи, а прав
+  // выдано столько, сколько есть вообще. Первой строкой, потому что это меняет
+  // смысл всего списка ниже.
+  if (m.permsSource === 'omitted') {
+    out.push({ level: 'red', text: 'Автор НЕ объявил разрешения вовсе — плагин получил все, какие есть. '
+      + 'Это может быть забывчивость, а не решение: по коду видно меньше, чем ему выдано' })
+  } else if (m.permsSource === 'star') {
+    out.push({ level: 'red', text: 'Автор запросил ВСЕ разрешения одной звёздочкой — плагин сможет всё, '
+      + 'что умеет система плагинов, а не только то, что ему нужно' })
+  }
+
   for (const p of m.permissions) {
     if (КРАСНЫЕ[p]) out.push({ level: 'red', text: КРАСНЫЕ[p] })
   }

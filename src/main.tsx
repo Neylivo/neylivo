@@ -22,6 +22,12 @@ import './styles.css'
 import './ponoi-ui.css'
 import { initChatBg } from './lib/chatBg'
 import { applyBlurMessages, watchBlurTaps } from './lib/captureGuard'
+import { держатьРамку } from './lib/frameGuard'
+
+// v1.557.0: во вложении в чужую страницу приложение не запускается — см.
+// lib/frameGuard.ts. Проверка стоит ПЕРВОЙ: смысл в том, чтобы ни один экран с
+// перепиской не успел появиться внутри чужой рамки.
+const вЧужойРамке = держатьРамку()
 
 initChatBg()
 
@@ -50,6 +56,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
  * не задерживает.
  */
 async function boot() {
+  if (вЧужойРамке) return
   try {
     const { restoreAuth, authKeyFor } = await import('./lib/authStore')
     await restoreAuth([authKeyFor(import.meta.env.VITE_SUPABASE_URL as string)])

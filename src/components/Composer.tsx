@@ -1,6 +1,7 @@
 import { Popover } from './Popover'
 import { toastErr } from '../lib/toast'
 import { isSafeUrl } from '../lib/safeUrl'
+import { useSigned } from '../lib/useSigned'
 import { stripAll } from '../lib/stripMeta'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -1163,15 +1164,20 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
   const idx = attachIndex ?? 0
   const myMeta = attachMeta?.[idx] ?? null
   const canEdit = !!editable && !!onEditAttachment && !uploading
+  // v1.557.0 (находка F1 аудита): показываем по ПОДПИСАННОЙ ссылке, если файл
+  // лежит в нашем хранилище. Для группы (склейка через \n), для blob: и для
+  // чужих адресов возвращается то же, что пришло, — ниже группа разбирается по
+  // одному, и каждая часть подписывается сама.
+  const signedUrl = useSigned(url)
   // Вес файла для подсказки: лёгкий HEAD-запрос, сам файл не скачивается.
   useEffect(() => {
-    if (!url || uploading || type === 'image' || type === 'video' || url.includes('\n')) { setSize(null); setBytes(null); return }
+    if (!signedUrl || uploading || type === 'image' || type === 'video' || signedUrl.includes('\n')) { setSize(null); setBytes(null); return }
     let on = true
-    fetch(url.replace('#spoiler', ''), { method: 'HEAD' })
+    fetch(signedUrl.replace('#spoiler', ''), { method: 'HEAD' })
       .then(r => { const n = Number(r.headers.get('content-length')); if (on && n > 0) { setSize(fmtSize(n)); setBytes(n) } })
       .catch(() => {})
     return () => { on = false }
-  }, [url, type, uploading])
+  }, [signedUrl, type, uploading])
   if (!url) return null
   // v1.312.0: адрес вложения задаёт отправитель. Небезопасную схему (javascript: и
   // подобные) не показываем и не открываем вовсе — см. src/lib/safeUrl.ts.
@@ -1189,7 +1195,10 @@ export function Attachment({ url, type, meta, editable, attachMeta, attachIndex,
         uploading={uploading} progress={progress} pendingNames={pendingNames ? [pendingNames[i]] : undefined} />)}
     </div>
   }
-  const clean = url.replace('#spoiler', '')
+  // Подписанный адрес, если он приехал; иначе исходный (см. lib/useSigned.ts).
+  // Пометка «#spoiler» едет в самом адресе и снимается здесь — подпись её
+  // сохраняет, поэтому проверки на неё ниже по-прежнему смотрят в url.
+  const clean = (signedUrl ?? url).replace('#spoiler', '')
 
   /**
    * Выяснить, почему картинка не открылась, и сказать это словами.

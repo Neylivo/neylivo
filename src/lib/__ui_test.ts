@@ -23,6 +23,8 @@ const _store = new Map<string, string>()
 ;(globalThis as any).document = { createElement: () => ({ style: {}, appendChild: () => {} }), body: { appendChild: () => {}, removeChild: () => {} } }
 
 import { readFileSync } from 'node:fs'
+import { MIN_PASSWORD, паролеваяБеда, паролеваяПодсказка } from './passwordRule'
+import { разложить, публичный } from './attachUrl'
 import {
   pickVoice, groupVoices, readSpeech, presetOf, speechText,
   SPEECH_DEFAULT, SPEECH_PRESETS, RATE_MIN, RATE_MAX, PITCH_MIN, PITCH_MAX,
@@ -3699,6 +3701,109 @@ check('порядок исполнителей не прыгает при рав
   const б = byArtist([{ id: '2', author: 'А' }, { id: '1', author: 'Б' }])
   return а.map(x => x.artist).join() === б.map(x => x.artist).join()
 })
+
+// ── Порог пароля (v1.557.0, находка F8 аудита) ─────────────────────────────
+//
+// Раньше своей проверки не было вовсе: приложение разбирало ответ сервера и
+// переводило его в строку про шесть символов. Теперь правило своё, и проверять
+// его надо здесь — на экране входа оно показывается в двух местах, и разъехаться
+// им нельзя.
+console.log('\n-- Порог пароля --')
+{
+  check('короткий пароль не проходит', () => typeof паролеваяБеда('1234567') === 'string')
+  check('ровно порог — проходит', () => паролеваяБеда('correct7') === null)
+  check('порог именно восемь, а не шесть', () => MIN_PASSWORD === 8 && паролеваяБеда('abc123') !== null)
+  check('очевидный пароль не проходит даже длинный', () => паролеваяБеда('password') !== null)
+  check('один символ на весь пароль не проходит', () => паролеваяБеда('aaaaaaaaaa') !== null)
+  check('пароль, повторяющий почту, не проходит', () =>
+    паролеваяБеда('vasyapupkin1', ['vasyapupkin@mail.ru']) !== null)
+  check('пароль, повторяющий юзернейм, не проходит', () =>
+    паролеваяБеда('nubas12345', ['nubas']) !== null)
+  check('короткий кусок почты не ловит невиновных', () =>
+    // «ok@mail.ru» — имя из двух букв; ловить по нему значило бы отвергать
+    // половину нормальных паролей за случайное совпадение.
+    паролеваяБеда('okkarusel99', ['ok@mail.ru']) === null)
+  check('обычный длинный пароль проходит', () => паролеваяБеда('три слова подряд', ['nubas', 'a@b.ru']) === null)
+  check('подсказка пропадает, когда длины хватило', () =>
+    паролеваяПодсказка('correct7') === '' && паролеваяПодсказка('abc') !== '')
+  check('экран входа берёт порог отсюда, а не пишет число руками', () => {
+    // Ловушка, на которую легко попасться: правило в одном файле, а в форме
+    // руками написано «6». Тогда подсказка и отказ разъедутся молча.
+    const src = readFileSync('src/auth/AuthScreen.tsx', 'utf8')
+    if (!src.includes('паролеваяБеда(')) throw new Error('форма не проверяет пароль до отправки')
+    return src.includes('MIN_PASSWORD')
+  })
+}
+
+// ── Адреса вложений (v1.557.0, находка F1 аудита) ──────────────────────────
+//
+// Показ перешёл на подписанные ссылки. Всё, что здесь можно сломать молча, —
+// это разбор адреса: подпишем не тот путь, и вложение не откроется; примем
+// чужой адрес за свой, и сломается показ картинок со сторонних сайтов.
+// В проверках адрес проекта — https://example.supabase.co (он задан сборке
+// проверки в package.json).
+console.log('\n-- Адреса вложений --')
+{
+  const БАЗА = 'https://example.supabase.co'
+  const пуб = (b: string, p: string) => `${БАЗА}/storage/v1/object/public/${b}/${p}`
+
+  check('публичный адрес вложения разбирается', () => {
+    const о = разложить(пуб('attachments', 'user-1/1723400000000_foto.jpg'))
+    return !!о && о.bucket === 'attachments' && о.path === 'user-1/1723400000000_foto.jpg'
+  })
+  check('пометка спойлера в путь не попадает', () =>
+    разложить(пуб('attachments', 'u/1_a.png') + '#spoiler')?.path === 'u/1_a.png')
+  check('пометка шифрования в путь не попадает', () =>
+    разложить(пуб('attachments', 'u/1_a.bin') + '#enc')?.path === 'u/1_a.bin')
+  check('modfiles тоже наш бакет', () => разложить(пуб('modfiles', 'ab/cd.zip'))?.bucket === 'modfiles')
+  check('аватары НЕ подписываем', () => разложить(пуб('avatars', 'u/1_a.png')) === null)
+  check('чужой сайт не трогаем', () => разложить('https://media.tenor.com/x.gif') === null)
+  check('blob: не трогаем', () => разложить('blob:file:///abc') === null)
+  check('другой проект Supabase не трогаем', () =>
+    разложить('https://other.supabase.co/storage/v1/object/public/attachments/u/1_a.png') === null)
+  check('склейка нескольких вложений не разбирается как один адрес', () => {
+    // Первая версия разбирала бы её и подписала первый файл, молча потеряв
+    // остальные: группу обязан разобрать вызывающий, по одному.
+    const два = пуб('attachments', 'u/1_a.png') + '\n' + пуб('attachments', 'u/2_b.png')
+    return разложить(два) === null
+  })
+  check('процентная кодировка в имени раскрывается', () =>
+    разложить(пуб('attachments', 'u/1_%D1%84%D0%BE%D1%82%D0%BE.jpg'))?.path === 'u/1_фото.jpg')
+
+  check('подписанный адрес превращается обратно в постоянный', () => {
+    const п = публичный(`${БАЗА}/storage/v1/object/sign/attachments/u/1_a.png?token=xyz.abc`)
+    return п === пуб('attachments', 'u/1_a.png')
+  })
+  check('пометка спойлера переживает возврат к постоянному', () =>
+    публичный(`${БАЗА}/storage/v1/object/sign/attachments/u/1_a.png?token=t#spoiler`)
+      === пуб('attachments', 'u/1_a.png') + '#spoiler')
+  check('постоянный адрес возврат не портит', () =>
+    публичный(пуб('attachments', 'u/1_a.png')) === пуб('attachments', 'u/1_a.png'))
+  check('чужой адрес возврат не трогает', () =>
+    публичный('https://media.tenor.com/x.gif') === 'https://media.tenor.com/x.gif')
+
+  check('«скопировать ссылку» копирует постоянный адрес, а не часовой', () => {
+    // Ловушка: показ подписывает, и в буфер легко уехала бы ссылка, которая
+    // умрёт через час у человека в заметках.
+    const src = readFileSync('src/lib/copyMedia.ts', 'utf8')
+    return /copyMediaLink[\s\S]{0,400}публичный\(/.test(src)
+  })
+  check('показ вложения идёт через подписанный адрес', () => {
+    const src = readFileSync('src/components/Composer.tsx', 'utf8')
+    if (!src.includes('useSigned(url)')) throw new Error('Attachment не подписывает адрес')
+    return /const clean = \(signedUrl \?\? url\)/.test(src)
+  })
+  check('большой файл собирается по подписанным адресам', () => {
+    const src = readFileSync('src/lib/bigUpload.ts', 'utf8')
+    // И опись, и куски: подпишем только опись — файл не соберётся после
+    // закрытия бакета, а выглядеть будет как «кусок не скачался».
+    return /fetch\(await подписать\(url\)\)/.test(src) && /fetch\(await подписать\(о\.parts\[i\]\)\)/.test(src)
+  })
+  check('зашифрованное вложение тоже качается по подписанному адресу', () => {
+    const src = readFileSync('src/components/DMHome.tsx', 'utf8')
+    return /fetch\(await подписать\(stripEncMark\(/.test(src)
+  })
+}
 
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)

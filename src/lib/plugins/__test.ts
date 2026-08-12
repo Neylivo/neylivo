@@ -7,7 +7,7 @@
 // зарегистрировать то, что обещает в описании.
 //
 // Запуск: npm run test:plugins
-import { auditPlugin, auditBadge, hiddenCode, unusedPerms, AUDIT_NOTE, AUDITED_PERMISSIONS } from './audit'
+import { auditPlugin, auditBadge, hiddenCode, unusedPerms, installRisks, AUDIT_NOTE, AUDITED_PERMISSIONS } from './audit'
 import { LIMITS_WARNING, LIMITS_WARNING_SHORT } from './limits'
 import { parsePlugin } from './manifest'
 import { OFFICIAL_PLUGINS } from './official'
@@ -2555,6 +2555,41 @@ function onLoad(ponoi) {}
   check('конструктор всегда пишет строку разрешений', () => {
     const src = readFileSync('src/lib/plugins/editorDraft.ts', 'utf8')
     return src.includes("@permissions none")
+  })
+
+  // v1.557.0 (находка F6 аудита): «забыл» и «попросил всё» дают одно и то же,
+  // а означают разное. Права от этого не меняются — меняется то, что видит
+  // человек на экране установки.
+  check('видно, что @permissions не объявлен вовсе', () => {
+    const m = M.parsePlugin(шапка())
+    return m.permsSource === 'omitted' && m.permissions.length === ALL_PERMISSIONS.length
+  })
+
+  check('звёздочка отличается от забытой строки', () => {
+    const m = M.parsePlugin(шапка('*'))
+    // Прав столько же, а признак другой — иначе различить их было бы нечем.
+    return m.permsSource === 'star' && m.permissions.length === ALL_PERMISSIONS.length
+  })
+
+  check('перечисленный список помечен как список', () => M.parsePlugin(шапка('commands')).permsSource === 'list')
+  check('«none» помечен как осознанное ничего', () => M.parsePlugin(шапка('none')).permsSource === 'none')
+
+  // installRisks берётся из обычного импорта в начале файла: check() —
+  // синхронный, и асинхронная проверка вернула бы ему Promise, то есть
+  // «прошла» бы всегда, что бы внутри ни случилось.
+  check('на экране установки эти два случая говорят разное', () => {
+    const забыл = installRisks({ permissions: [...ALL_PERMISSIONS], hosts: [], permsSource: 'omitted' }, 'x', false)
+    const звёзд = installRisks({ permissions: [...ALL_PERMISSIONS], hosts: [], permsSource: 'star' }, 'x', false)
+    const текст = (r: { text: string }[]) => r.map(x => x.text).join(' | ')
+    if (!/НЕ объявил/.test(текст(забыл))) throw new Error('про забытую строку не сказано')
+    if (!/звёздочкой/.test(текст(звёзд))) throw new Error('про звёздочку не сказано')
+    if (текст(забыл) === текст(звёзд)) throw new Error('оба случая описаны одинаково — различать их незачем')
+    return true
+  })
+
+  check('обычному плагину лишней строки не приписывают', () => {
+    const r = installRisks({ permissions: ['commands'], hosts: [], permsSource: 'list' }, 'x', false)
+    return !r.some(x => /НЕ объявил|звёздочкой/.test(x.text))
   })
 
   check('свой плагин не спрашивает разрешений', () => {

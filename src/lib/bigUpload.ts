@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { contentTypeOf } from './fileType'
+import { подписать } from './attachUrl'
 import {
   КУСОК, РАСШИРЕНИЕ, надоРезать, сколькоКусков, границы, имяКуска,
   опись, годнаяОпись, этоОпись, type BigManifest,
@@ -89,7 +90,10 @@ const описиВПамяти = new Map<string, BigManifest>()
 export async function прочитатьОпись(url: string): Promise<BigManifest> {
   const есть = описиВПамяти.get(url)
   if (есть) return есть
-  const r = await fetch(url)
+  // v1.557.0 (находка F1): и опись, и куски берём по подписанной ссылке —
+  // иначе после закрытия бакета большой файл перестал бы собираться, а причина
+  // выглядела бы как «опись повреждена».
+  const r = await fetch(await подписать(url))
   if (!r.ok) throw new Error('Опись не открылась (' + r.status + ')')
   const данные = await r.json()
   // Хост берём у самой описи: куски обязаны лежать там же, где она.
@@ -120,7 +124,7 @@ export async function собрать(url: string, наПрогресс?: (p: num
   const о = await прочитатьОпись(url)
   const куски: Blob[] = []
   for (let i = 0; i < о.parts.length; i++) {
-    const r = await fetch(о.parts[i])
+    const r = await fetch(await подписать(о.parts[i]))
     if (!r.ok) throw new Error('Кусок ' + (i + 1) + ' не скачался (' + r.status + ')')
     куски.push(await r.blob())
     if (наПрогресс) наПрогресс((i + 1) / о.parts.length)

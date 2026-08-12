@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
 import authBg from '../assets/auth-bg.jpg'
 import { QrLoginPanel } from './QrLoginPanel'
+import { MIN_PASSWORD, паролеваяБеда, паролеваяПодсказка } from '../lib/passwordRule'
 
 // Экран входа/регистрации (v1.35.0, редизайн v1.214.0, фон обновлён v1.217.0):
 // фирменный арт вместо голого Discord-клона (маскот из v1.214.0 убран — новый
@@ -38,7 +39,9 @@ function authErrText(e: any): string {
   if (!raw || raw === '()' || raw === '{}' || low === 'error' || low === '[object object]')
     return 'Что-то пошло не так при обращении к серверу. Попробуй ещё раз через минуту.'
   if (low.includes('invalid login credentials')) return 'Неверная почта/юзернейм или пароль'
-  if (low.includes('password should be at least')) return 'Пароль слишком короткий — минимум 6 символов'
+  // v1.557.0: порог задан у нас (lib/passwordRule.ts) и проверяется ДО отправки.
+  // Эта строка осталась страховкой: в проекте порог может быть строже нашего.
+  if (low.includes('password should be at least')) return `Пароль слишком короткий — нужно не меньше ${MIN_PASSWORD} символов`
   if (low.includes('unable to validate email') || low.includes('invalid email')) return 'Похоже, в почте опечатка — проверь адрес'
   return raw
 }
@@ -109,6 +112,12 @@ export function AuthScreen() {
         // с устройства. Подробности и почему не капча — в lib/signupGuard.ts.
         const вердикт = signupAllowed({ opened: openedAt.current, honeypot, history: loadTries() })
         if (!вердикт.ok) throw new Error(вердикт.text)
+        // v1.557.0 (находка F8): пароль проверяется ДО того, как что-либо
+        // уйдёт на сервер. Проверка только при регистрации: на входе поднимать
+        // порог нельзя — у людей уже есть пароли по старому правилу, и они
+        // просто перестали бы входить.
+        const беда = паролеваяБеда(password, [email, finalName])
+        if (беда) throw new Error(беда)
         // Работа доказательством: человеку это секунда ожидания один раз, а тому,
         // кто заводит тысячу аккаунтов, — тысяча секунд процессорного времени.
         setPow(true)
@@ -310,9 +319,18 @@ export function AuthScreen() {
           </label>
           <label className="auth2-field">
             <Icon name="lock" size={18} />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль" required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль"
+              autoComplete={reg ? 'new-password' : 'current-password'}
+              minLength={reg ? MIN_PASSWORD : undefined} required />
           </label>
         </div>
+        {/* v1.557.0 (находка F8): порог виден ДО отправки, а не приходит
+            ошибкой сервера после. Только при регистрации: на входе человек
+            вводит уже существующий пароль, и подсказка про длину там была бы
+            упрёком за то, чего он изменить не может. */}
+        {reg && паролеваяПодсказка(password) && (
+          <div className="auth2-legal" style={{ marginTop: -4 }}>{паролеваяПодсказка(password)}</div>
+        )}
         {/* v1.537.0: поле-ловушка. Человеку его не видно и не доступно с
             клавиатуры, а простой бот заполняет всё подряд — и попадается. */}
         {reg && <input className="auth2-hp" type="text" tabIndex={-1} autoComplete="off"

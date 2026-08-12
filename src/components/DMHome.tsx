@@ -47,6 +47,7 @@ import { sealForPeer, openIncoming, NoRecipientKeys, isUnreadable } from '../lib
 import { isEncrypted } from '../lib/crypto/envelope'
 import { b64 } from '../lib/crypto/core'
 import { encryptFile, decryptFile, markEncrypted, stripEncMark, TooLargeToEncrypt, type FileKey } from '../lib/crypto/files'
+import { подписать } from '../lib/attachUrl'
 import { useTyping } from '../lib/typing'
 import { TypingIndicator } from './TypingIndicator'
 import { GameLine, GameInline, ListenLine } from './ActivityLabel'
@@ -227,7 +228,10 @@ export function DMHome({ username, handle, avatarUrl, onAvatar, servers }:
             const key = payload.files[i]
             if (!key) { urls.push(parts[i]); types.push('file'); continue }
             try {
-              const res = await fetch(stripEncMark(parts[i]))
+              // v1.557.0 (находка F1): по подписанной ссылке. Для зашифрованных
+              // вложений это важно вдвойне — они и есть тот случай, ради
+              // которого хранилище перестаёт быть доверенным звеном.
+              const res = await fetch(await подписать(stripEncMark(parts[i])))
               const blob = await decryptFile(await res.arrayBuffer(), key)
               let u = URL.createObjectURL(blob)
               blobUrls.current.push(u)

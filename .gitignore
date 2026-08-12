@@ -48,3 +48,5 @@ vite.config.ts.timestamp-*
 dist-real-view/
 dist-scene-test/
 dist-capture-test/
+dist-nav-test/
+dist-site-shots/

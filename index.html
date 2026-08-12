@@ -2,6 +2,38 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      v1.557.0 (находка F4 аудита): Content-Security-Policy.
+
+      ЧТО ЗДЕСЬ ЕСТЬ И ПОЧЕМУ ИМЕННО ЭТО.
+
+      object-src 'none'  — <object>/<embed> в приложении не используются ни разу
+                           (проверено поиском), а это давний путь для чужого кода.
+      base-uri 'none'    — <base> тоже не используется. Без запрета одна
+                           внедрённая строка <base href="https://чужой/"> увела
+                           бы ВСЕ относительные адреса страницы на чужой сервер.
+      form-action 'none' — все четыре формы приложения отправляются через
+                           onSubmit с preventDefault, наружу не уходит ни одна.
+                           Запрет закрывает вынос данных отправкой формы —
+                           способ, который не проходит ни через fetch, ни через
+                           XHR, то есть мимо всех проверок в коде.
+
+      ЧЕГО ЗДЕСЬ НЕТ, И ЭТО НАДО ЗНАТЬ, А НЕ ЗАМАЛЧИВАТЬ.
+
+      script-src нет намеренно. Страницы плагинов живут в <iframe srcdoc>, а
+      srcdoc НАСЛЕДУЕТ политику родителя. Любой script-src, кроме
+      'unsafe-inline' + разрешения чужих адресов, убил бы все окна плагинов
+      разом — а с 'unsafe-inline' и чужими адресами директива не значит ничего.
+      Настоящее решение — отдавать страницы плагинов с ДРУГОГО происхождения, и
+      это отдельная работа, а не строка в мете.
+
+      frame-ancestors здесь тоже нет — не потому что не нужен, а потому что в
+      <meta> он игнорируется браузером по спецификации; работает только
+      заголовком ответа, а GitHub Pages заголовки задавать не даёт. Вместо него
+      ниже стоит отказ работать внутри чужой рамки.
+    -->
+    <meta http-equiv="Content-Security-Policy"
+          content="object-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#1e1f22" />
     <link rel="manifest" href="./manifest.webmanifest" />
