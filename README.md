@@ -1,139 +1,186 @@
-# Ponoi (настоящее приложение)
+<div align="center">
 
-Это исходник Ponoi как **настоящего** приложения: Vite + React + TypeScript + **Supabase**
-(регистрация/вход, сервера, каналы и сообщения в реальном времени между устройствами и пользователями),
-плюс голос/видео/демонстрация экрана через **LiveKit**.
-Он заменяет прежние браузерные live-патчи на реальное приложение с бэкендом.
+# Ponoi
 
-## Возможности
-- Регистрация и вход по email/паролю (Supabase Auth), профили.
-- Сервера, каналы и сообщения в реальном времени (Supabase Realtime).
-- Друзья и личные сообщения (DM).
-- Участники серверов + приглашения по коду (RLS через `server_members`).
-- Загрузка аватаров и вложений (Supabase Storage).
-- Реакции и закреплённые сообщения.
-- Голос/видео/демонстрация экрана (LiveKit).
-- Настройки пользователя, темы, Ponoi Music, GIF-пикер, кастом-эмодзи, питомец.
+**Private. Extensible. Yours.**
 
-## Установка
+Ponoi is a privacy-focused extensible messenger for conversations, communities,
+calls, music and user-created plugins. Windows, Android and the web.
 
-1. Установи Node.js 18+.
-2. В папке проекта:
-   ```bash
-   npm install
-   ```
-3. Создай проект на https://supabase.com (бесплатно).
+*Ponoi (Поной) — приватный расширяемый мессенджер для общения, сообществ,
+звонков, музыки и пользовательских плагинов.*
 
-4. **Storage → создай два ПУБЛИЧНЫХ бакета** (Public bucket: ON):
-   - `avatars`
-   - `attachments`
+[**Website**](https://ponoiai.github.io/) ·
+[**Download**](https://ponoiai.github.io/download/) ·
+[**Open web app**](https://ponoiai.github.io/ponoi/) ·
+[**Documentation**](https://ponoiai.github.io/docs/) ·
+[**Security**](https://ponoiai.github.io/security/) ·
+[**Plugins**](https://ponoiai.github.io/plugins/)
 
-5. **SQL Editor → выполни миграции строго по порядку** (каждый файл целиком):
-   1. Сначала `supabase/schema.sql`.
-   2. Потом все файлы `supabase/NN_*.sql` по числовому префиксу: `02`, `03`, `04` ... `106`.
-   3. `supabase/04_storage.sql` запускай ПОСЛЕ создания бакетов из шага 4.
+</div>
 
-   Порядок важен: обычная сортировка по имени ставит `100_...` раньше `10_...`,
-   а это неправильный порядок. Если пропустить свежие миграции, часть функций
-   приложения будет падать в рантайме: права каналов, боты, приватность,
-   музыка, read receipts, передачи плагинов и другие новые таблицы.
+---
 
-6. Project Settings → API → скопируй **Project URL** и **anon public key**.
-7. Скопируй `.env.example` в `.env` и подставь значения:
+## What it is
+
+A messenger you can rebuild. Direct messages and group conversations, servers
+with text, voice and forum channels, calls with video and screen sharing,
+a built-in music system, and plugins that anyone can write and hand to a friend
+as a single `.ponoi` file.
+
+- **Messaging** — direct and group conversations, replies, reactions, editing,
+  pins, threads, attachments, GIFs, custom emoji, slash commands.
+- **Communities** — servers, channels, roles with granular permissions,
+  invites, moderation with an audit log, webhooks and bots.
+- **Calls** — voice, video, screen sharing with sound, noise suppression,
+  push-to-talk, an overlay that stays on top of games.
+- **Trackoteka** — a shared music library with playlists, a queue, synced
+  lyrics and listening together in one room.
+- **Customization** — light and dark themes, presets, custom fonts, chat
+  backgrounds, profile colours and banners.
+- **Plugins** — one `.ponoi` JavaScript file, isolated in a Web Worker, with
+  permissions the user sees before installing.
+
+**Free.** No paid tiers, no subscriptions, no advertising, no analytics.
+
+## Status of each part
+
+| | |
+|---|---|
+| Messaging, communities, customization | **Available** |
+| Calls: voice, video, screen sharing | **Available** |
+| Trackoteka and the plugin platform | **Available** |
+| End-to-end encryption for direct messages, attachments and calls | **Available, optional, off by default** |
+| End-to-end encrypted calls, verified in a real call between two devices | **Experimental** — tested in code, never confirmed in the field |
+| Private attachment storage | **Planned** — see below |
+| End-to-end encryption for groups and channels | **Planned** — design first, see [`E2EE_DESIGN.md`](E2EE_DESIGN.md) |
+
+## Security, honestly
+
+One-to-one direct messages can be end-to-end encrypted with ECDH P-256,
+HKDF-SHA256 and AES-256-GCM; keys belong to devices, message length is hidden by
+padding, and there is no silent fallback to plaintext. Plugins are isolated by
+the browser itself — a Web Worker, and an opaque-origin sandboxed frame for
+plugin pages. There is no analytics, no crash reporting and no advertising code
+in the app.
+
+And the parts that are not good yet, in the project’s own words:
+
+- Encryption is **off by default**, and covers one-to-one conversations only —
+  not group chats, not server channels.
+- **Attachments sent without attachment encryption are in public storage** and
+  can be downloaded by anyone with the link. This is the most serious open issue
+  and it is being fixed in stages.
+- Call encryption has never been verified in a real call.
+- There is no Content-Security-Policy, and no external security audit.
+
+The full technical write-up, with file references, is in
+[`SECURITY_ARCHITECTURE_AUDIT.md`](SECURITY_ARCHITECTURE_AUDIT.md). The
+user-facing version is at [ponoiai.github.io/security](https://ponoiai.github.io/security/),
+and the list of known weaknesses is at
+[ponoiai.github.io/transparency](https://ponoiai.github.io/transparency/).
+
+To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
+
+## Get Ponoi
+
+Downloads live on the website, not here:
+**[ponoiai.github.io/download](https://ponoiai.github.io/download/)** — the
+Windows installer, the Android APK and the web version, all linked directly.
+
+---
+
+# Developer documentation
+
+Everything below is for building Ponoi, not for using it.
+
+## Stack
+
+Vite + React + TypeScript. Supabase for the database, accounts, storage and
+realtime; LiveKit for voice and video. Electron for the Windows build, Capacitor
+for Android. No backend of our own to run.
+
+## Running it
+
+1. Node.js 20+ (Capacitor CLI needs 22+; the Android build in CI uses 22).
+2. `npm install`
+3. Create a project at <https://supabase.com>.
+4. **Storage → create the buckets** `avatars`, `attachments`, `modfiles`.
+5. **SQL Editor → run the migrations strictly in numeric order**: first
+   `supabase/schema.sql`, then every `supabase/NN_*.sql` by its numeric prefix
+   (`02`, `03`, … `110`). Plain name sorting puts `100_` before `10_`, which is
+   the wrong order. `04_storage.sql` goes after the buckets exist.
+   Skipping recent migrations breaks features at runtime: channel permissions,
+   bots, privacy, music, read receipts, plugin transfers and more.
+6. Project Settings → API → copy the **Project URL** and the **anon public key**.
+7. Copy `.env.example` to `.env`:
    ```
    VITE_SUPABASE_URL=...
    VITE_SUPABASE_ANON_KEY=...
-   VITE_VAPID_PUBLIC_KEY=...       # опционально, для push
-   VITE_TENOR_KEY=...              # опционально, для GIF
-   VITE_STEAMGRIDDB_KEY=...        # опционально, для обложек игр
+   VITE_VAPID_PUBLIC_KEY=...       # optional, push notifications
+   VITE_TENOR_KEY=...              # optional, GIF search
+   VITE_STEAMGRIDDB_KEY=...        # optional, game cover art
    ```
+8. Optional Edge Functions — see `supabase/functions/README.md`:
+   - `livekit-token` — without it, text works and the call button errors.
+   - `login-by-username` — without it, only email login works.
+   - `send-push` — without it, no notifications while the app is closed.
+9. `npm run dev`
 
-8. **(Опционально, для звонков)** Разверни Edge Function `livekit-token`
-   (`supabase/functions/livekit-token`) и задай секреты LiveKit — см. `supabase/functions/README.md`.
-   Без этого текст/сервера/DM работают, а кнопка звонка выдаёт ошибку.
+## Checks
 
-8.1. **(Опционально, для пуш-уведомлений)** Разверни Edge Function `send-push`
-   и задай VAPID-секреты — см. `supabase/functions/README.md`. Без этого
-   всё работает как обычно, просто нет уведомлений при закрытом приложении.
+The project leans on live checks rather than assertions about code that was
+never run. A few of the load-bearing ones:
 
-8.2. **Разверни Edge Function `login-by-username`** — см. `supabase/functions/README.md`.
-   Без неё форма входа принимает только почту: поле «Юзернейм или почта» с
-   юзернеймом всегда отвечает «Неверная почта/юзернейм или пароль», даже с
-   верным паролем — экран входа не подсказывает, что дело в недеплоенной функции.
+```bash
+npm run typecheck     # TypeScript
+npm run test:db       # RLS rules against a real Postgres (pglite), 1500+ lines
+npm run test:crypto   # the encryption core, in a real browser engine
+npm run test:plugins  # the plugin system
+npm run test:attack   # deliberate attempts to escape the plugin sandbox
+npm run test:capture  # screen capture protection, by actually capturing the screen
+npm run smoke         # the built app starts
+```
 
-9. Запусти:
-   ```bash
-   npm run dev
-   ```
-10. Открой ссылку из терминала, зарегистрируйся, создай сервер (＋) и пиши сообщения.
-    Открой второе окно/устройство, войди другим аккаунтом — сообщения приходят в реальном времени.
+`npm run look` and `npm run look:real` take screenshots of the interface, the
+second one with the real components rather than markup written by hand.
 
-## Деплой
-- `npm run build` → статика в `dist/` (Vercel/Netlify/Cloudflare Pages).
-- Supabase и LiveKit — облачные бэкенды, отдельный сервер не нужен.
+## Releasing
 
-## Установщик для друзей (Windows) 📦
-
-Сборка настоящего установщика `Ponoi-Setup-<версия>.exe` полностью автоматизирована через GitHub Actions.
-
-**Один раз настроить:**
-1. В репозитории: Settings → Secrets and variables → Actions → New repository secret.
-   Добавь обязательные секреты (значения — из твоего локального `.env`):
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-
-   Опционально добавь:
-   - `VITE_VAPID_PUBLIC_KEY` — push-уведомления.
-   - `VITE_TENOR_KEY` — поиск GIF.
-   - `VITE_STEAMGRIDDB_KEY` — обложки игр.
-
-**Выпустить версию:**
 ```bash
 git tag v1.0.0
 git push --tags
 ```
-Через ~5 минут на странице **Releases** появится готовый `Ponoi-Setup-1.0.0.exe`.
 
-**Отдать другу:** просто скинь ссылку на .exe со страницы Releases. Друг устанавливает,
-регистрируется по email — и вы общаетесь: все данные живут в общем облаке (Supabase),
-звонки — через LiveKit. Никаких серверов поднимать не нужно.
+GitHub Actions builds `Ponoi-Setup-<version>.exe` and
+`Ponoi-Setup-<version>.apk` and attaches both to one release. The Android job
+**fails on purpose** if the signing keystore secret is missing, rather than
+signing with a throwaway debug key that would produce an APK nobody can install
+over their existing one.
 
-Проверить сборку без релиза: вкладка Actions → workflow «release» → Run workflow —
-готовый .exe будет в артефактах сборки.
+Required repository secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`. Optional: `VITE_VAPID_PUBLIC_KEY`, `VITE_TENOR_KEY`,
+`VITE_STEAMGRIDDB_KEY`.
 
-## Приложение для телефона (Android APK) 📱
+Commit messages become the changelog (`scripts/gen-changelog.mjs`), which the
+app shows in its “What’s new” window and the website publishes at
+[/changelog/](https://ponoiai.github.io/changelog/).
 
-Тот же тег `vX.Y.Z` одновременно собирает и `Ponoi-Setup-<версия>.exe` (Windows),
-и `Ponoi-Setup-<версия>.apk` (Android) — обе сборки уходят в один и тот же
-GitHub Release. Play Маркета нет — APK ставится вручную («сайдлоад»), как и
-задумано (`.github/workflows/release.yml`, джоба `android-apk`).
+## The website
 
-**Поставить на телефон:**
-1. Releases → скачать `Ponoi-Setup-<версия>.apk` на телефон.
-2. При установке Android спросит разрешение «Установка неизвестных приложений» —
-   разрешить для браузера/файлового менеджера, которым открываешь файл.
-3. Готово: Ponoi на телефоне — то же приложение, тот же Supabase-аккаунт,
-   звонки/камера/микрофон запрашиваются как обычно при первом звонке.
+The site at <https://ponoiai.github.io/> is a separate repository:
+[ponoiai/ponoiai.github.io](https://github.com/ponoiai/ponoiai.github.io). The
+web version of the app stays where it has always been,
+<https://ponoiai.github.io/ponoi/>, so invite links and installed PWAs keep
+working.
 
-**(Опционально) Свой ключ подписи — чтобы новые версии ставились ПОВЕРХ старой,
-без удаления приложения.** Без этого шага APK подписывается debug-ключом,
-который каждый CI-прогон генерирует заново — тогда для обновления придётся
-сначала удалить старую версию. Один раз собери постоянный keystore и добавь
-секреты в репозиторий (Settings → Secrets and variables → Actions):
-```bash
-keytool -genkeypair -v -keystore ponoi-release.keystore -alias ponoi \
-  -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 ponoi-release.keystore > ponoi-release.keystore.b64   # Linux/macOS
-# Windows (PowerShell): [Convert]::ToBase64String([IO.File]::ReadAllBytes("ponoi-release.keystore")) | Out-File ponoi-release.keystore.b64
-```
-Секреты:
-- `ANDROID_KEYSTORE_BASE64` — содержимое `ponoi-release.keystore.b64`
-- `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`ponoi` в примере выше), `ANDROID_KEY_PASSWORD`
+## Writing plugins
 
-Храни `ponoi-release.keystore` в надёжном месте вне репозитория — потеряешь его,
-и все следующие версии придётся ставить поверх старой уже не получится
-(Android требует один и тот же ключ подписи на все версии одного приложения).
+See [`PLUGINS.md`](PLUGINS.md) for the file format, the API and how isolation
+works — or use the editor inside the app: Settings → Plugins → Create.
 
-Веб-версия (GitHub Pages) уже ставится на телефон и без APK — открой сайт в
-браузере телефона → «Добавить на главный экран» (PWA, см. ниже); APK — просто
-второй, более «настоящий» вариант того же самого.
+## Licence
+
+Not chosen yet. The source is public and readable, but without a licence it is
+formally source-available rather than open source.
