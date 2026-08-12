@@ -65,7 +65,9 @@ export function SignOutModal({ onClose }: { onClose: () => void }) {
       const k = await keys()
       try {
         const uid = (await supabase.auth.getUser()).data.user?.id
-        if (uid) await k.backupMyKey(uid, pwd)
+        // v1.559.0: копию, запертую своим паролем, паролем аккаунта не трогаем —
+        // иначе выход из аккаунта молча снял бы поставленную защиту.
+        if (uid && !(await k.backupIsOwnLocked(uid))) await k.backupMyKey(uid, pwd)
       } catch { /* не вышло — выходить всё равно надо, копия обновится при входе */ }
       await k.signOutAndForgetKeys()
     } catch {

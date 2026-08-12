@@ -180,7 +180,7 @@ import { exportPrivateKey, importPrivateKey } from './core'
 const backup = () => import('./backup')
 
 /** Положить (или обновить) копию своего ключа. Тихо ничего не делает, если нечего класть. */
-export async function backupMyKey(userId: string, password: string): Promise<void> {
+export async function backupMyKey(userId: string, password: string, own = false): Promise<void> {
   const kp = await myIdentity()
   let jwk: JsonWebKey
   try {
@@ -193,13 +193,41 @@ export async function backupMyKey(userId: string, password: string): Promise<voi
   const { newSalt, wrapPrivateKey } = await backup()
   const salt = newSalt()
   const wrapped = await wrapPrivateKey(jwk, password, salt)
+  // Признак «заперто своим паролем» едет внутри jsonb-поля wrapped: отдельная
+  // колонка потребовала бы миграции, а их и так очередь ждёт владельца.
+  if (own) (wrapped as any).own = true
   await supabase.from('key_backups').upsert({
     user_id: userId, salt, wrapped, device_id: deviceId(),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
 
-export type RestoreResult = 'restored' | 'none' | 'wrong-password' | 'broken' | 'unavailable'
+export type RestoreResult = 'restored' | 'none' | 'wrong-password' | 'own-password' | 'broken' | 'unavailable'
+
+/**
+ * Запереть копию ключа ОТДЕЛЬНЫМ паролем (v1.559.0, находка F3 аудита).
+ *
+ * Пароль аккаунта проходит через сервер входа: тот, кто им управляет, может
+ * перехватить его и открыть копию. Отдельный пароль нигде, кроме этого
+ * шифрования, не используется — и тогда сервер копию открыть не может.
+ *
+ * Требует, чтобы ключ был на устройстве сейчас: перезапереть можно только то,
+ * что открыто.
+ */
+export async function setBackupPassword(userId: string, ownPassword: string): Promise<boolean> {
+  try { await backupMyKey(userId, ownPassword, true); return true } catch { return false }
+}
+
+/** Заперта ли копия своим паролем. Нужно, чтобы не перезаписать её паролем аккаунта. */
+export async function backupIsOwnLocked(userId: string): Promise<boolean> {
+  const { data } = await supabase.from('key_backups').select('wrapped').eq('user_id', userId).maybeSingle()
+  return !!(data?.wrapped as any)?.own
+}
+
+/** Вернуть копию под пароль аккаунта. */
+export async function dropBackupPassword(userId: string, accountPassword: string): Promise<boolean> {
+  try { await backupMyKey(userId, accountPassword, false); return true } catch { return false }
+}
 
 /**
  * Достать ключ из копии и положить его на это устройство.
@@ -218,7 +246,10 @@ export async function restoreMyKey(userId: string, password: string): Promise<Re
   try {
     jwk = await unwrapPrivateKey(data.wrapped as any, password, String(data.salt))
   } catch (e) {
-    return isWrongPassword(e) ? 'wrong-password' : 'broken'
+    if (!isWrongPassword(e)) return 'broken'
+    // Заперто своим паролем — это НЕ «пароль не тот», и перезаписывать копию
+    // паролем аккаунта нельзя: человек потерял бы переписку молча.
+    return (data.wrapped as any)?.own ? 'own-password' : 'wrong-password'
   }
   try {
     const priv = await importPrivateKey(jwk)

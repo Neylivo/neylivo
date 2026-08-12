@@ -80,6 +80,8 @@ export interface Settings {
    * выключение касается только новых.
    */
   e2eeFiles: boolean
+  /** Рисовать эмодзи картинками Twemoji (с чужого сервера) или системными. */
+  emojiImages: boolean
   devmode: boolean
   actOn: boolean
   actText: string
@@ -149,7 +151,7 @@ export const DEFAULTS: Settings = {
   // Ключи устройства при этом никуда не деваются: уже зашифрованная переписка
   // читается как и раньше, а включив настройку обратно, человек сразу продолжит
   // шифровать — заново ничего заводить не придётся.
-  e2ee: false, e2eeCalls: false, e2eeFiles: false, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
+  e2ee: false, e2eeCalls: false, e2eeFiles: false, emojiImages: true, devmode: false, actOn: true, actText: '', sbKey: 'Alt+S',
   fontFamily: '', fontFamilyUrl: '', radius: 8, msgGap: 0, time24: true, showAvatars: true, groupMessages: true, bigEmoji: true, otherFonts: true,
   sendKey: 'enter', keyMusic: 'Alt+M', keyHome: 'Alt+H',
   appIcon: DEFAULT_APP_ICON,

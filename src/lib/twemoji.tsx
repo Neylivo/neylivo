@@ -1,7 +1,8 @@
-// Красивые эмодзи как в Discord: все юникод-эмодзи рендерятся картинками Twemoji
-// (Discord использует именно этот набор). Без npm-зависимости — SVG с CDN,
-// с фолбэком на системный эмодзи, если картинка не загрузилась.
+// Красивые эмодзи как в Discord: юникод-эмодзи рендерятся картинками Twemoji.
+// Картинки идут с чужого сервера (jsDelivr) — он видит адрес каждого, у кого на
+// экране есть эмодзи. Выключается в настройках приватности: «Эмодзи картинками».
 import { useState } from 'react'
+import { KEY as SETTINGS_KEY } from './settingsStore'
 import type { ReactNode } from 'react'
 
 const CDN = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/'
@@ -21,9 +22,17 @@ export function emojiUrl(emoji: string): string {
   return CDN + named.join('-') + '.svg'
 }
 
+/** Читаем прямо из хранилища: emojify зовут и вне React-дерева. */
+function картинкиВключены(): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    return !raw || JSON.parse(raw)?.emojiImages !== false
+  } catch { return true }
+}
+
 function TwEmoji({ ch }: { ch: string }) {
   const [err, setErr] = useState(false)
-  if (err) return <>{ch}</>   // нет такой картинки — показываем системный эмодзи
+  if (err || !картинкиВключены()) return <>{ch}</>   // системный эмодзи, без запроса
   return <img className="twemoji" draggable={false} src={emojiUrl(ch)} alt={ch} loading="lazy" onError={() => setErr(true)} />
 }
 

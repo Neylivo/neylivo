@@ -5,7 +5,7 @@ import { DeleteAccountModal } from './DeleteAccountModal'
 import { FONT_PRESETS, ensureFont } from '../lib/fonts'
 import { logErr, logWarn } from '../lib/log'
 import { toastErr, toastOk } from '../lib/toast'
-import { confirmUi } from '../lib/confirm'
+import { confirmUi, promptUi } from '../lib/confirm'
 import { useBackClose } from '../lib/mobileBack'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
@@ -216,6 +216,72 @@ function E2eeSection() {
       Шифрование не скрывает, <b>кто</b> с кем и <b>когда</b> переписывается — эти данные
       нужны серверу для доставки. Скрывается только содержание.
     </div>
+    <KeyBackupRow />
+    <Row title="Эмодзи картинками"
+      desc="Единый набор эмодзи вместо системных — как в Discord. Картинки берутся с чужого сервера (jsDelivr), и он видит адрес твоего устройства всякий раз, когда на экране есть эмодзи. Выключи — будут системные эмодзи и ни одного запроса на сторону.">
+      <Toggle on={settings.emojiImages !== false} onChange={v => set('emojiImages', v)} />
+    </Row>
+  </>
+}
+
+/**
+ * Отдельный пароль для копии ключа (v1.559.0, находка F3 аудита).
+ *
+ * Пароль аккаунта проходит через сервер входа — тот, кто им управляет, может
+ * перехватить его и открыть копию ключа. Отдельный пароль не используется
+ * больше нигде, и тогда сервер копию открыть не может. Цена честная: забыл —
+ * прежняя переписка не восстановится ни на одном новом устройстве.
+ */
+function KeyBackupRow() {
+  const { user } = useAuth()
+  const [надоСпросить, setНадоСпросить] = useState(() => localStorage.getItem('ponoi-key-ask') === '1')
+  const [занято, setЗанято] = useState(false)
+
+  async function поставить() {
+    if (!user) return
+    const p1 = await promptUi('Придумай пароль для копии ключа. Он нигде больше не используется — и потому сервер входа его не увидит.',
+      { okText: 'Поставить', placeholder: 'Не короче 8 символов' })
+    if (!p1) return
+    if (p1.length < 8) { toastErr('Пароль короче 8 символов'); return }
+    const p2 = await promptUi('Повтори пароль. Если забыть его, прежняя переписка не восстановится нигде.',
+      { okText: 'Подтвердить', placeholder: 'Ещё раз' })
+    if (p2 !== p1) { toastErr('Пароли не совпали'); return }
+    setЗанято(true)
+    try {
+      const { setBackupPassword } = await import('../lib/crypto/keys')
+      if (await setBackupPassword(user.id, p1)) toastOk('Копия ключа заперта своим паролем')
+      else toastErr('Не удалось — ключа нет на этом устройстве')
+    } finally { setЗанято(false) }
+  }
+
+  async function открыть() {
+    if (!user) return
+    const p = await promptUi('Пароль копии ключа', { okText: 'Открыть', placeholder: 'Пароль копии' })
+    if (!p) return
+    setЗанято(true)
+    try {
+      const { restoreMyKey } = await import('../lib/crypto/keys')
+      const r = await restoreMyKey(user.id, p)
+      if (r === 'restored') {
+        localStorage.removeItem('ponoi-key-ask'); setНадоСпросить(false)
+        toastOk('Ключ восстановлен — прежняя переписка снова читается')
+      } else if (r === 'own-password' || r === 'wrong-password') toastErr('Пароль не тот')
+      else toastErr('Копию открыть не удалось')
+    } finally { setЗанято(false) }
+  }
+
+  return <>
+    {надоСпросить && <div className="plug-err" style={{ marginTop: 12 }}>
+      <span>Копия ключа заперта отдельным паролем, и прежняя переписка сейчас не читается.
+        Введи пароль копии, чтобы вернуть её.</span>
+    </div>}
+    <Row title="Свой пароль для копии ключа"
+      desc="Копия ключа переписки лежит на сервере запертой. По умолчанию замок — пароль аккаунта, а он проходит через сервер входа: тот, кто им управляет, может его перехватить и копию открыть. Свой пароль не используется больше нигде. Забудешь его — прежняя переписка не восстановится ни на одном новом устройстве.">
+      <span style={{ display: 'flex', gap: 8 }}>
+        {надоСпросить && <button className="pqs2-btn" disabled={занято} onClick={открыть}>Ввести</button>}
+        <button className="pqs2-btn" disabled={занято} onClick={поставить}>Поставить</button>
+      </span>
+    </Row>
   </>
 }
 

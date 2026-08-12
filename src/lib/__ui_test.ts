@@ -3805,5 +3805,36 @@ console.log('\n-- Адреса вложений --')
   })
 }
 
+console.log('\n-- Свой пароль для копии ключа --')
+{
+  const keys = readFileSync('src/lib/crypto/keys.ts', 'utf8')
+  check('копию можно запереть своим паролем', () => keys.includes('setBackupPassword'))
+  check('признак «своим паролем» пишется в копию', () => keys.includes("(wrapped as any).own = true"))
+  check('«заперто своим» отличается от «пароль не тот»', () =>
+    keys.includes("'own-password'") && keys.includes("? 'own-password' : 'wrong-password'"))
+  check('вход не перезаписывает копию под своим паролем', () => {
+    // Самая дорогая ошибка здесь: вход видит «пароль не тот» и кладёт свою
+    // копию поверх — человек теряет переписку и не узнаёт почему.
+    const a = readFileSync('src/auth/AuthScreen.tsx', 'utf8')
+    return /own-password[\s\S]{0,120}return/.test(a)
+  })
+  check('выход не снимает свой пароль с копии', () =>
+    readFileSync('src/components/SignOutModal.tsx', 'utf8').includes('backupIsOwnLocked'))
+  check('в настройках сказано, чем это отличается от пароля аккаунта', () =>
+    readFileSync('src/components/Settings.tsx', 'utf8').includes('через сервер входа'))
+}
+
+console.log('\n-- Эмодзи картинками --')
+{
+  const src = readFileSync('src/lib/twemoji.tsx', 'utf8')
+  check('картинки эмодзи можно выключить', () => src.includes('emojiImages'))
+  check('выключено — показывается системный эмодзи, без запроса', () =>
+    src.includes('!картинкиВключены()') && src.includes('return <>{ch}</>'))
+  check('по умолчанию картинки включены', () =>
+    readFileSync('src/lib/settingsStore.ts', 'utf8').includes('emojiImages: true'))
+  check('в настройках названо, куда уходит запрос', () =>
+    readFileSync('src/components/Settings.tsx', 'utf8').includes('jsDelivr'))
+}
+
 console.log(`\nИТОГ: пройдено ${pass}, провалено ${fail}`)
 process.exit(fail ? 1 : 0)
