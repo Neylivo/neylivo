@@ -29,6 +29,11 @@ const ЭКРАНЫ = [
   { имя: 'меню у угла, окно 700', стр: 'dark', ш: 700,  в: 520, дела: ['сервер', 'меню-угол'] },
   { имя: 'настройки, 1440',       стр: 'dark', ш: 1440, в: 900, дела: ['настройки'] },
   { имя: 'настройки, окно 760',   стр: 'dark', ш: 760,  в: 560, дела: ['настройки'] },
+  { имя: 'длинные имена, 1440',   стр: 'dark', ш: 1440, в: 900, дела: ['сервер'], длинно: true },
+  { имя: 'длинные имена, 760',    стр: 'dark', ш: 760,  в: 560, дела: ['сервер'], длинно: true },
+  { имя: 'длинные имена, телефон', стр: 'dark', ш: 412, в: 892, дела: ['сервер'], длинно: true },
+  { имя: 'крошечное окно 420×360', стр: 'dark', ш: 420, в: 360, дела: ['сервер'] },
+  { имя: 'большое окно 2560×1400', стр: 'dark', ш: 2560, в: 1400, дела: ['сервер'] },
 ]
 
 const НАЖАТЬ = (сел) => `(() => {
@@ -84,6 +89,20 @@ const РАЗБОР = `(() => {
     const r = el.getBoundingClientRect()
     return r.width > 1 && r.height > 1
   }
+  /**
+   * Ближайший прокручиваемый предок.
+   *
+   * Два элемента из РАЗНЫХ прокруток законно проезжают друг под другом: шапка
+   * стоит, лента едет. Сравнивать их бессмысленно — на этом проба один раз уже
+   * нашла «наложение» кнопки шапки и кнопки, уехавшей под неё при прокрутке.
+   */
+  const прокрутка = (el) => {
+    for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+      const s = getComputedStyle(n)
+      if (/(auto|scroll)/.test(s.overflowY + s.overflowX)) return n
+    }
+    return null
+  }
   const слой = (el) => {
     // Задуманные слои: у них своё положение и они лежат ПОВЕРХ. Такие с
     // соседями пересекаются по делу.
@@ -129,6 +148,7 @@ const РАЗБОР = `(() => {
       if (a.contains(b) || b.contains(a)) continue
       // Разные слои пересекаются по делу: меню поверх списка и т.п.
       if (слой(a) !== слой(b)) continue
+      if (прокрутка(a) !== прокрутка(b)) continue
       const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect()
       const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left)
       const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top)
@@ -198,7 +218,7 @@ app.whenReady().then(async () => {
   let всего = 0
   for (const э of ЭКРАНЫ) {
     win.setContentSize(э.ш, э.в)
-    await win.loadFile(СТРАНИЦА(э.стр))
+    await win.loadFile(СТРАНИЦА(э.стр), э.длинно ? { search: 'long=1' } : undefined)
     await new Promise(r => setTimeout(r, 1800))
     for (const шаг of э.дела) {
       for (const код of (ДЕЛА[шаг] || [])) {

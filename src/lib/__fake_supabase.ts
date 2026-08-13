@@ -34,14 +34,19 @@ const час = (ч: number, м: number) => {
   return d.toISOString()
 }
 
+// ?long — те же данные, но с нарочно длинными именами. Именно на них вылезают
+// подписи из своих коробок, а меню и списки — за край окна.
+const ДЛИННО = typeof location !== 'undefined' && /(\?|&)long=1/.test(location.search)
+const д = (обычно: string, длинно: string) => (ДЛИННО ? длинно : обычно)
+
 export const ФИКСТУРЫ: Record<string, any[]> = {
   profiles: [
-    { id: Я, username: 'nubas', display_name: 'nubas', avatar_url: null, about: 'Собираю NeyLivo', accent: '#8ea1ff', status: 'online' },
+    { id: Я, username: д('nubas', 'nubas-с-очень-длинным-именем-которое-не-влезает'), display_name: д('nubas', 'Никнейм длиной в целую строку и ещё немного сверху'), avatar_url: null, about: 'Собираю NeyLivo', accent: '#8ea1ff', status: 'online' },
     { id: ВАНЯ, username: 'vanya', display_name: 'Ваня', avatar_url: null, about: null, accent: '#7ecb8f', status: 'online' },
     { id: МИЛА, username: 'mila', display_name: 'Мила', avatar_url: null, about: null, accent: '#e0a3d6', status: 'idle' },
   ],
   servers: [
-    { id: СЕРВЕР, name: 'Мастерская', owner: Я, icon_url: null, banner_url: null, description: 'Про сборки и плагины' },
+    { id: СЕРВЕР, name: д('Мастерская', 'Сообщество любителей очень длинных названий серверов'), owner: Я, icon_url: null, banner_url: null, description: 'Про сборки и плагины' },
   ],
   server_members: [
     { server_id: СЕРВЕР, user_id: Я, member_name: 'nubas', joined_at: час(9, 0) },
@@ -51,13 +56,13 @@ export const ФИКСТУРЫ: Record<string, any[]> = {
   channels: [
     // «болталка», а не «общий», намеренно: приложение открывает первый канал
     // по алфавиту, и с «общим» снимок всегда получался пустым каналом «музыка».
-    { id: КАНАЛ, server_id: СЕРВЕР, name: 'болталка', kind: 'text', position: 0, settings: {} },
+    { id: КАНАЛ, server_id: СЕРВЕР, name: д('болталка', 'болталка-с-невероятно-длинным-названием-канала'), kind: 'text', position: 0, settings: {} },
     { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', server_id: СЕРВЕР, name: 'плагины', kind: 'text', position: 1, settings: {} },
     { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3', server_id: СЕРВЕР, name: 'музыка', kind: 'text', position: 2, settings: {} },
     { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4', server_id: СЕРВЕР, name: 'Голосовая', kind: 'voice', position: 3, settings: {} },
   ],
   messages: [
-    { id: 'm1', channel_id: КАНАЛ, author: ВАНЯ, author_name: 'Ваня', content: 'Собрал плагин на выходных — переводит входящие прямо в сообщении', created_at: час(14, 2), thread_id: null },
+    { id: 'm1', channel_id: КАНАЛ, author: ВАНЯ, author_name: 'Ваня', content: д('Собрал плагин на выходных — переводит входящие прямо в сообщении', 'Строкабезпробеловкотораяникакнеразрываетсяипоэтомурастягиваетленту'.repeat(3)), created_at: час(14, 2), thread_id: null },
     { id: 'm2', channel_id: КАНАЛ, author: Я, author_name: 'nubas', content: 'Покажи файл, поставлю у себя', created_at: час(14, 3), thread_id: null },
     { id: 'm3', channel_id: КАНАЛ, author: ВАНЯ, author_name: 'Ваня', content: 'Держи — один .ponoi, ставится за секунду', created_at: час(14, 4), thread_id: null },
     { id: 'm4', channel_id: КАНАЛ, author: МИЛА, author_name: 'Мила', content: 'А разрешения он какие просит?', created_at: час(14, 6), thread_id: null },
