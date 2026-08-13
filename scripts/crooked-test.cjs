@@ -24,6 +24,11 @@ const ЭКРАНЫ = [
   { имя: 'телефон, 412',        стр: 'dark',    ш: 412,  в: 892, дела: ['сервер'] },
   { имя: 'рабочий стол, 1440',  стр: 'desktop', ш: 1440, в: 900, дела: ['сервер'] },
   { имя: 'рабочий стол + просмотр картинки', стр: 'desktop', ш: 1440, в: 900, дела: ['сервер', 'лайтбокс'] },
+  { имя: 'меню у нижнего угла',   стр: 'dark', ш: 1440, в: 900, дела: ['сервер', 'меню-угол'] },
+  { имя: 'меню у верхнего угла',  стр: 'dark', ш: 1440, в: 900, дела: ['сервер', 'меню-верх'] },
+  { имя: 'меню у угла, окно 700', стр: 'dark', ш: 700,  в: 520, дела: ['сервер', 'меню-угол'] },
+  { имя: 'настройки, 1440',       стр: 'dark', ш: 1440, в: 900, дела: ['настройки'] },
+  { имя: 'настройки, окно 760',   стр: 'dark', ш: 760,  в: 560, дела: ['настройки'] },
 ]
 
 const НАЖАТЬ = (сел) => `(() => {
@@ -32,8 +37,23 @@ const НАЖАТЬ = (сел) => `(() => {
   n.click(); return 'ок'
 })()`
 
+/** Настоящее нажатие правой кнопкой в заданной точке окна. */
+const ПРАВОЙ = (сел, гдеX, гдеY) => `(() => {
+  const n = document.querySelector(${JSON.stringify(сел)})
+  if (!n) return 'нет: ' + ${JSON.stringify(сел)}
+  const x = ${гдеX}, y = ${гдеY}
+  n.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
+  return 'ок'
+})()`
+
 const ДЕЛА = {
   сервер: [НАЖАТЬ('button.srv:not(.add):not(.join):not(.home):not(.fold-head)')],
+  // Меню у самого нижнего правого угла: именно там его обрезает край окна,
+  // если оно не умеет разворачиваться в другую сторону.
+  'меню-угол': [ПРАВОЙ('button.srv:not(.add):not(.join):not(.home):not(.fold-head)', 'innerWidth - 6', 'innerHeight - 6')],
+  'меню-верх': [ПРАВОЙ('button.srv:not(.add):not(.join):not(.home):not(.fold-head)', '4', '4')],
+  настройки: [НАЖАТЬ('button.me-out')],
+  эмодзи: [НАЖАТЬ('.composer button[title*="мод"], .composer .cmp-emoji, .composer button')],
   // Просмотр картинки открывается своей же разметкой приложения: вложения на
   // стенде нет, а проверять надо ровно наложение его верхнего ряда на полосу
   // заголовка окна — на него владелец и прислал снимок.
@@ -139,7 +159,13 @@ const РАЗБОР = `(() => {
     }
   }
 
-  // ── 4. Наложение на полосу заголовка окна ────────────────────────────────
+  // ── 4. Лишняя прокрутка вбок ─────────────────────────────────────────────
+  if (document.documentElement.scrollWidth > innerWidth + 2) {
+    беды.push({ вид: 'прокрутка вбок', что: 'страница целиком',
+      сколько: document.documentElement.scrollWidth + '>' + innerWidth })
+  }
+
+  // ── 5. Наложение на полосу заголовка окна ────────────────────────────────
   const полоса = document.querySelector('.titlebar')
   if (полоса) {
     const rp = полоса.getBoundingClientRect()
@@ -154,6 +180,15 @@ const РАЗБОР = `(() => {
   return JSON.stringify(беды)
 })()`
 
+/** Что обязано появиться после шага. */
+const ЖДЁМ = {
+  'сервер': '.ch-list',
+  'меню-угол': '.ctxmenu',
+  'меню-верх': '.ctxmenu',
+  'настройки': process.env.SABOTAGE === 'steps' ? '.-нет-такого-' : '.pqs2-body, .pqs-body, .settings',
+  'лайтбокс': '.lightbox',
+}
+
 app.disableHardwareAcceleration()
 setTimeout(() => { console.log('ЗАВИС'); process.exit(2) }, 180000)
 
@@ -165,9 +200,18 @@ app.whenReady().then(async () => {
     win.setContentSize(э.ш, э.в)
     await win.loadFile(СТРАНИЦА(э.стр))
     await new Promise(r => setTimeout(r, 1800))
-    for (const шаг of э.дела) for (const код of (ДЕЛА[шаг] || [])) {
-      await win.webContents.executeJavaScript(код).catch(() => {})
-      await new Promise(r => setTimeout(r, 900))
+    for (const шаг of э.дела) {
+      for (const код of (ДЕЛА[шаг] || [])) {
+        await win.webContents.executeJavaScript(код).catch(() => {})
+        await new Promise(r => setTimeout(r, 900))
+      }
+      // Проверка, что шаг СРАБОТАЛ. Без неё «чисто» означало бы только то, что
+      // экран не открылся: разбирать было нечего, и проба радовалась пустоте.
+      const ждём = ЖДЁМ[шаг]
+      if (ждём) {
+        const есть = await win.webContents.executeJavaScript('!!document.querySelector(' + JSON.stringify(ждём) + ')')
+        if (!есть) { console.log('  ! шаг «' + шаг + '» не сработал: нет ' + ждём); всего++ }
+      }
     }
     // Проверка, которая не умеет падать, ничего не значит. SABOTAGE=crooked
     // возвращает прежнее поведение (наложения ничего не знают о полосе

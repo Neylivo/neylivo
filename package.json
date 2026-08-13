@@ -1,7 +1,7 @@
 {
   "name": "neylivo",
   "private": true,
-  "version": "1.560.0",
+  "version": "1.561.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
