@@ -3805,6 +3805,20 @@ console.log('\n-- Адреса вложений --')
   })
 }
 
+console.log('\n-- Логотип приложения --')
+{
+  const st = readFileSync('src/lib/settings.tsx', 'utf8')
+  const ui = readFileSync('src/components/Settings.tsx', 'utf8')
+  check('официальный логотип обновляется сам', () =>
+    st.includes("appIconSource !== 'official'") && st.includes('officialIconDataUrl'))
+  check('свой файл при этом не трогают', () => ui.includes("set('appIconSource', 'own')"))
+  check('есть кнопка взять официальный', () => ui.includes("set('appIconSource', 'official')"))
+  check('в манифесте нынешнее имя продукта', () => {
+    const m = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'))
+    return m.name === 'NeyLivo' && m.short_name === 'NeyLivo'
+  })
+}
+
 console.log('\n-- Свой пароль для копии ключа --')
 {
   const keys = readFileSync('src/lib/crypto/keys.ts', 'utf8')

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { ensureFont } from './fonts'
 import { setTime24 } from './ui'
 import { applyLang } from './i18n'
-import { applyAppIcon } from './appIcon'
+import { applyAppIcon, officialIconDataUrl } from './appIcon'
 import { getUserPrefs, patchUserPrefs } from './userPrefs'
 import { customNickFamily } from './profilePrefs'
 // v1.337.0: сами данные и их запись/чтение — в settingsStore.ts. Там же они и
@@ -191,6 +191,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { applyLang(settings.lang) }, [settings.lang])
   // v1.158.0: логотип приложения — favicon сразу, иконка окна/трея в Electron (асинхронно).
   useEffect(() => { applyAppIcon(settings.appIcon) }, [settings.appIcon])
+  // Логотип, взятый из сборки, обновляется сам: официальный сменился с новой
+  // версией — сменится и здесь. Свой файл человека при этом не трогаем.
+  useEffect(() => {
+    if (settings.appIconSource !== 'official') return
+    let жив = true
+    officialIconDataUrl()
+      .then(u => { if (жив && u && u !== settings.appIcon) setSettings(p => ({ ...p, appIcon: u })) })
+      .catch(() => {})
+    return () => { жив = false }
+  }, [settings.appIconSource])
   // v1.309.0: система переключила тему — реагируем сразу, а не через минуту.
   useEffect(() => {
     if (!settings.systemTheme || !window.matchMedia) return

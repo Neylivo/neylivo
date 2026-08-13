@@ -82,6 +82,8 @@ export interface Settings {
   e2eeFiles: boolean
   /** Рисовать эмодзи картинками Twemoji (с чужого сервера) или системными. */
   emojiImages: boolean
+  /** Откуда логотип приложения: из сборки (обновляется сам) или свой файл. */
+  appIconSource?: 'official' | 'own'
   devmode: boolean
   actOn: boolean
   actText: string

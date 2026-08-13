@@ -6,6 +6,20 @@ export const DEFAULT_APP_ICON = ''   // пусто = свой логотип н�
 export const DEFAULT_ICON_URL = '/icon.png'   // тот же файл, что и favicon по умолчанию
 export const MAX_ICON_BYTES = 2 * 1024 * 1024   // 2 МБ на исходный файл
 
+/**
+ * Откуда взялся логотип приложения.
+ *
+ * 'official' — взят из самой сборки. Такой обновляется САМ, когда официальный
+ * логотип меняется вместе с приложением. 'own' — файл человека, его никто не
+ * трогает.
+ */
+export type IconSource = 'official' | 'own'
+
+/** Текущий официальный логотип, растеризованный так же, как загруженный файл. */
+export async function officialIconDataUrl(): Promise<string> {
+  return rasterize(DEFAULT_ICON_URL, 256)
+}
+
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader()

@@ -27,7 +27,7 @@ import {
 } from '../lib/speech'
 import { loadChatBgPrefs, setChatBgPrefs, setChatBgPhoto, clearChatBgPhoto, getChatBgUrl } from '../lib/chatBg'
 import { fileFontCoverage, urlFontCoverage } from '../lib/fontCoverage'
-import { readFileAsDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
+import { readFileAsDataUrl, officialIconDataUrl, DEFAULT_ICON_URL, MAX_ICON_BYTES } from '../lib/appIcon'
 import { getUserPrefs, patchUserPrefs } from '../lib/userPrefs'
 import { DevPortal } from './DevPortal'
 import { PluginsSettings } from './PluginsSettings'
@@ -622,7 +622,7 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
     if (!f.type.startsWith('image/')) { toastErr('Нужен файл изображения'); return }
     if (f.size > MAX_ICON_BYTES) { toastErr('Файл слишком большой — максимум 2 МБ'); return }
     setIconBusy(true)
-    try { set('appIcon', await readFileAsDataUrl(f)) }
+    try { set('appIcon', await readFileAsDataUrl(f)); set('appIconSource', 'own') }
     catch (err: any) { toastErr(err.message ?? String(err)) }
     finally { setIconBusy(false) }
   }
@@ -1280,10 +1280,17 @@ export function Settings({ username, avatarUrl, onClose, onAvatar, initialCat }:
                 <div className="pqs-iconrow">
                   <span className="pqs-iconprev"><img src={settings.appIcon || DEFAULT_ICON_URL} alt="" width={40} height={40} /></span>
                   <button className="modal-primary" onClick={() => iconInputRef.current?.click()}>{iconBusy ? 'Загрузка…' : 'Загрузить свой логотип'}</button>
-                  {settings.appIcon && <button className="pqs2-btn ghost" onClick={() => set('appIcon', '')}>Сбросить</button>}
+                  <button className="pqs2-btn ghost" disabled={iconBusy} onClick={async () => {
+                    setIconBusy(true)
+                    try { set('appIcon', await officialIconDataUrl()); set('appIconSource', 'official') }
+                    catch { toastErr('Не удалось взять официальный логотип') }
+                    finally { setIconBusy(false) }
+                  }}>Официальный</button>
+                  {settings.appIcon && <button className="pqs2-btn ghost" onClick={() => { set('appIcon', ''); set('appIconSource', undefined) }}>Сбросить</button>}
                   <input ref={iconInputRef} type="file" accept="image/*" hidden onChange={pickAppIcon} />
                 </div>
-                <div className="cset-hint" style={{ marginTop: 6 }}>PNG, JPG или SVG, до 2 МБ.</div>
+                <div className="cset-hint" style={{ marginTop: 6 }}>PNG, JPG или SVG, до 2 МБ.
+                  {settings.appIconSource === 'official' && ' Официальный логотип обновляется сам вместе с приложением.'}</div>
 
                 <Row title="Размер шрифта" desc={view.fontPx + 'px'}>
                   <input type="range" min={12} max={20} step={1} value={view.fontPx} onChange={e => setD('fontPx', Number(e.target.value))} />

@@ -1,7 +1,7 @@
 {
-  "name": "Ponoi",
-  "short_name": "Ponoi",
-  "description": "Ponoi — общение с друзьями: серверы, личные сообщения, звонки и музыка",
+  "name": "NeyLivo",
+  "short_name": "NeyLivo",
+  "description": "NeyLivo — общение с друзьями: серверы, личные сообщения, звонки и музыка",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -10,9 +10,29 @@
   "theme_color": "#1e1f22",
   "lang": "ru",
   "icons": [
-    { "src": "./icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./icon.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
-    { "src": "./icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./icon.png", "sizes": "256x256", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "./icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
