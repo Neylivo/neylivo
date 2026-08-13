@@ -11,12 +11,16 @@ import { createRoot } from 'react-dom/client'
 import { SettingsProvider } from '../lib/settings'
 import { AuthProvider } from '../auth/AuthProvider'
 import { ErrorBoundary } from './ErrorBoundary'
+import App from '../App'
 import { Home } from './Home'
 import { useAuth } from '../auth/AuthProvider'
 import { Toasts } from '../lib/toast'
 import '../styles.css'
 import '../neylivo-ui.css'
 
+// Рабочий стол подделывается ДО импорта App: isDesktop в нём вычисляется один
+// раз на модуле, и позже флаг уже ничего не изменит. Нужен, чтобы на стенде
+// была настоящая полоса заголовка — на неё и наезжали наложения.
 const тема = (window as any).__ТЕМА || 'dark'
 document.documentElement.dataset.theme = тема
 document.body.dataset.theme = тема
@@ -31,7 +35,9 @@ document.body.dataset.theme = тема
 function Врата() {
   const { user, loading } = useAuth()
   if (loading || !user) return null
-  return <Home />
+  // Весь настоящий каркас, если попросили рабочий стол: полоса заголовка,
+  // баннеры, наложения. Иначе только основной экран — снимкам он и нужен.
+  return (window as any).__РАБСТОЛ ? <App /> : <Home />
 }
 
 // БЕЗ React.StrictMode, и это не небрежность: он монтирует всё дважды, и лента

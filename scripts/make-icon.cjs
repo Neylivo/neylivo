@@ -22,10 +22,54 @@ if (!ВХОД || !fs.existsSync(ВХОД)) {
 const КОРЕНЬ = path.join(__dirname, '..')
 const САЙТ = path.join(КОРЕНЬ, '..', 'ponoi-site', 'assets')
 const РАЗМЕР = 512
+const ICO = [16, 24, 32, 48, 64, 128, 256]   // размеры внутри build/icon.ico
 const ПОЛЕ = 0.055          // доля поля вокруг знака
 const БЕЛОЕ = 246           // ярче этого во всех каналах — считаем фоном
 
 app.disableHardwareAcceleration()
+
+/** Снять несколько размеров одним окном и сложить .ico (каждый размер — PNG внутри). */
+async function собратьIco(win, файл, minx, miny, поле, бок, W, H) {
+  const ширина = Math.max(...ICO)
+  const блоки = ICO.map((р) => `<div class="b" style="width:${р}px;height:${р}px">`
+    + `<img style="width:${(W / бок) * р}px;height:${(H / бок) * р}px;`
+    + `left:${(-(minx - поле) / бок) * р}px;top:${(-(miny - поле) / бок) * р}px"></div>`).join('\n')
+  const html = `<!doctype html><meta charset=utf-8>
+<style>*{margin:0;padding:0}html,body{width:${ширина}px;overflow:hidden;background:#fff}
+.b{position:relative;overflow:hidden;background:#fff}
+img{position:absolute}</style>
+${блоки}
+<script>for (const i of document.images) i.src = ${JSON.stringify('file:///' + файл.split(path.sep).join('/'))}</script>`
+  const врем = path.join(require('os').tmpdir(), 'neylivo-ico-' + process.pid + '.html')
+  fs.writeFileSync(врем, html)
+  await win.loadFile(врем)
+  await new Promise(r => setTimeout(r, 700))
+  await win.webContents.capturePage()
+  await new Promise(r => setTimeout(r, 400))
+
+  const куски = []
+  let y = 0
+  for (const р of ICO) {
+    const кадр = await win.webContents.capturePage({ x: 0, y, width: р, height: р })
+    куски.push({ размер: р, png: кадр.resize({ width: р, height: р }).toPNG() })
+    y += р
+  }
+  fs.unlinkSync(врем)
+
+  const шапка = Buffer.alloc(6)
+  шапка.writeUInt16LE(0, 0); шапка.writeUInt16LE(1, 2); шапка.writeUInt16LE(куски.length, 4)
+  let смещение = 6 + 16 * куски.length
+  const записи = []
+  for (const { размер, png } of куски) {
+    const e = Buffer.alloc(16)
+    e.writeUInt8(размер >= 256 ? 0 : размер, 0); e.writeUInt8(размер >= 256 ? 0 : размер, 1)
+    e.writeUInt16LE(1, 4); e.writeUInt16LE(32, 6)
+    e.writeUInt32LE(png.length, 8); e.writeUInt32LE(смещение, 12)
+    смещение += png.length
+    записи.push(e)
+  }
+  return Buffer.concat([шапка, ...записи, ...куски.map(к => к.png)])
+}
 
 app.whenReady().then(async () => {
   const исходник = nativeImage.createFromPath(ВХОД)
@@ -68,8 +112,14 @@ img{position:absolute;image-rendering:auto;
   await new Promise(r => setTimeout(r, 400))
   const кадр = await win.webContents.capturePage()
   const png = кадр.resize({ width: РАЗМЕР, height: РАЗМЕР }).toPNG()
-  win.destroy()
   fs.unlinkSync(врем)
+
+  // build/icon.ico — значок окна, панели задач, трея и установщика. Про него
+  // легко забыть: он лежит отдельно и меняется отдельно.
+  const ico = await собратьIco(win, path.resolve(ВХОД), minx, miny, поле, бок, W, H)
+  win.destroy()
+  fs.writeFileSync(path.join(КОРЕНЬ, 'build', 'icon.ico'), ico)
+  console.log('записан: build/icon.ico (' + (ico.length / 1024).toFixed(0) + ' КБ, ' + ICO.join('/') + ')')
 
   const куда = [
     path.join(КОРЕНЬ, 'public', 'icon.png'),

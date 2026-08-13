@@ -9,7 +9,7 @@
 //
 // Готовые снимки кладутся прямо в репозиторий сайта — ../ponoi-site/assets/shots.
 import { build } from 'esbuild'
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,6 +49,8 @@ await build({
   outfile: path.join(ВЫХОД, 'app.js'),
   plugins: [подставить],
   define: {
+    // App.tsx ждёт эту подстановку от vite; без неё каркас падает на первом кадре.
+    __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(path.join(КОРЕНЬ, 'package.json'), 'utf8')).version),
     'import.meta.env': JSON.stringify({
       VITE_SUPABASE_URL: 'https://example.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'shots',
@@ -63,14 +65,31 @@ await build({
 
 // По странице на тему, а не ?theme= в адресе: загрузка file:// с запросом
 // в Electron падала с ERR_FAILED через раз, и второй снимок просто не снимался.
-for (const тема of ['dark', 'light']) {
+// desktop.html — тот же стенд, но с подделанным рабочим столом: приложение
+// рисует настоящую полосу заголовка, и на ней видно наложения.
+for (const тема of ['dark', 'light', 'desktop']) {
   writeFileSync(path.join(ВЫХОД, тема + '.html'),
-    `<!doctype html><html lang="ru" data-theme="${тема}"><head><meta charset="utf-8">
+    `<!doctype html><html lang="ru" data-theme="${тема === 'desktop' ? 'dark' : тема}"><head><meta charset="utf-8">
 <title>NeyLivo</title>
-<link rel="stylesheet" href="app.css"></head><body data-theme="${тема}"><div id="root"></div>
-<script>window.__ТЕМА = ${JSON.stringify(тема)}; window.__ШУМ = ${process.env.SHOTS_NOISE ? 'true' : 'false'}</script>
+<link rel="stylesheet" href="app.css"></head><body data-theme="${тема === 'desktop' ? 'dark' : тема}"><div id="root"></div>
+<script>
+window.__ТЕМА = ${JSON.stringify(тема === 'desktop' ? 'dark' : тема)}
+window.__ШУМ = ${process.env.SHOTS_NOISE ? 'true' : 'false'}
+window.__РАБСТОЛ = ${тема === 'desktop' ? 'true' : 'false'}
+if (window.__РАБСТОЛ) {
+  // Заглушка моста: нужен только признак «это рабочий стол» и молчаливые
+  // ответы на всё остальное, чтобы каркас поднялся целиком.
+  window.neylivoDesktop = new Proxy({ isDesktop: true, platform: 'win32' }, {
+    get: (t, k) => (k in t ? t[k] : () => Promise.resolve(null)),
+  })
+}
+</script>
 <script src="app.js"></script></body></html>`)
 }
+
+// --only-build: собрать и выйти. Этим пользуется проверка на кривости — ей
+// нужна та же сборка, но снимки не нужны.
+if (process.argv.includes('--only-build')) process.exit(0)
 
 if (!existsSync(path.join(КОРЕНЬ, 'node_modules', '.bin', 'electron.cmd'))
   && !existsSync(path.join(КОРЕНЬ, 'node_modules', '.bin', 'electron'))) {

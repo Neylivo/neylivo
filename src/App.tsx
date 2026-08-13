@@ -59,6 +59,15 @@ declare const __APP_VERSION__: string
 // а нативные кнопки «свернуть/развернуть/закрыть» отдаёт Windows-overlay
 // (см. electron/main.cjs, titleBarOverlay). Вся полоска — drag-регион.
 const isDesktop = typeof window !== 'undefined' && !!(window as any).neylivoDesktop?.isDesktop
+
+/** Высота полосы заголовка — в переменную, чтобы наложения её не накрывали. */
+function TitlebarHeightVar() {
+  useEffect(() => {
+    document.documentElement.style.setProperty('--titlebar-h', '32px')
+    return () => { document.documentElement.style.removeProperty('--titlebar-h') }
+  }, [])
+  return null
+}
 // v1.213.0: настоящий APK (Capacitor-обёртка), не браузер/PWA — у той свой
 // путь обновления (см. apkUpdate.ts).
 const isApkNative = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
@@ -548,6 +557,7 @@ export default function App() {
       {isDesktop && <UpdateBanner />}
       {isApkNative && <ApkUpdateBanner />}
     </Portal>
+    {isDesktop && <TitlebarHeightVar />}
     {isDesktop && <Titlebar />}
     {/* А эта полоса — НЕ наложение: она обычная строка в колонке приложения и
         сдвигает содержимое вниз (.net-banner, flex: none). В портале она

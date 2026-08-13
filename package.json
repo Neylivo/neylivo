@@ -1,7 +1,7 @@
 {
   "name": "neylivo",
   "private": true,
-  "version": "1.559.0",
+  "version": "1.560.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -62,7 +62,8 @@
     "test:stand": "node scripts/stand-honest.cjs",
     "test:call": "electron scripts/call-test.cjs",
     "test:reach": "electron scripts/reach-test.cjs",
-    "test:nav": "esbuild src/lib/frameGuard.ts --bundle --format=iife --global-name=FG --outfile=dist-nav-test/frameguard.js && electron scripts/nav-test.cjs"
+    "test:nav": "esbuild src/lib/frameGuard.ts --bundle --format=iife --global-name=FG --outfile=dist-nav-test/frameguard.js && electron scripts/nav-test.cjs",
+    "test:crooked": "node scripts/site-shots.mjs --only-build && electron scripts/crooked-test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.1",
