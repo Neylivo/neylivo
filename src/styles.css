@@ -147,7 +147,8 @@ body {
 .ch:hover { background:rgba(var(--ov, 255,255,255),.04); color:var(--tx); }
 .ch.on { background:rgba(var(--ov, 255,255,255),.08); color:var(--tx-hi, #fff); }
 .ch.add { color:var(--green); }
-.me { display:flex; align-items:center; gap:8px; height:52px; padding:0 10px; background:var(--c-main); }
+/* --av-ring стоит вплотную к background намеренно: поменяют одно — увидят второе. */
+.me { display:flex; align-items:center; gap:8px; height:52px; padding:0 10px; background:var(--c-main); --av-ring:var(--c-main); }
 .me-av { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:14px; overflow:hidden; cursor:pointer; }
 .me-av img { width:100%; height:100%; object-fit:cover; }
 .me-nm { flex:1; font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -350,7 +351,15 @@ html.hide-msg .msg.open .msg-quote {
 
 /* ===== pass 2: members + presence + mini-profile ===== */
 .av-wrap { position:relative; display:inline-flex; flex-shrink:0; }
-.av-status { position:absolute; right:-2px; bottom:-2px; background:var(--bg2); border-radius:50%; padding:2px; display:flex; }
+/* v1.563.0: кольцо вокруг кружка статуса берёт цвет у того, на чём лежит.
+   Оно должно ЧИТАТЬСЯ как вырез в аватарке, а вырез бывает только цвета фона.
+   Здесь стоял жёсткий --bg2, и в нижней полосе с именем (`.me`, фон --c-main,
+   #23272a) вокруг зелёной точки светился ободок #2b2d31 — светлее полосы, да
+   ещё и выедающий светлое пятно из самой аватарки. Замерено пробой: кольцо
+   rgb(43,45,49) на фоне rgb(35,39,42).
+   Теперь цвет берётся из --av-ring, а контейнер с НЕ тем фоном обязан её
+   задать рядом со своим background — тогда два цвета не разъедутся. */
+.av-status { position:absolute; right:-2px; bottom:-2px; background:var(--av-ring, var(--bg2)); border-radius:50%; padding:2px; display:flex; }
 .status-dot { display:inline-block; border-radius:50%; }
 
 .me { position:relative; }

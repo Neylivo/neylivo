@@ -30,7 +30,7 @@ import { otaDecide, otaBanner, otaStale } from './lib/otaPlan'
 import { IS_MOBILE } from './lib/mobile'
 import { watchKeyboard } from './lib/keyboardInset'
 import { useClampToViewport } from './lib/clampPos'
-import { useNetDegraded, useNetDegradedForMs } from './lib/netStatus'
+import { useNetDegraded, useNetDegradedForMs, useNetStopped } from './lib/netStatus'
 import { lazyNamed } from './lib/lazyScreen'
 // Аварийный чат нужен в редкой ситуации «основной сервер лёг» — грузим тогда же.
 // v1.415.0: основной экран грузится после входа, а не вместе с ним.
@@ -234,12 +234,18 @@ function UpdateBanner() {
 // сломано. Тонкая полоска сверху, не блокирует работу с уже загруженным.
 function NetStatusBanner({ onOpenEmergency }: { onOpenEmergency: () => void }) {
   const degraded = useNetDegraded()
+  const stopped = useNetStopped()
   const forMs = useNetDegradedForMs()
   if (!degraded) return null
-  const long = forMs >= EMERGENCY_SUGGEST_MS
+  // v1.563.0: остановленный за перерасход проект — не «нет связи». Ждать и
+  // жать «обновить» бесполезно, и говорить об этом надо сразу, а не через
+  // положенные аварийному чату полминуты.
+  const long = stopped || forMs >= EMERGENCY_SUGGEST_MS
   return (
     <div className="net-banner">
-      Нет связи с сервером — показываю последнее сохранённое, часть действий пока не сработает
+      {stopped
+        ? 'Сервер NeyLivo остановлен: кончился оплаченный трафик. Это не сбой связи — обновление не поможет, показываю последнее сохранённое'
+        : 'Нет связи с сервером — показываю последнее сохранённое, часть действий пока не сработает'}
       {long && <button className="net-banner-ec" onClick={onOpenEmergency}>🚨 Открыть аварийный чат</button>}
     </div>
   )

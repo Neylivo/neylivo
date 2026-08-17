@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { signupAllowed, solvePow, loadTries, noteTry } from '../lib/signupGuard'
-import { humanText } from '../lib/humanFail'
+import { humanText, ОСТАНОВЛЕН, ЭТО_ОСТАНОВКА } from '../lib/humanFail'
 import { supabase } from '../lib/supabase'
 import { Icon } from '../components/icons'
 import authBg from '../assets/auth-bg.jpg'
@@ -29,6 +29,10 @@ function authErrText(e: any): string {
   // формулировка: дело не в логине/пароле, дело в бэкенде, и когда именно
   // отпустит — не от пользователя зависит.
   const status = e?.status ?? e?.context?.status
+  // v1.563.0: 402 — проект остановлен за перерасход трафика. Проверяется ПЕРВЫМ
+  // и по двум признакам сразу: код доезжает сюда не всегда (у ошибок из
+  // functions.invoke он спрятан в context), а текст ответа — всегда.
+  if (status === 402 || ЭТО_ОСТАНОВКА.test(raw)) return ОСТАНОВЛЕН
   if (status === 522 || status === 523 || status === 524 || /\b52[234]\b/.test(raw) ||
       low.includes('failed to fetch') || low.includes('networkerror') || low.includes('load failed') ||
       (low.includes('unexpected token') && low.includes('<')))

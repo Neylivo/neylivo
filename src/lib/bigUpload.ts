@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { contentTypeOf } from './fileType'
 import { подписать } from './attachUrl'
+import { КЭШ_НАВСЕГДА } from './cacheHeader'
 import {
   КУСОК, РАСШИРЕНИЕ, надоРезать, сколькоКусков, границы, имяКуска,
   опись, годнаяОпись, этоОпись, type BigManifest,
@@ -27,7 +28,10 @@ async function отправитьКусок(
     xhr.open('POST', `${base}/storage/v1/object/${bucket}/${path}`)
     xhr.setRequestHeader('Authorization', 'Bearer ' + token)
     xhr.setRequestHeader('apikey', anon)
-    xhr.setRequestHeader('cache-control', 'max-age=3600')
+    // Кусок неизменяем ровно так же, как обычный файл: его адрес содержит время
+    // отправки. Час, стоявший здесь раньше, заставлял перекачивать клип целиком
+    // при каждом повторном просмотре — см. КЭШ_НАВСЕГДА в storage.ts.
+    xhr.setRequestHeader('cache-control', 'max-age=' + КЭШ_НАВСЕГДА)
     // Тип у куска обезличенный намеренно: сам по себе кусок — не видео и не
     // картинка, а настоящий тип записан в описи.
     xhr.setRequestHeader('content-type', 'application/octet-stream')

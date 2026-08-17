@@ -3,6 +3,7 @@ import { runUploadHooks } from './plugins/bridge'
 import { contentTypeOf } from './fileType'
 import { надоРезать, отказПоРазмеру } from './bigFile'
 import { отправитьЧастями } from './bigUpload'
+import { КЭШ_НАВСЕГДА } from './cacheHeader'
 export { contentTypeOf } from './fileType'
 
 
@@ -38,7 +39,7 @@ export async function uploadTo(bucket: string, uid: string, fileRaw: File): Prom
   const safe = file.name.replace(/[^\w.\-]+/g, '_')
   const path = `${uid}/${Date.now()}_${safe}`
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: '3600', upsert: false, contentType: contentTypeOf(file),
+    cacheControl: КЭШ_НАВСЕГДА, upsert: false, contentType: contentTypeOf(file),
   })
   if (error) throw error
   const { data } = supabase.storage.from(bucket).getPublicUrl(path)
@@ -84,7 +85,7 @@ export async function uploadWithProgress(bucket: string, uid: string, fileRaw: F
     xhr.open('POST', `${base}/storage/v1/object/${bucket}/${path}`)
     xhr.setRequestHeader('Authorization', 'Bearer ' + token)
     xhr.setRequestHeader('apikey', anon)
-    xhr.setRequestHeader('cache-control', 'max-age=3600')
+    xhr.setRequestHeader('cache-control', 'max-age=' + КЭШ_НАВСЕГДА)
     xhr.setRequestHeader('content-type', contentTypeOf(file))
     xhr.upload.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total) }
     xhr.onload = () => {

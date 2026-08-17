@@ -474,7 +474,7 @@ export function Home() {
     // уже показанный (из кэша или прошлого успешного ответа) список.
     let list: Server[]
     try { list = await myServers(); netOk() }
-    catch (e) { netFail(); logErr('servers]', e); return }
+    catch (e) { netFail(e); logErr('servers]', e); return }
     setServers(list)
     // Умолчание уведомлений, заданное владельцем сервера, — оно нужно srvNotify,
     // а тот про сами серверы ничего не знает (v1.332.0).

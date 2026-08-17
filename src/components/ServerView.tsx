@@ -521,7 +521,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // хотя ты просто на секунду потерял связь. При сбое просто не трогаем
     // уже показанное состояние.
     const { data, error } = await supabase.from('channels').select('*').eq('server_id', server.id).order('name')
-    if (error) { netFail(); logErr('channels]', error); return }
+    if (error) { netFail(error); logErr('channels]', error); return }
     netOk()
     const list = data ?? []
     setChannels(list)
@@ -592,7 +592,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
     // v1.274.0: при сбое сети раньше всё равно шли в setMessages([]) — стирали уже
     // показанный кэш (cachedList чуть выше) реальной пустой лентой. Оставляем кэш
     // как есть при сбое, а не притворяемся, что в канале никогда не было сообщений.
-    if (error) { netFail(); logErr('messages]', error); return }
+    if (error) { netFail(error); logErr('messages]', error); return }
     netOk()
     const list = (data ?? []).reverse()
     hasMore.current = (data ?? []).length === 100
@@ -768,7 +768,7 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
       // v1.274.0: сбой сети раньше молча читался как «старых сообщений больше нет»
       // (hasMore=false навсегда для этого канала) — теперь просто не трогаем
       // hasMore, следующая прокрутка вверх honestly попробует ещё раз.
-      if (error) { netFail(); logErr('messages] loadOlder', error); return }
+      if (error) { netFail(error); logErr('messages] loadOlder', error); return }
       netOk()
       const older = ((data ?? []) as Message[]).reverse()
       hasMore.current = older.length === 50
@@ -1789,7 +1789,13 @@ export function ServerView({ server, username, avatarUrl, onAvatar, onLeft }:
               <div className="dm-sec-t">{r.name} — {list.length}</div>
               {list.map(row)}
             </div>)}
-            {rest.length > 0 && <div className="dm-sec-t">Участник — {rest.length}</div>}
+            {/* v1.563.0: было «Участник — N». Соседняя секция называется «Не в сети»,
+                и рядом с ней «Участник» читался как другой признак, а не как
+                «в сети»: выходило «Участник — 1 / Не в сети — 2», где противопоставлены
+                разные вещи. Плюс на любом числе, кроме единицы, получалось
+                «Участник — 5». Комментарий двумя строками выше всё это время говорил
+                «В сети» — расходились подпись и замысел, а не замысел и код. */}
+            {rest.length > 0 && <div className="dm-sec-t">В сети — {rest.length}</div>}
             {rest.map(row)}
             {off.length > 0 && <div className="dm-sec-t">Не в сети — {off.length}</div>}
             {off.map(row)}

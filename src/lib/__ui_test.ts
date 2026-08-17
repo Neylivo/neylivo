@@ -43,7 +43,7 @@ import { toggleOne, selectRange, pruneSelection, deletable, skippedCount, bulkLa
 import { keepAliveAction, parseMediaKey, mediaSeeked } from './keepAlive'
 import { msgTime, dayLabel, daysAgo, setTime24 } from './ui'
 import { panelFor, panelTitle } from './activityPanel'
-import { humanFail, humanText } from './humanFail'
+import { humanFail, humanText, ОСТАНОВЛЕН, ЭТО_ОСТАНОВКА } from './humanFail'
 import { saving, slowMs, SAVE_SLOWDOWN } from './gameMode'
 import { fileKind, fileSub, sizeText, fileNameOf, extOf } from './fileKind'
 import { parseZipTail } from './zipPeek'
@@ -2462,11 +2462,58 @@ check('спрятанное не теряется — оно уходит в к�
 check('у человеческого отказа прятать нечего', () =>
   humanFail('Сообщение слишком длинное').спрятано === '')
 
+// -- v1.563.0: проект остановлен за перерасход трафика ------------------------
+//
+// 16.08.2026 Supabase закрыл проект целиком и отвечал 402 на КАЖДЫЙ запрос —
+// база, вход, хранилище, функции. Владелец увидел «0.0% Success Rate» и решил,
+// что сломалось приложение; человек на экране регистрации видел английское
+// «Service for this project is restricted…» и решал, что сломан его аккаунт.
+//
+// Здесь проверяется, что этот отказ узнаётся и называется своим именем, а не
+// растворяется в «Не получилось» или, того хуже, в «Не хватает прав».
+console.log('\n-- Проект остановлен за перерасход --')
+
+const ОТВЕТ_402 = 'Service for this project is restricted due to the following violations: '
+  + 'exceed_cached_egress_quota. The project owner must upgrade their plan or remove spend caps to restore service.'
+
+check('402 узнаётся по настоящему тексту ответа Supabase', () =>
+  ЭТО_ОСТАНОВКА.test(ОТВЕТ_402))
+check('человеку — про остановку, а не английский текст сервера', () => {
+  const r = humanFail(ОТВЕТ_402)
+  return r.видно === ОСТАНОВЛЕН
+    && !/restricted|quota|spend cap/i.test(r.видно)
+})
+check('слово «остановлен» и причина названы прямо', () =>
+  ОСТАНОВЛЕН.includes('остановлен') && /трафик/i.test(ОСТАНОВЛЕН))
+check('сказано, что дело не в человеке и не в приложении', () =>
+  /не в тво[её]м аккаунте/i.test(ОСТАНОВЛЕН) && /не в приложении/i.test(ОСТАНОВЛЕН))
+check('регистрация названа отдельно — там других объяснений нет', () =>
+  /регистраци/i.test(ОСТАНОВЛЕН))
+check('английский текст сервера не выброшен, а спрятан для консоли', () =>
+  humanFail(ОТВЕТ_402).спрятано.includes('exceed_cached_egress_quota'))
+check('другие написания того же запрета тоже узнаются', () =>
+  ЭТО_ОСТАНОВКА.test('exceed_db_size_quota')
+  && ЭТО_ОСТАНОВКА.test('exceed_egress_quota')
+  && ЭТО_ОСТАНОВКА.test('remove spend caps to restore service'))
+check('обычный отказ остановкой не считается', () =>
+  !ЭТО_ОСТАНОВКА.test('new row violates row-level security policy')
+  && !ЭТО_ОСТАНОВКА.test('Failed to fetch')
+  && humanText('Failed to fetch') === 'Нет связи с сервером')
+
 console.log('\n-- Ломаем нарочно (отказы) --')
 check('проверка ловит возврат отказа базы на экран', () => {
   const плохо = 'new row violates row-level security policy for table "channels"'
   return плохо !== humanText(плохо)
 })
+check('проверка ловит возврат английского 402 на экран', () =>
+  ОТВЕТ_402 !== humanText(ОТВЕТ_402) && !/restricted/i.test(humanText(ОТВЕТ_402)))
+// Слабая формулировка тут уже была и прошла на нарочно сломанном разборе:
+// «не равно „Не хватает прав“» верно и для непереведённого английского. Поэтому
+// требуем ровно тот текст, который человек должен увидеть.
+check('проверка заметила бы, что остановку принимают за «нет прав»', () =>
+  humanText(ОТВЕТ_402) === ОСТАНОВЛЕН
+  && humanText(ОТВЕТ_402) !== 'Не хватает прав на это действие'
+  && humanText(ОТВЕТ_402) !== 'Не получилось')
 check('проверка ловит возврат имени файла базы', () => {
   const плохо = 'Канал не удалился: примени миграцию supabase/29_channels_update_policy.sql'
   return плохо !== humanText(плохо) && !humanText(плохо).includes('supabase/')
